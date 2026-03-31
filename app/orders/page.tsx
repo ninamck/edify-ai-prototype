@@ -1,13 +1,12 @@
+'use client';
+
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
-type SearchParams = { ref?: string };
-
-export default async function OrdersPage({
-  searchParams,
-}: {
-  searchParams: Promise<SearchParams>;
-}) {
-  const { ref } = await searchParams;
+function OrdersContent() {
+  const searchParams = useSearchParams();
+  const ref = searchParams.get('ref');
 
   return (
     <div
@@ -36,5 +35,13 @@ export default async function OrdersPage({
         Full order detail will live here. This route is wired from &quot;Go to order&quot; in the orders panel.
       </p>
     </div>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense>
+      <OrdersContent />
+    </Suspense>
   );
 }
