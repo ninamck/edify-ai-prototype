@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import {
   Send,
   Sparkles,
@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import QuinnOrb from '@/components/Sidebar/QuinnOrb';
-import RecipeChatWorking, { RECIPE_EDIFY_TASKS } from '@/components/Feed/RecipeChatWorking';
 import type { BriefingRole } from '@/components/briefing';
 import { timeAwareGreeting } from '@/components/briefing';
 
@@ -70,7 +69,7 @@ const PROMPT_CHIPS: {
   {
     label: 'New recipe',
     icon: ChefHat,
-    text: 'I want to add a new recipe for our weekend brunch menu — walk me through ingredients, costing, and production.',
+    text: 'I want to add a new recipe for our weekend brunch menu.',
   },
   {
     label: 'Food cost',
@@ -84,19 +83,129 @@ const PROMPT_CHIPS: {
   },
 ];
 
-type ChatMsg = { id: string; role: 'user' | 'quinn'; text: string };
+type ChatMsg = { id: string; role: 'user' | 'quinn'; text: string; msgType?: string };
 
-const QUINN_RECIPE_REPLY =
-  "Happy to help you add a brunch recipe. Here's a simple path:\n\n" +
-  '1. **Ingredients** — List each ingredient with quantity and unit; I\'ll match against your supplier catalogue.\n' +
-  '2. **Costing** — I\'ll pull latest prices from Bidfood and Urban Fresh and calculate food cost %.\n' +
-  '3. **Production** — Once you confirm, I can add it to the weekend plan and prep sheets.\n\n' +
-  'What dish are you thinking — name and key ingredients?';
+type RecipeIngredient = { name: string; qty: string; unit: string };
 
-const QUINN_RECIPE_DONE =
-  '**Done — your recipe is in Edify.**\n\n' +
-  'I matched everything to Bidfood & Urban Fresh, pulled today’s contract prices, and landed **food cost at 34%** against your brunch target (under your 38% ceiling).\n\n' +
-  'The recipe card is in **Fitzroy Espresso → Recipes** and I’ve queued it for **Saturday brunch prep** with quantities scaled for covers. Open **Production → Weekend plan** to tweak portions or ping the kitchen.';
+const INITIAL_RECIPE_INGREDIENTS: RecipeIngredient[] = [
+  { name: 'Chicken breast (cooked, shredded)', qty: '150', unit: 'g' },
+  { name: 'Mayonnaise', qty: '30', unit: 'g' },
+  { name: 'Dijon mustard', qty: '5', unit: 'g' },
+  { name: 'Baby gem lettuce', qty: '20', unit: 'g' },
+  { name: 'Vine tomato (sliced)', qty: '40', unit: 'g' },
+  { name: 'Brioche bun', qty: '1', unit: 'pc' },
+  { name: 'Salt & pepper', qty: '\u2014', unit: '' },
+];
+
+const RECIPE_GREETING = "Hey, happy to add a recipe. What is it of?";
+const RECIPE_CARD_INTRO = "Great choice! Here's a suggested recipe for a **Chicken & Mayo Sandwich**. Adjust the quantities to match your serving size:";
+const RECIPE_LINK_MSG =
+  "I've linked most of these ingredients to your existing Edify catalogue \u2014 chicken, mayo, mustard, lettuce, and tomato are all matched to current suppliers.\n\n" +
+  "However, I noticed you don't have a supplier set up for **brioche buns** yet.\n\n" +
+  "I'd recommend **Artisan Bakehouse** \u2014 I picked them because they're trusted amongst our users for consistently good quality and reliable deliveries. Want me to add them as a supplier for you?";
+const RECIPE_DONE_MSG =
+  "**Done!** Artisan Bakehouse is now set up as a supplier and linked to brioche buns in your recipe.\n\n" +
+  "Your **Chicken & Mayo Sandwich** recipe is live in Edify \u2014 you'll find it under **Fitzroy Espresso \u2192 Recipes**. I've calculated the food cost at **32%**, well within your target. The recipe is ready to add to any production plan.";
+
+function RecipeCardEditor({
+  ingredients,
+  onChange,
+}: {
+  ingredients: RecipeIngredient[];
+  onChange: (idx: number, qty: string) => void;
+}) {
+  return (
+    <div style={{
+      marginTop: '8px',
+      borderRadius: '10px',
+      border: '1px solid var(--color-border-subtle)',
+      overflow: 'hidden',
+    }}>
+      <div style={{
+        padding: '10px 14px',
+        background: 'var(--color-bg-hover)',
+        borderBottom: '1px solid var(--color-border-subtle)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+      }}>
+        <ChefHat size={14} color="var(--color-accent-active)" strokeWidth={2} />
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+          Chicken & Mayo Sandwich
+        </span>
+        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginLeft: 'auto' }}>
+          Serves 1
+        </span>
+      </div>
+      {ingredients.map((ing, i) => (
+        <div
+          key={i}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            padding: '8px 14px',
+            borderBottom: i < ingredients.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
+            fontSize: '12.5px',
+            gap: '8px',
+          }}
+        >
+          <span style={{ flex: 1, color: 'var(--color-text-secondary)' }}>{ing.name}</span>
+          {ing.qty === '\u2014' ? (
+            <span style={{ fontSize: '12px', color: 'var(--color-text-muted)', width: '64px', textAlign: 'right' }}>to taste</span>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <input
+                type="text"
+                value={ing.qty}
+                onChange={(e) => onChange(i, e.target.value)}
+                style={{
+                  width: '48px',
+                  padding: '4px 6px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--color-border-subtle)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  fontFamily: 'var(--font-primary)',
+                  textAlign: 'right',
+                  color: 'var(--color-text-primary)',
+                  background: '#fff',
+                  outline: 'none',
+                }}
+              />
+              <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', minWidth: '16px' }}>{ing.unit}</span>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ActionButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
+      <button
+        type="button"
+        onClick={onClick}
+        style={{
+          padding: '9px 18px',
+          borderRadius: '100px',
+          border: 'none',
+          background: 'var(--color-accent-active)',
+          color: '#fff',
+          fontSize: '12.5px',
+          fontWeight: 600,
+          fontFamily: 'var(--font-primary)',
+          cursor: 'pointer',
+          boxShadow: '0 2px 8px rgba(20,67,233,0.25)',
+          transition: 'opacity 0.12s ease',
+        }}
+      >
+        {label}
+      </button>
+    </div>
+  );
+}
 
 function QuinnMessageBody({ text }: { text: string }) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
@@ -111,7 +220,7 @@ function QuinnMessageBody({ text }: { text: string }) {
   );
 }
 
-function ChatBubble({ msg }: { msg: ChatMsg }) {
+function ChatBubble({ msg, children }: { msg: ChatMsg; children?: ReactNode }) {
   const isUser = msg.role === 'user';
   return (
     <div style={{
@@ -123,20 +232,21 @@ function ChatBubble({ msg }: { msg: ChatMsg }) {
         maxWidth: '88%',
         padding: '11px 14px',
         borderRadius: isUser ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-        background: isUser ? 'var(--color-bg-surface)' : '#fff',
+        background: isUser ? '#F5F4F2' : '#fff',
         border: '1px solid var(--color-border-subtle)',
-        boxShadow: isUser ? 'none' : '0 1px 3px rgba(58,48,40,0.06)',
+        boxShadow: isUser ? 'none' : '0 2px 8px rgba(58,48,40,0.08), 0 0 0 1px rgba(58,48,40,0.03)',
         fontSize: '13.5px',
         lineHeight: 1.6,
         color: 'var(--color-text-secondary)',
         whiteSpace: 'pre-wrap',
       }}>
         {!isUser && (
-          <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-accent-quinn)', marginBottom: '6px', letterSpacing: '0.04em' }}>
+          <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-accent-active)', marginBottom: '6px', letterSpacing: '0.04em' }}>
             QUINN
           </div>
         )}
         {isUser ? msg.text : <QuinnMessageBody text={msg.text} />}
+        {children}
       </div>
     </div>
   );
@@ -168,7 +278,7 @@ function ClaudeComposer({
         background: '#fff',
         borderRadius: '20px',
         border: '1px solid rgba(58,48,40,0.1)',
-        boxShadow: '0 8px 32px rgba(58,48,40,0.07), 0 2px 8px rgba(58,48,40,0.04)',
+        boxShadow: '0 8px 32px rgba(58,48,40,0.1), 0 2px 8px rgba(58,48,40,0.06)',
         overflow: 'hidden',
       }}
     >
@@ -302,77 +412,106 @@ export default function Feed({
   briefingRole,
   quinnExpanded = false,
   onToggleQuinnExpand,
+  onChatStateChange,
 }: {
   briefingRole: BriefingRole;
   quinnExpanded?: boolean;
   onToggleQuinnExpand?: () => void;
+  onChatStateChange?: (active: boolean) => void;
 }) {
   const [chatStarted, setChatStarted] = useState(false);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState('');
-  const [recipeWorking, setRecipeWorking] = useState(false);
-  const [workStep, setWorkStep] = useState(0);
-  const [headerOrbMode, setHeaderOrbMode] = useState<'sparkle' | 'thinking' | 'ready'>('sparkle');
+  const [recipeFlow, setRecipeFlow] = useState(0);
+  const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>(INITIAL_RECIPE_INGREDIENTS);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const recipeTaskCount = RECIPE_EDIFY_TASKS.length;
   const greeting = timeAwareGreeting(briefingRole);
 
   useEffect(() => {
-    if (!recipeWorking) return;
+    onChatStateChange?.(chatStarted);
+  }, [chatStarted, onChatStateChange]);
 
-    if (workStep < recipeTaskCount) {
-      const t = window.setTimeout(() => setWorkStep((s) => s + 1), 880);
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, recipeFlow]);
+
+  useEffect(() => {
+    if (recipeFlow === 1) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, { id: `u-recipe-${Date.now()}`, role: 'user', text: 'Chicken and mayo sandwich' }]);
+        setRecipeFlow(2);
+      }, 1500);
       return () => clearTimeout(t);
     }
-
-    if (workStep === recipeTaskCount) {
-      const t = window.setTimeout(() => {
-        setHeaderOrbMode('ready');
-        setMessages((prev) => [
-          ...prev,
-          { id: `q-recipe-done-${Date.now()}`, role: 'quinn', text: QUINN_RECIPE_DONE },
-        ]);
-        setRecipeWorking(false);
-        setWorkStep(0);
-        window.setTimeout(() => setHeaderOrbMode('sparkle'), 1200);
-      }, 700);
+    if (recipeFlow === 2) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: `q-recipe-card-${Date.now()}`,
+          role: 'quinn',
+          text: RECIPE_CARD_INTRO,
+          msgType: 'recipe-card',
+        }]);
+        setRecipeFlow(3);
+      }, 1200);
       return () => clearTimeout(t);
     }
-  }, [recipeWorking, workStep, recipeTaskCount]);
+    if (recipeFlow === 4) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: `q-supplier-${Date.now()}`,
+          role: 'quinn',
+          text: RECIPE_LINK_MSG,
+        }]);
+        setRecipeFlow(5);
+      }, 800);
+      return () => clearTimeout(t);
+    }
+    if (recipeFlow === 6) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: `q-done-${Date.now()}`,
+          role: 'quinn',
+          text: RECIPE_DONE_MSG,
+        }]);
+        setRecipeFlow(7);
+      }, 800);
+      return () => clearTimeout(t);
+    }
+  }, [recipeFlow]);
+
+  function startRecipeFlow() {
+    setChatStarted(true);
+    setMessages([{ id: `q-greeting-${Date.now()}`, role: 'quinn', text: RECIPE_GREETING }]);
+    setRecipeFlow(1);
+  }
+
+  function confirmRecipe() {
+    setMessages(prev => [...prev, { id: `u-confirm-${Date.now()}`, role: 'user', text: 'Looks good, save it' }]);
+    setRecipeFlow(4);
+  }
+
+  function confirmSupplier() {
+    setMessages(prev => [...prev, { id: `u-supplier-${Date.now()}`, role: 'user', text: 'Yes, add them' }]);
+    setRecipeFlow(6);
+  }
 
   function sendMessage(overrideText?: string) {
     const raw = overrideText !== undefined ? overrideText : input;
     const text = raw.trim();
     if (!text) return;
-    if (recipeWorking) return;
 
     const userMsg: ChatMsg = { id: `u-${Date.now()}`, role: 'user', text };
-    const nextMessages = [...messages, userMsg];
-    const userCount = nextMessages.filter((m) => m.role === 'user').length;
-
     setChatStarted(true);
-    setMessages(nextMessages);
+    setMessages(prev => [...prev, userMsg]);
     setInput('');
-
-    if (userCount === 1) {
-      window.setTimeout(() => {
-        setMessages((prev) => [
-          ...prev,
-          { id: `q-${Date.now()}`, role: 'quinn', text: QUINN_RECIPE_REPLY },
-        ]);
-      }, 450);
-    } else {
-      setRecipeWorking(true);
-      setWorkStep(0);
-      setHeaderOrbMode('thinking');
-    }
   }
 
-  const composerDisabled = recipeWorking;
-  const composerPlaceholder = recipeWorking ? 'Quinn is working in Edify…' : PLACEHOLDER;
+  const composerDisabled = recipeFlow > 0 && recipeFlow < 7;
+  const composerPlaceholder = composerDisabled ? 'Quinn is working on your recipe\u2026' : PLACEHOLDER;
   const composerMinH = chatStarted ? 40 : 72;
 
-  const showHeader = quinnExpanded || chatStarted || recipeWorking;
+  const showHeader = quinnExpanded || chatStarted;
 
   return (
     <div style={{
@@ -383,14 +522,15 @@ export default function Feed({
       minWidth: 0,
       height: '100%',
       width: '100%',
-      maxWidth: 'min(680px, 100%)',
+      maxWidth: chatStarted ? '100%' : 'min(680px, 100%)',
       margin: '0 auto',
-      background: quinnExpanded ? 'var(--color-bg-nav)' : 'transparent',
-      borderRadius: quinnExpanded ? 0 : 'var(--radius-nav)',
+      background: quinnExpanded || chatStarted ? '#fff' : 'transparent',
+      borderRadius: (quinnExpanded || chatStarted) ? 0 : 'var(--radius-nav)',
       overflow: 'hidden',
       fontFamily: 'var(--font-primary)',
-      boxShadow: quinnExpanded ? 'none' : undefined,
+      boxShadow: (quinnExpanded || chatStarted) ? 'none' : undefined,
       position: 'relative',
+      borderLeft: chatStarted && !quinnExpanded ? '1px solid var(--color-border-subtle)' : 'none',
     }}>
 
       {showHeader && (
@@ -403,22 +543,12 @@ export default function Feed({
           flexShrink: 0,
           background: quinnExpanded ? 'var(--color-bg-nav)' : 'transparent',
         }}>
-          <QuinnAvatar mode={headerOrbMode} />
+          <QuinnAvatar mode="sparkle" />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
               Quinn
             </div>
-            {recipeWorking && headerOrbMode === 'thinking' && (
-              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '1px' }}>
-                Working in Edify on your recipe…
-              </div>
-            )}
-            {headerOrbMode === 'ready' && (
-              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '1px' }}>
-                Recipe updates ready
-              </div>
-            )}
-            {quinnExpanded && !chatStarted && !recipeWorking && (
+            {quinnExpanded && !chatStarted && (
               <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '1px' }}>
                 Full screen · chat
               </div>
@@ -468,7 +598,7 @@ export default function Feed({
               border: '1px solid var(--color-border-subtle)',
               background: '#fff',
               cursor: 'pointer',
-              boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
+              boxShadow: '0 2px 6px rgba(58,48,40,0.08)',
             }}
           >
             <Maximize2 size={17} color="var(--color-text-secondary)" strokeWidth={2} />
@@ -484,7 +614,7 @@ export default function Feed({
         flexDirection: 'column',
         position: 'relative',
       }}>
-        {!chatStarted && !recipeWorking ? (
+        {!chatStarted ? (
           <div style={{
             flex: 1,
             display: 'flex',
@@ -493,6 +623,7 @@ export default function Feed({
             justifyContent: 'center',
             padding: '20px 16px 24px',
             boxSizing: 'border-box',
+            background: '#fff',
           }}>
             <div style={{ width: '100%', maxWidth: '560px' }}>
               <div style={{ textAlign: 'center', marginBottom: '28px' }}>
@@ -539,9 +670,9 @@ export default function Feed({
                 value={input}
                 onChange={setInput}
                 onSend={() => sendMessage()}
-                disabled={composerDisabled}
-                placeholder={composerPlaceholder}
-                minHeight={composerMinH}
+                disabled={false}
+                placeholder={PLACEHOLDER}
+                minHeight={72}
               />
 
               <div style={{
@@ -557,7 +688,13 @@ export default function Feed({
                     <button
                       key={i}
                       type="button"
-                      onClick={() => sendMessage(chip.text)}
+                      onClick={() => {
+                        if (chip.label === 'New recipe') {
+                          startRecipeFlow();
+                        } else {
+                          sendMessage(chip.text);
+                        }
+                      }}
                       style={{
                         display: 'inline-flex',
                         alignItems: 'center',
@@ -571,7 +708,7 @@ export default function Feed({
                         color: 'var(--color-text-secondary)',
                         cursor: 'pointer',
                         fontFamily: 'var(--font-primary)',
-                        boxShadow: '0 1px 3px rgba(58,48,40,0.05)',
+                        boxShadow: '0 2px 6px rgba(58,48,40,0.08)',
                       }}
                     >
                       <Icon size={15} strokeWidth={2} color="var(--color-text-muted)" />
@@ -587,10 +724,15 @@ export default function Feed({
             <div style={{
               flex: 1,
               overflowY: 'auto',
-              padding: '12px 16px 16px',
+              display: 'flex',
+              justifyContent: 'center',
             }}>
-              <AnimatePresence mode="wait">
-                {chatStarted && (
+              <div style={{
+                width: '100%',
+                maxWidth: '680px',
+                padding: '16px 24px 16px',
+              }}>
+                <AnimatePresence mode="wait">
                   <motion.div
                     key="chat"
                     initial={{ opacity: 0, y: 6 }}
@@ -598,32 +740,52 @@ export default function Feed({
                     transition={{ duration: 0.2 }}
                   >
                     {messages.map((m) => (
-                      <ChatBubble key={m.id} msg={m} />
+                      <ChatBubble key={m.id} msg={m}>
+                        {m.msgType === 'recipe-card' && (
+                          <RecipeCardEditor
+                            ingredients={recipeIngredients}
+                            onChange={(idx, qty) => {
+                              setRecipeIngredients(prev => prev.map((ing, i) => i === idx ? { ...ing, qty } : ing));
+                            }}
+                          />
+                        )}
+                      </ChatBubble>
                     ))}
-                    <AnimatePresence>
-                      {recipeWorking && (
-                        <RecipeChatWorking key="recipe-edify-work" workStep={workStep} />
-                      )}
-                    </AnimatePresence>
+
+                    {recipeFlow === 3 && (
+                      <ActionButton label="Looks good, save it" onClick={confirmRecipe} />
+                    )}
+                    {recipeFlow === 5 && (
+                      <ActionButton label="Yes, add them" onClick={confirmSupplier} />
+                    )}
+
+                    <div ref={chatEndRef} />
                   </motion.div>
-                )}
-              </AnimatePresence>
+                </AnimatePresence>
+              </div>
             </div>
             <div style={{
-              padding: '12px 16px 16px',
               flexShrink: 0,
-              opacity: recipeWorking ? 0.55 : 1,
-              pointerEvents: recipeWorking ? 'none' : 'auto',
-              background: 'var(--color-bg-surface)',
+              display: 'flex',
+              justifyContent: 'center',
+              borderTop: '1px solid var(--color-border-subtle)',
+              opacity: composerDisabled ? 0.55 : 1,
+              pointerEvents: composerDisabled ? 'none' : 'auto',
             }}>
-              <ClaudeComposer
-                value={input}
-                onChange={setInput}
-                onSend={() => sendMessage()}
-                disabled={composerDisabled}
-                placeholder={composerPlaceholder}
-                minHeight={composerMinH}
-              />
+              <div style={{
+                width: '100%',
+                maxWidth: '680px',
+                padding: '12px 24px 16px',
+              }}>
+                <ClaudeComposer
+                  value={input}
+                  onChange={setInput}
+                  onSend={() => sendMessage()}
+                  disabled={composerDisabled}
+                  placeholder={composerPlaceholder}
+                  minHeight={composerMinH}
+                />
+              </div>
             </div>
           </div>
         )}

@@ -14,7 +14,7 @@ export default function MobileInsightsBar({ onOpen }: { onOpen: () => void }) {
         borderRadius: '12px',
         border: '1px solid var(--color-border-subtle)',
         background: '#fff',
-        boxShadow: '0 2px 8px rgba(58,48,40,0.06)',
+        boxShadow: '0 2px 8px rgba(58,48,40,0.1)',
         cursor: 'pointer',
         fontFamily: 'var(--font-primary)',
         textAlign: 'left',

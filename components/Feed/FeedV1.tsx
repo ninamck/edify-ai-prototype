@@ -150,7 +150,7 @@ function ActionItem({ tag, summary, changes, primary, secondary, index }: Action
         borderRadius: '10px',
         border: '1px solid var(--color-border-subtle)',
         overflow: 'hidden',
-        boxShadow: '0 1px 3px rgba(58,48,40,0.05)',
+        boxShadow: '0 2px 8px rgba(58,48,40,0.08), 0 0 0 1px rgba(58,48,40,0.03)',
       }}
     >
       {tag && TagIcon && (
@@ -476,7 +476,7 @@ export default function FeedV1() {
           borderRadius: '12px',
           border: '1px solid var(--color-border-subtle)',
           padding: '10px 14px',
-          boxShadow: '0 1px 3px rgba(58,48,40,0.05)',
+          boxShadow: '0 2px 8px rgba(58,48,40,0.08), 0 0 0 1px rgba(58,48,40,0.03)',
         }}>
           <input
             placeholder="Ask Quinn anything…"

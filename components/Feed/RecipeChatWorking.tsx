@@ -30,7 +30,7 @@ export default function RecipeChatWorking({ workStep }: RecipeChatWorkingProps) 
         borderRadius: '14px',
         border: '1px solid var(--color-border-subtle)',
         background: '#fff',
-        boxShadow: '0 4px 20px rgba(58,48,40,0.08)',
+        boxShadow: '0 4px 20px rgba(58,48,40,0.12), 0 0 0 1px rgba(58,48,40,0.03)',
         overflow: 'hidden',
       }}
     >

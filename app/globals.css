@@ -4,12 +4,12 @@
 :root {
   /* BASE SURFACES */
   --color-bg-nav:          #FFFFFF;
-  --color-bg-surface:      #F9F8F6;
-  --color-bg-hover:        #F2F1EF;
+  --color-bg-surface:      #FFFFFF;
+  --color-bg-hover:        #F5F4F2;
 
   /* BORDERS */
-  --color-border:          #DDDBD8;
-  --color-border-subtle:   #ECEAE7;
+  --color-border:          #D9D7D4;
+  --color-border-subtle:   #E8E6E3;
 
   /* TEXT */
   --color-text-primary:    #3A3028;
@@ -17,7 +17,7 @@
   --color-text-muted:      #6B5E55;
 
   /* BRAND ACCENTS */
-  --color-accent-quinn:    #F98513;
+  --color-accent-quinn:    #FFFFFF;
   --color-accent-active:   #1443E9;
   --color-accent-deep:     #1035C0;
   --color-accent-mid:      #8FA3E8;
@@ -33,7 +33,7 @@
 
   /* QUINN BUTTON */
   --color-quinn-bg:        #1035C0;
-  --color-quinn-label:     #F98513;
+  --color-quinn-label:     #FFFFFF;
 
   /* NOTIFICATION */
   --color-dot:             #1443E9;

@@ -38,7 +38,7 @@ export default function MorningBriefingTimeline({
         background: '#fff',
         borderRadius: sidebar ? 12 : 0,
         border: sidebar ? '1px solid var(--color-border-subtle)' : 'none',
-        boxShadow: sidebar ? '0 2px 12px rgba(58,48,40,0.06)' : undefined,
+        boxShadow: sidebar ? '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.03)' : undefined,
         overflow: 'hidden',
         fontFamily: 'var(--font-primary)',
         boxSizing: 'border-box',
@@ -73,7 +73,7 @@ export default function MorningBriefingTimeline({
           </div>
 
           <div
-            role="tablist"
+            role="group"
             aria-label="Briefing panel"
             style={{
               display: 'flex',
@@ -81,72 +81,73 @@ export default function MorningBriefingTimeline({
               marginTop: '12px',
               padding: '4px',
               borderRadius: '100px',
-              background: 'var(--color-bg-surface)',
+              background: 'var(--color-bg-hover)',
               border: '1px solid var(--color-border-subtle)',
             }}
           >
             <button
               type="button"
-              role="tab"
-              aria-selected={panel === 'insights'}
+              aria-pressed={panel === 'insights'}
               onClick={() => setPanel('insights')}
               style={{
                 flex: 1,
-                padding: '8px 10px',
+                padding: '8px 14px',
                 borderRadius: '100px',
                 border: 'none',
                 fontSize: '11px',
                 fontWeight: 600,
                 fontFamily: 'var(--font-primary)',
                 cursor: 'pointer',
-                background: panel === 'insights' ? '#fff' : 'transparent',
-                color: panel === 'insights' ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                boxShadow: panel === 'insights' ? '0 1px 4px rgba(58,48,40,0.08)' : 'none',
-                transition: 'background 0.15s ease, color 0.15s ease',
+                background: panel === 'insights' ? 'var(--color-accent-active)' : 'transparent',
+                color: panel === 'insights' ? '#fff' : 'var(--color-text-muted)',
+                boxShadow: panel === 'insights' ? '0 2px 8px rgba(20,67,233,0.25)' : 'none',
+                transition: 'background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease',
+                whiteSpace: 'nowrap',
               }}
             >
               Quinn insights
             </button>
             <button
               type="button"
-              role="tab"
-              aria-selected={panel === 'actions'}
+              aria-pressed={panel === 'actions'}
               onClick={() => setPanel('actions')}
               style={{
                 flex: 1,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px',
-                padding: '8px 10px',
+                gap: '6px',
+                padding: '8px 14px',
                 borderRadius: '100px',
                 border: 'none',
                 fontSize: '11px',
                 fontWeight: 600,
                 fontFamily: 'var(--font-primary)',
                 cursor: 'pointer',
-                background: panel === 'actions' ? '#fff' : 'transparent',
-                color: panel === 'actions' ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                boxShadow: panel === 'actions' ? '0 1px 4px rgba(58,48,40,0.08)' : 'none',
-                transition: 'background 0.15s ease, color 0.15s ease',
+                background: panel === 'actions' ? 'var(--color-accent-active)' : 'transparent',
+                color: panel === 'actions' ? '#fff' : 'var(--color-text-muted)',
+                boxShadow: panel === 'actions' ? '0 2px 8px rgba(20,67,233,0.25)' : 'none',
+                transition: 'background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease',
+                whiteSpace: 'nowrap',
               }}
             >
               <span>To Review</span>
               <span
                 aria-hidden
                 style={{
-                  minWidth: '20px',
-                  height: '20px',
-                  padding: '0 5px',
+                  minWidth: '18px',
+                  height: '18px',
+                  padding: '0 4px',
                   borderRadius: '50%',
-                  background: 'var(--color-accent-deep)',
-                  color: '#F4F1EC',
+                  background: panel === 'actions' ? 'rgba(255,255,255,0.3)' : 'var(--color-accent-mid)',
+                  color: '#fff',
                   fontSize: '10px',
                   fontWeight: 700,
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   lineHeight: 1,
+                  transition: 'background 0.15s ease',
                 }}
               >
                 {actionCount}

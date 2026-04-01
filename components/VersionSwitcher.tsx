@@ -32,7 +32,7 @@ export default function VersionSwitcher() {
     }}>
       <span style={{
         fontSize: '10px', fontWeight: 600, letterSpacing: '0.06em',
-        color: 'rgba(249,133,19,0.6)',
+        color: 'rgba(255,255,255,0.6)',
         textTransform: 'uppercase', padding: '0 8px',
       }}>
         Iterations

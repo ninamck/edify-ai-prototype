@@ -114,7 +114,7 @@ function ConfidenceMeter({ label, valuePct, caption }: { label: string; valuePct
             background: valuePct >= 70
               ? 'linear-gradient(90deg, #2D6A4F, #40916C)'
               : valuePct >= 45
-                ? 'linear-gradient(90deg, #F98513, #FFB347)'
+                ? 'linear-gradient(90deg, #FFFFFF, #E8E6E3)'
                 : 'linear-gradient(90deg, #9B2226, #E85D04)',
           }}
         />
@@ -164,7 +164,7 @@ export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso',
           boxShadow: '0 4px 20px rgba(16,53,192,0.25)',
         }}
       >
-        <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(249,133,19,0.85)', marginBottom: '8px' }}>
+        <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.85)', marginBottom: '8px' }}>
           TODAY · BOARD LINE
         </div>
         <p style={{ margin: 0 }}>
@@ -200,7 +200,7 @@ export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso',
         borderRadius: '12px',
         background: '#fff',
         border: '1px solid var(--color-border-subtle)',
-        boxShadow: '0 2px 12px rgba(58,48,40,0.06)',
+        boxShadow: '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.03)',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
@@ -288,7 +288,7 @@ export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso',
             display: 'flex',
           }}>
             <div style={{ width: '68%', background: '#2D6A4F', height: '100%' }} title="Matched" />
-            <div style={{ width: '22%', background: '#F98513', height: '100%' }} title="In review" />
+            <div style={{ width: '22%', background: 'var(--color-accent-active)', height: '100%' }} title="In review" />
             <div style={{ width: '10%', background: 'rgba(155,34,38,0.85)', height: '100%' }} title="Exception" />
           </div>
           <div style={{ display: 'flex', gap: '12px', marginTop: '6px', fontSize: '10px', color: 'var(--color-text-muted)' }}>

@@ -27,6 +27,7 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
   const [briefingRole, setBriefingRole] = useState<BriefingRole>('ravi');
   const [quinnExpanded, setQuinnExpanded] = useState(false);
   const [mobileInsightsOpen, setMobileInsightsOpen] = useState(false);
+  const [chatActive, setChatActive] = useState(false);
   const isNarrow = useMediaQuery(NARROW_BREAKPOINT);
 
   useEffect(() => {
@@ -92,6 +93,7 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
           minWidth: 0,
           minHeight: 0,
           overflow: 'hidden',
+          background: '#fff',
         }}
       >
         <Sidebar />
@@ -103,9 +105,10 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
               flexDirection: 'row',
               minWidth: 0,
               minHeight: 0,
-              padding: 12,
-              gap: 12,
+              padding: chatActive ? 0 : 12,
+              gap: chatActive ? 0 : 12,
               alignItems: 'stretch',
+              transition: 'padding 0.25s ease, gap 0.25s ease',
             }}
           >
             <div
@@ -115,10 +118,10 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
                 flexDirection: 'column',
                 minWidth: 0,
                 minHeight: 0,
-                gap: 12,
+                gap: chatActive ? 0 : 12,
               }}
             >
-              {!quinnExpanded && (
+              {!quinnExpanded && !chatActive && (
                 <FloorActionsBox
                   briefingRole={briefingRole}
                   onOpenCommandCentre={() => setCommandCentreOpen(true)}
@@ -128,12 +131,13 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
                 briefingRole={briefingRole}
                 quinnExpanded={quinnExpanded}
                 onToggleQuinnExpand={() => setQuinnExpanded((v) => !v)}
+                onChatStateChange={setChatActive}
               />
-              {isNarrow && !quinnExpanded && (
+              {isNarrow && !quinnExpanded && !chatActive && (
                 <MobileInsightsBar onOpen={() => setMobileInsightsOpen(true)} />
               )}
             </div>
-            {!quinnExpanded && !isNarrow && (
+            {!quinnExpanded && !isNarrow && !chatActive && (
               <MorningBriefingTimeline briefingRole={briefingRole} />
             )}
           </div>

@@ -55,6 +55,7 @@ export default function Sidebar() {
         overflowY: 'auto',
         overflowX: 'hidden',
         flexShrink: 0,
+        boxShadow: '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.04)',
       }}
     >
       {/* Zone 1 — Home (site switcher lives in ShellTopBar) */}

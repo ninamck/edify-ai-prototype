@@ -135,7 +135,7 @@ function KpiCard({
         borderRadius: '10px',
         border: '1px solid var(--color-border-subtle)',
         background: '#fff',
-        boxShadow: '0 1px 4px rgba(58,48,40,0.05)',
+        boxShadow: '0 2px 8px rgba(58,48,40,0.08), 0 0 0 1px rgba(58,48,40,0.03)',
       }}
     >
       <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: '6px' }}>
@@ -168,7 +168,7 @@ function ChartCard({
         borderRadius: '12px',
         border: '1px solid var(--color-border-subtle)',
         background: '#fff',
-        boxShadow: '0 2px 12px rgba(58,48,40,0.06)',
+        boxShadow: '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.03)',
         minHeight: 0,
       }}
     >

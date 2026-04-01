@@ -187,7 +187,7 @@ function FinanceActionRow({
       borderRadius: '10px',
       border: '1px solid var(--color-border-subtle)',
       padding: '12px 14px',
-      boxShadow: '0 1px 3px rgba(58,48,40,0.05)',
+      boxShadow: '0 2px 8px rgba(58,48,40,0.08), 0 0 0 1px rgba(58,48,40,0.03)',
     }}>
       <p style={{ margin: '0 0 10px', fontSize: '13px', color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
         <strong style={{ color: 'var(--color-text-primary)' }}>{title}</strong>

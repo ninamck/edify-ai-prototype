@@ -41,7 +41,7 @@ function FloorActionSquare({
         borderRadius: '12px',
         border: '1px solid var(--color-border-subtle)',
         background: '#fff',
-        boxShadow: '0 1px 3px rgba(58,48,40,0.06)',
+        boxShadow: '0 1px 3px rgba(58,48,40,0.08), 0 0 0 1px rgba(58,48,40,0.03)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -94,7 +94,7 @@ function FloorActionSquare({
             width: '8px',
             height: '8px',
             borderRadius: '50%',
-            background: '#F98513',
+            background: 'var(--color-accent-active)',
             border: '2px solid #fff',
           }} />
         )}
@@ -236,7 +236,7 @@ export default function FloorActionsBox({
         borderRadius: '12px',
         background: '#fff',
         border: '1px solid var(--color-border-subtle)',
-        boxShadow: '0 2px 12px rgba(58,48,40,0.06)',
+        boxShadow: '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.03)',
       }}
     >
       <div style={{
