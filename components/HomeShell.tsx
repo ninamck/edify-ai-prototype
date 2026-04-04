@@ -1,16 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { AnimatePresence, motion } from 'framer-motion';
 import Sidebar from '@/components/Sidebar/Sidebar';
 import ShellTopBar from '@/components/ShellTopBar';
 import type { ShellViewMode } from '@/components/ShellTopBar';
 import EstateDashboard from '@/components/Dashboard/EstateDashboard';
-import Feed from '@/components/Feed/Feed';
 import MorningBriefingTimeline from '@/components/Feed/MorningBriefingTimeline';
 import RightPanelSheetOverlay from '@/components/RightPanel/RightPanelSheetOverlay';
 import MobileInsightsBar from '@/components/MobileInsightsBar';
 import VersionSwitcher from '@/components/VersionSwitcher';
 import FloorActionsBox, { CommandCentreModal } from '@/components/FloorActionsBox';
+import Feed from '@/components/Feed/Feed';
 import type { BriefingRole } from '@/components/briefing';
 import { commandCentreVariant } from '@/components/briefing';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -22,10 +24,10 @@ type HomeShellProps = {
 const NARROW_BREAKPOINT = '(max-width: 900px)';
 
 export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps) {
+  const router = useRouter();
   const [shellView, setShellView] = useState<ShellViewMode>('command-centre');
   const [commandCentreOpen, setCommandCentreOpen] = useState(false);
   const [briefingRole, setBriefingRole] = useState<BriefingRole>('ravi');
-  const [quinnExpanded, setQuinnExpanded] = useState(false);
   const [mobileInsightsOpen, setMobileInsightsOpen] = useState(false);
   const [chatActive, setChatActive] = useState(false);
   const isNarrow = useMediaQuery(NARROW_BREAKPOINT);
@@ -51,15 +53,6 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
   }, [mobileInsightsOpen]);
 
   useEffect(() => {
-    if (!quinnExpanded) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setQuinnExpanded(false);
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [quinnExpanded]);
-
-  useEffect(() => {
     if (!mobileInsightsOpen) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') setMobileInsightsOpen(false);
@@ -74,6 +67,7 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
+        overflow: 'hidden',
         background: 'var(--color-bg-surface)',
         fontFamily: 'var(--font-primary)',
       }}
@@ -105,12 +99,10 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
               flexDirection: 'row',
               minWidth: 0,
               minHeight: 0,
-              padding: chatActive ? 0 : 12,
-              gap: chatActive ? 0 : 12,
-              alignItems: 'stretch',
-              transition: 'padding 0.25s ease, gap 0.25s ease',
+              overflow: 'hidden',
             }}
           >
+            {/* Main column: floor actions above Quinn chat */}
             <div
               style={{
                 flex: 1,
@@ -118,28 +110,66 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
                 flexDirection: 'column',
                 minWidth: 0,
                 minHeight: 0,
-                gap: chatActive ? 0 : 12,
+                overflow: 'hidden',
               }}
             >
-              {!quinnExpanded && !chatActive && (
-                <FloorActionsBox
-                  briefingRole={briefingRole}
-                  onOpenCommandCentre={() => setCommandCentreOpen(true)}
-                />
-              )}
+              {/* Floor actions strip — fades out when chat opens */}
+              <AnimatePresence initial={false}>
+                {!chatActive && (
+                  <motion.div
+                    key="floor-actions"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    style={{
+                      flexShrink: 0,
+                      padding: '12px 12px 0',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                    }}
+                  >
+                    <FloorActionsBox
+                      briefingRole={briefingRole}
+                      onOpenCommandCentre={() => setCommandCentreOpen(true)}
+                      onReceiveDelivery={() => router.push('/receive')}
+                    />
+                    {isNarrow && (
+                      <MobileInsightsBar onOpen={() => setMobileInsightsOpen(true)} />
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Quinn chat — expands to fill full area when chat is active */}
               <Feed
                 briefingRole={briefingRole}
-                quinnExpanded={quinnExpanded}
-                onToggleQuinnExpand={() => setQuinnExpanded((v) => !v)}
                 onChatStateChange={setChatActive}
               />
-              {isNarrow && !quinnExpanded && !chatActive && (
-                <MobileInsightsBar onOpen={() => setMobileInsightsOpen(true)} />
-              )}
             </div>
-            {!quinnExpanded && !isNarrow && !chatActive && (
-              <MorningBriefingTimeline briefingRole={briefingRole} />
-            )}
+
+            {/* Right panel: briefing timeline — fades out when chat opens */}
+            <AnimatePresence initial={false}>
+              {!chatActive && !isNarrow && (
+                <motion.div
+                  key="right-panel"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  style={{
+                    flexShrink: 0,
+                    padding: '12px 12px 12px 0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    minHeight: 0,
+                  }}
+                >
+                  <MorningBriefingTimeline briefingRole={briefingRole} />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         ) : (
           <div
@@ -175,7 +205,7 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
         siteLabel="Fitzroy Espresso"
       />
 
-      {showVersionSwitcher && (shellView === 'dashboard' || !quinnExpanded) && <VersionSwitcher />}
+      {showVersionSwitcher && <VersionSwitcher />}
     </div>
   );
 }

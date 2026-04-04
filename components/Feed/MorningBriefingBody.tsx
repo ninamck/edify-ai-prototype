@@ -1,551 +1,419 @@
 'use client';
 
-import { type ReactNode, useState } from 'react';
-import {
-  Package,
-  Receipt,
-  ChefHat,
-  BarChart3,
-  AlertCircle,
-  Truck,
-  ClipboardList,
-  ShoppingCart,
-  Percent,
-} from 'lucide-react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import type { BriefingRole } from '@/components/briefing';
 
-// ── Inline highlight ──────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-function Hi({ children }: { children: React.ReactNode }) {
+type Category = 'act-today' | 'changed' | 'preempted';
+
+interface InsightItem {
+  headline: string;
+  detail: string;
+  actionLabel?: string;
+  actionSecondary?: string;
+}
+
+interface InsightGroup {
+  category: Category;
+  items: InsightItem[];
+}
+
+// ── Category config ────────────────────────────────────────────────────────────
+
+const CATEGORY = {
+  'act-today': {
+    label: 'Act today',
+    color: '#B91C1C',
+    bg: 'rgba(185,28,28,0.055)',
+    borderColor: 'rgba(185,28,28,0.22)',
+    dot: '#EF4444',
+  },
+  'changed': {
+    label: 'Something changed',
+    color: '#92400E',
+    bg: 'rgba(146,64,14,0.055)',
+    borderColor: 'rgba(146,64,14,0.22)',
+    dot: '#F59E0B',
+  },
+  'preempted': {
+    label: "Quinn's already on it",
+    color: '#1a5c3a',
+    bg: 'rgba(26,92,58,0.055)',
+    borderColor: 'rgba(26,92,58,0.22)',
+    dot: '#22C55E',
+  },
+} as const;
+
+// ── Insight item ──────────────────────────────────────────────────────────────
+
+function InsightCard({
+  item,
+  accentColor,
+}: {
+  item: InsightItem;
+  accentColor: string;
+}) {
+  const [done, setDone] = useState(false);
+  if (done) return null;
+
   return (
-    <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>
-      {children}
-    </span>
+    <div
+      style={{
+        padding: '10px 12px',
+        borderRadius: '8px',
+        background: '#fff',
+        border: '1px solid var(--color-border-subtle)',
+        boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
+      }}
+    >
+      <p
+        style={{
+          margin: '0 0 4px',
+          fontSize: '12.5px',
+          fontWeight: 700,
+          color: 'var(--color-text-primary)',
+          lineHeight: 1.4,
+        }}
+      >
+        {item.headline}
+      </p>
+      <p
+        style={{
+          margin: item.actionLabel ? '0 0 10px' : 0,
+          fontSize: '12px',
+          color: 'var(--color-text-secondary)',
+          lineHeight: 1.65,
+        }}
+      >
+        {item.detail}
+      </p>
+      {item.actionLabel && (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => setDone(true)}
+            style={{
+              padding: '5px 12px',
+              borderRadius: '6px',
+              fontSize: '11.5px',
+              fontWeight: 600,
+              fontFamily: 'var(--font-primary)',
+              cursor: 'pointer',
+              border: 'none',
+              background: accentColor,
+              color: '#fff',
+            }}
+          >
+            {item.actionLabel}
+          </button>
+          {item.actionSecondary && (
+            <button
+              type="button"
+              onClick={() => setDone(true)}
+              style={{
+                padding: '5px 12px',
+                borderRadius: '6px',
+                fontSize: '11.5px',
+                fontWeight: 600,
+                fontFamily: 'var(--font-primary)',
+                cursor: 'pointer',
+                border: '1px solid var(--color-border)',
+                background: 'transparent',
+                color: 'var(--color-text-secondary)',
+              }}
+            >
+              {item.actionSecondary}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
-// ── Section ───────────────────────────────────────────────────────────────────
+// ── Insight group ─────────────────────────────────────────────────────────────
 
-interface DataPoint {
-  label: string;
-  value: string;
-  tone?: 'positive' | 'warning' | 'neutral';
-}
-
-interface SectionProps {
-  icon: React.ElementType;
-  title: string;
-  children: React.ReactNode;
-  dataPoints?: DataPoint[];
+function InsightGroup({
+  group,
+  index,
+}: {
+  group: InsightGroup;
   index: number;
-}
+}) {
+  const cfg = CATEGORY[group.category];
 
-const TONE_COLOR = {
-  positive: '#2D6A4F',
-  warning:  '#9B2226',
-  neutral:  'var(--color-text-primary)',
-};
-
-function BriefingSection({ icon: Icon, title, children, dataPoints, index }: SectionProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.1 + index * 0.07, duration: 0.28, ease: 'easeOut' }}
-      style={{ padding: '0 6px 16px 4px' }}
-    >
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: '7px',
+      transition={{ delay: 0.06 + index * 0.08, duration: 0.26, ease: 'easeOut' }}
+      style={{
+        borderRadius: '10px',
+        background: cfg.bg,
+        border: `1px solid ${cfg.borderColor}`,
+        padding: '12px',
         marginBottom: '10px',
-      }}>
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          width: '22px', height: '22px', borderRadius: '6px',
-          background: 'var(--color-bg-surface)',
-          flexShrink: 0,
-        }}>
-          <Icon size={12} color="var(--color-text-secondary)" strokeWidth={2} />
-        </span>
-        <span style={{
-          fontSize: '10px', fontWeight: 700, letterSpacing: '0.07em',
-          textTransform: 'uppercase', color: 'var(--color-text-secondary)',
-          lineHeight: 1.25,
-        }}>
-          {title}
+      }}
+    >
+      {/* Category label */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '7px',
+          marginBottom: '10px',
+        }}
+      >
+        <span
+          style={{
+            width: '7px',
+            height: '7px',
+            borderRadius: '50%',
+            background: cfg.dot,
+            flexShrink: 0,
+          }}
+        />
+        <span
+          style={{
+            fontSize: '10px',
+            fontWeight: 700,
+            letterSpacing: '0.07em',
+            textTransform: 'uppercase',
+            color: cfg.color,
+          }}
+        >
+          {cfg.label}
         </span>
       </div>
 
-      <div style={{
-        fontSize: '12.5px', color: 'var(--color-text-secondary)',
-        lineHeight: 1.65, marginBottom: dataPoints ? '12px' : 0,
-      }}>
-        {children}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+        {group.items.map((item, i) => (
+          <InsightCard key={i} item={item} accentColor={cfg.color} />
+        ))}
       </div>
-
-      {dataPoints && (
-        <div style={{
-          display: 'flex', flexDirection: 'column', gap: '5px',
-          background: 'rgba(58,48,40,0.04)',
-          borderRadius: '8px', padding: '8px 10px',
-        }}>
-          {dataPoints.map((dp, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{dp.label}</span>
-              <span style={{
-                fontSize: '11px', fontWeight: 700,
-                color: TONE_COLOR[dp.tone ?? 'neutral'],
-              }}>
-                {dp.value}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
     </motion.div>
   );
 }
 
-// ── Divider ───────────────────────────────────────────────────────────────────
+// ── Role content ──────────────────────────────────────────────────────────────
 
-function Divider() {
-  return <div style={{ height: '1px', background: 'var(--color-border-subtle)', margin: '10px 6px' }} />;
-}
+const RAVI_INSIGHTS: InsightGroup[] = [
+  {
+    category: 'act-today',
+    items: [
+      {
+        headline: 'Metro credit £312 — 18 days open, 4 past your agreed threshold',
+        detail:
+          'Finance can\'t close the period cleanly until this clears. The paperwork is ready and waiting — this needs a decision from you, not another delegation.',
+        actionLabel: 'Open credit workflow',
+        actionSecondary: 'Snooze 48h',
+      },
+      {
+        headline: 'Matcha stocks out Thursday at Fitzroy and City Centre',
+        detail:
+          'No inbound PO covers it before then. Quinn can move 3 cases from South Yarra today — that buys the estate five days. Approve and it happens automatically.',
+        actionLabel: 'Approve transfer',
+        actionSecondary: 'Escalate to ops',
+      },
+    ],
+  },
+  {
+    category: 'changed',
+    items: [
+      {
+        headline: 'City Centre labour at 107% for three evenings in a row',
+        detail:
+          'This isn\'t a one-off rush response — the pattern points to a structural rostering gap. One conversation with the GM now is cheaper than a week of overspend.',
+      },
+      {
+        headline: 'Urban Fresh invoices 6 days late — unusual for them',
+        detail:
+          'Dry-goods margin confidence is sitting at 72% because of it. If they batch-post at period end, your cost read will spike without warning.',
+      },
+      {
+        headline: 'Pastry waste at Fitzroy up 38% vs baseline — building quietly',
+        detail:
+          'Too slow for daily alerts, but Quinn has tracked it over the week. Pattern maps to morning batch over-pull. Worth a look before it compounds into the weekend.',
+      },
+    ],
+  },
+  {
+    category: 'preempted',
+    items: [
+      {
+        headline: 'Bidfood basket built — £1,240 est., matcha top-up included',
+        detail:
+          'Quinn has pre-filled tomorrow\'s order with the extra matcha case already in. Cut-off is 2pm — approve as-is or adjust first.',
+        actionLabel: 'Review & approve',
+        actionSecondary: 'Adjust basket',
+      },
+      {
+        headline: '3 supplier chase emails ready for Urban Fresh dry goods',
+        detail:
+          'Quinn has drafted them to the right contacts. One tap sends all three — or open to review first if you want to adjust tone.',
+        actionLabel: 'Send all three',
+        actionSecondary: 'Review first',
+      },
+    ],
+  },
+];
 
-/** TLDR / opening block spacing (no timeline dots). */
-function TimelineLead({ children }: { children: ReactNode }) {
-  return <div style={{ padding: '0 6px 14px 4px' }}>{children}</div>;
-}
+const GM_INSIGHTS: InsightGroup[] = [
+  {
+    category: 'act-today',
+    items: [
+      {
+        headline: 'Fresh Direct 11am — one milk case confirmed short before it arrives',
+        detail:
+          'Don\'t sign the GRN until you\'ve physically checked the drop. Quinn will auto-log the discrepancy so the credit workflow starts immediately.',
+        actionLabel: 'Got it',
+      },
+      {
+        headline: 'Matcha runs out Friday — Bidfood order needs your go-ahead today',
+        detail:
+          'Quinn has already added 1 extra case to the basket. Cut-off is 2pm — approve now and it\'s handled.',
+        actionLabel: 'Approve order',
+        actionSecondary: 'Adjust quantity',
+      },
+    ],
+  },
+  {
+    category: 'changed',
+    items: [
+      {
+        headline: 'Pastry waste up 40% after 3pm — three days running',
+        detail:
+          'This isn\'t random. It maps to morning over-pull on the batch — you\'re making more than lunchtime sells. A quick word with the shift lead today could fix it before the weekend.',
+      },
+      {
+        headline: 'Evening labour at 107% of plan — not just last night',
+        detail:
+          'Third time this week. If deliveries slip again today it\'ll compound. Worth flagging to whoever sets the evening roster.',
+      },
+    ],
+  },
+  {
+    category: 'preempted',
+    items: [
+      {
+        headline: 'Tomorrow\'s Bidfood basket ready — £1,240 est.',
+        detail:
+          'Extra matcha included. One screen to review, one tap to send before 2pm.',
+        actionLabel: 'Review & send',
+      },
+      {
+        headline: 'Compliance checks queued for today',
+        detail:
+          'AM temperature log, fire door check, and one outstanding head office policy acknowledgement from Tuesday. All three forms are ready — takes about 2 minutes.',
+        actionLabel: 'Start checks',
+      },
+    ],
+  },
+];
 
-// ── Deliveries TLDR (role-specific bullets) ───────────────────────────────────
+const CHERYL_INSIGHTS: InsightGroup[] = [
+  {
+    category: 'act-today',
+    items: [
+      {
+        headline: '3 PO mismatches ready to clear — Bidfood (2) and Metro (1)',
+        detail:
+          'Quinn has pre-filled queries and write-off tolerances for all three. Approve as-is or send the supplier queries — either way it\'s one pass, not three.',
+        actionLabel: 'Approve or send queries',
+        actionSecondary: 'Defer to tomorrow',
+      },
+      {
+        headline: 'Metro credit £312 — 18 days open, 4 past SLA',
+        detail:
+          'It\'s sitting in the queue but it won\'t move without your workflow action. One click to open, one to close.',
+        actionLabel: 'Open credit workflow',
+      },
+    ],
+  },
+  {
+    category: 'changed',
+    items: [
+      {
+        headline: 'Flour SKU came in +12% vs contract — no agreed price change on file',
+        detail:
+          'It\'s sitting unmatched so it can\'t hit recipe costs yet. But it won\'t wait — you need to accept the variance or raise a formal dispute before the invoice ages.',
+      },
+      {
+        headline: 'Urban Fresh and Lacto invoices past their usual posting window',
+        detail:
+          'Both suppliers typically post within 3 days. If they batch at month end, it\'ll create a cost spike you\'ll have to explain in the period review. Better to chase now.',
+      },
+      {
+        headline: 'Period cost completeness at 64% — below where it should be',
+        detail:
+          'Dry goods are the main gap. At this point in the period you\'d normally expect to be at 75%+. The late invoices are the reason.',
+      },
+    ],
+  },
+  {
+    category: 'preempted',
+    items: [
+      {
+        headline: 'Chase emails drafted for Urban Fresh and Lacto',
+        detail:
+          'Addressed to the right contacts, referencing the correct PO numbers. One tap sends both — or open to adjust before sending.',
+        actionLabel: 'Send both',
+        actionSecondary: 'Review first',
+      },
+      {
+        headline: 'Flour variance linked to contract file and ready for dispute',
+        detail:
+          'Quinn has matched the invoice to the contract and flagged the 12% gap. Your call: accept for this delivery or raise it formally.',
+        actionLabel: 'Raise dispute',
+        actionSecondary: 'Accept variance',
+      },
+    ],
+  },
+];
 
-function DeliveriesTldrBullets({ items }: { items: string[] }) {
+const CHAIRMAN_INSIGHTS: InsightGroup[] = [
+  {
+    category: 'act-today',
+    items: [
+      {
+        headline: 'Two items need your eye — everything else is in hand',
+        detail:
+          'Metro credit £312 is past the threshold agreed with finance (18 days). Matcha velocity at two sites will stock out before next inbound unless the estate intervenes. Quinn can brief the detail on either.',
+      },
+    ],
+  },
+  {
+    category: 'preempted',
+    items: [
+      {
+        headline: 'Estate trading in line with plan — no board-level surprises overnight',
+        detail:
+          'All sites opened normally. Net sales tracking ahead of last week. Margin confidence at 72% — gap is late invoices, not missing sales. Quinn and the ops team have the rest.',
+      },
+    ],
+  },
+];
+
+// ── Role renderers ─────────────────────────────────────────────────────────────
+
+function InsightFeed({ groups }: { groups: InsightGroup[] }) {
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '10px',
-      fontSize: '13px',
-      color: 'var(--color-text-secondary)',
-      lineHeight: 1.55,
-    }}>
-      {items.map((text, i) => (
-        <p key={i} style={{ margin: 0 }}>
-          {text}
-        </p>
+    <div style={{ padding: '2px 0 24px' }}>
+      {groups.map((group, i) => (
+        <InsightGroup key={group.category} group={group} index={i} />
       ))}
     </div>
   );
 }
 
-function MorningDeliveriesTldr({ title, items }: { title: string; items: string[] }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.28, ease: 'easeOut' }}
-      style={{ padding: 0 }}
-    >
-      <div style={{
-        fontSize: '10px',
-        fontWeight: 700,
-        letterSpacing: '0.08em',
-        textTransform: 'uppercase',
-        color: 'var(--color-text-secondary)',
-        marginBottom: '10px',
-      }}>
-        {title}
-      </div>
-      <div style={{
-        padding: '12px 14px',
-        borderRadius: '10px',
-        background: 'rgba(58,48,40,0.04)',
-        border: '1px solid var(--color-border-subtle)',
-      }}>
-        <DeliveriesTldrBullets items={items} />
-      </div>
-    </motion.div>
-  );
-}
-/** Finance queue row — every item has an explicit action */
-function FinanceActionRow({
-  title,
-  detail,
-  primary,
-  secondary,
-}: {
-  title: string;
-  detail: ReactNode;
-  primary: string;
-  secondary?: string;
-}) {
-  const [done, setDone] = useState(false);
-  if (done) return null;
-  return (
-    <div style={{
-      background: '#fff',
-      borderRadius: '10px',
-      border: '1px solid var(--color-border-subtle)',
-      padding: '12px 14px',
-      boxShadow: '0 2px 8px rgba(58,48,40,0.08), 0 0 0 1px rgba(58,48,40,0.03)',
-    }}>
-      <p style={{ margin: '0 0 10px', fontSize: '13px', color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
-        <strong style={{ color: 'var(--color-text-primary)' }}>{title}</strong>
-        {' — '}
-        {detail}
-      </p>
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <button
-          type="button"
-          onClick={() => setDone(true)}
-          style={{
-            padding: '6px 14px', borderRadius: '7px',
-            fontSize: '12px', fontWeight: 600,
-            fontFamily: 'var(--font-primary)',
-            cursor: 'pointer', border: 'none',
-            background: 'var(--color-accent-deep)',
-            color: '#F4F1EC',
-          }}
-        >
-          {primary}
-        </button>
-        {secondary && (
-          <button
-            type="button"
-            onClick={() => setDone(true)}
-            style={{
-              padding: '6px 14px', borderRadius: '7px',
-              fontSize: '12px', fontWeight: 600,
-              fontFamily: 'var(--font-primary)',
-              cursor: 'pointer',
-              border: '1px solid var(--color-border)',
-              background: 'transparent',
-              color: 'var(--color-text-secondary)',
-            }}
-          >
-            {secondary}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function BriefingRavi() {
-  return (
-    <>
-      <TimelineLead>
-        <MorningDeliveriesTldr
-          title="TLDR · deliveries & supply"
-          items={[
-            'Metro £312 credit is past the agreed threshold — needs your nod with finance, not a longer queue.',
-            'Matcha will stock out at two sites before the next inbound unless the estate intervenes on orders or transfers.',
-            'Estate trading is ahead of last week; margin read is ~72% confident with dry-goods invoices still landing.',
-          ]}
-        />
-      </TimelineLead>
-
-      <Divider />
-
-      <BriefingSection
-        icon={BarChart3}
-        title="Estate · yesterday vs same day last week"
-        index={0}
-        dataPoints={[
-          { label: 'Net sales (estate)', value: '£48,920', tone: 'positive' },
-          { label: 'vs same weekday LY', value: '+6.2%', tone: 'positive' },
-        ]}
-      >
-        <p style={{ margin: '0 0 12px' }}>
-          Estate-wide net sales yesterday came in <Hi>about six points ahead</Hi> of the same weekday
-          last week once you normalise for the bank holiday shift. Nothing flashing red at the top line.
-        </p>
-      </BriefingSection>
-
-      <Divider />
-
-      <BriefingSection
-        icon={Percent}
-        title="Gross margin · how complete is the cost picture?"
-        index={1}
-        dataPoints={[
-          { label: 'Confidence score', value: '72%', tone: 'neutral' },
-          { label: 'Main gap', value: '3 late supplier invoices', tone: 'warning' },
-        ]}
-      >
-        <p style={{ margin: '0 0 12px' }}>
-          I&apos;m showing a <Hi>gross margin confidence score of 72%</Hi> — meaning roughly three quarters
-          of the cost inputs I&apos;d want for a reliable margin read are in. The gap is mostly late
-          invoices on dry goods, not missing sales data.
-        </p>
-      </BriefingSection>
-
-      <Divider />
-
-      <BriefingSection
-        icon={Receipt}
-        title="Labour · all sites"
-        index={2}
-        dataPoints={[
-          { label: 'Estate vs roster', value: '101% · within tolerance', tone: 'neutral' },
-          { label: 'City Centre', value: 'Overspent vs plan', tone: 'warning' },
-        ]}
-      >
-        <p style={{ margin: '0 0 12px' }}>
-          Across the chain, labour landed close to plan. The only site that <Hi>meaningfully overspent
-          yesterday</Hi> was City Centre — mostly extra cover from a late delivery squeeze. Worth a
-          conversation with the GM if that becomes a pattern this week.
-        </p>
-      </BriefingSection>
-
-      <Divider />
-
-      <BriefingSection icon={AlertCircle} title="What actually needs you" index={3}>
-        <p style={{ margin: 0 }}>
-          Two things deserve executive attention, not a longer list: <Hi>Metro&apos;s unresolved £312
-          credit</Hi> is now past the threshold we agreed with finance, and <Hi>matcha velocity</Hi> at
-          two sites will stock out before the next inbound delivery unless we intervene. Everything else
-          Quinn or the sites can handle.
-        </p>
-      </BriefingSection>
-
-      <Divider />
-
-      <BriefingSection icon={Receipt} title="Invoices & credits · stuck items" index={4}>
-        <p style={{ margin: '0 0 12px' }}>
-          Beyond Metro, there are <Hi>two supplier credits</Hi> over 14 days old that haven&apos;t been
-          cleared — I&apos;ve listed them in finance&apos;s queue with suggested owners. No surprises in
-          payment runs today.
-        </p>
-      </BriefingSection>
-
-      <Divider />
-
-      <BriefingSection icon={Package} title="Trading & openings" index={5}>
-        <p style={{ margin: 0 }}>
-          <Hi>All sites opened on time and traded normally</Hi> yesterday — no closures, no partial
-          opens, no card outages logged.
-        </p>
-      </BriefingSection>
-
-      <div style={{ height: '24px' }} />
-    </>
-  );
-}
-
-function BriefingCheryl() {
-  return (
-    <>
-      <TimelineLead>
-        <MorningDeliveriesTldr
-          title="TLDR · inbound & deliveries"
-          items={[
-            '3 PO vs GRN mismatches (Bidfood, Metro) — clear matches, queries, or tolerances before they distort period margin.',
-            'Invoices missing from Urban Fresh & Lacto — chase today so dry goods aren’t sitting on accruals you can’t defend.',
-            'Flour landed +12% vs contract on inbound — don’t let it flow into recipe costs until variance is accepted or disputed.',
-          ]}
-        />
-      </TimelineLead>
-
-      <Divider />
-
-      <TimelineLead>
-      <div style={{ padding: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <div style={{
-          fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.08em',
-          textTransform: 'uppercase', color: 'var(--color-text-secondary)',
-          marginBottom: '4px',
-        }}>
-          Overnight · invoice variances
-        </div>
-        <FinanceActionRow
-          title="3 PO mismatches ready for you"
-          detail={<>Bidfood (2) and Metro (1) — quantities don&apos;t match GRN. I&apos;ve pre-filled queries you can send as-is or approve a write-off within tolerance.</>}
-          primary="Approve or send queries"
-          secondary="Defer to tomorrow"
-        />
-        <FinanceActionRow
-          title="Outstanding credit notes"
-          detail={<>Metro £312 — <Hi>18 days</Hi> open. Fresh Direct £96 — <Hi>9 days</Hi> open.</>}
-          primary="Open credit workflow"
-          secondary="Snooze 48h"
-        />
-        <FinanceActionRow
-          title="Suppliers · invoices not arrived when expected"
-          detail={<>Urban Fresh (dry schedule) and Lacto Ltd are both past their usual posting window — worth a proactive chase before period close.</>}
-          primary="Send chase templates"
-          secondary="Mark expected"
-        />
-        <FinanceActionRow
-          title="Period cost completeness"
-          detail={<>You&apos;re at <Hi>64% confirmed</Hi> for this period with 36% still in accrual or unmatched invoice. Biggest bucket is dry goods.</>}
-          primary="View period breakdown"
-          secondary="Export for audit"
-        />
-        <FinanceActionRow
-          title="Price changes on incoming invoices"
-          detail={<>Flour SKU on Bidfood came in <Hi>+12%</Hi> with no agreed price change on file — flagged for sign-off before it hits recipe costs.</>}
-          primary="Accept variance or dispute"
-          secondary="Link to contract"
-        />
-      </div>
-      </TimelineLead>
-
-      <div style={{ height: '24px' }} />
-    </>
-  );
-}
-
-function BriefingGM() {
-  return (
-    <>
-      <BriefingSection
-        icon={Truck}
-        title="Deliveries expected"
-        index={0}
-        dataPoints={[
-          { label: 'Bidfood', value: '7–9am · 14 lines', tone: 'neutral' },
-          { label: 'Fresh Direct', value: '11am · flagged case short', tone: 'warning' },
-        ]}
-      >
-        <div style={{ marginBottom: '12px' }}>
-          <div style={{
-            fontSize: '10.5px',
-            fontWeight: 700,
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
-            color: 'var(--color-text-muted)',
-            marginBottom: '8px',
-          }}>
-            TLDR
-          </div>
-          <div style={{
-            padding: '12px 14px',
-            borderRadius: '10px',
-            background: 'rgba(58,48,40,0.04)',
-            border: '1px solid var(--color-border-subtle)',
-          }}>
-            <DeliveriesTldrBullets
-              items={[
-                'Bidfood 7–9am (14 lines) — receive as normal; flag anything short vs the docket before you sign.',
-                'Fresh Direct 11am — expect one milk case short; don’t sign off until you’ve eyeball-checked the drop.',
-                'Matcha runs out Friday at today’s pace — supplier basket already has an extra case; review and send in one pass.',
-              ]}
-            />
-          </div>
-        </div>
-        <p style={{ margin: 0 }}>
-          <Hi>Bidfood</Hi> window as usual. <Hi>Fresh Direct</Hi> pre-flagged a one-case short on milk
-          from the order — I&apos;ve noted it so you can check the drop before sign-off.
-        </p>
-      </BriefingSection>
-
-      <Divider />
-
-      <BriefingSection icon={Package} title="Stock · before next delivery" index={1}>
-        <p style={{ margin: 0 }}>
-          <Hi>Matcha</Hi> runs out <Hi>Friday</Hi> at current velocity; next inbound is after that unless
-          we add a top-up. Syrups are fine.
-        </p>
-      </BriefingSection>
-
-      <Divider />
-
-      <BriefingSection
-        icon={ShoppingCart}
-        title="Order basket · one tap"
-        index={2}
-        dataPoints={[
-          { label: 'Bidfood basket', value: '£1,240 est.', tone: 'neutral' },
-          { label: 'Suggested tweak', value: '+matcha case', tone: 'warning' },
-        ]}
-      >
-        <p style={{ margin: '0 0 12px' }}>
-          I&apos;ve pre-filled tomorrow&apos;s supplier basket including an extra matcha case — adjust in
-          one screen, then send.
-        </p>
-        <button
-          type="button"
-          style={{
-            padding: '8px 16px', borderRadius: '8px',
-            fontSize: '12px', fontWeight: 600,
-            fontFamily: 'var(--font-primary)',
-            cursor: 'pointer', border: 'none',
-            background: 'var(--color-accent-deep)',
-            color: '#F4F1EC',
-          }}
-        >
-          Review &amp; send basket
-        </button>
-      </BriefingSection>
-
-      <Divider />
-
-      <BriefingSection icon={ClipboardList} title="Tasks due today" index={3}>
-        <p style={{ margin: 0 }}>
-          Temperature checks AM/PM, fire door log, and one <Hi>head office policy acknowledgement</Hi>
-          outstanding from Tuesday — two minutes in back office.
-        </p>
-      </BriefingSection>
-
-      <Divider />
-
-      <BriefingSection
-        icon={BarChart3}
-        title="Yesterday · trading"
-        index={4}
-        dataPoints={[
-          { label: 'Net sales', value: '£6,180', tone: 'positive' },
-          { label: 'Labour vs target', value: '102%', tone: 'warning' },
-        ]}
-      >
-        <p style={{ margin: 0 }}>
-          Net sales <Hi>on plan</Hi>. Labour nudged over target in the evening rush — not alarming, but
-          watch today if deliveries slip again.
-        </p>
-      </BriefingSection>
-
-      <Divider />
-
-      <BriefingSection icon={ChefHat} title="Waste · worth a look" index={5}>
-        <p style={{ margin: 0 }}>
-          Pastry waste <Hi>spiked after 3pm</Hi> versus your usual curve — likely over-pull from the
-          morning run. Quick huddle with shift lead if it repeats today.
-        </p>
-      </BriefingSection>
-
-      <div style={{ height: '24px' }} />
-    </>
-  );
-}
-
-function BriefingChairman() {
-  return (
-    <>
-      <TimelineLead>
-        <MorningDeliveriesTldr
-          title="TLDR · deliveries & supply"
-          items={[
-            'Estate trading in line with plan overnight — no material inbound or cash shock on the board line.',
-            'Two items need executive visibility only: Metro credit age and matcha velocity at two sites (Quinn can brief detail).',
-          ]}
-        />
-      </TimelineLead>
-
-      <div style={{ height: '8px' }} />
-    </>
-  );
-}
-
 function BriefingContent({ role }: { role: BriefingRole }) {
-  return (
-    <>
-      {role === 'chairman' && <BriefingChairman />}
-      {role === 'ravi' && <BriefingRavi />}
-      {role === 'cheryl' && <BriefingCheryl />}
-      {role === 'gm' && <BriefingGM />}
-    </>
-  );
+  if (role === 'chairman') return <InsightFeed groups={CHAIRMAN_INSIGHTS} />;
+  if (role === 'ravi') return <InsightFeed groups={RAVI_INSIGHTS} />;
+  if (role === 'cheryl') return <InsightFeed groups={CHERYL_INSIGHTS} />;
+  if (role === 'gm') return <InsightFeed groups={GM_INSIGHTS} />;
+  return null;
 }
 
 export { BriefingContent };

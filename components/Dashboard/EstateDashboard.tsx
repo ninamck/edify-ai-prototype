@@ -237,8 +237,8 @@ export default function EstateDashboard() {
             <AreaChart data={SALES_TREND} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#1035C0" stopOpacity={0.12} />
-                  <stop offset="100%" stopColor="#1035C0" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#1a3636" stopOpacity={0.12} />
+                  <stop offset="100%" stopColor="#1a3636" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" vertical={false} />

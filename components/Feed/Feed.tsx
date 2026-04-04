@@ -103,9 +103,116 @@ const RECIPE_LINK_MSG =
   "I've linked most of these ingredients to your existing Edify catalogue \u2014 chicken, mayo, mustard, lettuce, and tomato are all matched to current suppliers.\n\n" +
   "However, I noticed you don't have a supplier set up for **brioche buns** yet.\n\n" +
   "I'd recommend **Artisan Bakehouse** \u2014 I picked them because they're trusted amongst our users for consistently good quality and reliable deliveries. Want me to add them as a supplier for you?";
-const RECIPE_DONE_MSG =
-  "**Done!** Artisan Bakehouse is now set up as a supplier and linked to brioche buns in your recipe.\n\n" +
-  "Your **Chicken & Mayo Sandwich** recipe is live in Edify \u2014 you'll find it under **Fitzroy Espresso \u2192 Recipes**. I've calculated the food cost at **32%**, well within your target. The recipe is ready to add to any production plan.";
+const RECIPE_COST_MSG =
+  "Here's the cost and margin breakdown based on your current supplier prices:";
+
+type IngredientCost = { name: string; qty: string; unit: string; cost: number };
+
+const INGREDIENT_COSTS: IngredientCost[] = [
+  { name: 'Chicken breast (cooked, shredded)', qty: '150', unit: 'g', cost: 2.85 },
+  { name: 'Mayonnaise', qty: '30', unit: 'g', cost: 0.22 },
+  { name: 'Dijon mustard', qty: '5', unit: 'g', cost: 0.15 },
+  { name: 'Baby gem lettuce', qty: '20', unit: 'g', cost: 0.18 },
+  { name: 'Vine tomato (sliced)', qty: '40', unit: 'g', cost: 0.28 },
+  { name: 'Brioche bun', qty: '1', unit: 'pc', cost: 1.10 },
+  { name: 'Salt & pepper', qty: '\u2014', unit: '', cost: 0.02 },
+];
+
+const TOTAL_FOOD_COST = INGREDIENT_COSTS.reduce((s, i) => s + i.cost, 0);
+const DESIRED_MARGIN_PCT = 65;
+const VAT_RATE = 0.20;
+const SRP_EX_VAT = parseFloat((TOTAL_FOOD_COST / (1 - DESIRED_MARGIN_PCT / 100)).toFixed(2));
+const DINE_IN_INC_VAT = parseFloat((SRP_EX_VAT * (1 + VAT_RATE)).toFixed(2));
+const TAKEAWAY_PRICE = SRP_EX_VAT; // cold food = 0% VAT in UK
+const FOOD_COST_PCT = Math.round((TOTAL_FOOD_COST / SRP_EX_VAT) * 100);
+const GROSS_PROFIT_EX_VAT = parseFloat((SRP_EX_VAT - TOTAL_FOOD_COST).toFixed(2));
+const TARGET_FOOD_COST_PCT = 35;
+
+const RECIPE_PACKAGING_MSG =
+  "Would you like to include any packaging in the recipe cost? Here are common options for a sandwich:";
+
+type PackagingOption = { id: string; name: string; cost: number; unit: string };
+
+const PACKAGING_OPTIONS: PackagingOption[] = [
+  { id: 'wrap', name: 'Greaseproof wrap', cost: 0.08, unit: 'sheet' },
+  { id: 'bag', name: 'Brown paper bag', cost: 0.06, unit: 'ea' },
+  { id: 'box', name: 'Kraft takeaway box', cost: 0.32, unit: 'ea' },
+  { id: 'sticker', name: 'Branded label/sticker', cost: 0.05, unit: 'ea' },
+  { id: 'napkin', name: 'Napkin', cost: 0.03, unit: 'ea' },
+];
+
+const RECIPE_ALLERGEN_MSG =
+  "I've detected the following allergens based on the ingredients. Please review and confirm — you can add or remove any that apply:";
+
+const ALL_ALLERGENS = [
+  'Mustard', 'Peanuts', 'Crustaceans', 'Fish', 'Nuts', 'Cereals containing gluten',
+  'Molluscs', 'Sesame Seeds', 'Celery', 'Lupin', 'Soya', 'Sulphites', 'Eggs', 'Dairy',
+];
+
+const AUTO_DETECTED_ALLERGENS = new Set(['Mustard', 'Eggs', 'Cereals containing gluten']);
+
+const RECIPE_SITES_MSG =
+  "Almost there! I've put this under the **Food** product class — this looks like a cold eat-in & takeaway item.\n\nWhich sites should this recipe be available at?";
+
+type Site = { id: string; name: string };
+
+const MOCK_SITES: Site[] = [
+  { id: 'fitzroy', name: 'Fitzroy Espresso' },
+  { id: 'city', name: 'City Centre' },
+  { id: 'south-yarra', name: 'South Yarra' },
+  { id: 'richmond', name: 'Richmond' },
+  { id: 'airport', name: 'Airport Lounge' },
+];
+
+function buildDoneMsg(siteNames: string[]): string {
+  const sitesStr = siteNames.length === 1
+    ? `**${siteNames[0]}**`
+    : siteNames.slice(0, -1).map(s => `**${s}**`).join(', ') + ` and **${siteNames[siteNames.length - 1]}**`;
+  return (
+    `**Done!** Artisan Bakehouse is now set up as a supplier and linked to brioche buns in your recipe.\n\n` +
+    `Your **Chicken & Mayo Sandwich** recipe is live in Edify under the **Food** class, assigned to ${sitesStr}. You'll find it under Recipes \u2192 Food. The recipe is ready to add to any production plan.`
+  );
+}
+
+// ─── Production flow constants ───────────────────────────────────────────────
+
+const PROD_PREP_MSG =
+  "Let's get your **Chicken & Mayo Sandwich** onto a production schedule — I'll ask a few quick questions, with sensible defaults already filled in. First up: what's the prep time per unit?";
+const PROD_SHELF_MSG =
+  "Got it. How long does it stay fresh once made? This sets the shelf life for waste tracking and production cutoffs.";
+const PROD_BATCH_MSG =
+  "How many do you typically make in a batch? You can also decide whether any unsold stock should carry over to the next period.";
+const PROD_CATEGORY_MSG =
+  "Almost done — which category does this fall under, and how far before closing should production stop?";
+
+const PREP_TIME_OPTIONS = ['2 min', '5 min', '10 min', '15 min', '20 min'];
+const SHELF_LIFE_OPTIONS = ['30 min', '1 hour', '2 hours', '4 hours', 'End of day'];
+const CATEGORY_OPTIONS = ['Sandwiches & Wraps', 'Cold Food', 'Salads', 'Snacks', 'Hot Food'];
+const CLOSING_RANGE_OPTIONS = ['30 min', '45 min', '60 min', '90 min', 'No limit'];
+
+type ProdSettings = {
+  prepTime: string;
+  shelfLife: string;
+  batchMin: number;
+  batchMax: number | 'unlimited';
+  batchMultiple: number;
+  allowCarryOver: boolean;
+  category: string;
+  closingRange: string;
+};
+
+const DEFAULT_PROD_SETTINGS: ProdSettings = {
+  prepTime: '5 min',
+  shelfLife: '2 hours',
+  batchMin: 1,
+  batchMax: 10,
+  batchMultiple: 1,
+  allowCarryOver: false,
+  category: 'Sandwiches & Wraps',
+  closingRange: '60 min',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function RecipeCardEditor({
   ingredients,
@@ -181,6 +288,503 @@ function RecipeCardEditor({
   );
 }
 
+function CostBreakdownCard() {
+  const withinTarget = FOOD_COST_PCT <= TARGET_FOOD_COST_PCT;
+
+  const pricingRows = [
+    { label: 'Ingredient Cost', dineIn: `£${TOTAL_FOOD_COST.toFixed(2)}`, takeaway: `£${TOTAL_FOOD_COST.toFixed(2)}` },
+    { label: 'Packaging Cost', dineIn: '£0.00', takeaway: '£0.00' },
+    { label: 'Desired Margin', dineIn: `${DESIRED_MARGIN_PCT}%`, takeaway: `${DESIRED_MARGIN_PCT}%` },
+    { label: 'SRP ex VAT', dineIn: `£${SRP_EX_VAT.toFixed(2)}`, takeaway: `£${TAKEAWAY_PRICE.toFixed(2)}` },
+    { label: 'VAT', dineIn: `${Math.round(VAT_RATE * 100)}%`, takeaway: '0%*' },
+    { label: 'SRP inc VAT', dineIn: `£${DINE_IN_INC_VAT.toFixed(2)}`, takeaway: `£${TAKEAWAY_PRICE.toFixed(2)}`, bold: true },
+  ];
+
+  return (
+    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '10px 14px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <BarChart3 size={14} color="var(--color-accent-active)" strokeWidth={2} />
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Cost & Margin Breakdown</span>
+        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginLeft: '2px' }}>· Cold · Serves 1</span>
+        <span style={{ marginLeft: 'auto', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px', background: withinTarget ? 'rgba(21,128,61,0.1)' : 'rgba(185,28,28,0.1)', color: withinTarget ? '#15803D' : '#B91C1C' }}>
+          {withinTarget ? 'Within target' : 'Above target'}
+        </span>
+      </div>
+
+      {/* Ingredient rows */}
+      {INGREDIENT_COSTS.map((ing, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '7px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: '12px', gap: '8px' }}>
+          <span style={{ flex: 1, color: 'var(--color-text-secondary)' }}>{ing.name}</span>
+          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', minWidth: '44px', textAlign: 'right' }}>
+            {ing.qty === '\u2014' ? 'to taste' : `${ing.qty}${ing.unit}`}
+          </span>
+          <span style={{ fontWeight: 600, color: 'var(--color-text-primary)', minWidth: '44px', textAlign: 'right' }}>£{ing.cost.toFixed(2)}</span>
+        </div>
+      ))}
+
+      {/* Total food cost */}
+      <div style={{ display: 'flex', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid var(--color-border-subtle)', background: 'rgba(58,48,40,0.02)' }}>
+        <span style={{ flex: 1, fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Food Cost</span>
+        <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>£{TOTAL_FOOD_COST.toFixed(2)}</span>
+      </div>
+
+      {/* Dine In / Takeaway pricing table */}
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 82px 82px', gap: '2px', marginBottom: '6px' }}>
+          <div />
+          <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Dine In</div>
+          <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Takeaway</div>
+        </div>
+        {pricingRows.map((row, i) => (
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 82px 82px', gap: '2px', padding: '4px 0', borderTop: i === 0 ? 'none' : '1px solid rgba(58,48,40,0.05)' }}>
+            <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{row.label}</span>
+            <span style={{ fontSize: '12px', fontWeight: row.bold ? 700 : 500, color: row.bold ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', textAlign: 'center' }}>{row.dineIn}</span>
+            <span style={{ fontSize: '12px', fontWeight: row.bold ? 700 : 500, color: row.bold ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', textAlign: 'center' }}>{row.takeaway}</span>
+          </div>
+        ))}
+        <p style={{ fontSize: '10px', color: 'var(--color-text-muted)', margin: '6px 0 0' }}>* Cold takeaway sandwiches are zero-rated for VAT in the UK</p>
+      </div>
+
+      {/* Food cost % + weekly projection */}
+      <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: '8px', background: withinTarget ? 'rgba(21,128,61,0.06)' : 'rgba(185,28,28,0.06)' }}>
+          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>Food cost % (ex VAT)</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '18px', fontWeight: 700, color: withinTarget ? '#15803D' : '#B91C1C' }}>{FOOD_COST_PCT}%</span>
+            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>target {TARGET_FOOD_COST_PCT}%</span>
+          </div>
+        </div>
+        <div style={{ padding: '8px 10px', borderRadius: '8px', background: 'rgba(3,105,161,0.05)', fontSize: '11.5px', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+          <span style={{ fontWeight: 700, color: 'var(--color-info)' }}>Projected weekly:</span> At ~25 serves/day, that&apos;s <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>£{(GROSS_PROFIT_EX_VAT * 25 * 7).toFixed(0)}</span> gross profit/week from this item alone.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PackagingPicker({ selected, onToggle, onConfirm, onSkip }: {
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+  onConfirm: () => void;
+  onSkip: () => void;
+}) {
+  const totalPackaging = PACKAGING_OPTIONS
+    .filter(p => selected.has(p.id))
+    .reduce((s, p) => s + p.cost, 0);
+
+  return (
+    <div style={{
+      marginTop: '8px',
+      borderRadius: '10px',
+      border: '1px solid var(--color-border-subtle)',
+      overflow: 'hidden',
+    }}>
+      {PACKAGING_OPTIONS.map((pkg, i) => {
+        const isSelected = selected.has(pkg.id);
+        return (
+          <button
+            key={pkg.id}
+            type="button"
+            onClick={() => onToggle(pkg.id)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              width: '100%',
+              padding: '10px 14px',
+              gap: '10px',
+              borderBottom: i < PACKAGING_OPTIONS.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
+              background: isSelected ? 'rgba(34,68,68,0.04)' : '#fff',
+              border: 'none',
+              borderLeft: isSelected ? '3px solid var(--color-accent-active)' : '3px solid transparent',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-primary)',
+              textAlign: 'left',
+              transition: 'all 0.12s',
+            }}
+          >
+            <span style={{
+              width: '18px',
+              height: '18px',
+              borderRadius: '4px',
+              border: isSelected ? '2px solid var(--color-accent-active)' : '2px solid var(--color-border)',
+              background: isSelected ? 'var(--color-accent-active)' : '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              transition: 'all 0.12s',
+            }}>
+              {isSelected && (
+                <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                  <path d="M1 4L3.5 6.5L9 1" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </span>
+            <span style={{ flex: 1, fontSize: '12.5px', color: 'var(--color-text-primary)', fontWeight: isSelected ? 600 : 400 }}>
+              {pkg.name}
+            </span>
+            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+              per {pkg.unit}
+            </span>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: isSelected ? 'var(--color-accent-active)' : 'var(--color-text-secondary)', minWidth: '42px', textAlign: 'right' }}>
+              £{pkg.cost.toFixed(2)}
+            </span>
+          </button>
+        );
+      })}
+
+      {selected.size > 0 && (
+        <div style={{
+          padding: '8px 14px',
+          background: 'rgba(34,68,68,0.04)',
+          borderTop: '1px solid var(--color-border-subtle)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: '12px',
+        }}>
+          <span style={{ color: 'var(--color-text-secondary)' }}>Packaging adds</span>
+          <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>+£{totalPackaging.toFixed(2)}/serve</span>
+        </div>
+      )}
+
+      <div style={{
+        padding: '10px 14px',
+        borderTop: '1px solid var(--color-border-subtle)',
+        display: 'flex',
+        gap: '8px',
+        justifyContent: 'flex-end',
+      }}>
+        <button
+          type="button"
+          onClick={onSkip}
+          style={{
+            padding: '7px 16px',
+            borderRadius: '100px',
+            border: '1px solid var(--color-border)',
+            background: '#fff',
+            fontSize: '12px',
+            fontWeight: 600,
+            fontFamily: 'var(--font-primary)',
+            color: 'var(--color-text-secondary)',
+            cursor: 'pointer',
+          }}
+        >
+          No packaging needed
+        </button>
+        {selected.size > 0 && (
+          <button
+            type="button"
+            onClick={onConfirm}
+            style={{
+              padding: '7px 16px',
+              borderRadius: '100px',
+              border: 'none',
+              background: 'var(--color-accent-active)',
+              fontSize: '12px',
+              fontWeight: 600,
+              fontFamily: 'var(--font-primary)',
+              color: '#fff',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(34,68,68,0.25)',
+            }}
+          >
+            Add selected ({selected.size})
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SiteSelectionCard({ selected, onToggle, onConfirm }: { selected: Set<string>; onToggle: (id: string) => void; onConfirm: () => void }) {
+  return (
+    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden' }}>
+      <div style={{ padding: '9px 14px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Select Sites</span>
+        <button
+          type="button"
+          onClick={() => {
+            const allSelected = MOCK_SITES.every(s => selected.has(s.id));
+            if (allSelected) {
+              MOCK_SITES.forEach(s => { if (s.id !== 'fitzroy') onToggle(s.id); });
+            } else {
+              MOCK_SITES.forEach(s => { if (!selected.has(s.id)) onToggle(s.id); });
+            }
+          }}
+          style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-accent-active)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-primary)', padding: 0 }}
+        >
+          {MOCK_SITES.every(s => selected.has(s.id)) ? 'Deselect all' : 'Select all'}
+        </button>
+      </div>
+      <div style={{ padding: '12px 14px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+        {MOCK_SITES.map(site => {
+          const isSelected = selected.has(site.id);
+          return (
+            <button
+              key={site.id}
+              type="button"
+              onClick={() => onToggle(site.id)}
+              style={{
+                padding: '7px 16px',
+                borderRadius: '100px',
+                border: isSelected ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)',
+                background: isSelected ? 'var(--color-accent-active)' : '#fff',
+                color: isSelected ? '#fff' : 'var(--color-text-secondary)',
+                fontSize: '12.5px',
+                fontWeight: isSelected ? 700 : 400,
+                fontFamily: 'var(--font-primary)',
+                cursor: 'pointer',
+                transition: 'all 0.12s',
+              }}
+            >
+              {site.name}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ padding: '10px 14px', borderTop: '1px solid var(--color-border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{selected.size} site{selected.size !== 1 ? 's' : ''} selected</span>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={selected.size === 0}
+          style={{ padding: '7px 18px', borderRadius: '100px', border: 'none', background: selected.size > 0 ? 'var(--color-accent-active)' : 'var(--color-bg-hover)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: selected.size > 0 ? '#fff' : 'var(--color-text-muted)', cursor: selected.size > 0 ? 'pointer' : 'not-allowed', boxShadow: selected.size > 0 ? '0 2px 8px rgba(34,68,68,0.25)' : 'none' }}
+        >
+          Confirm sites
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AllergenCard({ confirmed, onToggle, onConfirm }: { confirmed: Set<string>; onToggle: (a: string) => void; onConfirm: () => void }) {
+  return (
+    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden' }}>
+      <div style={{ padding: '10px 14px', background: 'var(--color-warning-light)', borderBottom: '1px solid var(--color-warning-border)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-warning)' }}>Allergens</span>
+        <span style={{ fontSize: '11px', color: 'var(--color-warning)', marginLeft: 'auto' }}>
+          {confirmed.size} selected · {AUTO_DETECTED_ALLERGENS.size} auto-detected from ingredients
+        </span>
+      </div>
+      <div style={{ padding: '10px 14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px' }}>
+        {ALL_ALLERGENS.map(allergen => {
+          const isDetected = AUTO_DETECTED_ALLERGENS.has(allergen);
+          const isSelected = confirmed.has(allergen);
+          return (
+            <button
+              key={allergen}
+              type="button"
+              onClick={() => onToggle(allergen)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 8px',
+                borderRadius: '6px',
+                border: 'none',
+                background: isSelected ? (isDetected ? 'rgba(146,64,14,0.07)' : 'rgba(34,68,68,0.05)') : 'transparent',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-primary)',
+                textAlign: 'left',
+              }}
+            >
+              <span style={{
+                width: '15px', height: '15px', borderRadius: '3px', flexShrink: 0,
+                border: isSelected ? '2px solid var(--color-accent-active)' : '2px solid var(--color-border)',
+                background: isSelected ? 'var(--color-accent-active)' : '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {isSelected && (
+                  <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                    <path d="M1 3.5L3 5.5L8 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </span>
+              <span style={{ fontSize: '11.5px', color: 'var(--color-text-primary)', fontWeight: isDetected && isSelected ? 600 : 400 }}>
+                {allergen}
+                {isDetected && (
+                  <span style={{ fontSize: '9px', color: 'var(--color-warning)', marginLeft: '4px', fontWeight: 700 }}>auto</span>
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ padding: '10px 14px', borderTop: '1px solid var(--color-border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Based on UK Food Information Regulations 2014</span>
+        <button
+          type="button"
+          onClick={onConfirm}
+          style={{ padding: '7px 18px', borderRadius: '100px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer', boxShadow: '0 2px 8px rgba(34,68,68,0.25)' }}
+        >
+          Confirm allergens ({confirmed.size})
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Production flow components ──────────────────────────────────────────────
+
+function PillPicker({ options, selected, onSelect, onConfirm }: { options: string[]; selected: string; onSelect: (o: string) => void; onConfirm: () => void }) {
+  const [customVal, setCustomVal] = useState('');
+  const isCustomSelected = selected !== '' && !options.includes(selected);
+  return (
+    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden', background: '#fff' }}>
+      <div style={{ padding: '12px 14px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+        {options.map(opt => {
+          const on = selected === opt && !isCustomSelected;
+          return (
+            <button key={opt} type="button" onClick={() => { setCustomVal(''); onSelect(opt); }} style={{ padding: '7px 16px', borderRadius: '100px', border: on ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)', background: on ? 'var(--color-accent-active)' : '#fff', color: on ? '#fff' : 'var(--color-text-secondary)', fontSize: '12.5px', fontWeight: on ? 700 : 400, fontFamily: 'var(--font-primary)', cursor: 'pointer', transition: 'all 0.12s' }}>
+              {opt}
+            </button>
+          );
+        })}
+        <input
+          type="text"
+          value={customVal}
+          onChange={(e) => { setCustomVal(e.target.value); if (e.target.value.trim()) onSelect(e.target.value.trim()); }}
+          placeholder="Other…"
+          style={{ width: '82px', padding: '6px 12px', borderRadius: '100px', border: isCustomSelected ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)', background: isCustomSelected ? 'rgba(34,68,68,0.04)' : '#fff', fontSize: '12.5px', fontFamily: 'var(--font-primary)', color: 'var(--color-text-primary)', outline: 'none' }}
+        />
+      </div>
+      <div style={{ padding: '0 14px 12px', display: 'flex', justifyContent: 'flex-end' }}>
+        <button type="button" onClick={onConfirm} style={{ padding: '7px 18px', borderRadius: '100px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer', boxShadow: '0 2px 8px rgba(34,68,68,0.25)' }}>
+          Confirm
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function BatchAndCarryCard({ settings, onUpdate, onConfirm }: { settings: ProdSettings; onUpdate: (u: Partial<ProdSettings>) => void; onConfirm: () => void }) {
+  const btnStyle: React.CSSProperties = { width: '28px', height: '28px', borderRadius: '8px', border: '1px solid var(--color-border)', background: '#fff', fontFamily: 'var(--font-primary)', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-primary)', flexShrink: 0 };
+  return (
+    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden', background: '#fff' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0', borderBottom: '1px solid var(--color-border-subtle)' }}>
+        {[{ label: 'Min batch', key: 'batchMin' as const }, { label: 'Max batch', key: 'batchMax' as const }].map(({ label, key }, i) => (
+          <div key={key} style={{ padding: '12px 14px', borderRight: i === 0 ? '1px solid var(--color-border-subtle)' : 'none' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>{label}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {settings[key] === 'unlimited' ? (
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)', flex: 1 }}>Unlimited</span>
+              ) : (
+                <>
+                  <button style={btnStyle} onClick={() => onUpdate({ [key]: Math.max(key === 'batchMax' ? settings.batchMin : 1, (settings[key] as number) - 1) })}>−</button>
+                  <span style={{ fontWeight: 700, fontSize: '18px', minWidth: '28px', textAlign: 'center' }}>{settings[key]}</span>
+                  <button style={btnStyle} onClick={() => onUpdate({ [key]: (settings[key] as number) + 1 })}>+</button>
+                </>
+              )}
+              {key === 'batchMax' && (
+                <button onClick={() => onUpdate({ batchMax: settings.batchMax === 'unlimited' ? 10 : 'unlimited' })} style={{ fontSize: '10px', color: 'var(--color-accent-active)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-primary)', fontWeight: 600, marginLeft: '2px' }}>
+                  {settings.batchMax === 'unlimited' ? 'Set limit' : 'No limit'}
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>Batch multiplier</div>
+          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '1px' }}>Production must be made in multiples of this number</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button style={btnStyle} onClick={() => onUpdate({ batchMultiple: Math.max(1, settings.batchMultiple - 1) })}>−</button>
+          <span style={{ fontWeight: 700, fontSize: '16px', minWidth: '24px', textAlign: 'center' }}>{settings.batchMultiple}</span>
+          <button style={btnStyle} onClick={() => onUpdate({ batchMultiple: settings.batchMultiple + 1 })}>+</button>
+        </div>
+      </div>
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>Allow carry over</div>
+          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '1px' }}>Unsold stock rolls to the next production period</div>
+        </div>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          {(['Write off', 'Allow carry over'] as const).map(opt => {
+            const on = opt === 'Allow carry over' ? settings.allowCarryOver : !settings.allowCarryOver;
+            return (
+              <button key={opt} type="button" onClick={() => onUpdate({ allowCarryOver: opt === 'Allow carry over' })} style={{ padding: '6px 12px', borderRadius: '100px', border: on ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)', background: on ? 'var(--color-accent-active)' : '#fff', color: on ? '#fff' : 'var(--color-text-secondary)', fontSize: '11.5px', fontWeight: on ? 700 : 400, fontFamily: 'var(--font-primary)', cursor: 'pointer', transition: 'all 0.12s' }}>
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div style={{ padding: '10px 14px', display: 'flex', justifyContent: 'flex-end' }}>
+        <button type="button" onClick={onConfirm} style={{ padding: '7px 18px', borderRadius: '100px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer', boxShadow: '0 2px 8px rgba(34,68,68,0.25)' }}>
+          Confirm
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CategoryClosingCard({ settings, onUpdate, onConfirm }: { settings: ProdSettings; onUpdate: (u: Partial<ProdSettings>) => void; onConfirm: () => void }) {
+  return (
+    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden', background: '#fff' }}>
+      <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Recipe category</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {CATEGORY_OPTIONS.map(opt => {
+            const on = settings.category === opt;
+            return <button key={opt} type="button" onClick={() => onUpdate({ category: opt })} style={{ padding: '6px 14px', borderRadius: '100px', border: on ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)', background: on ? 'var(--color-accent-active)' : '#fff', color: on ? '#fff' : 'var(--color-text-secondary)', fontSize: '12px', fontWeight: on ? 700 : 400, fontFamily: 'var(--font-primary)', cursor: 'pointer', transition: 'all 0.12s' }}>{opt}</button>;
+          })}
+        </div>
+      </div>
+      <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Stop production before closing</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {CLOSING_RANGE_OPTIONS.map(opt => {
+            const on = settings.closingRange === opt;
+            return <button key={opt} type="button" onClick={() => onUpdate({ closingRange: opt })} style={{ padding: '6px 14px', borderRadius: '100px', border: on ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)', background: on ? 'var(--color-accent-active)' : '#fff', color: on ? '#fff' : 'var(--color-text-secondary)', fontSize: '12px', fontWeight: on ? 700 : 400, fontFamily: 'var(--font-primary)', cursor: 'pointer', transition: 'all 0.12s' }}>{opt}</button>;
+          })}
+        </div>
+      </div>
+      <div style={{ padding: '10px 14px', display: 'flex', justifyContent: 'flex-end' }}>
+        <button type="button" onClick={onConfirm} style={{ padding: '7px 18px', borderRadius: '100px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer', boxShadow: '0 2px 8px rgba(34,68,68,0.25)' }}>
+          Confirm
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ProductionSummaryCard({ settings }: { settings: ProdSettings }) {
+  const rows = [
+    { label: 'Recipe', value: 'Chicken & Mayo Sandwich', bold: true },
+    { label: 'Product class', value: 'Food' },
+    { label: 'Category', value: settings.category },
+    { label: 'Prep time', value: settings.prepTime },
+    { label: 'Shelf life', value: settings.shelfLife },
+    { label: 'Min batch', value: String(settings.batchMin) },
+    { label: 'Max batch', value: settings.batchMax === 'unlimited' ? 'Unlimited' : String(settings.batchMax) },
+    { label: 'Batch multiplier', value: String(settings.batchMultiple) },
+    { label: 'Carry over', value: settings.allowCarryOver ? 'Allowed' : 'Write off' },
+    { label: 'Stop production', value: settings.closingRange === 'No limit' ? 'No limit' : `${settings.closingRange} before close` },
+  ];
+  return (
+    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-success-border)', overflow: 'hidden', background: 'var(--color-success-light)' }}>
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--color-success-border)', display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(21,128,61,0.06)' }}>
+        <span style={{ fontSize: '14px' }}>✓</span>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-success)' }}>Production plan configured</span>
+      </div>
+      <div style={{ padding: '10px 14px', background: '#fff' }}>
+        {rows.map((row, i) => (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: i < rows.length - 1 ? '1px solid var(--color-border-subtle)' : 'none' }}>
+            <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{row.label}</span>
+            <span style={{ fontSize: '12px', fontWeight: row.bold ? 700 : 600, color: 'var(--color-text-primary)' }}>{row.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function ActionButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
@@ -197,7 +801,7 @@ function ActionButton({ label, onClick }: { label: string; onClick: () => void }
           fontWeight: 600,
           fontFamily: 'var(--font-primary)',
           cursor: 'pointer',
-          boxShadow: '0 2px 8px rgba(20,67,233,0.25)',
+          boxShadow: '0 2px 8px rgba(34,68,68,0.25)',
           transition: 'opacity 0.12s ease',
         }}
       >
@@ -413,17 +1017,25 @@ export default function Feed({
   quinnExpanded = false,
   onToggleQuinnExpand,
   onChatStateChange,
+  noHeader = false,
 }: {
   briefingRole: BriefingRole;
   quinnExpanded?: boolean;
   onToggleQuinnExpand?: () => void;
   onChatStateChange?: (active: boolean) => void;
+  noHeader?: boolean;
 }) {
   const [chatStarted, setChatStarted] = useState(false);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState('');
   const [recipeFlow, setRecipeFlow] = useState(0);
   const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>(INITIAL_RECIPE_INGREDIENTS);
+  const [selectedPackaging, setSelectedPackaging] = useState<Set<string>>(new Set());
+  const [selectedAllergens, setSelectedAllergens] = useState<Set<string>>(new Set(AUTO_DETECTED_ALLERGENS));
+  const [selectedSites, setSelectedSites] = useState<Set<string>>(new Set(['fitzroy']));
+  const doneSiteNamesRef = useRef<string[]>(['Fitzroy Espresso']);
+  const [productionFlow, setProductionFlow] = useState(0);
+  const [prodSettings, setProdSettings] = useState<ProdSettings>({ ...DEFAULT_PROD_SETTINGS });
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const greeting = timeAwareGreeting(briefingRole);
@@ -434,7 +1046,7 @@ export default function Feed({
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, recipeFlow]);
+  }, [messages, recipeFlow, productionFlow]);
 
   useEffect(() => {
     if (recipeFlow === 1) {
@@ -456,29 +1068,119 @@ export default function Feed({
       }, 1200);
       return () => clearTimeout(t);
     }
+    if (recipeFlow === 3) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: `q-cost-${Date.now()}`,
+          role: 'quinn',
+          text: RECIPE_COST_MSG,
+          msgType: 'cost-breakdown',
+        }]);
+        setRecipeFlow(4);
+      }, 1000);
+      return () => clearTimeout(t);
+    }
     if (recipeFlow === 4) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: `q-packaging-${Date.now()}`,
+          role: 'quinn',
+          text: RECIPE_PACKAGING_MSG,
+          msgType: 'packaging-picker',
+        }]);
+        setRecipeFlow(5);
+      }, 900);
+      return () => clearTimeout(t);
+    }
+    if (recipeFlow === 6) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: `q-allergen-${Date.now()}`,
+          role: 'quinn',
+          text: RECIPE_ALLERGEN_MSG,
+          msgType: 'allergen-check',
+        }]);
+        setRecipeFlow(7);
+      }, 800);
+      return () => clearTimeout(t);
+    }
+    if (recipeFlow === 8) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: `q-sites-${Date.now()}`,
+          role: 'quinn',
+          text: RECIPE_SITES_MSG,
+          msgType: 'site-selection',
+        }]);
+        setRecipeFlow(9);
+      }, 700);
+      return () => clearTimeout(t);
+    }
+    if (recipeFlow === 11) {
       const t = setTimeout(() => {
         setMessages(prev => [...prev, {
           id: `q-supplier-${Date.now()}`,
           role: 'quinn',
           text: RECIPE_LINK_MSG,
         }]);
-        setRecipeFlow(5);
+        setRecipeFlow(12);
       }, 800);
       return () => clearTimeout(t);
     }
-    if (recipeFlow === 6) {
+    if (recipeFlow === 13) {
       const t = setTimeout(() => {
         setMessages(prev => [...prev, {
           id: `q-done-${Date.now()}`,
           role: 'quinn',
-          text: RECIPE_DONE_MSG,
+          text: buildDoneMsg(doneSiteNamesRef.current),
         }]);
-        setRecipeFlow(7);
+        setRecipeFlow(14);
       }, 800);
       return () => clearTimeout(t);
     }
+    if (recipeFlow === 14) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: `q-prod-offer-${Date.now()}`,
+          role: 'quinn',
+          text: "Want to add it to a production plan while we're here? I can walk you through the settings in a couple of quick questions.",
+        }]);
+        setRecipeFlow(15);
+      }, 1400);
+      return () => clearTimeout(t);
+    }
   }, [recipeFlow]);
+
+  useEffect(() => {
+    if (productionFlow === 3) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, { id: `q-shelf-${Date.now()}`, role: 'quinn', text: PROD_SHELF_MSG, msgType: 'prod-shelf' }]);
+        setProductionFlow(4);
+      }, 700);
+      return () => clearTimeout(t);
+    }
+    if (productionFlow === 5) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, { id: `q-batch-${Date.now()}`, role: 'quinn', text: PROD_BATCH_MSG, msgType: 'prod-batch' }]);
+        setProductionFlow(6);
+      }, 700);
+      return () => clearTimeout(t);
+    }
+    if (productionFlow === 7) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, { id: `q-category-${Date.now()}`, role: 'quinn', text: PROD_CATEGORY_MSG, msgType: 'prod-category' }]);
+        setProductionFlow(8);
+      }, 700);
+      return () => clearTimeout(t);
+    }
+    if (productionFlow === 9) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, { id: `q-prod-done-${Date.now()}`, role: 'quinn', text: 'All done! Here\'s the production plan I\'ve set up for your **Chicken & Mayo Sandwich**:', msgType: 'prod-summary' }]);
+        setProductionFlow(10);
+      }, 800);
+      return () => clearTimeout(t);
+    }
+  }, [productionFlow]);
 
   function startRecipeFlow() {
     setChatStarted(true);
@@ -486,15 +1188,103 @@ export default function Feed({
     setRecipeFlow(1);
   }
 
+  function confirmPackaging() {
+    const chosen = PACKAGING_OPTIONS.filter(p => selectedPackaging.has(p.id));
+    const total = chosen.reduce((s, p) => s + p.cost, 0);
+    const names = chosen.map(p => p.name).join(', ');
+    setMessages(prev => [...prev, {
+      id: `u-packaging-${Date.now()}`,
+      role: 'user',
+      text: `Add ${names} (+£${total.toFixed(2)}/serve)`,
+    }]);
+    setRecipeFlow(6);
+  }
+
+  function skipPackaging() {
+    setMessages(prev => [...prev, {
+      id: `u-packaging-skip-${Date.now()}`,
+      role: 'user',
+      text: 'No packaging needed',
+    }]);
+    setRecipeFlow(6);
+  }
+
+  function confirmAllergens() {
+    const list = Array.from(selectedAllergens).join(', ');
+    setMessages(prev => [...prev, {
+      id: `u-allergens-${Date.now()}`,
+      role: 'user',
+      text: `Confirmed — ${list}`,
+    }]);
+    setRecipeFlow(8);
+  }
+
+  function confirmSites() {
+    const names = MOCK_SITES.filter(s => selectedSites.has(s.id)).map(s => s.name);
+    doneSiteNamesRef.current = names;
+    const sitesStr = names.join(', ');
+    setMessages(prev => [...prev, {
+      id: `u-sites-${Date.now()}`,
+      role: 'user',
+      text: `Assign to: ${sitesStr}`,
+    }]);
+    setRecipeFlow(10);
+  }
+
   function confirmRecipe() {
     setMessages(prev => [...prev, { id: `u-confirm-${Date.now()}`, role: 'user', text: 'Looks good, save it' }]);
-    setRecipeFlow(4);
+    setRecipeFlow(11);
   }
 
   function confirmSupplier() {
     setMessages(prev => [...prev, { id: `u-supplier-${Date.now()}`, role: 'user', text: 'Yes, add them' }]);
-    setRecipeFlow(6);
+    setRecipeFlow(13);
   }
+
+  // ─── Production flow actions ──────────────────────────────────────────────
+
+  function startProductionFlow() {
+    setMessages(prev => [...prev,
+      { id: `u-prod-yes-${Date.now()}`, role: 'user', text: 'Yes, set it up' },
+      { id: `q-prod-start-${Date.now()}`, role: 'quinn', text: PROD_PREP_MSG, msgType: 'prod-prep' },
+    ]);
+    setRecipeFlow(16);
+    setProdSettings({ ...DEFAULT_PROD_SETTINGS });
+    setProductionFlow(2);
+  }
+
+  function skipProductionOffer() {
+    setMessages(prev => [...prev, { id: `u-prod-skip-${Date.now()}`, role: 'user', text: 'Not now, thanks' }]);
+    setRecipeFlow(16);
+  }
+
+  function confirmPrepTime(time: string) {
+    setProdSettings(s => ({ ...s, prepTime: time }));
+    setMessages(prev => [...prev, { id: `u-prep-${Date.now()}`, role: 'user', text: `${time} prep time` }]);
+    setProductionFlow(3);
+  }
+
+  function confirmShelfLife(life: string) {
+    setProdSettings(s => ({ ...s, shelfLife: life }));
+    setMessages(prev => [...prev, { id: `u-shelf-${Date.now()}`, role: 'user', text: `Shelf life: ${life}` }]);
+    setProductionFlow(5);
+  }
+
+  function confirmBatch() {
+    const maxStr = prodSettings.batchMax === 'unlimited' ? 'no max' : `max ${prodSettings.batchMax}`;
+    const multipleStr = prodSettings.batchMultiple > 1 ? `, ×${prodSettings.batchMultiple} multiple` : '';
+    const carryStr = prodSettings.allowCarryOver ? 'allow carry over' : 'write off unsold';
+    setMessages(prev => [...prev, { id: `u-batch-${Date.now()}`, role: 'user', text: `Batch: ${prodSettings.batchMin}–${maxStr}${multipleStr}, ${carryStr}` }]);
+    setProductionFlow(7);
+  }
+
+  function confirmCategoryAndClosing() {
+    const closingStr = prodSettings.closingRange === 'No limit' ? 'no production cutoff' : `stop ${prodSettings.closingRange} before close`;
+    setMessages(prev => [...prev, { id: `u-cat-${Date.now()}`, role: 'user', text: `${prodSettings.category} · ${closingStr}` }]);
+    setProductionFlow(9);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   function sendMessage(overrideText?: string) {
     const raw = overrideText !== undefined ? overrideText : input;
@@ -507,11 +1297,13 @@ export default function Feed({
     setInput('');
   }
 
-  const composerDisabled = recipeFlow > 0 && recipeFlow < 7;
-  const composerPlaceholder = composerDisabled ? 'Quinn is working on your recipe\u2026' : PLACEHOLDER;
+  const composerDisabled = (recipeFlow > 0 && recipeFlow < 16) || (productionFlow > 0 && productionFlow < 10);
+  const composerPlaceholder = composerDisabled
+    ? (productionFlow > 0 ? 'Quinn is setting up your production plan\u2026' : 'Quinn is working on your recipe\u2026')
+    : PLACEHOLDER;
   const composerMinH = chatStarted ? 40 : 72;
 
-  const showHeader = quinnExpanded || chatStarted;
+  const showHeader = !noHeader && (quinnExpanded || chatStarted);
 
   return (
     <div style={{
@@ -522,15 +1314,14 @@ export default function Feed({
       minWidth: 0,
       height: '100%',
       width: '100%',
-      maxWidth: chatStarted ? '100%' : 'min(680px, 100%)',
+      maxWidth: noHeader ? '100%' : (chatStarted ? '100%' : 'min(680px, 100%)'),
       margin: '0 auto',
-      background: quinnExpanded || chatStarted ? '#fff' : 'transparent',
-      borderRadius: (quinnExpanded || chatStarted) ? 0 : 'var(--radius-nav)',
+      background: noHeader ? '#fff' : (quinnExpanded || chatStarted ? '#fff' : 'transparent'),
+      borderRadius: noHeader ? 0 : ((quinnExpanded || chatStarted) ? 0 : 'var(--radius-nav)'),
       overflow: 'hidden',
       fontFamily: 'var(--font-primary)',
       boxShadow: (quinnExpanded || chatStarted) ? 'none' : undefined,
       position: 'relative',
-      borderLeft: chatStarted && !quinnExpanded ? '1px solid var(--color-border-subtle)' : 'none',
     }}>
 
       {showHeader && (
@@ -749,17 +1540,97 @@ export default function Feed({
                             }}
                           />
                         )}
+                        {m.msgType === 'cost-breakdown' && (
+                          <CostBreakdownCard />
+                        )}
+                        {m.msgType === 'packaging-picker' && recipeFlow === 5 && (
+                          <PackagingPicker
+                            selected={selectedPackaging}
+                            onToggle={(id) => setSelectedPackaging(prev => {
+                              const next = new Set(prev);
+                              if (next.has(id)) next.delete(id); else next.add(id);
+                              return next;
+                            })}
+                            onConfirm={confirmPackaging}
+                            onSkip={skipPackaging}
+                          />
+                        )}
+                        {m.msgType === 'allergen-check' && recipeFlow === 7 && (
+                          <AllergenCard
+                            confirmed={selectedAllergens}
+                            onToggle={(a) => setSelectedAllergens(prev => {
+                              const next = new Set(prev);
+                              if (next.has(a)) next.delete(a); else next.add(a);
+                              return next;
+                            })}
+                            onConfirm={confirmAllergens}
+                          />
+                        )}
+                        {m.msgType === 'site-selection' && recipeFlow === 9 && (
+                          <SiteSelectionCard
+                            selected={selectedSites}
+                            onToggle={(id) => setSelectedSites(prev => {
+                              const next = new Set(prev);
+                              if (next.has(id)) next.delete(id); else next.add(id);
+                              return next;
+                            })}
+                            onConfirm={confirmSites}
+                          />
+                        )}
+                        {m.msgType === 'prod-prep' && productionFlow === 2 && (
+                          <PillPicker
+                            options={PREP_TIME_OPTIONS}
+                            selected={prodSettings.prepTime}
+                            onSelect={(v) => setProdSettings(s => ({ ...s, prepTime: v }))}
+                            onConfirm={() => confirmPrepTime(prodSettings.prepTime)}
+                          />
+                        )}
+                        {m.msgType === 'prod-shelf' && productionFlow === 4 && (
+                          <PillPicker
+                            options={SHELF_LIFE_OPTIONS}
+                            selected={prodSettings.shelfLife}
+                            onSelect={(v) => setProdSettings(s => ({ ...s, shelfLife: v }))}
+                            onConfirm={() => confirmShelfLife(prodSettings.shelfLife)}
+                          />
+                        )}
+                        {m.msgType === 'prod-batch' && productionFlow === 6 && (
+                          <BatchAndCarryCard
+                            settings={prodSettings}
+                            onUpdate={(u) => setProdSettings(s => ({ ...s, ...u }))}
+                            onConfirm={confirmBatch}
+                          />
+                        )}
+                        {m.msgType === 'prod-category' && productionFlow === 8 && (
+                          <CategoryClosingCard
+                            settings={prodSettings}
+                            onUpdate={(u) => setProdSettings(s => ({ ...s, ...u }))}
+                            onConfirm={confirmCategoryAndClosing}
+                          />
+                        )}
+                        {m.msgType === 'prod-summary' && productionFlow === 10 && (
+                          <ProductionSummaryCard settings={prodSettings} />
+                        )}
                       </ChatBubble>
                     ))}
 
-                    {recipeFlow === 3 && (
+                    {recipeFlow === 10 && (
                       <ActionButton label="Looks good, save it" onClick={confirmRecipe} />
                     )}
-                    {recipeFlow === 5 && (
+                    {recipeFlow === 12 && (
                       <ActionButton label="Yes, add them" onClick={confirmSupplier} />
                     )}
+                    {recipeFlow === 15 && (
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', maxWidth: '88%' }}>
+                        <button type="button" onClick={skipProductionOffer} style={{ padding: '8px 18px', borderRadius: '100px', border: '1.5px solid var(--color-border)', background: '#fff', fontSize: '12.5px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
+                          Not now
+                        </button>
+                        <button type="button" onClick={startProductionFlow} style={{ padding: '8px 18px', borderRadius: '100px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12.5px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer', boxShadow: '0 2px 8px rgba(34,68,68,0.25)' }}>
+                          Yes, set it up
+                        </button>
+                      </div>
+                    )}
 
-                    <div ref={chatEndRef} />
+                    <div ref={chatEndRef} style={{ height: '32px' }} />
                   </motion.div>
                 </AnimatePresence>
               </div>
@@ -768,6 +1639,7 @@ export default function Feed({
               flexShrink: 0,
               display: 'flex',
               justifyContent: 'center',
+              marginTop: '20px',
               borderTop: '1px solid var(--color-border-subtle)',
               opacity: composerDisabled ? 0.55 : 1,
               pointerEvents: composerDisabled ? 'none' : 'auto',
@@ -775,7 +1647,7 @@ export default function Feed({
               <div style={{
                 width: '100%',
                 maxWidth: '680px',
-                padding: '12px 24px 16px',
+                padding: '12px 24px 8px',
               }}>
                 <ClaudeComposer
                   value={input}

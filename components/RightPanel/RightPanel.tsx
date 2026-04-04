@@ -203,7 +203,7 @@ const ORDERS: Order[] = [
   },
   {
     supplier: 'Fresh Direct', items: 8, value: '£640', status: 'In transit',
-    dot: '#1443E9', ref: 'PO-2848', delivery: 'Today · 11am', site: 'Fitzroy Espresso',
+    dot: '#224444', ref: 'PO-2848', delivery: 'Today · 11am', site: 'Fitzroy Espresso',
     lines: [
       { name: 'Baby spinach 500g', qty: '6', unit: 'bags', price: '£21.00' },
       { name: 'Cherry tomatoes 500g', qty: '8', unit: 'punnets', price: '£28.00' },
@@ -231,11 +231,11 @@ const ORDERS: Order[] = [
 ];
 
 const STATUS_COLOR: Record<string, string> = {
-  'Confirmed': '#2D6A4F', 'In transit': '#1443E9',
+  'Confirmed': '#2D6A4F', 'In transit': '#224444',
   'Pending': '#7A3800', 'Delivered': '#2D6A4F',
 };
 const STATUS_BG: Record<string, string> = {
-  'Confirmed': '#D8F3DC', 'In transit': '#E8EDFC',
+  'Confirmed': '#D8F3DC', 'In transit': '#E8F2F2',
   'Pending': '#FEF0DF', 'Delivered': '#D8F3DC',
 };
 
@@ -391,7 +391,7 @@ function OrderModal({ order, onClose }: { order: Order; onClose: () => void }) {
         onClick={onClose}
         style={{
           position: 'fixed', inset: 0,
-          background: 'rgba(16,53,192,0.35)',
+          background: 'rgba(34,68,68,0.35)',
           backdropFilter: 'blur(4px)',
           zIndex: 1000,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -410,7 +410,7 @@ function OrderModal({ order, onClose }: { order: Order; onClose: () => void }) {
             maxHeight: 'min(80vh, 720px)',
             background: '#fff',
             borderRadius: '16px',
-            boxShadow: '0 24px 60px rgba(16,53,192,0.2)',
+            boxShadow: '0 24px 60px rgba(34,68,68,0.2)',
             overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',

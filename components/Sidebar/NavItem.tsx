@@ -14,6 +14,7 @@ interface NavItemProps {
   compact?: boolean;
   /** Match Ask Quinn control: navy background + accent label colour. */
   tone?: 'default' | 'quinn';
+  onClick?: () => void;
 }
 
 export default function NavItem({
@@ -24,6 +25,7 @@ export default function NavItem({
   dot,
   compact = false,
   tone = 'default',
+  onClick,
 }: NavItemProps) {
   const quinnActive = tone === 'quinn' && active;
   const [hoverTip, setHoverTip] = useState<{ left: number; top: number } | null>(null);
@@ -35,6 +37,7 @@ export default function NavItem({
         className="nav-item"
         data-active={active}
         aria-label={label}
+        onClick={onClick}
         style={{
           display: 'flex',
           alignItems: 'center',

@@ -22,7 +22,7 @@ export default function VersionSwitcher() {
       display: 'flex',
       alignItems: 'center',
       gap: '4px',
-      background: 'rgba(16,53,192,0.88)',
+      background: 'rgba(34,68,68,0.88)',
       backdropFilter: 'blur(8px)',
       borderRadius: '100px',
       padding: '5px 6px',
@@ -47,7 +47,7 @@ export default function VersionSwitcher() {
           fontSize: '12px', fontWeight: 600,
           textDecoration: 'none',
           background: isRoot ? 'var(--color-accent-quinn)' : 'transparent',
-          color: isRoot ? '#1035C0' : 'rgba(255,255,255,0.5)',
+          color: isRoot ? '#1a3636' : 'rgba(255,255,255,0.5)',
           transition: 'all 0.15s ease',
         }}
       >
@@ -68,7 +68,7 @@ export default function VersionSwitcher() {
               fontSize: '12px', fontWeight: 600,
               textDecoration: 'none',
               background: active ? 'var(--color-accent-quinn)' : 'transparent',
-              color: active ? '#1035C0' : 'rgba(255,255,255,0.5)',
+              color: active ? '#1a3636' : 'rgba(255,255,255,0.5)',
               transition: 'all 0.15s ease',
             }}
           >

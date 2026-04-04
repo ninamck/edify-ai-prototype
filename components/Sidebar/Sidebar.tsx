@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Home,
   CalendarClock,
@@ -28,6 +29,7 @@ type QuinnState = 'idle' | 'thinking' | 'ready';
 const QUINN_CYCLE: QuinnState[] = ['idle', 'thinking', 'ready'];
 
 export default function Sidebar() {
+  const router = useRouter();
   const [quinnState, setQuinnState] = useState<QuinnState>('idle');
   /** Icon-only rail (labels via tooltips); always minimised. */
   const compact = true;
@@ -44,7 +46,7 @@ export default function Sidebar() {
       style={{
         width: compact ? '72px' : '240px',
         minWidth: compact ? '72px' : '240px',
-        height: 'calc(100vh - 24px)',
+        height: 'calc(100% - 24px)',
         margin: '12px 0 12px 12px',
         borderRadius: 'var(--radius-nav)',
         background: 'var(--color-bg-nav)',
@@ -84,7 +86,7 @@ export default function Sidebar() {
         <NavGroup title="Stock & ordering" compact={compact}>
           <NavItem label="Review suggested orders" icon={ShoppingCart} compact={compact} />
           <NavItem label="Count stock" icon={PackageSearch} compact={compact} />
-          <NavItem label="Match invoices" icon={FileCheck} compact={compact} />
+          <NavItem label="Match invoices" icon={FileCheck} compact={compact} badge={2} onClick={() => router.push('/invoices')} />
           <NavItem label="View order history" icon={Clock} compact={compact} />
           <NavItem label="Manage credit notes" icon={FileX} compact={compact} />
         </NavGroup>

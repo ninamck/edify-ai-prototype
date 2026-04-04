@@ -157,11 +157,11 @@ export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso',
           margin: outerMargin,
           padding: '14px 16px',
           borderRadius: '12px',
-          background: 'linear-gradient(135deg, #1035C0 0%, #1A45D4 100%)',
+          background: 'linear-gradient(135deg, #1a3636 0%, #335858 100%)',
           color: '#F4F1EC',
           fontSize: '13px',
           lineHeight: 1.55,
-          boxShadow: '0 4px 20px rgba(16,53,192,0.25)',
+          boxShadow: '0 4px 20px rgba(34,68,68,0.25)',
         }}
       >
         <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.85)', marginBottom: '8px' }}>

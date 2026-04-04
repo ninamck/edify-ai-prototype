@@ -100,7 +100,7 @@ export default function MorningBriefingTimeline({
                 cursor: 'pointer',
                 background: panel === 'insights' ? 'var(--color-accent-active)' : 'transparent',
                 color: panel === 'insights' ? '#fff' : 'var(--color-text-muted)',
-                boxShadow: panel === 'insights' ? '0 2px 8px rgba(20,67,233,0.25)' : 'none',
+                boxShadow: panel === 'insights' ? '0 2px 8px rgba(34,68,68,0.25)' : 'none',
                 transition: 'background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease',
                 whiteSpace: 'nowrap',
               }}
@@ -126,7 +126,7 @@ export default function MorningBriefingTimeline({
                 cursor: 'pointer',
                 background: panel === 'actions' ? 'var(--color-accent-active)' : 'transparent',
                 color: panel === 'actions' ? '#fff' : 'var(--color-text-muted)',
-                boxShadow: panel === 'actions' ? '0 2px 8px rgba(20,67,233,0.25)' : 'none',
+                boxShadow: panel === 'actions' ? '0 2px 8px rgba(34,68,68,0.25)' : 'none',
                 transition: 'background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease',
                 whiteSpace: 'nowrap',
               }}

@@ -71,7 +71,7 @@ export default function ShellTopBar({
             cursor: 'pointer',
             background: shellView === 'command-centre' ? 'var(--color-accent-active)' : 'transparent',
             color: shellView === 'command-centre' ? '#fff' : 'var(--color-text-muted)',
-            boxShadow: shellView === 'command-centre' ? '0 2px 8px rgba(20,67,233,0.25)' : 'none',
+            boxShadow: shellView === 'command-centre' ? '0 2px 8px rgba(34,68,68,0.25)' : 'none',
             transition: 'background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease',
             whiteSpace: 'nowrap',
           }}
@@ -93,7 +93,7 @@ export default function ShellTopBar({
             cursor: 'pointer',
             background: shellView === 'dashboard' ? 'var(--color-accent-active)' : 'transparent',
             color: shellView === 'dashboard' ? '#fff' : 'var(--color-text-muted)',
-            boxShadow: shellView === 'dashboard' ? '0 2px 8px rgba(20,67,233,0.25)' : 'none',
+            boxShadow: shellView === 'dashboard' ? '0 2px 8px rgba(34,68,68,0.25)' : 'none',
             transition: 'background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease',
             whiteSpace: 'nowrap',
           }}
@@ -140,7 +140,7 @@ export default function ShellTopBar({
                 fontFamily: 'var(--font-primary)',
                 cursor: 'pointer',
                 border: active ? '1.5px solid var(--color-accent-active)' : '1.5px solid var(--color-border-subtle)',
-                background: active ? 'rgba(20,67,233,0.08)' : '#fff',
+                background: active ? 'rgba(34,68,68,0.08)' : '#fff',
                 color: active ? 'var(--color-accent-active)' : 'var(--color-text-muted)',
                 transition: 'background 0.15s ease, color 0.15s ease, border-color 0.15s ease',
               }}

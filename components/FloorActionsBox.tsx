@@ -139,7 +139,7 @@ export function CommandCentreModal({
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(16,53,192,0.35)',
+            background: 'rgba(34,68,68,0.35)',
             backdropFilter: 'blur(4px)',
             zIndex: 1000,
             display: 'flex',
@@ -160,7 +160,7 @@ export function CommandCentreModal({
               maxHeight: 'min(88vh, 820px)',
               background: 'var(--color-bg-nav)',
               borderRadius: '16px',
-              boxShadow: '0 24px 60px rgba(16,53,192,0.2)',
+              boxShadow: '0 24px 60px rgba(34,68,68,0.2)',
               overflow: 'hidden',
               display: 'flex',
               flexDirection: 'column',
@@ -220,9 +220,11 @@ export function CommandCentreModal({
 
 export default function FloorActionsBox({
   onOpenCommandCentre,
+  onReceiveDelivery,
   briefingRole,
 }: {
   onOpenCommandCentre: () => void;
+  onReceiveDelivery?: () => void;
   /** Reserved: filter or reorder floor tiles by persona. */
   briefingRole?: BriefingRole;
 }) {
@@ -263,7 +265,7 @@ export default function FloorActionsBox({
         />
         <FloorActionSquare label="Run production" icon={Utensils} onClick={() => {}} />
         <FloorActionSquare label="Log waste" icon={Trash2} onClick={() => {}} />
-        <FloorActionSquare label="Receive delivery" icon={Truck} dot onClick={() => {}} />
+        <FloorActionSquare label="Receive delivery" icon={Truck} dot onClick={onReceiveDelivery ?? (() => {})} />
         <FloorActionSquare label="Transfer stock" icon={ArrowLeftRight} onClick={() => {}} />
         <FloorActionSquare
           label={<>View command<br />centre</>}

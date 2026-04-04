@@ -313,7 +313,7 @@ export default function FeedV1() {
               <ActionItem
                 id="doughnut-pattern"
                 index={0}
-                tag={{ icon: TrendingUp, label: 'Pattern detected — recurring order', color: '#1443E9', bg: '#E8EDFC' }}
+                tag={{ icon: TrendingUp, label: 'Pattern detected — recurring order', color: '#224444', bg: '#E8F2F2' }}
                 summary={
                   <>
                     <Hi>Fitzroy Espresso</Hi> has run out of doughnuts before 2pm on{' '}
