@@ -57,13 +57,15 @@ export default function Sidebar() {
         overflowY: 'auto',
         overflowX: 'hidden',
         flexShrink: 0,
-        boxShadow: '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.04)',
+        position: 'relative',
+        zIndex: 10,
+        boxShadow: '4px 0 16px rgba(58,48,40,0.12), 0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.04)',
       }}
     >
       {/* Zone 1 — Home (site switcher lives in ShellTopBar) */}
       <div style={{ marginTop: compact ? 0 : '2px' }}>
         <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-          <NavItem label="Home" icon={Home} active={true} compact={compact} tone="quinn" />
+          <NavItem label="Home" icon={Home} active={true} compact={compact} tone="quinn" onClick={() => router.push('/')} />
         </ul>
       </div>
 
@@ -84,11 +86,11 @@ export default function Sidebar() {
 
         {/* Group 3 — Stock & ordering (Manager+) */}
         <NavGroup title="Stock & ordering" compact={compact}>
-          <NavItem label="Review suggested orders" icon={ShoppingCart} compact={compact} />
+          <NavItem label="Review suggested orders" icon={ShoppingCart} compact={compact} badge={3} onClick={() => router.push('/assisted-ordering')} />
           <NavItem label="Count stock" icon={PackageSearch} compact={compact} />
           <NavItem label="Match invoices" icon={FileCheck} compact={compact} badge={2} onClick={() => router.push('/invoices')} />
           <NavItem label="View order history" icon={Clock} compact={compact} />
-          <NavItem label="Manage credit notes" icon={FileX} compact={compact} />
+          <NavItem label="Manage credit notes" icon={FileX} compact={compact} onClick={() => router.push('/credit-notes')} />
         </NavGroup>
 
         {/* Group 4 — Performance (Manager+) */}
@@ -103,7 +105,7 @@ export default function Sidebar() {
           <NavItem label="Manage recipes" icon={Star} compact={compact} />
           <NavItem label="Manage suppliers" icon={MapPin} compact={compact} />
           <NavItem label="Manage users" icon={User} compact={compact} />
-          <NavItem label="Manage checklists" icon={ClipboardList} compact={compact} />
+          <NavItem label="Manage checklists" icon={ClipboardList} compact={compact} onClick={() => router.push('/checklists')} />
           <NavItem label="Configure settings" icon={Settings} compact={compact} />
         </NavGroup>
 

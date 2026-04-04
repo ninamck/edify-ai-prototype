@@ -12,6 +12,10 @@ import {
   ChefHat,
   BarChart3,
   ClipboardList,
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import QuinnOrb from '@/components/Sidebar/QuinnOrb';
@@ -65,11 +69,13 @@ const PROMPT_CHIPS: {
   label: string;
   icon: typeof ChefHat;
   text: string;
+  action?: 'recipe' | 'integrity';
 }[] = [
   {
     label: 'New recipe',
     icon: ChefHat,
     text: 'I want to add a new recipe for our weekend brunch menu.',
+    action: 'recipe',
   },
   {
     label: 'Food cost',
@@ -81,6 +87,38 @@ const PROMPT_CHIPS: {
     icon: ClipboardList,
     text: 'What should the floor team prioritise this morning?',
   },
+  {
+    label: 'Check data integrity',
+    icon: ShieldCheck,
+    text: '',
+    action: 'integrity',
+  },
+];
+
+// ─── Data integrity checks ────────────────────────────────────────────────────
+
+type IntegrityStatus = 'issue' | 'warning' | 'ok';
+
+type IntegrityCheck = {
+  id: string;
+  label: string;
+  detail: string;
+  status: IntegrityStatus;
+  action?: string;
+};
+
+const INTEGRITY_CHECKS: IntegrityCheck[] = [
+  { id: 'unavailable-ing', label: 'Unavailable ingredients', detail: '4 items flagged as unavailable in active recipes', status: 'issue', action: 'Review' },
+  { id: 'inactive-items', label: 'Inactive or discontinued items in recipes', detail: '2 discontinued items still referenced', status: 'issue', action: 'Review' },
+  { id: 'inactive-suppliers', label: 'Inactive suppliers still listed', detail: '1 inactive supplier linked to active items', status: 'issue', action: 'Review' },
+  { id: 'yield-outdated', label: 'Yield assumptions outdated', detail: 'Last reviewed 6+ months ago on 7 recipes', status: 'warning', action: 'Update' },
+  { id: 'price-margin', label: 'Margin shifted after yield update', detail: 'Menu price unchanged on 3 items — margins may be off', status: 'warning', action: 'Review' },
+  { id: 'sub-recipes', label: 'Sub-recipes not linked correctly', detail: '2 sub-recipes missing parent links', status: 'warning', action: 'Fix' },
+  { id: 'unit-measure', label: 'Wrong unit of measure on supplier items', detail: '1 item has mismatched units', status: 'warning', action: 'Fix' },
+  { id: 'archived-ing', label: 'Inactive ingredients archived', detail: 'All archived correctly', status: 'ok' },
+  { id: 'pos-linked', label: 'Every POS item has a linked recipe', detail: 'All 42 POS items linked', status: 'ok' },
+  { id: 'modifiers-mapped', label: 'Modifiers and variants mapped', detail: 'All mapped correctly', status: 'ok' },
+  { id: 'no-archived-ref', label: 'No recipes referencing archived ingredients', detail: 'No issues found', status: 'ok' },
 ];
 
 type ChatMsg = { id: string; role: 'user' | 'quinn'; text: string; msgType?: string };
@@ -1012,6 +1050,165 @@ function ClaudeComposer({
   );
 }
 
+// ─── Data integrity components ────────────────────────────────────────────────
+
+function CheckRow({ check }: { check: IntegrityCheck }) {
+  const config = {
+    issue: { color: '#DC2626', bg: 'rgba(220,38,38,0.05)', Icon: AlertCircle },
+    warning: { color: '#D97706', bg: 'rgba(217,119,6,0.05)', Icon: AlertTriangle },
+    ok: { color: '#15803D', bg: 'transparent', Icon: CheckCircle2 },
+  }[check.status];
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      padding: '9px 14px',
+      gap: '10px',
+      borderTop: '1px solid var(--color-border-subtle)',
+      background: config.bg,
+    }}>
+      <config.Icon size={14} color={config.color} strokeWidth={2} style={{ flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: 1.3 }}>
+          {check.label}
+        </div>
+        <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '1px', lineHeight: 1.4 }}>
+          {check.detail}
+        </div>
+      </div>
+      {check.action && (
+        <button
+          type="button"
+          style={{
+            padding: '4px 11px',
+            borderRadius: '100px',
+            border: '1px solid var(--color-border)',
+            background: '#fff',
+            fontSize: '11px',
+            fontWeight: 600,
+            fontFamily: 'var(--font-primary)',
+            color: 'var(--color-text-secondary)',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
+          {check.action}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function DataIntegrityCard({ onFixWithQuinn }: { onFixWithQuinn: () => void }) {
+  const issues = INTEGRITY_CHECKS.filter(c => c.status === 'issue');
+  const warnings = INTEGRITY_CHECKS.filter(c => c.status === 'warning');
+  const passing = INTEGRITY_CHECKS.filter(c => c.status === 'ok');
+
+  return (
+    <div style={{
+      marginTop: '8px',
+      borderRadius: '10px',
+      border: '1px solid var(--color-border-subtle)',
+      overflow: 'hidden',
+    }}>
+      {/* Header with summary pills */}
+      <div style={{
+        padding: '10px 14px',
+        background: 'var(--color-bg-hover)',
+        borderBottom: '1px solid var(--color-border-subtle)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        flexWrap: 'wrap',
+      }}>
+        <ShieldCheck size={14} color="#D97706" strokeWidth={2} />
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+          Data Integrity
+        </span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '5px', alignItems: 'center' }}>
+          <span style={{
+            fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px',
+            background: 'rgba(220,38,38,0.1)', color: '#DC2626',
+          }}>
+            {issues.length} issues
+          </span>
+          <span style={{
+            fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px',
+            background: 'rgba(217,119,6,0.1)', color: '#D97706',
+          }}>
+            {warnings.length} warnings
+          </span>
+          <span style={{
+            fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px',
+            background: 'rgba(21,128,61,0.1)', color: '#15803D',
+          }}>
+            {passing.length} ok
+          </span>
+        </div>
+      </div>
+
+      {/* Issues */}
+      {issues.length > 0 && (
+        <>
+          <div style={{ padding: '8px 14px 4px', fontSize: '10px', fontWeight: 700, color: '#DC2626', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            Needs attention
+          </div>
+          {issues.map(check => <CheckRow key={check.id} check={check} />)}
+        </>
+      )}
+
+      {/* Warnings */}
+      {warnings.length > 0 && (
+        <>
+          <div style={{ padding: '8px 14px 4px', fontSize: '10px', fontWeight: 700, color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            Review recommended
+          </div>
+          {warnings.map(check => <CheckRow key={check.id} check={check} />)}
+        </>
+      )}
+
+      {/* Passing */}
+      {passing.length > 0 && (
+        <>
+          <div style={{ padding: '8px 14px 4px', fontSize: '10px', fontWeight: 700, color: '#15803D', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            All good
+          </div>
+          {passing.map(check => <CheckRow key={check.id} check={check} />)}
+        </>
+      )}
+
+      {/* Footer CTA */}
+      <div style={{
+        padding: '10px 14px',
+        borderTop: '1px solid var(--color-border-subtle)',
+        background: 'var(--color-bg-hover)',
+        display: 'flex',
+        justifyContent: 'flex-end',
+      }}>
+        <button
+          type="button"
+          onClick={onFixWithQuinn}
+          style={{
+            padding: '7px 16px', borderRadius: '100px',
+            border: 'none',
+            background: 'var(--color-accent-active)',
+            fontSize: '12px', fontWeight: 600,
+            fontFamily: 'var(--font-primary)',
+            color: '#fff', cursor: 'pointer',
+            boxShadow: '0 2px 8px rgba(34,68,68,0.25)',
+          }}
+        >
+          Walk me through fixing these
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function Feed({
   briefingRole,
   quinnExpanded = false,
@@ -1036,13 +1233,15 @@ export default function Feed({
   const doneSiteNamesRef = useRef<string[]>(['Fitzroy Espresso']);
   const [productionFlow, setProductionFlow] = useState(0);
   const [prodSettings, setProdSettings] = useState<ProdSettings>({ ...DEFAULT_PROD_SETTINGS });
+  const [chatMinimized, setChatMinimized] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(true);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const greeting = timeAwareGreeting(briefingRole);
 
   useEffect(() => {
-    onChatStateChange?.(chatStarted);
-  }, [chatStarted, onChatStateChange]);
+    onChatStateChange?.(chatStarted && !chatMinimized);
+  }, [chatStarted, chatMinimized, onChatStateChange]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1183,9 +1382,24 @@ export default function Feed({
   }, [productionFlow]);
 
   function startRecipeFlow() {
+    setChatMinimized(false);
     setChatStarted(true);
     setMessages([{ id: `q-greeting-${Date.now()}`, role: 'quinn', text: RECIPE_GREETING }]);
     setRecipeFlow(1);
+  }
+
+  function startIntegrityCheck() {
+    setChatMinimized(false);
+    setChatStarted(true);
+    setMessages([{ id: `u-integrity-${Date.now()}`, role: 'user', text: 'Check my data integrity' }]);
+    setTimeout(() => {
+      setMessages(prev => [...prev, {
+        id: `q-integrity-${Date.now()}`,
+        role: 'quinn',
+        text: "I've scanned your setup. You've got **3 things that need attention**, **4 worth a review**, and **4 checks that are all clear**. Here's the full picture:",
+        msgType: 'integrity-check',
+      }]);
+    }, 2000);
   }
 
   function confirmPackaging() {
@@ -1293,6 +1507,7 @@ export default function Feed({
 
     const userMsg: ChatMsg = { id: `u-${Date.now()}`, role: 'user', text };
     setChatStarted(true);
+    setChatMinimized(false);
     setMessages(prev => [...prev, userMsg]);
     setInput('');
   }
@@ -1303,7 +1518,7 @@ export default function Feed({
     : PLACEHOLDER;
   const composerMinH = chatStarted ? 40 : 72;
 
-  const showHeader = !noHeader && (quinnExpanded || chatStarted);
+  const showHeader = !noHeader && (quinnExpanded || chatStarted) && !chatMinimized;
 
   return (
     <div style={{
@@ -1345,6 +1560,28 @@ export default function Feed({
               </div>
             )}
           </div>
+          {chatStarted && (
+            <button
+              type="button"
+              onClick={() => setChatMinimized(true)}
+              title="Minimise chat"
+              aria-label="Minimise chat"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '36px',
+                height: '36px',
+                borderRadius: '10px',
+                border: '1px solid var(--color-border-subtle)',
+                background: '#fff',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              <ChevronDown size={17} color="var(--color-text-secondary)" strokeWidth={2} />
+            </button>
+          )}
           {onToggleQuinnExpand && (
             <button
               type="button"
@@ -1405,14 +1642,14 @@ export default function Feed({
         flexDirection: 'column',
         position: 'relative',
       }}>
-        {!chatStarted ? (
+        {(!chatStarted || chatMinimized) ? (
           <div style={{
-            flex: 1,
+            flex: chatMinimized ? 0 : 1,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px 16px 24px',
+            justifyContent: chatMinimized ? 'flex-start' : 'center',
+            padding: chatMinimized ? '28px 16px 0' : '20px 16px 24px',
             boxSizing: 'border-box',
             background: '#fff',
           }}>
@@ -1480,8 +1717,10 @@ export default function Feed({
                       key={i}
                       type="button"
                       onClick={() => {
-                        if (chip.label === 'New recipe') {
+                        if (chip.action === 'recipe') {
                           startRecipeFlow();
+                        } else if (chip.action === 'integrity') {
+                          startIntegrityCheck();
                         } else {
                           sendMessage(chip.text);
                         }
@@ -1502,12 +1741,122 @@ export default function Feed({
                         boxShadow: '0 2px 6px rgba(58,48,40,0.08)',
                       }}
                     >
-                      <Icon size={15} strokeWidth={2} color="var(--color-text-muted)" />
+                      <Icon
+                        size={15}
+                        strokeWidth={2}
+                        color="var(--color-text-muted)"
+                      />
                       {chip.label}
                     </button>
                   );
                 })}
               </div>
+
+              {/* Chat history — shown only when minimised and there are messages */}
+              {chatMinimized && messages.length > 0 && (
+                <div style={{ marginTop: '32px' }}>
+                  {/* Section header */}
+                  <button
+                    type="button"
+                    onClick={() => setHistoryOpen(prev => !prev)}
+                    style={{
+                      display: 'flex',
+                      width: '100%',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '12px 0',
+                      border: 'none',
+                      borderTop: '1px solid var(--color-border-subtle)',
+                      background: 'none',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-primary)',
+                    }}
+                  >
+                    <span style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: 'var(--color-text-secondary)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.07em',
+                    }}>
+                      Chat History
+                    </span>
+                    <ChevronDown
+                      size={14}
+                      color="var(--color-text-muted)"
+                      strokeWidth={2.5}
+                      style={{
+                        transform: historyOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.18s ease',
+                      }}
+                    />
+                  </button>
+
+                  {historyOpen && (
+                    <div>
+                      {/* Single conversation entry — clicking restores the chat */}
+                      <button
+                        type="button"
+                        onClick={() => setChatMinimized(false)}
+                        style={{
+                          display: 'flex',
+                          width: '100%',
+                          alignItems: 'center',
+                          gap: '12px',
+                          padding: '12px 0',
+                          border: 'none',
+                          borderTop: '1px solid var(--color-border-subtle)',
+                          background: 'none',
+                          cursor: 'pointer',
+                          fontFamily: 'var(--font-primary)',
+                          textAlign: 'left',
+                        }}
+                      >
+                        <div style={{
+                          width: 30, height: 30, borderRadius: '8px',
+                          background: 'var(--color-quinn-bg)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0,
+                        }}>
+                          <Sparkles size={14} color="var(--color-accent-quinn)" strokeWidth={2} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            fontSize: '13px', fontWeight: 600,
+                            color: 'var(--color-text-primary)',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>
+                            {(() => {
+                              const t = messages.find(m => m.role === 'user')?.text ?? 'Conversation';
+                              return t.length > 52 ? t.slice(0, 52) + '…' : t;
+                            })()}
+                          </div>
+                          <div style={{
+                            fontSize: '11.5px',
+                            color: 'var(--color-text-muted)',
+                            marginTop: '2px',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>
+                            {(() => {
+                              const t = messages.find(m => m.role === 'quinn')?.text.replace(/\*\*/g, '') ?? '';
+                              return t.length > 64 ? t.slice(0, 64) + '…' : t;
+                            })()}
+                          </div>
+                        </div>
+                        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          just now
+                        </span>
+                        <ChevronDown
+                          size={14}
+                          color="var(--color-text-muted)"
+                          strokeWidth={2}
+                          style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}
+                        />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -1542,6 +1891,11 @@ export default function Feed({
                         )}
                         {m.msgType === 'cost-breakdown' && (
                           <CostBreakdownCard />
+                        )}
+                        {m.msgType === 'integrity-check' && (
+                          <DataIntegrityCard
+                            onFixWithQuinn={() => sendMessage('Walk me through fixing the data integrity issues — let\'s start with the 3 that need immediate attention.')}
+                          />
                         )}
                         {m.msgType === 'packaging-picker' && recipeFlow === 5 && (
                           <PackagingPicker
@@ -1662,6 +2016,7 @@ export default function Feed({
           </div>
         )}
       </div>
+
     </div>
   );
 }

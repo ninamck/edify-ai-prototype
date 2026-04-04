@@ -103,20 +103,22 @@ export default function NavItem({
             <span
               style={{
                 position: 'absolute',
-                top: '-5px',
-                right: '-8px',
+                top: '-6px',
+                right: '-9px',
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                minWidth: '16px',
-                height: '15px',
-                padding: '0 4px',
-                borderRadius: 'var(--radius-badge)',
-                background: active ? 'var(--color-badge-active-bg)' : 'var(--color-badge-bg)',
-                color: active ? 'var(--color-badge-active-text)' : 'var(--color-badge-text)',
-                fontSize: '9px',
+                minWidth: '18px',
+                height: '18px',
+                padding: '0 5px',
+                borderRadius: '999px',
+                background: '#15803D',
+                color: '#fff',
+                fontSize: '10px',
                 fontWeight: 700,
                 lineHeight: 1,
+                boxShadow: '0 0 0 2px var(--color-bg-nav)',
+                fontFamily: 'var(--font-primary)',
               }}
             >
               {badge}

@@ -2,6 +2,7 @@
 
 import { type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import {
   CheckSquare,
   ListChecks,
@@ -229,6 +230,7 @@ export default function FloorActionsBox({
   briefingRole?: BriefingRole;
 }) {
   void briefingRole;
+  const router = useRouter();
   return (
     <div
       style={{
@@ -257,11 +259,11 @@ export default function FloorActionsBox({
         gap: '12px',
         alignItems: 'flex-start',
       }}>
-        <FloorActionSquare label="Complete tasks" icon={CheckSquare} badge={4} onClick={() => {}} />
+        <FloorActionSquare label="Complete tasks" icon={CheckSquare} badge={4} onClick={() => router.push('/checklists/complete')} />
         <FloorActionSquare
           label={<>Complete your<br />checklists</>}
           icon={ListChecks}
-          onClick={() => {}}
+          onClick={() => router.push('/checklists/complete')}
         />
         <FloorActionSquare label="Run production" icon={Utensils} onClick={() => {}} />
         <FloorActionSquare label="Log waste" icon={Trash2} onClick={() => {}} />
