@@ -374,17 +374,17 @@ function QuestionCard({
       {/* Question number + follow-up label */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
         {isFollowUp ? (
-          <span style={{ fontSize: '10px', fontWeight: 700, color: '#D97706', display: 'flex', alignItems: 'center', gap: '3px' }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: '#D97706', display: 'flex', alignItems: 'center', gap: '3px' }}>
             <GitBranch size={11} />
             Follow-up
           </span>
         ) : (
-          <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-muted)', letterSpacing: '0.05em' }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-muted)', letterSpacing: '0.05em' }}>
             Q{questionNumber}
           </span>
         )}
         {question.mandatory && (
-          <span style={{ fontSize: '10px', color: missing ? '#B91C1C' : 'var(--color-text-muted)' }}>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: missing ? '#B91C1C' : 'var(--color-text-muted)' }}>
             · Required
           </span>
         )}
@@ -439,7 +439,7 @@ function QuestionCard({
       {missing && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '10px' }}>
           <AlertCircle size={13} color="#B91C1C" />
-          <span style={{ fontSize: '11px', color: '#B91C1C', fontWeight: 500 }}>This question is required</span>
+          <span style={{ fontSize: '12px', color: '#B91C1C', fontWeight: 500 }}>This question is required</span>
         </div>
       )}
     </div>
@@ -628,7 +628,7 @@ export function CompletionFlowClient({ instanceId }: { instanceId: string }) {
           <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
             {template.name}
           </span>
-          <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
             {answeredCount} of {totalCount} answered
           </span>
         </div>
@@ -711,7 +711,7 @@ export function CompletionFlowClient({ instanceId }: { instanceId: string }) {
         {showRequired && !allMandatoryAnswered && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <AlertCircle size={13} color="#B91C1C" />
-            <span style={{ fontSize: '11px', color: '#B91C1C', fontWeight: 500 }}>
+            <span style={{ fontSize: '12px', color: '#B91C1C', fontWeight: 500 }}>
               Answer all required questions before submitting
             </span>
           </div>

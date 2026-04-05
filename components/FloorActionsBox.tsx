@@ -78,7 +78,7 @@ function FloorActionSquare({
             borderRadius: '100px',
             background: 'var(--color-accent-deep)',
             color: '#F4F1EC',
-            fontSize: '10px',
+            fontSize: '12px',
             fontWeight: 700,
             display: 'flex',
             alignItems: 'center',
@@ -101,7 +101,7 @@ function FloorActionSquare({
         )}
       </span>
       <span style={{
-        fontSize: '9.5px',
+        fontSize: '12px',
         fontWeight: 600,
         color: 'var(--color-text-secondary)',
         textAlign: 'center',
@@ -244,10 +244,9 @@ export default function FloorActionsBox({
       }}
     >
       <div style={{
-        fontSize: '10px',
+        fontSize: '12px',
         fontWeight: 700,
-        letterSpacing: '0.06em',
-        textTransform: 'uppercase',
+        letterSpacing: '0.04em',
         color: 'var(--color-text-muted)',
         marginBottom: '12px',
       }}>

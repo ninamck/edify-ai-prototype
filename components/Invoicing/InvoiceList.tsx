@@ -119,8 +119,7 @@ export default function InvoiceList({ onViewInvoice }: InvoiceListProps) {
                       textAlign: 'left',
                       padding: '10px 14px',
                       fontWeight: 600,
-                      fontSize: '11px',
-                      textTransform: 'uppercase',
+                      fontSize: '12px', fontWeight: 500,
                       letterSpacing: '0.04em',
                       color: 'var(--color-text-secondary)',
                       borderBottom: '1px solid var(--color-border-subtle)',
@@ -171,7 +170,7 @@ function InvoiceRow({ invoice, onView }: { invoice: Invoice; onView: () => void 
       <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', color: invoice.grnNumbers.length ? 'var(--color-accent-active)' : 'var(--color-text-secondary)', fontWeight: invoice.grnNumbers.length ? 600 : 400 }}>
         {invoice.grnNumbers.length > 0 ? invoice.grnNumbers.join(', ') : '—'}
         {invoice.suggestedGRN && (
-          <span style={{ display: 'block', fontSize: '10px', color: 'var(--color-info)', fontWeight: 600, marginTop: '2px' }}>
+          <span style={{ display: 'block', fontSize: '12px', color: 'var(--color-info)', fontWeight: 600, marginTop: '2px' }}>
             + {invoice.suggestedGRN} suggested
           </span>
         )}
@@ -233,7 +232,7 @@ function TabBadge({ count, active }: { count: number; active: boolean }) {
         height: '18px',
         padding: '0 5px',
         borderRadius: '100px',
-        fontSize: '10px',
+        fontSize: '12px',
         fontWeight: 700,
         background: active ? 'rgba(255,255,255,0.25)' : 'var(--color-border-subtle)',
         color: active ? '#fff' : 'var(--color-text-secondary)',

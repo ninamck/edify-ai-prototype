@@ -25,7 +25,7 @@ function StatusPill({ status }: { status: InstanceStatus }) {
       alignItems: 'center',
       padding: '3px 9px',
       borderRadius: '100px',
-      fontSize: '10px',
+      fontSize: '12px',
       fontWeight: 700,
       background: cfg.bg,
       color: cfg.text,
@@ -93,7 +93,7 @@ function InstanceCard({ instance, onClick }: { instance: ChecklistInstance; onCl
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '6px' }}>
           <StatusPill status={instance.status} />
           <span style={{
-            fontSize: '11px',
+            fontSize: '12px', fontWeight: 500,
             color: 'var(--color-text-secondary)',
             display: 'flex',
             alignItems: 'center',
@@ -105,11 +105,11 @@ function InstanceCard({ instance, onClick }: { instance: ChecklistInstance; onCl
         </div>
 
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
             <MapPin size={11} />
             {instance.site}
           </span>
-          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
             {ROLE_LABELS[instance.assignedRole]} · {instance.questionCount} questions
           </span>
         </div>
@@ -131,7 +131,7 @@ function InstanceCard({ instance, onClick }: { instance: ChecklistInstance; onCl
                 transition: 'width 0.3s ease',
               }} />
             </div>
-            <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '3px', display: 'block' }}>
+            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '3px', display: 'block' }}>
               {instance.answers.length} of {instance.questionCount} answered
             </span>
           </div>
@@ -158,11 +158,11 @@ export default function CompleteTasksPage() {
         <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
           <div style={summaryCardStyle}>
             <span style={{ fontSize: '22px', fontWeight: 800, color: 'var(--color-text-primary)' }}>{pending.length}</span>
-            <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', fontWeight: 500 }}>To do</span>
+            <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', fontWeight: 500 }}>To do</span>
           </div>
           <div style={summaryCardStyle}>
             <span style={{ fontSize: '22px', fontWeight: 800, color: '#15803D' }}>{complete.length}</span>
-            <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', fontWeight: 500 }}>Done today</span>
+            <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', fontWeight: 500 }}>Done today</span>
           </div>
           <button
             type="button"
@@ -183,7 +183,7 @@ export default function CompleteTasksPage() {
             }}
           >
             <History size={18} color="var(--color-text-secondary)" />
-            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>History</span>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>History</span>
           </button>
         </div>
 
@@ -248,10 +248,9 @@ const summaryCardStyle: React.CSSProperties = {
 };
 
 const sectionHeaderStyle: React.CSSProperties = {
-  fontSize: '10px',
+  fontSize: '12px',
   fontWeight: 700,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
   color: 'var(--color-text-muted)',
   marginBottom: '10px',
 };

@@ -77,9 +77,9 @@ export default function ConfidenceBadge({ score, factors }: Props) {
           background: cfg.bg,
           color: cfg.text,
           border: `1px solid ${cfg.border}`,
-          fontSize: '10px',
+          fontSize: '12px',
           fontWeight: 700,
-          letterSpacing: '0.06em',
+          letterSpacing: '0.04em',
           cursor: 'pointer',
           fontFamily: 'var(--font-primary)',
           lineHeight: 1.6,
@@ -117,14 +117,14 @@ export default function ConfidenceBadge({ score, factors }: Props) {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
-                  fontSize: '12px',
+                  fontSize: '12px', fontWeight: 500,
                   color: 'var(--color-text-primary)',
                   fontFamily: 'var(--font-primary)',
                 }}
               >
                 <span
                   style={{
-                    fontSize: '11px',
+                    fontSize: '12px', fontWeight: 500,
                     color: ok ? '#15803D' : '#B91C1C',
                     flexShrink: 0,
                   }}

@@ -109,10 +109,9 @@ export default function MorningBriefingActionsPanel({ briefingRole }: { briefing
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div>
         <div style={{
-          fontSize: '10px',
+          fontSize: '12px',
           fontWeight: 700,
-          letterSpacing: '0.08em',
-          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
           color: 'var(--color-text-muted)',
           marginBottom: '10px',
         }}>
@@ -130,7 +129,7 @@ export default function MorningBriefingActionsPanel({ briefingRole }: { briefing
               }}
             >
               <div style={{
-                fontSize: '12.5px',
+                fontSize: '13px',
                 fontWeight: 700,
                 color: 'var(--color-text-primary)',
                 marginBottom: '6px',
@@ -138,7 +137,7 @@ export default function MorningBriefingActionsPanel({ briefingRole }: { briefing
               }}>
                 {item.title}
               </div>
-              <p style={{ margin: '0 0 10px', fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+              <p style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: 400, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
                 {item.detail}
               </p>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -147,7 +146,7 @@ export default function MorningBriefingActionsPanel({ briefingRole }: { briefing
                   style={{
                     padding: '5px 12px',
                     borderRadius: '8px',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 600,
                     fontFamily: 'var(--font-primary)',
                     border: 'none',
@@ -163,7 +162,7 @@ export default function MorningBriefingActionsPanel({ briefingRole }: { briefing
                   style={{
                     padding: '5px 12px',
                     borderRadius: '8px',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 600,
                     fontFamily: 'var(--font-primary)',
                     border: '1px solid var(--color-border)',
@@ -183,10 +182,9 @@ export default function MorningBriefingActionsPanel({ briefingRole }: { briefing
       {other.length > 0 && (
         <div>
           <div style={{
-            fontSize: '10px',
+            fontSize: '12px',
             fontWeight: 700,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
             color: 'var(--color-text-muted)',
             marginBottom: '10px',
           }}>
@@ -204,7 +202,7 @@ export default function MorningBriefingActionsPanel({ briefingRole }: { briefing
                 }}
               >
                 <div style={{
-                  fontSize: '12.5px',
+                  fontSize: '13px',
                   fontWeight: 700,
                   color: 'var(--color-text-primary)',
                   marginBottom: '6px',
@@ -213,7 +211,7 @@ export default function MorningBriefingActionsPanel({ briefingRole }: { briefing
                 >
                   {item.title}
                 </div>
-                <p style={{ margin: '0 0 10px', fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+                <p style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: 400, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
                   {item.detail}
                 </p>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -222,7 +220,7 @@ export default function MorningBriefingActionsPanel({ briefingRole }: { briefing
                     style={{
                       padding: '5px 12px',
                       borderRadius: '8px',
-                      fontSize: '11px',
+                      fontSize: '12px',
                       fontWeight: 600,
                       fontFamily: 'var(--font-primary)',
                       border: 'none',

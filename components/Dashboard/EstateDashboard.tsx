@@ -117,7 +117,7 @@ const tipStyle = {
   background: '#fff',
   border: '1px solid var(--color-border-subtle)',
   borderRadius: '8px',
-  fontSize: '11px',
+  fontSize: '12px', fontWeight: 500,
   color: 'var(--color-text-primary)',
 };
 
@@ -138,13 +138,13 @@ function KpiCard({
         boxShadow: '0 2px 8px rgba(58,48,40,0.08), 0 0 0 1px rgba(58,48,40,0.03)',
       }}
     >
-      <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: '6px' }}>
+      <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: '6px' }}>
         {label}
       </div>
       <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: '4px' }}>
         {value}
       </div>
-      <div style={{ fontSize: '11px', fontWeight: 600, color: positive ? OK : 'var(--color-text-secondary)' }}>
+      <div style={{ fontSize: '12px', fontWeight: 600, color: positive ? OK : 'var(--color-text-secondary)' }}>
         {delta}
         <span style={{ fontWeight: 500, color: 'var(--color-text-muted)' }}> · {deltaLabel}</span>
       </div>
@@ -175,7 +175,7 @@ function ChartCard({
       <div style={{ marginBottom: '12px' }}>
         <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{title}</div>
         {subtitle && (
-          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>{subtitle}</div>
+          <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '2px' }}>{subtitle}</div>
         )}
       </div>
       <div style={{ width: '100%', height: 220 }}>{children}</div>
@@ -207,7 +207,7 @@ export default function EstateDashboard() {
         >
           Estate dashboard
         </h1>
-        <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-text-muted)' }}>
+        <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
           Dummy data · Fitzroy Espresso estate · rolling 7-day where noted
         </p>
       </div>
@@ -242,8 +242,8 @@ export default function EstateDashboard() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" vertical={false} />
-              <XAxis dataKey="d" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} interval={2} />
-              <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={36} domain={['dataMin - 2', 'dataMax + 2']} />
+              <XAxis dataKey="d" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} interval={2} />
+              <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} width={36} domain={['dataMin - 2', 'dataMax + 2']} />
               <Tooltip
                 contentStyle={tipStyle}
                 formatter={(v) => [`£${Number(v).toFixed(1)}k`, 'Net sales']}
@@ -257,8 +257,8 @@ export default function EstateDashboard() {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart layout="vertical" data={SITE_GP} margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" horizontal={false} />
-              <XAxis type="number" domain={[62, 72]} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} unit="%" />
-              <YAxis type="category" dataKey="site" width={88} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+              <XAxis type="number" domain={[62, 72]} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} unit="%" />
+              <YAxis type="category" dataKey="site" width={88} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
               <Tooltip contentStyle={tipStyle} formatter={(v) => [`${Number(v)}%`, 'GP']} />
               <Bar dataKey="gp" radius={[0, 6, 6, 0]} maxBarSize={22}>
                 {SITE_GP.map((_, i) => (
@@ -281,8 +281,8 @@ export default function EstateDashboard() {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={WASTAGE} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" vertical={false} />
-              <XAxis dataKey="cat" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} interval={0} angle={-12} textAnchor="end" height={52} />
-              <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={36} />
+              <XAxis dataKey="cat" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} interval={0} angle={-12} textAnchor="end" height={52} />
+              <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} width={36} />
               <Tooltip
                 contentStyle={tipStyle}
                 formatter={(v) => [`£${(Number(v) * 1000).toFixed(0)}`, 'Wastage']}
@@ -296,8 +296,8 @@ export default function EstateDashboard() {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={COGS_VAR} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" vertical={false} />
-              <XAxis dataKey="line" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={36} unit="%" />
+              <XAxis dataKey="line" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} width={36} unit="%" />
               <Tooltip
                 contentStyle={tipStyle}
                 formatter={(v) => {
@@ -329,17 +329,17 @@ export default function EstateDashboard() {
             margin={{ top: 8, right: 8, left: 0, bottom: 4 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" vertical={false} />
-            <XAxis dataKey="site" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
-            <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={36} domain={[24, 32]} unit="%" />
+            <XAxis dataKey="site" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+            <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} width={36} domain={[24, 32]} unit="%" />
             <Tooltip contentStyle={tipStyle} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Legend wrapperStyle={{ fontSize: 12 }} />
             <Line type="monotone" dataKey="actual" name="Actual %" stroke={ACCENT} strokeWidth={2} dot={{ r: 3 }} />
             <Line type="monotone" dataKey="plan" name="Roster plan %" stroke={ACCENT_MID} strokeWidth={2} strokeDasharray="5 4" dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </ChartCard>
 
-      <p style={{ margin: 0, fontSize: '10px', color: 'var(--color-text-muted)' }}>
+      <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
         Figures are illustrative for the prototype. Command centre remains the place for live Quinn briefings and approvals.
       </p>
     </div>

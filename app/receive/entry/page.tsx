@@ -26,7 +26,7 @@ function EntryContent() {
   if (selectedPOs.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 24px', fontFamily: 'var(--font-primary)' }}>
-        <p style={{ fontSize: '15px', color: 'var(--color-text-secondary)', marginBottom: '16px' }}>No POs selected.</p>
+        <p style={{ fontSize: '16px', color: 'var(--color-text-secondary)', marginBottom: '16px' }}>No POs selected.</p>
         <button
           onClick={() => router.push('/receive')}
           style={{

@@ -190,7 +190,7 @@ function AwaitingList({ pos, selected, onToggle, onReceiveSingle }: { pos: PO[];
               <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>— {po.supplier}</span>
               <StatusBadge status={po.status} />
             </div>
-            <div style={{ display: 'flex', gap: '8px', marginTop: '8px', fontSize: '12px', color: 'var(--color-text-secondary)', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', flexWrap: 'wrap', alignItems: 'center' }}>
               <span>{po.site}</span>
               <span>·</span>
               <span>{poItemCount(po)} items</span>
@@ -251,7 +251,7 @@ function CompletedList({ deliveries }: { deliveries: GRN[] }) {
               <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>— {grn.supplier}</span>
               <StatusBadge status={grn.status} />
             </div>
-            <div style={{ display: 'flex', gap: '8px', marginTop: '8px', fontSize: '12px', color: 'var(--color-text-secondary)', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', flexWrap: 'wrap', alignItems: 'center' }}>
               <span>{grn.site}</span>
               <span>·</span>
               <span>Received {grn.dateReceived}</span>

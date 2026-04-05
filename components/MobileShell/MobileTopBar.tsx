@@ -71,7 +71,7 @@ export default function MobileTopBar({
       <span style={{
         padding: '5px 10px',
         borderRadius: '100px',
-        fontSize: '11px',
+        fontSize: '12px',
         fontWeight: 700,
         border: '1.5px solid var(--color-accent-active)',
         background: 'rgba(34,68,68,0.08)',

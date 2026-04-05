@@ -74,7 +74,7 @@ function DrawerNavItem({
           borderRadius: '100px',
           background: 'var(--color-accent-deep)',
           color: '#F4F1EC',
-          fontSize: '10px',
+          fontSize: '12px',
           fontWeight: 700,
           display: 'flex',
           alignItems: 'center',
@@ -91,10 +91,9 @@ function SectionDivider({ label }: { label: string }) {
   return (
     <div style={{
       padding: '10px 16px 4px',
-      fontSize: '10px',
+      fontSize: '12px',
       fontWeight: 700,
-      letterSpacing: '0.07em',
-      textTransform: 'uppercase',
+      letterSpacing: '0.04em',
       color: 'var(--color-text-muted)',
     }}>
       {label}

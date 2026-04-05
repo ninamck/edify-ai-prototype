@@ -71,7 +71,7 @@ function InsightCard({
       <p
         style={{
           margin: '0 0 4px',
-          fontSize: '12.5px',
+          fontSize: '13px',
           fontWeight: 700,
           color: 'var(--color-text-primary)',
           lineHeight: 1.4,
@@ -82,9 +82,10 @@ function InsightCard({
       <p
         style={{
           margin: item.actionLabel ? '0 0 10px' : 0,
-          fontSize: '12px',
+          fontSize: '14px',
+          fontWeight: 400,
           color: 'var(--color-text-secondary)',
-          lineHeight: 1.65,
+          lineHeight: 1.6,
         }}
       >
         {item.detail}
@@ -97,7 +98,7 @@ function InsightCard({
             style={{
               padding: '5px 12px',
               borderRadius: '6px',
-              fontSize: '11.5px',
+              fontSize: '12px',
               fontWeight: 600,
               fontFamily: 'var(--font-primary)',
               cursor: 'pointer',
@@ -115,7 +116,7 @@ function InsightCard({
               style={{
                 padding: '5px 12px',
                 borderRadius: '6px',
-                fontSize: '11.5px',
+                fontSize: '12px',
                 fontWeight: 600,
                 fontFamily: 'var(--font-primary)',
                 cursor: 'pointer',
@@ -177,10 +178,9 @@ function InsightGroup({
         />
         <span
           style={{
-            fontSize: '10px',
+            fontSize: '12px',
             fontWeight: 700,
-            letterSpacing: '0.07em',
-            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
             color: cfg.color,
           }}
         >

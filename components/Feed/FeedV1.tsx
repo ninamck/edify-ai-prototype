@@ -79,7 +79,7 @@ function BriefingSection({ icon: Icon, title, children, dataPoints, index }: Sec
           <Icon size={12} color="var(--color-text-secondary)" strokeWidth={2} />
         </span>
         <span style={{
-          fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.08em',
+          fontSize: '12px', fontWeight: 700, letterSpacing: '0.04em',
           textTransform: 'uppercase', color: 'var(--color-text-secondary)',
         }}>
           {title}
@@ -99,7 +99,7 @@ function BriefingSection({ icon: Icon, title, children, dataPoints, index }: Sec
         }}>
           {dataPoints.map((dp, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{dp.label}</span>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>{dp.label}</span>
               <span style={{
                 fontSize: '12px', fontWeight: 700,
                 color: TONE_COLOR[dp.tone ?? 'neutral'],
@@ -161,7 +161,7 @@ function ActionItem({ tag, summary, changes, primary, secondary, index }: Action
           borderBottom: '1px solid var(--color-border-subtle)',
         }}>
           <TagIcon size={11} color={tag.color} strokeWidth={2.2} />
-          <span style={{ fontSize: '10.5px', fontWeight: 700, color: tag.color, letterSpacing: '0.04em' }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: tag.color, letterSpacing: '0.04em' }}>
             {tag.label}
           </span>
         </div>
@@ -195,7 +195,7 @@ function ActionItem({ tag, summary, changes, primary, secondary, index }: Action
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)', flex: 1 }}>
                   {c.label}
                 </span>
-                <span style={{ fontSize: '11.5px', color: 'var(--color-text-muted)' }}>{c.detail}</span>
+                <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>{c.detail}</span>
               </div>
             ))}
           </div>
@@ -264,7 +264,7 @@ export default function FeedV1() {
         <QuinnAvatar />
         <div>
           <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Quinn</div>
-          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '1px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
             Morning briefing · {TODAY}
           </div>
         </div>
@@ -302,7 +302,7 @@ export default function FeedV1() {
               <AlertCircle size={12} color="#7A3800" strokeWidth={2} />
             </span>
             <span style={{
-              fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.08em',
+              fontSize: '12px', fontWeight: 700, letterSpacing: '0.04em',
               textTransform: 'uppercase', color: '#7A3800',
             }}>
               Needs your eye

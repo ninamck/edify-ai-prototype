@@ -47,13 +47,13 @@ function LabourCurve({ subtitle }: { subtitle: string }) {
   return (
     <div>
       <div style={{
-        fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.06em',
+        fontSize: '12px', fontWeight: 700, letterSpacing: '0.04em',
         textTransform: 'uppercase', color: 'var(--color-text-secondary)',
         marginBottom: '8px',
       }}>
         Labour cost by hour vs forecast
       </div>
-      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '6px' }}>
+      <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginBottom: '6px' }}>
         {subtitle}
       </div>
       <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: 'block' }}>
@@ -80,7 +80,7 @@ function LabourCurve({ subtitle }: { subtitle: string }) {
           10pm
         </text>
       </svg>
-      <div style={{ display: 'flex', gap: '12px', marginTop: '4px', fontSize: '10px', color: 'var(--color-text-muted)' }}>
+      <div style={{ display: 'flex', gap: '12px', marginTop: '4px', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
         <span><span style={{ color: 'var(--color-accent-deep)', fontWeight: 700 }}>—</span> Actual</span>
         <span><span style={{ color: 'rgba(107,94,85,0.5)', fontWeight: 700 }}>· ·</span> Forecast</span>
       </div>
@@ -92,7 +92,7 @@ function ConfidenceMeter({ label, valuePct, caption }: { label: string; valuePct
   return (
     <div>
       <div style={{
-        fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.06em',
+        fontSize: '12px', fontWeight: 700, letterSpacing: '0.04em',
         textTransform: 'uppercase', color: 'var(--color-text-secondary)',
         marginBottom: '8px',
       }}>
@@ -121,7 +121,7 @@ function ConfidenceMeter({ label, valuePct, caption }: { label: string; valuePct
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <span style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{valuePct}%</span>
-        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', textAlign: 'right', maxWidth: '70%' }}>
+        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', textAlign: 'right', maxWidth: '70%' }}>
           {caption}
         </span>
       </div>
@@ -164,7 +164,7 @@ export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso',
           boxShadow: '0 4px 20px rgba(34,68,68,0.25)',
         }}
       >
-        <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.85)', marginBottom: '8px' }}>
+        <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.85)', marginBottom: '8px' }}>
           TODAY · BOARD LINE
         </div>
         <p style={{ margin: 0 }}>
@@ -215,7 +215,7 @@ export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso',
           <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
             The &ldquo;Today&rdquo; Command Centre
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '2px' }}>
             {scope}
           </div>
         </div>
@@ -231,7 +231,7 @@ export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso',
         marginBottom: '16px',
       }}>
         <AlertTriangle size={16} color="#7A3800" style={{ flexShrink: 0, marginTop: '1px' }} />
-        <div style={{ fontSize: '12.5px', color: 'var(--color-text-secondary)', lineHeight: 1.55 }}>
+        <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)', lineHeight: 1.55 }}>
           <strong style={{ color: '#7A3800' }}>Proactive alert · </strong>
           Matcha stock will run out <Hi>Friday</Hi> at {variant === 'store' ? siteLabel : 'two sites'} based on current velocity and no inbound PO before then.
         </div>
@@ -275,7 +275,7 @@ export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso',
       {variant === 'finance' && (
         <div style={{ marginBottom: '16px' }}>
           <div style={{
-            fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.06em',
+            fontSize: '12px', fontWeight: 700, letterSpacing: '0.04em',
             textTransform: 'uppercase', color: 'var(--color-text-secondary)',
             marginBottom: '8px',
           }}>
@@ -291,7 +291,7 @@ export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso',
             <div style={{ width: '22%', background: 'var(--color-accent-active)', height: '100%' }} title="In review" />
             <div style={{ width: '10%', background: 'rgba(155,34,38,0.85)', height: '100%' }} title="Exception" />
           </div>
-          <div style={{ display: 'flex', gap: '12px', marginTop: '6px', fontSize: '10px', color: 'var(--color-text-muted)' }}>
+          <div style={{ display: 'flex', gap: '12px', marginTop: '6px', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
             <span>68% cleared</span>
             <span>22% in review</span>
             <span>10% exception</span>
@@ -301,7 +301,7 @@ export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso',
 
       {/* Top 3 Quinn approvals */}
       <div style={{
-        fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.06em',
+        fontSize: '12px', fontWeight: 700, letterSpacing: '0.04em',
         textTransform: 'uppercase', color: 'var(--color-text-secondary)',
         marginBottom: '10px',
         display: 'flex', alignItems: 'center', gap: '6px',
@@ -322,10 +322,10 @@ export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso',
             }}
           >
             <div>
-              <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
                 {i + 1}. {a.title}
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '2px' }}>
                 {a.detail}
               </div>
             </div>
@@ -334,7 +334,7 @@ export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso',
               style={{
                 padding: '5px 10px',
                 borderRadius: '6px',
-                fontSize: '11px', fontWeight: 600,
+                fontSize: '12px', fontWeight: 600,
                 fontFamily: 'var(--font-primary)',
                 border: 'none',
                 cursor: 'pointer',
@@ -352,7 +352,7 @@ export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso',
       <div style={{
         marginTop: '14px', paddingTop: '12px',
         borderTop: '1px solid var(--color-border-subtle)',
-        fontSize: '10px', color: 'var(--color-text-muted)',
+        fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)',
         display: 'flex', alignItems: 'center', gap: '6px',
       }}>
         <Activity size={11} />

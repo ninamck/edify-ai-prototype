@@ -278,7 +278,7 @@ function RecipeCardEditor({
         <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
           Chicken & Mayo Sandwich
         </span>
-        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginLeft: 'auto' }}>
+        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginLeft: 'auto' }}>
           Serves 1
         </span>
       </div>
@@ -290,13 +290,13 @@ function RecipeCardEditor({
             alignItems: 'center',
             padding: '8px 14px',
             borderBottom: i < ingredients.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
-            fontSize: '12.5px',
+            fontSize: '13px',
             gap: '8px',
           }}
         >
           <span style={{ flex: 1, color: 'var(--color-text-secondary)' }}>{ing.name}</span>
           {ing.qty === '\u2014' ? (
-            <span style={{ fontSize: '12px', color: 'var(--color-text-muted)', width: '64px', textAlign: 'right' }}>to taste</span>
+            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', width: '64px', textAlign: 'right' }}>to taste</span>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <input
@@ -317,7 +317,7 @@ function RecipeCardEditor({
                   outline: 'none',
                 }}
               />
-              <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', minWidth: '16px' }}>{ing.unit}</span>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', minWidth: '16px' }}>{ing.unit}</span>
             </div>
           )}
         </div>
@@ -344,17 +344,17 @@ function CostBreakdownCard() {
       <div style={{ padding: '10px 14px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: '8px' }}>
         <BarChart3 size={14} color="var(--color-accent-active)" strokeWidth={2} />
         <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Cost & Margin Breakdown</span>
-        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginLeft: '2px' }}>· Cold · Serves 1</span>
-        <span style={{ marginLeft: 'auto', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px', background: withinTarget ? 'rgba(21,128,61,0.1)' : 'rgba(185,28,28,0.1)', color: withinTarget ? '#15803D' : '#B91C1C' }}>
+        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginLeft: '2px' }}>· Cold · Serves 1</span>
+        <span style={{ marginLeft: 'auto', fontSize: '12px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px', background: withinTarget ? 'rgba(21,128,61,0.1)' : 'rgba(185,28,28,0.1)', color: withinTarget ? '#15803D' : '#B91C1C' }}>
           {withinTarget ? 'Within target' : 'Above target'}
         </span>
       </div>
 
       {/* Ingredient rows */}
       {INGREDIENT_COSTS.map((ing, i) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '7px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: '12px', gap: '8px' }}>
+        <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '7px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: '12px', fontWeight: 500, gap: '8px' }}>
           <span style={{ flex: 1, color: 'var(--color-text-secondary)' }}>{ing.name}</span>
-          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', minWidth: '44px', textAlign: 'right' }}>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', minWidth: '44px', textAlign: 'right' }}>
             {ing.qty === '\u2014' ? 'to taste' : `${ing.qty}${ing.unit}`}
           </span>
           <span style={{ fontWeight: 600, color: 'var(--color-text-primary)', minWidth: '44px', textAlign: 'right' }}>£{ing.cost.toFixed(2)}</span>
@@ -371,17 +371,17 @@ function CostBreakdownCard() {
       <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 82px 82px', gap: '2px', marginBottom: '6px' }}>
           <div />
-          <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Dine In</div>
-          <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Takeaway</div>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Dine In</div>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Takeaway</div>
         </div>
         {pricingRows.map((row, i) => (
           <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 82px 82px', gap: '2px', padding: '4px 0', borderTop: i === 0 ? 'none' : '1px solid rgba(58,48,40,0.05)' }}>
-            <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{row.label}</span>
+            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{row.label}</span>
             <span style={{ fontSize: '12px', fontWeight: row.bold ? 700 : 500, color: row.bold ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', textAlign: 'center' }}>{row.dineIn}</span>
             <span style={{ fontSize: '12px', fontWeight: row.bold ? 700 : 500, color: row.bold ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', textAlign: 'center' }}>{row.takeaway}</span>
           </div>
         ))}
-        <p style={{ fontSize: '10px', color: 'var(--color-text-muted)', margin: '6px 0 0' }}>* Cold takeaway sandwiches are zero-rated for VAT in the UK</p>
+        <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', margin: '6px 0 0' }}>* Cold takeaway sandwiches are zero-rated for VAT in the UK</p>
       </div>
 
       {/* Food cost % + weekly projection */}
@@ -390,10 +390,10 @@ function CostBreakdownCard() {
           <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>Food cost % (ex VAT)</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '18px', fontWeight: 700, color: withinTarget ? '#15803D' : '#B91C1C' }}>{FOOD_COST_PCT}%</span>
-            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>target {TARGET_FOOD_COST_PCT}%</span>
+            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>target {TARGET_FOOD_COST_PCT}%</span>
           </div>
         </div>
-        <div style={{ padding: '8px 10px', borderRadius: '8px', background: 'rgba(3,105,161,0.05)', fontSize: '11.5px', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+        <div style={{ padding: '8px 10px', borderRadius: '8px', background: 'rgba(3,105,161,0.05)', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
           <span style={{ fontWeight: 700, color: 'var(--color-info)' }}>Projected weekly:</span> At ~25 serves/day, that&apos;s <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>£{(GROSS_PROFIT_EX_VAT * 25 * 7).toFixed(0)}</span> gross profit/week from this item alone.
         </div>
       </div>
@@ -459,10 +459,10 @@ function PackagingPicker({ selected, onToggle, onConfirm, onSkip }: {
                 </svg>
               )}
             </span>
-            <span style={{ flex: 1, fontSize: '12.5px', color: 'var(--color-text-primary)', fontWeight: isSelected ? 600 : 400 }}>
+            <span style={{ flex: 1, fontSize: '13px', color: 'var(--color-text-primary)', fontWeight: isSelected ? 600 : 400 }}>
               {pkg.name}
             </span>
-            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
               per {pkg.unit}
             </span>
             <span style={{ fontSize: '12px', fontWeight: 600, color: isSelected ? 'var(--color-accent-active)' : 'var(--color-text-secondary)', minWidth: '42px', textAlign: 'right' }}>
@@ -480,7 +480,7 @@ function PackagingPicker({ selected, onToggle, onConfirm, onSkip }: {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          fontSize: '12px',
+          fontSize: '12px', fontWeight: 500,
         }}>
           <span style={{ color: 'var(--color-text-secondary)' }}>Packaging adds</span>
           <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>+£{totalPackaging.toFixed(2)}/serve</span>
@@ -551,7 +551,7 @@ function SiteSelectionCard({ selected, onToggle, onConfirm }: { selected: Set<st
               MOCK_SITES.forEach(s => { if (!selected.has(s.id)) onToggle(s.id); });
             }
           }}
-          style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-accent-active)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-primary)', padding: 0 }}
+          style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-accent-active)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-primary)', padding: 0 }}
         >
           {MOCK_SITES.every(s => selected.has(s.id)) ? 'Deselect all' : 'Select all'}
         </button>
@@ -570,7 +570,7 @@ function SiteSelectionCard({ selected, onToggle, onConfirm }: { selected: Set<st
                 border: isSelected ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)',
                 background: isSelected ? 'var(--color-accent-active)' : '#fff',
                 color: isSelected ? '#fff' : 'var(--color-text-secondary)',
-                fontSize: '12.5px',
+                fontSize: '13px',
                 fontWeight: isSelected ? 700 : 400,
                 fontFamily: 'var(--font-primary)',
                 cursor: 'pointer',
@@ -583,7 +583,7 @@ function SiteSelectionCard({ selected, onToggle, onConfirm }: { selected: Set<st
         })}
       </div>
       <div style={{ padding: '10px 14px', borderTop: '1px solid var(--color-border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{selected.size} site{selected.size !== 1 ? 's' : ''} selected</span>
+        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>{selected.size} site{selected.size !== 1 ? 's' : ''} selected</span>
         <button
           type="button"
           onClick={onConfirm}
@@ -602,7 +602,7 @@ function AllergenCard({ confirmed, onToggle, onConfirm }: { confirmed: Set<strin
     <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden' }}>
       <div style={{ padding: '10px 14px', background: 'var(--color-warning-light)', borderBottom: '1px solid var(--color-warning-border)', display: 'flex', alignItems: 'center', gap: '8px' }}>
         <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-warning)' }}>Allergens</span>
-        <span style={{ fontSize: '11px', color: 'var(--color-warning)', marginLeft: 'auto' }}>
+        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-warning)', marginLeft: 'auto' }}>
           {confirmed.size} selected · {AUTO_DETECTED_ALLERGENS.size} auto-detected from ingredients
         </span>
       </div>
@@ -640,10 +640,10 @@ function AllergenCard({ confirmed, onToggle, onConfirm }: { confirmed: Set<strin
                   </svg>
                 )}
               </span>
-              <span style={{ fontSize: '11.5px', color: 'var(--color-text-primary)', fontWeight: isDetected && isSelected ? 600 : 400 }}>
+              <span style={{ fontSize: '12px', color: 'var(--color-text-primary)', fontWeight: isDetected && isSelected ? 600 : 400 }}>
                 {allergen}
                 {isDetected && (
-                  <span style={{ fontSize: '9px', color: 'var(--color-warning)', marginLeft: '4px', fontWeight: 700 }}>auto</span>
+                  <span style={{ fontSize: '12px', color: 'var(--color-warning)', marginLeft: '4px', fontWeight: 700 }}>auto</span>
                 )}
               </span>
             </button>
@@ -651,7 +651,7 @@ function AllergenCard({ confirmed, onToggle, onConfirm }: { confirmed: Set<strin
         })}
       </div>
       <div style={{ padding: '10px 14px', borderTop: '1px solid var(--color-border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Based on UK Food Information Regulations 2014</span>
+        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>Based on UK Food Information Regulations 2014</span>
         <button
           type="button"
           onClick={onConfirm}
@@ -675,7 +675,7 @@ function PillPicker({ options, selected, onSelect, onConfirm }: { options: strin
         {options.map(opt => {
           const on = selected === opt && !isCustomSelected;
           return (
-            <button key={opt} type="button" onClick={() => { setCustomVal(''); onSelect(opt); }} style={{ padding: '7px 16px', borderRadius: '100px', border: on ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)', background: on ? 'var(--color-accent-active)' : '#fff', color: on ? '#fff' : 'var(--color-text-secondary)', fontSize: '12.5px', fontWeight: on ? 700 : 400, fontFamily: 'var(--font-primary)', cursor: 'pointer', transition: 'all 0.12s' }}>
+            <button key={opt} type="button" onClick={() => { setCustomVal(''); onSelect(opt); }} style={{ padding: '7px 16px', borderRadius: '100px', border: on ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)', background: on ? 'var(--color-accent-active)' : '#fff', color: on ? '#fff' : 'var(--color-text-secondary)', fontSize: '13px', fontWeight: on ? 700 : 400, fontFamily: 'var(--font-primary)', cursor: 'pointer', transition: 'all 0.12s' }}>
               {opt}
             </button>
           );
@@ -685,7 +685,7 @@ function PillPicker({ options, selected, onSelect, onConfirm }: { options: strin
           value={customVal}
           onChange={(e) => { setCustomVal(e.target.value); if (e.target.value.trim()) onSelect(e.target.value.trim()); }}
           placeholder="Other…"
-          style={{ width: '82px', padding: '6px 12px', borderRadius: '100px', border: isCustomSelected ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)', background: isCustomSelected ? 'rgba(34,68,68,0.04)' : '#fff', fontSize: '12.5px', fontFamily: 'var(--font-primary)', color: 'var(--color-text-primary)', outline: 'none' }}
+          style={{ width: '82px', padding: '6px 12px', borderRadius: '100px', border: isCustomSelected ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)', background: isCustomSelected ? 'rgba(34,68,68,0.04)' : '#fff', fontSize: '13px', fontFamily: 'var(--font-primary)', color: 'var(--color-text-primary)', outline: 'none' }}
         />
       </div>
       <div style={{ padding: '0 14px 12px', display: 'flex', justifyContent: 'flex-end' }}>
@@ -704,7 +704,7 @@ function BatchAndCarryCard({ settings, onUpdate, onConfirm }: { settings: ProdSe
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0', borderBottom: '1px solid var(--color-border-subtle)' }}>
         {[{ label: 'Min batch', key: 'batchMin' as const }, { label: 'Max batch', key: 'batchMax' as const }].map(({ label, key }, i) => (
           <div key={key} style={{ padding: '12px 14px', borderRight: i === 0 ? '1px solid var(--color-border-subtle)' : 'none' }}>
-            <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>{label}</div>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>{label}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {settings[key] === 'unlimited' ? (
                 <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)', flex: 1 }}>Unlimited</span>
@@ -716,7 +716,7 @@ function BatchAndCarryCard({ settings, onUpdate, onConfirm }: { settings: ProdSe
                 </>
               )}
               {key === 'batchMax' && (
-                <button onClick={() => onUpdate({ batchMax: settings.batchMax === 'unlimited' ? 10 : 'unlimited' })} style={{ fontSize: '10px', color: 'var(--color-accent-active)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-primary)', fontWeight: 600, marginLeft: '2px' }}>
+                <button onClick={() => onUpdate({ batchMax: settings.batchMax === 'unlimited' ? 10 : 'unlimited' })} style={{ fontSize: '12px', color: 'var(--color-accent-active)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-primary)', fontWeight: 600, marginLeft: '2px' }}>
                   {settings.batchMax === 'unlimited' ? 'Set limit' : 'No limit'}
                 </button>
               )}
@@ -727,7 +727,7 @@ function BatchAndCarryCard({ settings, onUpdate, onConfirm }: { settings: ProdSe
       <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>Batch multiplier</div>
-          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '1px' }}>Production must be made in multiples of this number</div>
+          <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>Production must be made in multiples of this number</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button style={btnStyle} onClick={() => onUpdate({ batchMultiple: Math.max(1, settings.batchMultiple - 1) })}>−</button>
@@ -738,13 +738,13 @@ function BatchAndCarryCard({ settings, onUpdate, onConfirm }: { settings: ProdSe
       <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>Allow carry over</div>
-          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '1px' }}>Unsold stock rolls to the next production period</div>
+          <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>Unsold stock rolls to the next production period</div>
         </div>
         <div style={{ display: 'flex', gap: '6px' }}>
           {(['Write off', 'Allow carry over'] as const).map(opt => {
             const on = opt === 'Allow carry over' ? settings.allowCarryOver : !settings.allowCarryOver;
             return (
-              <button key={opt} type="button" onClick={() => onUpdate({ allowCarryOver: opt === 'Allow carry over' })} style={{ padding: '6px 12px', borderRadius: '100px', border: on ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)', background: on ? 'var(--color-accent-active)' : '#fff', color: on ? '#fff' : 'var(--color-text-secondary)', fontSize: '11.5px', fontWeight: on ? 700 : 400, fontFamily: 'var(--font-primary)', cursor: 'pointer', transition: 'all 0.12s' }}>
+              <button key={opt} type="button" onClick={() => onUpdate({ allowCarryOver: opt === 'Allow carry over' })} style={{ padding: '6px 12px', borderRadius: '100px', border: on ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)', background: on ? 'var(--color-accent-active)' : '#fff', color: on ? '#fff' : 'var(--color-text-secondary)', fontSize: '12px', fontWeight: on ? 700 : 400, fontFamily: 'var(--font-primary)', cursor: 'pointer', transition: 'all 0.12s' }}>
                 {opt}
               </button>
             );
@@ -764,7 +764,7 @@ function CategoryClosingCard({ settings, onUpdate, onConfirm }: { settings: Prod
   return (
     <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden', background: '#fff' }}>
       <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
-        <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Recipe category</div>
+        <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Recipe category</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
           {CATEGORY_OPTIONS.map(opt => {
             const on = settings.category === opt;
@@ -773,7 +773,7 @@ function CategoryClosingCard({ settings, onUpdate, onConfirm }: { settings: Prod
         </div>
       </div>
       <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
-        <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Stop production before closing</div>
+        <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Stop production before closing</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
           {CLOSING_RANGE_OPTIONS.map(opt => {
             const on = settings.closingRange === opt;
@@ -812,7 +812,7 @@ function ProductionSummaryCard({ settings }: { settings: ProdSettings }) {
       <div style={{ padding: '10px 14px', background: '#fff' }}>
         {rows.map((row, i) => (
           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: i < rows.length - 1 ? '1px solid var(--color-border-subtle)' : 'none' }}>
-            <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{row.label}</span>
+            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{row.label}</span>
             <span style={{ fontSize: '12px', fontWeight: row.bold ? 700 : 600, color: 'var(--color-text-primary)' }}>{row.value}</span>
           </div>
         ))}
@@ -835,7 +835,7 @@ function ActionButton({ label, onClick }: { label: string; onClick: () => void }
           border: 'none',
           background: 'var(--color-accent-active)',
           color: '#fff',
-          fontSize: '12.5px',
+          fontSize: '13px',
           fontWeight: 600,
           fontFamily: 'var(--font-primary)',
           cursor: 'pointer',
@@ -883,7 +883,7 @@ function ChatBubble({ msg, children }: { msg: ChatMsg; children?: ReactNode }) {
         whiteSpace: 'pre-wrap',
       }}>
         {!isUser && (
-          <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-accent-active)', marginBottom: '6px', letterSpacing: '0.04em' }}>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-accent-active)', marginBottom: '6px', letterSpacing: '0.04em' }}>
             QUINN
           </div>
         )}
@@ -1070,10 +1070,10 @@ function CheckRow({ check }: { check: IntegrityCheck }) {
     }}>
       <config.Icon size={14} color={config.color} strokeWidth={2} style={{ flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: 1.3 }}>
+        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: 1.3 }}>
           {check.label}
         </div>
-        <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '1px', lineHeight: 1.4 }}>
+        <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px', lineHeight: 1.4 }}>
           {check.detail}
         </div>
       </div>
@@ -1085,7 +1085,7 @@ function CheckRow({ check }: { check: IntegrityCheck }) {
             borderRadius: '100px',
             border: '1px solid var(--color-border)',
             background: '#fff',
-            fontSize: '11px',
+            fontSize: '12px',
             fontWeight: 600,
             fontFamily: 'var(--font-primary)',
             color: 'var(--color-text-secondary)',
@@ -1129,19 +1129,19 @@ function DataIntegrityCard({ onFixWithQuinn }: { onFixWithQuinn: () => void }) {
         </span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '5px', alignItems: 'center' }}>
           <span style={{
-            fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px',
+            fontSize: '12px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px',
             background: 'rgba(220,38,38,0.1)', color: '#DC2626',
           }}>
             {issues.length} issues
           </span>
           <span style={{
-            fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px',
+            fontSize: '12px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px',
             background: 'rgba(217,119,6,0.1)', color: '#D97706',
           }}>
             {warnings.length} warnings
           </span>
           <span style={{
-            fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px',
+            fontSize: '12px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px',
             background: 'rgba(21,128,61,0.1)', color: '#15803D',
           }}>
             {passing.length} ok
@@ -1152,7 +1152,7 @@ function DataIntegrityCard({ onFixWithQuinn }: { onFixWithQuinn: () => void }) {
       {/* Issues */}
       {issues.length > 0 && (
         <>
-          <div style={{ padding: '8px 14px 4px', fontSize: '10px', fontWeight: 700, color: '#DC2626', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+          <div style={{ padding: '8px 14px 4px', fontSize: '12px', fontWeight: 700, color: '#DC2626', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Needs attention
           </div>
           {issues.map(check => <CheckRow key={check.id} check={check} />)}
@@ -1162,7 +1162,7 @@ function DataIntegrityCard({ onFixWithQuinn }: { onFixWithQuinn: () => void }) {
       {/* Warnings */}
       {warnings.length > 0 && (
         <>
-          <div style={{ padding: '8px 14px 4px', fontSize: '10px', fontWeight: 700, color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+          <div style={{ padding: '8px 14px 4px', fontSize: '12px', fontWeight: 700, color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Review recommended
           </div>
           {warnings.map(check => <CheckRow key={check.id} check={check} />)}
@@ -1172,7 +1172,7 @@ function DataIntegrityCard({ onFixWithQuinn }: { onFixWithQuinn: () => void }) {
       {/* Passing */}
       {passing.length > 0 && (
         <>
-          <div style={{ padding: '8px 14px 4px', fontSize: '10px', fontWeight: 700, color: '#15803D', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+          <div style={{ padding: '8px 14px 4px', fontSize: '12px', fontWeight: 700, color: '#15803D', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             All good
           </div>
           {passing.map(check => <CheckRow key={check.id} check={check} />)}
@@ -1555,7 +1555,7 @@ export default function Feed({
               Quinn
             </div>
             {quinnExpanded && !chatStarted && (
-              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '1px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
                 Full screen · chat
               </div>
             )}
@@ -1660,10 +1660,9 @@ export default function Feed({
                     display: 'inline-block',
                     padding: '5px 12px',
                     borderRadius: '100px',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 700,
-                    letterSpacing: '0.06em',
-                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
                     color: 'var(--color-text-secondary)',
                     background: 'rgba(58,48,40,0.06)',
                     border: '1px solid var(--color-border-subtle)',
@@ -1733,7 +1732,7 @@ export default function Feed({
                         borderRadius: '100px',
                         border: '1px solid var(--color-border-subtle)',
                         background: '#fff',
-                        fontSize: '12.5px',
+                        fontSize: '13px',
                         fontWeight: 600,
                         color: 'var(--color-text-secondary)',
                         cursor: 'pointer',
@@ -1773,11 +1772,10 @@ export default function Feed({
                     }}
                   >
                     <span style={{
-                      fontSize: '11px',
+                      fontSize: '12px',
                       fontWeight: 700,
                       color: 'var(--color-text-secondary)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.07em',
+                      letterSpacing: '0.04em',
                     }}>
                       Chat History
                     </span>
@@ -1832,7 +1830,7 @@ export default function Feed({
                             })()}
                           </div>
                           <div style={{
-                            fontSize: '11.5px',
+                            fontSize: '12px', fontWeight: 500,
                             color: 'var(--color-text-muted)',
                             marginTop: '2px',
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -1843,7 +1841,7 @@ export default function Feed({
                             })()}
                           </div>
                         </div>
-                        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
                           just now
                         </span>
                         <ChevronDown
@@ -1975,10 +1973,10 @@ export default function Feed({
                     )}
                     {recipeFlow === 15 && (
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', maxWidth: '88%' }}>
-                        <button type="button" onClick={skipProductionOffer} style={{ padding: '8px 18px', borderRadius: '100px', border: '1.5px solid var(--color-border)', background: '#fff', fontSize: '12.5px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
+                        <button type="button" onClick={skipProductionOffer} style={{ padding: '8px 18px', borderRadius: '100px', border: '1.5px solid var(--color-border)', background: '#fff', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
                           Not now
                         </button>
-                        <button type="button" onClick={startProductionFlow} style={{ padding: '8px 18px', borderRadius: '100px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12.5px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer', boxShadow: '0 2px 8px rgba(34,68,68,0.25)' }}>
+                        <button type="button" onClick={startProductionFlow} style={{ padding: '8px 18px', borderRadius: '100px', border: 'none', background: 'var(--color-accent-active)', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer', boxShadow: '0 2px 8px rgba(34,68,68,0.25)' }}>
                           Yes, set it up
                         </button>
                       </div>

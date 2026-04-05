@@ -77,9 +77,9 @@ export default function SupplierSection({
                     background: 'rgba(185,28,28,0.10)',
                     color: '#B91C1C',
                     border: '1px solid rgba(185,28,28,0.25)',
-                    fontSize: '10px',
+                    fontSize: '12px',
                     fontWeight: 700,
-                    letterSpacing: '0.06em',
+                    letterSpacing: '0.04em',
                     fontFamily: 'var(--font-primary)',
                   }}
                 >
@@ -92,7 +92,7 @@ export default function SupplierSection({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px',
-                fontSize: '12px',
+                fontSize: '12px', fontWeight: 500,
                 color: 'var(--color-text-secondary)',
                 fontFamily: 'var(--font-primary)',
               }}

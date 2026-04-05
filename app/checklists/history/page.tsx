@@ -112,7 +112,7 @@ function HistoryCard({ instance, onClick }: { instance: ChecklistInstance; onCli
           </span>
           {flagged && (
             <span style={{
-              fontSize: '9px',
+              fontSize: '12px',
               fontWeight: 700,
               padding: '2px 6px',
               borderRadius: '100px',
@@ -126,16 +126,16 @@ function HistoryCard({ instance, onClick }: { instance: ChecklistInstance; onCli
         </div>
 
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
             <Clock size={10} />
             {instance.completedAt}
           </span>
-          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
             <MapPin size={10} />
             {instance.site}
           </span>
           {instance.completedBy && (
-            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
               <User size={10} />
               {instance.completedBy}
             </span>
@@ -188,7 +188,7 @@ export default function ChecklistHistoryPage() {
             <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: 'var(--color-text-primary)' }}>
               History
             </h1>
-            <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+            <p style={{ margin: '2px 0 0', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
               {filtered.length} completed · {flaggedCount} with flags
             </p>
           </div>
@@ -222,7 +222,7 @@ export default function ChecklistHistoryPage() {
                 height: '16px',
                 borderRadius: '100px',
                 background: 'rgba(255,255,255,0.25)',
-                fontSize: '9px',
+                fontSize: '12px',
                 fontWeight: 800,
                 display: 'flex',
                 alignItems: 'center',
@@ -282,7 +282,7 @@ export default function ChecklistHistoryPage() {
                   borderRadius: '7px',
                   border: '1px solid var(--color-border)',
                   background: '#fff',
-                  fontSize: '11px',
+                  fontSize: '12px',
                   fontWeight: 600,
                   color: 'var(--color-text-secondary)',
                   cursor: 'pointer',
@@ -332,7 +332,7 @@ function FilterPill({ label, active, onClick }: { label: string; active: boolean
         border: active ? 'none' : '1px solid var(--color-border)',
         background: active ? 'var(--color-accent-active)' : '#fff',
         color: active ? '#F4F1EC' : 'var(--color-text-secondary)',
-        fontSize: '11px',
+        fontSize: '12px',
         fontWeight: 600,
         cursor: 'pointer',
         fontFamily: 'var(--font-primary)',
@@ -344,19 +344,17 @@ function FilterPill({ label, active, onClick }: { label: string; active: boolean
 }
 
 const filterLabelStyle: React.CSSProperties = {
-  fontSize: '10px',
+  fontSize: '12px',
   fontWeight: 700,
-  letterSpacing: '0.07em',
-  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
   color: 'var(--color-text-muted)',
   marginBottom: '7px',
 };
 
 const dayHeadingStyle: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: '12px',
   fontWeight: 700,
-  letterSpacing: '0.06em',
-  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
   color: 'var(--color-text-muted)',
   marginBottom: '8px',
   paddingBottom: '6px',

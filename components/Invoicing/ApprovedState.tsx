@@ -95,7 +95,7 @@ export default function ApprovedState({ invoice, onBackToInvoices }: ApprovedSta
           <h3 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>
             Ingredient Costs Updated
           </h3>
-          <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', margin: '0 0 14px' }}>
+          <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', margin: '0 0 14px' }}>
             These prices are now the new master cost. Recipe GP% has been recalculated.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -115,13 +115,13 @@ export default function ApprovedState({ invoice, onBackToInvoices }: ApprovedSta
               >
                 <div>
                   <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text-primary)' }}>{ci.item}</span>
-                  <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginLeft: '8px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginLeft: '8px' }}>
                     ${ci.oldPrice.toFixed(2)} → ${ci.newPrice.toFixed(2)}
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <StatusBadge status={ci.change} variant="warning" />
-                  <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{ci.recipes} recipes affected</span>
+                  <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{ci.recipes} recipes affected</span>
                 </div>
               </div>
             ))}
@@ -143,7 +143,7 @@ export default function ApprovedState({ invoice, onBackToInvoices }: ApprovedSta
           <h3 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>
             Accepted for This Delivery Only
           </h3>
-          <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', margin: '0 0 14px' }}>
+          <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', margin: '0 0 14px' }}>
             These prices were accepted for this invoice but did not change the master ingredient cost.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -164,7 +164,7 @@ export default function ApprovedState({ invoice, onBackToInvoices }: ApprovedSta
               >
                 <div>
                   <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text-primary)' }}>{d.item}</span>
-                  <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginLeft: '8px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginLeft: '8px' }}>
                     Charged ${d.invoicePrice.toFixed(2)}
                   </span>
                 </div>

@@ -83,7 +83,7 @@ export default function QuinnFloatingCard() {
                 <div style={{ fontSize: '14px', fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>
                   Quinn
                 </div>
-                <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.65)', marginTop: '1px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 500, color: 'rgba(255,255,255,0.65)', marginTop: '1px' }}>
                   AI kitchen assistant
                 </div>
               </div>

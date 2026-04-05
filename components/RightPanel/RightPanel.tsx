@@ -57,8 +57,8 @@ function CollapsibleWidget({
         <Icon size={12} color="var(--color-text-secondary)" strokeWidth={2} />
         <span style={{
           flex: 1,
-          fontSize: '10.5px', fontWeight: 700,
-          letterSpacing: '0.07em', textTransform: 'uppercase',
+          fontSize: '12px', fontWeight: 700,
+          letterSpacing: '0.04em', textTransform: 'uppercase',
           color: 'var(--color-text-secondary)',
         }}>
           {title}
@@ -124,13 +124,13 @@ function WastageChart() {
           <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1 }}>
             £{today}
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '3px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '3px' }}>
             today&apos;s waste
           </div>
         </div>
         <div style={{
           display: 'flex', alignItems: 'center', gap: '3px',
-          fontSize: '11px', fontWeight: 600,
+          fontSize: '12px', fontWeight: 600,
           color: diff > 0 ? '#9B2226' : '#2D6A4F',
         }}>
           {diff > 0
@@ -264,7 +264,7 @@ function OrderDetailContent({ order, onClose, expanded, onExpand }: {
           {order.supplier}
         </span>
         <span style={{
-          fontSize: '10.5px', fontWeight: 600,
+          fontSize: '12px', fontWeight: 600,
           color: STATUS_COLOR[order.status], background: STATUS_BG[order.status],
           borderRadius: '6px', padding: '2px 8px',
         }}>
@@ -312,7 +312,7 @@ function OrderDetailContent({ order, onClose, expanded, onExpand }: {
           ].map(({ icon: Icon, text }, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Icon size={11} color="var(--color-text-muted)" strokeWidth={2} />
-              <span style={{ fontSize: expanded ? '13px' : '11.5px', color: 'var(--color-text-secondary)' }}>{text}</span>
+              <span style={{ fontSize: expanded ? '13px' : '12px', color: 'var(--color-text-secondary)' }}>{text}</span>
             </div>
           ))}
         </div>
@@ -328,7 +328,7 @@ function OrderDetailContent({ order, onClose, expanded, onExpand }: {
               <div style={{ fontSize: expanded ? '13.5px' : '12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
                 {line.name}
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '1px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
                 {line.qty} {line.unit}
               </div>
             </div>
@@ -346,7 +346,7 @@ function OrderDetailContent({ order, onClose, expanded, onExpand }: {
         borderTop: '1px solid var(--color-border-subtle)',
         flexShrink: 0,
       }}>
-        <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{order.items} items</span>
+        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>{order.items} items</span>
         <span style={{ fontSize: expanded ? '16px' : '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
           {order.value}
         </span>
@@ -485,10 +485,10 @@ function OrdersLog() {
           >
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: o.dot, flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {o.supplier}
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '1px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
                 {o.items} items · {o.status}
               </div>
             </div>
@@ -531,7 +531,7 @@ function SalesLog() {
         padding: '10px 13px',
         borderBottom: '1px solid var(--color-border-subtle)',
       }}>
-        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Running total</span>
+        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>Running total</span>
         <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
           £{SALES_TOTAL.toLocaleString()}
         </span>
@@ -551,11 +551,11 @@ function SalesLog() {
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-            <span style={{ fontSize: '11.5px', color: 'var(--color-text-secondary)' }}>
+            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
               {s.period}
               <span style={{ color: 'var(--color-text-muted)', marginLeft: '5px' }}>{s.time}</span>
             </span>
-            <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
               £{s.value.toLocaleString()}
             </span>
           </div>

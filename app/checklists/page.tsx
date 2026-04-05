@@ -34,7 +34,7 @@ function Pill({ label, color }: { label: string; color?: { bg: string; text: str
         alignItems: 'center',
         padding: '2px 8px',
         borderRadius: '100px',
-        fontSize: '10px',
+        fontSize: '12px',
         fontWeight: 600,
         background: color?.bg ?? 'var(--color-bg-surface)',
         color: color?.text ?? 'var(--color-text-secondary)',
@@ -82,7 +82,7 @@ function TemplateCard({ template, onEdit }: { template: ChecklistTemplate; onEdi
                 borderRadius: '100px',
                 background: '#F5F4F2',
                 color: 'var(--color-text-muted)',
-                fontSize: '10px',
+                fontSize: '12px',
                 fontWeight: 600,
               }}>
                 Inactive
@@ -94,7 +94,7 @@ function TemplateCard({ template, onEdit }: { template: ChecklistTemplate; onEdi
               <Pill key={r} label={ROLE_LABELS[r]} color={ROLE_COLORS[r]} />
             ))}
             <Pill label={FREQUENCY_LABELS[template.frequency]} />
-            <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: '3px' }}>
               <Clock size={11} />
               {template.timeOfDay}
             </span>
@@ -129,7 +129,7 @@ function TemplateCard({ template, onEdit }: { template: ChecklistTemplate; onEdi
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <MapPin size={12} color="var(--color-text-muted)" />
-          <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
             {template.sites.length === 1
               ? template.sites[0]
               : `${template.sites.length} sites`}
@@ -138,7 +138,7 @@ function TemplateCard({ template, onEdit }: { template: ChecklistTemplate; onEdi
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <ClipboardList size={12} color="var(--color-text-muted)" />
-          <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
             {rootQuestions.length} {rootQuestions.length === 1 ? 'question' : 'questions'}
           </span>
         </div>
@@ -146,7 +146,7 @@ function TemplateCard({ template, onEdit }: { template: ChecklistTemplate; onEdi
         {notifyNames && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <Users size={12} color="var(--color-text-muted)" />
-            <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
               Notify {notifyNames}
             </span>
           </div>
@@ -226,7 +226,7 @@ export default function ManageChecklistsPage() {
             <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
               View completion history
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '1px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '1px' }}>
               {history.length} completed records
               {recentFlagged.length > 0 && (
                 <span style={{ color: '#B45309', fontWeight: 600 }}>
@@ -254,7 +254,7 @@ export default function ManageChecklistsPage() {
           <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
             Checklists
           </h1>
-          <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+          <p style={{ margin: '2px 0 0', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
             {templates.filter((t) => t.active).length} active · {templates.length} total
           </p>
         </div>

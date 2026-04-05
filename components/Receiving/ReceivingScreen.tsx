@@ -76,7 +76,7 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO, onSca
       render: (row) => (
         <div>
           <div style={{ fontWeight: 600, fontSize: '13px' }}>{row.name}</div>
-          <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{row.sku} · {row.unit}</div>
+          <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{row.sku} · {row.unit}</div>
         </div>
       ),
     },
@@ -174,7 +174,7 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO, onSca
                 </div>
                 <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{total}</span>
               </div>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '8px', fontSize: '12px', color: 'var(--color-text-secondary)', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '8px', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', flexWrap: 'wrap', alignItems: 'center' }}>
                 <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{po.supplier}</span>
                 <span>·</span>
                 <span>{po.site}</span>

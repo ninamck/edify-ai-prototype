@@ -51,7 +51,7 @@ export default function SiteSwitcher({ siteName, compact = false }: SiteSwitcher
           borderRadius: 'var(--radius-avatar)',
           background: 'var(--color-accent-active)',
           color: '#ffffff',
-          fontSize: compact ? '12px' : '11px',
+          fontSize: compact ? '12px' : '12px',
           fontWeight: 700,
           flexShrink: 0,
           letterSpacing: '0.02em',
@@ -66,7 +66,7 @@ export default function SiteSwitcher({ siteName, compact = false }: SiteSwitcher
             <span
               style={{
                 display: 'block',
-                fontSize: '12.5px',
+                fontSize: '13px',
                 fontWeight: 600,
                 color: 'var(--color-text-primary)',
                 overflow: 'hidden',
@@ -79,7 +79,7 @@ export default function SiteSwitcher({ siteName, compact = false }: SiteSwitcher
             <span
               style={{
                 display: 'block',
-                fontSize: '10px',
+                fontSize: '12px',
                 fontWeight: 400,
                 color: 'var(--color-text-secondary)',
                 marginTop: '1px',

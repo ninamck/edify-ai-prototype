@@ -31,10 +31,9 @@ export default function NavGroup({
             title={title}
             style={{
               padding: '0 10px 4px',
-              fontSize: '9px',
+              fontSize: '12px',
               fontWeight: 700,
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
               color: 'var(--color-text-secondary)',
               fontFamily: 'var(--font-primary)',
             }}

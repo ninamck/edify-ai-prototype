@@ -65,7 +65,7 @@ export default function ShellTopBar({
             padding: '8px 14px',
             borderRadius: '100px',
             border: 'none',
-            fontSize: '11px',
+            fontSize: '12px',
             fontWeight: 600,
             fontFamily: 'var(--font-primary)',
             cursor: 'pointer',
@@ -87,7 +87,7 @@ export default function ShellTopBar({
             padding: '8px 14px',
             borderRadius: '100px',
             border: 'none',
-            fontSize: '11px',
+            fontSize: '12px',
             fontWeight: 600,
             fontFamily: 'var(--font-primary)',
             cursor: 'pointer',
@@ -114,10 +114,9 @@ export default function ShellTopBar({
       >
         <span
           style={{
-            fontSize: '10px',
+            fontSize: '12px',
             fontWeight: 700,
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
             color: 'var(--color-text-muted)',
             marginRight: '4px',
           }}
@@ -135,7 +134,7 @@ export default function ShellTopBar({
               style={{
                 padding: '6px 12px',
                 borderRadius: '100px',
-                fontSize: '11.5px',
+                fontSize: '12px',
                 fontWeight: 600,
                 fontFamily: 'var(--font-primary)',
                 cursor: 'pointer',

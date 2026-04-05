@@ -56,7 +56,7 @@ function NavButton({
             borderRadius: '100px',
             background: 'var(--color-accent-deep)',
             color: '#F4F1EC',
-            fontSize: '9px',
+            fontSize: '12px',
             fontWeight: 700,
             display: 'flex',
             alignItems: 'center',
@@ -80,7 +80,7 @@ function NavButton({
         )}
       </span>
       <span style={{
-        fontSize: '9.5px',
+        fontSize: '12px',
         fontWeight: active ? 700 : 500,
         color,
         letterSpacing: '0.01em',
@@ -144,7 +144,7 @@ function CentreTaskButton({
           borderRadius: '100px',
           background: '#E85D4A',
           color: '#fff',
-          fontSize: '9px',
+          fontSize: '12px',
           fontWeight: 700,
           display: 'flex',
           alignItems: 'center',
@@ -154,7 +154,7 @@ function CentreTaskButton({
         </span>
       </span>
       <span style={{
-        fontSize: '9.5px',
+        fontSize: '12px',
         fontWeight: 600,
         color: active ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
         lineHeight: 1,

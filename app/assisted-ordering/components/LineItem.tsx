@@ -164,7 +164,7 @@ export default function LineItem({
         background: 'rgba(34, 68, 68, 0.06)',
         borderRadius: 'var(--radius-item) var(--radius-item) 0 0',
         borderBottom: '1px solid rgba(34,68,68,0.10)',
-        fontSize: '11px',
+        fontSize: '12px',
         fontWeight: 600,
         color: 'var(--color-accent-active)',
         fontFamily: 'var(--font-primary)',
@@ -222,7 +222,7 @@ export default function LineItem({
             </span>
             <span
               style={{
-                fontSize: '12px',
+                fontSize: '12px', fontWeight: 500,
                 color: 'var(--color-text-secondary)',
                 fontFamily: 'var(--font-primary)',
                 whiteSpace: 'nowrap',
@@ -242,7 +242,7 @@ export default function LineItem({
                   borderRadius: 'var(--radius-badge)',
                   background: 'rgba(34,68,68,0.10)',
                   color: 'var(--color-accent-active)',
-                  fontSize: '10px',
+                  fontSize: '12px',
                   fontWeight: 700,
                   letterSpacing: '0.05em',
                   fontFamily: 'var(--font-primary)',
@@ -258,7 +258,7 @@ export default function LineItem({
                   borderRadius: 'var(--radius-badge)',
                   background: 'rgba(34,68,68,0.10)',
                   color: 'var(--color-accent-active)',
-                  fontSize: '10px',
+                  fontSize: '12px',
                   fontWeight: 700,
                   letterSpacing: '0.05em',
                   fontFamily: 'var(--font-primary)',
@@ -275,7 +275,7 @@ export default function LineItem({
           <QtyControl value={qty} onChange={onQtyChange} min={0} />
           <span
             style={{
-              fontSize: '12px',
+              fontSize: '12px', fontWeight: 500,
               color: 'var(--color-text-secondary)',
               fontFamily: 'var(--font-primary)',
               whiteSpace: 'nowrap',
@@ -347,7 +347,7 @@ export default function LineItem({
           >
             <span
               style={{
-                fontSize: '12px',
+                fontSize: '12px', fontWeight: 500,
                 color: 'var(--color-text-secondary)',
                 fontFamily: 'var(--font-primary)',
               }}
@@ -361,7 +361,7 @@ export default function LineItem({
 
             <span
               style={{
-                fontSize: '12px',
+                fontSize: '12px', fontWeight: 500,
                 color: 'var(--color-text-secondary)',
                 fontFamily: 'var(--font-primary)',
                 fontStyle: ingredient.parLevel !== null && !ingredient.parConfirmed ? 'italic' : 'normal',
@@ -376,7 +376,7 @@ export default function LineItem({
             {wasEdited && (
               <span
                 style={{
-                  fontSize: '12px',
+                  fontSize: '12px', fontWeight: 500,
                   color: 'var(--color-text-secondary)',
                   fontFamily: 'var(--font-primary)',
                 }}
@@ -423,7 +423,7 @@ export default function LineItem({
                 <li
                   key={i}
                   style={{
-                    fontSize: '12px',
+                    fontSize: '12px', fontWeight: 500,
                     color: 'var(--color-text-secondary)',
                     fontFamily: 'var(--font-primary)',
                     lineHeight: 1.5,

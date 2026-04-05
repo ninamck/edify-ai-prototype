@@ -118,9 +118,9 @@ export default function NotificationPanel({
                         borderRadius: 'var(--radius-badge)',
                         background: 'rgba(185,28,28,0.12)',
                         color: '#B91C1C',
-                        fontSize: '10px',
+                        fontSize: '12px',
                         fontWeight: 700,
-                        letterSpacing: '0.06em',
+                        letterSpacing: '0.04em',
                         fontFamily: 'var(--font-primary)',
                       }}
                     >
@@ -134,11 +134,10 @@ export default function NotificationPanel({
                       borderRadius: 'var(--radius-badge)',
                       background: 'var(--color-bg-hover)',
                       color: 'var(--color-text-secondary)',
-                      fontSize: '10px',
+                      fontSize: '12px',
                       fontWeight: 700,
-                      letterSpacing: '0.06em',
+                      letterSpacing: '0.04em',
                       fontFamily: 'var(--font-primary)',
-                      textTransform: 'uppercase',
                     }}
                   >
                     {order.state}
@@ -162,7 +161,7 @@ export default function NotificationPanel({
                   display: 'flex',
                   alignItems: 'center',
                   gap: '10px',
-                  fontSize: '12px',
+                  fontSize: '12px', fontWeight: 500,
                   color: 'var(--color-text-secondary)',
                   fontFamily: 'var(--font-primary)',
                   flexWrap: 'wrap',

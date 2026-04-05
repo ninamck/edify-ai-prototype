@@ -133,7 +133,7 @@ function AnswerRow({
         )}
 
         {!hasAnswer && (
-          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', flexShrink: 0 }}>Not answered</span>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', flexShrink: 0 }}>Not answered</span>
         )}
       </div>
 
@@ -156,7 +156,7 @@ function AnswerRow({
       {triggered && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <AlertTriangle size={11} color="#D97706" />
-          <span style={{ fontSize: '10px', color: '#D97706', fontWeight: 600 }}>Follow-up triggered</span>
+          <span style={{ fontSize: '12px', color: '#D97706', fontWeight: 600 }}>Follow-up triggered</span>
         </div>
       )}
     </div>
@@ -219,7 +219,7 @@ export function HistoryDetailClient({ instanceId }: { instanceId: string }) {
               <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--color-text-primary)' }}>
                 {template.name}
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '1px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '1px' }}>
                 Completed
               </div>
             </div>
@@ -229,19 +229,19 @@ export function HistoryDetailClient({ instanceId }: { instanceId: string }) {
             {instance.completedBy && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <User size={12} color="var(--color-text-muted)" />
-                <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{instance.completedBy}</span>
+                <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{instance.completedBy}</span>
               </div>
             )}
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <Clock size={12} color="var(--color-text-muted)" />
-              <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
                 {instance.completedAt}
                 {instance.completedDate && ` · ${formatDateHeading(instance.completedDate)}`}
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <MapPin size={12} color="var(--color-text-muted)" />
-              <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{instance.site}</span>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{instance.site}</span>
             </div>
           </div>
 
@@ -278,10 +278,9 @@ export function HistoryDetailClient({ instanceId }: { instanceId: string }) {
               <div key={q.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: i > 0 ? '2px' : '0' }}>
                   <span style={{
-                    fontSize: '9px',
+                    fontSize: '12px',
                     fontWeight: 700,
-                    letterSpacing: '0.06em',
-                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
                     color: 'var(--color-text-muted)',
                   }}>
                     Q{i + 1}
@@ -325,7 +324,7 @@ function StatChip({ label, value, color }: { label: string; value: number; color
       gap: '1px',
     }}>
       <span style={{ fontSize: '17px', fontWeight: 800, color }}>{value}</span>
-      <span style={{ fontSize: '9px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
     </div>
   );
 }

@@ -204,7 +204,7 @@ export default function OrderReview({
               <span style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'var(--font-primary)' }}>
                 £{grandTotal.toFixed(0)}
               </span>
-              <span style={{ fontSize: '12px', fontFamily: 'var(--font-primary)', opacity: 0.85 }}>
+              <span style={{ fontSize: '12px', fontWeight: 500, fontFamily: 'var(--font-primary)', opacity: 0.85 }}>
                 {totalItems} items · {orders.length} supplier{orders.length !== 1 ? 's' : ''}
               </span>
             </div>
@@ -243,7 +243,7 @@ export default function OrderReview({
                       {supplier.name}
                     </span>
                     {urgent && (
-                      <span style={{ fontSize: '10px', color: '#B91C1C' }}>●</span>
+                      <span style={{ fontSize: '12px', fontWeight: 500, color: '#B91C1C' }}>●</span>
                     )}
                   </div>
                   <span
@@ -258,7 +258,7 @@ export default function OrderReview({
                   </span>
                   <span
                     style={{
-                      fontSize: '11px',
+                      fontSize: '12px', fontWeight: 500,
                       color: 'var(--color-text-secondary)',
                       fontFamily: 'var(--font-primary)',
                     }}
@@ -291,7 +291,7 @@ export default function OrderReview({
               borderRadius: 'var(--radius-item)',
               background: 'rgba(34,68,68,0.06)',
               border: '1px solid rgba(34,68,68,0.15)',
-              fontSize: '12px',
+              fontSize: '12px', fontWeight: 500,
               color: 'var(--color-accent-active)',
               fontFamily: 'var(--font-primary)',
               fontWeight: 500,
@@ -369,7 +369,7 @@ export default function OrderReview({
                       </span>
                       <span
                         style={{
-                          fontSize: '12px',
+                          fontSize: '12px', fontWeight: 500,
                           color: 'var(--color-text-secondary)',
                           fontFamily: 'var(--font-primary)',
                         }}
@@ -398,12 +398,11 @@ export default function OrderReview({
                               {/* Supplier badge per line in day view */}
                               <div
                                 style={{
-                                  fontSize: '10px',
+                                  fontSize: '12px',
                                   fontWeight: 600,
                                   color: 'var(--color-text-secondary)',
                                   fontFamily: 'var(--font-primary)',
                                   marginBottom: '3px',
-                                  textTransform: 'uppercase',
                                   letterSpacing: '0.05em',
                                 }}
                               >
@@ -463,11 +462,10 @@ export default function OrderReview({
                       >
                         <span
                           style={{
-                            fontSize: '10px',
+                            fontSize: '12px',
                             fontWeight: 600,
                             color: 'var(--color-text-secondary)',
                             fontFamily: 'var(--font-primary)',
-                            textTransform: 'uppercase',
                             letterSpacing: '0.05em',
                           }}
                         >
@@ -479,7 +477,7 @@ export default function OrderReview({
                             borderRadius: 'var(--radius-badge)',
                             background: 'var(--color-bg-hover)',
                             color: 'var(--color-text-secondary)',
-                            fontSize: '10px',
+                            fontSize: '12px',
                             fontWeight: 600,
                             fontFamily: 'var(--font-primary)',
                           }}
@@ -532,7 +530,7 @@ export default function OrderReview({
             display: 'flex',
             alignItems: 'center',
             gap: '12px',
-            fontSize: '12px',
+            fontSize: '12px', fontWeight: 500,
             color: 'var(--color-text-secondary)',
             fontFamily: 'var(--font-primary)',
             flexWrap: 'wrap',

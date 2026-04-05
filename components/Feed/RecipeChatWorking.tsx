@@ -47,10 +47,9 @@ export default function RecipeChatWorking({ workStep }: RecipeChatWorkingProps) 
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
-            fontSize: '10px',
+            fontSize: '12px',
             fontWeight: 700,
             letterSpacing: '0.1em',
-            textTransform: 'uppercase',
             color: 'var(--color-accent-quinn)',
             marginBottom: '4px',
           }}>
@@ -65,7 +64,7 @@ export default function RecipeChatWorking({ workStep }: RecipeChatWorkingProps) 
             Working on your recipe in the background…
           </div>
           <div style={{
-            fontSize: '12px',
+            fontSize: '12px', fontWeight: 500,
             color: 'var(--color-text-muted)',
             marginTop: '4px',
             lineHeight: 1.45,

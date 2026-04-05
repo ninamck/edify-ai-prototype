@@ -85,10 +85,10 @@ function PORow({ po, onAdd }: { po: PO; onAdd: () => void }) {
       <div style={{ minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--color-text-primary)' }}>{po.poNumber}</span>
-          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{po.supplier}</span>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{po.supplier}</span>
           <StatusBadge status={po.status} />
         </div>
-        <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '3px' }}>
+        <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '3px' }}>
           {poItemCount(po)} items · {poTotal(po)}
         </div>
       </div>
@@ -135,12 +135,12 @@ export function ScanGRNModal({ onClose }: ScanGRNModalProps) {
           marginBottom: '20px',
         }}
       >
-        <div style={{ fontSize: '32px', marginBottom: '10px' }}>📷</div>
+        <div style={{ fontSize: '32px', marginBottom: '12px' }}>📷</div>
         <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)', margin: '0 0 6px' }}>
           Barcode / QR scanning
         </p>
         <StatusBadge status="Coming in v2" variant="info" />
-        <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', margin: '10px 0 0' }}>
+        <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', margin: '10px 0 0' }}>
           Scan a supplier GRN barcode to auto-match against purchase orders.
         </p>
       </div>

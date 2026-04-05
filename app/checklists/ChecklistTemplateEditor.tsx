@@ -110,10 +110,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        fontSize: '10px',
+        fontSize: '12px',
         fontWeight: 700,
-        letterSpacing: '0.08em',
-        textTransform: 'uppercase',
+        letterSpacing: '0.04em',
         color: 'var(--color-text-muted)',
         marginBottom: '10px',
       }}
@@ -188,7 +187,7 @@ function FollowUpRuleRow({
         flexWrap: 'wrap',
       }}
     >
-      <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', paddingTop: '6px', flexShrink: 0 }}>If response</span>
+      <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', paddingTop: '6px', flexShrink: 0 }}>If response</span>
 
       <select
         value={rule.condition.type}
@@ -223,7 +222,7 @@ function FollowUpRuleRow({
         />
       )}
 
-      <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', paddingTop: '6px', flexShrink: 0 }}>→ show</span>
+      <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', paddingTop: '6px', flexShrink: 0 }}>→ show</span>
 
       <select
         value={rule.followUpQuestionId}
@@ -363,7 +362,7 @@ function QuestionCard({
         </span>
 
         {question.mandatory && (
-          <span style={{ fontSize: '10px', color: '#B91C1C', fontWeight: 700, flexShrink: 0 }}>Required</span>
+          <span style={{ fontSize: '12px', color: '#B91C1C', fontWeight: 700, flexShrink: 0 }}>Required</span>
         )}
 
         {!isFollowUp && (
@@ -478,7 +477,7 @@ function QuestionCard({
                     borderRadius: '7px',
                     border: '1px solid var(--color-border)',
                     background: '#fff',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 600,
                     color: 'var(--color-text-secondary)',
                     cursor: 'pointer',
@@ -491,7 +490,7 @@ function QuestionCard({
               </div>
 
               {question.followUpRules.length === 0 ? (
-                <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: 0 }}>
+                <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', margin: 0 }}>
                   No follow-up rules — this question always appears.
                 </p>
               ) : (
@@ -536,11 +535,10 @@ const selectStyle: React.CSSProperties = {
 
 const labelStyle: React.CSSProperties = {
   display: 'block',
-  fontSize: '11px',
+  fontSize: '12px',
   fontWeight: 600,
   color: 'var(--color-text-secondary)',
   marginBottom: '6px',
-  textTransform: 'uppercase',
   letterSpacing: '0.04em',
 };
 
@@ -664,7 +662,7 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
       <h1 style={{ margin: '0 0 4px', fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
         {mode === 'new' ? 'Create checklist' : 'Edit checklist'}
       </h1>
-      <p style={{ margin: '0 0 24px', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+      <p style={{ margin: '0 0 24px', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
         {mode === 'new' ? 'Configure your checklist template and add questions.' : `Editing: ${existing?.name ?? ''}`}
       </p>
 
@@ -808,7 +806,7 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
       <div style={sectionStyle}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
           <SectionLabel>Questions</SectionLabel>
-          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
             {rootQuestions.length} question{rootQuestions.length !== 1 ? 's' : ''}
           </span>
         </div>

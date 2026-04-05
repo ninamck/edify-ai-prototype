@@ -97,7 +97,7 @@ export default function QuinnButton({ state = 'idle', onClick, compact = false }
             background: '#fff',
             border: '1px solid var(--color-border-subtle)',
             boxShadow: '0 4px 20px rgba(58,48,40,0.14)',
-            fontSize: '11px',
+            fontSize: '12px',
             fontWeight: 600,
             color: 'var(--color-text-primary)',
             fontFamily: 'var(--font-primary)',

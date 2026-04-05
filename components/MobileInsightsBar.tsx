@@ -43,10 +43,9 @@ export default function MobileInsightsBar({ onOpen }: { onOpen: () => void }) {
         <ChevronRight size={18} color="var(--color-text-muted)" strokeWidth={2.2} style={{ flexShrink: 0 }} />
       </div>
       <div style={{
-        fontSize: '10px',
+        fontSize: '12px',
         fontWeight: 700,
-        letterSpacing: '0.06em',
-        textTransform: 'uppercase',
+        letterSpacing: '0.04em',
         color: 'var(--color-text-muted)',
         marginTop: '4px',
       }}>

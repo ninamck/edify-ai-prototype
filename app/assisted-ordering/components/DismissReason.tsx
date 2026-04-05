@@ -41,7 +41,7 @@ export default function DismissReasonPrompt({ onSelect, onDismiss, autoDismissMs
     >
       <span
         style={{
-          fontSize: '11px',
+          fontSize: '12px', fontWeight: 500,
           color: 'var(--color-text-secondary)',
           fontFamily: 'var(--font-primary)',
           fontWeight: 500,
@@ -64,7 +64,7 @@ export default function DismissReasonPrompt({ onSelect, onDismiss, autoDismissMs
             border: '1px solid var(--color-border-subtle)',
             background: 'var(--color-bg-surface)',
             color: 'var(--color-text-primary)',
-            fontSize: '11px',
+            fontSize: '12px',
             fontWeight: 500,
             fontFamily: 'var(--font-primary)',
             cursor: 'pointer',

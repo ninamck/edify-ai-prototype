@@ -177,7 +177,7 @@ function AttachInvoiceModal({ onClose }: { onClose: () => void }) {
           <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>
             Drop invoice file here
           </p>
-          <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', margin: 0 }}>
+          <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', margin: 0 }}>
             or click to browse — PDF, PNG, JPG accepted
           </p>
         </div>

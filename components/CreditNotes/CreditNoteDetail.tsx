@@ -229,13 +229,13 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
                   flexShrink: 0,
                 }}
               >
-                <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff' }}>Q</span>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>Q</span>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--color-quinn-label)' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-quinn-label)' }}>
                   Chase {creditNote.supplier} for {creditNote.ref}?
                 </div>
-                <div style={{ fontSize: '11.5px', color: 'var(--color-text-secondary)', marginTop: '1px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '1px' }}>
                   Quinn will send a chase email on your behalf
                 </div>
               </div>
@@ -287,27 +287,27 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
               border: '1px solid var(--color-border-subtle)',
             }}
           >
-            <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
               Origin
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-accent-active)' }}>
                 {creditNote.originRef}
               </span>
-              <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
                 · {creditNote.originType} · {creditNote.originDate}
               </span>
             </div>
-            <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '3px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '3px' }}>
               {creditNote.reason} — {creditNote.supplier}
             </div>
             {creditNote.supplierRef && (
-              <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '4px' }}>
                 Supplier ref: <span style={{ fontWeight: 600 }}>{creditNote.supplierRef}</span>
               </div>
             )}
             {creditNote.linkedInvoice && (
-              <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '2px' }}>
                 Linked invoice: <span style={{ fontWeight: 600, color: 'var(--color-accent-active)' }}>{creditNote.linkedInvoice}</span>
               </div>
             )}
@@ -318,10 +318,9 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
         <div style={{ padding: '20px 20px 0' }}>
           <div
             style={{
-              fontSize: '10px',
+              fontSize: '12px',
               fontWeight: 700,
-              letterSpacing: '0.07em',
-              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
               color: 'var(--color-text-secondary)',
               marginBottom: '12px',
             }}
@@ -366,11 +365,10 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
               <div style={{ marginBottom: '12px' }}>
                 <div
                   style={{
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 600,
                     color: 'var(--color-text-secondary)',
                     marginBottom: '6px',
-                    textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                   }}
                 >
@@ -409,11 +407,10 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
               <div style={{ marginBottom: '12px' }}>
                 <div
                   style={{
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 600,
                     color: 'var(--color-text-secondary)',
                     marginBottom: '6px',
-                    textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                   }}
                 >
@@ -579,7 +576,7 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#15803D', marginBottom: '3px' }}>
                   Credit note received
                 </div>
-                <div style={{ fontSize: '12.5px', color: '#166534', lineHeight: 1.5 }}>{successMessage}</div>
+                <div style={{ fontSize: '13px', color: '#166534', lineHeight: 1.5 }}>{successMessage}</div>
               </div>
             </motion.div>
           )}
@@ -599,7 +596,7 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
       >
         {view === 'detail' && <ActionBar creditNote={creditNote} canChase={canChase} canReceive={canReceive} onLogChase={() => setView('log-chase')} onMarkReceived={() => setView('mark-received')} onEscalate={handleEscalate} />}
         {view !== 'detail' && (
-          <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: '5px' }}>
             <Clock size={12} strokeWidth={2} />
             {view === 'log-chase' ? 'Logging a chase…' : view === 'mark-received' ? 'Confirming receipt…' : 'Done'}
           </div>
@@ -735,7 +732,7 @@ function TimelineEvent({ event, isLast }: { event: ChaseEvent; isLast: boolean }
       {/* Content */}
       <div style={{ flex: 1, minWidth: 0, paddingBottom: isLast ? 0 : '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '3px' }}>
-          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-text-primary)', textTransform: 'capitalize' }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)', textTransform: 'capitalize' }}>
             {event.type}
           </span>
           {event.method && (
@@ -744,7 +741,7 @@ function TimelineEvent({ event, isLast }: { event: ChaseEvent; isLast: boolean }
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '3px',
-                fontSize: '10px',
+                fontSize: '12px',
                 fontWeight: 600,
                 color: 'var(--color-text-secondary)',
                 background: '#DBEAFE',
@@ -756,17 +753,17 @@ function TimelineEvent({ event, isLast }: { event: ChaseEvent; isLast: boolean }
               {event.method}
             </span>
           )}
-          <span style={{ fontSize: '10.5px', color: 'var(--color-text-secondary)', marginLeft: 'auto' }}>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginLeft: 'auto' }}>
             {event.by}
           </span>
         </div>
-        <div style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
+        <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
           {event.date}
         </div>
         {event.note && (
           <div
             style={{
-              fontSize: '12px',
+              fontSize: '12px', fontWeight: 500,
               color: 'var(--color-text-secondary)',
               lineHeight: 1.5,
             }}

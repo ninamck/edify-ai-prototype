@@ -14,7 +14,7 @@ function MatchContent() {
   if (!invoice) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 24px', fontFamily: 'var(--font-primary)' }}>
-        <p style={{ fontSize: '15px', color: 'var(--color-text-secondary)', marginBottom: '16px' }}>Invoice not found.</p>
+        <p style={{ fontSize: '16px', color: 'var(--color-text-secondary)', marginBottom: '16px' }}>Invoice not found.</p>
         <button
           onClick={() => router.push('/invoices')}
           style={{

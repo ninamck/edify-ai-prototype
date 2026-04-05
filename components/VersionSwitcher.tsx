@@ -31,7 +31,7 @@ export default function VersionSwitcher() {
       fontFamily: 'var(--font-primary)',
     }}>
       <span style={{
-        fontSize: '10px', fontWeight: 600, letterSpacing: '0.06em',
+        fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em',
         color: 'rgba(255,255,255,0.6)',
         textTransform: 'uppercase', padding: '0 8px',
       }}>

@@ -150,14 +150,14 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
       )}
 
       {hasUnmatched && !canSuggest && (
-        <div style={{ padding: '14px 18px', borderRadius: '10px', background: 'var(--color-error-light)', border: '1px solid var(--color-error-border)', marginBottom: '20px', fontSize: '13px', color: 'var(--color-error)', fontWeight: 600 }}>
+        <div style={{ padding: '14px 18px', borderRadius: '12px', background: 'var(--color-error-light)', border: '1px solid var(--color-error-border)', marginBottom: '20px', fontSize: '13px', color: 'var(--color-error)', fontWeight: 600 }}>
           {unmatchedLines.length} invoice item{unmatchedLines.length > 1 ? 's' : ''} could not be matched to any linked GRN. Manual review required.
         </div>
       )}
 
       {/* Linked GRN success banner */}
       {linkedGRNs.length > 0 && !hasUnmatched && (
-        <div style={{ padding: '14px 18px', borderRadius: '10px', background: 'var(--color-success-light)', border: '1px solid var(--color-success-border)', marginBottom: '20px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ padding: '14px 18px', borderRadius: '12px', background: 'var(--color-success-light)', border: '1px solid var(--color-success-border)', marginBottom: '20px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ fontSize: '18px' }}>✓</span>
           <div>
             <div style={{ fontWeight: 700, color: 'var(--color-success)' }}>All items now matched across {grns.length} GRNs</div>
@@ -175,11 +175,11 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
       {invoice.variances.length > 0 && !hasUnmatched && (
         <div style={{ marginTop: '24px' }}>
           {allResolved ? (
-            <div style={{ padding: '12px 16px', borderRadius: '10px', background: 'var(--color-success-light)', border: '1px solid var(--color-success-border)', marginBottom: '16px', fontSize: '13px', fontWeight: 600, color: 'var(--color-success)' }}>
+            <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'var(--color-success-light)', border: '1px solid var(--color-success-border)', marginBottom: '16px', fontSize: '13px', fontWeight: 600, color: 'var(--color-success)' }}>
               All variances resolved. Ready for approval.
             </div>
           ) : (
-            <div style={{ padding: '12px 16px', borderRadius: '10px', background: 'var(--color-warning-light)', border: '1px solid var(--color-warning-border)', marginBottom: '16px', fontSize: '13px', fontWeight: 600, color: 'var(--color-warning)' }}>
+            <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'var(--color-warning-light)', border: '1px solid var(--color-warning-border)', marginBottom: '16px', fontSize: '13px', fontWeight: 600, color: 'var(--color-warning)' }}>
               Resolve all {invoice.variances.length} variance{invoice.variances.length > 1 ? 's' : ''} to enable approval.
             </div>
           )}
@@ -228,7 +228,7 @@ function SuggestGRNBanner({ unmatchedLines, suggestedGRN, onLink }: { unmatchedL
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '12px' }}>
             {unmatchedLines.map(line => (
-              <div key={line.sku} style={{ fontSize: '12px', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div key={line.sku} style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ color: 'var(--color-error)', fontWeight: 700 }}>✕</span>
                 {line.description} <span style={{ opacity: 0.6 }}>({line.sku})</span>
               </div>
@@ -249,7 +249,7 @@ function SuggestGRNBanner({ unmatchedLines, suggestedGRN, onLink }: { unmatchedL
               <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--color-text-primary)' }}>
                 {suggestedGRN.grnNumber}
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '2px' }}>
                 {suggestedGRN.supplier} · Received {suggestedGRN.dateReceived} · {suggestedGRN.lines.length} items · PO {suggestedGRN.poNumbers.join(', ')}
               </div>
             </div>
@@ -262,7 +262,7 @@ function SuggestGRNBanner({ unmatchedLines, suggestedGRN, onLink }: { unmatchedL
                 color: '#fff',
                 border: 'none',
                 fontWeight: 700,
-                fontSize: '12px',
+                fontSize: '12px', fontWeight: 500,
                 fontFamily: 'var(--font-primary)',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
@@ -294,17 +294,17 @@ function SplitView({ invoice, grnLines, grns, unmatchedLines }: { invoice: Invoi
           <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--color-text-primary)' }}>Supplier Invoice</div>
-              <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>{invoice.invoiceNumber} · {invoice.date}</div>
+              <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '2px' }}>{invoice.invoiceNumber} · {invoice.date}</div>
             </div>
-            <button style={{ padding: '5px 12px', borderRadius: '6px', background: 'transparent', border: '1px solid var(--color-border)', fontSize: '11px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
+            <button style={{ padding: '5px 12px', borderRadius: '6px', background: 'transparent', border: '1px solid var(--color-border)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
               View PDF
             </button>
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontFamily: 'var(--font-primary)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontWeight: 500, fontFamily: 'var(--font-primary)' }}>
             <thead>
               <tr>
                 {['Description', 'Qty', 'Price', 'Total'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border-subtle)' }}>{h}</th>
+                  <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border-subtle)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -325,10 +325,10 @@ function SplitView({ invoice, grnLines, grns, unmatchedLines }: { invoice: Invoi
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {line.description}
                         {isUnmatched && (
-                          <span style={{ fontSize: '9px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'var(--color-error)', color: '#fff' }}>NO GRN</span>
+                          <span style={{ fontSize: '12px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'var(--color-error)', color: '#fff' }}>NO GRN</span>
                         )}
                       </div>
-                      <div style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>{line.sku}</div>
+                      <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{line.sku}</div>
                     </td>
                     <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-border-subtle)' }}>{line.qty}</td>
                     <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-border-subtle)', fontWeight: priceVar ? 700 : 400, color: priceVar ? 'var(--color-warning)' : undefined }}>${line.unitPrice.toFixed(2)}</td>
@@ -352,7 +352,7 @@ function SplitView({ invoice, grnLines, grns, unmatchedLines }: { invoice: Invoi
             <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--color-text-primary)' }}>
               GRN{grns.length > 1 ? 's' : ''}
             </div>
-            <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {grns.length > 0
                 ? grns.map((g, i) => (
                     <span key={g.id}>
@@ -365,11 +365,11 @@ function SplitView({ invoice, grnLines, grns, unmatchedLines }: { invoice: Invoi
             </div>
           </div>
           {grnLines.length > 0 ? (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontFamily: 'var(--font-primary)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontWeight: 500, fontFamily: 'var(--font-primary)' }}>
               <thead>
                 <tr>
                   {['Description', 'Received', 'Price', 'Total', ''].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border-subtle)' }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border-subtle)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -381,13 +381,13 @@ function SplitView({ invoice, grnLines, grns, unmatchedLines }: { invoice: Invoi
                     <tr key={line.id}>
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-border-subtle)' }}>
                         <div>{line.description}</div>
-                        <div style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>{line.sku}</div>
+                        <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{line.sku}</div>
                       </td>
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-border-subtle)', fontWeight: 600 }}>{line.receivedQty}</td>
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-border-subtle)', fontWeight: !priceMatch ? 600 : 400, color: !priceMatch ? 'var(--color-success)' : undefined }}>
                         ${line.unitPrice.toFixed(2)}
                         {!priceMatch && invoiceLine && (
-                          <span style={{ fontSize: '10px', color: 'var(--color-warning)', marginLeft: '4px' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-warning)', marginLeft: '4px' }}>
                             (inv: ${invoiceLine.unitPrice.toFixed(2)})
                           </span>
                         )}
@@ -446,7 +446,7 @@ function VarianceCard({ variance, resolution, onResolve }: { variance: MatchVari
             <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--color-text-primary)' }}>{variance.itemName}</span>
             <StatusBadge status={variance.type === 'price' ? 'Price' : 'Quantity'} variant={variance.type === 'price' ? 'warning' : 'info'} />
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>{detail}</div>
+          <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '4px' }}>{detail}</div>
         </div>
         <span style={{ fontWeight: 700, fontSize: '14px', color: variance.impact >= 0 ? 'var(--color-error)' : 'var(--color-success)', whiteSpace: 'nowrap' }}>{impactLabel}</span>
       </div>
@@ -475,12 +475,12 @@ function VarianceCard({ variance, resolution, onResolve }: { variance: MatchVari
       </div>
 
       {resolution === 'Accept & Update Cost' && variance.type === 'price' && (
-        <div style={{ marginTop: '10px', padding: '10px 14px', borderRadius: '8px', background: 'var(--color-info-light)', fontSize: '12px', color: 'var(--color-info)' }}>
+        <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '8px', background: 'var(--color-info-light)', fontSize: '12px', fontWeight: 500, color: 'var(--color-info)' }}>
           Updates master ingredient cost to ${variance.invoiceValue.toFixed(2)} — cascades to recipe costing and GP%.
         </div>
       )}
       {resolution === 'Accept This Delivery' && variance.type === 'price' && (
-        <div style={{ marginTop: '10px', padding: '10px 14px', borderRadius: '8px', background: 'var(--color-success-light)', fontSize: '12px', color: 'var(--color-success)' }}>
+        <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '8px', background: 'var(--color-success-light)', fontSize: '12px', fontWeight: 500, color: 'var(--color-success)' }}>
           Pays ${variance.invoiceValue.toFixed(2)} for this delivery only. Ingredient cost stays at ${variance.poValue.toFixed(2)}.
         </div>
       )}
@@ -497,9 +497,9 @@ function MatchSummaryCard({ label, value, sub, variant }: { label: string; value
 
   return (
     <div style={{ padding: '14px 18px', borderRadius: '10px', background: bg, border: `1px solid ${border}` }}>
-      <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>{label}</div>
+      <div style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>{label}</div>
       <div style={{ fontSize: '22px', fontWeight: 700, color: valueColor }}>{value}</div>
-      <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>{sub}</div>
+      <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '2px' }}>{sub}</div>
     </div>
   );
 }
@@ -535,7 +535,7 @@ function ApprovalConfirmation({ invoice, resolutions, grns, onBack, onConfirm }:
               <div key={v.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '10px 14px', borderRadius: '8px', background: 'var(--color-bg-hover)', flexWrap: 'wrap' }}>
                 <div>
                   <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text-primary)' }}>{v.itemName}</span>
-                  <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginLeft: '8px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginLeft: '8px' }}>
                     {v.type === 'price' ? `$${v.poValue.toFixed(2)} → $${v.invoiceValue.toFixed(2)}` : `GRN: ${v.grnValue} vs Invoice: ${v.invoiceValue}`}
                   </span>
                 </div>
@@ -552,7 +552,7 @@ function ApprovalConfirmation({ invoice, resolutions, grns, onBack, onConfirm }:
           <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 10px' }}>Linked GRNs ({grns.length})</h3>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {grns.map(g => (
-              <div key={g.id} style={{ padding: '8px 14px', borderRadius: '8px', background: 'var(--color-bg-hover)', fontSize: '12px' }}>
+              <div key={g.id} style={{ padding: '8px 14px', borderRadius: '8px', background: 'var(--color-bg-hover)', fontSize: '12px', fontWeight: 500 }}>
                 <span style={{ fontWeight: 700 }}>{g.grnNumber}</span>
                 <span style={{ color: 'var(--color-text-secondary)', marginLeft: '6px' }}>{g.lines.length} items · PO {g.poNumbers.join(', ')}</span>
               </div>
@@ -568,14 +568,14 @@ function ApprovalConfirmation({ invoice, resolutions, grns, onBack, onConfirm }:
           {costUpdates.map(v => (
             <li key={v.id}>
               <strong>{v.itemName}</strong> master cost updated ${v.poValue.toFixed(2)} → ${v.invoiceValue.toFixed(2)}
-              <span style={{ fontSize: '11px', color: 'var(--color-info)', marginLeft: '6px' }}>Affects recipes & GP%</span>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-info)', marginLeft: '6px' }}>Affects recipes & GP%</span>
             </li>
           ))}
           {costUpdates.length > 0 && <li>Recipe GP% recalculated for affected recipes</li>}
           {deliveryOnly.map(v => (
             <li key={v.id}>
               <strong>{v.itemName}</strong> charged at ${v.invoiceValue.toFixed(2)} for this delivery
-              <span style={{ fontSize: '11px', color: 'var(--color-success)', marginLeft: '6px' }}>Cost stays at ${v.poValue.toFixed(2)}</span>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-success)', marginLeft: '6px' }}>Cost stays at ${v.poValue.toFixed(2)}</span>
             </li>
           ))}
           <li>Invoice pushed to Xero (account codes mapped)</li>
@@ -584,7 +584,7 @@ function ApprovalConfirmation({ invoice, resolutions, grns, onBack, onConfirm }:
       </div>
 
       {/* Warning */}
-      <div style={{ padding: '12px 16px', borderRadius: '10px', background: 'var(--color-warning-light)', border: '1px solid var(--color-warning-border)', marginBottom: '20px', fontSize: '13px', fontWeight: 600, color: 'var(--color-warning)' }}>
+      <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'var(--color-warning-light)', border: '1px solid var(--color-warning-border)', marginBottom: '20px', fontSize: '13px', fontWeight: 600, color: 'var(--color-warning)' }}>
         Approval is final. Costs update and invoice pushes to Xero. Logged for audit.
       </div>
 

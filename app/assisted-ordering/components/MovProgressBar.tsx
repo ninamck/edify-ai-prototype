@@ -27,7 +27,7 @@ export default function MovProgressBar({ current, minimum }: Props) {
       >
         <span
           style={{
-            fontSize: '11px',
+            fontSize: '12px',
             fontWeight: 600,
             color: met ? '#15803D' : 'var(--color-text-secondary)',
             fontFamily: 'var(--font-primary)',
@@ -39,7 +39,7 @@ export default function MovProgressBar({ current, minimum }: Props) {
         </span>
         <span
           style={{
-            fontSize: '11px',
+            fontSize: '12px',
             fontWeight: 600,
             color: 'var(--color-text-secondary)',
             fontFamily: 'var(--font-primary)',

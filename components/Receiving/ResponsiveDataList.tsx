@@ -58,8 +58,7 @@ export default function ResponsiveDataList<T>({ columns, data, getRowKey, emptyT
                   textAlign: 'left',
                   padding: '10px 12px',
                   fontWeight: 600,
-                  fontSize: '11px',
-                  textTransform: 'uppercase',
+                  fontSize: '12px', fontWeight: 500,
                   letterSpacing: '0.04em',
                   color: 'var(--color-text-secondary)',
                   borderBottom: '1px solid var(--color-border-subtle)',
@@ -116,12 +115,12 @@ export default function ResponsiveDataList<T>({ columns, data, getRowKey, emptyT
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
                 <div>
                   {titleCol && <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--color-text-primary)' }}>{titleCol.render(row, i)}</div>}
-                  {subtitleCol && <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>{subtitleCol.render(row, i)}</div>}
+                  {subtitleCol && <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '2px' }}>{subtitleCol.render(row, i)}</div>}
                 </div>
                 {badgeCol && <div>{badgeCol.render(row, i)}</div>}
               </div>
               {restCols.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '14px', fontSize: '12px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '14px', fontSize: '12px', fontWeight: 500 }}>
                   {restCols.map(col => (
                     <div key={col.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
                       <span style={{ color: 'var(--color-text-secondary)', flexShrink: 0 }}>{col.header}</span>

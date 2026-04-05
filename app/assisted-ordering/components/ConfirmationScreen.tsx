@@ -148,7 +148,7 @@ export default function ConfirmationScreen({
                   </span>
                   <span
                     style={{
-                      fontSize: '12px',
+                      fontSize: '12px', fontWeight: 500,
                       color: 'var(--color-text-secondary)',
                       fontFamily: 'var(--font-primary)',
                     }}
@@ -169,7 +169,7 @@ export default function ConfirmationScreen({
                   </span>
                   <span
                     style={{
-                      fontSize: '11px',
+                      fontSize: '12px', fontWeight: 500,
                       color: 'var(--color-text-secondary)',
                       fontFamily: 'var(--font-primary)',
                     }}

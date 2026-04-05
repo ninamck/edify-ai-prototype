@@ -58,7 +58,7 @@ export default function NavItem({
             : active
               ? 'var(--color-text-on-active)'
               : 'var(--color-text-secondary)',
-          fontSize: '12.5px',
+          fontSize: '13px',
           fontWeight: active ? 600 : 400,
           fontFamily: 'var(--font-primary)',
           textAlign: 'left',
@@ -114,7 +114,7 @@ export default function NavItem({
                 borderRadius: '999px',
                 background: '#15803D',
                 color: '#fff',
-                fontSize: '10px',
+                fontSize: '12px',
                 fontWeight: 700,
                 lineHeight: 1,
                 boxShadow: '0 0 0 2px var(--color-bg-nav)',
@@ -153,7 +153,7 @@ export default function NavItem({
               borderRadius: 'var(--radius-badge)',
               background: active ? 'var(--color-badge-active-bg)' : 'var(--color-badge-bg)',
               color: active ? 'var(--color-badge-active-text)' : 'var(--color-badge-text)',
-              fontSize: '10px',
+              fontSize: '12px',
               fontWeight: 700,
               lineHeight: 1,
             }}
@@ -190,7 +190,7 @@ export default function NavItem({
               background: '#fff',
               border: '1px solid var(--color-border-subtle)',
               boxShadow: '0 4px 20px rgba(58,48,40,0.14)',
-              fontSize: '11px',
+              fontSize: '12px',
               fontWeight: 600,
               color: 'var(--color-text-primary)',
               fontFamily: 'var(--font-primary)',

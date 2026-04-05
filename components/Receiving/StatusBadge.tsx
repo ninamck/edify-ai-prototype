@@ -37,7 +37,7 @@ export default function StatusBadge({ status, variant }: StatusBadgeProps) {
         gap: '5px',
         padding: '4px 10px',
         borderRadius: '100px',
-        fontSize: '11px',
+        fontSize: '12px',
         fontWeight: 600,
         fontFamily: 'var(--font-primary)',
         background: s.bg,
