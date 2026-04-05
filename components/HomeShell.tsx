@@ -16,12 +16,14 @@ import Feed from '@/components/Feed/Feed';
 import type { BriefingRole } from '@/components/briefing';
 import { commandCentreVariant } from '@/components/briefing';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import MobileShell from '@/components/MobileShell/MobileShell';
 
 type HomeShellProps = {
   showVersionSwitcher?: boolean;
 };
 
 const NARROW_BREAKPOINT = '(max-width: 900px)';
+const MOBILE_SHELL_BREAKPOINT = '(max-width: 430px)';
 
 export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps) {
   const router = useRouter();
@@ -31,6 +33,7 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
   const [mobileInsightsOpen, setMobileInsightsOpen] = useState(false);
   const [chatActive, setChatActive] = useState(false);
   const isNarrow = useMediaQuery(NARROW_BREAKPOINT);
+  const isMobileShell = useMediaQuery(MOBILE_SHELL_BREAKPOINT);
 
   useEffect(() => {
     if (!isNarrow) setMobileInsightsOpen(false);
@@ -60,6 +63,10 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [mobileInsightsOpen]);
+
+  if (isMobileShell) {
+    return <MobileShell />;
+  }
 
   return (
     <div

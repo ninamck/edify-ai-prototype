@@ -1,0 +1,103 @@
+'use client';
+
+import { useState } from 'react';
+import Feed from '@/components/Feed/Feed';
+import MobileTopBar from './MobileTopBar';
+import MobileBottomNav from './MobileBottomNav';
+import MobileHamburgerDrawer from './MobileHamburgerDrawer';
+import MobileTasksDrawer from './MobileTasksDrawer';
+import MobileInsightsSheet from './MobileInsightsSheet';
+
+type NavTab = 'receive' | 'checklists' | 'tasks' | 'waste' | 'insights';
+
+const BOTTOM_NAV_HEIGHT = 64;
+
+export default function MobileShell() {
+  const [hamburgerOpen, setHamburgerOpen] = useState(false);
+  const [tasksOpen, setTasksOpen] = useState(false);
+  const [insightsOpen, setInsightsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<NavTab | null>(null);
+
+  function handleTabChange(tab: NavTab) {
+    if (tab === 'tasks') {
+      setActiveTab('tasks');
+      setTasksOpen(true);
+      return;
+    }
+    if (tab === 'insights') {
+      setActiveTab('insights');
+      setInsightsOpen(true);
+      return;
+    }
+    if (tab === 'waste') {
+      setActiveTab('waste');
+      // stub — log waste sheet not yet built
+      return;
+    }
+    // receive & checklists navigate away — tab state resets on return
+    setActiveTab(tab);
+  }
+
+  function handleTasksClose() {
+    setTasksOpen(false);
+    setActiveTab(null);
+  }
+
+  function handleInsightsClose() {
+    setInsightsOpen(false);
+    setActiveTab(null);
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100dvh',
+        overflow: 'hidden',
+        background: 'var(--color-bg-surface)',
+        fontFamily: 'var(--font-primary)',
+      }}
+    >
+      <MobileTopBar
+        siteName="Fitzroy Espresso"
+        onHamburgerOpen={() => setHamburgerOpen(true)}
+      />
+
+      {/* Quinn chat — fills remaining space above bottom nav */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          paddingBottom: BOTTOM_NAV_HEIGHT,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        <Feed briefingRole="gm" />
+      </div>
+
+      <MobileBottomNav
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+      />
+
+      <MobileHamburgerDrawer
+        open={hamburgerOpen}
+        onClose={() => setHamburgerOpen(false)}
+        siteName="Fitzroy Espresso"
+      />
+
+      <MobileTasksDrawer
+        open={tasksOpen}
+        onClose={handleTasksClose}
+      />
+
+      <MobileInsightsSheet
+        open={insightsOpen}
+        onClose={handleInsightsClose}
+      />
+    </div>
+  );
+}

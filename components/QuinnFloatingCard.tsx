@@ -3,11 +3,18 @@
 import { useState } from 'react';
 import { Minus } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { usePathname } from 'next/navigation';
 import Feed from '@/components/Feed/Feed';
 import QuinnOrb from '@/components/Sidebar/QuinnOrb';
 
+/** Routes where Quinn chat is already embedded — hide the floating card. */
+const SHELL_ROUTES = new Set(['/', '/v1', '/v2', '/v3']);
+
 export default function QuinnFloatingCard() {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+
+  if (SHELL_ROUTES.has(pathname)) return null;
 
   return (
     <div
