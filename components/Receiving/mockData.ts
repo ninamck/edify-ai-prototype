@@ -45,6 +45,7 @@ export interface GRN {
   receivedBy: string;
   invoiceNumber?: string;
   invoiceStatus: InvoiceStatus;
+  attachmentUrl?: string;
   lines: GRNLine[];
 }
 
@@ -109,18 +110,19 @@ export const MOCK_COMPLETED_DELIVERIES: GRN[] = [
   {
     id: 'grn-1',
     grnNumber: 'GRN-1244',
-    poNumbers: ['PO-2880'],
+    poNumbers: ['PO-2901'],
     supplier: 'Bidfood',
     site: 'Fitzroy Espresso',
     status: 'Pending Invoice',
     dateReceived: '26 Mar 2026',
     receivedBy: 'Ravi Patel',
     invoiceStatus: 'Pending Invoice',
+    attachmentUrl: '/mock-grn-doc.pdf',
     lines: [
-      { id: 'gl-1', poLineId: 'pl-x1', name: 'Full cream milk 2L', sku: 'FCM-2L', unit: 'EA', price: 4.20, expectedQty: 20, receivedQty: 18 },
-      { id: 'gl-2', poLineId: 'pl-x2', name: 'Double cream 1L', sku: 'DC-1L', unit: 'EA', price: 8.00, expectedQty: 8, receivedQty: 8 },
-      { id: 'gl-2b', poLineId: 'pl-x2b', name: 'Free range eggs 15pk', sku: 'FRE-15', unit: 'EA', price: 8.00, expectedQty: 12, receivedQty: 12 },
-      { id: 'gl-2c', poLineId: 'pl-x2c', name: 'Unsalted butter 500g', sku: 'UB-500', unit: 'EA', price: 6.50, expectedQty: 6, receivedQty: 6 },
+      { id: 'gl-1', poLineId: 'pl-1', name: 'Full cream milk 2L', sku: 'FCM-2L', unit: 'EA', price: 4.20, expectedQty: 20, receivedQty: 18 },
+      { id: 'gl-2', poLineId: 'pl-2', name: 'Double cream 1L', sku: 'DC-1L', unit: 'EA', price: 8.00, expectedQty: 8, receivedQty: 8 },
+      { id: 'gl-2b', poLineId: 'pl-3', name: 'Free range eggs 15pk', sku: 'FRE-15', unit: 'EA', price: 8.00, expectedQty: 12, receivedQty: 12 },
+      { id: 'gl-2c', poLineId: 'pl-4', name: 'Unsalted butter 500g', sku: 'UB-500', unit: 'EA', price: 6.50, expectedQty: 6, receivedQty: 6 },
     ],
   },
   {
@@ -142,25 +144,26 @@ export const MOCK_COMPLETED_DELIVERIES: GRN[] = [
   {
     id: 'grn-2',
     grnNumber: 'GRN-1243',
-    poNumbers: ['PO-2875'],
+    poNumbers: ['PO-2903'],
     supplier: 'Fresh Direct',
     site: 'Fitzroy Espresso',
     status: 'Pending Invoice',
     dateReceived: '24 Mar 2026',
     receivedBy: 'Aisha Nguyen',
     invoiceStatus: 'Pending Invoice',
+    attachmentUrl: '/mock-grn-doc.pdf',
     lines: [
-      { id: 'gl-3', poLineId: 'pl-x3', name: 'Baby spinach 500g', sku: 'BS-500', unit: 'BAG', price: 3.50, expectedQty: 6, receivedQty: 6 },
-      { id: 'gl-4', poLineId: 'pl-x4', name: 'Cherry tomatoes 500g', sku: 'CT-500', unit: 'PUN', price: 3.50, expectedQty: 8, receivedQty: 8 },
-      { id: 'gl-4b', poLineId: 'pl-x4b', name: 'Sourdough loaves', sku: 'SDL-WH', unit: 'EA', price: 6.00, expectedQty: 20, receivedQty: 20 },
-      { id: 'gl-4c', poLineId: 'pl-x4c', name: 'Avocados', sku: 'AVO-EA', unit: 'EA', price: 2.00, expectedQty: 24, receivedQty: 24 },
-      { id: 'gl-4d', poLineId: 'pl-x4d', name: 'Lemons', sku: 'LEM-EA', unit: 'EA', price: 0.60, expectedQty: 30, receivedQty: 30 },
+      { id: 'gl-3', poLineId: 'pl-5', name: 'Baby spinach 500g', sku: 'BS-500', unit: 'BAG', price: 3.50, expectedQty: 6, receivedQty: 6 },
+      { id: 'gl-4', poLineId: 'pl-6', name: 'Cherry tomatoes 500g', sku: 'CT-500', unit: 'PUN', price: 3.50, expectedQty: 8, receivedQty: 8 },
+      { id: 'gl-4b', poLineId: 'pl-7', name: 'Sourdough loaves', sku: 'SDL-WH', unit: 'EA', price: 6.00, expectedQty: 20, receivedQty: 20 },
+      { id: 'gl-4c', poLineId: 'pl-8', name: 'Avocados', sku: 'AVO-EA', unit: 'EA', price: 2.00, expectedQty: 24, receivedQty: 24 },
+      { id: 'gl-4d', poLineId: 'pl-9', name: 'Lemons', sku: 'LEM-EA', unit: 'EA', price: 0.60, expectedQty: 30, receivedQty: 30 },
     ],
   },
   {
     id: 'grn-3',
     grnNumber: 'GRN-1240',
-    poNumbers: ['PO-2860'],
+    poNumbers: ['PO-2895'],
     supplier: 'Metro',
     site: 'City Centre',
     status: 'Closed',
@@ -169,7 +172,7 @@ export const MOCK_COMPLETED_DELIVERIES: GRN[] = [
     invoiceNumber: 'INV-4380',
     invoiceStatus: 'Closed',
     lines: [
-      { id: 'gl-5', poLineId: 'pl-x5', name: 'Napkins (white)', sku: 'NAP-W', unit: 'PKT', price: 3.80, expectedQty: 10, receivedQty: 10 },
+      { id: 'gl-5', poLineId: 'pl-13', name: 'Napkins (white)', sku: 'NAP-W', unit: 'PKT', price: 3.80, expectedQty: 10, receivedQty: 10 },
     ],
   },
 ];

@@ -89,7 +89,7 @@ export default function Sidebar() {
           <NavItem label="Review suggested orders" icon={ShoppingCart} compact={compact} badge={3} onClick={() => router.push('/assisted-ordering')} />
           <NavItem label="Count stock" icon={PackageSearch} compact={compact} />
           <NavItem label="Match invoices" icon={FileCheck} compact={compact} badge={2} onClick={() => router.push('/invoices')} />
-          <NavItem label="View order history" icon={Clock} compact={compact} />
+          <NavItem label="View order history" icon={Clock} compact={compact} onClick={() => router.push('/order-history')} />
           <NavItem label="Manage credit notes" icon={FileX} compact={compact} onClick={() => router.push('/credit-notes')} />
         </NavGroup>
 

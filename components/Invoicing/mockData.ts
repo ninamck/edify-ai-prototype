@@ -9,7 +9,7 @@ export type InvoiceMatchStatus =
   | 'Approved'
   | 'Matching in Progress';
 
-export type PriceResolution = 'Accept & Update Cost' | 'Accept This Delivery' | 'Dispute → Credit Note';
+export type PriceResolution = 'Accept & Update Cost in Edify' | 'Accept for this delivery' | 'Dispute → Credit Note';
 export type QtyResolution = 'Credit Note' | 'Accept Short' | 'Back-order';
 
 export interface InvoiceLine {
@@ -68,12 +68,12 @@ export const MOCK_INVOICES: Invoice[] = [
     invoiceNumber: 'INV-4421',
     supplier: 'Bidfood',
     date: '2 Apr 2026',
-    total: 918.60,
+    total: 921.60,
     grnNumbers: ['GRN-1244'],
     suggestedGRN: 'GRN-1245',
     status: 'Variance',
     lines: [
-      { id: 'il-1', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 18, unitPrice: 4.50, lineTotal: 81.00 },
+      { id: 'il-1', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 20, unitPrice: 4.20, lineTotal: 84.00 },
       { id: 'il-2', description: 'Double cream 1L', sku: 'DC-1L', qty: 8, unitPrice: 8.00, lineTotal: 64.00 },
       { id: 'il-3', description: 'Free range eggs 15pk', sku: 'FRE-15', qty: 12, unitPrice: 8.50, lineTotal: 102.00 },
       { id: 'il-4', description: 'Unsalted butter 500g', sku: 'UB-500', qty: 6, unitPrice: 6.50, lineTotal: 39.00 },
@@ -82,7 +82,7 @@ export const MOCK_INVOICES: Invoice[] = [
       { id: 'il-7', description: 'Takeaway cups 12oz', sku: 'TC-12', qty: 4, unitPrice: 28.00, lineTotal: 112.00 },
     ],
     variances: [
-      { id: 'v-1', itemName: 'Full cream milk 2L', sku: 'FCM-2L', type: 'price', invoiceValue: 4.50, grnValue: 4.20, poValue: 4.20, impact: 5.40 },
+      { id: 'v-1', itemName: 'Full cream milk 2L', sku: 'FCM-2L', type: 'qty', invoiceValue: 20, grnValue: 18, poValue: 20, impact: 8.40 },
       { id: 'v-2', itemName: 'Free range eggs 15pk', sku: 'FRE-15', type: 'price', invoiceValue: 8.50, grnValue: 8.00, poValue: 8.00, impact: 6.00 },
       { id: 'v-6', itemName: 'Espresso blend 1kg', sku: 'EB-1KG', type: 'price', invoiceValue: 19.20, grnValue: 18.00, poValue: 18.00, impact: 12.00 },
     ],
