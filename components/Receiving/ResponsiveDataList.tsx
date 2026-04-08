@@ -57,7 +57,6 @@ export default function ResponsiveDataList<T>({ columns, data, getRowKey, emptyT
                 style={{
                   textAlign: 'left',
                   padding: '10px 12px',
-                  fontWeight: 600,
                   fontSize: '12px', fontWeight: 500,
                   letterSpacing: '0.04em',
                   color: 'var(--color-text-secondary)',

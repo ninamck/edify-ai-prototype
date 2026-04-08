@@ -294,7 +294,6 @@ export default function OrderReview({
               fontSize: '12px', fontWeight: 500,
               color: 'var(--color-accent-active)',
               fontFamily: 'var(--font-primary)',
-              fontWeight: 500,
               display: 'flex',
               alignItems: 'center',
               gap: '8px',

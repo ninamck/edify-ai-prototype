@@ -169,7 +169,6 @@ export default function CreditNoteList({ onView }: CreditNoteListProps) {
                       style={{
                         textAlign: 'left',
                         padding: '10px 14px',
-                        fontWeight: 600,
                         fontSize: '12px', fontWeight: 500,
                         letterSpacing: '0.04em',
                         color: 'var(--color-text-secondary)',

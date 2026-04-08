@@ -274,7 +274,6 @@ function SuggestGRNBanner({ unmatchedLines, suggestedGRN, onLink }: { unmatchedL
                 background: 'var(--color-accent-active)',
                 color: '#fff',
                 border: 'none',
-                fontWeight: 700,
                 fontSize: '12px', fontWeight: 500,
                 fontFamily: 'var(--font-primary)',
                 cursor: 'pointer',

@@ -44,7 +44,6 @@ export default function DismissReasonPrompt({ onSelect, onDismiss, autoDismissMs
           fontSize: '12px', fontWeight: 500,
           color: 'var(--color-text-secondary)',
           fontFamily: 'var(--font-primary)',
-          fontWeight: 500,
           flexShrink: 0,
         }}
       >
