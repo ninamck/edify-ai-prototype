@@ -11,7 +11,7 @@ interface InvoiceListProps {
 }
 
 export default function InvoiceList({ onViewInvoice }: InvoiceListProps) {
-  const [tab, setTab] = useState<Tab>('needs-review');
+  const [tab, setTab] = useState<Tab>('all');
   const [search, setSearch] = useState('');
 
   const reviewCount = needsReviewCount();
@@ -60,13 +60,13 @@ export default function InvoiceList({ onViewInvoice }: InvoiceListProps) {
 
       {/* Tabs */}
       <div style={{ display: 'flex', background: 'var(--color-bg-hover)', borderRadius: '100px', padding: '3px', marginBottom: '16px', width: 'fit-content' }}>
-        <button onClick={() => setTab('needs-review')} style={tabStyle(tab === 'needs-review')}>
-          Needs Review
-          <TabBadge count={reviewCount} active={tab === 'needs-review'} />
-        </button>
         <button onClick={() => setTab('all')} style={tabStyle(tab === 'all')}>
           All Invoices
           <TabBadge count={MOCK_INVOICES.length} active={tab === 'all'} />
+        </button>
+        <button onClick={() => setTab('needs-review')} style={tabStyle(tab === 'needs-review')}>
+          Needs Review
+          <TabBadge count={reviewCount} active={tab === 'needs-review'} />
         </button>
         <button onClick={() => setTab('approved')} style={tabStyle(tab === 'approved')}>
           Approved

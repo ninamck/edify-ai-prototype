@@ -41,7 +41,9 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
   const hasUnmatched = unmatchedLines.length > 0;
   const canSuggest = hasUnmatched && suggestedGRN && !linkedGRNs.includes(suggestedGRN.grnNumber);
 
-  const [lineTaxRates, setLineTaxRates] = useState<Record<string, number>>({});
+  const [lineTaxRates, setLineTaxRates] = useState<Record<string, number>>(
+    () => Object.fromEntries(invoice.lines.map(il => [il.id, 10]))
+  );
   const setLineRate = (lineId: string, rate: number) => {
     setLineTaxRates(prev => {
       const next = { ...prev };
@@ -139,18 +141,16 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
         />
         <MatchSummaryCard
           label="Invoice Total"
-          value={`$${invoice.total.toFixed(2)}`}
-          sub="Per supplier invoice"
+          value={`$${(invoice.total + totalTax).toFixed(2)}`}
+          sub={anyTax ? `Incl. tax · Ex-tax $${invoice.total.toFixed(2)}` : 'Per supplier invoice'}
           variant="default"
         />
-        {anyTax && (
-          <MatchSummaryCard
-            label="Tax on Invoice"
-            value={`$${totalTax.toFixed(2)}`}
-            sub={`Invoice total incl. tax: $${(invoice.total + totalTax).toFixed(2)}`}
-            variant="default"
-          />
-        )}
+        <MatchSummaryCard
+          label="GST / Tax"
+          value={`$${totalTax.toFixed(2)}`}
+          sub="Total tax on this invoice"
+          variant="default"
+        />
         <MatchSummaryCard
           label="Variance"
           value={varianceTotal === 0 ? '$0.00' : `${varianceTotal > 0 ? '+' : ''}$${varianceTotal.toFixed(2)}`}
@@ -328,7 +328,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
   const allPoTotal = grnGroups.reduce((s, g) => s + g.pos.reduce((ss, p) => ss + p.lines.reduce((sss, l) => sss + l.price * l.expectedQty, 0), 0), 0);
 
   // right column count differs by tab
-  const RC = rightTab === 'grn' ? 5 : 4;
+  const RC = rightTab === 'grn' ? 6 : 4;
 
   const cell: React.CSSProperties = { padding: '8px 12px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: '12px' };
   const divider: React.CSSProperties = { borderRight: '2px solid var(--color-border)' };
@@ -415,6 +415,16 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
         .split-tab-toggle button { padding: 3px 10px; font-size: 12px; font-weight: 600; font-family: var(--font-primary); border: none; background: transparent; color: var(--color-text-secondary); cursor: pointer; transition: background 0.12s, color 0.12s; white-space: nowrap; }
         .split-tab-toggle button.active { background: var(--color-text-primary); color: #fff; }
         .split-tab-toggle button:not(.active):hover { background: var(--color-bg-subtle, #f5f5f5); }
+        @keyframes expandSlide {
+          from { grid-template-rows: 0fr; }
+          to   { grid-template-rows: 1fr; }
+        }
+        .expand-row-outer {
+          display: grid;
+          animation: expandSlide 0.32s ease-out;
+          animation-fill-mode: forwards;
+        }
+        .expand-row-content { overflow: hidden; min-height: 0; }
       `}</style>
 
       <div style={{ border: '1px solid var(--color-border-subtle)', borderRadius: '10px', overflow: 'hidden', background: '#fff', fontFamily: 'var(--font-primary)' }}>
@@ -452,14 +462,12 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                    {rightTab === 'grn' && grns.length === 1 && grns[0].attachmentUrl && (
+                    {rightTab === 'grn' && grns.length === 1 && (
                       <a
-                        href={grns[0].attachmentUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        href={`/receive/grn/${grns[0].id}`}
                         style={{ padding: '5px 12px', borderRadius: '6px', background: 'transparent', border: '1px solid var(--color-border)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-text-secondary)', cursor: 'pointer', textDecoration: 'none', whiteSpace: 'nowrap' }}
                       >
-                        View GRN Doc
+                        View GRN
                       </a>
                     )}
                     <div className="split-tab-toggle">
@@ -485,6 +493,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   <th style={colLabelStyle}>Received</th>
                   <th style={colLabelStyle}>Price</th>
                   <th style={colLabelStyle}>Total</th>
+                  <th style={colLabelStyle}>Tax $</th>
                   <th style={{ ...colLabelStyle, width: '32px' }}></th>
                 </>
               ) : (
@@ -522,14 +531,12 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                             {rightTab === 'grn' ? `Received ${grn.dateReceived} · ${grn.receivedBy}` : `via ${grn.grnNumber}`}
                           </span>
                         </div>
-                        {rightTab === 'grn' && grn.attachmentUrl && (
+                        {rightTab === 'grn' && (
                           <a
-                            href={grn.attachmentUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            href={`/receive/grn/${grn.id}`}
                             style={{ padding: '3px 10px', borderRadius: '6px', background: 'transparent', border: '1px solid var(--color-border)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-text-secondary)', cursor: 'pointer', textDecoration: 'none', whiteSpace: 'nowrap' }}
                           >
-                            View GRN Doc
+                            View GRN
                           </a>
                         )}
                       </div>
@@ -547,8 +554,8 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const isExpanded = !!variance && expandedVariance === variance.id;
                   const isResolved = !!variance && !!resolutions[variance.id];
                   const hasVar = (priceVar || variance?.type === 'qty') && !isResolved;
-                  const rowBg = hasVar ? 'rgba(217, 119, 6, 0.05)' : 'transparent';
-                  const leftAccent: React.CSSProperties = hasVar ? { boxShadow: 'inset 3px 0 0 var(--color-warning)' } : {};
+                  const rowBg = hasVar ? 'rgba(217, 119, 6, 0.11)' : 'transparent';
+                  const leftAccent: React.CSSProperties = hasVar ? { boxShadow: 'inset 4px 0 0 #D97706' } : {};
                   const qtyDiff = variance?.type === 'qty' ? variance.invoiceValue - variance.grnValue : 0;
                   const varLabel = variance?.type === 'qty'
                     ? `${qtyDiff > 0 ? '+' : ''}${qtyDiff} unit${Math.abs(qtyDiff) !== 1 ? 's' : ''}`
@@ -582,6 +589,9 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                       </td>
                       <td style={{ ...cell, fontWeight: priceVar ? 700 : 400, color: priceVar ? 'var(--color-warning)' : undefined }}>${grnLine.unitPrice.toFixed(2)}</td>
                       <td style={{ ...cell, fontWeight: 600 }}>${grnLine.lineTotal.toFixed(2)}</td>
+                      <td style={{ ...cell, color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                        ${(grnLine.lineTotal * (invLine ? (lineTaxRates[invLine.id] ?? 10) : 10) / 100).toFixed(2)}
+                      </td>
                       <td style={{ ...cell, padding: '6px 12px', textAlign: 'center' }}>
                         {variance
                           ? <VarBadge varianceId={variance.id} label={varLabel} />
@@ -606,8 +616,10 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
 
                   const expandRow = (
                     <tr key={`expand-${grnLine.id}`}>
-                      <td colSpan={6 + RC} style={{ padding: '14px 18px', background: expandBg, borderBottom: '1px solid var(--color-border-subtle)', boxShadow: expandAccent }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                      <td colSpan={6 + RC} style={{ padding: 0, background: expandBg, borderBottom: '1px solid var(--color-border-subtle)', boxShadow: expandAccent }}>
+                        <div className="expand-row-outer">
+                        <div className="expand-row-content">
+                        <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
                           <div style={{ flex: '1 1 200px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
                               <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--color-text-primary)' }}>{variance.itemName}</span>
@@ -622,7 +634,11 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                             {options.map(opt => (
                               <button
                                 key={opt}
-                                onClick={() => onResolve(variance.id, resolution === opt ? null : opt as AnyResolution)}
+                                onClick={() => {
+                                  const isDeselect = resolution === opt;
+                                  onResolve(variance.id, isDeselect ? null : opt as AnyResolution);
+                                  if (!isDeselect) setExpandedVariance(null);
+                                }}
                                 style={{
                                   padding: '6px 16px', borderRadius: '999px',
                                   border: resolution === opt ? '1.5px solid var(--color-accent-active)' : '1px solid var(--color-border)',
@@ -636,16 +652,8 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                           </div>
                           <button onClick={() => setExpandedVariance(null)} style={{ padding: '4px 6px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: '15px', lineHeight: 1, alignSelf: 'flex-start', flexShrink: 0 }}>✕</button>
                         </div>
-                        {resolution === 'Accept & Update Cost in Edify' && variance.type === 'price' && (
-                          <div style={{ marginTop: '10px', padding: '8px 12px', borderRadius: '7px', background: 'var(--color-info-light)', fontSize: '12px', fontWeight: 500, color: 'var(--color-info)' }}>
-                            Updates master ingredient cost to ${variance.invoiceValue.toFixed(2)} — cascades to recipe costing and GP%.
-                          </div>
-                        )}
-                        {resolution === 'Accept for this delivery' && variance.type === 'price' && (
-                          <div style={{ marginTop: '10px', padding: '8px 12px', borderRadius: '7px', background: 'var(--color-success-light)', fontSize: '12px', fontWeight: 500, color: 'var(--color-success)' }}>
-                            Pays ${variance.invoiceValue.toFixed(2)} for this delivery only. Ingredient cost stays at ${variance.poValue.toFixed(2)}.
-                          </div>
-                        )}
+                        </div>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -662,8 +670,8 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const variance = invoice.variances.find(v => v.sku === poLine.sku);
                   const isExpanded = !!variance && expandedVariance === variance.id;
                   const isResolved = !!variance && !!resolutions[variance.id];
-                  const rowBg = !priceMatch && !isResolved ? 'rgba(217, 119, 6, 0.05)' : 'transparent';
-                  const leftAccent: React.CSSProperties = !priceMatch && !isResolved ? { boxShadow: 'inset 3px 0 0 var(--color-warning)' } : {};
+                  const rowBg = !priceMatch && !isResolved ? 'rgba(217, 119, 6, 0.11)' : 'transparent';
+                  const leftAccent: React.CSSProperties = !priceMatch && !isResolved ? { boxShadow: 'inset 4px 0 0 #D97706' } : {};
 
                   const dataRow = (
                     <tr key={poLine.id} style={{ background: rowBg }}>
@@ -715,8 +723,10 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
 
                   const expandRow = (
                     <tr key={`expand-po-${poLine.id}`}>
-                      <td colSpan={6 + RC} style={{ padding: '14px 18px', background: expandBgPo, borderBottom: '1px solid var(--color-border-subtle)', boxShadow: expandAccentPo }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                      <td colSpan={6 + RC} style={{ padding: 0, background: expandBgPo, borderBottom: '1px solid var(--color-border-subtle)', boxShadow: expandAccentPo }}>
+                        <div className="expand-row-outer">
+                        <div className="expand-row-content">
+                        <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
                           <div style={{ flex: '1 1 200px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
                               <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--color-text-primary)' }}>{variance.itemName}</span>
@@ -729,7 +739,11 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                             {options.map(opt => (
                               <button
                                 key={opt}
-                                onClick={() => onResolve(variance.id, resolution === opt ? null : opt as AnyResolution)}
+                                onClick={() => {
+                                  const isDeselect = resolution === opt;
+                                  onResolve(variance.id, isDeselect ? null : opt as AnyResolution);
+                                  if (!isDeselect) setExpandedVariance(null);
+                                }}
                                 style={{
                                   padding: '6px 16px', borderRadius: '999px',
                                   border: resolution === opt ? '1.5px solid var(--color-accent-active)' : '1px solid var(--color-border)',
@@ -743,16 +757,8 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                           </div>
                           <button onClick={() => setExpandedVariance(null)} style={{ padding: '4px 6px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: '15px', lineHeight: 1, alignSelf: 'flex-start', flexShrink: 0 }}>✕</button>
                         </div>
-                        {resolution === 'Accept & Update Cost in Edify' && (
-                          <div style={{ marginTop: '10px', padding: '8px 12px', borderRadius: '7px', background: 'var(--color-info-light)', fontSize: '12px', fontWeight: 500, color: 'var(--color-info)' }}>
-                            Updates master ingredient cost to ${variance.invoiceValue.toFixed(2)} — cascades to recipe costing and GP%.
-                          </div>
-                        )}
-                        {resolution === 'Accept for this delivery' && (
-                          <div style={{ marginTop: '10px', padding: '8px 12px', borderRadius: '7px', background: 'var(--color-success-light)', fontSize: '12px', fontWeight: 500, color: 'var(--color-success)' }}>
-                            Pays ${variance.invoiceValue.toFixed(2)} for this delivery only. Ingredient cost stays at ${variance.poValue.toFixed(2)}.
-                          </div>
-                        )}
+                        </div>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -774,7 +780,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                     <td style={cell}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
                         {il.description}
-                        <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(185, 28, 28, 0.1)', color: 'var(--color-error)', border: '1px solid rgba(185, 28, 28, 0.25)' }}>NO GRN</span>
+                        <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(185, 28, 28, 0.1)', color: 'var(--color-error)', border: '1px solid rgba(185, 28, 28, 0.25)', whiteSpace: 'nowrap', flexShrink: 0 }}>NO GRN</span>
                       </div>
                       <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{il.sku}</div>
                     </td>
@@ -815,6 +821,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                 <>
                   <td colSpan={3} />
                   <td style={{ padding: '8px 12px', fontWeight: 700 }}>${allGrnTotal.toFixed(2)}</td>
+                  <td style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>${(allGrnTotal * 0.10).toFixed(2)}</td>
                   <td />
                 </>
               ) : (
@@ -829,7 +836,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
             {anyTax && (
               <tr style={{ borderTop: '1px solid var(--color-border-subtle)' }}>
                 <td colSpan={2} />
-                <td style={{ padding: '10px 12px', fontWeight: 700, textAlign: 'right' }}>Total (incl. tax)</td>
+                <td style={{ padding: '10px 12px', fontWeight: 700, textAlign: 'right', whiteSpace: 'nowrap' }}>Total (incl. tax)</td>
                 <td colSpan={3} style={{ padding: '10px 12px', fontWeight: 700, ...divider }}>
                   ${(invoice.total + totalTax).toFixed(2)}
                 </td>

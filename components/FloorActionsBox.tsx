@@ -101,7 +101,7 @@ function FloorActionSquare({
         )}
       </span>
       <span style={{
-        fontSize: '12px',
+        fontSize: '11px',
         fontWeight: 600,
         color: 'var(--color-text-secondary)',
         textAlign: 'center',
