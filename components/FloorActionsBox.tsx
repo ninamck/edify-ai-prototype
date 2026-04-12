@@ -8,6 +8,7 @@ import {
   Trash2,
   Truck,
   ArrowLeftRight,
+  Pencil,
 } from 'lucide-react';
 import type { BriefingRole } from '@/components/briefing';
 
@@ -131,13 +132,37 @@ export default function FloorActionsBox({
       }}
     >
       <div style={{
-        fontSize: '15px',
-        fontWeight: 700,
-        letterSpacing: '0.04em',
-        color: 'var(--color-text-muted)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         marginBottom: '12px',
       }}>
-        On the floor
+        <span style={{
+          fontSize: '15px',
+          fontWeight: 700,
+          letterSpacing: '0.04em',
+          color: 'var(--color-text-muted)',
+        }}>
+          On the floor
+        </span>
+        <button
+          type="button"
+          aria-label="Edit floor actions"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '28px',
+            height: '28px',
+            borderRadius: '8px',
+            border: 'none',
+            background: 'var(--color-bg-surface)',
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+        >
+          <Pencil size={13} color="var(--color-text-muted)" strokeWidth={2} />
+        </button>
       </div>
       <div style={{
         display: 'flex',
