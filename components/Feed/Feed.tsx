@@ -917,11 +917,11 @@ function ClaudeComposer({
     <div
       style={{
         width: '100%',
-        background: '#fff',
-        borderRadius: '20px',
-        border: '1px solid rgba(58,48,40,0.1)',
-        boxShadow: '0 8px 32px rgba(58,48,40,0.1), 0 2px 8px rgba(58,48,40,0.06)',
-        overflow: 'hidden',
+      background: '#fff',
+      borderRadius: '20px',
+      border: '1.5px solid rgba(217, 215, 212, 1)',
+      boxShadow: '0 4px 20px rgba(58,48,40,0.09)',
+      overflow: 'hidden',
       }}
     >
       <textarea
@@ -1651,21 +1651,18 @@ export default function Feed({
             justifyContent: chatMinimized ? 'flex-start' : 'center',
             padding: chatMinimized ? '28px 16px 0' : '20px 16px 24px',
             boxSizing: 'border-box',
-            background: '#fff',
+            background: 'transparent',
           }}>
             <div style={{ width: '100%', maxWidth: '560px' }}>
               <div style={{ textAlign: 'center', marginBottom: '28px' }}>
                 <span
                   style={{
                     display: 'inline-block',
-                    padding: '5px 12px',
-                    borderRadius: '100px',
                     fontSize: '12px',
                     fontWeight: 700,
-                    letterSpacing: '0.04em',
-                    color: 'var(--color-text-secondary)',
-                    background: 'rgba(58,48,40,0.06)',
-                    border: '1px solid var(--color-border-subtle)',
+                    letterSpacing: '0.06em',
+                    color: 'var(--color-text-muted)',
+                    textTransform: 'uppercase',
                   }}
                 >
                   Edify
@@ -1737,7 +1734,6 @@ export default function Feed({
                         color: 'var(--color-text-secondary)',
                         cursor: 'pointer',
                         fontFamily: 'var(--font-primary)',
-                        boxShadow: '0 2px 6px rgba(58,48,40,0.08)',
                       }}
                     >
                       <Icon

@@ -1,9 +1,10 @@
 'use client';
 
-import type { SuggestedOrder, DismissReason } from '../types';
-import { getSupplier, isUrgent } from '../data/mockOrders';
+import type { SuggestedOrder, DismissReason, ManualLine } from '../types';
+import { getSupplier, getIngredient, getProduct, isUrgent } from '../data/mockOrders';
 import LineItem from './LineItem';
 import MovProgressBar from './MovProgressBar';
+import QtyControl from './QtyControl';
 
 interface Props {
   order: SuggestedOrder;
@@ -15,6 +16,9 @@ interface Props {
   onRemove: (lineId: string) => void;
   onRestore: (lineId: string) => void;
   onDismissReason: (lineId: string, reason: DismissReason) => void;
+  manualLines?: ManualLine[];
+  onManualLineQtyChange?: (id: string, qty: number) => void;
+  onRemoveManualLine?: (id: string) => void;
 }
 
 export default function SupplierSection({
@@ -27,6 +31,9 @@ export default function SupplierSection({
   onRemove,
   onRestore,
   onDismissReason,
+  manualLines = [],
+  onManualLineQtyChange,
+  onRemoveManualLine,
 }: Props) {
   const supplier = getSupplier(order.supplierId);
   const urgent = isUrgent(supplier);
@@ -144,6 +151,148 @@ export default function SupplierSection({
             onDismissReason={(reason) => onDismissReason(line.id, reason)}
           />
         ))}
+
+        {/* Manually added lines for this supplier */}
+        {manualLines.length > 0 && (
+          <>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginTop: '4px',
+              }}
+            >
+              <div
+                style={{
+                  flex: 1,
+                  height: '1px',
+                  background: 'var(--color-border-subtle)',
+                }}
+              />
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: 'var(--color-text-secondary)',
+                  fontFamily: 'var(--font-primary)',
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Added by you
+              </span>
+              <div
+                style={{
+                  flex: 1,
+                  height: '1px',
+                  background: 'var(--color-border-subtle)',
+                }}
+              />
+            </div>
+
+            {manualLines.map((ml) => {
+              const ingredient = getIngredient(ml.ingredientId);
+              const product = getProduct(ml.ingredientId, ml.supplierId);
+              const lineTotal = ml.qty * product.unitCost;
+              return (
+                <div
+                  key={ml.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '10px 14px',
+                    borderRadius: 'var(--radius-item)',
+                    border: '1px solid var(--color-border-subtle)',
+                    background: 'var(--color-bg-surface)',
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        color: 'var(--color-text-primary)',
+                        fontFamily: 'var(--font-primary)',
+                      }}
+                    >
+                      {ingredient.name}
+                    </p>
+                    <p
+                      style={{
+                        margin: '2px 0 0',
+                        fontSize: '12px',
+                        color: 'var(--color-text-secondary)',
+                        fontFamily: 'var(--font-primary)',
+                      }}
+                    >
+                      {ingredient.variant} · {product.unitName}
+                    </p>
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <QtyControl
+                      value={ml.qty}
+                      onChange={(q) => onManualLineQtyChange?.(ml.id, q)}
+                      min={1}
+                      label={ingredient.name}
+                    />
+                    <span
+                      style={{
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        color: 'var(--color-text-primary)',
+                        fontFamily: 'var(--font-primary)',
+                        minWidth: '48px',
+                        textAlign: 'right',
+                      }}
+                    >
+                      £{lineTotal.toFixed(0)}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${ingredient.name}`}
+                      onClick={() => onRemoveManualLine?.(ml.id)}
+                      style={{
+                        width: '26px',
+                        height: '26px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: 'transparent',
+                        color: 'var(--color-text-secondary)',
+                        fontSize: '14px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        transition: 'background 0.1s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background =
+                          'var(--color-bg-hover)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
       </div>
 
       {/* MOV progress bar */}

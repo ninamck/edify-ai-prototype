@@ -1,8 +1,157 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import type { BriefingRole } from '@/components/briefing';
+
+// ── Live snapshot widgets (migrated from Command Centre) ───────────────────────
+
+function ConfidenceMeterBar({ label, valuePct, caption }: { label: string; valuePct: number; caption: string }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '5px' }}>
+        <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--color-text-secondary)' }}>
+          {label}
+        </span>
+        <span style={{ fontSize: '17px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{valuePct}%</span>
+      </div>
+      <div style={{
+        height: '8px', borderRadius: '100px',
+        background: 'rgba(58,48,40,0.08)',
+        overflow: 'hidden',
+        marginBottom: '5px',
+      }}>
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${valuePct}%` }}
+          transition={{ duration: 0.6, ease: 'easeOut' }}
+          style={{
+            height: '100%',
+            borderRadius: '100px',
+            background: valuePct >= 70
+              ? 'linear-gradient(90deg, #2D6A4F, #40916C)'
+              : valuePct >= 45
+                ? 'linear-gradient(90deg, #6B8F71, #91B89A)'
+                : 'linear-gradient(90deg, #9B2226, #E85D04)',
+          }}
+        />
+      </div>
+      <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: 1.4 }}>{caption}</p>
+    </div>
+  );
+}
+
+function InvoiceMatchBar() {
+  return (
+    <div>
+      <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+        Invoice & PO match · overnight
+      </div>
+      <div style={{
+        height: '8px', borderRadius: '100px',
+        background: 'rgba(58,48,40,0.08)',
+        overflow: 'hidden',
+        display: 'flex',
+        marginBottom: '6px',
+      }}>
+        <div style={{ width: '68%', background: '#2D6A4F', height: '100%' }} />
+        <div style={{ width: '22%', background: 'var(--color-accent-active)', height: '100%' }} />
+        <div style={{ width: '10%', background: 'rgba(155,34,38,0.85)', height: '100%' }} />
+      </div>
+      <div style={{ display: 'flex', gap: '10px', fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
+        <span>68% cleared</span>
+        <span>22% in review</span>
+        <span>10% exception</span>
+      </div>
+    </div>
+  );
+}
+
+const LABOUR_FORECAST = [0.35, 0.32, 0.38, 0.45, 0.52, 0.68, 0.75, 0.72, 0.55, 0.42, 0.38, 0.32];
+const LABOUR_ACTUAL   = [0.33, 0.34, 0.40, 0.48, 0.58, 0.82, 0.88, 0.79, 0.62, 0.45, 0.36, 0.30];
+
+function LabourMiniCurve({ subtitle }: { subtitle: string }) {
+  const w = 260; const h = 72;
+  const pad = { l: 6, r: 6, t: 6, b: 16 };
+  const iW = w - pad.l - pad.r; const iH = h - pad.t - pad.b;
+  const toPath = (pts: number[]) =>
+    pts.map((y, i) => {
+      const x = pad.l + (i / (pts.length - 1)) * iW;
+      const yy = pad.t + y * iH;
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${yy.toFixed(1)}`;
+    }).join(' ');
+
+  return (
+    <div>
+      <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--color-text-secondary)', marginBottom: '3px' }}>
+        Labour cost · actual vs forecast
+      </div>
+      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '4px' }}>{subtitle}</div>
+      <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: 'block' }}>
+        <path d={toPath(LABOUR_FORECAST)} fill="none" stroke="rgba(107,94,85,0.35)" strokeWidth="1.8" strokeDasharray="4 3" />
+        <path d={toPath(LABOUR_ACTUAL)} fill="none" stroke="var(--color-accent-deep)" strokeWidth="2" />
+        <text x={pad.l} y={h - 2} fontSize="8" fill="var(--color-text-muted)">6am</text>
+        <text x={w / 2 - 10} y={h - 2} fontSize="8" fill="var(--color-text-muted)">midday</text>
+        <text x={w - 26} y={h - 2} fontSize="8" fill="var(--color-text-muted)">10pm</text>
+      </svg>
+      <div style={{ display: 'flex', gap: '10px', marginTop: '2px', fontSize: '11px', color: 'var(--color-text-muted)' }}>
+        <span><span style={{ color: 'var(--color-accent-deep)', fontWeight: 700 }}>—</span> Actual</span>
+        <span><span style={{ color: 'rgba(107,94,85,0.5)', fontWeight: 700 }}>· ·</span> Forecast</span>
+      </div>
+    </div>
+  );
+}
+
+function LiveSnapshot({ role }: { role: BriefingRole }) {
+  if (role === 'chairman') return null;
+
+  const pnlPct = role === 'cheryl' ? 72 : 78;
+  const pnlLabel = role === 'cheryl' ? 'Gross margin confidence' : 'Live P&L confidence';
+  const pnlCaption = role === 'cheryl'
+    ? 'How complete your cost inputs are for the current period.'
+    : 'Based on matched sales, clocked labour, and invoices posted so far today.';
+  const labourSubtitle = role === 'gm' ? 'Fitzroy Espresso · yesterday' : 'Chain roll-up · yesterday';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28 }}
+      style={{
+        padding: '12px',
+        borderRadius: '10px',
+        background: '#fff',
+        border: '1px solid var(--color-border-subtle)',
+        boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
+        marginBottom: '12px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+      }}
+    >
+      <ConfidenceMeterBar label={pnlLabel} valuePct={pnlPct} caption={pnlCaption} />
+      {role === 'cheryl' && (
+        <>
+          <div style={{ borderTop: '1px solid var(--color-border-subtle)' }} />
+          <ConfidenceMeterBar
+            label="Period cost completeness"
+            valuePct={64}
+            caption="Of this period's costs confirmed vs still pending accrual or invoice."
+          />
+          <div style={{ borderTop: '1px solid var(--color-border-subtle)' }} />
+          <InvoiceMatchBar />
+        </>
+      )}
+      {(role === 'ravi' || role === 'gm') && (
+        <>
+          <div style={{ borderTop: '1px solid var(--color-border-subtle)' }} />
+          <LabourMiniCurve subtitle={labourSubtitle} />
+        </>
+      )}
+    </motion.div>
+  );
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -12,6 +161,7 @@ interface InsightItem {
   headline: string;
   detail: string;
   actionLabel?: string;
+  actionHref?: string;
   actionSecondary?: string;
 }
 
@@ -56,6 +206,7 @@ function InsightCard({
   accentColor: string;
 }) {
   const [done, setDone] = useState(false);
+  const router = useRouter();
   if (done) return null;
 
   return (
@@ -79,22 +230,39 @@ function InsightCard({
       >
         {item.headline}
       </p>
-      <p
+      <ul
         style={{
           margin: item.actionLabel ? '0 0 10px' : 0,
-          fontSize: '14px',
-          fontWeight: 400,
-          color: 'var(--color-text-secondary)',
-          lineHeight: 1.6,
+          padding: '0 0 0 16px',
+          listStyleType: 'disc',
         }}
       >
-        {item.detail}
-      </p>
+        {item.detail.split('. ').map((sentence, i, arr) => (
+          <li
+            key={i}
+            style={{
+              fontSize: '13px',
+              fontWeight: 400,
+              color: 'var(--color-text-secondary)',
+              lineHeight: 1.55,
+              marginBottom: i < arr.length - 1 ? '3px' : 0,
+            }}
+          >
+            {sentence.endsWith('.') ? sentence : sentence + (i < arr.length - 1 ? '.' : '')}
+          </li>
+        ))}
+      </ul>
       {item.actionLabel && (
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
           <button
             type="button"
-            onClick={() => setDone(true)}
+            onClick={() => {
+              if (item.actionHref) {
+                router.push(item.actionHref);
+              } else {
+                setDone(true);
+              }
+            }}
             style={{
               padding: '5px 12px',
               borderRadius: '6px',
@@ -250,6 +418,19 @@ const RAVI_INSIGHTS: InsightGroup[] = [
         actionSecondary: 'Adjust basket',
       },
       {
+        headline: 'Rebalance doughnut / croissant recurring order at Fitzroy',
+        detail:
+          'Pattern and margin data suggest doughnuts are over-ordered and croissants under-ordered. Quinn has drafted revised quantities — approve to update the standing order.',
+        actionLabel: 'Review & approve',
+        actionSecondary: 'Adjust',
+      },
+      {
+        headline: 'New Urban Fresh spinach SKU needs mapping before production',
+        detail:
+          'The new baby spinach SKU is not yet linked to any recipe. Map it now to prevent production stalls.',
+        actionLabel: 'Map SKU',
+      },
+      {
         headline: '3 supplier chase emails ready for Urban Fresh dry goods',
         detail:
           'Quinn has drafted them to the right contacts. One tap sends all three — or open to review first if you want to adjust tone.',
@@ -275,6 +456,7 @@ const GM_INSIGHTS: InsightGroup[] = [
         detail:
           'Quinn has already added 1 extra case to the basket. Cut-off is 2pm — approve now and it\'s handled.',
         actionLabel: 'Approve order',
+        actionHref: '/assisted-ordering',
         actionSecondary: 'Adjust quantity',
       },
     ],
@@ -398,9 +580,10 @@ const CHAIRMAN_INSIGHTS: InsightGroup[] = [
 
 // ── Role renderers ─────────────────────────────────────────────────────────────
 
-function InsightFeed({ groups }: { groups: InsightGroup[] }) {
+function InsightFeed({ groups, role }: { groups: InsightGroup[]; role: BriefingRole }) {
   return (
     <div style={{ padding: '2px 0 24px' }}>
+      <LiveSnapshot role={role} />
       {groups.map((group, i) => (
         <InsightGroup key={group.category} group={group} index={i} />
       ))}
@@ -409,10 +592,10 @@ function InsightFeed({ groups }: { groups: InsightGroup[] }) {
 }
 
 function BriefingContent({ role }: { role: BriefingRole }) {
-  if (role === 'chairman') return <InsightFeed groups={CHAIRMAN_INSIGHTS} />;
-  if (role === 'ravi') return <InsightFeed groups={RAVI_INSIGHTS} />;
-  if (role === 'cheryl') return <InsightFeed groups={CHERYL_INSIGHTS} />;
-  if (role === 'gm') return <InsightFeed groups={GM_INSIGHTS} />;
+  if (role === 'chairman') return <InsightFeed groups={CHAIRMAN_INSIGHTS} role={role} />;
+  if (role === 'ravi') return <InsightFeed groups={RAVI_INSIGHTS} role={role} />;
+  if (role === 'cheryl') return <InsightFeed groups={CHERYL_INSIGHTS} role={role} />;
+  if (role === 'gm') return <InsightFeed groups={GM_INSIGHTS} role={role} />;
   return null;
 }
 

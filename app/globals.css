@@ -3,7 +3,7 @@
 /* ── EDIFY DESIGN TOKENS ── */
 :root {
   /* BASE SURFACES */
-  --color-bg-nav:          #FFFFFF;
+  --color-bg-nav:          #031c59;
   --color-bg-surface:      #FFFFFF;
   --color-bg-hover:        #F5F4F2;
 
@@ -18,9 +18,9 @@
 
   /* BRAND ACCENTS */
   --color-accent-quinn:    #FFFFFF;
-  --color-accent-active:   #224444;
-  --color-accent-deep:     #1a3636;
-  --color-accent-mid:      #6a9494;
+  --color-accent-active:   #031c59;
+  --color-accent-deep:     #020f3a;
+  --color-accent-mid:      #4a6cb5;
 
   /* ACTIVE STATE TEXT */
   --color-text-on-active:  #F4F1EC;
@@ -32,7 +32,7 @@
   --color-badge-active-text: #FFC060;
 
   /* QUINN BUTTON */
-  --color-quinn-bg:        #1a3636;
+  --color-quinn-bg:        #031c59;
   --color-quinn-label:     #FFFFFF;
 
   /* SEMANTIC — SUCCESS */
@@ -55,7 +55,7 @@
   --color-info-light:      #E0F2FE;
 
   /* NOTIFICATION */
-  --color-dot:             #224444;
+  --color-dot:             #031c59;
 
   /* TYPOGRAPHY */
   --font-primary: 'Plus Jakarta Sans', sans-serif;

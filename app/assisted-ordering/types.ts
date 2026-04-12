@@ -100,6 +100,15 @@ export interface EnrichedLine extends SuggestedOrderLine {
   product: SupplierProduct;
 }
 
+// ─── Manually added line ──────────────────────────────────────────────────────
+
+export interface ManualLine {
+  id: string;
+  ingredientId: string;
+  supplierId: string;
+  qty: number;
+}
+
 // ─── View state ───────────────────────────────────────────────────────────────
 
 export type View = 'notifications' | 'review' | 'confirmed';

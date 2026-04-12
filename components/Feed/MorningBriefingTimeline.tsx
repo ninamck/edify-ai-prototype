@@ -37,7 +37,7 @@ export default function MorningBriefingTimeline({
         flexShrink: 0,
         background: '#fff',
         borderRadius: sidebar ? 12 : 0,
-        border: sidebar ? '1px solid var(--color-border-subtle)' : 'none',
+        border: sidebar ? '2px solid rgba(217, 215, 212, 1)' : 'none',
         boxShadow: sidebar ? '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.03)' : undefined,
         overflow: 'hidden',
         fontFamily: 'var(--font-primary)',

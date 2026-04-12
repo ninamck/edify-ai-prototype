@@ -30,6 +30,10 @@ export default function AssistedOrderingPage() {
     supplierTotals,
     supplierItemCounts,
     confirmAll,
+    manualLines,
+    addManualLine,
+    removeManualLine,
+    setManualLineQty,
   } = state;
 
   return (
@@ -77,6 +81,10 @@ export default function AssistedOrderingPage() {
             onDismissReason={setDismissReason}
             onConfirmAll={confirmAll}
             onBack={() => setView('notifications')}
+            manualLines={manualLines}
+            onAddItem={addManualLine}
+            onRemoveManualLine={removeManualLine}
+            onManualLineQtyChange={setManualLineQty}
           />
         </div>
       )}

@@ -46,12 +46,24 @@ export default function ChecklistsLayout({ children }: { children: React.ReactNo
     <div
       style={{
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'row',
         height: '100vh',
         background: 'var(--color-bg-surface)',
         fontFamily: 'var(--font-primary)',
       }}
     >
+      {!isMobile && !isComplete && !isHistory && <Sidebar />}
+
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          minWidth: 0,
+          minHeight: 0,
+          overflow: 'hidden',
+        }}
+      >
       <header
         style={{
           flexShrink: 0,
@@ -62,8 +74,7 @@ export default function ChecklistsLayout({ children }: { children: React.ReactNo
           minHeight: '52px',
           padding: '10px 16px 10px 12px',
           borderBottom: '1px solid var(--color-border-subtle)',
-          background: 'var(--color-bg-nav)',
-          boxShadow: '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.04)',
+          background: '#ffffff',
         }}
       >
         <div style={{ minWidth: 0, maxWidth: '240px' }}>
@@ -107,33 +118,16 @@ export default function ChecklistsLayout({ children }: { children: React.ReactNo
       <div
         style={{
           flex: 1,
-          display: 'flex',
-          flexDirection: 'row',
           minWidth: 0,
           minHeight: 0,
-          overflow: 'hidden',
-          background: '#fff',
+          overflow: 'auto',
+          background: (isComplete || isHistory) ? '#fff' : 'var(--color-bg-surface)',
+          position: 'relative',
+          zIndex: 1,
         }}
       >
-        {!isMobile && !isComplete && !isHistory && (
-          <div style={{ position: 'relative', zIndex: 10, flexShrink: 0 }}>
-            <Sidebar />
-          </div>
-        )}
-
-        <div
-          style={{
-            flex: 1,
-            minWidth: 0,
-            minHeight: 0,
-            overflow: 'auto',
-            background: (isComplete || isHistory) ? '#fff' : 'var(--color-bg-surface)',
-            position: 'relative',
-            zIndex: 1,
-          }}
-        >
-          {children}
-        </div>
+        {children}
+      </div>
       </div>
     </div>
   );

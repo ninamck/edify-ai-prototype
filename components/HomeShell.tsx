@@ -10,25 +10,21 @@ import EstateDashboard from '@/components/Dashboard/EstateDashboard';
 import MorningBriefingTimeline from '@/components/Feed/MorningBriefingTimeline';
 import RightPanelSheetOverlay from '@/components/RightPanel/RightPanelSheetOverlay';
 import MobileInsightsBar from '@/components/MobileInsightsBar';
-import VersionSwitcher from '@/components/VersionSwitcher';
-import FloorActionsBox, { CommandCentreModal } from '@/components/FloorActionsBox';
+
+import FloorActionsBox from '@/components/FloorActionsBox';
 import Feed from '@/components/Feed/Feed';
 import type { BriefingRole } from '@/components/briefing';
-import { commandCentreVariant } from '@/components/briefing';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import MobileShell from '@/components/MobileShell/MobileShell';
 
-type HomeShellProps = {
-  showVersionSwitcher?: boolean;
-};
+
 
 const NARROW_BREAKPOINT = '(max-width: 900px)';
 const MOBILE_SHELL_BREAKPOINT = '(max-width: 430px)';
 
-export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps) {
+export default function HomeShell() {
   const router = useRouter();
   const [shellView, setShellView] = useState<ShellViewMode>('command-centre');
-  const [commandCentreOpen, setCommandCentreOpen] = useState(false);
   const [briefingRole, setBriefingRole] = useState<BriefingRole>('ravi');
   const [mobileInsightsOpen, setMobileInsightsOpen] = useState(false);
   const [chatActive, setChatActive] = useState(false);
@@ -41,7 +37,6 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
 
   useEffect(() => {
     if (shellView === 'dashboard') {
-      setCommandCentreOpen(false);
       setMobileInsightsOpen(false);
     }
   }, [shellView]);
@@ -72,13 +67,25 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
     <div
       style={{
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'row',
         height: '100vh',
         overflow: 'hidden',
         background: 'var(--color-bg-surface)',
         fontFamily: 'var(--font-primary)',
       }}
     >
+      <Sidebar />
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          minWidth: 0,
+          minHeight: 0,
+          overflow: 'hidden',
+          background: '#fff',
+        }}
+      >
       <ShellTopBar
         siteName="Fitzroy Espresso"
         briefingRole={briefingRole}
@@ -97,7 +104,7 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
           background: '#fff',
         }}
       >
-        <Sidebar />
+        
         {shellView === 'command-centre' ? (
           <div
             style={{
@@ -139,7 +146,6 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
                   >
                     <FloorActionsBox
                       briefingRole={briefingRole}
-                      onOpenCommandCentre={() => setCommandCentreOpen(true)}
                       onReceiveDelivery={() => router.push('/receive')}
                     />
                     {isNarrow && (
@@ -196,6 +202,7 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
           </div>
         )}
       </div>
+      </div>
 
       <RightPanelSheetOverlay
         open={mobileInsightsOpen}
@@ -205,14 +212,6 @@ export default function HomeShell({ showVersionSwitcher = true }: HomeShellProps
         <MorningBriefingTimeline briefingRole={briefingRole} layout="sheet" />
       </RightPanelSheetOverlay>
 
-      <CommandCentreModal
-        open={commandCentreOpen}
-        onClose={() => setCommandCentreOpen(false)}
-        variant={commandCentreVariant(briefingRole)}
-        siteLabel="Fitzroy Espresso"
-      />
-
-      {showVersionSwitcher && <VersionSwitcher />}
     </div>
   );
 }

@@ -32,8 +32,8 @@ export default function ShellTopBar({
         gap: '12px 16px',
         minHeight: '52px',
         padding: '10px 16px 10px 12px',
-        borderBottom: '1px solid var(--color-border-subtle)',
-        background: 'var(--color-bg-nav)',
+        borderBottom: '2px solid rgba(217, 215, 212, 1)',
+        background: '#ffffff',
         boxShadow: '0 1px 0 rgba(58,48,40,0.08)',
         fontFamily: 'var(--font-primary)',
       }}

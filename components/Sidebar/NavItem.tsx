@@ -27,7 +27,6 @@ export default function NavItem({
   tone = 'default',
   onClick,
 }: NavItemProps) {
-  const quinnActive = tone === 'quinn' && active;
   const [hoverTip, setHoverTip] = useState<{ left: number; top: number } | null>(null);
 
   return (
@@ -44,20 +43,14 @@ export default function NavItem({
           justifyContent: compact ? 'center' : 'flex-start',
           gap: compact ? 0 : '8px',
           width: '100%',
-          padding: compact ? '10px 6px' : '7px 10px',
-          borderRadius: quinnActive ? 'var(--radius-card)' : 'var(--radius-item)',
+          padding: compact ? '9px 6px' : '7px 10px',
+          borderRadius: 'var(--radius-item)',
           border: 'none',
           cursor: 'pointer',
-          background: quinnActive
-            ? 'var(--color-quinn-bg)'
-            : active
-              ? 'var(--color-accent-active)'
-              : 'transparent',
-          color: quinnActive
-            ? 'var(--color-quinn-label)'
-            : active
-              ? 'var(--color-text-on-active)'
-              : 'var(--color-text-secondary)',
+          background: active
+            ? '#ffffff'
+            : 'transparent',
+          color: active ? '#031c59' : '#ffffff',
           fontSize: '13px',
           fontWeight: active ? 600 : 400,
           fontFamily: 'var(--font-primary)',
@@ -72,21 +65,13 @@ export default function NavItem({
             const r = btn.getBoundingClientRect();
             setHoverTip({ left: r.right + 10, top: r.top + r.height / 2 });
           }
-          if (quinnActive) {
-            btn.style.opacity = '0.9';
-            return;
-          }
           if (!active) {
-            btn.style.background = 'var(--color-bg-hover)';
+            btn.style.background = 'rgba(255,255,255,0.10)';
           }
         }}
         onMouseLeave={(e) => {
           const btn = e.currentTarget as HTMLButtonElement;
           if (compact) setHoverTip(null);
-          if (quinnActive) {
-            btn.style.opacity = '1';
-            return;
-          }
           if (!active) {
             btn.style.background = 'transparent';
           }
@@ -96,7 +81,6 @@ export default function NavItem({
           <Icon
             size={compact ? 19 : 15}
             strokeWidth={active ? 2.2 : 1.8}
-            color={quinnActive ? 'var(--color-quinn-label)' : undefined}
             style={{ flexShrink: 0 }}
           />
           {compact && badge !== undefined && badge > 0 && (
@@ -112,8 +96,8 @@ export default function NavItem({
                 height: '18px',
                 padding: '0 5px',
                 borderRadius: '999px',
-                background: '#15803D',
-                color: '#fff',
+                background: '#ffffff',
+                color: '#031c59',
                 fontSize: '12px',
                 fontWeight: 700,
                 lineHeight: 1,

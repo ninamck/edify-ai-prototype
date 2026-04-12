@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
-import type { GroupBy, View, DismissReason } from '../types';
+import type { GroupBy, View, DismissReason, ManualLine } from '../types';
 import { SUGGESTED_ORDERS, SUPPLIERS, getIngredient, getProduct } from '../data/mockOrders';
 
 // ─── Derived per-line values ──────────────────────────────────────────────────
@@ -47,6 +47,7 @@ export function useAssistedOrdering() {
   const [removed, setRemoved] = useState<Set<string>>(new Set());
   const [dismissReasons, setDismissReasons] = useState<Record<string, DismissReason>>({});
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [manualLines, setManualLines] = useState<ManualLine[]>([]);
 
   // ─── Quantity actions ─────────────────────────────────────────────────────
 
@@ -73,6 +74,21 @@ export function useAssistedOrdering() {
 
   const setDismissReason = useCallback((lineId: string, reason: DismissReason) => {
     setDismissReasons((prev) => ({ ...prev, [lineId]: reason }));
+  }, []);
+
+  const addManualLine = useCallback((ingredientId: string, supplierId: string, qty: number) => {
+    const id = `manual-${Date.now()}`;
+    setManualLines((prev) => [...prev, { id, ingredientId, supplierId, qty }]);
+  }, []);
+
+  const removeManualLine = useCallback((id: string) => {
+    setManualLines((prev) => prev.filter((l) => l.id !== id));
+  }, []);
+
+  const setManualLineQty = useCallback((id: string, qty: number) => {
+    setManualLines((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, qty: Math.max(1, qty) } : l)),
+    );
   }, []);
 
   // ─── Derived values ───────────────────────────────────────────────────────
@@ -105,6 +121,16 @@ export function useAssistedOrdering() {
       totalItems += supplierItemCount;
     }
 
+    // Include manually added lines in totals
+    for (const ml of manualLines) {
+      const product = getProduct(ml.ingredientId, ml.supplierId);
+      const lineTotal = ml.qty * product.unitCost;
+      supplierTotals[ml.supplierId] = (supplierTotals[ml.supplierId] ?? 0) + lineTotal;
+      supplierItemCounts[ml.supplierId] = (supplierItemCounts[ml.supplierId] ?? 0) + 1;
+      grandTotal += lineTotal;
+      totalItems += 1;
+    }
+
     const movMet: Record<string, boolean> = {};
     for (const supplier of SUPPLIERS) {
       movMet[supplier.id] =
@@ -123,7 +149,7 @@ export function useAssistedOrdering() {
       supplierItemCounts,
       movMet,
     };
-  }, [quantities, removed]);
+  }, [quantities, removed, manualLines]);
 
   // ─── Action logger stub ───────────────────────────────────────────────────
 
@@ -169,6 +195,10 @@ export function useAssistedOrdering() {
     setDismissReason,
     bannerDismissed,
     setBannerDismissed,
+    manualLines,
+    addManualLine,
+    removeManualLine,
+    setManualLineQty,
     // Derived
     ...derived,
     // Actions

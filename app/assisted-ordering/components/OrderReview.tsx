@@ -1,11 +1,14 @@
 'use client';
 
-import type { SuggestedOrder, GroupBy, DismissReason } from '../types';
+import { useState } from 'react';
+import type { SuggestedOrder, GroupBy, DismissReason, ManualLine } from '../types';
 import { getSupplier, getIngredient, getProduct, SUPPLIERS, isUrgent } from '../data/mockOrders';
 import GroupToggle from './GroupToggle';
 import DetailToggle from './DetailToggle';
 import SupplierSection from './SupplierSection';
 import LineItem from './LineItem';
+import AddItemSheet from './AddItemSheet';
+import QtyControl from './QtyControl';
 
 interface Props {
   orders: SuggestedOrder[];
@@ -27,6 +30,10 @@ interface Props {
   onDismissReason: (lineId: string, reason: DismissReason) => void;
   onConfirmAll: () => void;
   onBack: () => void;
+  manualLines: ManualLine[];
+  onAddItem: (ingredientId: string, supplierId: string, qty: number) => void;
+  onRemoveManualLine: (id: string) => void;
+  onManualLineQtyChange: (id: string, qty: number) => void;
 }
 
 // Oldest stocktake across all suggested order lines (for the banner)
@@ -100,7 +107,12 @@ export default function OrderReview({
   onDismissReason,
   onConfirmAll,
   onBack,
+  manualLines,
+  onAddItem,
+  onRemoveManualLine,
+  onManualLineQtyChange,
 }: Props) {
+  const [showAddSheet, setShowAddSheet] = useState(false);
   const stocktakeAge = getStocktakeAge(orders);
   const stocktakeDateStr = dayLabel(stocktakeAge);
 
@@ -325,6 +337,9 @@ export default function OrderReview({
                   onRemove={onRemove}
                   onRestore={onRestore}
                   onDismissReason={onDismissReason}
+                  manualLines={manualLines.filter((ml) => ml.supplierId === order.supplierId)}
+                  onManualLineQtyChange={onManualLineQtyChange}
+                  onRemoveManualLine={onRemoveManualLine}
                 />
               ))}
             </div>
@@ -499,6 +514,236 @@ export default function OrderReview({
                 })}
               </div>
             </div>
+          )}
+
+          {/* New-supplier manual lines — shown as separate sections */}
+          {manualLines.some((ml) => !orders.map((o) => o.supplierId).includes(ml.supplierId)) && (() => {
+            // Only lines for suppliers NOT already in the order
+            const newSupplierLines = manualLines.filter(
+              (ml) => !orders.map((o) => o.supplierId).includes(ml.supplierId),
+            );
+            const grouped = new Map<string, typeof manualLines>();
+            for (const ml of newSupplierLines) {
+              if (!grouped.has(ml.supplierId)) grouped.set(ml.supplierId, []);
+              grouped.get(ml.supplierId)!.push(ml);
+            }
+            const existingIds = orders.map((o) => o.supplierId);
+
+            return Array.from(grouped.entries()).map(([supplierId, lines]) => {
+              const supplier = getSupplier(supplierId);
+              const isNew = !existingIds.includes(supplierId);
+              return (
+                <div key={supplierId}>
+                  {/* Supplier header */}
+                  <div
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: 'var(--radius-item) var(--radius-item) 0 0',
+                      background: isNew ? 'rgba(146,64,14,0.06)' : 'var(--color-bg-hover)',
+                      border: isNew
+                        ? '1px solid rgba(146,64,14,0.22)'
+                        : '1px solid var(--color-border-subtle)',
+                      borderBottom: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        color: isNew ? '#92400E' : 'var(--color-text-primary)',
+                        fontFamily: 'var(--font-primary)',
+                      }}
+                    >
+                      {supplier.name}
+                    </span>
+                    {isNew && (
+                      <span
+                        style={{
+                          padding: '2px 7px',
+                          borderRadius: 'var(--radius-badge)',
+                          background: 'rgba(146,64,14,0.12)',
+                          color: '#92400E',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          fontFamily: 'var(--font-primary)',
+                          letterSpacing: '0.04em',
+                        }}
+                      >
+                        NEW SUPPLIER
+                      </span>
+                    )}
+                    {isNew && (
+                      <span
+                        style={{
+                          fontSize: '12px',
+                          color: '#92400E',
+                          fontFamily: 'var(--font-primary)',
+                          marginLeft: '2px',
+                        }}
+                      >
+                        · 📦 {supplier.deliveryDate} · cutoff {supplier.cutOffTime}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Lines */}
+                  <div
+                    style={{
+                      border: isNew
+                        ? '1px solid rgba(146,64,14,0.22)'
+                        : '1px solid var(--color-border-subtle)',
+                      borderRadius: '0 0 var(--radius-item) var(--radius-item)',
+                      background: 'var(--color-bg-surface)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {lines.map((ml, i) => {
+                      const ingredient = getIngredient(ml.ingredientId);
+                      const product = getProduct(ml.ingredientId, ml.supplierId);
+                      const lineTotal = ml.qty * product.unitCost;
+                      return (
+                        <div
+                          key={ml.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '10px 14px',
+                            borderTop: i === 0 ? 'none' : '1px solid var(--color-border-subtle)',
+                          }}
+                        >
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p
+                              style={{
+                                margin: 0,
+                                fontSize: '13px',
+                                fontWeight: 600,
+                                color: 'var(--color-text-primary)',
+                                fontFamily: 'var(--font-primary)',
+                              }}
+                            >
+                              {ingredient.name}
+                            </p>
+                            <p
+                              style={{
+                                margin: '2px 0 0',
+                                fontSize: '12px',
+                                color: 'var(--color-text-secondary)',
+                                fontFamily: 'var(--font-primary)',
+                              }}
+                            >
+                              {ingredient.variant} · {product.unitName}
+                            </p>
+                          </div>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '10px',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <QtyControl
+                              value={ml.qty}
+                              onChange={(q) => onManualLineQtyChange(ml.id, q)}
+                              min={1}
+                              label={ingredient.name}
+                            />
+                            <span
+                              style={{
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                color: 'var(--color-text-primary)',
+                                fontFamily: 'var(--font-primary)',
+                                minWidth: '48px',
+                                textAlign: 'right',
+                              }}
+                            >
+                              £{lineTotal.toFixed(0)}
+                            </span>
+                            <button
+                              type="button"
+                              aria-label={`Remove ${ingredient.name}`}
+                              onClick={() => onRemoveManualLine(ml.id)}
+                              style={{
+                                width: '26px',
+                                height: '26px',
+                                borderRadius: '6px',
+                                border: 'none',
+                                background: 'transparent',
+                                color: 'var(--color-text-secondary)',
+                                fontSize: '14px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                transition: 'background 0.1s ease',
+                              }}
+                              onMouseEnter={(e) => {
+                                (e.currentTarget as HTMLButtonElement).style.background =
+                                  'var(--color-bg-hover)';
+                              }}
+                              onMouseLeave={(e) => {
+                                (e.currentTarget as HTMLButtonElement).style.background =
+                                  'transparent';
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            });
+          })()}
+
+          {/* Add item — inline dropdown */}
+          {showAddSheet ? (
+            <AddItemSheet
+              onClose={() => setShowAddSheet(false)}
+              onAdd={onAddItem}
+              existingSupplierIds={orders.map((o) => o.supplierId)}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAddSheet(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                width: '100%',
+                padding: '12px 16px',
+                borderRadius: 'var(--radius-card)',
+                border: '1.5px dashed var(--color-border)',
+                background: 'transparent',
+                color: 'var(--color-text-secondary)',
+                fontSize: '13px',
+                fontWeight: 600,
+                fontFamily: 'var(--font-primary)',
+                cursor: 'pointer',
+                transition: 'background 0.15s ease, color 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget as HTMLButtonElement;
+                el.style.background = 'var(--color-bg-hover)';
+                el.style.color = 'var(--color-text-primary)';
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget as HTMLButtonElement;
+                el.style.background = 'transparent';
+                el.style.color = 'var(--color-text-secondary)';
+              }}
+            >
+              <span style={{ fontSize: '16px', lineHeight: 1 }}>+</span> Add item
+            </button>
           )}
 
           {/* Bottom padding */}
