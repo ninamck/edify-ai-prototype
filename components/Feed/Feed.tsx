@@ -16,11 +16,15 @@ import {
   CheckCircle2,
   AlertCircle,
   AlertTriangle,
+  LayoutDashboard,
+  Pin,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import QuinnOrb from '@/components/Sidebar/QuinnOrb';
 import type { BriefingRole } from '@/components/briefing';
 import { timeAwareGreeting } from '@/components/briefing';
+import type { AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
+import { renderAnalyticsChart, ANALYTICS_CONFIG } from '@/components/Analytics/AnalyticsCharts';
 
 function QuinnAvatar({
   size = 30,
@@ -64,6 +68,27 @@ function Hi({ children }: { children: ReactNode }) {
 }
 
 const PLACEHOLDER = 'How can I help you today?';
+
+// ─── Analytics autocomplete suggestions ──────────────────────────────────────
+
+const ANALYTICS_SUGGESTIONS: { trigger: string; full: string }[] = [
+  { trigger: 'What were',       full: 'What were total sales across all sites last week?' },
+  { trigger: 'Which hour',      full: 'Which hour of the day drives the most revenue on weekdays?' },
+  { trigger: 'How has',         full: 'How has revenue trended over the last 12 weeks?' },
+  { trigger: 'Which site has',  full: 'Which site has shown the strongest month-on-month growth?' },
+  { trigger: 'What is',         full: 'What is the revenue per labour hour across each site?' },
+  { trigger: 'Which sites are', full: 'Which sites are consistently over their COGS budget?' },
+];
+
+function getGhostSuggestion(value: string): string {
+  if (!value.trim()) return '';
+  for (const s of ANALYTICS_SUGGESTIONS) {
+    if (s.full.startsWith(value) && value.length < s.full.length) {
+      return s.full.slice(value.length);
+    }
+  }
+  return '';
+}
 
 const PROMPT_CHIPS: {
   label: string;
@@ -121,7 +146,7 @@ const INTEGRITY_CHECKS: IntegrityCheck[] = [
   { id: 'no-archived-ref', label: 'No recipes referencing archived ingredients', detail: 'No issues found', status: 'ok' },
 ];
 
-type ChatMsg = { id: string; role: 'user' | 'quinn'; text: string; msgType?: string };
+type ChatMsg = { id: string; role: 'user' | 'quinn'; text: string; msgType?: string; chartId?: string };
 
 type RecipeIngredient = { name: string; qty: string; unit: string };
 
@@ -898,6 +923,7 @@ type ComposerProps = {
   value: string;
   onChange: (v: string) => void;
   onSend: () => void;
+  onAcceptSuggestion?: (full: string) => void;
   disabled: boolean;
   placeholder: string;
   minHeight: number;
@@ -907,11 +933,14 @@ function ClaudeComposer({
   value,
   onChange,
   onSend,
+  onAcceptSuggestion,
   disabled,
   placeholder,
   minHeight,
 }: ComposerProps) {
   const hasText = value.trim().length > 0;
+  const ghost = getGhostSuggestion(value);
+  const fullSuggestion = ghost ? value + ghost : '';
 
   return (
     <div
@@ -919,38 +948,103 @@ function ClaudeComposer({
         width: '100%',
       background: '#fff',
       borderRadius: '20px',
-      border: '1.5px solid rgba(217, 215, 212, 1)',
+      border: ghost ? '1.5px solid var(--color-accent-mid, rgba(34,68,68,0.35))' : '1.5px solid rgba(217, 215, 212, 1)',
       boxShadow: '0 4px 20px rgba(58,48,40,0.09)',
       overflow: 'hidden',
+      transition: 'border-color 0.15s ease',
       }}
     >
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            onSend();
-          }
-        }}
-        placeholder={placeholder}
-        disabled={disabled}
-        rows={2}
-        style={{
-          width: '100%',
-          boxSizing: 'border-box',
-          minHeight,
-          padding: '12px 16px 8px',
-          border: 'none',
-          outline: 'none',
-          resize: 'none',
-          fontSize: '14px',
-          color: 'var(--color-text-primary)',
-          background: 'transparent',
-          fontFamily: 'var(--font-primary)',
-          lineHeight: 1.55,
-        }}
-      />
+      {/* Ghost text + textarea wrapper */}
+      <div style={{ position: 'relative' }}>
+        {/* Ghost overlay — renders behind textarea text */}
+        {ghost && (
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              padding: '12px 16px 8px',
+              fontSize: '14px',
+              fontFamily: 'var(--font-primary)',
+              lineHeight: 1.55,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              overflowWrap: 'break-word',
+              pointerEvents: 'none',
+              userSelect: 'none',
+              boxSizing: 'border-box',
+              minHeight,
+              zIndex: 0,
+            }}
+          >
+            <span style={{ color: 'transparent' }}>{value}</span>
+            <span style={{ color: 'rgba(58,48,40,0.3)', fontStyle: 'normal' }}>{ghost}</span>
+          </div>
+        )}
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Tab' && ghost && onAcceptSuggestion) {
+              e.preventDefault();
+              onAcceptSuggestion(fullSuggestion);
+              return;
+            }
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              onSend();
+            }
+          }}
+          placeholder={ghost ? '' : placeholder}
+          disabled={disabled}
+          rows={2}
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            width: '100%',
+            boxSizing: 'border-box',
+            minHeight,
+            padding: '12px 16px 8px',
+            border: 'none',
+            outline: 'none',
+            resize: 'none',
+            fontSize: '14px',
+            color: 'var(--color-text-primary)',
+            background: 'transparent',
+            fontFamily: 'var(--font-primary)',
+            lineHeight: 1.55,
+          }}
+        />
+      </div>
+      {/* Tab hint strip */}
+      {ghost && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '4px 16px 6px',
+          borderTop: '1px solid var(--color-border-subtle)',
+        }}>
+          <kbd style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '1px 6px',
+            borderRadius: '4px',
+            border: '1px solid var(--color-border-subtle)',
+            background: 'var(--color-bg-surface, #f7f6f4)',
+            fontSize: '11px',
+            fontWeight: 600,
+            fontFamily: 'var(--font-primary)',
+            color: 'var(--color-text-muted)',
+            lineHeight: 1.5,
+          }}>Tab</kbd>
+          <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)', fontFamily: 'var(--font-primary)' }}>
+            to accept suggestion
+          </span>
+        </div>
+      )}
       <div
         style={{
           display: 'flex',
@@ -1207,6 +1301,140 @@ function DataIntegrityCard({ onFixWithQuinn }: { onFixWithQuinn: () => void }) {
   );
 }
 
+// ─── Analytics thinking bubble ───────────────────────────────────────────────
+
+const THINKING_PHRASES = [
+  'Pulling your data\u2026',
+  'Crunching numbers\u2026',
+  'Building your chart\u2026',
+];
+
+function QuinnThinkingContent() {
+  const [phraseIdx, setPhraseIdx] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setPhraseIdx(i => (i + 1) % THINKING_PHRASES.length);
+    }, 900);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 0 2px' }}>
+      <QuinnAvatar size={28} mode="thinking" />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        <AnimatePresence mode="wait">
+          <motion.span
+            key={phraseIdx}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.25 }}
+            style={{
+              fontSize: '12px',
+              fontWeight: 500,
+              color: 'var(--color-text-muted)',
+              fontFamily: 'var(--font-primary)',
+            }}
+          >
+            {THINKING_PHRASES[phraseIdx]}
+          </motion.span>
+        </AnimatePresence>
+        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+          {[0, 1, 2].map(i => (
+            <motion.span
+              key={i}
+              style={{
+                display: 'inline-block',
+                width: 5,
+                height: 5,
+                borderRadius: '50%',
+                background: 'var(--color-accent-quinn)',
+              }}
+              animate={{ y: [0, -5, 0], opacity: [0.3, 1, 0.3] }}
+              transition={{
+                duration: 0.7,
+                delay: i * 0.14,
+                repeat: Infinity,
+                ease: 'easeInOut',
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Analytics chart bubble content ─────────────────────────────────────────
+
+function AnalyticsChartContent({
+  chartId,
+  isPinned,
+  onAdd,
+}: {
+  chartId: AnalyticsChartId;
+  isPinned: boolean;
+  onAdd: () => void;
+}) {
+  return (
+    <div style={{ marginTop: '10px' }}>
+      <div style={{
+        borderRadius: '10px',
+        border: '1px solid var(--color-border-subtle)',
+        overflow: 'hidden',
+        background: '#fff',
+        padding: '12px 8px 8px',
+      }}>
+        {renderAnalyticsChart(chartId)}
+        {analyticsChartLegend(chartId)}
+      </div>
+      <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'flex-end' }}>
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={isPinned}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '7px 14px',
+            borderRadius: '100px',
+            border: isPinned ? 'none' : '1.5px solid var(--color-border)',
+            background: isPinned ? 'var(--color-success-light, #f0fdf4)' : '#fff',
+            color: isPinned ? '#166534' : 'var(--color-text-secondary)',
+            fontSize: '12px',
+            fontWeight: 600,
+            fontFamily: 'var(--font-primary)',
+            cursor: isPinned ? 'default' : 'pointer',
+          }}
+        >
+          <Pin size={12} strokeWidth={2} />
+          {isPinned ? 'Added to dashboard' : 'Add to dashboard'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function analyticsChartLegend(chartId: AnalyticsChartId) {
+  if (chartId === 'sales') {
+    return (
+      <div style={{ display: 'flex', gap: '12px', padding: '6px 8px 0', justifyContent: 'center' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--color-text-muted)', fontFamily: 'var(--font-primary)' }}>
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--color-border-subtle)', display: 'inline-block' }} />
+          Prior week
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--color-text-muted)', fontFamily: 'var(--font-primary)' }}>
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--color-accent-deep)', display: 'inline-block' }} />
+          Last week
+        </span>
+      </div>
+    );
+  }
+  return null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Feed({
@@ -1215,12 +1443,16 @@ export default function Feed({
   onToggleQuinnExpand,
   onChatStateChange,
   noHeader = false,
+  onAddToDashboard,
+  onViewDashboard,
 }: {
   briefingRole: BriefingRole;
   quinnExpanded?: boolean;
   onToggleQuinnExpand?: () => void;
   onChatStateChange?: (active: boolean) => void;
   noHeader?: boolean;
+  onAddToDashboard?: (id: AnalyticsChartId) => void;
+  onViewDashboard?: () => void;
 }) {
   const [chatStarted, setChatStarted] = useState(false);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -1236,6 +1468,9 @@ export default function Feed({
   const [chatMinimized, setChatMinimized] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(true);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const [analyticsType, setAnalyticsType] = useState<AnalyticsChartId | null>(null);
+  const [analyticsStep, setAnalyticsStep] = useState(0);
+  const [pinnedChartIds, setPinnedChartIds] = useState<Set<AnalyticsChartId>>(new Set());
 
   const greeting = timeAwareGreeting(briefingRole);
 
@@ -1381,6 +1616,51 @@ export default function Feed({
     }
   }, [productionFlow]);
 
+  // ─── Analytics flow ──────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!analyticsType || analyticsStep === 0 || analyticsStep >= 3) return;
+    if (analyticsStep === 1) {
+      const t = setTimeout(() => {
+        setMessages(prev => [
+          ...prev.filter(m => m.msgType !== 'analytics-thinking'),
+          {
+            id: `q-analytics-chart-${analyticsType}-${Date.now()}`,
+            role: 'quinn' as const,
+            text: ANALYTICS_CONFIG[analyticsType].chartLabel,
+            msgType: 'analytics-chart',
+            chartId: analyticsType,
+          },
+        ]);
+        setAnalyticsStep(2);
+      }, 1600);
+      return () => clearTimeout(t);
+    }
+    if (analyticsStep === 2) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: `q-analytics-reasoning-${analyticsType}-${Date.now()}`,
+          role: 'quinn' as const,
+          text: ANALYTICS_CONFIG[analyticsType].reasoning,
+        }]);
+        setAnalyticsStep(3);
+      }, 800);
+      return () => clearTimeout(t);
+    }
+  }, [analyticsType, analyticsStep]);
+
+  function handleAddChart(chartId: AnalyticsChartId) {
+    if (pinnedChartIds.has(chartId)) return;
+    setPinnedChartIds(prev => new Set([...prev, chartId]));
+    onAddToDashboard?.(chartId);
+    setMessages(prev => [...prev, {
+      id: `q-analytics-pinned-${chartId}-${Date.now()}`,
+      role: 'quinn',
+      text: `Done — I've pinned **${ANALYTICS_CONFIG[chartId].label}** to your dashboard.`,
+      msgType: 'analytics-pinned',
+    }]);
+  }
+
   function startRecipeFlow() {
     setChatMinimized(false);
     setChatStarted(true);
@@ -1508,13 +1788,39 @@ export default function Feed({
     const userMsg: ChatMsg = { id: `u-${Date.now()}`, role: 'user', text };
     setChatStarted(true);
     setChatMinimized(false);
-    setMessages(prev => [...prev, userMsg]);
     setInput('');
+
+    // Analytics trigger detection — order matters (more specific first)
+    let detected: AnalyticsChartId | null = null;
+    if (text.startsWith('Which site has'))      detected = 'growth';
+    else if (text.startsWith('Which sites are')) detected = 'cogs';
+    else if (text.startsWith('Which hour'))      detected = 'hour';
+    else if (text.startsWith('What were'))       detected = 'sales';
+    else if (text.startsWith('How has'))         detected = 'trend';
+    else if (text.startsWith('What is'))         detected = 'labour';
+
+    if (detected) {
+      setMessages(prev => [...prev, userMsg, {
+        id: `q-thinking-${Date.now()}`,
+        role: 'quinn' as const,
+        text: '',
+        msgType: 'analytics-thinking',
+      }]);
+      setAnalyticsType(detected);
+      setAnalyticsStep(1);
+    } else {
+      setMessages(prev => [...prev, userMsg]);
+    }
   }
 
-  const composerDisabled = (recipeFlow > 0 && recipeFlow < 16) || (productionFlow > 0 && productionFlow < 10);
+  const analyticsActive = analyticsStep > 0 && analyticsStep < 3;
+  const composerDisabled = (recipeFlow > 0 && recipeFlow < 16) || (productionFlow > 0 && productionFlow < 10) || analyticsActive;
   const composerPlaceholder = composerDisabled
-    ? (productionFlow > 0 ? 'Quinn is setting up your production plan\u2026' : 'Quinn is working on your recipe\u2026')
+    ? (productionFlow > 0
+        ? 'Quinn is setting up your production plan\u2026'
+        : analyticsActive
+          ? 'Quinn is analysing your data\u2026'
+          : 'Quinn is working on your recipe\u2026')
     : PLACEHOLDER;
   const composerMinH = chatStarted ? 40 : 72;
 
@@ -1694,6 +2000,7 @@ export default function Feed({
                 value={input}
                 onChange={setInput}
                 onSend={() => sendMessage()}
+                onAcceptSuggestion={(full) => sendMessage(full)}
                 disabled={false}
                 placeholder={PLACEHOLDER}
                 minHeight={72}
@@ -1874,7 +2181,16 @@ export default function Feed({
                     transition={{ duration: 0.2 }}
                   >
                     {messages.map((m) => (
+                      <motion.div
+                        key={m.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.28, ease: [0.25, 0.1, 0.25, 1] }}
+                      >
                       <ChatBubble key={m.id} msg={m}>
+                        {m.msgType === 'analytics-thinking' && (
+                          <QuinnThinkingContent />
+                        )}
                         {m.msgType === 'recipe-card' && (
                           <RecipeCardEditor
                             ingredients={recipeIngredients}
@@ -1958,7 +2274,40 @@ export default function Feed({
                         {m.msgType === 'prod-summary' && productionFlow === 10 && (
                           <ProductionSummaryCard settings={prodSettings} />
                         )}
+                        {m.msgType === 'analytics-chart' && m.chartId && (
+                          <AnalyticsChartContent
+                            chartId={m.chartId as AnalyticsChartId}
+                            isPinned={pinnedChartIds.has(m.chartId as AnalyticsChartId)}
+                            onAdd={() => handleAddChart(m.chartId as AnalyticsChartId)}
+                          />
+                        )}
+                        {m.msgType === 'analytics-pinned' && (
+                          <button
+                            type="button"
+                            onClick={() => onViewDashboard?.()}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              marginTop: '10px',
+                              padding: '7px 14px',
+                              borderRadius: '100px',
+                              border: 'none',
+                              background: 'var(--color-accent-active)',
+                              color: '#fff',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              fontFamily: 'var(--font-primary)',
+                              cursor: 'pointer',
+                              boxShadow: '0 2px 8px rgba(34,68,68,0.22)',
+                            }}
+                          >
+                            <LayoutDashboard size={13} strokeWidth={2} />
+                            View dashboard
+                          </button>
+                        )}
                       </ChatBubble>
+                      </motion.div>
                     ))}
 
                     {recipeFlow === 10 && (
@@ -2001,6 +2350,7 @@ export default function Feed({
                   value={input}
                   onChange={setInput}
                   onSend={() => sendMessage()}
+                  onAcceptSuggestion={(full) => sendMessage(full)}
                   disabled={composerDisabled}
                   placeholder={composerPlaceholder}
                   minHeight={composerMinH}

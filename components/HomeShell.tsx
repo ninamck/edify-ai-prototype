@@ -14,6 +14,7 @@ import MobileInsightsBar from '@/components/MobileInsightsBar';
 import FloorActionsBox from '@/components/FloorActionsBox';
 import Feed from '@/components/Feed/Feed';
 import type { BriefingRole } from '@/components/briefing';
+import type { AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import MobileShell from '@/components/MobileShell/MobileShell';
 
@@ -28,6 +29,7 @@ export default function HomeShell() {
   const [briefingRole, setBriefingRole] = useState<BriefingRole>('ravi');
   const [mobileInsightsOpen, setMobileInsightsOpen] = useState(false);
   const [chatActive, setChatActive] = useState(false);
+  const [pinnedCharts, setPinnedCharts] = useState<AnalyticsChartId[]>([]);
   const isNarrow = useMediaQuery(NARROW_BREAKPOINT);
   const isMobileShell = useMediaQuery(MOBILE_SHELL_BREAKPOINT);
 
@@ -159,6 +161,10 @@ export default function HomeShell() {
               <Feed
                 briefingRole={briefingRole}
                 onChatStateChange={setChatActive}
+                onAddToDashboard={(id) => {
+                  setPinnedCharts(prev => prev.includes(id) ? prev : [...prev, id]);
+                }}
+                onViewDashboard={() => setShellView('dashboard')}
               />
             </div>
 
@@ -198,7 +204,7 @@ export default function HomeShell() {
               background: 'var(--color-bg-surface)',
             }}
           >
-            <EstateDashboard />
+            <EstateDashboard pinnedCharts={pinnedCharts} />
           </div>
         )}
       </div>
