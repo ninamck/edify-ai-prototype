@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ListChecks,
@@ -9,8 +9,39 @@ import {
   Truck,
   ArrowLeftRight,
   Pencil,
+  ClipboardList,
+  Package,
+  ShoppingCart,
+  Thermometer,
+  Scale,
+  Clock,
+  FileText,
+  AlertTriangle,
+  CheckCircle,
+  type LucideIcon,
 } from 'lucide-react';
 import type { BriefingRole } from '@/components/briefing';
+import EditFloorActionsPopup, {
+  type FloorAction,
+  DEFAULT_FLOOR_ACTIONS,
+} from '@/components/EditFloorActionsPopup';
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  ListChecks,
+  Utensils,
+  Trash2,
+  Truck,
+  ArrowLeftRight,
+  ClipboardList,
+  Package,
+  ShoppingCart,
+  Thermometer,
+  Scale,
+  Clock,
+  FileText,
+  AlertTriangle,
+  CheckCircle,
+};
 
 function FloorActionSquare({
   label,
@@ -119,6 +150,25 @@ export default function FloorActionsBox({
 }) {
   void briefingRole;
   const router = useRouter();
+  const [editOpen, setEditOpen] = useState(false);
+  const [actions, setActions] = useState<FloorAction[]>(DEFAULT_FLOOR_ACTIONS);
+
+  const visibleActions = actions.filter((a) => a.visible);
+
+  /* Route handler for built-in actions */
+  function handleActionClick(action: FloorAction) {
+    switch (action.id) {
+      case 'checklists':
+        router.push('/checklists/complete');
+        break;
+      case 'receive-delivery':
+        onReceiveDelivery?.();
+        break;
+      default:
+        break;
+    }
+  }
+
   return (
     <div
       style={{
@@ -148,6 +198,7 @@ export default function FloorActionsBox({
         <button
           type="button"
           aria-label="Edit floor actions"
+          onClick={() => setEditOpen(true)}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -170,16 +221,26 @@ export default function FloorActionsBox({
         gap: '12px',
         alignItems: 'flex-start',
       }}>
-        <FloorActionSquare
-          label="Checklists"
-          icon={ListChecks}
-          onClick={() => router.push('/checklists/complete')}
-        />
-        <FloorActionSquare label="Run production" icon={Utensils} onClick={() => {}} />
-        <FloorActionSquare label="Log waste" icon={Trash2} onClick={() => {}} />
-        <FloorActionSquare label="Receive delivery" icon={Truck} dot onClick={onReceiveDelivery ?? (() => {})} />
-        <FloorActionSquare label="Transfer stock" icon={ArrowLeftRight} onClick={() => {}} />
+        {visibleActions.map((action) => {
+          const IconComp = ICON_MAP[action.iconKey] ?? ListChecks;
+          return (
+            <FloorActionSquare
+              key={action.id}
+              label={action.label}
+              icon={IconComp}
+              dot={action.id === 'receive-delivery'}
+              onClick={() => handleActionClick(action)}
+            />
+          );
+        })}
       </div>
+
+      <EditFloorActionsPopup
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        actions={actions}
+        onSave={setActions}
+      />
     </div>
   );
 }

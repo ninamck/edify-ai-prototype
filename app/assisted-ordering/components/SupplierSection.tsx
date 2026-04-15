@@ -138,7 +138,7 @@ export default function SupplierSection({
           gap: '8px',
         }}
       >
-        {order.lines.map((line) => (
+        {[...order.lines].sort((a, b) => getIngredient(a.ingredientId).name.localeCompare(getIngredient(b.ingredientId).name)).map((line) => (
           <LineItem
             key={line.id}
             line={line}

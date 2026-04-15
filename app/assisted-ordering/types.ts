@@ -80,6 +80,10 @@ export interface SuggestedOrderLine {
 
   // MOV
   movWarnShown: boolean;
+
+  // Optional overrides for the "Why?" panel
+  whyOverride?: string[];
+  whyHighlight?: boolean;
 }
 
 // ─── Suggested Order ─────────────────────────────────────────────────────────

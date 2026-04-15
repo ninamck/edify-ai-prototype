@@ -16,6 +16,8 @@ interface Props {
   onRemove: () => void;
   onRestore: () => void;
   onDismissReason: (reason: DismissReason) => void;
+  supplierName?: string;
+  deliveryDate?: string;
 }
 
 function buildWhyCopy(
@@ -79,8 +81,10 @@ export default function LineItem({
   onRemove,
   onRestore,
   onDismissReason,
+  supplierName,
+  deliveryDate,
 }: Props) {
-  const [whyExpanded, setWhyExpanded] = useState(false);
+  const [whyExpanded, setWhyExpanded] = useState(line.whyHighlight ?? false);
   const [showDismiss, setShowDismiss] = useState(false);
 
   const ingredient = getIngredient(line.ingredientId);
@@ -89,7 +93,7 @@ export default function LineItem({
   const projectedStock = ingredient.currentStock + qty * product.unitSize;
   const wasEdited = qty !== line.suggestedQty;
 
-  const whyCopy = buildWhyCopy(line, qty, ingredient, product);
+  const whyCopy = line.whyOverride ?? buildWhyCopy(line, qty, ingredient, product);
 
   // ─── Removed state ────────────────────────────────────────────────────────
 
@@ -193,13 +197,49 @@ export default function LineItem({
     >
       {movBanner}
 
+      {/* Supplier + delivery context (shown in detail mode for ingredient/day views) */}
+      {supplierName && showDetail && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '6px 14px 0',
+          }}
+        >
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 600,
+              color: 'var(--color-text-secondary)',
+              fontFamily: 'var(--font-primary)',
+              letterSpacing: '0.03em',
+            }}
+          >
+            {supplierName}
+          </span>
+          {deliveryDate && (
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 500,
+                color: 'var(--color-text-secondary)',
+                fontFamily: 'var(--font-primary)',
+              }}
+            >
+              · 📦 {deliveryDate}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Main row */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
-          padding: '10px 14px',
+          padding: supplierName && showDetail ? '4px 14px 10px' : '10px 14px',
         }}
       >
         {/* Name + badges */}
@@ -419,17 +459,20 @@ export default function LineItem({
                 gap: '4px',
               }}
             >
-              {whyCopy.map((line, i) => (
+              {whyCopy.map((text, i) => (
                 <li
                   key={i}
                   style={{
-                    fontSize: '12px', fontWeight: 500,
-                    color: 'var(--color-text-secondary)',
+                    fontSize: '12px',
+                    fontWeight: line.whyHighlight && i === 0 ? 600 : 500,
+                    color: line.whyHighlight && i === 0
+                      ? 'var(--color-text-primary)'
+                      : 'var(--color-text-secondary)',
                     fontFamily: 'var(--font-primary)',
                     lineHeight: 1.5,
                   }}
                 >
-                  {line}
+                  {text}
                 </li>
               ))}
             </ul>

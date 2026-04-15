@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import type { SuggestedOrder, GroupBy, DismissReason, ManualLine } from '../types';
-import { getSupplier, getIngredient, getProduct, SUPPLIERS, isUrgent } from '../data/mockOrders';
+import { getSupplier, getIngredient, getProduct, SUPPLIERS, SUPPLIER_PRODUCTS, isUrgent } from '../data/mockOrders';
 import GroupToggle from './GroupToggle';
 import DetailToggle from './DetailToggle';
 import SupplierSection from './SupplierSection';
 import LineItem from './LineItem';
 import AddItemSheet from './AddItemSheet';
+import MovProgressBar from './MovProgressBar';
 import QtyControl from './QtyControl';
 
 interface Props {
@@ -85,6 +86,395 @@ function groupByIngredient(orders: SuggestedOrder[]): FlatLine[] {
   }
   lines.sort((a, b) => a.ingredientName.localeCompare(b.ingredientName));
   return lines;
+}
+
+// ─── New-supplier section with MOV top-up flow ──────────────────────────────
+
+import type { Supplier, SupplierProduct } from '../types';
+
+function NewSupplierSection({
+  supplierId,
+  supplier,
+  lines,
+  isNew,
+  sectionTotal,
+  mov,
+  movMet,
+  shortfall,
+  topUpProducts,
+  onManualLineQtyChange,
+  onRemoveManualLine,
+  onAddItem,
+}: {
+  supplierId: string;
+  supplier: Supplier;
+  lines: ManualLine[];
+  isNew: boolean;
+  sectionTotal: number;
+  mov: number;
+  movMet: boolean;
+  shortfall: number;
+  topUpProducts: SupplierProduct[];
+  onManualLineQtyChange: (id: string, qty: number) => void;
+  onRemoveManualLine: (id: string) => void;
+  onAddItem: (ingredientId: string, supplierId: string, qty: number) => void;
+}) {
+  const [showTopUp, setShowTopUp] = useState(false);
+
+  return (
+    <div>
+      {/* Supplier header */}
+      <div
+        style={{
+          padding: '10px 14px',
+          borderRadius: 'var(--radius-item) var(--radius-item) 0 0',
+          background: isNew ? 'rgba(146,64,14,0.06)' : 'var(--color-bg-hover)',
+          border: isNew
+            ? '1px solid rgba(146,64,14,0.22)'
+            : '1px solid var(--color-border-subtle)',
+          borderBottom: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '8px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span
+            style={{
+              fontSize: '13px',
+              fontWeight: 700,
+              color: isNew ? '#92400E' : 'var(--color-text-primary)',
+              fontFamily: 'var(--font-primary)',
+            }}
+          >
+            {supplier.name}
+          </span>
+          {isNew && (
+            <span
+              style={{
+                padding: '2px 7px',
+                borderRadius: 'var(--radius-badge)',
+                background: 'rgba(146,64,14,0.12)',
+                color: '#92400E',
+                fontSize: '11px',
+                fontWeight: 700,
+                fontFamily: 'var(--font-primary)',
+                letterSpacing: '0.04em',
+              }}
+            >
+              ADDED TO ORDER
+            </span>
+          )}
+          {isNew && (
+            <span
+              style={{
+                fontSize: '12px',
+                color: '#92400E',
+                fontFamily: 'var(--font-primary)',
+                marginLeft: '2px',
+              }}
+            >
+              · 📦 {supplier.deliveryDate} · cutoff {supplier.cutOffTime}
+            </span>
+          )}
+        </div>
+        <span
+          style={{
+            fontSize: '16px',
+            fontWeight: 700,
+            color: 'var(--color-text-primary)',
+            fontFamily: 'var(--font-primary)',
+            flexShrink: 0,
+          }}
+        >
+          £{sectionTotal.toFixed(0)}
+        </span>
+      </div>
+
+      {/* Lines + MOV */}
+      <div
+        style={{
+          border: isNew
+            ? '1px solid rgba(146,64,14,0.22)'
+            : '1px solid var(--color-border-subtle)',
+          borderRadius: '0 0 var(--radius-item) var(--radius-item)',
+          background: 'var(--color-bg-surface)',
+          overflow: 'hidden',
+        }}
+      >
+        {lines.map((ml, i) => {
+          const ingredient = getIngredient(ml.ingredientId);
+          const product = getProduct(ml.ingredientId, ml.supplierId);
+          const lineTotal = ml.qty * product.unitCost;
+          return (
+            <div
+              key={ml.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '10px 14px',
+                borderTop: i === 0 ? 'none' : '1px solid var(--color-border-subtle)',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: 'var(--color-text-primary)',
+                    fontFamily: 'var(--font-primary)',
+                  }}
+                >
+                  {ingredient.name}
+                </p>
+                <p
+                  style={{
+                    margin: '2px 0 0',
+                    fontSize: '12px',
+                    color: 'var(--color-text-secondary)',
+                    fontFamily: 'var(--font-primary)',
+                  }}
+                >
+                  {ingredient.variant} · {product.unitName}
+                </p>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  flexShrink: 0,
+                }}
+              >
+                <QtyControl
+                  value={ml.qty}
+                  onChange={(q) => onManualLineQtyChange(ml.id, q)}
+                  min={1}
+                  label={ingredient.name}
+                />
+                <span
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    color: 'var(--color-text-primary)',
+                    fontFamily: 'var(--font-primary)',
+                    minWidth: '48px',
+                    textAlign: 'right',
+                  }}
+                >
+                  £{lineTotal.toFixed(0)}
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Remove ${ingredient.name}`}
+                  onClick={() => onRemoveManualLine(ml.id)}
+                  style={{
+                    width: '26px',
+                    height: '26px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--color-text-secondary)',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    transition: 'background 0.1s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background =
+                      'var(--color-bg-hover)';
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background =
+                      'transparent';
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* MOV progress bar */}
+        {mov > 0 && (
+          <div style={{ padding: '4px 14px 14px' }}>
+            <MovProgressBar current={sectionTotal} minimum={mov} />
+
+            {/* Top-up prompt when MOV not met */}
+            {!movMet && topUpProducts.length > 0 && (
+              <div style={{ marginTop: '10px' }}>
+                {!showTopUp ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowTopUp(true)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: 'var(--radius-item)',
+                      border: '1.5px dashed rgba(146,64,14,0.35)',
+                      background: 'rgba(146,64,14,0.04)',
+                      color: '#92400E',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      fontFamily: 'var(--font-primary)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      transition: 'background 0.12s ease, border-color 0.12s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      const el = e.currentTarget as HTMLButtonElement;
+                      el.style.background = 'rgba(146,64,14,0.08)';
+                      el.style.borderColor = 'rgba(146,64,14,0.50)';
+                    }}
+                    onMouseLeave={(e) => {
+                      const el = e.currentTarget as HTMLButtonElement;
+                      el.style.background = 'rgba(146,64,14,0.04)';
+                      el.style.borderColor = 'rgba(146,64,14,0.35)';
+                    }}
+                  >
+                    <span style={{ fontSize: '15px', lineHeight: 1 }}>+</span>
+                    Add £{shortfall.toFixed(0)} more to reach minimum
+                  </button>
+                ) : (
+                  <div
+                    style={{
+                      borderRadius: 'var(--radius-item)',
+                      border: '1px solid rgba(146,64,14,0.22)',
+                      background: 'rgba(146,64,14,0.03)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        borderBottom: '1px solid rgba(146,64,14,0.15)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          color: '#92400E',
+                          fontFamily: 'var(--font-primary)',
+                          letterSpacing: '0.03em',
+                        }}
+                      >
+                        Add items to reach £{mov} minimum
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowTopUp(false)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--color-text-secondary)',
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          padding: '2px 4px',
+                          fontFamily: 'var(--font-primary)',
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div style={{ padding: '6px 0' }}>
+                      {topUpProducts.map((product) => {
+                        const ingredient = getIngredient(product.ingredientId);
+                        return (
+                          <div
+                            key={product.ingredientId}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '8px 12px',
+                              gap: '10px',
+                              transition: 'background 0.1s ease',
+                            }}
+                          >
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p
+                                style={{
+                                  margin: 0,
+                                  fontSize: '13px',
+                                  fontWeight: 600,
+                                  color: 'var(--color-text-primary)',
+                                  fontFamily: 'var(--font-primary)',
+                                }}
+                              >
+                                {ingredient.name}
+                              </p>
+                              <p
+                                style={{
+                                  margin: '1px 0 0',
+                                  fontSize: '12px',
+                                  color: 'var(--color-text-secondary)',
+                                  fontFamily: 'var(--font-primary)',
+                                }}
+                              >
+                                {product.unitName} · £{product.unitCost}
+                                {ingredient.currentStock <= (ingredient.parLevel ?? 0) * 0.5 && (
+                                  <span style={{ color: '#B91C1C', fontWeight: 600, marginLeft: '6px' }}>
+                                    Low stock ({ingredient.currentStock}{ingredient.stockUnit})
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onAddItem(product.ingredientId, supplierId, 1);
+                              }}
+                              style={{
+                                padding: '6px 14px',
+                                borderRadius: 'var(--radius-item)',
+                                border: '1px solid rgba(146,64,14,0.30)',
+                                background: 'rgba(146,64,14,0.08)',
+                                color: '#92400E',
+                                fontSize: '12px',
+                                fontWeight: 700,
+                                fontFamily: 'var(--font-primary)',
+                                cursor: 'pointer',
+                                flexShrink: 0,
+                                transition: 'background 0.12s ease',
+                                whiteSpace: 'nowrap',
+                              }}
+                              onMouseEnter={(e) => {
+                                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(146,64,14,0.15)';
+                              }}
+                              onMouseLeave={(e) => {
+                                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(146,64,14,0.08)';
+                              }}
+                            >
+                              + Add · £{product.unitCost}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function OrderReview({
@@ -405,34 +795,21 @@ export default function OrderReview({
                       }}
                     >
                       {dayOrders.flatMap((order) =>
-                        order.lines.map((line) => {
+                        [...order.lines].sort((a, b) => getIngredient(a.ingredientId).name.localeCompare(getIngredient(b.ingredientId).name)).map((line) => {
                           const supplier = getSupplier(order.supplierId);
                           return (
-                            <div key={line.id}>
-                              {/* Supplier badge per line in day view */}
-                              <div
-                                style={{
-                                  fontSize: '12px',
-                                  fontWeight: 600,
-                                  color: 'var(--color-text-secondary)',
-                                  fontFamily: 'var(--font-primary)',
-                                  marginBottom: '3px',
-                                  letterSpacing: '0.05em',
-                                }}
-                              >
-                                {supplier.name}
-                              </div>
-                              <LineItem
-                                line={line}
-                                qty={quantities[line.id] ?? line.suggestedQty}
-                                removed={removed.has(line.id)}
-                                showDetail={showDetail}
-                                onQtyChange={(qty) => onQtyChange(line.id, qty)}
-                                onRemove={() => onRemove(line.id)}
-                                onRestore={() => onRestore(line.id)}
-                                onDismissReason={(reason) => onDismissReason(line.id, reason)}
-                              />
-                            </div>
+                            <LineItem
+                              key={line.id}
+                              line={line}
+                              qty={quantities[line.id] ?? line.suggestedQty}
+                              removed={removed.has(line.id)}
+                              showDetail={showDetail}
+                              onQtyChange={(qty) => onQtyChange(line.id, qty)}
+                              onRemove={() => onRemove(line.id)}
+                              onRestore={() => onRestore(line.id)}
+                              onDismissReason={(reason) => onDismissReason(line.id, reason)}
+                              supplierName={supplier.name}
+                            />
                           );
                         }),
                       )}
@@ -464,61 +841,27 @@ export default function OrderReview({
                   const supplier = getSupplier(supplierId);
                   const order = orders.find((o) => o.supplierId === supplierId)!;
                   return (
-                    <div key={line.id}>
-                      {/* Supplier + delivery badges */}
-                      <div
-                        style={{
-                          display: 'flex',
-                          gap: '6px',
-                          marginBottom: '3px',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            color: 'var(--color-text-secondary)',
-                            fontFamily: 'var(--font-primary)',
-                            letterSpacing: '0.05em',
-                          }}
-                        >
-                          {supplier.name}
-                        </span>
-                        <span
-                          style={{
-                            padding: '1px 6px',
-                            borderRadius: 'var(--radius-badge)',
-                            background: 'var(--color-bg-hover)',
-                            color: 'var(--color-text-secondary)',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            fontFamily: 'var(--font-primary)',
-                          }}
-                        >
-                          📦 {order.deliveryDate}
-                        </span>
-                      </div>
-                      <LineItem
-                        line={line}
-                        qty={quantities[line.id] ?? line.suggestedQty}
-                        removed={removed.has(line.id)}
-                        showDetail={showDetail}
-                        onQtyChange={(qty) => onQtyChange(line.id, qty)}
-                        onRemove={() => onRemove(line.id)}
-                        onRestore={() => onRestore(line.id)}
-                        onDismissReason={(reason) => onDismissReason(line.id, reason)}
-                      />
-                    </div>
+                    <LineItem
+                      key={line.id}
+                      line={line}
+                      qty={quantities[line.id] ?? line.suggestedQty}
+                      removed={removed.has(line.id)}
+                      showDetail={showDetail}
+                      onQtyChange={(qty) => onQtyChange(line.id, qty)}
+                      onRemove={() => onRemove(line.id)}
+                      onRestore={() => onRestore(line.id)}
+                      onDismissReason={(reason) => onDismissReason(line.id, reason)}
+                      supplierName={supplier.name}
+                      deliveryDate={order.deliveryDate}
+                    />
                   );
                 })}
               </div>
             </div>
           )}
 
-          {/* New-supplier manual lines — shown as separate sections */}
+          {/* New-supplier manual lines — shown as separate sections with MOV */}
           {manualLines.some((ml) => !orders.map((o) => o.supplierId).includes(ml.supplierId)) && (() => {
-            // Only lines for suppliers NOT already in the order
             const newSupplierLines = manualLines.filter(
               (ml) => !orders.map((o) => o.supplierId).includes(ml.supplierId),
             );
@@ -532,174 +875,34 @@ export default function OrderReview({
             return Array.from(grouped.entries()).map(([supplierId, lines]) => {
               const supplier = getSupplier(supplierId);
               const isNew = !existingIds.includes(supplierId);
-              return (
-                <div key={supplierId}>
-                  {/* Supplier header */}
-                  <div
-                    style={{
-                      padding: '10px 14px',
-                      borderRadius: 'var(--radius-item) var(--radius-item) 0 0',
-                      background: isNew ? 'rgba(146,64,14,0.06)' : 'var(--color-bg-hover)',
-                      border: isNew
-                        ? '1px solid rgba(146,64,14,0.22)'
-                        : '1px solid var(--color-border-subtle)',
-                      borderBottom: 'none',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: '13px',
-                        fontWeight: 700,
-                        color: isNew ? '#92400E' : 'var(--color-text-primary)',
-                        fontFamily: 'var(--font-primary)',
-                      }}
-                    >
-                      {supplier.name}
-                    </span>
-                    {isNew && (
-                      <span
-                        style={{
-                          padding: '2px 7px',
-                          borderRadius: 'var(--radius-badge)',
-                          background: 'rgba(146,64,14,0.12)',
-                          color: '#92400E',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          fontFamily: 'var(--font-primary)',
-                          letterSpacing: '0.04em',
-                        }}
-                      >
-                        NEW SUPPLIER
-                      </span>
-                    )}
-                    {isNew && (
-                      <span
-                        style={{
-                          fontSize: '12px',
-                          color: '#92400E',
-                          fontFamily: 'var(--font-primary)',
-                          marginLeft: '2px',
-                        }}
-                      >
-                        · 📦 {supplier.deliveryDate} · cutoff {supplier.cutOffTime}
-                      </span>
-                    )}
-                  </div>
+              const sectionTotal = lines.reduce((sum, ml) => {
+                const product = getProduct(ml.ingredientId, ml.supplierId);
+                return sum + ml.qty * product.unitCost;
+              }, 0);
+              const mov = supplier.minimumOrderValue;
+              const movMet = mov === 0 || sectionTotal >= mov;
+              const shortfall = mov > 0 ? mov - sectionTotal : 0;
+              const alreadyAddedIngredientIds = lines.map((ml) => ml.ingredientId);
+              const topUpProducts = SUPPLIER_PRODUCTS.filter(
+                (p) => p.supplierId === supplierId && p.available && !alreadyAddedIngredientIds.includes(p.ingredientId),
+              );
 
-                  {/* Lines */}
-                  <div
-                    style={{
-                      border: isNew
-                        ? '1px solid rgba(146,64,14,0.22)'
-                        : '1px solid var(--color-border-subtle)',
-                      borderRadius: '0 0 var(--radius-item) var(--radius-item)',
-                      background: 'var(--color-bg-surface)',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {lines.map((ml, i) => {
-                      const ingredient = getIngredient(ml.ingredientId);
-                      const product = getProduct(ml.ingredientId, ml.supplierId);
-                      const lineTotal = ml.qty * product.unitCost;
-                      return (
-                        <div
-                          key={ml.id}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            padding: '10px 14px',
-                            borderTop: i === 0 ? 'none' : '1px solid var(--color-border-subtle)',
-                          }}
-                        >
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <p
-                              style={{
-                                margin: 0,
-                                fontSize: '13px',
-                                fontWeight: 600,
-                                color: 'var(--color-text-primary)',
-                                fontFamily: 'var(--font-primary)',
-                              }}
-                            >
-                              {ingredient.name}
-                            </p>
-                            <p
-                              style={{
-                                margin: '2px 0 0',
-                                fontSize: '12px',
-                                color: 'var(--color-text-secondary)',
-                                fontFamily: 'var(--font-primary)',
-                              }}
-                            >
-                              {ingredient.variant} · {product.unitName}
-                            </p>
-                          </div>
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '10px',
-                              flexShrink: 0,
-                            }}
-                          >
-                            <QtyControl
-                              value={ml.qty}
-                              onChange={(q) => onManualLineQtyChange(ml.id, q)}
-                              min={1}
-                              label={ingredient.name}
-                            />
-                            <span
-                              style={{
-                                fontSize: '13px',
-                                fontWeight: 700,
-                                color: 'var(--color-text-primary)',
-                                fontFamily: 'var(--font-primary)',
-                                minWidth: '48px',
-                                textAlign: 'right',
-                              }}
-                            >
-                              £{lineTotal.toFixed(0)}
-                            </span>
-                            <button
-                              type="button"
-                              aria-label={`Remove ${ingredient.name}`}
-                              onClick={() => onRemoveManualLine(ml.id)}
-                              style={{
-                                width: '26px',
-                                height: '26px',
-                                borderRadius: '6px',
-                                border: 'none',
-                                background: 'transparent',
-                                color: 'var(--color-text-secondary)',
-                                fontSize: '14px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexShrink: 0,
-                                transition: 'background 0.1s ease',
-                              }}
-                              onMouseEnter={(e) => {
-                                (e.currentTarget as HTMLButtonElement).style.background =
-                                  'var(--color-bg-hover)';
-                              }}
-                              onMouseLeave={(e) => {
-                                (e.currentTarget as HTMLButtonElement).style.background =
-                                  'transparent';
-                              }}
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+              return (
+                <NewSupplierSection
+                  key={supplierId}
+                  supplierId={supplierId}
+                  supplier={supplier}
+                  lines={lines}
+                  isNew={isNew}
+                  sectionTotal={sectionTotal}
+                  mov={mov}
+                  movMet={movMet}
+                  shortfall={shortfall}
+                  topUpProducts={topUpProducts}
+                  onManualLineQtyChange={onManualLineQtyChange}
+                  onRemoveManualLine={onRemoveManualLine}
+                  onAddItem={onAddItem}
+                />
               );
             });
           })()}
