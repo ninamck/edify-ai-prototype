@@ -1,10 +1,12 @@
 'use client';
 
-import type { SuggestedOrder } from '../types';
-import { getSupplier, isUrgent } from '../data/mockOrders';
+import type { SuggestedOrder, RecurringOrder } from '../types';
+import { needsReview, recurringFrequencyBadgeLabel, sentenceCase } from '../types';
+import { getSupplier, getProduct, isUrgent } from '../data/mockOrders';
 
 interface Props {
   orders: SuggestedOrder[];
+  recurringOrders: RecurringOrder[];
   grandTotal: number;
   totalItems: number;
   supplierTotals: Record<string, number>;
@@ -14,6 +16,7 @@ interface Props {
 
 export default function NotificationPanel({
   orders,
+  recurringOrders,
   grandTotal,
   totalItems,
   supplierTotals,
@@ -138,9 +141,10 @@ export default function NotificationPanel({
                       fontWeight: 700,
                       letterSpacing: '0.04em',
                       fontFamily: 'var(--font-primary)',
+                      textTransform: 'none',
                     }}
                   >
-                    {order.state}
+                    {sentenceCase(order.state)}
                   </span>
                 </div>
                 <span
@@ -183,6 +187,104 @@ export default function NotificationPanel({
           );
         })}
       </div>
+
+      {/* Recurring order cards */}
+      {recurringOrders.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {recurringOrders.map((recOrder) => {
+            const supplier = getSupplier(recOrder.supplierId);
+            const reviewCount = recOrder.lines.filter((l) =>
+              needsReview(l.recurringBaseQty, l.suggestedQty),
+            ).length;
+            const recTotal = recOrder.lines.reduce((sum, l) => {
+              const p = getProduct(l.ingredientId, l.supplierId);
+              return sum + l.suggestedQty * p.unitCost;
+            }, 0);
+
+            return (
+              <div
+                key={recOrder.id}
+                style={{
+                  borderRadius: 'var(--radius-card)',
+                  border: '1px solid rgba(34,68,68,0.20)',
+                  background: 'var(--color-bg-surface)',
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                  boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '8px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span
+                      style={{
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        color: 'var(--color-text-primary)',
+                        fontFamily: 'var(--font-primary)',
+                      }}
+                    >
+                      {supplier.name}
+                    </span>
+                    <span
+                      style={{
+                        padding: '2px 8px',
+                        borderRadius: 'var(--radius-badge)',
+                        background: 'rgba(34,68,68,0.08)',
+                        color: 'var(--color-accent-active)',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        letterSpacing: '0.03em',
+                        fontFamily: 'var(--font-primary)',
+                        textTransform: 'none',
+                      }}
+                    >
+                      {recurringFrequencyBadgeLabel(recOrder.frequency)}
+                    </span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '15px',
+                      fontWeight: 700,
+                      color: 'var(--color-text-primary)',
+                      fontFamily: 'var(--font-primary)',
+                    }}
+                  >
+                    £{recTotal.toFixed(0)}
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: 'var(--color-text-secondary)',
+                    fontFamily: 'var(--font-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <span>{recOrder.lines.length} item{recOrder.lines.length !== 1 ? 's' : ''} in this order</span>
+                  <span>·</span>
+                  <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                    {reviewCount} item{reviewCount !== 1 ? 's' : ''} changed {'>'}10% — needs review
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* CTA */}
       <div style={{ display: 'flex', justifyContent: 'center', paddingTop: '8px' }}>

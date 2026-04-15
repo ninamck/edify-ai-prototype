@@ -2,7 +2,8 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import type { GroupBy, View, DismissReason, ManualLine } from '../types';
-import { SUGGESTED_ORDERS, SUPPLIERS, getIngredient, getProduct } from '../data/mockOrders';
+import { needsReview } from '../types';
+import { SUGGESTED_ORDERS, SUPPLIERS, RECURRING_ORDERS, getIngredient, getProduct } from '../data/mockOrders';
 
 // ─── Derived per-line values ──────────────────────────────────────────────────
 
@@ -49,6 +50,19 @@ export function useAssistedOrdering() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [manualLines, setManualLines] = useState<ManualLine[]>([]);
 
+  // Recurring order quantities: lineId -> accepted qty (starts at suggestedQty)
+  const [recurringQtys, setRecurringQtys] = useState<Record<string, number>>(() => {
+    const init: Record<string, number> = {};
+    for (const order of RECURRING_ORDERS) {
+      for (const line of order.lines) {
+        init[line.id] = line.suggestedQty;
+      }
+    }
+    return init;
+  });
+  // Track which recurring lines the user has explicitly accepted/reverted
+  const [recurringActions, setRecurringActions] = useState<Record<string, 'accepted' | 'reverted'>>({});
+
   // ─── Quantity actions ─────────────────────────────────────────────────────
 
   const setQty = useCallback((lineId: string, qty: number) => {
@@ -89,6 +103,24 @@ export function useAssistedOrdering() {
     setManualLines((prev) =>
       prev.map((l) => (l.id === id ? { ...l, qty: Math.max(1, qty) } : l)),
     );
+  }, []);
+
+  // ─── Recurring order actions ──────────────────────────────────────────────
+
+  const setRecurringQty = useCallback((lineId: string, qty: number) => {
+    setRecurringQtys((prev) => ({ ...prev, [lineId]: Math.max(0, qty) }));
+  }, []);
+
+  const acceptRecurringLine = useCallback((lineId: string) => {
+    setRecurringActions((prev) => ({ ...prev, [lineId]: 'accepted' }));
+  }, []);
+
+  const revertRecurringLine = useCallback((lineId: string) => {
+    const line = RECURRING_ORDERS.flatMap((o) => o.lines).find((l) => l.id === lineId);
+    if (line) {
+      setRecurringQtys((prev) => ({ ...prev, [lineId]: line.recurringBaseQty }));
+      setRecurringActions((prev) => ({ ...prev, [lineId]: 'reverted' }));
+    }
   }, []);
 
   // ─── Derived values ───────────────────────────────────────────────────────
@@ -178,6 +210,17 @@ export function useAssistedOrdering() {
     setView('confirmed');
   }, [quantities, removed, dismissReasons, logAction]);
 
+  const confirmRecurring = useCallback(() => {
+    for (const order of RECURRING_ORDERS) {
+      for (const line of order.lines) {
+        const qty = recurringQtys[line.id] ?? line.suggestedQty;
+        const action = recurringActions[line.id] ?? (needsReview(line.recurringBaseQty, line.suggestedQty) ? 'pending' : 'auto');
+        logAction(line.id, `recurring-${action}`, { base: line.recurringBaseQty, final: qty });
+      }
+    }
+    setView('notifications');
+  }, [recurringQtys, recurringActions, logAction]);
+
   return {
     // State
     view,
@@ -204,5 +247,12 @@ export function useAssistedOrdering() {
     // Actions
     confirmAll,
     logAction,
+    // Recurring orders
+    recurringQtys,
+    recurringActions,
+    setRecurringQty,
+    acceptRecurringLine,
+    revertRecurringLine,
+    confirmRecurring,
   };
 }

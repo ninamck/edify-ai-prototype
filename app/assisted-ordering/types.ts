@@ -113,6 +113,53 @@ export interface ManualLine {
   qty: number;
 }
 
+// ─── Recurring Order ──────────────────────────────────────────────────────────
+
+export type RecurringFrequency = 'daily' | 'weekly';
+
+export interface RecurringOrderLine {
+  id: string;
+  ingredientId: string;
+  supplierId: string;
+  recurringBaseQty: number;
+  suggestedQty: number;
+  salesVelocity7d: number | null;
+  reasons: string[];
+}
+
+export interface RecurringOrder {
+  id: string;
+  supplierId: string;
+  frequency: RecurringFrequency;
+  lines: RecurringOrderLine[];
+}
+
+export function getVariancePercent(base: number, suggested: number): number {
+  if (base === 0) return suggested > 0 ? 100 : 0;
+  return Math.round(((suggested - base) / base) * 100);
+}
+
+export function needsReview(base: number, suggested: number): boolean {
+  return Math.abs(getVariancePercent(base, suggested)) > 10;
+}
+
+/** e.g. `"draft"` → `"Draft"`, `"daily"` → `"Daily"` */
+export function sentenceCase(text: string): string {
+  const t = text.trim();
+  if (!t) return '';
+  return `${t.charAt(0).toUpperCase()}${t.slice(1).toLowerCase()}`;
+}
+
+/** e.g. `"daily"` → `"Daily"` (alias for readability at call sites) */
+export function sentenceCaseFrequency(frequency: string): string {
+  return sentenceCase(frequency);
+}
+
+/** e.g. `"daily"` → `"Daily recurring"` */
+export function recurringFrequencyBadgeLabel(frequency: string): string {
+  return `${sentenceCaseFrequency(frequency)} recurring`;
+}
+
 // ─── View state ───────────────────────────────────────────────────────────────
 
 export type View = 'notifications' | 'review' | 'confirmed';

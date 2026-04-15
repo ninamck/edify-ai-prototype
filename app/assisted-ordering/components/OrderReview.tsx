@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import type { SuggestedOrder, GroupBy, DismissReason, ManualLine } from '../types';
+import type { SuggestedOrder, GroupBy, DismissReason, ManualLine, RecurringOrder } from '../types';
+import { getVariancePercent, needsReview, recurringFrequencyBadgeLabel, sentenceCaseFrequency } from '../types';
 import { getSupplier, getIngredient, getProduct, SUPPLIERS, SUPPLIER_PRODUCTS, isUrgent } from '../data/mockOrders';
 import GroupToggle from './GroupToggle';
 import DetailToggle from './DetailToggle';
@@ -35,6 +36,12 @@ interface Props {
   onAddItem: (ingredientId: string, supplierId: string, qty: number) => void;
   onRemoveManualLine: (id: string) => void;
   onManualLineQtyChange: (id: string, qty: number) => void;
+  recurringOrders: RecurringOrder[];
+  recurringQtys: Record<string, number>;
+  recurringActions: Record<string, 'accepted' | 'reverted'>;
+  onRecurringQtyChange: (lineId: string, qty: number) => void;
+  onRecurringAccept: (lineId: string) => void;
+  onRecurringRevert: (lineId: string) => void;
 }
 
 // Oldest stocktake across all suggested order lines (for the banner)
@@ -477,6 +484,634 @@ function NewSupplierSection({
   );
 }
 
+// ─── Recurring order inline section ──────────────────────────────────────────
+
+import type { Supplier as SupplierType, RecurringOrderLine } from '../types';
+
+function RecurringOrderSection({
+  order,
+  supplier,
+  reviewLines,
+  autoLines,
+  quantities,
+  actions,
+  onQtyChange,
+  onAccept,
+  onRevert,
+}: {
+  order: RecurringOrder;
+  supplier: SupplierType;
+  reviewLines: RecurringOrderLine[];
+  autoLines: RecurringOrderLine[];
+  quantities: Record<string, number>;
+  actions: Record<string, 'accepted' | 'reverted'>;
+  onQtyChange: (lineId: string, qty: number) => void;
+  onAccept: (lineId: string) => void;
+  onRevert: (lineId: string) => void;
+}) {
+  const [autoExpanded, setAutoExpanded] = useState(false);
+  const [autoLineEditIds, setAutoLineEditIds] = useState<Set<string>>(() => new Set());
+
+  const toggleAutoLineEdit = (lineId: string) => {
+    setAutoLineEditIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(lineId)) next.delete(lineId);
+      else next.add(lineId);
+      return next;
+    });
+  };
+
+  return (
+    <div
+      style={{
+        borderRadius: 'var(--radius-card)',
+        border: '1px solid rgba(34,68,68,0.20)',
+        background: 'var(--color-bg-surface)',
+        overflow: 'hidden',
+        boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
+      }}
+    >
+      {/* Section header */}
+      <div
+        style={{
+          padding: '14px 16px 12px',
+          background: 'var(--color-bg-hover)',
+          borderBottom: '1px solid var(--color-border-subtle)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span
+              style={{
+                fontSize: '15px',
+                fontWeight: 700,
+                color: 'var(--color-text-primary)',
+                fontFamily: 'var(--font-primary)',
+              }}
+            >
+              {supplier.name}
+            </span>
+            <span
+              style={{
+                padding: '2px 8px',
+                borderRadius: 'var(--radius-badge)',
+                background: 'rgba(34,68,68,0.08)',
+                color: 'var(--color-accent-active)',
+                fontSize: '12px',
+                fontWeight: 700,
+                letterSpacing: '0.03em',
+                fontFamily: 'var(--font-primary)',
+                textTransform: 'none',
+              }}
+            >
+              {recurringFrequencyBadgeLabel(order.frequency)}
+            </span>
+          </div>
+        </div>
+        <div
+          style={{
+            marginTop: '4px',
+            fontSize: '12px',
+            fontWeight: 500,
+            color: 'var(--color-text-secondary)',
+            fontFamily: 'var(--font-primary)',
+          }}
+        >
+          {reviewLines.length} item{reviewLines.length !== 1 ? 's' : ''} changed {'>'}10% — review below
+        </div>
+      </div>
+
+      {/* Review lines */}
+      <div
+        style={{
+          padding: '12px 16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+        }}
+      >
+        {reviewLines.map((line) => {
+          const ingredient = getIngredient(line.ingredientId);
+          const product = getProduct(line.ingredientId, line.supplierId);
+          const variance = getVariancePercent(line.recurringBaseQty, line.suggestedQty);
+          const isUp = variance > 0;
+          const qty = quantities[line.id] ?? line.suggestedQty;
+          const action = actions[line.id];
+          const lineTotal = qty * product.unitCost;
+
+          return (
+            <div
+              key={line.id}
+              style={{
+                borderRadius: 'var(--radius-item)',
+                border: action
+                  ? '1px solid rgba(21,128,61,0.25)'
+                  : '1px solid var(--color-border-subtle)',
+                background: action
+                  ? 'rgba(21,128,61,0.03)'
+                  : 'var(--color-bg-surface)',
+                overflow: 'hidden',
+                transition: 'border-color 0.15s ease, background 0.15s ease',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '12px 14px',
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <span
+                      style={{
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        color: 'var(--color-text-primary)',
+                        fontFamily: 'var(--font-primary)',
+                      }}
+                    >
+                      {ingredient.name}
+                    </span>
+                    <RecurringVarianceBadge variance={variance} />
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      color: 'var(--color-text-secondary)',
+                      fontFamily: 'var(--font-primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <span>{ingredient.variant}</span>
+                    <span>·</span>
+                    <span>Was {line.recurringBaseQty} {product.unitName} → now {qty}</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                  <QtyControl value={qty} onChange={(q) => onQtyChange(line.id, q)} min={0} label={ingredient.name} />
+                  <span
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: 'var(--color-text-primary)',
+                      fontFamily: 'var(--font-primary)',
+                      minWidth: '48px',
+                      textAlign: 'right',
+                    }}
+                  >
+                    £{lineTotal.toFixed(0)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Detail + Why + actions */}
+              <RecurringLineDetail
+                line={line}
+                qty={qty}
+                variance={variance}
+                isUp={isUp}
+                action={action}
+                product={product}
+                ingredient={ingredient}
+                onAccept={onAccept}
+                onRevert={onRevert}
+              />
+            </div>
+          );
+        })}
+
+        {/* Auto-updated / unchanged lines */}
+        {autoLines.length > 0 && (
+          <div
+            style={{
+              borderRadius: 'var(--radius-item)',
+              border: '1px solid var(--color-border-subtle)',
+              overflow: 'hidden',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setAutoExpanded((v) => !v)}
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                background: 'var(--color-bg-hover)',
+                border: 'none',
+                borderBottom: autoExpanded ? '1px solid var(--color-border-subtle)' : 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-primary)',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: 'var(--color-text-secondary)',
+                  fontFamily: 'var(--font-primary)',
+                }}
+              >
+                {autoLines.length} item{autoLines.length !== 1 ? 's' : ''} unchanged
+              </span>
+              <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+                {autoExpanded ? '▲' : '▼'}
+              </span>
+            </button>
+            {autoExpanded && (
+              <div style={{ padding: '6px 14px 10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {autoLines.map((line) => {
+                  const ingredient = getIngredient(line.ingredientId);
+                  const product = getProduct(line.ingredientId, line.supplierId);
+                  const qty = quantities[line.id] ?? line.suggestedQty;
+                  const lineTotal = qty * product.unitCost;
+                  const editing = autoLineEditIds.has(line.id);
+                  const variance = getVariancePercent(line.recurringBaseQty, qty);
+
+                  return (
+                    <div
+                      key={line.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '8px 10px',
+                        borderRadius: 'var(--radius-item)',
+                        border: '1px solid var(--color-border-subtle)',
+                        background: editing ? 'var(--color-bg-surface)' : 'transparent',
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            color: 'var(--color-text-primary)',
+                            fontFamily: 'var(--font-primary)',
+                          }}
+                        >
+                          {ingredient.name}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 500,
+                            color: 'var(--color-text-secondary)',
+                            fontFamily: 'var(--font-primary)',
+                            marginTop: '2px',
+                          }}
+                        >
+                          {ingredient.variant}
+                          <span style={{ margin: '0 4px' }}>·</span>
+                          Recurring {line.recurringBaseQty} {product.unitName}
+                          {qty !== line.recurringBaseQty && (
+                            <>
+                              <span style={{ margin: '0 4px' }}>→</span>
+                              {qty} {product.unitName}
+                              <span style={{ marginLeft: '6px', fontWeight: 700, color: 'var(--color-accent-active)' }}>
+                                ({variance > 0 ? '+' : ''}
+                                {variance}%)
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {editing ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                          <QtyControl value={qty} onChange={(q) => onQtyChange(line.id, q)} min={0} label={ingredient.name} />
+                          <span
+                            style={{
+                              fontSize: '13px',
+                              fontWeight: 700,
+                              color: 'var(--color-text-primary)',
+                              fontFamily: 'var(--font-primary)',
+                              minWidth: '44px',
+                              textAlign: 'right',
+                            }}
+                          >
+                            £{lineTotal.toFixed(0)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => toggleAutoLineEdit(line.id)}
+                            style={{
+                              padding: '6px 10px',
+                              borderRadius: 'var(--radius-badge)',
+                              border: '1px solid var(--color-border-subtle)',
+                              background: 'var(--color-bg-hover)',
+                              color: 'var(--color-text-secondary)',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              fontFamily: 'var(--font-primary)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Done
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                          <span
+                            style={{
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              color: 'var(--color-text-secondary)',
+                              fontFamily: 'var(--font-primary)',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {qty} {product.unitName}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              color: 'var(--color-text-primary)',
+                              fontFamily: 'var(--font-primary)',
+                              minWidth: '40px',
+                              textAlign: 'right',
+                            }}
+                          >
+                            £{lineTotal.toFixed(0)}
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Edit quantity for ${ingredient.name}`}
+                            title="Edit quantity"
+                            onClick={() => toggleAutoLineEdit(line.id)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: '34px',
+                              height: '34px',
+                              borderRadius: '8px',
+                              border: '1px solid var(--color-border)',
+                              background: 'var(--color-bg-surface)',
+                              color: 'var(--color-text-secondary)',
+                              cursor: 'pointer',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+                              <path
+                                d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
+                                stroke="currentColor"
+                                strokeWidth="1.75"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RecurringLineDetail({
+  line,
+  qty,
+  variance,
+  isUp,
+  action,
+  product,
+  ingredient,
+  onAccept,
+  onRevert,
+}: {
+  line: RecurringOrderLine;
+  qty: number;
+  variance: number;
+  isUp: boolean;
+  action: 'accepted' | 'reverted' | undefined;
+  product: { unitName: string };
+  ingredient: { currentStock: number; stockUnit: string; parLevel: number | null; parConfirmed: boolean };
+  onAccept: (lineId: string) => void;
+  onRevert: (lineId: string) => void;
+}) {
+  const [whyExpanded, setWhyExpanded] = useState(false);
+
+  return (
+    <div
+      style={{
+        padding: '0 14px 12px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '4px',
+        borderTop: '1px solid var(--color-border-subtle)',
+        paddingTop: '8px',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '16px',
+          flexWrap: 'wrap',
+        }}
+      >
+        <span
+          style={{
+            fontSize: '12px', fontWeight: 500,
+            color: 'var(--color-text-secondary)',
+            fontFamily: 'var(--font-primary)',
+          }}
+        >
+          Recurring: {line.recurringBaseQty} {product.unitName} →{' '}
+          <strong style={{ color: 'var(--color-text-primary)' }}>{qty} {product.unitName}</strong>
+        </span>
+
+        <button
+          type="button"
+          onClick={() => setWhyExpanded((v) => !v)}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--color-accent-active)',
+            fontSize: '12px',
+            fontWeight: 600,
+            fontFamily: 'var(--font-primary)',
+            cursor: 'pointer',
+            padding: 0,
+            textDecoration: 'underline',
+            textUnderlineOffset: '2px',
+          }}
+        >
+          {whyExpanded ? 'Hide ▲' : 'Why? ▼'}
+        </button>
+
+        {/* Accept / revert actions */}
+        <div style={{ display: 'flex', gap: '6px', marginLeft: 'auto' }}>
+          {action === 'accepted' ? (
+            <span
+              style={{
+                padding: '4px 12px',
+                borderRadius: 'var(--radius-badge)',
+                background: 'rgba(21,128,61,0.10)',
+                color: '#15803D',
+                fontSize: '12px',
+                fontWeight: 700,
+                fontFamily: 'var(--font-primary)',
+              }}
+            >
+              ✓ Accepted
+            </span>
+          ) : action === 'reverted' ? (
+            <span
+              style={{
+                padding: '4px 12px',
+                borderRadius: 'var(--radius-badge)',
+                background: 'var(--color-bg-hover)',
+                color: 'var(--color-text-secondary)',
+                fontSize: '12px',
+                fontWeight: 700,
+                fontFamily: 'var(--font-primary)',
+              }}
+            >
+              Kept at {line.recurringBaseQty}
+            </span>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => onAccept(line.id)}
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: 'var(--radius-badge)',
+                  border: '1px solid rgba(21,128,61,0.30)',
+                  background: 'rgba(21,128,61,0.08)',
+                  color: '#15803D',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-primary)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'background 0.12s ease',
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = 'rgba(21,128,61,0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = 'rgba(21,128,61,0.08)';
+                }}
+              >
+                Accept {isUp ? '↑' : '↓'} {line.suggestedQty}
+              </button>
+              <button
+                type="button"
+                onClick={() => onRevert(line.id)}
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: 'var(--radius-badge)',
+                  border: '1px solid var(--color-border-subtle)',
+                  background: 'var(--color-bg-surface)',
+                  color: 'var(--color-text-secondary)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  fontFamily: 'var(--font-primary)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'background 0.12s ease',
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-bg-hover)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-bg-surface)';
+                }}
+              >
+                Keep at {line.recurringBaseQty}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {whyExpanded && (
+        <ul
+          style={{
+            margin: '6px 0 0 0',
+            padding: '10px 14px',
+            background: 'var(--color-bg-hover)',
+            borderRadius: 'var(--radius-item)',
+            listStyle: 'disc',
+            paddingLeft: '28px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px',
+          }}
+        >
+          {line.reasons.map((text, i) => (
+            <li
+              key={i}
+              style={{
+                fontSize: '12px', fontWeight: 500,
+                color: 'var(--color-text-secondary)',
+                fontFamily: 'var(--font-primary)',
+                lineHeight: 1.5,
+              }}
+            >
+              {text}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function RecurringVarianceBadge({ variance }: { variance: number }) {
+  const isUp = variance > 0;
+  const isDown = variance < 0;
+
+  const bg = isUp
+    ? 'rgba(21,128,61,0.10)'
+    : isDown
+      ? 'rgba(185,28,28,0.10)'
+      : 'var(--color-bg-hover)';
+  const color = isUp
+    ? '#15803D'
+    : isDown
+      ? '#B91C1C'
+      : 'var(--color-text-secondary)';
+
+  return (
+    <span
+      style={{
+        padding: '2px 7px',
+        borderRadius: 'var(--radius-badge)',
+        background: bg,
+        color: color,
+        fontSize: '11px',
+        fontWeight: 700,
+        fontFamily: 'var(--font-primary)',
+        letterSpacing: '0.02em',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {isUp && '↑ '}{isDown && '↓ '}
+      {variance === 0 ? 'No change' : `${variance > 0 ? '+' : ''}${variance}%`}
+    </span>
+  );
+}
+
 export default function OrderReview({
   orders,
   quantities,
@@ -501,6 +1136,12 @@ export default function OrderReview({
   onAddItem,
   onRemoveManualLine,
   onManualLineQtyChange,
+  recurringOrders,
+  recurringQtys,
+  recurringActions,
+  onRecurringQtyChange,
+  onRecurringAccept,
+  onRecurringRevert,
 }: Props) {
   const [showAddSheet, setShowAddSheet] = useState(false);
   const stocktakeAge = getStocktakeAge(orders);
@@ -585,7 +1226,8 @@ export default function OrderReview({
             style={{
               display: 'flex',
               gap: '10px',
-              flexWrap: 'wrap',
+              overflowX: 'auto',
+              flexWrap: 'nowrap',
             }}
           >
             {/* Grand total card */}
@@ -666,6 +1308,80 @@ export default function OrderReview({
                     }}
                   >
                     {order.deliveryDate}
+                  </span>
+                </div>
+              );
+            })}
+
+            {/* Recurring order mini cards */}
+            {recurringOrders.map((recOrder) => {
+              const recSupplier = getSupplier(recOrder.supplierId);
+              const reviewCount = recOrder.lines.filter((l) => needsReview(l.recurringBaseQty, l.suggestedQty)).length;
+              const recTotal = recOrder.lines.reduce((sum, l) => {
+                const p = getProduct(l.ingredientId, l.supplierId);
+                const q = recurringQtys[l.id] ?? l.suggestedQty;
+                return sum + q * p.unitCost;
+              }, 0);
+              return (
+                <div
+                  key={recOrder.id}
+                  style={{
+                    flex: '0 0 auto',
+                    padding: '10px 14px',
+                    borderRadius: 'var(--radius-card)',
+                    border: '1px solid rgba(34,68,68,0.20)',
+                    background: 'var(--color-bg-surface)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '2px',
+                    minWidth: '120px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span
+                      style={{
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        color: 'var(--color-text-primary)',
+                        fontFamily: 'var(--font-primary)',
+                      }}
+                    >
+                      {recSupplier.name}
+                    </span>
+                    <span
+                      style={{
+                        padding: '2px 6px',
+                        borderRadius: 'var(--radius-badge)',
+                        background: 'rgba(34,68,68,0.08)',
+                        color: 'var(--color-accent-active)',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        letterSpacing: '0.03em',
+                        fontFamily: 'var(--font-primary)',
+                        textTransform: 'none',
+                      }}
+                    >
+                      {recurringFrequencyBadgeLabel(recOrder.frequency)}
+                    </span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: 'var(--color-text-primary)',
+                      fontFamily: 'var(--font-primary)',
+                    }}
+                  >
+                    £{recTotal.toFixed(0)}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '12px', fontWeight: 500,
+                      color: 'var(--color-text-secondary)',
+                      fontFamily: 'var(--font-primary)',
+                    }}
+                  >
+                    {reviewCount} to review · {sentenceCaseFrequency(recOrder.frequency)}
                   </span>
                 </div>
               );
@@ -906,6 +1622,28 @@ export default function OrderReview({
               );
             });
           })()}
+
+          {/* Recurring order sections */}
+          {recurringOrders.map((recOrder) => {
+            const recSupplier = getSupplier(recOrder.supplierId);
+            const reviewLines = recOrder.lines.filter((l) => needsReview(l.recurringBaseQty, l.suggestedQty));
+            const autoLines = recOrder.lines.filter((l) => !needsReview(l.recurringBaseQty, l.suggestedQty));
+
+            return (
+              <RecurringOrderSection
+                key={recOrder.id}
+                order={recOrder}
+                supplier={recSupplier}
+                reviewLines={reviewLines}
+                autoLines={autoLines}
+                quantities={recurringQtys}
+                actions={recurringActions}
+                onQtyChange={onRecurringQtyChange}
+                onAccept={onRecurringAccept}
+                onRevert={onRecurringRevert}
+              />
+            );
+          })}
 
           {/* Add item — inline dropdown */}
           {showAddSheet ? (

@@ -1,7 +1,7 @@
 'use client';
 
 import { useAssistedOrdering } from './hooks/useAssistedOrdering';
-import { SUGGESTED_ORDERS } from './data/mockOrders';
+import { SUGGESTED_ORDERS, RECURRING_ORDERS } from './data/mockOrders';
 import NotificationPanel from './components/NotificationPanel';
 import OrderReview from './components/OrderReview';
 import ConfirmationScreen from './components/ConfirmationScreen';
@@ -34,6 +34,11 @@ export default function AssistedOrderingPage() {
     addManualLine,
     removeManualLine,
     setManualLineQty,
+    recurringQtys,
+    recurringActions,
+    setRecurringQty,
+    acceptRecurringLine,
+    revertRecurringLine,
   } = state;
 
   return (
@@ -50,6 +55,7 @@ export default function AssistedOrderingPage() {
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <NotificationPanel
             orders={SUGGESTED_ORDERS}
+            recurringOrders={RECURRING_ORDERS}
             grandTotal={grandTotal}
             totalItems={totalItems}
             supplierTotals={supplierTotals}
@@ -85,6 +91,12 @@ export default function AssistedOrderingPage() {
             onAddItem={addManualLine}
             onRemoveManualLine={removeManualLine}
             onManualLineQtyChange={setManualLineQty}
+            recurringOrders={RECURRING_ORDERS}
+            recurringQtys={recurringQtys}
+            recurringActions={recurringActions}
+            onRecurringQtyChange={setRecurringQty}
+            onRecurringAccept={acceptRecurringLine}
+            onRecurringRevert={revertRecurringLine}
           />
         </div>
       )}
@@ -93,6 +105,9 @@ export default function AssistedOrderingPage() {
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <ConfirmationScreen
             orders={SUGGESTED_ORDERS}
+            recurringOrders={RECURRING_ORDERS}
+            recurringQtys={recurringQtys}
+            recurringActions={recurringActions}
             grandTotal={grandTotal}
             totalItems={totalItems}
             supplierTotals={supplierTotals}

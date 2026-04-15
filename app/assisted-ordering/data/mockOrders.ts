@@ -1,4 +1,4 @@
-import type { Supplier, Ingredient, SupplierProduct, SuggestedOrder } from '../types';
+import type { Supplier, Ingredient, SupplierProduct, SuggestedOrder, RecurringOrder } from '../types';
 
 // ─── Suppliers ────────────────────────────────────────────────────────────────
 
@@ -35,6 +35,17 @@ export const SUPPLIERS: Supplier[] = [
     email: 'hello@cheeseboard.co.za',
     deliveryDate: 'Wed 9 Apr',
     sendTime: '09:30',
+  },
+  {
+    id: 'sup-risebakery',
+    name: 'Rise Bakery',
+    cutOffTime: '05:00',
+    leadTimeDays: 0,
+    minimumOrderValue: 0,
+    deliveryDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+    email: 'orders@risebakery.co.za',
+    deliveryDate: 'Wed 9 Apr',
+    sendTime: '04:30',
   },
   {
     id: 'sup-freshearth',
@@ -223,6 +234,46 @@ export const INGREDIENTS: Ingredient[] = [
     parConfirmed: true,
   },
   {
+    id: 'ing-croissants',
+    name: 'Croissants',
+    variant: 'Butter, box of 12',
+    stockUnit: 'boxes',
+    currentStock: 0,
+    stockDataAgeDays: 1,
+    parLevel: 6,
+    parConfirmed: true,
+  },
+  {
+    id: 'ing-painchoc',
+    name: 'Pain au Chocolat',
+    variant: 'Classic, box of 8',
+    stockUnit: 'boxes',
+    currentStock: 1,
+    stockDataAgeDays: 1,
+    parLevel: 3,
+    parConfirmed: true,
+  },
+  {
+    id: 'ing-cinscrolls',
+    name: 'Cinnamon Scrolls',
+    variant: 'Glazed, box of 6',
+    stockUnit: 'boxes',
+    currentStock: 1,
+    stockDataAgeDays: 1,
+    parLevel: 2,
+    parConfirmed: true,
+  },
+  {
+    id: 'ing-almonddanish',
+    name: 'Almond Danishes',
+    variant: 'Box of 6',
+    stockUnit: 'boxes',
+    currentStock: 1,
+    stockDataAgeDays: 1,
+    parLevel: 3,
+    parConfirmed: true,
+  },
+  {
     id: 'ing-doughnuts',
     name: 'Doughnuts',
     variant: 'Assorted glazed 6-pack',
@@ -260,6 +311,11 @@ export const SUPPLIER_PRODUCTS: SupplierProduct[] = [
   { ingredientId: 'ing-coconut-milk', supplierId: 'sup-bidvest', isPrimary: true, unitName: 'case of 12', unitSize: 12, unitCost: 36, available: true },
   { ingredientId: 'ing-vanilla', supplierId: 'sup-cpu', isPrimary: true, unitName: '100ml bottle', unitSize: 1, unitCost: 42, available: true },
   { ingredientId: 'ing-doughnuts', supplierId: 'sup-bidvest', isPrimary: true, unitName: 'box of 12', unitSize: 12, unitCost: 38, available: true },
+  // Rise Bakery products
+  { ingredientId: 'ing-croissants', supplierId: 'sup-risebakery', isPrimary: true, unitName: 'box of 12', unitSize: 12, unitCost: 32, available: true },
+  { ingredientId: 'ing-painchoc', supplierId: 'sup-risebakery', isPrimary: true, unitName: 'box of 8', unitSize: 8, unitCost: 28, available: true },
+  { ingredientId: 'ing-cinscrolls', supplierId: 'sup-risebakery', isPrimary: true, unitName: 'box of 6', unitSize: 6, unitCost: 24, available: true },
+  { ingredientId: 'ing-almonddanish', supplierId: 'sup-risebakery', isPrimary: true, unitName: 'box of 6', unitSize: 6, unitCost: 26, available: true },
 ];
 
 // ─── Suggested Orders ─────────────────────────────────────────────────────────
@@ -507,3 +563,59 @@ export function getProduct(ingredientId: string, supplierId: string): SupplierPr
 export function isUrgent(supplier: Supplier): boolean {
   return supplier.id === 'sup-cheese';
 }
+
+// ─── Recurring Orders ─────────────────────────────────────────────────────────
+
+export const RECURRING_ORDERS: RecurringOrder[] = [
+  {
+    id: 'rec-risebakery',
+    supplierId: 'sup-risebakery',
+    frequency: 'daily',
+    lines: [
+      {
+        id: 'rec-croissants',
+        ingredientId: 'ing-croissants',
+        supplierId: 'sup-risebakery',
+        recurringBaseQty: 4,
+        suggestedQty: 6,
+        salesVelocity7d: 5.2,
+        reasons: [
+          'Sold out 5 of the last 7 days',
+          'You ran out by 11am on average — missing ~3 hrs of peak selling time each day',
+          'Selling ~5.2 boxes/day vs your current order of 4',
+        ],
+      },
+      {
+        id: 'rec-painchoc',
+        ingredientId: 'ing-painchoc',
+        supplierId: 'sup-risebakery',
+        recurringBaseQty: 3,
+        suggestedQty: 2,
+        salesVelocity7d: 1.4,
+        reasons: [
+          'Averaging 1.4 boxes/day over the last week',
+          'You\'re wasting ~1.6 boxes/day — roughly £45/day or £315/week thrown away',
+          'Reducing to 2 boxes still leaves a small buffer for busier days',
+        ],
+      },
+      {
+        id: 'rec-cinscrolls',
+        ingredientId: 'ing-cinscrolls',
+        supplierId: 'sup-risebakery',
+        recurringBaseQty: 2,
+        suggestedQty: 2,
+        salesVelocity7d: 1.9,
+        reasons: ['Demand is steady — no change needed'],
+      },
+      {
+        id: 'rec-almonddanish',
+        ingredientId: 'ing-almonddanish',
+        supplierId: 'sup-risebakery',
+        recurringBaseQty: 3,
+        suggestedQty: 3,
+        salesVelocity7d: 2.8,
+        reasons: ['Selling consistently — order stays the same'],
+      },
+    ],
+  },
+];
