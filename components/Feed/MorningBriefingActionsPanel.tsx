@@ -26,11 +26,6 @@ function getApprovals(role: BriefingRole): ApprovalItem[] {
         { id: 'a1', title: 'Fresh Direct short sign-off', detail: 'Milk case short on 11am drop — confirm before you sign the docket.' },
         { id: 'a2', title: 'Matcha basket add-on', detail: 'Extra case suggested — send supplier basket?' },
       ];
-    case 'chairman':
-      return [
-        { id: 'a1', title: 'Metro credit ageing', detail: 'Executive visibility — board pack footnote if unresolved by Friday.' },
-        { id: 'a2', title: 'Matcha velocity (two sites)', detail: 'Quinn can brief detail — no sign-off required unless you want it.' },
-      ];
     default:
       return [];
   }
@@ -81,15 +76,6 @@ function getOtherActions(role: BriefingRole): OtherActionItem[] {
           title: 'HO policy acknowledgement',
           detail: 'Acknowledge by end of day.',
           href: '/v1?open=ho-policy-ack',
-        },
-      ];
-    case 'chairman':
-      return [
-        {
-          id: 'o1',
-          title: 'Board-line matcha detail',
-          detail: 'Optional: ask Quinn for depth.',
-          href: '/v1?open=matcha-board-detail',
         },
       ];
     default:

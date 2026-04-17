@@ -8,7 +8,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 
-export type CommandCentreVariant = 'store' | 'chain' | 'finance' | 'chairman';
+export type CommandCentreVariant = 'store' | 'chain' | 'finance';
 
 interface CommandCentreProps {
   variant: CommandCentreVariant;
@@ -147,32 +147,6 @@ const QUINN_ACTIONS = [
 export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso', embedded = false }: CommandCentreProps) {
   const outerMargin = embedded ? 0 : '0 20px 20px';
 
-  if (variant === 'chairman') {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.28 }}
-        style={{
-          margin: outerMargin,
-          padding: '14px 16px',
-          borderRadius: '12px',
-          background: 'linear-gradient(135deg, #1a3636 0%, #335858 100%)',
-          color: '#F4F1EC',
-          fontSize: '13px',
-          lineHeight: 1.55,
-          boxShadow: '0 4px 20px rgba(34,68,68,0.25)',
-        }}
-      >
-        <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.85)', marginBottom: '8px' }}>
-          TODAY · BOARD LINE
-        </div>
-        <p style={{ margin: 0 }}>
-          Estate trading in line with plan; one labour overspend at City Centre; no material supplier or cash risks; Quinn has two items awaiting your nod when you have a minute.
-        </p>
-      </motion.div>
-    );
-  }
 
   const scope =
     variant === 'store'

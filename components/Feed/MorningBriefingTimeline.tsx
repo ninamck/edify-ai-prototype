@@ -5,7 +5,10 @@ import type { BriefingRole } from '@/components/briefing';
 import { BriefingContent } from '@/components/Feed/MorningBriefingBody';
 import MorningBriefingActionsPanel, { approvalCountForRole } from '@/components/Feed/MorningBriefingActionsPanel';
 
-const PANEL_W = 320;
+// Responsive panel width: grows a bit on wider monitors, floors at 340 so the
+// insight copy doesn't get cramped. Below 900px the sheet overlay takes over
+// (see HomeShell.tsx NARROW_BREAKPOINT), so this only tunes desktop.
+const PANEL_W = 'clamp(340px, 26vw, 420px)';
 
 export default function MorningBriefingTimeline({
   briefingRole,
@@ -28,7 +31,7 @@ export default function MorningBriefingTimeline({
     <div
       style={{
         width: sidebar ? PANEL_W : '100%',
-        minWidth: sidebar ? PANEL_W : 0,
+        minWidth: 0,
         maxWidth: sidebar ? PANEL_W : undefined,
         height: sidebar ? '100%' : 'auto',
         minHeight: 0,

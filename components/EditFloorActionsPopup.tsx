@@ -55,7 +55,7 @@ export interface FloorAction {
 
 export const DEFAULT_FLOOR_ACTIONS: FloorAction[] = [
   { id: 'checklists', label: 'Checklists', iconKey: 'ListChecks', visible: true },
-  { id: 'run-production', label: 'Run production', iconKey: 'Utensils', visible: true },
+  { id: 'review-orders', label: 'Review orders', iconKey: 'ShoppingCart', visible: true },
   { id: 'log-waste', label: 'Log waste', iconKey: 'Trash2', visible: true },
   { id: 'receive-delivery', label: 'Receive delivery', iconKey: 'Truck', visible: true },
   { id: 'transfer-stock', label: 'Transfer stock', iconKey: 'ArrowLeftRight', visible: true },

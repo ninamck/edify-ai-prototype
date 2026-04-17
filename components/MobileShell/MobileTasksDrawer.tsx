@@ -8,7 +8,6 @@ import {
   X,
   CheckSquare,
   ListChecks,
-  Utensils,
   ArrowLeftRight,
   ShoppingCart,
 } from 'lucide-react';
@@ -258,8 +257,8 @@ export default function MobileTasksDrawer({
                 onClick={() => go('/checklists/complete')}
               />
               <TaskRow
-                icon={Utensils}
-                label="Run production"
+                icon={ShoppingCart}
+                label="Review orders"
                 onClick={() => go('/')}
               />
               <TaskRow

@@ -1,13 +1,12 @@
 import type { CommandCentreVariant } from '@/components/Feed/CommandCentre';
 
-export type BriefingRole = 'ravi' | 'cheryl' | 'gm' | 'chairman';
+export type BriefingRole = 'ravi' | 'cheryl' | 'gm';
 
 /** Role options for briefing + chat context (top bar); floor actions can key off this later. */
 export const BRIEFING_ROLES: { id: BriefingRole; label: string; short: string }[] = [
-  { id: 'ravi', label: 'CEO · Owner', short: 'CEO' },
-  { id: 'cheryl', label: 'Finance / Head office', short: 'Finance' },
-  { id: 'gm', label: 'GM · Site', short: 'GM' },
-  { id: 'chairman', label: 'Chairman', short: 'Board' },
+  { id: 'ravi', label: 'Manager', short: 'Manager' },
+  { id: 'cheryl', label: 'Admin', short: 'Admin' },
+  { id: 'gm', label: 'Employee', short: 'Employee' },
 ];
 
 /** One-line greeting for the top bar (matches timeline persona copy). */
@@ -19,8 +18,6 @@ export function morningGreetingLine(role: BriefingRole): string {
       return 'Good morning, Cheryl.';
     case 'gm':
       return 'Good morning — Fitzroy Espresso';
-    case 'chairman':
-      return 'Good morning.';
     default:
       return 'Good morning.';
   }
@@ -37,8 +34,6 @@ export function timeAwareGreeting(role: BriefingRole): string {
       return `Good ${tod}, Cheryl.`;
     case 'gm':
       return `Good ${tod} — Fitzroy Espresso`;
-    case 'chairman':
-      return `Good ${tod}.`;
     default:
       return `Good ${tod}.`;
   }
@@ -52,8 +47,6 @@ export function commandCentreVariant(role: BriefingRole): CommandCentreVariant {
       return 'finance';
     case 'gm':
       return 'store';
-    case 'chairman':
-      return 'chairman';
     default:
       return 'chain';
   }

@@ -7,6 +7,7 @@ import Sidebar from '@/components/Sidebar/Sidebar';
 import ShellTopBar from '@/components/ShellTopBar';
 import type { ShellViewMode } from '@/components/ShellTopBar';
 import EstateDashboard from '@/components/Dashboard/EstateDashboard';
+import ManagerDashboard from '@/components/Dashboard/ManagerDashboard';
 import MorningBriefingTimeline from '@/components/Feed/MorningBriefingTimeline';
 import RightPanelSheetOverlay from '@/components/RightPanel/RightPanelSheetOverlay';
 import MobileInsightsBar from '@/components/MobileInsightsBar';
@@ -204,7 +205,11 @@ export default function HomeShell() {
               background: 'var(--color-bg-surface)',
             }}
           >
-            <EstateDashboard pinnedCharts={pinnedCharts} />
+            {briefingRole === 'cheryl' ? (
+              <EstateDashboard pinnedCharts={pinnedCharts} />
+            ) : (
+              <ManagerDashboard />
+            )}
           </div>
         )}
       </div>

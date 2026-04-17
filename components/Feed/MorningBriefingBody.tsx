@@ -104,7 +104,7 @@ function LabourMiniCurve({ subtitle }: { subtitle: string }) {
 }
 
 function LiveSnapshot({ role }: { role: BriefingRole }) {
-  if (role === 'chairman') return null;
+  if (role === 'ravi') return null;
 
   const pnlPct = role === 'cheryl' ? 72 : 78;
   const pnlLabel = role === 'cheryl' ? 'Gross margin confidence' : 'Live P&L confidence';
@@ -143,7 +143,7 @@ function LiveSnapshot({ role }: { role: BriefingRole }) {
           <InvoiceMatchBar />
         </>
       )}
-      {(role === 'ravi' || role === 'gm') && (
+      {role === 'gm' && (
         <>
           <div style={{ borderTop: '1px solid var(--color-border-subtle)' }} />
           <LabourMiniCurve subtitle={labourSubtitle} />
@@ -372,18 +372,23 @@ const RAVI_INSIGHTS: InsightGroup[] = [
     category: 'act-today',
     items: [
       {
-        headline: 'Metro credit £312 — 18 days open, 4 past your agreed threshold',
+        headline: 'Bidvest delivery lands 11:10 — pre-check the GRN',
         detail:
-          'Finance can\'t close the period cleanly until this clears. The paperwork is ready and waiting — this needs a decision from you, not another delegation.',
-        actionLabel: 'Open credit workflow',
-        actionSecondary: 'Snooze 48h',
+          '14 lines, £412 on the drop. WTD spend on Bidvest already £10 over budget — scrutinise short-shipments before you sign so the overage doesn\'t grow.',
+        actionLabel: 'Open GRN',
+        actionSecondary: 'Log discrepancy',
       },
       {
-        headline: 'Matcha stocks out Thursday at Fitzroy and City Centre',
+        headline: '6 blueberry muffins rolled over from yesterday — at risk of waste today',
         detail:
-          'No inbound PO covers it before then. Quinn can move 3 cases from South Yarra today — that buys the estate five days. Approve and it happens automatically.',
-        actionLabel: 'Approve transfer',
-        actionSecondary: 'Escalate to ops',
+          'Yesterday\'s bake-off left 6 on the shelf this morning. Shelf life ends today — if they don\'t sell by close, they bin. Typical rollover at this store is 2. Worth moving them front-of-counter or tagging for staff to upsell.',
+        actionLabel: 'Got it',
+      },
+      {
+        headline: 'Ham & cheese baguette prep running ahead of sales pace',
+        detail:
+          'Morning batch was 8; 5 sold, 3 still displayed. At this hour you\'d typically be down to 1 or 2 left. If the lunch pickup doesn\'t catch up by 11:30, chill the remainder to extend shelf into tomorrow.',
+        actionLabel: 'Got it',
       },
     ],
   },
@@ -391,19 +396,19 @@ const RAVI_INSIGHTS: InsightGroup[] = [
     category: 'changed',
     items: [
       {
-        headline: 'City Centre labour at 107% for three evenings in a row',
+        headline: 'Sales +11% vs forecast at 11am — warm day pulling extra cover',
         detail:
-          'This isn\'t a one-off rush response — the pattern points to a structural rostering gap. One conversation with the GM now is cheaper than a week of overspend.',
+          '£13,770 vs £12,390 forecast. Weather came in 6° warmer than predicted (21° vs 15°). Iced drinks and cold food likely to over-index — keep ice and cold-brew topped up.',
       },
       {
-        headline: 'Urban Fresh invoices 6 days late — unusual for them',
+        headline: 'Expected EOD £20,250 vs £18,910 plan — consider holding the 3pm cut',
         detail:
-          'Dry-goods margin confidence is sitting at 72% because of it. If they batch-post at period end, your cost read will spike without warning.',
+          'Pace suggests you\'re £1.3k ahead at close. Afternoon roster already drops from 4 → 3 at 3pm; that cut may no longer be the right call if customer flow stays high.',
       },
       {
-        headline: 'Pastry waste at Fitzroy up 38% vs baseline — building quietly',
+        headline: 'Bidvest WTD £1,210 of £1,200 — £10 over budget',
         detail:
-          'Too slow for daily alerts, but Quinn has tracked it over the week. Pattern maps to morning batch over-pull. Worth a look before it compounds into the weekend.',
+          'Small now, but the 11:10 drop will add £412 on top. Worth a glance at what\'s in today\'s basket before you sign.',
       },
     ],
   },
@@ -411,31 +416,25 @@ const RAVI_INSIGHTS: InsightGroup[] = [
     category: 'preempted',
     items: [
       {
-        headline: 'Bidfood basket built — £1,240 est., matcha top-up included',
+        headline: 'Cold-drink spec prepped for the afternoon push',
         detail:
-          'Quinn has pre-filled tomorrow\'s order with the extra matcha case already in. Cut-off is 2pm — approve as-is or adjust first.',
+          'Given the weather swing, Quinn has drafted a one-line board spec (iced latte + cold-brew citrus) and a 5-min brief for the barista. Approve to push to the floor.',
+        actionLabel: 'Approve',
+        actionSecondary: 'Edit first',
+      },
+      {
+        headline: 'Tomorrow\'s Fresh Direct basket built — cut-off 2pm',
+        detail:
+          '£486 est., pastry quantities trimmed 10% to stop the muffin over-pull repeating. Approve as-is or adjust.',
         actionLabel: 'Review & approve',
         actionSecondary: 'Adjust basket',
       },
       {
-        headline: 'Rebalance doughnut / croissant recurring order at Fitzroy',
+        headline: 'Muffin batch size tuned down for tomorrow AM',
         detail:
-          'Pattern and margin data suggest doughnuts are over-ordered and croissants under-ordered. Quinn has drafted revised quantities — approve to update the standing order.',
-        actionLabel: 'Review & approve',
-        actionSecondary: 'Adjust',
-      },
-      {
-        headline: 'New Urban Fresh spinach SKU needs mapping before production',
-        detail:
-          'The new baby spinach SKU is not yet linked to any recipe. Map it now to prevent production stalls.',
-        actionLabel: 'Map SKU',
-      },
-      {
-        headline: '3 supplier chase emails ready for Urban Fresh dry goods',
-        detail:
-          'Quinn has drafted them to the right contacts. One tap sends all three — or open to review first if you want to adjust tone.',
-        actionLabel: 'Send all three',
-        actionSecondary: 'Review first',
+          'Based on today\'s rollover pattern, Quinn has drafted a smaller AM batch (from 12 → 9). Approve to update the standing bake-off.',
+        actionLabel: 'Approve',
+        actionSecondary: 'Keep as-is',
       },
     ],
   },
@@ -555,29 +554,6 @@ const CHERYL_INSIGHTS: InsightGroup[] = [
   },
 ];
 
-const CHAIRMAN_INSIGHTS: InsightGroup[] = [
-  {
-    category: 'act-today',
-    items: [
-      {
-        headline: 'Two items need your eye — everything else is in hand',
-        detail:
-          'Metro credit £312 is past the threshold agreed with finance (18 days). Matcha velocity at two sites will stock out before next inbound unless the estate intervenes. Quinn can brief the detail on either.',
-      },
-    ],
-  },
-  {
-    category: 'preempted',
-    items: [
-      {
-        headline: 'Estate trading in line with plan — no board-level surprises overnight',
-        detail:
-          'All sites opened normally. Net sales tracking ahead of last week. Margin confidence at 72% — gap is late invoices, not missing sales. Quinn and the ops team have the rest.',
-      },
-    ],
-  },
-];
-
 // ── Role renderers ─────────────────────────────────────────────────────────────
 
 function InsightFeed({ groups, role }: { groups: InsightGroup[]; role: BriefingRole }) {
@@ -592,7 +568,6 @@ function InsightFeed({ groups, role }: { groups: InsightGroup[]; role: BriefingR
 }
 
 function BriefingContent({ role }: { role: BriefingRole }) {
-  if (role === 'chairman') return <InsightFeed groups={CHAIRMAN_INSIGHTS} role={role} />;
   if (role === 'ravi') return <InsightFeed groups={RAVI_INSIGHTS} role={role} />;
   if (role === 'cheryl') return <InsightFeed groups={CHERYL_INSIGHTS} role={role} />;
   if (role === 'gm') return <InsightFeed groups={GM_INSIGHTS} role={role} />;
