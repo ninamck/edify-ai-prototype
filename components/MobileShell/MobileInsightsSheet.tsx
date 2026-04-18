@@ -126,7 +126,7 @@ export default function MobileInsightsSheet({
               WebkitOverflowScrolling: 'touch',
               padding: '12px 12px max(24px, env(safe-area-inset-bottom))',
             }}>
-              <MorningBriefingTimeline briefingRole="gm" layout="sheet" />
+              <MorningBriefingTimeline briefingRole="gm" phase="morning" layout="sheet" />
             </div>
           </motion.div>
         </>

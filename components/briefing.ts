@@ -2,6 +2,15 @@ import type { CommandCentreVariant } from '@/components/Feed/CommandCentre';
 
 export type BriefingRole = 'ravi' | 'cheryl' | 'gm';
 
+export type BriefingPhase = 'morning' | 'midday' | 'afternoon' | 'evening';
+
+export function phaseFromHour(hour: number): BriefingPhase {
+  if (hour < 11) return 'morning';
+  if (hour < 14) return 'midday';
+  if (hour < 17) return 'afternoon';
+  return 'evening';
+}
+
 /** Role options for briefing + chat context (top bar); floor actions can key off this later. */
 export const BRIEFING_ROLES: { id: BriefingRole; label: string; short: string }[] = [
   { id: 'ravi', label: 'Manager', short: 'Manager' },

@@ -3,18 +3,19 @@
 import { useMemo } from 'react';
 import type { ReactNode } from 'react';
 import {
-  HOURLY_TRADING,
-  WEATHER_HOURLY,
-  DELIVERIES_TODAY,
   WTD_SPEND,
-  WASTE_TODAY,
-  CURRENT_HOUR_INDEX,
+  currentHourIndexForPhase,
+  hourlyTradingForPhase,
+  weatherHourlyForPhase,
+  deliveriesForPhase,
+  wasteForPhase,
 } from '@/components/Dashboard/data/managerMockData';
 import HourlyCombo from '@/components/Dashboard/parts/HourlyCombo';
 import WeatherStrip from '@/components/Dashboard/parts/WeatherStrip';
 import DeliveriesCard from '@/components/Dashboard/parts/DeliveriesCard';
 import WasteCard from '@/components/Dashboard/parts/WasteCard';
 import ShiftKpiRow from '@/components/Dashboard/parts/ShiftKpiRow';
+import type { BriefingPhase } from '@/components/briefing';
 
 function ChartCard({
   title,
@@ -49,19 +50,23 @@ function ChartCard({
   );
 }
 
-export default function ManagerDashboard() {
+export default function ManagerDashboard({ phase }: { phase: BriefingPhase }) {
+  const hourlyTrading = useMemo(() => hourlyTradingForPhase(phase), [phase]);
+  const weatherHourly = useMemo(() => weatherHourlyForPhase(phase), [phase]);
+  const deliveries = useMemo(() => deliveriesForPhase(phase), [phase]);
+  const waste = useMemo(() => wasteForPhase(phase), [phase]);
+
   const kpis = useMemo(() => {
     let salesSoFar = 0;
     let forecastToNow = 0;
     let forecastRemaining = 0;
-    HOURLY_TRADING.forEach((row, i) => {
+    hourlyTrading.forEach((row) => {
       if (row.actual !== null) {
         salesSoFar += row.actual;
         forecastToNow += row.forecast;
       } else {
         forecastRemaining += row.forecast;
       }
-      void i;
     });
     const pace = forecastToNow > 0 ? salesSoFar / forecastToNow : 1;
     const expectedEod = Math.round(salesSoFar + forecastRemaining * pace);
@@ -72,9 +77,9 @@ export default function ManagerDashboard() {
       expectedEod,
       fullDayForecast,
     };
-  }, []);
+  }, [hourlyTrading]);
 
-  const nowHourLabel = HOURLY_TRADING[CURRENT_HOUR_INDEX]?.hour ?? '11am';
+  const nowHourLabel = hourlyTrading[currentHourIndexForPhase(phase)]?.hour ?? '11am';
 
   return (
     <div
@@ -112,7 +117,7 @@ export default function ManagerDashboard() {
         subtitle="Bars: actual £ (green = ahead of forecast, amber = behind, grey = not yet). Line: forecast £. Right axis: staff headcount — solid for hours worked, dashed for the rest of the roster."
         height={280}
       >
-        <HourlyCombo data={HOURLY_TRADING} />
+        <HourlyCombo data={hourlyTrading} />
       </ChartCard>
 
       {/* Weather */}
@@ -121,14 +126,14 @@ export default function ManagerDashboard() {
         subtitle="Today's hourly conditions. Chip shows actual vs what forecast said (+ = warmer than forecast)."
         height={110}
       >
-        <WeatherStrip data={WEATHER_HOURLY} />
+        <WeatherStrip data={weatherHourly} />
       </ChartCard>
 
       {/* Waste */}
-      <WasteCard rows={WASTE_TODAY} />
+      <WasteCard rows={waste} />
 
       {/* Deliveries */}
-      <DeliveriesCard drops={DELIVERIES_TODAY} wtd={WTD_SPEND} />
+      <DeliveriesCard drops={deliveries} wtd={WTD_SPEND} />
     </div>
   );
 }

@@ -1,14 +1,26 @@
 /**
  * Mock data for the in-shift Manager dashboard.
- * Scenario: Fitzroy Espresso, ~11am on a trading day. Weather is warmer than
- * forecast which creates a real "push cold drinks / reopen terrace" decision.
+ * Scenario: Fitzroy Espresso on a trading day. Weather came in warmer than
+ * forecast, creating a "push cold drinks" decision.
  *
- * CURRENT_HOUR marks the cutoff — hours at/before it are actual, after it are
- * null so the UI can ghost them. Change CURRENT_HOUR to simulate a different
- * point in the shift.
+ * The dashboard is phase-aware: morning / midday / afternoon / evening shift
+ * the cutoff so hours past it are ghosted. The `FOR_PHASE` helpers return
+ * copies of the fixtures with `actual` populated up to the phase's cutoff.
  */
 
-export const CURRENT_HOUR_INDEX = 5; // 0=6am, 5=11am
+import type { BriefingPhase } from '@/components/briefing';
+
+// Legacy — kept for any direct imports. Matches midday.
+export const CURRENT_HOUR_INDEX = 5;
+
+export function currentHourIndexForPhase(phase: BriefingPhase): number {
+  switch (phase) {
+    case 'morning':   return 2;  // 8am — 3 hours of actuals
+    case 'midday':    return 5;  // 11am — current default
+    case 'afternoon': return 9;  // 3pm
+    case 'evening':   return 14; // 8pm — nearly full day
+  }
+}
 
 export type WeatherCondition = 'sun' | 'cloud' | 'rain' | 'part-cloud';
 
@@ -118,3 +130,112 @@ export const WTD_SPEND: WtdSupplierSpend[] = [
   { supplier: 'Lacto Dairy',  spend: 520,  budget: 600  },
   { supplier: 'Other',        spend: 290,  budget: 400  },
 ];
+
+// ── Phase-aware helpers ────────────────────────────────────────────────────────
+// Actuals for hours the base fixture left null (12pm–9pm). These get revealed
+// as the phase advances. Numbers chosen to feel like a plausible continuation
+// of the morning (lunch bump, afternoon lull, tapering evening).
+const FULL_DAY_ACTUALS: Record<string, number> = {
+  '12pm': 2420,
+  '1pm':  2280,
+  '2pm':  1610,
+  '3pm':  1380,
+  '4pm':  1150,
+  '5pm':   990,
+  '6pm':   660,
+  '7pm':   410,
+  '8pm':   230,
+  '9pm':   100,
+};
+
+const FULL_DAY_WEATHER_ACTUALS: Record<string, { condition: WeatherCondition; tempC: number }> = {
+  '12pm': { condition: 'sun',        tempC: 22 },
+  '1pm':  { condition: 'sun',        tempC: 22 },
+  '2pm':  { condition: 'part-cloud', tempC: 21 },
+  '3pm':  { condition: 'part-cloud', tempC: 19 },
+  '4pm':  { condition: 'cloud',      tempC: 17 },
+  '5pm':  { condition: 'cloud',      tempC: 15 },
+  '6pm':  { condition: 'rain',       tempC: 13 },
+  '7pm':  { condition: 'cloud',      tempC: 12 },
+  '8pm':  { condition: 'cloud',      tempC: 11 },
+  '9pm':  { condition: 'cloud',      tempC: 10 },
+};
+
+export function hourlyTradingForPhase(phase: BriefingPhase): HourlyTradingRow[] {
+  const cutoff = currentHourIndexForPhase(phase);
+  return HOURLY_TRADING.map((row, i) => {
+    if (i <= cutoff) {
+      const actual = row.actual ?? FULL_DAY_ACTUALS[row.hour] ?? row.forecast;
+      return { ...row, actual };
+    }
+    return { ...row, actual: null };
+  });
+}
+
+export function weatherHourlyForPhase(phase: BriefingPhase): WeatherRow[] {
+  const cutoff = currentHourIndexForPhase(phase);
+  return WEATHER_HOURLY.map((row, i) => {
+    if (i <= cutoff) {
+      const actual = row.actual ?? FULL_DAY_WEATHER_ACTUALS[row.hour] ?? row.forecast;
+      return { ...row, actual };
+    }
+    return { ...row, actual: null };
+  });
+}
+
+// Deliveries evolve through the day. Status transitions:
+//   Fresh Direct (08:45): already done in morning
+//   Bidvest (11:10):  upcoming → in-window → done after midday
+//   Urban Fresh (14:00): upcoming → in-window → done after afternoon
+//   Lacto Dairy (16:30): upcoming → in-window (afternoon) → done (evening)
+export function deliveriesForPhase(phase: BriefingPhase): DeliveryDrop[] {
+  const statusForDelivery = (id: string): DeliveryDrop['status'] => {
+    if (id === 'd1') return 'done';
+    if (id === 'd2') {
+      if (phase === 'morning') return 'upcoming';
+      if (phase === 'midday') return 'in-window';
+      return 'done';
+    }
+    if (id === 'd3') {
+      if (phase === 'morning' || phase === 'midday') return 'upcoming';
+      if (phase === 'afternoon') return 'in-window';
+      return 'done';
+    }
+    if (id === 'd4') {
+      if (phase === 'evening') return 'done';
+      if (phase === 'afternoon') return 'in-window';
+      return 'upcoming';
+    }
+    return 'upcoming';
+  };
+  return DELIVERIES_TODAY.map((d) => ({ ...d, status: statusForDelivery(d.id) }));
+}
+
+// Waste accrues through the day. Morning has near-zero (pre-lunch), midday
+// matches the current fixture, afternoon adds lunch/cake items, evening is
+// the full day.
+export function wasteForPhase(phase: BriefingPhase): WasteRow[] {
+  const scaleFor: Record<BriefingPhase, number> = {
+    morning: 0.15,
+    midday: 1.0, // the current fixture represents midday
+    afternoon: 1.6,
+    evening: 2.2,
+  };
+  const typicalScaleFor: Record<BriefingPhase, number> = {
+    morning: 0.2,
+    midday: 1.0,
+    afternoon: 1.7,
+    evening: 2.4,
+  };
+  const scale = scaleFor[phase];
+  const typicalScale = typicalScaleFor[phase];
+  return WASTE_TODAY.map((row) => ({
+    ...row,
+    unitsToday: Math.max(0, Math.round(row.unitsToday * scale)),
+    unitsTypical: Math.max(0, Math.round(row.unitsTypical * typicalScale)),
+    spendToday: Math.round(row.spendToday * scale),
+    spendTypical: Math.round(row.spendTypical * typicalScale),
+    // Only keep action flags once there's meaningful waste to talk about.
+    flag: phase === 'morning' ? undefined : row.flag,
+  }));
+}

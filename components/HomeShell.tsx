@@ -14,7 +14,9 @@ import MobileInsightsBar from '@/components/MobileInsightsBar';
 
 import FloorActionsBox from '@/components/FloorActionsBox';
 import Feed from '@/components/Feed/Feed';
-import type { BriefingRole } from '@/components/briefing';
+import type { BriefingRole, BriefingPhase } from '@/components/briefing';
+import { phaseFromHour } from '@/components/briefing';
+import type { PhaseOverride } from '@/components/PhaseSwitcher';
 import type { AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import MobileShell from '@/components/MobileShell/MobileShell';
@@ -31,6 +33,9 @@ export default function HomeShell() {
   const [mobileInsightsOpen, setMobileInsightsOpen] = useState(false);
   const [chatActive, setChatActive] = useState(false);
   const [pinnedCharts, setPinnedCharts] = useState<AnalyticsChartId[]>([]);
+  const [phaseOverride, setPhaseOverride] = useState<PhaseOverride>('auto');
+  const effectivePhase: BriefingPhase =
+    phaseOverride === 'auto' ? phaseFromHour(new Date().getHours()) : phaseOverride;
   const isNarrow = useMediaQuery(NARROW_BREAKPOINT);
   const isMobileShell = useMediaQuery(MOBILE_SHELL_BREAKPOINT);
 
@@ -95,6 +100,8 @@ export default function HomeShell() {
         onBriefingRoleChange={setBriefingRole}
         shellView={shellView}
         onShellViewChange={setShellView}
+        phaseOverride={phaseOverride}
+        onPhaseOverrideChange={setPhaseOverride}
       />
       <div
         style={{
@@ -186,7 +193,7 @@ export default function HomeShell() {
                     minHeight: 0,
                   }}
                 >
-                  <MorningBriefingTimeline briefingRole={briefingRole} />
+                  <MorningBriefingTimeline briefingRole={briefingRole} phase={effectivePhase} />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -206,9 +213,9 @@ export default function HomeShell() {
             }}
           >
             {briefingRole === 'cheryl' ? (
-              <EstateDashboard pinnedCharts={pinnedCharts} />
+              <EstateDashboard pinnedCharts={pinnedCharts} phase={effectivePhase} />
             ) : (
-              <ManagerDashboard />
+              <ManagerDashboard phase={effectivePhase} />
             )}
           </div>
         )}
@@ -220,7 +227,7 @@ export default function HomeShell() {
         onClose={() => setMobileInsightsOpen(false)}
         title="Timeline"
       >
-        <MorningBriefingTimeline briefingRole={briefingRole} layout="sheet" />
+        <MorningBriefingTimeline briefingRole={briefingRole} phase={effectivePhase} layout="sheet" />
       </RightPanelSheetOverlay>
 
     </div>

@@ -18,6 +18,22 @@ import {
 } from 'recharts';
 import type { AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
 import { renderAnalyticsChart, ANALYTICS_CONFIG } from '@/components/Analytics/AnalyticsCharts';
+import type { BriefingPhase } from '@/components/briefing';
+
+function estatePhaseSubtitle(phase: BriefingPhase): string {
+  switch (phase) {
+    case 'morning':   return 'Morning position · today just getting started';
+    case 'midday':    return 'Midday update · trading in flight';
+    case 'afternoon': return 'Afternoon position · most of the day in';
+    case 'evening':   return 'Evening close · today (near-final)';
+  }
+}
+
+function labourChartSubtitle(phase: BriefingPhase): string {
+  return phase === 'morning'
+    ? 'Yesterday · actual vs plan'
+    : 'Today so far · actual vs plan';
+}
 
 const ACCENT = 'var(--color-accent-deep)';
 const ACCENT_MID = 'var(--color-accent-mid)';
@@ -200,7 +216,13 @@ function ChartCard({
   );
 }
 
-export default function EstateDashboard({ pinnedCharts = [] }: { pinnedCharts?: AnalyticsChartId[] }) {
+export default function EstateDashboard({
+  pinnedCharts = [],
+  phase,
+}: {
+  pinnedCharts?: AnalyticsChartId[];
+  phase: BriefingPhase;
+}) {
   const defaultTo = SALES_TREND[SALES_TREND.length - 1].date;
   const defaultFrom = SALES_TREND[Math.max(0, SALES_TREND.length - 14)].date;
   const [fromDate, setFromDate] = useState(defaultFrom);
@@ -257,7 +279,7 @@ export default function EstateDashboard({ pinnedCharts = [] }: { pinnedCharts?: 
             Estate dashboard
           </h1>
           <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
-            Dummy data · Fitzroy Espresso estate · rolling 7-day where noted
+            Dummy data · Fitzroy Espresso estate · {estatePhaseSubtitle(phase)}
           </p>
         </div>
 
@@ -484,7 +506,7 @@ export default function EstateDashboard({ pinnedCharts = [] }: { pinnedCharts?: 
         </ChartCard>
       </div>
 
-      <ChartCard title="Labour vs sales — by site" subtitle="% of net sales · yesterday">
+      <ChartCard title="Labour vs sales — by site" subtitle={`% of net sales · ${labourChartSubtitle(phase)}`}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={[

@@ -164,6 +164,9 @@ export default function FloorActionsBox({
       case 'receive-delivery':
         onReceiveDelivery?.();
         break;
+      case 'log-waste':
+        router.push('/log-waste');
+        break;
       default:
         break;
     }

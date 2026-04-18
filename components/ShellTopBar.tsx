@@ -3,6 +3,8 @@
 import SiteSwitcher from '@/components/Sidebar/SiteSwitcher';
 import type { BriefingRole } from '@/components/briefing';
 import { BRIEFING_ROLES } from '@/components/briefing';
+import PhaseSwitcher from '@/components/PhaseSwitcher';
+import type { PhaseOverride } from '@/components/PhaseSwitcher';
 
 export type ShellViewMode = 'command-centre' | 'dashboard';
 
@@ -12,6 +14,8 @@ type ShellTopBarProps = {
   onBriefingRoleChange: (r: BriefingRole) => void;
   shellView: ShellViewMode;
   onShellViewChange: (v: ShellViewMode) => void;
+  phaseOverride: PhaseOverride;
+  onPhaseOverrideChange: (v: PhaseOverride) => void;
 };
 
 export default function ShellTopBar({
@@ -20,6 +24,8 @@ export default function ShellTopBar({
   onBriefingRoleChange,
   shellView,
   onShellViewChange,
+  phaseOverride,
+  onPhaseOverrideChange,
 }: ShellTopBarProps) {
   return (
     <header
@@ -148,6 +154,9 @@ export default function ShellTopBar({
             </button>
           );
         })}
+        <div style={{ marginLeft: '4px', display: 'inline-flex' }}>
+          <PhaseSwitcher phaseOverride={phaseOverride} onPhaseOverrideChange={onPhaseOverrideChange} />
+        </div>
       </div>
     </header>
   );

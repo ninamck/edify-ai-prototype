@@ -1,31 +1,43 @@
 'use client';
 
-import { useState } from 'react';
-import type { BriefingRole } from '@/components/briefing';
+import type { BriefingRole, BriefingPhase } from '@/components/briefing';
 import { BriefingContent } from '@/components/Feed/MorningBriefingBody';
-import MorningBriefingActionsPanel, { approvalCountForRole } from '@/components/Feed/MorningBriefingActionsPanel';
 
-// Responsive panel width: grows a bit on wider monitors, floors at 340 so the
+// Responsive panel width: grows a bit on wider monitors, floors at 380 so the
 // insight copy doesn't get cramped. Below 900px the sheet overlay takes over
 // (see HomeShell.tsx NARROW_BREAKPOINT), so this only tunes desktop.
-const PANEL_W = 'clamp(340px, 26vw, 420px)';
+const PANEL_W = 'clamp(380px, 30vw, 480px)';
+
+function briefingLabelForPhase(phase: BriefingPhase): { title: string; subtitle: string } {
+  switch (phase) {
+    case 'morning':
+      return { title: 'Morning briefing', subtitle: 'Pre-service priorities and what Quinn\'s queued for the day.' };
+    case 'midday':
+      return { title: 'Midday update', subtitle: 'Mid-service pacing — sales, stock and floor calls.' };
+    case 'afternoon':
+      return { title: 'Afternoon briefing', subtitle: 'Wrap decisions and prep for tomorrow.' };
+    case 'evening':
+      return { title: 'Evening wrap', subtitle: 'Today\'s close + what\'s teed up for tomorrow.' };
+  }
+}
 
 export default function MorningBriefingTimeline({
   briefingRole,
+  phase,
   layout = 'sidebar',
 }: {
   briefingRole: BriefingRole;
+  phase: BriefingPhase;
   layout?: 'sidebar' | 'sheet';
 }) {
   const sidebar = layout === 'sidebar';
-  const [panel, setPanel] = useState<'insights' | 'actions'>('insights');
   const today = new Intl.DateTimeFormat('en-GB', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
   }).format(new Date());
 
-  const actionCount = approvalCountForRole(briefingRole);
+  const { title: briefingTitle, subtitle: briefingSubtitle } = briefingLabelForPhase(phase);
 
   return (
     <div
@@ -59,103 +71,45 @@ export default function MorningBriefingTimeline({
       >
         <div
           style={{
-            padding: '0 0 14px',
+            padding: '0 0 12px',
             borderBottom: '1px solid var(--color-border-subtle)',
             flexShrink: 0,
           }}
         >
           <div
             style={{
-              fontSize: '12px',
+              fontSize: '11px',
               fontWeight: 600,
-              color: 'var(--color-text-secondary)',
-              lineHeight: 1.35,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              color: 'var(--color-text-muted)',
+              lineHeight: 1.3,
             }}
           >
             {today}
           </div>
-
           <div
-            role="group"
-            aria-label="Briefing panel"
             style={{
-              display: 'flex',
-              gap: '4px',
-              marginTop: '12px',
-              padding: '4px',
-              borderRadius: '100px',
-              background: 'var(--color-bg-hover)',
-              border: '1px solid var(--color-border-subtle)',
+              fontSize: '17px',
+              fontWeight: 700,
+              color: 'var(--color-text-primary)',
+              lineHeight: 1.25,
+              marginTop: '4px',
+              fontFamily: 'var(--font-display, var(--font-primary))',
             }}
           >
-            <button
-              type="button"
-              aria-pressed={panel === 'insights'}
-              onClick={() => setPanel('insights')}
-              style={{
-                flex: 1,
-                padding: '8px 14px',
-                borderRadius: '100px',
-                border: 'none',
-                fontSize: '12px',
-                fontWeight: 600,
-                fontFamily: 'var(--font-primary)',
-                cursor: 'pointer',
-                background: panel === 'insights' ? 'var(--color-accent-active)' : 'transparent',
-                color: panel === 'insights' ? '#fff' : 'var(--color-text-muted)',
-                boxShadow: panel === 'insights' ? '0 2px 8px rgba(34,68,68,0.25)' : 'none',
-                transition: 'background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Quinn insights
-            </button>
-            <button
-              type="button"
-              aria-pressed={panel === 'actions'}
-              onClick={() => setPanel('actions')}
-              style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-                padding: '8px 14px',
-                borderRadius: '100px',
-                border: 'none',
-                fontSize: '12px',
-                fontWeight: 600,
-                fontFamily: 'var(--font-primary)',
-                cursor: 'pointer',
-                background: panel === 'actions' ? 'var(--color-accent-active)' : 'transparent',
-                color: panel === 'actions' ? '#fff' : 'var(--color-text-muted)',
-                boxShadow: panel === 'actions' ? '0 2px 8px rgba(34,68,68,0.25)' : 'none',
-                transition: 'background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <span>To Review</span>
-              <span
-                aria-hidden
-                style={{
-                  minWidth: '18px',
-                  height: '18px',
-                  padding: '0 4px',
-                  borderRadius: '50%',
-                  background: panel === 'actions' ? 'rgba(255,255,255,0.3)' : 'var(--color-accent-mid)',
-                  color: '#fff',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  lineHeight: 1,
-                  transition: 'background 0.15s ease',
-                }}
-              >
-                {actionCount}
-              </span>
-            </button>
+            {briefingTitle}
+          </div>
+          <div
+            style={{
+              fontSize: '12px',
+              fontWeight: 500,
+              color: 'var(--color-text-secondary)',
+              lineHeight: 1.45,
+              marginTop: '4px',
+            }}
+          >
+            {briefingSubtitle}
           </div>
         </div>
 
@@ -167,11 +121,7 @@ export default function MorningBriefingTimeline({
             padding: '12px 0 4px',
           }}
         >
-          {panel === 'insights' ? (
-            <BriefingContent role={briefingRole} />
-          ) : (
-            <MorningBriefingActionsPanel briefingRole={briefingRole} />
-          )}
+          <BriefingContent role={briefingRole} phase={phase} />
         </div>
       </div>
     </div>

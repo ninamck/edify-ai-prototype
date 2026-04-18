@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Feed from '@/components/Feed/Feed';
 import MobileTopBar from './MobileTopBar';
 import MobileBottomNav from './MobileBottomNav';
@@ -13,6 +14,7 @@ type NavTab = 'receive' | 'checklists' | 'tasks' | 'waste' | 'insights';
 const BOTTOM_NAV_HEIGHT = 64;
 
 export default function MobileShell() {
+  const router = useRouter();
   const [hamburgerOpen, setHamburgerOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
@@ -31,7 +33,7 @@ export default function MobileShell() {
     }
     if (tab === 'waste') {
       setActiveTab('waste');
-      // stub — log waste sheet not yet built
+      router.push('/log-waste');
       return;
     }
     // receive & checklists navigate away — tab state resets on return

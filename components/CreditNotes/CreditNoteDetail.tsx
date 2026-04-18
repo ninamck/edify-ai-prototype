@@ -235,7 +235,7 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
                 <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-quinn-label)' }}>
                   Chase {creditNote.supplier} for {creditNote.ref}?
                 </div>
-                <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '1px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 500, color: '#fff', marginTop: '1px' }}>
                   Quinn will send a chase email on your behalf
                 </div>
               </div>
@@ -262,8 +262,8 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
                     padding: '5px 10px',
                     borderRadius: '6px',
                     background: 'transparent',
-                    border: '1px solid var(--color-border)',
-                    color: 'var(--color-text-secondary)',
+                    border: '1px solid rgba(255,255,255,0.4)',
+                    color: '#fff',
                     fontSize: '12px',
                     fontWeight: 600,
                     cursor: 'pointer',
