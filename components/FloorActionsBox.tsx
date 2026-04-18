@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ListChecks,
@@ -18,13 +18,49 @@ import {
   FileText,
   AlertTriangle,
   CheckCircle,
+  CalendarClock,
+  Send,
+  PackageSearch,
+  FileCheck,
+  FileX,
+  LayoutDashboard,
+  TrendingUp,
+  Layers,
+  Star,
+  MapPin,
+  User,
+  Settings,
   type LucideIcon,
 } from 'lucide-react';
 import type { BriefingRole } from '@/components/briefing';
 import EditFloorActionsPopup, {
   type FloorAction,
-  DEFAULT_FLOOR_ACTIONS,
+  DEFAULT_FLOOR_ACTIONS_BY_ROLE,
 } from '@/components/EditFloorActionsPopup';
+
+const STORAGE_KEY = 'edify:floorActionsByRole';
+
+function loadStoredActions(): Record<BriefingRole, FloorAction[]> | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Record<BriefingRole, FloorAction[]>;
+    if (!parsed || !parsed.ravi || !parsed.cheryl || !parsed.gm) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function storeActions(actions: Record<BriefingRole, FloorAction[]>) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(actions));
+  } catch {
+    /* quota / private mode — ignore */
+  }
+}
 
 const ICON_MAP: Record<string, LucideIcon> = {
   ListChecks,
@@ -41,6 +77,18 @@ const ICON_MAP: Record<string, LucideIcon> = {
   FileText,
   AlertTriangle,
   CheckCircle,
+  CalendarClock,
+  Send,
+  PackageSearch,
+  FileCheck,
+  FileX,
+  LayoutDashboard,
+  TrendingUp,
+  Layers,
+  Star,
+  MapPin,
+  User,
+  Settings,
 };
 
 function FloorActionSquare({
@@ -145,31 +193,44 @@ export default function FloorActionsBox({
   briefingRole,
 }: {
   onReceiveDelivery?: () => void;
-  /** Reserved: filter or reorder floor tiles by persona. */
+  /** Picks which per-role action set to render + edit. */
   briefingRole?: BriefingRole;
 }) {
-  void briefingRole;
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
-  const [actions, setActions] = useState<FloorAction[]>(DEFAULT_FLOOR_ACTIONS);
+  const [actionsByRole, setActionsByRole] =
+    useState<Record<BriefingRole, FloorAction[]>>(DEFAULT_FLOOR_ACTIONS_BY_ROLE);
 
+  // Hydrate from localStorage after mount (avoids SSR hydration mismatch).
+  useEffect(() => {
+    const stored = loadStoredActions();
+    if (stored) setActionsByRole(stored);
+  }, []);
+
+  const role: BriefingRole = briefingRole ?? 'ravi';
+  const actions = actionsByRole[role];
   const visibleActions = actions.filter((a) => a.visible);
 
-  /* Route handler for built-in actions */
+  /* Route handler: built-ins use the switch; picker-added shortcuts use action.href. */
   function handleActionClick(action: FloorAction) {
     switch (action.id) {
       case 'checklists':
         router.push('/checklists/complete');
-        break;
+        return;
       case 'receive-delivery':
         onReceiveDelivery?.();
-        break;
+        return;
       case 'log-waste':
         router.push('/log-waste');
-        break;
-      default:
-        break;
+        return;
+      case 'review-orders':
+        router.push('/assisted-ordering');
+        return;
+      case 'match-invoices':
+        router.push('/invoices');
+        return;
     }
+    if (action.href) router.push(action.href);
   }
 
   return (
@@ -206,16 +267,16 @@ export default function FloorActionsBox({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '28px',
-            height: '28px',
-            borderRadius: '8px',
+            width: '22px',
+            height: '22px',
+            borderRadius: '6px',
             border: 'none',
-            background: 'var(--color-bg-surface)',
+            background: 'transparent',
             cursor: 'pointer',
             flexShrink: 0,
           }}
         >
-          <Pencil size={13} color="var(--color-text-muted)" strokeWidth={2} />
+          <Pencil size={11} color="var(--color-text-muted)" strokeWidth={2} />
         </button>
       </div>
       <div style={{
@@ -242,7 +303,14 @@ export default function FloorActionsBox({
         open={editOpen}
         onClose={() => setEditOpen(false)}
         actions={actions}
-        onSave={setActions}
+        role={role}
+        onSave={(updated) =>
+          setActionsByRole((prev) => {
+            const next = { ...prev, [role]: updated };
+            storeActions(next);
+            return next;
+          })
+        }
       />
     </div>
   );

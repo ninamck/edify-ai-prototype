@@ -8,6 +8,7 @@ import MobileBottomNav from './MobileBottomNav';
 import MobileHamburgerDrawer from './MobileHamburgerDrawer';
 import MobileTasksDrawer from './MobileTasksDrawer';
 import MobileInsightsSheet from './MobileInsightsSheet';
+import type { BriefingRole } from '@/components/briefing';
 
 type NavTab = 'receive' | 'checklists' | 'tasks' | 'waste' | 'insights';
 
@@ -19,6 +20,7 @@ export default function MobileShell() {
   const [tasksOpen, setTasksOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<NavTab | null>(null);
+  const [briefingRole, setBriefingRole] = useState<BriefingRole>('gm');
 
   function handleTabChange(tab: NavTab) {
     if (tab === 'tasks') {
@@ -64,6 +66,8 @@ export default function MobileShell() {
       <MobileTopBar
         siteName="Fitzroy Espresso"
         onHamburgerOpen={() => setHamburgerOpen(true)}
+        role={briefingRole}
+        onRoleChange={setBriefingRole}
       />
 
       {/* Quinn chat — fills remaining space above bottom nav */}
@@ -77,7 +81,7 @@ export default function MobileShell() {
           overflow: 'hidden',
         }}
       >
-        <Feed briefingRole="gm" />
+        <Feed briefingRole={briefingRole} />
       </div>
 
       <MobileBottomNav
@@ -94,11 +98,13 @@ export default function MobileShell() {
       <MobileTasksDrawer
         open={tasksOpen}
         onClose={handleTasksClose}
+        role={briefingRole}
       />
 
       <MobileInsightsSheet
         open={insightsOpen}
         onClose={handleInsightsClose}
+        role={briefingRole}
       />
     </div>
   );

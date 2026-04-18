@@ -13,12 +13,24 @@ function LogWasteInner() {
   const itemId = params.get('itemId');
   const qtyParam = params.get('qty');
   const reasonParam = params.get('reason');
+  const queueParam = params.get('queue');
+  const iParam = params.get('i');
 
   if (itemId) {
     const qty = qtyParam && Number.isFinite(+qtyParam) ? Math.max(0, +qtyParam) : 1;
     const isValidReason = reasonParam && WASTE_REASONS.some((r) => r.id === reasonParam);
     const reason = (isValidReason ? (reasonParam as WasteReasonId) : null);
-    return <WasteLogCard itemId={itemId} initialQty={qty} initialReason={reason} />;
+    const queue = queueParam ? queueParam.split(',').filter(Boolean) : undefined;
+    const queueIndex = iParam && Number.isFinite(+iParam) ? Math.max(0, +iParam) : 0;
+    return (
+      <WasteLogCard
+        itemId={itemId}
+        initialQty={qty}
+        initialReason={reason}
+        queue={queue}
+        queueIndex={queueIndex}
+      />
+    );
   }
 
   const phase = phaseFromHour(new Date().getHours());

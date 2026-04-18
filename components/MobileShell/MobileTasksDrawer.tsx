@@ -6,11 +6,36 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
-  CheckSquare,
-  ListChecks,
   ArrowLeftRight,
   ShoppingCart,
+  PackageSearch,
+  FileCheck,
+  FileX,
+  type LucideIcon,
 } from 'lucide-react';
+import type { BriefingRole } from '@/components/briefing';
+
+type MobileTaskItem = {
+  id: string;
+  icon: LucideIcon;
+  label: string;
+  badge?: number;
+  route: string;
+};
+
+const COMMON_TASKS: MobileTaskItem[] = [
+  { id: 'review-orders', icon: ShoppingCart, label: 'Review orders', badge: 3, route: '/assisted-ordering' },
+  { id: 'transfer-stock', icon: ArrowLeftRight, label: 'Transfer stock', route: '/' },
+  { id: 'count-stock', icon: PackageSearch, label: 'Count stock', route: '/' },
+  { id: 'match-invoices', icon: FileCheck, label: 'Match invoices', badge: 2, route: '/invoices' },
+  { id: 'credit-notes', icon: FileX, label: 'Manage credit notes', route: '/credit-notes' },
+];
+
+const MOBILE_TASKS_BY_ROLE: Record<BriefingRole, MobileTaskItem[]> = {
+  ravi: COMMON_TASKS,
+  cheryl: COMMON_TASKS,
+  gm: COMMON_TASKS,
+};
 
 function TaskRow({
   icon: Icon,
@@ -111,9 +136,11 @@ function TaskRow({
 export default function MobileTasksDrawer({
   open,
   onClose,
+  role = 'gm',
 }: {
   open: boolean;
   onClose: () => void;
+  role?: BriefingRole;
 }) {
   const router = useRouter();
 
@@ -213,7 +240,7 @@ export default function MobileTasksDrawer({
                   fontWeight: 700,
                   color: 'var(--color-text-primary)',
                 }}>
-                  Tasks
+                  Actions
                 </span>
               </div>
               <button
@@ -245,33 +272,15 @@ export default function MobileTasksDrawer({
               flexDirection: 'column',
               gap: '10px',
             }}>
-              <TaskRow
-                icon={CheckSquare}
-                label="Complete tasks"
-                badge={4}
-                onClick={() => go('/checklists/complete')}
-              />
-              <TaskRow
-                icon={ListChecks}
-                label="Complete your checklists"
-                onClick={() => go('/checklists/complete')}
-              />
-              <TaskRow
-                icon={ShoppingCart}
-                label="Review orders"
-                onClick={() => go('/')}
-              />
-              <TaskRow
-                icon={ArrowLeftRight}
-                label="Transfer stock"
-                onClick={() => go('/')}
-              />
-              <TaskRow
-                icon={ShoppingCart}
-                label="Suggested orders"
-                badge={3}
-                onClick={() => go('/assisted-ordering')}
-              />
+              {MOBILE_TASKS_BY_ROLE[role].map((task) => (
+                <TaskRow
+                  key={task.id}
+                  icon={task.icon}
+                  label={task.label}
+                  badge={task.badge}
+                  onClick={() => go(task.route)}
+                />
+              ))}
             </div>
           </motion.div>
         </>

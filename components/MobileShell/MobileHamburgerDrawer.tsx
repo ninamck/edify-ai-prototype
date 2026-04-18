@@ -54,15 +54,15 @@ function DrawerNavItem({
         transition: 'background 0.12s ease',
         WebkitTapHighlightColor: 'transparent',
       }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-bg-hover)'; }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.08)'; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
     >
-      <Icon size={17} color="var(--color-text-secondary)" strokeWidth={1.8} style={{ flexShrink: 0 }} />
+      <Icon size={17} color="rgba(255,255,255,0.75)" strokeWidth={1.8} style={{ flexShrink: 0 }} />
       <span style={{
         flex: 1,
         fontSize: '13.5px',
         fontWeight: 500,
-        color: 'var(--color-text-primary)',
+        color: '#FFFFFF',
       }}>
         {label}
       </span>
@@ -94,7 +94,7 @@ function SectionDivider({ label }: { label: string }) {
       fontSize: '12px',
       fontWeight: 700,
       letterSpacing: '0.04em',
-      color: 'var(--color-text-muted)',
+      color: 'rgba(255,255,255,0.55)',
     }}>
       {label}
     </div>
@@ -185,13 +185,13 @@ export default function MobileHamburgerDrawer({
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '12px 12px 12px 16px',
-              borderBottom: '1px solid var(--color-border-subtle)',
+              borderBottom: '1px solid rgba(255,255,255,0.12)',
               flexShrink: 0,
             }}>
               <span style={{
                 fontSize: '13px',
                 fontWeight: 700,
-                color: 'var(--color-text-primary)',
+                color: '#FFFFFF',
               }}>
                 Menu
               </span>
@@ -207,11 +207,11 @@ export default function MobileHamburgerDrawer({
                   height: '36px',
                   borderRadius: '10px',
                   border: 'none',
-                  background: 'var(--color-bg-hover)',
+                  background: 'rgba(255,255,255,0.1)',
                   cursor: 'pointer',
                 }}
               >
-                <X size={17} color="var(--color-text-muted)" />
+                <X size={17} color="#FFFFFF" />
               </button>
             </div>
 

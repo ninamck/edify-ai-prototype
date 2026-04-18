@@ -5,13 +5,16 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import MorningBriefingTimeline from '@/components/Feed/MorningBriefingTimeline';
+import type { BriefingRole } from '@/components/briefing';
 
 export default function MobileInsightsSheet({
   open,
   onClose,
+  role = 'gm',
 }: {
   open: boolean;
   onClose: () => void;
+  role?: BriefingRole;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -126,7 +129,7 @@ export default function MobileInsightsSheet({
               WebkitOverflowScrolling: 'touch',
               padding: '12px 12px max(24px, env(safe-area-inset-bottom))',
             }}>
-              <MorningBriefingTimeline briefingRole="gm" phase="morning" layout="sheet" />
+              <MorningBriefingTimeline briefingRole={role} phase="morning" layout="sheet" />
             </div>
           </motion.div>
         </>

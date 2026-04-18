@@ -1445,6 +1445,7 @@ export default function Feed({
   noHeader = false,
   onAddToDashboard,
   onViewDashboard,
+  seedUserPrompt,
 }: {
   briefingRole: BriefingRole;
   quinnExpanded?: boolean;
@@ -1453,9 +1454,14 @@ export default function Feed({
   noHeader?: boolean;
   onAddToDashboard?: (id: AnalyticsChartId) => void;
   onViewDashboard?: () => void;
+  seedUserPrompt?: string;
 }) {
-  const [chatStarted, setChatStarted] = useState(false);
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [chatStarted, setChatStarted] = useState(!!seedUserPrompt);
+  const [messages, setMessages] = useState<ChatMsg[]>(() =>
+    seedUserPrompt
+      ? [{ id: 'q-seed', role: 'quinn', text: seedUserPrompt }]
+      : [],
+  );
   const [input, setInput] = useState('');
   const [recipeFlow, setRecipeFlow] = useState(0);
   const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>(INITIAL_RECIPE_INGREDIENTS);

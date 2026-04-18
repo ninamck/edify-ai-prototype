@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Truck, ClipboardList, CheckSquare, Trash2, Sparkles } from 'lucide-react';
+import { Truck, ClipboardList, LayoutGrid, Trash2, Sparkles } from 'lucide-react';
 
 type NavTab = 'receive' | 'checklists' | 'tasks' | 'waste' | 'insights';
 
@@ -92,79 +92,6 @@ function NavButton({
   );
 }
 
-function CentreTaskButton({
-  active,
-  onClick,
-}: {
-  active?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="Tasks"
-      style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '4px',
-        padding: '8px 4px',
-        border: 'none',
-        background: 'transparent',
-        cursor: 'pointer',
-        fontFamily: 'var(--font-primary)',
-        WebkitTapHighlightColor: 'transparent',
-      }}
-    >
-      {/* Elevated centre button */}
-      <span style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '48px',
-        height: '48px',
-        borderRadius: '14px',
-        background: active ? 'var(--color-accent-active)' : 'var(--color-accent-deep)',
-        boxShadow: '0 4px 14px rgba(34,68,68,0.28)',
-        position: 'relative',
-        marginTop: '-12px',
-      }}>
-        <CheckSquare size={22} color="#fff" strokeWidth={2} />
-        {/* Tasks badge */}
-        <span style={{
-          position: 'absolute',
-          top: '-5px',
-          right: '-5px',
-          minWidth: '17px',
-          height: '17px',
-          padding: '0 4px',
-          borderRadius: '100px',
-          background: '#E85D4A',
-          color: '#fff',
-          fontSize: '12px',
-          fontWeight: 700,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-          4
-        </span>
-      </span>
-      <span style={{
-        fontSize: '12px',
-        fontWeight: 600,
-        color: active ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
-        lineHeight: 1,
-      }}>
-        Tasks
-      </span>
-    </button>
-  );
-}
-
 export default function MobileBottomNav({
   activeTab,
   onTabChange,
@@ -212,7 +139,9 @@ export default function MobileBottomNav({
           router.push('/checklists/complete');
         }}
       />
-      <CentreTaskButton
+      <NavButton
+        icon={LayoutGrid}
+        label="Actions"
         active={activeTab === 'tasks'}
         onClick={() => onTabChange('tasks')}
       />
