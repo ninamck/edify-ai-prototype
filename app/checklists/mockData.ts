@@ -1,4 +1,10 @@
-import type { ChecklistTemplate, ChecklistInstance } from './types';
+import type { BriefingPhase } from '@/components/briefing';
+import type {
+  ChecklistTemplate,
+  ChecklistInstance,
+  FollowUpCondition,
+  ResponseType,
+} from './types';
 
 export const MOCK_SITES = ['Fitzroy Espresso', 'South Yarra', 'Richmond', 'Carlton'];
 
@@ -262,11 +268,21 @@ export const MOCK_INSTANCES: ChecklistInstance[] = [
     templateId: 'tpl-1',
     templateName: 'Opening checks',
     site: 'Fitzroy Espresso',
-    status: 'pending',
-    dueLabel: 'Due today · 7:00am',
+    status: 'complete',
+    dueLabel: 'Completed today · 7:05am',
     assignedRole: 'kitchen',
     questionCount: 5,
-    answers: [],
+    answers: [
+      { questionId: 'q1', value: true },
+      { questionId: 'q2', value: 6 },
+      { questionId: 'q2a', value: 'Fridge 1 was 6°C on arrival. Thermostat bumped down, re-checked at 7:40am — now 3°C. Will monitor through day.' },
+      { questionId: 'q3', value: true },
+      { questionId: 'q4', value: true },
+      { questionId: 'q5', value: '' },
+    ],
+    completedAt: '7:05am',
+    completedDate: '2026-04-20',
+    completedBy: 'Ravi Mehta',
   },
   {
     id: 'inst-2',
@@ -302,15 +318,74 @@ export const MOCK_INSTANCES: ChecklistInstance[] = [
     assignedRole: 'kitchen',
     questionCount: 5,
     answers: [
-      { questionId: 'q1', value: true },
+      { questionId: 'q1', value: false },
+      { questionId: 'q1a', value: 'Display fridge door seal broken. Raised a work order with Coolhub, items moved to backup unit.' },
       { questionId: 'q2', value: 3 },
       { questionId: 'q3', value: true },
       { questionId: 'q4', value: true },
       { questionId: 'q5', value: '' },
     ],
     completedAt: '7:12am',
-    completedDate: '2026-04-04',
-    completedBy: 'Ravi Mehta',
+    completedDate: '2026-04-20',
+    completedBy: 'Sam Torres',
+  },
+  {
+    id: 'inst-5',
+    templateId: 'tpl-2',
+    templateName: 'Temperature log — cold chain',
+    site: 'South Yarra',
+    status: 'complete',
+    dueLabel: 'Completed today · 8:58am',
+    assignedRole: 'kitchen',
+    questionCount: 4,
+    answers: [
+      { questionId: 'qt1', value: 3 },
+      { questionId: 'qt2', value: 4 },
+      { questionId: 'qt3', value: 3 },
+      { questionId: 'qt4', value: true },
+    ],
+    completedAt: '8:58am',
+    completedDate: '2026-04-20',
+    completedBy: 'Sam Torres',
+  },
+  {
+    id: 'inst-6',
+    templateId: 'tpl-2',
+    templateName: 'Temperature log — cold chain',
+    site: 'Richmond',
+    status: 'complete',
+    dueLabel: 'Completed today · 9:06am',
+    assignedRole: 'kitchen',
+    questionCount: 4,
+    answers: [
+      { questionId: 'qt1', value: 5 },
+      { questionId: 'qt1a', value: 'Walk-in at 5°C — door left ajar overnight. Stock checked, nothing above 4°C at core. Manager notified.' },
+      { questionId: 'qt2', value: 3 },
+      { questionId: 'qt3', value: 2 },
+      { questionId: 'qt4', value: true },
+    ],
+    completedAt: '9:06am',
+    completedDate: '2026-04-20',
+    completedBy: 'Jordan Beck',
+  },
+  {
+    id: 'inst-7',
+    templateId: 'tpl-2',
+    templateName: 'Temperature log — cold chain',
+    site: 'Carlton',
+    status: 'complete',
+    dueLabel: 'Completed today · 9:11am',
+    assignedRole: 'kitchen',
+    questionCount: 4,
+    answers: [
+      { questionId: 'qt1', value: 3 },
+      { questionId: 'qt2', value: 4 },
+      { questionId: 'qt3', value: 3 },
+      { questionId: 'qt4', value: true },
+    ],
+    completedAt: '9:11am',
+    completedDate: '2026-04-20',
+    completedBy: 'Jordan Beck',
   },
 ];
 
@@ -543,4 +618,156 @@ export function getAllHistoryInstances(): ChecklistInstance[] {
     const dateB = b.completedDate ?? '0000-00-00';
     return dateB.localeCompare(dateA);
   });
+}
+
+// ---------- Compliance helpers (used by dashboard) ----------
+
+export interface FollowUpWarning {
+  instanceId: string;
+  templateName: string;
+  site: string;
+  completedAt?: string;
+  completedBy?: string;
+  parentQuestion: string;
+  parentAnswer: string;
+  followUpNote: string;
+}
+
+function answerForQuestion(
+  instance: ChecklistInstance,
+  questionId: string,
+): ChecklistInstance['answers'][number] | undefined {
+  return instance.answers.find((a) => a.questionId === questionId);
+}
+
+function conditionMet(
+  condition: FollowUpCondition,
+  value: ChecklistInstance['answers'][number]['value'],
+): boolean {
+  switch (condition.type) {
+    case 'checked':   return value === true;
+    case 'unchecked': return value === false;
+    case 'equals':    return value === condition.value;
+    case 'greater_than':
+      return typeof value === 'number' && typeof condition.value === 'number' && value > condition.value;
+    case 'less_than':
+      return typeof value === 'number' && typeof condition.value === 'number' && value < condition.value;
+    case 'contains':
+      return typeof value === 'string' && typeof condition.value === 'string'
+        && value.toLowerCase().includes(condition.value.toLowerCase());
+    default:
+      return false;
+  }
+}
+
+function describeParentAnswer(responseType: ResponseType, value: ChecklistInstance['answers'][number]['value']): string {
+  if (responseType === 'temperature' && typeof value === 'number') return `${value}°C`;
+  if (responseType === 'number' && typeof value === 'number') return String(value);
+  if (responseType === 'checkbox') return value === true ? 'Yes' : 'No';
+  return String(value ?? '');
+}
+
+export function followUpWarningsForInstance(instance: ChecklistInstance): FollowUpWarning[] {
+  if (instance.status !== 'complete') return [];
+  const template = getTemplateForInstance(instance);
+  if (!template) return [];
+
+  const warnings: FollowUpWarning[] = [];
+  for (const question of template.questions) {
+    const ans = answerForQuestion(instance, question.id);
+    if (!ans) continue;
+    for (const rule of question.followUpRules) {
+      if (!conditionMet(rule.condition, ans.value)) continue;
+      const followUpAns = answerForQuestion(instance, rule.followUpQuestionId);
+      warnings.push({
+        instanceId: instance.id,
+        templateName: instance.templateName,
+        site: instance.site,
+        completedAt: instance.completedAt,
+        completedBy: instance.completedBy,
+        parentQuestion: question.name,
+        parentAnswer: describeParentAnswer(question.responseType, ans.value),
+        followUpNote: typeof followUpAns?.value === 'string' ? followUpAns.value : '',
+      });
+    }
+  }
+  return warnings;
+}
+
+function phaseHour(phase: BriefingPhase): number {
+  switch (phase) {
+    case 'morning':   return 9;
+    case 'midday':    return 12;
+    case 'afternoon': return 15;
+    case 'evening':   return 19;
+  }
+}
+
+function parseDueHour(dueLabel: string): number | null {
+  const match = dueLabel.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+  if (!match) return null;
+  let h = parseInt(match[1], 10);
+  const ampm = match[3].toLowerCase();
+  if (ampm === 'pm' && h !== 12) h += 12;
+  if (ampm === 'am' && h === 12) h = 0;
+  return h;
+}
+
+export interface ChecklistComplianceSummary {
+  totalToday: number;
+  completeToday: number;
+  inProgressToday: number;
+  overdueToday: number;
+  upcomingToday: number;
+  completionPct: number;
+  warnings: FollowUpWarning[];
+  sevenDayPct: number;
+  sevenDayTotal: number;
+  sevenDayComplete: number;
+}
+
+export function getChecklistComplianceSummary(phase: BriefingPhase): ChecklistComplianceSummary {
+  const now = phaseHour(phase);
+
+  let completeToday = 0;
+  let inProgressToday = 0;
+  let overdueToday = 0;
+  let upcomingToday = 0;
+
+  for (const inst of MOCK_INSTANCES) {
+    if (inst.status === 'complete') {
+      completeToday += 1;
+    } else if (inst.status === 'in_progress') {
+      inProgressToday += 1;
+    } else {
+      const due = parseDueHour(inst.dueLabel);
+      if (due !== null && due <= now) overdueToday += 1;
+      else upcomingToday += 1;
+    }
+  }
+
+  const totalToday = MOCK_INSTANCES.length;
+  const completionPct = totalToday > 0 ? Math.round((completeToday / totalToday) * 100) : 0;
+
+  const warnings = MOCK_INSTANCES.flatMap(followUpWarningsForInstance);
+
+  // Seven-day compliance baseline. Fixtures are too thin to derive a believable rate,
+  // so we use a realistic demo number that reflects a well-run estate with occasional
+  // misses.
+  const sevenDayPct = 94;
+  const sevenDayTotal = 49;
+  const sevenDayComplete = Math.round(sevenDayTotal * (sevenDayPct / 100));
+
+  return {
+    totalToday,
+    completeToday,
+    inProgressToday,
+    overdueToday,
+    upcomingToday,
+    completionPct,
+    warnings,
+    sevenDayPct,
+    sevenDayTotal,
+    sevenDayComplete,
+  };
 }

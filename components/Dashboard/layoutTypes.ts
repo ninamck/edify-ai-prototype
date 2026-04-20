@@ -23,6 +23,7 @@ export const MANAGER_DEFAULT_LAYOUT: DashboardLayoutEntry[] = [
   { id: 'shift-kpi', visible: true },
   { id: 'hourly-combo', visible: true },
   { id: 'weather', visible: true },
+  { id: 'checklist-compliance', visible: true },
   { id: 'waste', visible: true },
   { id: 'deliveries', visible: true },
 ];
@@ -31,6 +32,7 @@ export const ESTATE_DEFAULT_LAYOUT: DashboardLayoutEntry[] = [
   { id: 'date-filter', visible: true },
   { id: 'kpi-grid', visible: true },
   { id: 'sales-trend', visible: true },
+  { id: 'checklist-compliance', visible: true },
   { id: 'site-gp', visible: true },
   { id: 'wastage', visible: true },
   { id: 'cogs-variance', visible: true },

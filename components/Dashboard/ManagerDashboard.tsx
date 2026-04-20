@@ -16,6 +16,8 @@ import WeatherStrip from '@/components/Dashboard/parts/WeatherStrip';
 import DeliveriesCard from '@/components/Dashboard/parts/DeliveriesCard';
 import WasteCard from '@/components/Dashboard/parts/WasteCard';
 import ShiftKpiRow from '@/components/Dashboard/parts/ShiftKpiRow';
+import ChecklistComplianceCard from '@/components/Dashboard/parts/ChecklistComplianceCard';
+import { getChecklistComplianceSummary } from '@/app/checklists/mockData';
 import type { BriefingPhase } from '@/components/briefing';
 import type { AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
 import { renderAnalyticsChart, ANALYTICS_CONFIG } from '@/components/Analytics/AnalyticsCharts';
@@ -80,6 +82,7 @@ export default function ManagerDashboard({
   const weatherHourly = useMemo(() => weatherHourlyForPhase(phase), [phase]);
   const deliveries = useMemo(() => deliveriesForPhase(phase), [phase]);
   const waste = useMemo(() => wasteForPhase(phase), [phase]);
+  const checklistSummary = useMemo(() => getChecklistComplianceSummary(phase), [phase]);
 
   const kpis = useMemo(() => {
     let salesSoFar = 0;
@@ -138,6 +141,7 @@ export default function ManagerDashboard({
             forecastToNow={kpis.forecastToNow}
             expectedEod={kpis.expectedEod}
             fullDayForecast={kpis.fullDayForecast}
+            asAt={nowHourLabel}
           />
         );
       case 'hourly-combo':
@@ -154,8 +158,8 @@ export default function ManagerDashboard({
         return (
           <ChartCard
             title="Weather · now vs forecast"
-            subtitle="Today's hourly conditions. Chip shows actual vs what forecast said (+ = warmer than forecast)."
-            height={110}
+            subtitle="Morning & afternoon pattern. Tap either to see the hourly breakdown."
+            height={96}
           >
             <WeatherStrip data={weatherHourly} />
           </ChartCard>
@@ -164,6 +168,8 @@ export default function ManagerDashboard({
         return <WasteCard rows={waste} />;
       case 'deliveries':
         return <DeliveriesCard drops={deliveries} wtd={WTD_SPEND} />;
+      case 'checklist-compliance':
+        return <ChecklistComplianceCard summary={checklistSummary} />;
       default:
         return null;
     }
