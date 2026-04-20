@@ -12,66 +12,31 @@ import MorningBriefingTimeline from '@/components/Feed/MorningBriefingTimeline';
 import RightPanelSheetOverlay from '@/components/RightPanel/RightPanelSheetOverlay';
 import MobileInsightsBar from '@/components/MobileInsightsBar';
 import AddInsightPopup from '@/components/Dashboard/AddInsightPopup';
-import {
-  MANAGER_DEFAULT_LAYOUT,
-  ESTATE_DEFAULT_LAYOUT,
-  pinnedId,
-  type DashboardLayoutEntry,
-} from '@/components/Dashboard/layoutTypes';
+import { pinnedChartIdOf, type DashboardLayoutEntry } from '@/components/Dashboard/layoutTypes';
 
 import FloorActionsBox from '@/components/FloorActionsBox';
 import Feed from '@/components/Feed/Feed';
-import type { BriefingRole, BriefingPhase } from '@/components/briefing';
+import type { BriefingPhase } from '@/components/briefing';
 import { phaseFromHour } from '@/components/briefing';
+import { useDemoBriefingRole } from '@/components/DemoControls/demoStore';
 import type { PhaseOverride } from '@/components/PhaseSwitcher';
 import type { AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useDashboardLayout } from '@/hooks/useDashboardLayout';
 import MobileShell from '@/components/MobileShell/MobileShell';
 
 
 
 const NARROW_BREAKPOINT = '(max-width: 900px)';
-const MOBILE_SHELL_BREAKPOINT = '(max-width: 430px)';
-
-const LAYOUT_STORAGE_KEY = 'edify:dashboardLayoutByRole';
-
-type LayoutByRole = Record<BriefingRole, DashboardLayoutEntry[]>;
-
-const DEFAULT_LAYOUT_BY_ROLE: LayoutByRole = {
-  ravi: MANAGER_DEFAULT_LAYOUT,
-  gm: MANAGER_DEFAULT_LAYOUT,
-  cheryl: ESTATE_DEFAULT_LAYOUT,
-};
-
-function loadStoredLayout(): LayoutByRole | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<LayoutByRole>;
-    if (!parsed || !parsed.ravi || !parsed.cheryl || !parsed.gm) return null;
-    return parsed as LayoutByRole;
-  } catch {
-    return null;
-  }
-}
-
-function storeLayout(layout: LayoutByRole) {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout));
-  } catch {
-    /* quota / private mode — ignore */
-  }
-}
+const MOBILE_SHELL_BREAKPOINT = '(max-width: 500px)';
 
 export default function HomeShell() {
   const router = useRouter();
   const [shellView, setShellView] = useState<ShellViewMode>('command-centre');
-  const [briefingRole, setBriefingRole] = useState<BriefingRole>('ravi');
+  const briefingRole = useDemoBriefingRole();
   const [mobileInsightsOpen, setMobileInsightsOpen] = useState(false);
   const [chatActive, setChatActive] = useState(false);
-  const [dashboardLayoutByRole, setDashboardLayoutByRole] = useState<LayoutByRole>(DEFAULT_LAYOUT_BY_ROLE);
+  const { layoutByRole, setLayoutForRole, addPinnedChart: addPinned, removePinnedChart: removePinned } = useDashboardLayout();
   const [editingDashboard, setEditingDashboard] = useState(false);
   const [addInsightOpen, setAddInsightOpen] = useState(false);
   const [phaseOverride, setPhaseOverride] = useState<PhaseOverride>('auto');
@@ -79,17 +44,6 @@ export default function HomeShell() {
     phaseOverride === 'auto' ? phaseFromHour(new Date().getHours()) : phaseOverride;
   const isNarrow = useMediaQuery(NARROW_BREAKPOINT);
   const isMobileShell = useMediaQuery(MOBILE_SHELL_BREAKPOINT);
-
-  // Hydrate dashboard layout from localStorage after mount (avoids SSR mismatch).
-  useEffect(() => {
-    const stored = loadStoredLayout();
-    if (stored) setDashboardLayoutByRole(stored);
-  }, []);
-
-  // Persist on change.
-  useEffect(() => {
-    storeLayout(dashboardLayoutByRole);
-  }, [dashboardLayoutByRole]);
 
   useEffect(() => {
     if (!isNarrow) setMobileInsightsOpen(false);
@@ -126,30 +80,18 @@ export default function HomeShell() {
     return <MobileShell />;
   }
 
-  const currentLayout = dashboardLayoutByRole[briefingRole];
+  const currentLayout = layoutByRole[briefingRole];
 
   function updateCurrentLayout(next: DashboardLayoutEntry[]) {
-    setDashboardLayoutByRole((prev) => ({ ...prev, [briefingRole]: next }));
+    setLayoutForRole(briefingRole, next);
   }
 
   function addPinnedChart(id: AnalyticsChartId) {
-    const entryId = pinnedId(id);
-    setDashboardLayoutByRole((prev) => {
-      const existing = prev[briefingRole];
-      if (existing.some((e) => e.id === entryId)) return prev;
-      return {
-        ...prev,
-        [briefingRole]: [...existing, { id: entryId, visible: true }],
-      };
-    });
+    addPinned(briefingRole, id);
   }
 
   function removePinnedChart(id: AnalyticsChartId) {
-    const entryId = pinnedId(id);
-    setDashboardLayoutByRole((prev) => ({
-      ...prev,
-      [briefingRole]: prev[briefingRole].filter((e) => e.id !== entryId),
-    }));
+    removePinned(briefingRole, id);
   }
 
   return (
@@ -177,8 +119,6 @@ export default function HomeShell() {
       >
       <ShellTopBar
         siteName="Fitzroy Espresso"
-        briefingRole={briefingRole}
-        onBriefingRoleChange={setBriefingRole}
         shellView={shellView}
         onShellViewChange={setShellView}
         phaseOverride={phaseOverride}
@@ -330,6 +270,11 @@ export default function HomeShell() {
         onClose={() => setAddInsightOpen(false)}
         briefingRole={briefingRole}
         onAddToDashboard={addPinnedChart}
+        alreadyPinned={new Set(
+          currentLayout
+            .map((e) => pinnedChartIdOf(e.id))
+            .filter((id): id is AnalyticsChartId => id !== null),
+        )}
       />
 
     </div>

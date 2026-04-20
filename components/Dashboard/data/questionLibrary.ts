@@ -1,0 +1,1090 @@
+import type { AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
+
+export type QuestionSegment =
+  | 'sales'
+  | 'cogs'
+  | 'labour'
+  | 'waste'
+  | 'production';
+
+export type ProductionSubsegment =
+  | 'general'
+  | 'produced-v-sold'
+  | 'availability'
+  | 'closing-range'
+  | 'efficiency';
+
+export interface QuestionEntry {
+  id: string;
+  segment: QuestionSegment;
+  subsegment?: ProductionSubsegment;
+  text: string;
+  /** Non-exhaustive — only the 6 canonical exact-match questions carry a chart hint. */
+  suggestedChartId?: AnalyticsChartId;
+}
+
+export const SEGMENT_LABELS: Record<QuestionSegment, string> = {
+  sales: 'Sales',
+  cogs: 'COGS',
+  labour: 'Labour',
+  waste: 'Waste',
+  production: 'Production',
+};
+
+export const PRODUCTION_SUBSEGMENT_LABELS: Record<ProductionSubsegment, string> = {
+  general: 'General',
+  'produced-v-sold': 'Produced v sold',
+  availability: 'Availability',
+  'closing-range': 'Closing range',
+  efficiency: 'Efficiency',
+};
+
+export const SEGMENT_ORDER: QuestionSegment[] = ['sales', 'cogs', 'labour', 'waste', 'production'];
+export const PRODUCTION_SUBSEGMENT_ORDER: ProductionSubsegment[] = [
+  'general',
+  'produced-v-sold',
+  'availability',
+  'closing-range',
+  'efficiency',
+];
+
+export const QUESTION_LIBRARY: QuestionEntry[] = [
+  {
+    id: 'sales-what-were-total-sales-across',
+    segment: 'sales',
+    text: 'What were total sales across all sites last week?',
+    suggestedChartId: 'sales',
+  },
+  {
+    id: 'sales-which-site-had-the-highest',
+    segment: 'sales',
+    text: 'Which site had the highest revenue in the last 30 days?',
+  },
+  {
+    id: 'sales-how-did-sales-perform-this',
+    segment: 'sales',
+    text: 'How did sales perform this week vs the same week last year?',
+  },
+  {
+    id: 'sales-what-is-the-average-transaction',
+    segment: 'sales',
+    text: 'What is the average transaction value per site this month?',
+  },
+  {
+    id: 'sales-which-hour-of-the-day',
+    segment: 'sales',
+    text: 'Which hour of the day drives the most revenue on weekdays?',
+    suggestedChartId: 'hour',
+  },
+  {
+    id: 'sales-how-has-revenue-trended-over',
+    segment: 'sales',
+    text: 'How has revenue trended over the last 12 weeks?',
+    suggestedChartId: 'trend',
+  },
+  {
+    id: 'sales-what-is-the-sales-split',
+    segment: 'sales',
+    text: 'What is the sales split between eat-in and takeaway?',
+  },
+  {
+    id: 'sales-which-product-category-generates-the',
+    segment: 'sales',
+    text: 'Which product category generates the most revenue?',
+  },
+  {
+    id: 'sales-what-are-the-top-10',
+    segment: 'sales',
+    text: 'What are the top 10 best-selling items across all sites?',
+  },
+  {
+    id: 'sales-how-do-weekend-sales-compare',
+    segment: 'sales',
+    text: 'How do weekend sales compare to weekday sales on average?',
+  },
+  {
+    id: 'sales-which-site-has-shown-the',
+    segment: 'sales',
+    text: 'Which site has shown the strongest month-on-month growth?',
+    suggestedChartId: 'growth',
+  },
+  {
+    id: 'sales-what-percentage-of-revenue-comes',
+    segment: 'sales',
+    text: 'What percentage of revenue comes from our loyalty customers?',
+  },
+  {
+    id: 'sales-how-did-the-recent-menu',
+    segment: 'sales',
+    text: 'How did the recent menu change impact sales mix?',
+  },
+  {
+    id: 'sales-what-is-the-revenue-per',
+    segment: 'sales',
+    text: 'What is the revenue per labour hour across each site?',
+    suggestedChartId: 'labour',
+  },
+  {
+    id: 'sales-which-new-product-has-had',
+    segment: 'sales',
+    text: 'Which new product has had the best sales performance since launch?',
+  },
+  {
+    id: 'sales-what-is-the-average-basket',
+    segment: 'sales',
+    text: 'What is the average basket size per customer visit?',
+  },
+  {
+    id: 'sales-how-does-site-performance-rank',
+    segment: 'sales',
+    text: 'How does site performance rank against the network average?',
+  },
+  {
+    id: 'sales-what-were-sales-during-the',
+    segment: 'sales',
+    text: 'What were sales during the breakfast vs lunch vs afternoon daypart?',
+  },
+  {
+    id: 'sales-which-sites-underperformed-against-their',
+    segment: 'sales',
+    text: 'Which sites underperformed against their sales target this month?',
+  },
+  {
+    id: 'sales-how-has-our-average-transaction',
+    segment: 'sales',
+    text: 'How has our average transaction value changed over the last quarter?',
+  },
+  {
+    id: 'cogs-what-is-our-cogs-as',
+    segment: 'cogs',
+    text: 'What is our COGS as a percentage of revenue across all sites this month?',
+  },
+  {
+    id: 'cogs-which-site-has-the-highest',
+    segment: 'cogs',
+    text: 'Which site has the highest COGS variance against theoretical this week?',
+  },
+  {
+    id: 'cogs-what-are-the-top-5',
+    segment: 'cogs',
+    text: 'What are the top 5 ingredients driving the most cost this month?',
+  },
+  {
+    id: 'cogs-how-has-our-overall-cogs',
+    segment: 'cogs',
+    text: 'How has our overall COGS % trended over the last 12 weeks?',
+  },
+  {
+    id: 'cogs-which-menu-items-have-the',
+    segment: 'cogs',
+    text: 'Which menu items have the lowest gross margin?',
+  },
+  {
+    id: 'cogs-what-is-the-theoretical-vs',
+    segment: 'cogs',
+    text: 'What is the theoretical vs actual COGS gap at each site?',
+  },
+  {
+    id: 'cogs-which-supplier-invoices-have-the',
+    segment: 'cogs',
+    text: 'Which supplier invoices have the largest price variance vs contract rates?',
+  },
+  {
+    id: 'cogs-how-much-did-coffee-bean',
+    segment: 'cogs',
+    text: 'How much did coffee bean costs change after our last supplier review?',
+  },
+  {
+    id: 'cogs-what-is-the-cost-per',
+    segment: 'cogs',
+    text: 'What is the cost per serving for our top 10 selling items?',
+  },
+  {
+    id: 'cogs-which-sites-are-consistently-over',
+    segment: 'cogs',
+    text: 'Which sites are consistently over their COGS budget?',
+    suggestedChartId: 'cogs',
+  },
+  {
+    id: 'cogs-what-is-the-ingredient-cost',
+    segment: 'cogs',
+    text: 'What is the ingredient cost breakdown for our signature latte?',
+  },
+  {
+    id: 'cogs-how-does-dairy-cost-as',
+    segment: 'cogs',
+    text: 'How does dairy cost as a % of COGS compare site to site?',
+  },
+  {
+    id: 'cogs-which-recipes-show-the-biggest',
+    segment: 'cogs',
+    text: 'Which recipes show the biggest gap between actual and theoretical usage?',
+  },
+  {
+    id: 'cogs-what-is-our-average-food',
+    segment: 'cogs',
+    text: 'What is our average food cost % vs drink cost %?',
+  },
+  {
+    id: 'cogs-how-much-has-our-cogs',
+    segment: 'cogs',
+    text: 'How much has our COGS increased in absolute terms vs the same period last year?',
+  },
+  {
+    id: 'cogs-which-ingredient-has-seen-the',
+    segment: 'cogs',
+    text: 'Which ingredient has seen the biggest price increase in the last 6 months?',
+  },
+  {
+    id: 'cogs-what-is-the-cogs-impact',
+    segment: 'cogs',
+    text: 'What is the COGS impact if we switch to oat milk as our default alt milk?',
+  },
+  {
+    id: 'cogs-which-sites-have-the-most',
+    segment: 'cogs',
+    text: 'Which sites have the most accurate portion control based on COGS variance?',
+  },
+  {
+    id: 'cogs-how-does-our-cogs-compare',
+    segment: 'cogs',
+    text: 'How does our COGS % compare across different dayparts?',
+  },
+  {
+    id: 'cogs-what-would-our-cogs-be',
+    segment: 'cogs',
+    text: 'What would our COGS % be if we removed our three lowest-margin items?',
+  },
+  {
+    id: 'labour-what-is-labour-as-a',
+    segment: 'labour',
+    text: 'What is labour as a percentage of sales across all sites this month?',
+  },
+  {
+    id: 'labour-which-site-has-the-highest',
+    segment: 'labour',
+    text: 'Which site has the highest labour cost per transaction?',
+  },
+  {
+    id: 'labour-how-does-actual-vs-scheduled',
+    segment: 'labour',
+    text: 'How does actual vs scheduled hours compare across the network this week?',
+  },
+  {
+    id: 'labour-which-day-of-the-week',
+    segment: 'labour',
+    text: 'Which day of the week has the highest labour cost relative to revenue?',
+  },
+  {
+    id: 'labour-what-is-the-average-hourly',
+    segment: 'labour',
+    text: 'What is the average hourly labour cost per site?',
+  },
+  {
+    id: 'labour-which-sites-are-consistently-over',
+    segment: 'labour',
+    text: 'Which sites are consistently over their labour budget?',
+  },
+  {
+    id: 'labour-how-does-our-labour-compare',
+    segment: 'labour',
+    text: 'How does our labour % compare in the morning rush vs the afternoon?',
+  },
+  {
+    id: 'labour-what-is-the-revenue-per',
+    segment: 'labour',
+    text: 'What is the revenue per team member across each site?',
+  },
+  {
+    id: 'labour-how-many-overtime-hours-were',
+    segment: 'labour',
+    text: 'How many overtime hours were recorded across the network last month?',
+  },
+  {
+    id: 'labour-which-role-type-accounts-for',
+    segment: 'labour',
+    text: 'Which role type accounts for the most labour cost — barista, shift lead, or manager?',
+  },
+  {
+    id: 'labour-how-has-our-labour-trended',
+    segment: 'labour',
+    text: 'How has our labour % trended since the minimum wage increase?',
+  },
+  {
+    id: 'labour-which-site-has-the-best',
+    segment: 'labour',
+    text: 'Which site has the best revenue-to-labour ratio?',
+  },
+  {
+    id: 'labour-what-is-the-variance-between',
+    segment: 'labour',
+    text: 'What is the variance between scheduled and actual hours at our busiest site?',
+  },
+  {
+    id: 'labour-how-does-weekend-labour-cost',
+    segment: 'labour',
+    text: 'How does weekend labour cost compare to weekday labour cost?',
+  },
+  {
+    id: 'labour-which-sites-have-the-highest',
+    segment: 'labour',
+    text: 'Which sites have the highest staff turnover cost in the last 6 months?',
+  },
+  {
+    id: 'labour-what-is-our-total-weekly',
+    segment: 'labour',
+    text: 'What is our total weekly labour cost broken down by site?',
+  },
+  {
+    id: 'labour-how-does-our-labour-efficiency',
+    segment: 'labour',
+    text: 'How does our labour efficiency compare during peak vs off-peak hours?',
+  },
+  {
+    id: 'labour-which-sites-would-benefit-most',
+    segment: 'labour',
+    text: 'Which sites would benefit most from a shift in staffing patterns?',
+  },
+  {
+    id: 'labour-what-is-the-labour-cost',
+    segment: 'labour',
+    text: 'What is the labour cost impact of staying open an extra hour on Sundays?',
+  },
+  {
+    id: 'labour-how-does-our-labour-benchmark',
+    segment: 'labour',
+    text: 'How does our labour % benchmark against the industry standard for QSR?',
+  },
+  {
+    id: 'waste-what-is-our-total-recorded',
+    segment: 'waste',
+    text: 'What is our total recorded waste value across all sites this week?',
+  },
+  {
+    id: 'waste-which-site-has-the-highest',
+    segment: 'waste',
+    text: 'Which site has the highest waste as a percentage of food and drink cost?',
+  },
+  {
+    id: 'waste-what-are-the-top-10',
+    segment: 'waste',
+    text: 'What are the top 10 most wasted items across the network?',
+  },
+  {
+    id: 'waste-how-does-waste-volume-compare',
+    segment: 'waste',
+    text: 'How does waste volume compare on Mondays vs Fridays?',
+  },
+  {
+    id: 'waste-which-category-generates-the-most',
+    segment: 'waste',
+    text: 'Which category generates the most waste — food, drink, or packaging?',
+  },
+  {
+    id: 'waste-what-percentage-of-our-waste',
+    segment: 'waste',
+    text: 'What percentage of our waste is recorded at end of day vs during service?',
+  },
+  {
+    id: 'waste-how-has-total-waste-trended',
+    segment: 'waste',
+    text: 'How has total waste trended over the last 12 weeks?',
+  },
+  {
+    id: 'waste-which-sites-are-logging-waste',
+    segment: 'waste',
+    text: 'Which sites are logging waste consistently and which have gaps in recording?',
+  },
+  {
+    id: 'waste-what-is-the-financial-impact',
+    segment: 'waste',
+    text: 'What is the financial impact of waste at each site per month?',
+  },
+  {
+    id: 'waste-which-day-of-the-week',
+    segment: 'waste',
+    text: 'Which day of the week sees the most waste across the network?',
+  },
+  {
+    id: 'waste-how-does-waste-compare-between',
+    segment: 'waste',
+    text: 'How does waste compare between high-volume and low-volume trading days?',
+  },
+  {
+    id: 'waste-what-is-the-waste-rate',
+    segment: 'waste',
+    text: 'What is the waste rate for our fresh pastry range?',
+  },
+  {
+    id: 'waste-which-sites-have-reduced-waste',
+    segment: 'waste',
+    text: 'Which sites have reduced waste the most following the new production planning rules?',
+  },
+  {
+    id: 'waste-how-much-waste-could-be',
+    segment: 'waste',
+    text: 'How much waste could be prevented if production accuracy improved by 10%?',
+  },
+  {
+    id: 'waste-what-is-the-average-waste',
+    segment: 'waste',
+    text: 'What is the average waste cost per customer transaction?',
+  },
+  {
+    id: 'waste-which-items-are-most-frequently',
+    segment: 'waste',
+    text: 'Which items are most frequently wasted due to overproduction vs spoilage?',
+  },
+  {
+    id: 'waste-how-does-waste-recording-compliance',
+    segment: 'waste',
+    text: 'How does waste recording compliance compare across site managers?',
+  },
+  {
+    id: 'waste-what-is-the-waste-trend',
+    segment: 'waste',
+    text: 'What is the waste trend for our made-to-order vs pre-made range?',
+  },
+  {
+    id: 'waste-how-much-of-our-total',
+    segment: 'waste',
+    text: 'How much of our total waste is attributable to the last hour of trading?',
+  },
+  {
+    id: 'waste-what-would-reducing-waste-by',
+    segment: 'waste',
+    text: 'What would reducing waste by 20% mean for COGS % across the network?',
+  },
+  {
+    id: 'production-what-did-we-plan-to',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'What did we plan to produce vs what we actually made across all sites yesterday?',
+  },
+  {
+    id: 'production-which-sites-consistently-over-produce',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'Which sites consistently over-produce against their production plan?',
+  },
+  {
+    id: 'production-how-has-production-accuracy-trended',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'How has production accuracy trended over the last 8 weeks?',
+  },
+  {
+    id: 'production-which-products-have-the-highest',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'Which products have the highest variance between planned and actual production?',
+  },
+  {
+    id: 'production-what-is-the-average-sell',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'What is the average sell-through rate for our fresh range by end of day?',
+  },
+  {
+    id: 'production-which-site-is-most-accurately',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'Which site is most accurately matching production to sales demand?',
+  },
+  {
+    id: 'production-how-does-production-volume-on',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'How does production volume on Mondays compare to the rest of the week?',
+  },
+  {
+    id: 'production-which-items-are-we-regularly',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'Which items are we regularly running out of before close of trading?',
+  },
+  {
+    id: 'production-what-percentage-of-production-is',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'What percentage of production is being wasted vs sold across the network?',
+  },
+  {
+    id: 'production-how-does-production-accuracy-differ',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'How does production accuracy differ between morning prep and afternoon batches?',
+  },
+  {
+    id: 'production-which-sites-are-producing-to',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'Which sites are producing to a plan vs producing from habit?',
+  },
+  {
+    id: 'production-what-is-the-gap-between',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'What is the gap between production plan and actual for our top 5 SKUs?',
+  },
+  {
+    id: 'production-how-has-the-introduction-of',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'How has the introduction of production planning targets affected waste at each site?',
+  },
+  {
+    id: 'production-which-products-have-the-shortest',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'Which products have the shortest shelf life and highest risk of waste?',
+  },
+  {
+    id: 'production-what-would-the-waste-saving',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'What would the waste saving be if all sites hit their production plan accuracy?',
+  },
+  {
+    id: 'production-how-does-weekend-production-planning',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'How does weekend production planning accuracy compare to weekday?',
+  },
+  {
+    id: 'production-which-site-managers-have-the',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'Which site managers have the best record for following production plans?',
+  },
+  {
+    id: 'production-what-is-the-average-time',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'What is the average time between production and sale for our fresh bakery range?',
+  },
+  {
+    id: 'production-how-much-are-we-over',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'How much are we over-producing in the last hour of trading across the network?',
+  },
+  {
+    id: 'production-which-new-menu-items-have',
+    segment: 'production',
+    subsegment: 'general',
+    text: 'Which new menu items have the least reliable production planning data?',
+  },
+  {
+    id: 'production-which-items-had-the-biggest',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'Which items had the biggest gap between units produced and units sold yesterday?',
+  },
+  {
+    id: 'production-what-is-the-average-sell-2',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'What is the average sell-through rate per item across all sites this week?',
+  },
+  {
+    id: 'production-which-sites-consistently-sell-out',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'Which sites consistently sell out of produced items before close?',
+  },
+  {
+    id: 'production-how-many-units-of-our',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'How many units of our top 10 products were produced vs sold last Monday?',
+  },
+  {
+    id: 'production-which-items-have-a-sell',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'Which items have a sell-through rate below 80% on a regular basis?',
+  },
+  {
+    id: 'production-what-is-the-produced-vs',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'What is the produced vs sold ratio for our fresh bakery range this month?',
+  },
+  {
+    id: 'production-which-day-of-the-week',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'Which day of the week has the worst sell-through performance across the network?',
+  },
+  {
+    id: 'production-how-does-produced-vs-sold',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'How does produced vs sold compare between high-volume and low-volume sites?',
+  },
+  {
+    id: 'production-which-items-are-we-producing',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'Which items are we producing more than 20% above what we actually sell?',
+  },
+  {
+    id: 'production-what-would-our-waste-cost',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'What would our waste cost be if produced vs sold was within 5% for every item?',
+  },
+  {
+    id: 'production-how-has-the-produced-vs',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'How has the produced vs sold gap changed since we introduced production planning targets?',
+  },
+  {
+    id: 'production-which-site-has-the-tightest',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'Which site has the tightest produced vs sold ratio across all products?',
+  },
+  {
+    id: 'production-how-does-produced-vs-sold-2',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'How does produced vs sold performance vary across dayparts?',
+  },
+  {
+    id: 'production-which-new-product-launches-have',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'Which new product launches have the worst produced vs sold accuracy?',
+  },
+  {
+    id: 'production-what-is-the-financial-value',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'What is the financial value of unsold produced items across the network per week?',
+  },
+  {
+    id: 'production-which-items-regularly-sell-more',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'Which items regularly sell more than produced, suggesting we are under-planning?',
+  },
+  {
+    id: 'production-how-does-the-produced-vs',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'How does the produced vs sold ratio for hot food compare to cold food?',
+  },
+  {
+    id: 'production-which-sites-have-improved-their',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'Which sites have improved their produced vs sold accuracy the most in the last 3 months?',
+  },
+  {
+    id: 'production-what-is-the-produced-vs-2',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'What is the produced vs sold trend for seasonal items vs core range?',
+  },
+  {
+    id: 'production-if-we-reduced-over-production',
+    segment: 'production',
+    subsegment: 'produced-v-sold',
+    text: 'If we reduced over-production by 15%, what would the COGS saving be per site?',
+  },
+  {
+    id: 'production-which-items-are-most-frequently',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'Which items are most frequently out of stock before the end of trading?',
+  },
+  {
+    id: 'production-what-time-of-day-do',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'What time of day do we typically run out of our top 5 selling products?',
+  },
+  {
+    id: 'production-which-sites-have-the-most',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'Which sites have the most availability failures in the last 30 days?',
+  },
+  {
+    id: 'production-how-many-times-did-we',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'How many times did we run out of a core range item during peak trading hours this week?',
+  },
+  {
+    id: 'production-what-percentage-of-our-menu',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'What percentage of our menu is available at 2pm vs when we open?',
+  },
+  {
+    id: 'production-which-sites-are-under-producing',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'Which sites are under-producing and causing the most availability gaps?',
+  },
+  {
+    id: 'production-how-does-availability-of-fresh',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'How does availability of fresh items compare between morning and afternoon?',
+  },
+  {
+    id: 'production-which-product-category-has-the',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'Which product category has the most frequent stockouts — food, drink, or bakery?',
+  },
+  {
+    id: 'production-what-is-the-lost-revenue',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'What is the lost revenue estimate from availability failures last month?',
+  },
+  {
+    id: 'production-how-does-availability-performance-differ',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'How does availability performance differ between weekdays and weekends?',
+  },
+  {
+    id: 'production-which-items-should-we-be',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'Which items should we be producing in a second batch based on sell-through speed?',
+  },
+  {
+    id: 'production-how-often-do-we-run',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'How often do we run out of a product within 2 hours of opening?',
+  },
+  {
+    id: 'production-which-sites-maintain-the-best',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'Which sites maintain the best full-range availability throughout the trading day?',
+  },
+  {
+    id: 'production-what-is-the-correlation-between',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'What is the correlation between low production plan adherence and availability failures?',
+  },
+  {
+    id: 'production-how-has-availability-improved-or',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'How has availability improved or declined since introducing production planning?',
+  },
+  {
+    id: 'production-which-high-margin-items-are',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'Which high-margin items are most at risk of availability failures?',
+  },
+  {
+    id: 'production-how-many-customer-facing-availability',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'How many customer-facing availability gaps occurred across the network this week?',
+  },
+  {
+    id: 'production-which-day-of-the-week-2',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'Which day of the week sees the most availability failures across all sites?',
+  },
+  {
+    id: 'production-what-is-the-average-duration',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'What is the average duration of an out-of-stock event per site per day?',
+  },
+  {
+    id: 'production-which-items-need-a-minimum',
+    segment: 'production',
+    subsegment: 'availability',
+    text: 'Which items need a minimum production floor to prevent availability failures?',
+  },
+  {
+    id: 'production-how-many-skus-are-still',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'How many SKUs are still available at close of trading across all sites?',
+  },
+  {
+    id: 'production-which-sites-consistently-have-too',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'Which sites consistently have too much range left at close?',
+  },
+  {
+    id: 'production-what-is-the-average-number',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'What is the average number of items remaining at close vs planned close range?',
+  },
+  {
+    id: 'production-which-items-are-most-commonly',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'Which items are most commonly left over at end of day?',
+  },
+  {
+    id: 'production-how-does-closing-range-compare',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'How does closing range compare between a Monday and a Friday?',
+  },
+  {
+    id: 'production-which-sites-are-hitting-their',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'Which sites are hitting their target closing range most consistently?',
+  },
+  {
+    id: 'production-what-is-the-value-of',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'What is the value of closing range waste across the network per week?',
+  },
+  {
+    id: 'production-how-many-items-in-the',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'How many items in the closing range could have been avoided with better production planning?',
+  },
+  {
+    id: 'production-which-product-categories-contribute-most',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'Which product categories contribute most to excess closing range — hot food, cold food, or bakery?',
+  },
+  {
+    id: 'production-how-does-closing-range-at',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'How does closing range at our top-performing site differ from our worst?',
+  },
+  {
+    id: 'production-what-time-do-sites-typically',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'What time do sites typically fall below their target closing range?',
+  },
+  {
+    id: 'production-which-items-are-regularly-in',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'Which items are regularly in the closing range despite low demand signals?',
+  },
+  {
+    id: 'production-how-has-closing-range-waste',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'How has closing range waste trended since production planning was introduced?',
+  },
+  {
+    id: 'production-which-sites-have-reduced-their',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'Which sites have reduced their closing range the most in the last quarter?',
+  },
+  {
+    id: 'production-what-would-the-financial-impact',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'What would the financial impact be of reducing closing range by 20% network-wide?',
+  },
+  {
+    id: 'production-how-does-closing-range-on',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'How does closing range on a bank holiday compare to a regular trading day?',
+  },
+  {
+    id: 'production-which-managers-have-the-best',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'Which managers have the best record for hitting target closing range?',
+  },
+  {
+    id: 'production-what-is-the-relationship-between',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'What is the relationship between closing range volume and waste cost per site?',
+  },
+  {
+    id: 'production-are-there-items-we-should',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'Are there items we should stop producing after a certain time to reduce closing range?',
+  },
+  {
+    id: 'production-how-does-our-closing-range',
+    segment: 'production',
+    subsegment: 'closing-range',
+    text: 'How does our closing range compare to our production plan targets for end of day?',
+  },
+  {
+    id: 'production-how-long-does-it-take',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'How long does it take each site to complete their morning production run on average?',
+  },
+  {
+    id: 'production-which-sites-are-completing-production',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'Which sites are completing production tasks within the planned time window?',
+  },
+  {
+    id: 'production-what-is-the-output-per',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'What is the output per production hour across each site this week?',
+  },
+  {
+    id: 'production-which-products-take-the-most',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'Which products take the most time to produce relative to their sales volume?',
+  },
+  {
+    id: 'production-how-does-production-efficiency-vary',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'How does production efficiency vary between weekday and weekend shifts?',
+  },
+  {
+    id: 'production-which-site-produces-the-most',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'Which site produces the most units per labour hour?',
+  },
+  {
+    id: 'production-what-percentage-of-production-is-2',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'What percentage of production is completed before the first customer rush?',
+  },
+  {
+    id: 'production-how-does-production-efficiency-change',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'How does production efficiency change when a site is running below target staffing?',
+  },
+  {
+    id: 'production-which-items-have-the-highest',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'Which items have the highest production cost per unit when labour is factored in?',
+  },
+  {
+    id: 'production-how-many-production-runs-are',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'How many production runs are completed on time vs late across the network per week?',
+  },
+  {
+    id: 'production-which-sites-have-the-most-2',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'Which sites have the most consistent production output day to day?',
+  },
+  {
+    id: 'production-what-is-the-labour-cost',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'What is the labour cost per unit produced for our top 10 products?',
+  },
+  {
+    id: 'production-how-does-batch-size-affect',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'How does batch size affect production efficiency across different site formats?',
+  },
+  {
+    id: 'production-which-items-take-the-longest',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'Which items take the longest to produce and are they worth it based on margin?',
+  },
+  {
+    id: 'production-how-has-production-efficiency-changed',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'How has production efficiency changed since the new production planning process was introduced?',
+  },
+  {
+    id: 'production-what-is-the-ratio-of',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'What is the ratio of production time to total shift length across each site?',
+  },
+  {
+    id: 'production-which-sites-are-re-producing',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'Which sites are re-producing items mid-shift most frequently?',
+  },
+  {
+    id: 'production-how-does-efficiency-differ-between',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'How does efficiency differ between experienced site managers and newer ones?',
+  },
+  {
+    id: 'production-what-is-the-production-output',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'What is the production output per team member during the morning prep window?',
+  },
+  {
+    id: 'production-which-products-should-we-consider',
+    segment: 'production',
+    subsegment: 'efficiency',
+    text: 'Which products should we consider batch-producing centrally based on unit production time?',
+  },
+];
+
+export function countsBySegment(): Record<QuestionSegment, number> {
+  const out: Record<QuestionSegment, number> = {
+    sales: 0, cogs: 0, labour: 0, waste: 0, production: 0,
+  };
+  for (const q of QUESTION_LIBRARY) out[q.segment] += 1;
+  return out;
+}
+
+export function countsByProductionSubsegment(): Record<ProductionSubsegment, number> {
+  const out: Record<ProductionSubsegment, number> = {
+    general: 0, 'produced-v-sold': 0, availability: 0, 'closing-range': 0, efficiency: 0,
+  };
+  for (const q of QUESTION_LIBRARY) {
+    if (q.segment === 'production' && q.subsegment) out[q.subsegment] += 1;
+  }
+  return out;
+}
+
+export function searchQuestions(
+  query: string,
+  segment?: QuestionSegment,
+  subsegment?: ProductionSubsegment,
+): QuestionEntry[] {
+  const q = query.trim().toLowerCase();
+  return QUESTION_LIBRARY.filter((entry) => {
+    if (segment && entry.segment !== segment) return false;
+    if (subsegment && entry.subsegment !== subsegment) return false;
+    if (!q) return true;
+    return entry.text.toLowerCase().includes(q);
+  });
+}

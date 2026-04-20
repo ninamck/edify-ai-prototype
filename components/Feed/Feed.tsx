@@ -1446,6 +1446,9 @@ export default function Feed({
   onAddToDashboard,
   onViewDashboard,
   seedUserPrompt,
+  autoSendPrompt,
+  autoSendChartId,
+  alreadyPinned,
 }: {
   briefingRole: BriefingRole;
   quinnExpanded?: boolean;
@@ -1455,10 +1458,16 @@ export default function Feed({
   onAddToDashboard?: (id: AnalyticsChartId) => void;
   onViewDashboard?: () => void;
   seedUserPrompt?: string;
+  /** If set, Feed simulates a user send with this text on mount. */
+  autoSendPrompt?: string;
+  /** Explicit chart for autoSendPrompt: id to force a chart, null for text-only, undefined to fall back to prefix detection. */
+  autoSendChartId?: AnalyticsChartId | null;
+  /** Charts already pinned to the dashboard — their "Add to dashboard" buttons render as already-pinned. */
+  alreadyPinned?: Set<AnalyticsChartId>;
 }) {
-  const [chatStarted, setChatStarted] = useState(!!seedUserPrompt);
+  const [chatStarted, setChatStarted] = useState(!!seedUserPrompt || !!autoSendPrompt);
   const [messages, setMessages] = useState<ChatMsg[]>(() =>
-    seedUserPrompt
+    seedUserPrompt && !autoSendPrompt
       ? [{ id: 'q-seed', role: 'quinn', text: seedUserPrompt }]
       : [],
   );
@@ -1476,7 +1485,9 @@ export default function Feed({
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [analyticsType, setAnalyticsType] = useState<AnalyticsChartId | null>(null);
   const [analyticsStep, setAnalyticsStep] = useState(0);
-  const [pinnedChartIds, setPinnedChartIds] = useState<Set<AnalyticsChartId>>(new Set());
+  const [pinnedChartIds, setPinnedChartIds] = useState<Set<AnalyticsChartId>>(
+    () => new Set(alreadyPinned ?? []),
+  );
 
   const greeting = timeAwareGreeting(briefingRole);
 
@@ -1487,6 +1498,16 @@ export default function Feed({
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, recipeFlow, productionFlow]);
+
+  // Auto-send the seeded prompt once on mount (used by AddInsightPopup).
+  const didAutoSendRef = useRef(false);
+  useEffect(() => {
+    if (didAutoSendRef.current) return;
+    if (!autoSendPrompt) return;
+    didAutoSendRef.current = true;
+    sendMessage(autoSendPrompt, autoSendChartId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSendPrompt]);
 
   useEffect(() => {
     if (recipeFlow === 1) {
@@ -1786,7 +1807,7 @@ export default function Feed({
 
   // ─────────────────────────────────────────────────────────────────────────
 
-  function sendMessage(overrideText?: string) {
+  function sendMessage(overrideText?: string, explicitChart?: AnalyticsChartId | null) {
     const raw = overrideText !== undefined ? overrideText : input;
     const text = raw.trim();
     if (!text) return;
@@ -1796,14 +1817,18 @@ export default function Feed({
     setChatMinimized(false);
     setInput('');
 
-    // Analytics trigger detection — order matters (more specific first)
     let detected: AnalyticsChartId | null = null;
-    if (text.startsWith('Which site has'))      detected = 'growth';
-    else if (text.startsWith('Which sites are')) detected = 'cogs';
-    else if (text.startsWith('Which hour'))      detected = 'hour';
-    else if (text.startsWith('What were'))       detected = 'sales';
-    else if (text.startsWith('How has'))         detected = 'trend';
-    else if (text.startsWith('What is'))         detected = 'labour';
+    if (explicitChart !== undefined) {
+      detected = explicitChart;
+    } else {
+      // Prefix detection for typed input. Order matters (more specific first).
+      if (text.startsWith('Which site has'))      detected = 'growth';
+      else if (text.startsWith('Which sites are')) detected = 'cogs';
+      else if (text.startsWith('Which hour'))      detected = 'hour';
+      else if (text.startsWith('What were'))       detected = 'sales';
+      else if (text.startsWith('How has'))         detected = 'trend';
+      else if (text.startsWith('What is'))         detected = 'labour';
+    }
 
     if (detected) {
       setMessages(prev => [...prev, userMsg, {
@@ -1815,7 +1840,28 @@ export default function Feed({
       setAnalyticsType(detected);
       setAnalyticsStep(1);
     } else {
-      setMessages(prev => [...prev, userMsg]);
+      // No canned chart — Quinn responds with a brief text answer after a short beat.
+      setMessages(prev => [...prev, userMsg, {
+        id: `q-thinking-text-${Date.now()}`,
+        role: 'quinn' as const,
+        text: '',
+        msgType: 'analytics-thinking',
+      }]);
+      const placeholderId = `q-text-${Date.now()}`;
+      window.setTimeout(() => {
+        setMessages(prev => {
+          // Replace the thinking bubble with a text reply
+          const withoutThinking = prev.filter(m => m.msgType !== 'analytics-thinking');
+          return [
+            ...withoutThinking,
+            {
+              id: placeholderId,
+              role: 'quinn' as const,
+              text: `Looking at that now. I don't have a canned chart for this one yet, but here's the shape of the answer from the last 30 days of data:\n\n• Strongest signal: patterns consistent across sites, with a clear outlier worth a deeper look.\n• What to do next: tell me which site or timeframe you want to drill into, or ask it differently and I'll pull the relevant numbers.\n\nI can also draft a custom chart if you want to pin something to the dashboard — just tell me what axes you'd like.`,
+            },
+          ];
+        });
+      }, 900);
     }
   }
 
