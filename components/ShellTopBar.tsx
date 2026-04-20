@@ -1,8 +1,6 @@
 'use client';
 
 import SiteSwitcher from '@/components/Sidebar/SiteSwitcher';
-import type { BriefingRole } from '@/components/briefing';
-import { BRIEFING_ROLES } from '@/components/briefing';
 import PhaseSwitcher from '@/components/PhaseSwitcher';
 import type { PhaseOverride } from '@/components/PhaseSwitcher';
 
@@ -10,8 +8,6 @@ export type ShellViewMode = 'command-centre' | 'dashboard';
 
 type ShellTopBarProps = {
   siteName: string;
-  briefingRole: BriefingRole;
-  onBriefingRoleChange: (r: BriefingRole) => void;
   shellView: ShellViewMode;
   onShellViewChange: (v: ShellViewMode) => void;
   phaseOverride: PhaseOverride;
@@ -20,8 +16,6 @@ type ShellTopBarProps = {
 
 export default function ShellTopBar({
   siteName,
-  briefingRole,
-  onBriefingRoleChange,
   shellView,
   onShellViewChange,
   phaseOverride,
@@ -118,45 +112,7 @@ export default function ShellTopBar({
           justifySelf: 'end',
         }}
       >
-        <span
-          style={{
-            fontSize: '12px',
-            fontWeight: 700,
-            letterSpacing: '0.04em',
-            color: 'var(--color-text-muted)',
-            marginRight: '4px',
-          }}
-        >
-          Role
-        </span>
-        {BRIEFING_ROLES.map((r) => {
-          const active = briefingRole === r.id;
-          return (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => onBriefingRoleChange(r.id)}
-              title={r.label}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '100px',
-                fontSize: '12px',
-                fontWeight: 600,
-                fontFamily: 'var(--font-primary)',
-                cursor: 'pointer',
-                border: active ? '1.5px solid var(--color-accent-active)' : '1.5px solid var(--color-border-subtle)',
-                background: active ? 'rgba(34,68,68,0.08)' : '#fff',
-                color: active ? 'var(--color-accent-active)' : 'var(--color-text-muted)',
-                transition: 'background 0.15s ease, color 0.15s ease, border-color 0.15s ease',
-              }}
-            >
-              {r.short}
-            </button>
-          );
-        })}
-        <div style={{ marginLeft: '4px', display: 'inline-flex' }}>
-          <PhaseSwitcher phaseOverride={phaseOverride} onPhaseOverrideChange={onPhaseOverrideChange} />
-        </div>
+        <PhaseSwitcher phaseOverride={phaseOverride} onPhaseOverrideChange={onPhaseOverrideChange} />
       </div>
     </header>
   );

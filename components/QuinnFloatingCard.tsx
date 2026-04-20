@@ -8,7 +8,7 @@ import Feed from '@/components/Feed/Feed';
 import QuinnOrb from '@/components/Sidebar/QuinnOrb';
 
 /** Routes where Quinn chat is already embedded — hide the floating card. */
-const SHELL_ROUTES = new Set(['/', '/v1', '/v2', '/v3']);
+const SHELL_ROUTES = new Set(['/']);
 
 export default function QuinnFloatingCard() {
   const [open, setOpen] = useState(false);

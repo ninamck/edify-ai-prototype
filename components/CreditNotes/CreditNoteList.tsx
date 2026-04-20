@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import StatusBadge from '@/components/Receiving/StatusBadge';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import {
   MOCK_CREDIT_NOTES,
   CreditNote,
@@ -31,6 +32,7 @@ function statusVariant(status: CreditNoteStatus): BadgeVariant {
 export default function CreditNoteList({ onView }: CreditNoteListProps) {
   const [tab, setTab] = useState<Tab>('pending');
   const [search, setSearch] = useState('');
+  const isMobile = useMediaQuery('(max-width: 640px)');
 
   const pendingCount  = pendingChaseCount();
   const overdue       = overdueCount();
@@ -69,7 +71,9 @@ export default function CreditNoteList({ onView }: CreditNoteListProps) {
     transition: 'all 0.15s',
     display: 'inline-flex',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: '6px',
+    flex: isMobile ? 1 : undefined,
   });
 
   return (
@@ -78,11 +82,22 @@ export default function CreditNoteList({ onView }: CreditNoteListProps) {
         Credit Notes
       </h1>
 
-      {/* Summary cards */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
-        <SummaryCard label="Outstanding Balance" value={`£${outstanding.toFixed(2)}`} variant="warning" />
-        <SummaryCard label="Overdue (21+ days)" value={String(overdue)} variant="error" />
-        <SummaryCard label="Pending Chase" value={String(pendingCount)} variant="info" />
+      {/* Summary line */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '14px', flexWrap: 'wrap', marginBottom: '16px', fontSize: '13px', color: 'var(--color-text-muted)' }}>
+        <span>
+          <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text-primary)' }}>£{outstanding.toFixed(2)}</span>
+          {' '}outstanding
+        </span>
+        <span aria-hidden="true" style={{ color: 'var(--color-border-subtle)' }}>·</span>
+        <span>
+          <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{overdue}</span>
+          {' '}overdue
+        </span>
+        <span aria-hidden="true" style={{ color: 'var(--color-border-subtle)' }}>·</span>
+        <span>
+          <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{pendingCount}</span>
+          {' '}pending
+        </span>
       </div>
 
       {/* Tabs */}
@@ -93,11 +108,11 @@ export default function CreditNoteList({ onView }: CreditNoteListProps) {
           borderRadius: '100px',
           padding: '3px',
           marginBottom: '16px',
-          width: 'fit-content',
+          width: isMobile ? '100%' : 'fit-content',
         }}
       >
         <button onClick={() => setTab('pending')} style={tabStyle(tab === 'pending')}>
-          Pending Chase
+          Pending
           <TabBadge count={pendingCount} active={tab === 'pending'} />
         </button>
         <button onClick={() => setTab('all')} style={tabStyle(tab === 'all')}>
@@ -296,64 +311,6 @@ function CreditNoteRow({ creditNote: cn, onView }: { creditNote: CreditNote; onV
         </button>
       </td>
     </tr>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  variant,
-}: {
-  label: string;
-  value: string;
-  variant: 'success' | 'warning' | 'error' | 'info';
-}) {
-  const styles: Record<string, { bg: string; border: string; color: string }> = {
-    warning: {
-      bg: '#FEF3C7',
-      border: '#FDE68A',
-      color: '#92400E',
-    },
-    error: {
-      bg: '#FEE2E2',
-      border: '#FECACA',
-      color: '#B91C1C',
-    },
-    info: {
-      bg: '#DBEAFE',
-      border: '#BFDBFE',
-      color: '#1D4ED8',
-    },
-    success: {
-      bg: '#DCFCE7',
-      border: '#BBF7D0',
-      color: '#15803D',
-    },
-  };
-  const s = styles[variant];
-  return (
-    <div
-      style={{
-        flex: '1 1 180px',
-        minWidth: '160px',
-        padding: '16px 20px',
-        borderRadius: '10px',
-        background: s.bg,
-        border: `1px solid ${s.border}`,
-      }}
-    >
-      <div style={{ fontSize: '26px', fontWeight: 700, color: s.color }}>{value}</div>
-      <div
-        style={{
-          fontSize: '13px',
-          fontWeight: 600,
-          color: 'var(--color-text-primary)',
-          marginTop: '4px',
-        }}
-      >
-        {label}
-      </div>
-    </div>
   );
 }
 

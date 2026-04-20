@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
 
-export default function ReceiveLayout({ children }: { children: React.ReactNode }) {
+export default function ApprovalsLayout({ children }: { children: React.ReactNode }) {
   const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
   const router = useRouter();
 
@@ -59,7 +59,7 @@ export default function ReceiveLayout({ children }: { children: React.ReactNode 
                 letterSpacing: '0.01em',
               }}
             >
-              Receive Delivery
+              Review Approvals
             </span>
           </div>
 

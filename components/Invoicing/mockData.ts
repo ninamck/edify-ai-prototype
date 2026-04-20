@@ -43,6 +43,9 @@ export interface Invoice {
   status: InvoiceMatchStatus;
   lines: InvoiceLine[];
   variances: MatchVariance[];
+  note?: string;
+  noteAuthor?: string;
+  noteUpdatedAt?: string;
 }
 
 export interface GRNMatchLine {
@@ -86,6 +89,9 @@ export const MOCK_INVOICES: Invoice[] = [
       { id: 'v-2', itemName: 'Free range eggs 15pk', sku: 'FRE-15', type: 'price', invoiceValue: 8.50, grnValue: 8.00, poValue: 8.00, impact: 6.00 },
       { id: 'v-6', itemName: 'Espresso blend 1kg', sku: 'EB-1KG', type: 'price', invoiceValue: 19.20, grnValue: 18.00, poValue: 18.00, impact: 12.00 },
     ],
+    note: 'Holding until Bidfood confirms the short-delivery credit on the milk line. Don\u2019t approve yet.',
+    noteAuthor: 'Sam',
+    noteUpdatedAt: '2h ago',
   },
   {
     id: 'inv-2',
@@ -108,6 +114,9 @@ export const MOCK_INVOICES: Invoice[] = [
       { id: 'v-7', itemName: 'Avocados', sku: 'AVO-EA', type: 'price', invoiceValue: 2.10, grnValue: 2.00, poValue: 2.00, impact: 2.40 },
       { id: 'v-8', itemName: 'Lemons', sku: 'LEM-EA', type: 'price', invoiceValue: 0.55, grnValue: 0.60, poValue: 0.60, impact: -1.50 },
     ],
+    note: 'Price variance on spinach/tomatoes looks like the supplier\u2019s new list \u2014 checking with Priya before accepting.',
+    noteAuthor: 'Jordan',
+    noteUpdatedAt: 'yesterday',
   },
   {
     id: 'inv-3',

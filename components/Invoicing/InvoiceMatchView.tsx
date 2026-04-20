@@ -162,10 +162,17 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
             label="Items Matched"
             value={`${invoice.lines.length - unmatchedLines.length} / ${invoice.lines.length}`}
             sub={hasUnmatched ? `${unmatchedLines.length} unmatched` : 'All items matched'}
-            variant={hasUnmatched ? 'warning' : 'success'}
+            variant={hasUnmatched ? 'warning' : 'default'}
           />
         )}
       </div>
+
+      {/* Shared note — cross-reviewer context */}
+      <InvoiceNoteSection
+        initialNote={invoice.note ?? ''}
+        initialAuthor={invoice.noteAuthor}
+        initialUpdatedAt={invoice.noteUpdatedAt}
+      />
 
       {/* Unmatched items alert + suggest GRN */}
       {canSuggest && suggestedGRN && (
@@ -285,6 +292,253 @@ function SuggestGRNBanner({ unmatchedLines, suggestedGRN, onLink }: { unmatchedL
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ──────────── Invoice Note Section ──────────── */
+
+function InvoiceNoteSection({ initialNote, initialAuthor, initialUpdatedAt }: {
+  initialNote: string;
+  initialAuthor?: string;
+  initialUpdatedAt?: string;
+}) {
+  const [note, setNote] = useState(initialNote);
+  const [author, setAuthor] = useState(initialAuthor);
+  const [updatedAt, setUpdatedAt] = useState(initialUpdatedAt);
+  const [isExpanded, setIsExpanded] = useState(initialNote.length > 0);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(initialNote);
+
+  const hasNote = note.trim().length > 0;
+  const preview = note.length > 60 ? note.slice(0, 60) + '…' : note;
+
+  const startEdit = () => {
+    setDraft(note);
+    setIsEditing(true);
+    setIsExpanded(true);
+  };
+
+  const save = () => {
+    const trimmed = draft.trim();
+    setNote(trimmed);
+    if (trimmed.length > 0) {
+      setAuthor('You');
+      setUpdatedAt('Just now');
+    } else {
+      setAuthor(undefined);
+      setUpdatedAt(undefined);
+    }
+    setIsEditing(false);
+  };
+
+  const cancel = () => {
+    setDraft(note);
+    setIsEditing(false);
+  };
+
+  return (
+    <div style={{
+      borderRadius: '12px',
+      background: '#fff',
+      border: '1px solid var(--color-border-subtle)',
+      marginBottom: '20px',
+      overflow: 'hidden',
+    }}>
+      {/* Header / collapsed row */}
+      <button
+        onClick={() => setIsExpanded(v => !v)}
+        style={{
+          width: '100%',
+          padding: '12px 16px',
+          background: 'none',
+          border: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          cursor: 'pointer',
+          fontFamily: 'var(--font-primary)',
+          textAlign: 'left',
+        }}
+        aria-expanded={isExpanded}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+          <span style={{ fontSize: '16px' }}>📝</span>
+          <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+            Note
+          </span>
+          {!isExpanded && (
+            <span style={{
+              fontSize: '12px',
+              fontWeight: 500,
+              color: hasNote ? 'var(--color-text-secondary)' : 'var(--color-text-muted)',
+              fontStyle: hasNote ? 'normal' : 'italic',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              minWidth: 0,
+            }}>
+              {hasNote ? preview : 'Add a note'}
+            </span>
+          )}
+        </div>
+        <span style={{
+          fontSize: '12px',
+          color: 'var(--color-text-muted)',
+          transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+          transition: 'transform 0.15s',
+          display: 'inline-block',
+        }}>
+          ▾
+        </span>
+      </button>
+
+      {/* Expanded body */}
+      {isExpanded && (
+        <div style={{ padding: '0 16px 16px', borderTop: '1px solid var(--color-border-subtle)' }}>
+          {isEditing ? (
+            <div style={{ paddingTop: '12px' }}>
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="e.g. Waiting on supplier credit note — don't approve yet."
+                rows={3}
+                autoFocus
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--color-border)',
+                  fontSize: '13px',
+                  fontFamily: 'var(--font-primary)',
+                  resize: 'vertical',
+                  boxSizing: 'border-box',
+                  outline: 'none',
+                  color: 'var(--color-text-primary)',
+                }}
+              />
+              <div style={{ display: 'flex', gap: '8px', marginTop: '10px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={cancel}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: '6px',
+                    background: 'var(--color-bg-hover)',
+                    border: '1px solid var(--color-border)',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    fontFamily: 'var(--font-primary)',
+                    color: 'var(--color-text-primary)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={save}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: '6px',
+                    background: 'var(--color-accent-active)',
+                    border: 'none',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    fontFamily: 'var(--font-primary)',
+                    color: '#fff',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ paddingTop: '12px' }}>
+              {hasNote ? (
+                <>
+                  <p style={{
+                    margin: 0,
+                    fontSize: '13px',
+                    lineHeight: 1.5,
+                    color: 'var(--color-text-primary)',
+                    whiteSpace: 'pre-wrap',
+                  }}>
+                    {note}
+                  </p>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    marginTop: '10px',
+                    flexWrap: 'wrap',
+                  }}>
+                    <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                      {author && updatedAt
+                        ? `Last edited by ${author}, ${updatedAt}`
+                        : author
+                          ? `Last edited by ${author}`
+                          : updatedAt
+                            ? `Last edited ${updatedAt}`
+                            : ''}
+                    </span>
+                    <button
+                      onClick={startEdit}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        background: 'var(--color-bg-hover)',
+                        border: '1px solid var(--color-border)',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        fontFamily: 'var(--font-primary)',
+                        color: 'var(--color-text-primary)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Edit note
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  flexWrap: 'wrap',
+                }}>
+                  <p style={{
+                    margin: 0,
+                    fontSize: '13px',
+                    color: 'var(--color-text-secondary)',
+                    fontStyle: 'italic',
+                  }}>
+                    No note yet. Leave context for anyone else reviewing this invoice.
+                  </p>
+                  <button
+                    onClick={startEdit}
+                    style={{
+                      padding: '7px 14px',
+                      borderRadius: '6px',
+                      background: 'var(--color-accent-active)',
+                      border: 'none',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      fontFamily: 'var(--font-primary)',
+                      color: '#fff',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Add a note
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

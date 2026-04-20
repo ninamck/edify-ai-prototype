@@ -39,13 +39,13 @@ function getOtherActions(role: BriefingRole): OtherActionItem[] {
           id: 'o1',
           title: 'Weekend brunch recipe card',
           detail: 'Review when Quinn finishes costing.',
-          href: '/v1?open=recipe-costing',
+          href: '/?open=recipe-costing',
         },
         {
           id: 'o2',
           title: 'Estate labour vs roster',
           detail: 'Scan estate — City Centre flagged only.',
-          href: '/v1?open=labour-roster',
+          href: '/?open=labour-roster',
         },
       ];
     case 'cheryl':
@@ -54,13 +54,13 @@ function getOtherActions(role: BriefingRole): OtherActionItem[] {
           id: 'o1',
           title: 'Period cost pack',
           detail: 'Export for audit trail.',
-          href: '/v1?open=cost-pack-export',
+          href: '/?open=cost-pack-export',
         },
         {
           id: 'o2',
           title: 'Missing invoices',
           detail: 'Chase Urban Fresh & Lacto before close.',
-          href: '/v1?open=invoice-chase',
+          href: '/?open=invoice-chase',
         },
       ];
     case 'gm':
@@ -69,13 +69,13 @@ function getOtherActions(role: BriefingRole): OtherActionItem[] {
           id: 'o1',
           title: 'Temperature checks & fire door log',
           detail: 'Run AM/PM checks and complete the fire door log.',
-          href: '/v1?open=compliance-daily-checks',
+          href: '/?open=compliance-daily-checks',
         },
         {
           id: 'o2',
           title: 'HO policy acknowledgement',
           detail: 'Acknowledge by end of day.',
-          href: '/v1?open=ho-policy-ack',
+          href: '/?open=ho-policy-ack',
         },
       ];
     default:

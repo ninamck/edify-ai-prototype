@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import StatusBadge from '@/components/Receiving/StatusBadge';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { MOCK_INVOICES, Invoice, needsReviewCount, autoMatchedCount } from './mockData';
 
 type Tab = 'needs-review' | 'all' | 'approved';
@@ -13,6 +14,7 @@ interface InvoiceListProps {
 export default function InvoiceList({ onViewInvoice }: InvoiceListProps) {
   const [tab, setTab] = useState<Tab>('all');
   const [search, setSearch] = useState('');
+  const isMobile = useMediaQuery('(max-width: 640px)');
 
   const reviewCount = needsReviewCount();
   const matchedCount = autoMatchedCount();
@@ -43,7 +45,9 @@ export default function InvoiceList({ onViewInvoice }: InvoiceListProps) {
     transition: 'all 0.15s',
     display: 'inline-flex',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: '6px',
+    flex: isMobile ? 1 : undefined,
   });
 
   return (
@@ -52,20 +56,27 @@ export default function InvoiceList({ onViewInvoice }: InvoiceListProps) {
         Invoices
       </h1>
 
-      {/* Summary cards */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
-        <SummaryCard label="Auto-matched Today" count={matchedCount} variant="success" />
-        <SummaryCard label="Needs Review" count={reviewCount} variant="warning" />
+      {/* Summary line */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '14px', flexWrap: 'wrap', marginBottom: '16px', fontSize: '13px', color: 'var(--color-text-muted)' }}>
+        <span>
+          <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{matchedCount}</span>
+          {' '}auto-matched today
+        </span>
+        <span aria-hidden="true" style={{ color: 'var(--color-border-subtle)' }}>·</span>
+        <span>
+          <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{reviewCount}</span>
+          {' '}need review
+        </span>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', background: 'var(--color-bg-hover)', borderRadius: '100px', padding: '3px', marginBottom: '16px', width: 'fit-content' }}>
+      <div style={{ display: 'flex', background: 'var(--color-bg-hover)', borderRadius: '100px', padding: '3px', marginBottom: '16px', width: isMobile ? '100%' : 'fit-content' }}>
         <button onClick={() => setTab('all')} style={tabStyle(tab === 'all')}>
-          All Invoices
+          All
           <TabBadge count={MOCK_INVOICES.length} active={tab === 'all'} />
         </button>
         <button onClick={() => setTab('needs-review')} style={tabStyle(tab === 'needs-review')}>
-          Needs Review
+          Review
           <TabBadge count={reviewCount} active={tab === 'needs-review'} />
         </button>
         <button onClick={() => setTab('approved')} style={tabStyle(tab === 'approved')}>
@@ -155,7 +166,18 @@ function InvoiceRow({ invoice, onView }: { invoice: Invoice; onView: () => void 
   return (
     <tr style={{ cursor: 'pointer' }} onClick={onView}>
       <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontWeight: 600, color: 'var(--color-accent-active)' }}>
-        {invoice.invoiceNumber}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+          {invoice.invoiceNumber}
+          {invoice.note && (
+            <span
+              title={invoice.note.length > 80 ? invoice.note.slice(0, 80) + '…' : invoice.note}
+              aria-label="Has note"
+              style={{ fontSize: '12px', cursor: 'help' }}
+            >
+              📝
+            </span>
+          )}
+        </span>
       </td>
       <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', color: 'var(--color-text-primary)' }}>
         {invoice.supplier}
@@ -196,27 +218,6 @@ function InvoiceRow({ invoice, onView }: { invoice: Invoice; onView: () => void 
         </button>
       </td>
     </tr>
-  );
-}
-
-function SummaryCard({ label, count, variant }: { label: string; count: number; variant: 'success' | 'warning' }) {
-  const bg = variant === 'success' ? 'var(--color-success-light)' : 'var(--color-warning-light)';
-  const border = variant === 'success' ? 'var(--color-success-border)' : 'var(--color-warning-border)';
-  const color = variant === 'success' ? 'var(--color-success)' : 'var(--color-warning)';
-  return (
-    <div
-      style={{
-        flex: '1 1 180px',
-        minWidth: '160px',
-        padding: '16px 20px',
-        borderRadius: '10px',
-        background: bg,
-        border: `1px solid ${border}`,
-      }}
-    >
-      <div style={{ fontSize: '28px', fontWeight: 700, color }}>{count}</div>
-      <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', marginTop: '4px' }}>{label}</div>
-    </div>
   );
 }
 

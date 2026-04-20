@@ -57,11 +57,13 @@ export default function ShiftKpiRow({
   forecastToNow,
   expectedEod,
   fullDayForecast,
+  asAt,
 }: {
   salesSoFar: number;
   forecastToNow: number;
   expectedEod: number;
   fullDayForecast: number;
+  asAt: string;
 }) {
   const varianceAbs = salesSoFar - forecastToNow;
   const variancePct = forecastToNow > 0 ? (varianceAbs / forecastToNow) * 100 : 0;
@@ -85,13 +87,13 @@ export default function ShiftKpiRow({
         value={`£${salesSoFar.toLocaleString()}`}
         delta={`${varianceAhead ? '+' : ''}£${Math.abs(varianceAbs).toLocaleString()} (${varianceAhead ? '+' : ''}${variancePct.toFixed(1)}%)`}
         positive={varianceAhead}
-        context="vs forecast to now"
+        context={`as at ${asAt} · vs forecast to now`}
         icon={<Clock size={13} color={muted} strokeWidth={2.2} />}
       />
       <KpiTile
         label="Forecast to now"
         value={`£${forecastToNow.toLocaleString()}`}
-        context="model prediction"
+        context={`as at ${asAt} · model prediction`}
         icon={<Target size={13} color={muted} strokeWidth={2.2} />}
       />
       <KpiTile

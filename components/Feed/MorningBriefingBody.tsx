@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Pin, ChevronDown } from 'lucide-react';
+import { Pin, ChevronDown, ShieldCheck, ChevronRight, AlertCircle } from 'lucide-react';
 import type { BriefingRole, BriefingPhase } from '@/components/briefing';
 import CloseReconciliationCard from '@/components/Waste/CloseReconciliationCard';
+import { useApprovals, getUser, RULE_LABELS } from '@/components/Approvals/approvalsStore';
+import { useActingUser } from '@/components/DemoControls/demoStore';
 
 // ── Live snapshot widgets (migrated from Command Centre) ───────────────────────
 
@@ -352,6 +354,8 @@ function InsightGroup({
   pinnedIds,
   onTogglePin,
   hiddenIds,
+  preamble,
+  extraCount = 0,
 }: {
   group: InsightGroup;
   index: number;
@@ -361,14 +365,18 @@ function InsightGroup({
   onTogglePin: (id: string) => void;
   /** Item ids to hide from this group (e.g. items that are currently pinned and shown above). */
   hiddenIds: Set<string>;
+  /** Optional sub-section rendered at the top of the group, before items. */
+  preamble?: React.ReactNode;
+  /** Count of items rendered inside preamble (added to the group header count). */
+  extraCount?: number;
 }) {
   const cfg = CATEGORY[group.category];
   const [expanded, setExpanded] = useState(!defaultCollapsed);
   const visibleItems = group.items.filter((it) => !hiddenIds.has(it.id));
-  if (visibleItems.length === 0) return null;
+  if (visibleItems.length === 0 && !preamble) return null;
 
   const collapsed = collapsible && !expanded;
-  const hiddenCount = visibleItems.length;
+  const hiddenCount = visibleItems.length + extraCount;
 
   return (
     <motion.div
@@ -469,6 +477,7 @@ function InsightGroup({
             style={{ overflow: 'hidden' }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+              {preamble}
               {visibleItems.map((item) => (
                 <InsightCard
                   key={item.id}
@@ -1595,6 +1604,11 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
 
 function InsightFeed({ groups, role, phase }: { groups: InsightGroup[]; role: BriefingRole; phase: BriefingPhase }) {
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
+  const approvals = useApprovals();
+  const actingUserId = useActingUser();
+  const actingUser = getUser(actingUserId);
+  const isManager = actingUser?.role === 'manager';
+  const pendingApprovals = isManager ? approvals.filter(a => a.status === 'pending') : [];
 
   function togglePin(id: string) {
     setPinnedIds((prev) => {
@@ -1617,6 +1631,10 @@ function InsightFeed({ groups, role, phase }: { groups: InsightGroup[]; role: Br
   // Close-of-day reconciliation nudge: operators only (ravi + gm), evening phase.
   const showCloseNudge = phase === 'evening' && (role === 'ravi' || role === 'gm');
 
+  const approvalsPreamble = pendingApprovals.length > 0
+    ? <ApprovalsSubcard pending={pendingApprovals} />
+    : undefined;
+
   return (
     <div style={{ padding: '2px 0 24px' }}>
       <LiveSnapshot role={role} />
@@ -1632,8 +1650,131 @@ function InsightFeed({ groups, role, phase }: { groups: InsightGroup[]; role: Br
           pinnedIds={pinnedIds}
           onTogglePin={togglePin}
           hiddenIds={pinnedIds}
+          preamble={group.category === 'needs-call' ? approvalsPreamble : undefined}
+          extraCount={group.category === 'needs-call' ? pendingApprovals.length : 0}
         />
       ))}
+    </div>
+  );
+}
+
+function ApprovalsSubcard({ pending }: { pending: ReturnType<typeof useApprovals> }) {
+  const router = useRouter();
+  return (
+    <div style={{
+      padding: '10px 12px',
+      borderRadius: '8px',
+      background: '#fff',
+      border: '1px solid var(--color-border-subtle)',
+      boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        marginBottom: '8px',
+      }}>
+        <ShieldCheck size={12} color="var(--color-accent-active)" strokeWidth={2.2} />
+        <span style={{
+          flex: 1,
+          fontSize: '11px',
+          fontWeight: 700,
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+          color: 'var(--color-text-secondary)',
+        }}>
+          Orders awaiting approval
+        </span>
+        <span style={{
+          fontSize: '10px',
+          fontWeight: 700,
+          padding: '2px 7px',
+          borderRadius: '100px',
+          background: 'var(--color-warning-light)',
+          color: 'var(--color-warning)',
+        }}>
+          {pending.length}
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {pending.map(a => {
+          const submitter = getUser(a.submittedById);
+          const topRule = a.triggeredRules[0];
+          return (
+            <button
+              key={a.id}
+              onClick={() => router.push('/approvals')}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '3px',
+                padding: '8px 10px',
+                borderRadius: '6px',
+                border: '1px solid var(--color-border-subtle)',
+                background: 'var(--color-bg-surface)',
+                cursor: 'pointer',
+                textAlign: 'left',
+                fontFamily: 'var(--font-primary)',
+                transition: 'border-color 0.12s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-accent-active)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border-subtle)'; }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {a.supplier}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '1px' }}>
+                    {submitter?.name ?? '—'} · ${a.total.toFixed(0)}
+                  </div>
+                </div>
+                <ChevronRight size={12} color="var(--color-text-muted)" strokeWidth={2.2} />
+              </div>
+              {topRule && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  fontSize: '10px',
+                  color: 'var(--color-warning)',
+                  fontWeight: 600,
+                }}>
+                  <AlertCircle size={10} strokeWidth={2.2} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {RULE_LABELS[topRule.rule]}
+                  </span>
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <button
+        onClick={() => router.push('/approvals')}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '4px',
+          width: '100%',
+          marginTop: '8px',
+          padding: '6px 10px',
+          borderRadius: '6px',
+          background: 'none',
+          border: 'none',
+          fontSize: '11px',
+          fontWeight: 700,
+          fontFamily: 'var(--font-primary)',
+          color: 'var(--color-accent-active)',
+          cursor: 'pointer',
+        }}
+      >
+        Review all
+        <ChevronRight size={12} strokeWidth={2.4} />
+      </button>
     </div>
   );
 }

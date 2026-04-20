@@ -8,7 +8,11 @@ import MobileBottomNav from './MobileBottomNav';
 import MobileHamburgerDrawer from './MobileHamburgerDrawer';
 import MobileTasksDrawer from './MobileTasksDrawer';
 import MobileInsightsSheet from './MobileInsightsSheet';
-import type { BriefingRole } from '@/components/briefing';
+import MobileViewSwitcher from './MobileViewSwitcher';
+import MobileDashboard from './MobileDashboard';
+import type { BriefingRole, BriefingPhase } from '@/components/briefing';
+import { phaseFromHour } from '@/components/briefing';
+import type { ShellViewMode } from '@/components/ShellTopBar';
 
 type NavTab = 'receive' | 'checklists' | 'tasks' | 'waste' | 'insights';
 
@@ -21,6 +25,8 @@ export default function MobileShell() {
   const [insightsOpen, setInsightsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<NavTab | null>(null);
   const [briefingRole, setBriefingRole] = useState<BriefingRole>('gm');
+  const [view, setView] = useState<ShellViewMode>('command-centre');
+  const phase: BriefingPhase = phaseFromHour(new Date().getHours());
 
   function handleTabChange(tab: NavTab) {
     if (tab === 'tasks') {
@@ -70,7 +76,9 @@ export default function MobileShell() {
         onRoleChange={setBriefingRole}
       />
 
-      {/* Quinn chat — fills remaining space above bottom nav */}
+      <MobileViewSwitcher view={view} onChange={setView} />
+
+      {/* Content — fills remaining space above bottom nav */}
       <div
         style={{
           flex: 1,
@@ -81,7 +89,11 @@ export default function MobileShell() {
           overflow: 'hidden',
         }}
       >
-        <Feed briefingRole={briefingRole} />
+        {view === 'command-centre' ? (
+          <Feed briefingRole={briefingRole} />
+        ) : (
+          <MobileDashboard role={briefingRole} phase={phase} />
+        )}
       </div>
 
       <MobileBottomNav
