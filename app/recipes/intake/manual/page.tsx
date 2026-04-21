@@ -299,8 +299,9 @@ export default function ManualRecipePage() {
     setProductionVis((prev) => (prev.length ? prev : d.production));
     setPrepSec((prev) => (prev === '' ? d.prepSec : prev));
     setDesiredMargin((prev) => (prev === 70 || prev === '' ? d.desiredMargin : prev));
-    if (d.shelfLifeMin) {
-      setShelfLifeValue((prev) => (prev === '' ? d.shelfLifeMin : prev));
+    if (d.shelfLifeMin !== null) {
+      const defaultMin = d.shelfLifeMin;
+      setShelfLifeValue((prev) => (prev === '' ? defaultMin : prev));
     }
   }
 

@@ -621,7 +621,7 @@ export function WasteTop10Chart() {
           width={150}
         />
         <Tooltip
-          formatter={(v: number | string, _name, entry) => {
+          formatter={(v, _name, entry) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const payload = (entry as any)?.payload;
             const units = payload?.units ?? 0;
