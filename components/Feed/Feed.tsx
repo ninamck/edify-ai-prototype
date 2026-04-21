@@ -1449,6 +1449,7 @@ export default function Feed({
   autoSendPrompt,
   autoSendChartId,
   alreadyPinned,
+  autoStartFlow,
 }: {
   briefingRole: BriefingRole;
   quinnExpanded?: boolean;
@@ -1464,6 +1465,8 @@ export default function Feed({
   autoSendChartId?: AnalyticsChartId | null;
   /** Charts already pinned to the dashboard — their "Add to dashboard" buttons render as already-pinned. */
   alreadyPinned?: Set<AnalyticsChartId>;
+  /** If set, auto-start the named guided flow on mount (e.g. from an external "Ask Quinn" entry point). */
+  autoStartFlow?: 'recipe' | 'integrity';
 }) {
   const [chatStarted, setChatStarted] = useState(!!seedUserPrompt || !!autoSendPrompt);
   const [messages, setMessages] = useState<ChatMsg[]>(() =>
@@ -1508,6 +1511,17 @@ export default function Feed({
     sendMessage(autoSendPrompt, autoSendChartId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSendPrompt]);
+
+  // Auto-start a guided flow once on mount (used by the /recipes/intake "Ask Quinn" entry point).
+  const didAutoStartRef = useRef(false);
+  useEffect(() => {
+    if (didAutoStartRef.current) return;
+    if (!autoStartFlow) return;
+    didAutoStartRef.current = true;
+    if (autoStartFlow === 'recipe') startRecipeFlow();
+    else if (autoStartFlow === 'integrity') startIntegrityCheck();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStartFlow]);
 
   useEffect(() => {
     if (recipeFlow === 1) {

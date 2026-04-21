@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import Sidebar from '@/components/Sidebar/Sidebar';
 import ShellTopBar from '@/components/ShellTopBar';
@@ -32,6 +32,15 @@ const MOBILE_SHELL_BREAKPOINT = '(max-width: 500px)';
 
 export default function HomeShell() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const flowParam = searchParams?.get('flow');
+  const autoStartFlow = flowParam === 'recipe' || flowParam === 'integrity' ? flowParam : undefined;
+
+  // Strip the ?flow=… param after it's been read so a reload doesn't re-trigger the flow.
+  useEffect(() => {
+    if (autoStartFlow) router.replace('/');
+  }, [autoStartFlow, router]);
+
   const [shellView, setShellView] = useState<ShellViewMode>('command-centre');
   const briefingRole = useDemoBriefingRole();
   const [mobileInsightsOpen, setMobileInsightsOpen] = useState(false);
@@ -192,6 +201,7 @@ export default function HomeShell() {
                 onChatStateChange={setChatActive}
                 onAddToDashboard={addPinnedChart}
                 onViewDashboard={() => setShellView('dashboard')}
+                autoStartFlow={autoStartFlow}
               />
             </div>
 
@@ -270,6 +280,7 @@ export default function HomeShell() {
         onClose={() => setAddInsightOpen(false)}
         briefingRole={briefingRole}
         onAddToDashboard={addPinnedChart}
+        onViewDashboard={() => setShellView('dashboard')}
         alreadyPinned={new Set(
           currentLayout
             .map((e) => pinnedChartIdOf(e.id))

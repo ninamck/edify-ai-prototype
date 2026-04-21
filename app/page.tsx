@@ -1,5 +1,10 @@
+import { Suspense } from 'react';
 import HomeShell from '@/components/HomeShell';
 
 export default function HomePage() {
-  return <HomeShell />;
+  return (
+    <Suspense fallback={null}>
+      <HomeShell />
+    </Suspense>
+  );
 }

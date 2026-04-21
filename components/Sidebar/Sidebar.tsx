@@ -88,7 +88,7 @@ export default function Sidebar() {
 
         {/* SETUP */}
         <NavGroup title="SETUP" compact={compact}>
-          <NavItem label="Manage recipes" icon={Star} compact={compact} active={is('/recipes')} />
+          <NavItem label="Manage recipes" icon={Star} compact={compact} active={is('/recipes')} onClick={() => router.push('/recipes')} />
           <NavItem label="Manage suppliers" icon={MapPin} compact={compact} active={is('/suppliers')} />
           <NavItem label="Manage users" icon={User} compact={compact} active={is('/users')} />
           <NavItem label="Manage checklists" icon={ClipboardList} compact={compact} active={is('/checklists')} onClick={() => router.push('/checklists')} />
