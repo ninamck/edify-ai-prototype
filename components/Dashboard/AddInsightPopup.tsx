@@ -23,12 +23,15 @@ export default function AddInsightPopup({
   onClose,
   briefingRole,
   onAddToDashboard,
+  onViewDashboard,
   alreadyPinned,
 }: {
   open: boolean;
   onClose: () => void;
   briefingRole: BriefingRole;
   onAddToDashboard: (id: AnalyticsChartId) => void;
+  /** Called when user clicks "View dashboard" after pinning a chart in chat. */
+  onViewDashboard?: () => void;
   alreadyPinned: Set<AnalyticsChartId>;
 }) {
   const [mode, setMode] = useState<'browse' | 'chat'>('browse');
@@ -260,6 +263,10 @@ export default function AddInsightPopup({
                     autoSendChartId={chatChartId}
                     alreadyPinned={effectivePinned}
                     onAddToDashboard={handleChatPin}
+                    onViewDashboard={() => {
+                      onViewDashboard?.();
+                      onClose();
+                    }}
                   />
                 </div>
               )}
