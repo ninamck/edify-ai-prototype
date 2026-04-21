@@ -1,6 +1,6 @@
 # Prototype context & handoff notes
 
-_Last updated: 2026-04-18_
+_Last updated: 2026-04-21_
 
 Context for future sessions on this prototype. Pair with `AGENTS.md` (which reminds you this is a custom / modified Next.js — check `node_modules/next/dist/docs/` before assuming APIs).
 
@@ -58,9 +58,82 @@ Role + Phase together select what Quinn shows (briefing items, close nudges, das
 - Close nudge: `[Waste N]` button → `/log-waste?itemId=...&qty=N&reason=expired`
 - History tabs: tap an entry → `/log-waste?itemId=...&qty=...&reason=...`
 
+### Invoice matching + adjacencies (large area, built out across 2026-04-19 → 2026-04-21)
+The invoices area has grown into its own mini-app. Five top-level routes, all under `/invoices/*` or `/purchase-orders/*`, sharing the same sidebar + header shell. **Currency throughout is GBP (£).** VAT, not Tax.
+
+- [app/invoices/page.tsx](app/invoices/page.tsx) → `InvoiceList`
+- [app/invoices/match/page.tsx](app/invoices/match/page.tsx) → `InvoiceMatchView` (three-way match)
+- [app/invoices/approved/page.tsx](app/invoices/approved/page.tsx) → `ApprovedState` (post-approval confirmation)
+- [app/invoices/pass-through/page.tsx](app/invoices/pass-through/page.tsx) → `PassThroughDetailView` (rent/utilities/insurance — skips matching)
+- [app/invoices/settings/page.tsx](app/invoices/settings/page.tsx) → `RulesView` (Invoicing rules — demo-grade)
+- [app/purchase-orders/[id]/page.tsx](app/purchase-orders/[id]/page.tsx) → `PODetailView` (PO-centric view with running total)
+
+**Invoice list ([components/Invoicing/InvoiceList.tsx](components/Invoicing/InvoiceList.tsx))** — lots lives here:
+- Tabs: All / Review / Split billing (conditional) / Approved / Pass-through
+- Per-row checkbox for bulk sync; header select-all is **indeterminate** when some-but-not-all syncable rows selected
+- Non-syncable rows (Variance, Parse Failed, Duplicate, Matching in Progress) show a disabled checkbox with a per-status tooltip (e.g. *"Unresolved variance — resolve before syncing"*)
+- `Sync all approved (N)` toolbar button (right-aligned in search row) — auto-hides when no ready invoices
+- `⚙ Rules` link sits inline with the "Invoices" h1 header, right-aligned
+- Sticky action bar appears when ≥1 row selected: `N selected · £X · M blocked in this view [Clear] [Sync now →]`
+- Mock sync flow: 900ms inline spinner per row → flips Matched→Approved, ✓ replaces checkbox, "Synced to Xero" caption under pill; top-centre toast; audit entry via `recordSync()` (console-visible)
+- Split-billing `SPLIT` chip next to invoice # on rows where `isSplitBillingInvoice(inv)` — detects invoices that share a PO with another non-duplicate invoice
+- Credit-notes column shows a small chip (`CN-007 · Received`) **only on Matched/Approved rows**; hover tooltip lists each CN with ref / status / amount
+- Pass-through tab renders a different table (columns: Invoice # · Supplier · Date · Due · Total · VAT · Category · Status) with a helper strip explaining the bucket
+- `[components/Invoicing/syncLog.ts](components/Invoicing/syncLog.ts)` — in-memory `recordSync()` log (future: surface in an admin view)
+
+**Three-way match view ([components/Invoicing/InvoiceMatchView.tsx](components/Invoicing/InvoiceMatchView.tsx))** — the big one (~1600 lines). Banner stack above the three-way table, in this order:
+- **PO context strip** (`POContextStrip`) — when this invoice is one of several against a PO: `🧾 PO-2907 · invoice 2 of 2`, running-total bar, prior/later invoices, state-aware copy: *"Approving closes PO-2907 — fully invoiced"* / *"stays open: £X remaining"* / *"Over-invoices PO by £X — resolve before approving"*. Click-through `View PO →` to the PO detail page.
+- **Auto-accepted banner** (`AutoAppliedBanner`) — green sparkle: *"✨ N variances auto-accepted by rules"* with per-variance reason + `See rules →`. Driven by `AUTO_APPLIED_VARIANCES` registry in [components/InvoicingRules/mockData.ts](components/InvoicingRules/mockData.ts).
+- **AI consistency-suggestion banner** (`AISuggestionBanner`) — gradient hero: *"✨ We've spotted a pattern — Milk 2L from Bidfood has invoiced at £4.30 for 5 consecutive weeks"*. Hardcoded to `inv-1`; dismissible. Buttons: Update catalogue / Keep prompting / Create a rule…
+- **Awaiting delivery** (`AwaitingDeliveryBanner`) — when no GRN linked: blocks approval, Park-until-delivery action
+- **Duplicate invoice** (`DuplicateInvoiceBanner`) — when `status === 'Duplicate'`: blocks approval, *"Not a duplicate · re-open PO"* override
+- **SuggestGRN banner** — the original "link missing GRN" nudge (pre-existing)
+
+Inside the table:
+- Three-way columns: Invoice (qty, price, total, VAT %, VAT £) / GRN (ordered, received, price, total, VAT £) / PO (ordered, **Prev. inv**, PO price, total). The `Prev. inv` column is new — shows qty already billed against this PO line by earlier invoices; tooltip lists the contributing invoices
+- Variance types: `'price' | 'qty' | 'over-invoice'`. Each has its own colour chip + resolution options:
+  - Price: Accept & Update Cost / Accept for this delivery / Dispute → Credit Note
+  - Qty: Credit Note / Accept Short (Back-order removed)
+  - Over-invoice: Request credit note (only — Amend PO removed; supervisor flow out of scope)
+- `✨ auto` chip replaces the VarBadge on any variance whose id is in `AUTO_APPLIED_VARIANCES` — those are counted as resolved, don't block approval, and are omitted from the "N of M variances resolved" count (shown as `(N auto ✨)` suffix instead)
+- No `View GRN` button — was removed; GRN context lives in the PO context strip / PO detail page instead
+
+**PO detail view ([components/PurchaseOrders/PODetailView.tsx](components/PurchaseOrders/PODetailView.tsx))**:
+- Header with PO status pill: `Not Invoiced` / `Partially Invoiced` / `Fully Invoiced` / `Over-invoiced` (derived from coverage math)
+- **Running-total card**: big `£X of £Y`, progress bar (green at 100%, red overflow at >100%, accent otherwise), `N of M lines complete · K pending`
+- **Invoices on this PO** list with inline coverage breakdown per row ("Covers: Milk 30/30 · Cream 10/10 · Butter 12/12")
+- **Line coverage table**: Ordered / Invoiced / Remaining / Invoice(s) link chips / Complete/Partial/Pending/Over status
+- All coverage math is in `getPOCoverage(poNumber)` in [components/Invoicing/mockData.ts](components/Invoicing/mockData.ts)
+
+**Pass-through ([components/PassThrough/](components/PassThrough))**:
+- [components/PassThrough/mockData.ts](components/PassThrough/mockData.ts) — types, 3 sample invoices (Brighton Energy · Utilities; Landmark Estate · Rent; Hiscox · Insurance), `XERO_ACCOUNT_MAP` per category
+- [components/PassThrough/PassThroughDetailView.tsx](components/PassThrough/PassThroughDetailView.tsx) — two-column layout: PDF placeholder on left, editable details + category pills + Send-to-Xero action + activity timeline on right
+- Categories: Rent / Utilities / Insurance / Accountant / Marketing / Other (Other prompts for Xero account)
+- Activity timeline shows ingest events (`auto-routed`, `fields-reviewed`, `category-set`, `sent`, etc.) with colored dots
+
+**Invoicing rules ([components/InvoicingRules/](components/InvoicingRules))** — demo-grade, not prod:
+- 4 rule types: `price-variance` / `qty-variance` / `discount-handling` / `vat-override`
+- 3 scopes: `global` / `supplier` / `invoice` — precedence: invoice > supplier > global
+- Pre-loaded rules in `INITIAL_RULES` (Global 5%, Bidfood 10%, Fresh Direct 3%, Hiscox 0% VAT override, etc.)
+- Inline edit popover per row; scope picker dynamically shows supplier dropdown (from `KNOWN_SUPPLIERS`) or invoice # input
+- Rules persist in component state only — lost on reload. Add/save is append-to-array; no backend.
+- `AUTO_APPLIED_VARIANCES` is a hardcoded `{ varianceId → { ruleId, note } }` map — no real rule engine; the match view just looks up the id and renders the sparkle chip
+- `AI_SUGGESTIONS` is hardcoded to `inv-1` to demonstrate the concept
+
+**Credit notes**:
+- [components/CreditNotes/mockData.ts](components/CreditNotes/mockData.ts) — existed already; added `CN-012` linked to `INV-4432` so a Matched invoice demonstrates the chip
+- New helper: `getCreditNotesForInvoice(invoiceNumber)`
+- Statuses on CNs: `Requested` / `Chasing` / `Overdue` / `Received` / `Applied`
+
+**VAT defaults** (in [components/Invoicing/mockData.ts](components/Invoicing/mockData.ts)):
+- `categorizeSku(sku)` returns `'food' | 'alcohol' | 'non-food' | 'unknown'` via SKU prefix lookup
+- `defaultVatRate(category)` returns 0 (food, zero-rated), 20 (alcohol / non-food), or `null` (unknown → prompt user)
+- SKU prefix sets are hardcoded (`FOOD_SKU_PREFIXES`, `NON_FOOD_SKU_PREFIXES`, `ALCOHOL_SKU_PREFIXES`) — if you add a new SKU, put it in the right set or it'll prompt for VAT
+- `TaxSelect` (still named `TaxSelect` internally but user-facing copy is VAT) shows an amber "Set VAT…" state when category is unknown
+
 ### Other routes
-- `/credit-notes` — list + detail slide-in (credit-notes feature). The Quinn banner on the detail panel has navy background — subtext is white there (fixed this session).
-- `/receive`, `/checklists/*`, `/order-history`, `/invoices`, `/assisted-ordering` — other floor actions.
+- `/credit-notes` — list + detail slide-in (credit-notes feature). The Quinn banner on the detail panel has navy background — subtext is white there (fixed in earlier session).
+- `/receive`, `/checklists/*`, `/order-history`, `/assisted-ordering` — other floor actions.
 
 ---
 
@@ -85,6 +158,33 @@ Role + Phase together select what Quinn shows (briefing items, close nudges, das
 - No backend / fetch — all data is fixtures.
 - No auth.
 - `_ = unused var` is fine but Next's strict TS + ESLint will surface anything that breaks builds.
+
+---
+
+## Recent session summary (2026-04-19 → 2026-04-21)
+
+Heavy work on the **invoice matching area** — what was one list + one match view has grown into: bulk-sync, PO detail, pass-through bucket, invoicing rules, VAT defaults, credit-note linkage. Rough chronology:
+
+1. **Currency normalized to GBP (£).** All `$` in invoice views replaced with `£`. Both currency literals (`$${x}` template strings, `${x}` JSX text) and header labels (`Tax $` → `VAT £`).
+2. **Split invoice → one PO flow.** We had 1-invoice→many-POs; added the inverse:
+   - New mock data: `PO-2907` Bidfood with `GRN-1248` + `GRN-1249` (two partial deliveries), covered by `INV-4432` + `INV-4433`. Both Matched.
+   - Also `PO-2910` + `INV-4440` / `INV-4441` for the over-invoice case (6 sacks flour billed vs 5 ordered).
+   - New PO detail route `/purchase-orders/[id]` with running-total card, invoice list, per-line coverage table.
+   - `POContextStrip` banner on match view, state-aware approval copy ("closes PO / stays open / over-invoices by £X"), `Prev. inv` column in PO tab.
+3. **Over-invoice variance type.** Third kind alongside `price` and `qty`. Red styling, single resolution option (`Request credit note`). The `Amend PO` option was designed but cut per user feedback — supervisor flow is out of scope for this view.
+4. **Queue chip + Split billing tab.** `SPLIT` chip on rows; new filter tab. `isSplitBillingInvoice()` excludes Duplicate/Parse-Failed so those don't pollute the bucket.
+5. **Edge-case banners** for the split flow:
+   - `AwaitingDeliveryBanner` (ahead-of-delivery, no GRN yet): blocks approval, Park-until-delivery button. Added `INV-4460` / `PO-2915` mock to demo.
+   - `DuplicateInvoiceBanner` (status === Duplicate): blocks approval, requires "Not a duplicate · re-open PO" override.
+6. **VAT rename + defaults.** "Tax" → "VAT" across the match view. Default VAT by SKU category (food 0%, alcohol/non-food 20%, unknown prompts with amber "Set VAT…"). Added Dishwasher tablets `DWT-100` to PO-2901/GRN-1244/INV-4421 to demonstrate a non-food line sitting next to food.
+7. **Credit notes surfaced on invoice list.** New `Credit notes` column; chip (`CN-XXX · Received`) renders **only on Matched/Approved** rows. Added `CN-012` linked to `INV-4432` in mock data so both an Approved and a Matched invoice show a chip. Chip excludes the amount (hover tooltip carries the detail).
+8. **Pass-through invoices.** New `/invoices/pass-through?id=...` route for rent / utilities / insurance bills that have no PO and no Edify supplier. New `components/PassThrough/` module with 3 sample invoices. Category pills map to Xero accounts; `Send to Xero` is a mock action with a confirmation modal; activity timeline logs every event.
+9. **Bulk sync with selection.** Per-row checkboxes (disabled on non-syncable with tooltips), header select-all (indeterminate state), sticky action bar, `Sync all approved (N)` toolbar button. Mock sync animation: 900ms spinner → flip Matched→Approved with "Synced to Xero" caption → toast. `syncLog.ts` records batches in memory.
+10. **Back-order resolution removed** from qty variance flow. `View GRN` button removed from the match view (PO detail is the canonical place).
+11. **Invoicing rules settings screen** — demo-grade settings at `/invoices/settings`. Four sections (Price, Qty, Discount, VAT override) with scope picker, inline edit, ON/OFF toggles, pre-loaded mock rules. Not a real rule engine: `AUTO_APPLIED_VARIANCES` is a hardcoded id → reason map that the match view reads to render `✨ auto` chips. `AI_SUGGESTIONS` hardcoded to `inv-1` for the consistency-pattern banner.
+12. **Header tidy.** `⚙ Rules` moved from search-row toolbar up inline with the "Invoices" h1 header (right-aligned). `Sync all approved` now right-aligned in the search row (previously mid-row).
+
+**Design-first cadence.** Most of these landed as a short design doc first → user confirmed ("yes") → build. The doc shape — user flow / key views / microcopy / edge cases — worked well for getting alignment on scope cuts (e.g. the Amend PO cut, Pass-through's skipped edge cases).
 
 ---
 
@@ -118,6 +218,14 @@ Rough chronology of what shipped:
 - **`CURRENT_HOUR_INDEX`** constant in `managerMockData.ts` is retained for legacy but no longer used by the dashboard — `currentHourIndexForPhase()` is the live path.
 - **The waste picker's "Likely to bin"** for morning/midday uses a slow-sell heuristic that shows items >40% under their expected sell-through. The label reads a bit strong for morning ("10 short" when it's really just pacing behind). Consider phase-aware labelling (e.g. "tracking slow" pre-noon, "short" after).
 - **Web Speech** — the mic button is a pure visual placeholder with a tooltip. Voice logging isn't wired.
+- **Invoicing rules don't persist.** Component state only — adding/editing/deleting a rule is lost on reload. Fine for the demo; real persistence would need a backend or localStorage.
+- **No real rule engine.** `AUTO_APPLIED_VARIANCES` is a hardcoded id → reason map. If you add new mock invoices/variances and want the sparkle chip to show, add the variance id to that map manually.
+- **`AI_SUGGESTIONS` is hardcoded to `inv-1`.** If the demo flow changes and `inv-1` is no longer the first invoice a user clicks, swap the hardcoded `invoiceId` in `components/InvoicingRules/mockData.ts`.
+- **`TaxSelect` is still named Tax internally** even though all user-facing copy says VAT. Low-priority rename if someone wants to fully align.
+- **Bulk sync is session-local.** `locallySynced` state in `InvoiceList` means a page refresh resets which invoices are "synced". `syncLog.ts` entries also don't persist.
+- **Pass-through PDF preview is a placeholder box.** Real PDF rendering isn't wired — the left pane just says "PDF preview placeholder".
+- **SKU categorizer is prefix-based.** `categorizeSku()` uses hardcoded prefix arrays. Unknown SKUs fall through to the "Set VAT…" prompt — fine for now, but if the catalogue grows this will need a proper per-SKU category field.
+- **"View GRN" button was removed** from the match view. Accessing the GRN now goes through the PO detail page's GRN references. If finance needs direct GRN access from the invoice view, add it back.
 
 ---
 
@@ -206,5 +314,17 @@ Big area. Worth a dedicated exploration pass before building — start by mappin
 3. To test mobile: resize the preview to 430px or below.
 4. To check the close nudge: switch phase to Evening, Manager role, Command centre view — red card at top of right panel.
 5. To hit the log card directly: `/log-waste?itemId=muffin-blueberry&qty=3&reason=expired`.
+6. Invoice-matching demo paths:
+   - `/invoices` — list with tabs, bulk sync, credit-note chips
+   - `/invoices/match?id=inv-1` — rich match view with AI suggestion banner + auto-accepted banner + dishwasher-tablets (non-food VAT 20%)
+   - `/invoices/match?id=inv-6` (or `inv-7`) — split-billing siblings against PO-2907, PO context strip
+   - `/invoices/match?id=inv-9` — over-invoice variance (6 of 5 flour), red banner, Request-credit-note resolution
+   - `/invoices/match?id=inv-10` — awaiting-delivery edge case (no GRN)
+   - `/invoices/match?id=inv-5` — duplicate-invoice edge case
+   - `/invoices/pass-through?id=pt-1` — utilities pass-through, ready to send
+   - `/invoices/pass-through?id=pt-3` — awaiting review, no category yet
+   - `/purchase-orders/po-5` — PO-2907 coverage view (2 invoices, fully invoiced)
+   - `/invoices/settings` — invoicing rules (demo-grade settings)
 
 When iterating on briefing content, the single file to know is [MorningBriefingBody.tsx](components/Feed/MorningBriefingBody.tsx) — long but well-structured.
+When iterating on the invoice match view, [components/Invoicing/InvoiceMatchView.tsx](components/Invoicing/InvoiceMatchView.tsx) is the equivalent — ~1600 lines, well-structured with `/* ──────────── Banner Name ──────────── */` dividers between subcomponents.

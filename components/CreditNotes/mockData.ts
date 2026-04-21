@@ -242,7 +242,42 @@ export const MOCK_CREDIT_NOTES: CreditNote[] = [
       },
     ],
   },
+  {
+    id: 'cn-7',
+    ref: 'CN-012',
+    supplier: 'Bidfood',
+    raisedDate: '4 Apr 2026',
+    daysOutstanding: 0,
+    amount: 16.80,
+    reason: 'Short delivery',
+    status: 'Received',
+    supplierRef: 'BIDFOOD-CN-3302',
+    linkedInvoice: 'INV-4432',
+    originRef: 'GRN-1248',
+    originType: 'GRN',
+    originDate: '4 Apr 2026',
+    chaseHistory: [
+      {
+        id: 'ce-17',
+        date: '4 Apr 2026 · 14:10',
+        type: 'raised',
+        note: 'Dairy delivery short — 4 of 30 milk 2L not received. £16.80 credit requested.',
+        by: 'Ravi P.',
+      },
+      {
+        id: 'ce-18',
+        date: '5 Apr 2026 · 09:00',
+        type: 'received',
+        note: 'Credit note BIDFOOD-CN-3302 received for £16.80.',
+        by: 'System',
+      },
+    ],
+  },
 ];
+
+export function getCreditNotesForInvoice(invoiceNumber: string): CreditNote[] {
+  return MOCK_CREDIT_NOTES.filter(cn => cn.linkedInvoice === invoiceNumber);
+}
 
 export function pendingChaseCount(): number {
   return MOCK_CREDIT_NOTES.filter(

@@ -70,13 +70,13 @@ export default function ApprovedState({ invoice, onBackToInvoices }: ApprovedSta
             <div>
               <span style={{ color: 'var(--color-text-secondary)' }}>Credit Notes</span>
               <div style={{ marginTop: '4px' }}>
-                <StatusBadge status={`${creditNoteCount} · $${creditValue.toFixed(2)}`} variant="warning" />
+                <StatusBadge status={`${creditNoteCount} · £${creditValue.toFixed(2)}`} variant="warning" />
               </div>
             </div>
           )}
           <div>
             <span style={{ color: 'var(--color-text-secondary)' }}>Total</span>
-            <div style={{ fontWeight: 700, color: 'var(--color-text-primary)', marginTop: '4px', fontSize: '16px' }}>${invoice.total.toFixed(2)}</div>
+            <div style={{ fontWeight: 700, color: 'var(--color-text-primary)', marginTop: '4px', fontSize: '16px' }}>£{invoice.total.toFixed(2)}</div>
           </div>
         </div>
       </div>
@@ -116,7 +116,7 @@ export default function ApprovedState({ invoice, onBackToInvoices }: ApprovedSta
                 <div>
                   <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text-primary)' }}>{ci.item}</span>
                   <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginLeft: '8px' }}>
-                    ${ci.oldPrice.toFixed(2)} → ${ci.newPrice.toFixed(2)}
+                    £{ci.oldPrice.toFixed(2)} → £{ci.newPrice.toFixed(2)}
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -165,11 +165,11 @@ export default function ApprovedState({ invoice, onBackToInvoices }: ApprovedSta
                 <div>
                   <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text-primary)' }}>{d.item}</span>
                   <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginLeft: '8px' }}>
-                    Charged ${d.invoicePrice.toFixed(2)}
+                    Charged £{d.invoicePrice.toFixed(2)}
                   </span>
                 </div>
                 <div style={{ fontSize: '12px', color: 'var(--color-success)', fontWeight: 600 }}>
-                  Master cost unchanged at ${d.masterPrice.toFixed(2)}
+                  Master cost unchanged at £{d.masterPrice.toFixed(2)}
                 </div>
               </div>
             ))}

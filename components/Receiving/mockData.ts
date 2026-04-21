@@ -62,6 +62,7 @@ export const MOCK_POS: PO[] = [
       { id: 'pl-2', name: 'Double cream 1L', sku: 'DC-1L', unit: 'EA', price: 8.00, expectedQty: 8 },
       { id: 'pl-3', name: 'Free range eggs 15pk', sku: 'FRE-15', unit: 'EA', price: 8.00, expectedQty: 12 },
       { id: 'pl-4', name: 'Unsalted butter 500g', sku: 'UB-500', unit: 'EA', price: 6.50, expectedQty: 6 },
+      { id: 'pl-4b', name: 'Dishwasher tablets 100pk', sku: 'DWT-100', unit: 'BOX', price: 24.00, expectedQty: 2 },
     ],
   },
   {
@@ -104,6 +105,45 @@ export const MOCK_POS: PO[] = [
       { id: 'pl-14', name: 'Sugar sachets', sku: 'SUG-S', unit: 'BOX', price: 12.00, expectedQty: 5 },
     ],
   },
+  {
+    id: 'po-5',
+    poNumber: 'PO-2907',
+    supplier: 'Bidfood',
+    site: 'Fitzroy Espresso',
+    status: 'Partially Received',
+    dateSent: '2 Apr 2026',
+    lines: [
+      { id: 'pl-15', name: 'Full cream milk 2L', sku: 'FCM-2L', unit: 'EA', price: 4.20, expectedQty: 30 },
+      { id: 'pl-16', name: 'Double cream 1L', sku: 'DC-1L', unit: 'EA', price: 8.00, expectedQty: 10 },
+      { id: 'pl-17', name: 'Free range eggs 15pk', sku: 'FRE-15', unit: 'EA', price: 8.00, expectedQty: 15 },
+      { id: 'pl-18', name: 'Unsalted butter 500g', sku: 'UB-500', unit: 'EA', price: 6.50, expectedQty: 12 },
+      { id: 'pl-19', name: 'Plain flour 10kg', sku: 'FLR-10', unit: 'SACK', price: 18.00, expectedQty: 4 },
+    ],
+  },
+  {
+    id: 'po-6',
+    poNumber: 'PO-2910',
+    supplier: 'Bidfood',
+    site: 'Fitzroy Espresso',
+    status: 'Partially Received',
+    dateSent: '6 Apr 2026',
+    lines: [
+      { id: 'pl-20', name: 'Full cream milk 2L', sku: 'FCM-2L', unit: 'EA', price: 4.20, expectedQty: 20 },
+      { id: 'pl-21', name: 'Plain flour 10kg', sku: 'FLR-10', unit: 'SACK', price: 18.00, expectedQty: 5 },
+    ],
+  },
+  {
+    id: 'po-7',
+    poNumber: 'PO-2915',
+    supplier: 'Bidfood',
+    site: 'Fitzroy Espresso',
+    status: 'Sent',
+    dateSent: '10 Apr 2026',
+    lines: [
+      { id: 'pl-22', name: 'Double cream 1L', sku: 'DC-1L', unit: 'EA', price: 8.00, expectedQty: 8 },
+      { id: 'pl-23', name: 'Free range eggs 15pk', sku: 'FRE-15', unit: 'EA', price: 8.00, expectedQty: 10 },
+    ],
+  },
 ];
 
 export const MOCK_COMPLETED_DELIVERIES: GRN[] = [
@@ -123,6 +163,7 @@ export const MOCK_COMPLETED_DELIVERIES: GRN[] = [
       { id: 'gl-2', poLineId: 'pl-2', name: 'Double cream 1L', sku: 'DC-1L', unit: 'EA', price: 8.00, expectedQty: 8, receivedQty: 8 },
       { id: 'gl-2b', poLineId: 'pl-3', name: 'Free range eggs 15pk', sku: 'FRE-15', unit: 'EA', price: 8.00, expectedQty: 12, receivedQty: 12 },
       { id: 'gl-2c', poLineId: 'pl-4', name: 'Unsalted butter 500g', sku: 'UB-500', unit: 'EA', price: 6.50, expectedQty: 6, receivedQty: 6 },
+      { id: 'gl-2d', poLineId: 'pl-4b', name: 'Dishwasher tablets 100pk', sku: 'DWT-100', unit: 'BOX', price: 24.00, expectedQty: 2, receivedQty: 2 },
     ],
   },
   {
@@ -173,6 +214,65 @@ export const MOCK_COMPLETED_DELIVERIES: GRN[] = [
     invoiceStatus: 'Closed',
     lines: [
       { id: 'gl-5', poLineId: 'pl-13', name: 'Napkins (white)', sku: 'NAP-W', unit: 'PKT', price: 3.80, expectedQty: 10, receivedQty: 10 },
+    ],
+  },
+  {
+    id: 'grn-5',
+    grnNumber: 'GRN-1248',
+    poNumbers: ['PO-2907'],
+    supplier: 'Bidfood',
+    site: 'Fitzroy Espresso',
+    status: 'Pending Invoice',
+    dateReceived: '4 Apr 2026',
+    receivedBy: 'Ravi Patel',
+    invoiceStatus: 'Pending Invoice',
+    lines: [
+      { id: 'gl-9', poLineId: 'pl-15', name: 'Full cream milk 2L', sku: 'FCM-2L', unit: 'EA', price: 4.20, expectedQty: 30, receivedQty: 30 },
+      { id: 'gl-10', poLineId: 'pl-16', name: 'Double cream 1L', sku: 'DC-1L', unit: 'EA', price: 8.00, expectedQty: 10, receivedQty: 10 },
+      { id: 'gl-11', poLineId: 'pl-18', name: 'Unsalted butter 500g', sku: 'UB-500', unit: 'EA', price: 6.50, expectedQty: 12, receivedQty: 12 },
+    ],
+  },
+  {
+    id: 'grn-6',
+    grnNumber: 'GRN-1249',
+    poNumbers: ['PO-2907'],
+    supplier: 'Bidfood',
+    site: 'Fitzroy Espresso',
+    status: 'Pending Invoice',
+    dateReceived: '5 Apr 2026',
+    receivedBy: 'Aisha Nguyen',
+    invoiceStatus: 'Pending Invoice',
+    lines: [
+      { id: 'gl-12', poLineId: 'pl-17', name: 'Free range eggs 15pk', sku: 'FRE-15', unit: 'EA', price: 8.00, expectedQty: 15, receivedQty: 15 },
+      { id: 'gl-13', poLineId: 'pl-19', name: 'Plain flour 10kg', sku: 'FLR-10', unit: 'SACK', price: 18.00, expectedQty: 4, receivedQty: 4 },
+    ],
+  },
+  {
+    id: 'grn-7',
+    grnNumber: 'GRN-1250',
+    poNumbers: ['PO-2910'],
+    supplier: 'Bidfood',
+    site: 'Fitzroy Espresso',
+    status: 'Pending Invoice',
+    dateReceived: '7 Apr 2026',
+    receivedBy: 'Ravi Patel',
+    invoiceStatus: 'Pending Invoice',
+    lines: [
+      { id: 'gl-14', poLineId: 'pl-20', name: 'Full cream milk 2L', sku: 'FCM-2L', unit: 'EA', price: 4.20, expectedQty: 20, receivedQty: 20 },
+    ],
+  },
+  {
+    id: 'grn-8',
+    grnNumber: 'GRN-1251',
+    poNumbers: ['PO-2910'],
+    supplier: 'Bidfood',
+    site: 'Fitzroy Espresso',
+    status: 'Pending Invoice',
+    dateReceived: '8 Apr 2026',
+    receivedBy: 'Aisha Nguyen',
+    invoiceStatus: 'Pending Invoice',
+    lines: [
+      { id: 'gl-15', poLineId: 'pl-21', name: 'Plain flour 10kg', sku: 'FLR-10', unit: 'SACK', price: 18.00, expectedQty: 5, receivedQty: 6 },
     ],
   },
 ];

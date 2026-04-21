@@ -1,4 +1,4 @@
-import { MOCK_COMPLETED_DELIVERIES, GRN } from '@/components/Receiving/mockData';
+import { MOCK_COMPLETED_DELIVERIES, MOCK_POS, GRN, PO, POLine } from '@/components/Receiving/mockData';
 export type { GRN } from '@/components/Receiving/mockData';
 
 export type InvoiceMatchStatus =
@@ -10,7 +10,8 @@ export type InvoiceMatchStatus =
   | 'Matching in Progress';
 
 export type PriceResolution = 'Accept & Update Cost in Edify' | 'Accept for this delivery' | 'Dispute → Credit Note';
-export type QtyResolution = 'Credit Note' | 'Accept Short' | 'Back-order';
+export type QtyResolution = 'Credit Note' | 'Accept Short';
+export type OverInvoiceResolution = 'Request credit note';
 
 export interface InvoiceLine {
   id: string;
@@ -25,7 +26,7 @@ export interface MatchVariance {
   id: string;
   itemName: string;
   sku: string;
-  type: 'price' | 'qty';
+  type: 'price' | 'qty' | 'over-invoice';
   invoiceValue: number;
   grnValue: number;
   poValue: number;
@@ -39,6 +40,7 @@ export interface Invoice {
   date: string;
   total: number;
   grnNumbers: string[];
+  poNumbers?: string[];
   suggestedGRN?: string;
   status: InvoiceMatchStatus;
   lines: InvoiceLine[];
@@ -46,6 +48,7 @@ export interface Invoice {
   note?: string;
   noteAuthor?: string;
   noteUpdatedAt?: string;
+  parked?: boolean;
 }
 
 export interface GRNMatchLine {
@@ -71,7 +74,7 @@ export const MOCK_INVOICES: Invoice[] = [
     invoiceNumber: 'INV-4421',
     supplier: 'Bidfood',
     date: '2 Apr 2026',
-    total: 921.60,
+    total: 969.60,
     grnNumbers: ['GRN-1244'],
     suggestedGRN: 'GRN-1245',
     status: 'Variance',
@@ -80,6 +83,7 @@ export const MOCK_INVOICES: Invoice[] = [
       { id: 'il-2', description: 'Double cream 1L', sku: 'DC-1L', qty: 8, unitPrice: 8.00, lineTotal: 64.00 },
       { id: 'il-3', description: 'Free range eggs 15pk', sku: 'FRE-15', qty: 12, unitPrice: 8.50, lineTotal: 102.00 },
       { id: 'il-4', description: 'Unsalted butter 500g', sku: 'UB-500', qty: 6, unitPrice: 6.50, lineTotal: 39.00 },
+      { id: 'il-4b', description: 'Dishwasher tablets 100pk', sku: 'DWT-100', qty: 2, unitPrice: 24.00, lineTotal: 48.00 },
       { id: 'il-5', description: 'Espresso blend 1kg', sku: 'EB-1KG', qty: 10, unitPrice: 19.20, lineTotal: 192.00 },
       { id: 'il-6', description: 'Oat milk 1L', sku: 'OM-1L', qty: 24, unitPrice: 4.00, lineTotal: 96.00 },
       { id: 'il-7', description: 'Takeaway cups 12oz', sku: 'TC-12', qty: 4, unitPrice: 28.00, lineTotal: 112.00 },
@@ -154,6 +158,84 @@ export const MOCK_INVOICES: Invoice[] = [
     lines: [],
     variances: [],
   },
+  {
+    id: 'inv-6',
+    invoiceNumber: 'INV-4432',
+    supplier: 'Bidfood',
+    date: '4 Apr 2026',
+    total: 284.00,
+    grnNumbers: ['GRN-1248'],
+    status: 'Matched',
+    lines: [
+      { id: 'il-20', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 30, unitPrice: 4.20, lineTotal: 126.00 },
+      { id: 'il-21', description: 'Double cream 1L', sku: 'DC-1L', qty: 10, unitPrice: 8.00, lineTotal: 80.00 },
+      { id: 'il-22', description: 'Unsalted butter 500g', sku: 'UB-500', qty: 12, unitPrice: 6.50, lineTotal: 78.00 },
+    ],
+    variances: [],
+    note: 'First of two deliveries against PO-2907 — dairy run. Eggs + flour arriving tomorrow on a separate truck.',
+    noteAuthor: 'Ravi',
+    noteUpdatedAt: '4 Apr',
+  },
+  {
+    id: 'inv-7',
+    invoiceNumber: 'INV-4433',
+    supplier: 'Bidfood',
+    date: '5 Apr 2026',
+    total: 192.00,
+    grnNumbers: ['GRN-1249'],
+    status: 'Matched',
+    lines: [
+      { id: 'il-23', description: 'Free range eggs 15pk', sku: 'FRE-15', qty: 15, unitPrice: 8.00, lineTotal: 120.00 },
+      { id: 'il-24', description: 'Plain flour 10kg', sku: 'FLR-10', qty: 4, unitPrice: 18.00, lineTotal: 72.00 },
+    ],
+    variances: [],
+  },
+  {
+    id: 'inv-8',
+    invoiceNumber: 'INV-4440',
+    supplier: 'Bidfood',
+    date: '7 Apr 2026',
+    total: 84.00,
+    grnNumbers: ['GRN-1250'],
+    status: 'Matched',
+    lines: [
+      { id: 'il-25', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 20, unitPrice: 4.20, lineTotal: 84.00 },
+    ],
+    variances: [],
+  },
+  {
+    id: 'inv-9',
+    invoiceNumber: 'INV-4441',
+    supplier: 'Bidfood',
+    date: '8 Apr 2026',
+    total: 108.00,
+    grnNumbers: ['GRN-1251'],
+    status: 'Variance',
+    lines: [
+      { id: 'il-26', description: 'Plain flour 10kg', sku: 'FLR-10', qty: 6, unitPrice: 18.00, lineTotal: 108.00 },
+    ],
+    variances: [
+      { id: 'v-9', itemName: 'Plain flour 10kg', sku: 'FLR-10', type: 'over-invoice', invoiceValue: 6, grnValue: 6, poValue: 5, impact: 18.00 },
+    ],
+    note: 'Supplier delivered 6 sacks of flour but PO only asked for 5. They billed for 6. Need a credit for 1 sack before we approve.',
+    noteAuthor: 'Priya',
+    noteUpdatedAt: 'today',
+  },
+  {
+    id: 'inv-10',
+    invoiceNumber: 'INV-4460',
+    supplier: 'Bidfood',
+    date: '10 Apr 2026',
+    total: 144.00,
+    grnNumbers: [],
+    poNumbers: ['PO-2915'],
+    status: 'Matching in Progress',
+    lines: [
+      { id: 'il-27', description: 'Double cream 1L', sku: 'DC-1L', qty: 8, unitPrice: 8.00, lineTotal: 64.00 },
+      { id: 'il-28', description: 'Free range eggs 15pk', sku: 'FRE-15', qty: 10, unitPrice: 8.00, lineTotal: 80.00 },
+    ],
+    variances: [],
+  },
 ];
 
 export function getGRNsForInvoice(invoice: Invoice, extraGRNs: string[] = []): GRN[] {
@@ -198,6 +280,265 @@ export function getUnmatchedInvoiceLines(invoice: Invoice, extraGRNs: string[] =
 export function invoiceGRNTotal(invoice: Invoice, extraGRNs: string[] = []): number {
   const lines = getGRNMatchLines(invoice, extraGRNs);
   return lines.reduce((sum, l) => sum + l.lineTotal, 0);
+}
+
+export function getPOsForInvoice(invoice: Invoice): string[] {
+  const grns = getGRNsForInvoice(invoice);
+  const viaGRN = grns.flatMap(g => g.poNumbers);
+  const explicit = invoice.poNumbers ?? [];
+  return Array.from(new Set([...viaGRN, ...explicit]));
+}
+
+export interface SiblingInvoice {
+  sibling: Invoice;
+  sharedPOs: string[];
+}
+
+export function getSiblingInvoicesSharingPO(invoice: Invoice): SiblingInvoice[] {
+  const thisPOs = new Set(getPOsForInvoice(invoice));
+  if (thisPOs.size === 0) return [];
+  return MOCK_INVOICES
+    .filter(other => other.id !== invoice.id)
+    .map(other => {
+      const sharedPOs = getPOsForInvoice(other).filter(po => thisPOs.has(po));
+      return { sibling: other, sharedPOs };
+    })
+    .filter(x => x.sharedPOs.length > 0);
+}
+
+export type POCoverageStatus =
+  | 'Not Invoiced'
+  | 'Partially Invoiced'
+  | 'Fully Invoiced'
+  | 'Over-invoiced';
+
+export interface POLineInvoiceApplication {
+  invoice: Invoice;
+  qty: number;
+  unitPrice: number;
+  lineTotal: number;
+  priceDelta: number;
+}
+
+export interface POLineCoverage {
+  poLine: POLine;
+  invoicedQty: number;
+  invoicedAmount: number;
+  remainingQty: number;
+  applications: POLineInvoiceApplication[];
+  overInvoiced: boolean;
+}
+
+export interface POCoverage {
+  po: PO;
+  invoices: Invoice[];
+  poAmount: number;
+  invoicedAmount: number;
+  percent: number;
+  lineCoverage: POLineCoverage[];
+  status: POCoverageStatus;
+  fullyInvoicedLineCount: number;
+}
+
+export function getInvoicesForPO(poNumber: string): Invoice[] {
+  return MOCK_INVOICES.filter(inv => getPOsForInvoice(inv).includes(poNumber));
+}
+
+export function getPOCoverage(poNumber: string): POCoverage | null {
+  const po = MOCK_POS.find(p => p.poNumber === poNumber);
+  if (!po) return null;
+  const invoices = getInvoicesForPO(poNumber);
+  const poAmount = po.lines.reduce((s, l) => s + l.price * l.expectedQty, 0);
+
+  const lineCoverage: POLineCoverage[] = po.lines.map(poLine => {
+    const applications: POLineInvoiceApplication[] = invoices
+      .map(inv => {
+        const il = inv.lines.find(l => l.sku === poLine.sku);
+        if (!il) return null;
+        return {
+          invoice: inv,
+          qty: il.qty,
+          unitPrice: il.unitPrice,
+          lineTotal: il.lineTotal,
+          priceDelta: il.unitPrice - poLine.price,
+        };
+      })
+      .filter((x): x is POLineInvoiceApplication => x !== null);
+    const invoicedQty = applications.reduce((s, a) => s + a.qty, 0);
+    const invoicedAmount = applications.reduce((s, a) => s + a.lineTotal, 0);
+    return {
+      poLine,
+      invoicedQty,
+      invoicedAmount,
+      remainingQty: poLine.expectedQty - invoicedQty,
+      applications,
+      overInvoiced: invoicedQty > poLine.expectedQty,
+    };
+  });
+
+  const invoicedAmount = lineCoverage.reduce((s, l) => s + l.invoicedAmount, 0);
+  const percent = poAmount > 0 ? (invoicedAmount / poAmount) * 100 : 0;
+  const anyOver = lineCoverage.some(l => l.overInvoiced);
+  const allFull = lineCoverage.every(l => l.invoicedQty >= l.poLine.expectedQty);
+
+  let status: POCoverageStatus;
+  if (invoices.length === 0) status = 'Not Invoiced';
+  else if (anyOver || invoicedAmount > poAmount + 0.01) status = 'Over-invoiced';
+  else if (allFull) status = 'Fully Invoiced';
+  else status = 'Partially Invoiced';
+
+  const fullyInvoicedLineCount = lineCoverage.filter(l => l.invoicedQty >= l.poLine.expectedQty && !l.overInvoiced).length;
+
+  return { po, invoices, poAmount, invoicedAmount, percent, lineCoverage, status, fullyInvoicedLineCount };
+}
+
+export function getPOCoverageByPOId(poId: string): POCoverage | null {
+  const po = MOCK_POS.find(p => p.id === poId);
+  if (!po) return null;
+  return getPOCoverage(po.poNumber);
+}
+
+export interface PriorInvoicedOnLine {
+  qty: number;
+  applications: POLineInvoiceApplication[];
+}
+
+function compareInvoicesByArrayOrder(a: Invoice, b: Invoice): number {
+  return MOCK_INVOICES.indexOf(a) - MOCK_INVOICES.indexOf(b);
+}
+
+export function getPriorInvoicedForInvoiceLine(
+  invoice: Invoice,
+  sku: string,
+): PriorInvoicedOnLine {
+  const pos = getPOsForInvoice(invoice);
+  if (pos.length === 0) return { qty: 0, applications: [] };
+  const applications: POLineInvoiceApplication[] = [];
+  for (const poNumber of pos) {
+    const coverage = getPOCoverage(poNumber);
+    if (!coverage) continue;
+    const lineCov = coverage.lineCoverage.find(lc => lc.poLine.sku === sku);
+    if (!lineCov) continue;
+    for (const app of lineCov.applications) {
+      if (app.invoice.id !== invoice.id && compareInvoicesByArrayOrder(app.invoice, invoice) < 0) {
+        applications.push(app);
+      }
+    }
+  }
+  const qty = applications.reduce((s, a) => s + a.qty, 0);
+  return { qty, applications };
+}
+
+export interface POContextForInvoice {
+  poNumber: string;
+  poId: string;
+  poAmount: number;
+  allInvoices: Invoice[];
+  priorInvoices: Invoice[];
+  laterInvoices: Invoice[];
+  priorInvoicedAmount: number;
+  thisInvoiceAmount: number;
+  afterThisAmount: number;
+  invoiceIndex: number;
+  totalInvoices: number;
+  closesIfApproved: boolean;
+  overInvoiceIfApproved: boolean;
+  overBy: number;
+}
+
+export function getPOContextForInvoice(invoice: Invoice): POContextForInvoice[] {
+  const pos = getPOsForInvoice(invoice);
+  const out: POContextForInvoice[] = [];
+  for (const poNumber of pos) {
+    const coverage = getPOCoverage(poNumber);
+    if (!coverage) continue;
+    const { po, poAmount, lineCoverage, invoices: allInvoices } = coverage;
+    const activeInvoices = allInvoices.filter(i => !EXCLUDED_FROM_SPLIT_BILLING.includes(i.status) || i.id === invoice.id);
+    const ordered = [...activeInvoices].sort(compareInvoicesByArrayOrder);
+    const idx = ordered.findIndex(i => i.id === invoice.id);
+    const priorInvoices = ordered.filter((_, i) => i < idx);
+    const laterInvoices = ordered.filter((_, i) => i > idx);
+
+    const thisInvoiceAmount = lineCoverage
+      .flatMap(lc => lc.applications.filter(a => a.invoice.id === invoice.id))
+      .reduce((s, a) => s + a.lineTotal, 0);
+    const priorInvoicedAmount = lineCoverage
+      .flatMap(lc => lc.applications.filter(a => priorInvoices.some(p => p.id === a.invoice.id)))
+      .reduce((s, a) => s + a.lineTotal, 0);
+    const afterThisAmount = priorInvoicedAmount + thisInvoiceAmount;
+
+    const tolerance = 0.01;
+    const lineFullyCoveredAfter = lineCoverage.map(lc => {
+      const priorQty = lc.applications.filter(a => priorInvoices.some(p => p.id === a.invoice.id)).reduce((s, a) => s + a.qty, 0);
+      const thisQty = lc.applications.filter(a => a.invoice.id === invoice.id).reduce((s, a) => s + a.qty, 0);
+      return { covered: priorQty + thisQty, expected: lc.poLine.expectedQty };
+    });
+    const anyOver = lineFullyCoveredAfter.some(l => l.covered > l.expected) || afterThisAmount > poAmount + tolerance;
+    const overBy = Math.max(0, afterThisAmount - poAmount);
+    const allLinesFull = lineFullyCoveredAfter.every(l => l.covered >= l.expected);
+    const closesIfApproved = !anyOver && allLinesFull && afterThisAmount <= poAmount + tolerance;
+
+    out.push({
+      poNumber,
+      poId: po.id,
+      poAmount,
+      allInvoices: ordered,
+      priorInvoices,
+      laterInvoices,
+      priorInvoicedAmount,
+      thisInvoiceAmount,
+      afterThisAmount,
+      invoiceIndex: idx + 1,
+      totalInvoices: ordered.length,
+      closesIfApproved,
+      overInvoiceIfApproved: anyOver,
+      overBy,
+    });
+  }
+  return out;
+}
+
+const EXCLUDED_FROM_SPLIT_BILLING: readonly InvoiceMatchStatus[] = ['Duplicate', 'Parse Failed'];
+
+export function isSplitBillingInvoice(invoice: Invoice): boolean {
+  if (EXCLUDED_FROM_SPLIT_BILLING.includes(invoice.status)) return false;
+  const pos = getPOsForInvoice(invoice);
+  return pos.some(po => {
+    const active = getInvoicesForPO(po).filter(i => !EXCLUDED_FROM_SPLIT_BILLING.includes(i.status));
+    return active.length > 1;
+  });
+}
+
+export function splitBillingCount(): number {
+  return MOCK_INVOICES.filter(isSplitBillingInvoice).length;
+}
+
+export type VatCategory = 'food' | 'alcohol' | 'non-food' | 'unknown';
+
+const FOOD_SKU_PREFIXES = ['FCM', 'DC', 'FRE', 'UB', 'EB', 'OM', 'BS', 'CT', 'SDL', 'AVO', 'LEM', 'SUG', 'FLR'];
+const NON_FOOD_SKU_PREFIXES = ['NAP', 'TC', 'DWT', 'CLN'];
+const ALCOHOL_SKU_PREFIXES = ['ALC', 'BEER', 'WINE', 'SPIR'];
+
+export function categorizeSku(sku: string): VatCategory {
+  const upper = sku.toUpperCase();
+  if (ALCOHOL_SKU_PREFIXES.some(p => upper.startsWith(p))) return 'alcohol';
+  if (NON_FOOD_SKU_PREFIXES.some(p => upper.startsWith(p))) return 'non-food';
+  if (FOOD_SKU_PREFIXES.some(p => upper.startsWith(p))) return 'food';
+  return 'unknown';
+}
+
+export function defaultVatRate(category: VatCategory): number | null {
+  if (category === 'food') return 0;
+  if (category === 'alcohol') return 20;
+  if (category === 'non-food') return 20;
+  return null;
+}
+
+export function vatCategoryLabel(category: VatCategory): string {
+  if (category === 'food') return 'Food & drink (zero-rated)';
+  if (category === 'alcohol') return 'Alcohol';
+  if (category === 'non-food') return 'Non-food / cleaning';
+  return 'Uncategorised';
 }
 
 export function needsReviewCount(): number {
