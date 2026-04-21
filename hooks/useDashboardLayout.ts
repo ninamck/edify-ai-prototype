@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ESTATE_DEFAULT_LAYOUT,
   MANAGER_DEFAULT_LAYOUT,
+  defaultWidthForChart,
   pinnedId,
   type DashboardLayoutEntry,
 } from '@/components/Dashboard/layoutTypes';
@@ -76,7 +77,13 @@ export function useDashboardLayout() {
     setLayoutByRole((prev) => {
       const existing = prev[role];
       if (existing.some((e) => e.id === entryId)) return prev;
-      return { ...prev, [role]: [...existing, { id: entryId, visible: true }] };
+      // New pins land at the top of the dashboard, with a sensible default width.
+      const newEntry: DashboardLayoutEntry = {
+        id: entryId,
+        visible: true,
+        width: defaultWidthForChart(chartId),
+      };
+      return { ...prev, [role]: [newEntry, ...existing] };
     });
   }, []);
 

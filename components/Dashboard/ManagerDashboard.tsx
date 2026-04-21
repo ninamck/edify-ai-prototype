@@ -1,8 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { Reorder } from 'framer-motion';
 import {
   WTD_SPEND,
   currentHourIndexForPhase,
@@ -23,9 +22,13 @@ import type { AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
 import { renderAnalyticsChart, ANALYTICS_CONFIG } from '@/components/Analytics/AnalyticsCharts';
 import DashboardWidget from '@/components/Dashboard/DashboardWidget';
 import DashboardEditToolbar from '@/components/Dashboard/DashboardEditToolbar';
+import QuinnInsightButton from '@/components/Dashboard/parts/QuinnInsightButton';
 import {
+  isHalfOnlyChart,
   pinnedChartIdOf,
+  widthOf,
   type DashboardLayoutEntry,
+  type WidgetWidth,
 } from '@/components/Dashboard/layoutTypes';
 
 function ChartCard({
@@ -124,9 +127,10 @@ export default function ManagerDashboard({
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
             <span style={{ fontSize: 11 }}>📌</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', flex: 1, minWidth: 0 }}>
               {ANALYTICS_CONFIG[pinned].label}
             </span>
+            <QuinnInsightButton text={ANALYTICS_CONFIG[pinned].reasoning} />
           </div>
           {renderAnalyticsChart(pinned)}
         </div>
@@ -181,15 +185,45 @@ export default function ManagerDashboard({
     );
   }
 
+  function toggleWidth(id: string) {
+    onLayoutChange(
+      layout.map((e) =>
+        e.id === id
+          ? { ...e, width: (widthOf(e) === 'full' ? 'half' : 'full') as WidgetWidth }
+          : e,
+      ),
+    );
+  }
+
   function removeEntry(id: string) {
     onLayoutChange(layout.filter((e) => e.id !== id));
   }
 
-  function handleReorder(newIds: string[]) {
-    const byId = new Map(layout.map((e) => [e.id, e]));
-    onLayoutChange(
-      newIds.map((id) => byId.get(id) ?? { id, visible: true }),
-    );
+  const widgetRefs = useRef<Map<string, HTMLElement>>(new Map());
+
+  function handleDragEnd(draggedId: string, dropPoint: { x: number; y: number }) {
+    // Find which widget the pointer dropped onto (if any) and swap positions.
+    let targetId: string | null = null;
+    widgetRefs.current.forEach((el, id) => {
+      if (id === draggedId || !el) return;
+      const r = el.getBoundingClientRect();
+      if (
+        dropPoint.x >= r.left &&
+        dropPoint.x <= r.right &&
+        dropPoint.y >= r.top &&
+        dropPoint.y <= r.bottom
+      ) {
+        targetId = id;
+      }
+    });
+    if (!targetId) return;
+    const from = layout.findIndex((e) => e.id === draggedId);
+    const to = layout.findIndex((e) => e.id === targetId);
+    if (from === -1 || to === -1 || from === to) return;
+    const next = layout.slice();
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onLayoutChange(next);
   }
 
   return (
@@ -228,22 +262,40 @@ export default function ManagerDashboard({
         />
       </div>
 
-      {editing ? (
-        <Reorder.Group
-          axis="y"
-          values={layout.map((e) => e.id)}
-          onReorder={handleReorder}
-          style={{ padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 14 }}
-        >
-          {layout.map((entry) => {
-            const pinned = pinnedChartIdOf(entry.id);
-            return (
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: 14,
+          gridAutoFlow: 'dense',
+        }}
+      >
+        {(editing ? layout : layout.filter((e) => e.visible)).map((entry) => {
+          const pinned = pinnedChartIdOf(entry.id);
+          return (
+            <div
+              key={entry.id}
+              ref={(el) => {
+                if (el) widgetRefs.current.set(entry.id, el);
+                else widgetRefs.current.delete(entry.id);
+              }}
+              style={{
+                gridColumn: `span ${widthOf(entry) === 'full' ? 2 : 1} / span ${widthOf(entry) === 'full' ? 2 : 1}`,
+                minWidth: 0,
+              }}
+            >
               <DashboardWidget
-                key={entry.id}
                 id={entry.id}
-                editing
+                editing={editing}
                 visible={entry.visible}
+                width={widthOf(entry)}
                 onToggleVisible={() => toggleVisible(entry.id)}
+                onToggleWidth={
+                  pinned && isHalfOnlyChart(pinned)
+                    ? undefined
+                    : () => toggleWidth(entry.id)
+                }
+                onDragEnd={(point) => handleDragEnd(entry.id, point)}
                 onRemove={
                   pinned
                     ? () => {
@@ -255,14 +307,10 @@ export default function ManagerDashboard({
               >
                 {renderWidget(entry.id)}
               </DashboardWidget>
-            );
-          })}
-        </Reorder.Group>
-      ) : (
-        layout
-          .filter((e) => e.visible)
-          .map((entry) => <div key={entry.id}>{renderWidget(entry.id)}</div>)
-      )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -1,30 +1,39 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Reorder, useDragControls } from 'framer-motion';
-import { GripVertical, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { motion, useDragControls } from 'framer-motion';
+import { GripVertical, Eye, EyeOff, Trash2, Maximize2, Minimize2 } from 'lucide-react';
+import type { WidgetWidth } from '@/components/Dashboard/layoutTypes';
 
 export interface DashboardWidgetProps {
   id: string;
   editing: boolean;
   visible: boolean;
+  width: WidgetWidth;
   onToggleVisible: () => void;
+  /** When omitted, the width toggle button is hidden (the widget's width is locked). */
+  onToggleWidth?: () => void;
   onRemove?: () => void;
+  onDragEnd?: (point: { x: number; y: number }) => void;
   children: ReactNode;
 }
 
 /**
- * Wraps a dashboard widget so that — in edit mode — it can be
- * drag-reordered (via a dedicated grip handle so recharts hover
- * isn't swallowed), hidden, and (for pinned charts) removed.
- * Outside edit mode, renders children as-is.
+ * Wraps a dashboard widget. In edit mode it can be:
+ *  - dragged in any direction (vertical + horizontal) — parent consumes the drop position
+ *  - toggled between full-width and half-width
+ *  - hidden
+ *  - removed (only for pinned charts)
  */
 export default function DashboardWidget({
   id,
   editing,
   visible,
+  width,
   onToggleVisible,
+  onToggleWidth,
   onRemove,
+  onDragEnd,
   children,
 }: DashboardWidgetProps) {
   const controls = useDragControls();
@@ -35,25 +44,31 @@ export default function DashboardWidget({
   }
 
   return (
-    <Reorder.Item
-      value={id}
+    <motion.div
+      layout
+      layoutId={id}
+      drag
       dragListener={false}
       dragControls={controls}
-      whileDrag={{
-        boxShadow: '0 12px 32px rgba(3,28,89,0.18)',
-        scale: 1.01,
-        cursor: 'grabbing',
-        zIndex: 2,
+      dragSnapToOrigin
+      onDragEnd={(_, info) => {
+        onDragEnd?.({ x: info.point.x, y: info.point.y });
       }}
+      whileDrag={{
+        boxShadow: '0 16px 40px rgba(3,28,89,0.22)',
+        scale: 1.015,
+        cursor: 'grabbing',
+        zIndex: 4,
+      }}
+      transition={{ type: 'spring', stiffness: 420, damping: 38 }}
       style={{
         position: 'relative',
-        listStyle: 'none',
         opacity: visible ? 1 : 0.45,
+        touchAction: 'none',
       }}
     >
       {visible ? (
         <div style={{ position: 'relative' }}>
-          {/* Grip overlay — top-left, starts drag */}
           <button
             type="button"
             onPointerDown={(e) => controls.start(e)}
@@ -79,7 +94,6 @@ export default function DashboardWidget({
             <GripVertical size={14} color="var(--color-text-muted)" strokeWidth={2} />
           </button>
 
-          {/* Eye / Trash — top-right */}
           <div
             style={{
               position: 'absolute',
@@ -90,6 +104,21 @@ export default function DashboardWidget({
               gap: 6,
             }}
           >
+            {onToggleWidth && (
+              <button
+                type="button"
+                onClick={onToggleWidth}
+                aria-label={width === 'full' ? 'Make half width' : 'Make full width'}
+                title={width === 'full' ? 'Half width' : 'Full width'}
+                style={editButtonStyle}
+              >
+                {width === 'full' ? (
+                  <Minimize2 size={14} color="var(--color-text-muted)" strokeWidth={2} />
+                ) : (
+                  <Maximize2 size={14} color="var(--color-text-muted)" strokeWidth={2} />
+                )}
+              </button>
+            )}
             <button
               type="button"
               onClick={onToggleVisible}
@@ -112,7 +141,6 @@ export default function DashboardWidget({
             )}
           </div>
 
-          {/* Subtle outline so edit mode is visible */}
           <div
             style={{
               position: 'absolute',
@@ -125,7 +153,6 @@ export default function DashboardWidget({
             }}
           />
 
-          {/* Dim overlay to block chart interactions while editing */}
           <div
             style={{
               position: 'absolute',
@@ -201,7 +228,7 @@ export default function DashboardWidget({
           </div>
         </div>
       )}
-    </Reorder.Item>
+    </motion.div>
   );
 }
 
