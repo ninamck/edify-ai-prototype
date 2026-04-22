@@ -19,20 +19,99 @@ import {
   MapPin,
   User,
   Settings,
+  ChefHat,
+  ClipboardCheck,
+  PackageCheck,
+  ShoppingBag,
+  PackageOpen,
+  Trash2,
+  LineChart,
 } from 'lucide-react';
 
 import NavGroup from './NavGroup';
 import NavItem from './NavItem';
 import { useApprovals } from '@/components/Approvals/approvalsStore';
+import { needsReviewCount } from '@/components/Invoicing/mockData';
+import { useCurrentRole } from '@/components/DemoControls/demoStore';
+import { canSeeRoute } from '@/components/Production/roleFilter';
+
+type SidebarItem = {
+  label: string;
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
+  href: string;
+  badge?: number;
+};
+
+type SidebarGroup = {
+  title: string;
+  items: SidebarItem[];
+};
 
 export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const approvals = useApprovals();
+  const role = useCurrentRole();
   const pendingApprovals = approvals.filter(a => a.status === 'pending').length;
-  /** Icon-only rail (labels via tooltips); always minimised. */
+  const invoiceReviewCount = needsReviewCount();
   const compact = true;
   const is = (href: string) => pathname === href || pathname.startsWith(href + '/');
+
+  const groups: SidebarGroup[] = [
+    {
+      title: 'Make, plan & dispatch',
+      items: [
+        { label: 'Plan production', icon: CalendarClock, href: '/production/demand' },
+        { label: 'View production plan', icon: ClipboardList, href: '/production/plan/2026-04-22' },
+        { label: 'My bench', icon: ChefHat, href: '/production/bench/bench-bake/tasks' },
+        { label: 'Run PCR', icon: ClipboardCheck, href: '/production/pcr' },
+        { label: 'Pick list', icon: PackageCheck, href: '/production/pick/run-p2' },
+        { label: 'Dispatch to stores', icon: Send, href: '/production/dispatch' },
+      ],
+    },
+    {
+      title: 'Spoke actions',
+      items: [
+        { label: 'Order for my site', icon: ShoppingBag, href: '/ordering' },
+        { label: 'Receive a delivery', icon: PackageOpen, href: '/receive' },
+        { label: 'Log waste', icon: Trash2, href: '/log-waste' },
+      ],
+    },
+    {
+      title: 'Stock & ordering',
+      items: [
+        { label: 'Review suggested orders', icon: ShoppingCart, href: '/assisted-ordering', badge: 3 },
+        { label: 'Count stock', icon: PackageSearch, href: '/stock-count' },
+        { label: 'Match invoices', icon: FileCheck, href: '/invoices', badge: invoiceReviewCount || undefined },
+        { label: 'Review approvals', icon: ShieldCheck, href: '/approvals', badge: pendingApprovals || undefined },
+        { label: 'View order history', icon: Clock, href: '/order-history' },
+        { label: 'Manage credit notes', icon: FileX, href: '/credit-notes' },
+      ],
+    },
+    {
+      title: 'Performance',
+      items: [
+        { label: 'View dashboard', icon: LayoutDashboard, href: '/dashboard' },
+        { label: 'Sales feedback', icon: LineChart, href: '/production/sales' },
+        { label: 'View analytics', icon: TrendingUp, href: '/analytics' },
+        { label: 'Compare sites', icon: Layers, href: '/compare' },
+      ],
+    },
+    {
+      title: 'SETUP',
+      items: [
+        { label: 'Manage recipes', icon: Star, href: '/recipes' },
+        { label: 'Manage suppliers', icon: MapPin, href: '/suppliers' },
+        { label: 'Manage users', icon: User, href: '/users' },
+        { label: 'Manage checklists', icon: ClipboardList, href: '/checklists' },
+        { label: 'Configure settings', icon: Settings, href: '/settings' },
+      ],
+    },
+  ];
+
+  const visibleGroups = groups
+    .map(g => ({ ...g, items: g.items.filter(i => canSeeRoute(role, i.href)) }))
+    .filter(g => g.items.length > 0);
 
   return (
     <aside
@@ -52,49 +131,33 @@ export default function Sidebar() {
         zIndex: 10,
       }}
     >
-      {/* Zone 1 — Home (site switcher lives in ShellTopBar) */}
       <div style={{ marginTop: compact ? 0 : '2px' }}>
         <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
           <NavItem label="Home" icon={Home} active={pathname === '/'} compact={compact} onClick={() => router.push('/')} />
         </ul>
       </div>
 
-      {/* Zone 2 — Nav groups (on-the-floor actions live in the feed header row) */}
       <div style={{ flex: 1 }}>
-
-        {/* Group 1 — Make, plan & dispatch (Manager+) */}
-        <NavGroup title="Make, plan & dispatch" showDivider={true} compact={compact}>
-          <NavItem label="Plan production" icon={CalendarClock} compact={compact} active={is('/plan-production')} />
-          <NavItem label="View production summary" icon={ClipboardList} compact={compact} active={is('/production-summary')} />
-          <NavItem label="Dispatch to stores" icon={Send} compact={compact} active={is('/dispatch')} />
-        </NavGroup>
-
-        {/* Group 3 — Stock & ordering (Manager+) */}
-        <NavGroup title="Stock & ordering" compact={compact}>
-          <NavItem label="Review suggested orders" icon={ShoppingCart} compact={compact} badge={3} active={is('/assisted-ordering')} onClick={() => router.push('/assisted-ordering')} />
-          <NavItem label="Count stock" icon={PackageSearch} compact={compact} active={is('/stock-count')} />
-          <NavItem label="Match invoices" icon={FileCheck} compact={compact} badge={2} active={is('/invoices')} onClick={() => router.push('/invoices')} />
-          <NavItem label="Review approvals" icon={ShieldCheck} compact={compact} badge={pendingApprovals || undefined} active={is('/approvals')} onClick={() => router.push('/approvals')} />
-          <NavItem label="View order history" icon={Clock} compact={compact} active={is('/order-history')} onClick={() => router.push('/order-history')} />
-          <NavItem label="Manage credit notes" icon={FileX} compact={compact} active={is('/credit-notes')} onClick={() => router.push('/credit-notes')} />
-        </NavGroup>
-
-        {/* Group 4 — Performance (Manager+) */}
-        <NavGroup title="Performance" compact={compact}>
-          <NavItem label="View dashboard" icon={LayoutDashboard} compact={compact} active={is('/dashboard')} />
-          <NavItem label="View analytics" icon={TrendingUp} compact={compact} active={is('/analytics')} />
-          <NavItem label="Compare sites" icon={Layers} compact={compact} active={is('/compare')} />
-        </NavGroup>
-
-        {/* SETUP */}
-        <NavGroup title="SETUP" compact={compact}>
-          <NavItem label="Manage recipes" icon={Star} compact={compact} active={is('/recipes')} onClick={() => router.push('/recipes')} />
-          <NavItem label="Manage suppliers" icon={MapPin} compact={compact} active={is('/suppliers')} />
-          <NavItem label="Manage users" icon={User} compact={compact} active={is('/users')} />
-          <NavItem label="Manage checklists" icon={ClipboardList} compact={compact} active={is('/checklists')} onClick={() => router.push('/checklists')} />
-          <NavItem label="Configure settings" icon={Settings} compact={compact} active={is('/settings')} />
-        </NavGroup>
-
+        {visibleGroups.map((group, idx) => (
+          <NavGroup
+            key={group.title}
+            title={group.title}
+            showDivider={idx > 0}
+            compact={compact}
+          >
+            {group.items.map(item => (
+              <NavItem
+                key={item.href}
+                label={item.label}
+                icon={item.icon}
+                active={is(item.href)}
+                badge={item.badge}
+                compact={compact}
+                onClick={() => router.push(item.href)}
+              />
+            ))}
+          </NavGroup>
+        ))}
       </div>
     </aside>
   );

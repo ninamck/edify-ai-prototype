@@ -6,6 +6,15 @@ export type RecipeFlag =
   | { type: 'missing-size'; label: string }
   | null;
 
+export type RecipeStep = {
+  id: string;
+  name: string;
+  capabilityTagId: string;
+  estimatedMinutes: number;
+  isSubRecipe?: boolean;
+  haccpRequired?: boolean;
+};
+
 export type Recipe = {
   id: string;
   name: string;
@@ -25,6 +34,12 @@ export type Recipe = {
     shelfLifeMinutes: number | null;
     prepTimeSeconds: number | null;
   };
+  // Optional extension for CPU recipes — see spec §4 / §5.5.
+  // Flat recipes omit these; multi-step recipes (Phase 5+) use them.
+  steps?: RecipeStep[];
+  capabilityTagIds?: string[];
+  shelfLifeHours?: number;
+  batchSize?: number;
 };
 
 const coffeeIngs = (withMilkMl: number | null) => {

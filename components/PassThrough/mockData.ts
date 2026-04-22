@@ -1,5 +1,5 @@
 export type PassThroughStatus = 'Awaiting review' | 'Ready to send' | 'Sent to Xero' | 'Failed to sync';
-export type PassThroughCategory = 'Rent' | 'Utilities' | 'Insurance' | 'Accountant' | 'Marketing' | 'Other';
+export type PassThroughCategory = 'Food & goods' | 'Rent' | 'Utilities' | 'Insurance' | 'Accountant' | 'Marketing' | 'Other';
 
 export interface PassThroughActivity {
   id: string;
@@ -32,6 +32,7 @@ export interface PassThroughInvoice {
 }
 
 export const XERO_ACCOUNT_MAP: Record<PassThroughCategory, string | null> = {
+  'Food & goods': 'Food Purchases',
   Rent: 'Rent & Rates',
   Utilities: 'Utilities',
   Insurance: 'Insurance',
@@ -41,6 +42,7 @@ export const XERO_ACCOUNT_MAP: Record<PassThroughCategory, string | null> = {
 };
 
 export const CATEGORY_OPTIONS: PassThroughCategory[] = [
+  'Food & goods',
   'Rent',
   'Utilities',
   'Insurance',

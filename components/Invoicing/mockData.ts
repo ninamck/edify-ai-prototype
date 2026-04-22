@@ -12,6 +12,123 @@ export type InvoiceMatchStatus =
 export type PriceResolution = 'Accept & Update Cost in Edify' | 'Accept for this delivery' | 'Dispute → Credit Note';
 export type QtyResolution = 'Credit Note' | 'Accept Short';
 export type OverInvoiceResolution = 'Request credit note';
+export type AnyResolution = PriceResolution | QtyResolution | OverInvoiceResolution;
+
+// Module-level store — resolutions captured when the user approves an invoice.
+// Lives for the lifetime of the page (cleared on browser refresh, like MOCK_INVOICES).
+const approvedResolutionsById = new Map<string, Record<string, AnyResolution>>();
+
+export function saveApprovedResolutions(invoiceId: string, resolutions: Record<string, AnyResolution>): void {
+  approvedResolutionsById.set(invoiceId, { ...resolutions });
+}
+
+export function getApprovedResolutions(invoiceId: string): Record<string, AnyResolution> | undefined {
+  return approvedResolutionsById.get(invoiceId);
+}
+
+// Invoices synced via a path other than the InvoiceList bulk-sync flow
+// (e.g. parse-failed invoices sent via the pass-through-style recovery view).
+// InvoiceList merges these into its locallySynced set on mount.
+const externallySyncedIds = new Set<string>();
+
+export function markInvoiceExternallySynced(invoiceId: string): void {
+  externallySyncedIds.add(invoiceId);
+}
+
+export function getExternallySyncedIds(): string[] {
+  return Array.from(externallySyncedIds);
+}
+
+// Promotes a parse-failed invoice into a matchable one by linking GRN(s).
+// Invoice lines are seeded from GRN received data; the user can then edit any
+// line in the match view if the actual PDF shows different values. Variances
+// and status are recomputed on demand via recomputeInvoiceVariances.
+export function promoteParseFailedToMatched(invoiceId: string, grnNumbers: string[]): void {
+  const inv = MOCK_INVOICES.find(i => i.id === invoiceId);
+  if (!inv) return;
+  const grns = grnNumbers
+    .map(n => MOCK_COMPLETED_DELIVERIES.find(g => g.grnNumber === n))
+    .filter((g): g is NonNullable<typeof g> => !!g);
+  const allLines = grns.flatMap(g => g.lines);
+  inv.grnNumbers = grnNumbers;
+  inv.lines = allLines.map((gl, i) => ({
+    id: `il-${invoiceId}-${i}`,
+    description: gl.name,
+    sku: gl.sku,
+    qty: gl.receivedQty,
+    unitPrice: gl.price,
+    lineTotal: gl.receivedQty * gl.price,
+  }));
+  inv.total = inv.lines.reduce((s, l) => s + l.lineTotal, 0);
+  inv.editable = true;
+  recomputeInvoiceVariances(invoiceId);
+}
+
+// Recomputes variances + status for an invoice, given the currently linked GRNs.
+// Qty variance: invoice.qty vs GRN received qty for that SKU.
+// Price variance: invoice.unitPrice vs PO price for that SKU (PO reached via GRN.poNumbers).
+export function recomputeInvoiceVariances(invoiceId: string): void {
+  const inv = MOCK_INVOICES.find(i => i.id === invoiceId);
+  if (!inv) return;
+  const grns = inv.grnNumbers
+    .map(n => MOCK_COMPLETED_DELIVERIES.find(g => g.grnNumber === n))
+    .filter((g): g is NonNullable<typeof g> => !!g);
+  const grnLines = grns.flatMap(g => g.lines);
+  const poLines = grns.flatMap(g =>
+    g.poNumbers.flatMap(pn => {
+      const po = MOCK_POS.find(p => p.poNumber === pn);
+      return po?.lines ?? [];
+    })
+  );
+  const variances: MatchVariance[] = [];
+  for (const line of inv.lines) {
+    const gl = grnLines.find(l => l.sku === line.sku);
+    const pl = poLines.find(l => l.sku === line.sku);
+    if (gl && line.qty !== gl.receivedQty) {
+      variances.push({
+        id: `v-${line.id}-qty`,
+        itemName: line.description,
+        sku: line.sku,
+        type: 'qty',
+        invoiceValue: line.qty,
+        grnValue: gl.receivedQty,
+        poValue: pl?.expectedQty ?? gl.expectedQty,
+        impact: Math.abs(line.qty - gl.receivedQty) * line.unitPrice,
+      });
+    }
+    if (pl && line.unitPrice !== pl.price) {
+      variances.push({
+        id: `v-${line.id}-price`,
+        itemName: line.description,
+        sku: line.sku,
+        type: 'price',
+        invoiceValue: line.unitPrice,
+        grnValue: gl?.price ?? pl.price,
+        poValue: pl.price,
+        impact: Math.abs(line.unitPrice - pl.price) * line.qty,
+      });
+    }
+  }
+  inv.variances = variances;
+  inv.total = inv.lines.reduce((s, l) => s + l.lineTotal, 0);
+  inv.status = variances.length > 0 ? 'Variance' : 'Matched';
+}
+
+// Update a single invoice line's qty or unitPrice, then recompute downstream state.
+export function updateInvoiceLine(
+  invoiceId: string,
+  lineId: string,
+  patch: { qty?: number; unitPrice?: number }
+): void {
+  const inv = MOCK_INVOICES.find(i => i.id === invoiceId);
+  if (!inv) return;
+  const line = inv.lines.find(l => l.id === lineId);
+  if (!line) return;
+  if (patch.qty !== undefined) line.qty = patch.qty;
+  if (patch.unitPrice !== undefined) line.unitPrice = patch.unitPrice;
+  line.lineTotal = line.qty * line.unitPrice;
+  recomputeInvoiceVariances(invoiceId);
+}
 
 export interface InvoiceLine {
   id: string;
@@ -49,6 +166,9 @@ export interface Invoice {
   noteAuthor?: string;
   noteUpdatedAt?: string;
   parked?: boolean;
+  // True when this invoice was promoted from a parse-failed state via a GRN,
+  // so the user can edit invoice line qty/price inline to match what the PDF shows.
+  editable?: boolean;
 }
 
 export interface GRNMatchLine {
@@ -208,16 +328,16 @@ export const MOCK_INVOICES: Invoice[] = [
     invoiceNumber: 'INV-4441',
     supplier: 'Bidfood',
     date: '8 Apr 2026',
-    total: 108.00,
+    total: 90.00,
     grnNumbers: ['GRN-1251'],
     status: 'Variance',
     lines: [
-      { id: 'il-26', description: 'Plain flour 10kg', sku: 'FLR-10', qty: 6, unitPrice: 18.00, lineTotal: 108.00 },
+      { id: 'il-26', description: 'Plain flour 10kg', sku: 'FLR-10', qty: 5, unitPrice: 18.00, lineTotal: 90.00 },
     ],
     variances: [
-      { id: 'v-9', itemName: 'Plain flour 10kg', sku: 'FLR-10', type: 'over-invoice', invoiceValue: 6, grnValue: 6, poValue: 5, impact: 18.00 },
+      { id: 'v-9', itemName: 'Plain flour 10kg', sku: 'FLR-10', type: 'qty', invoiceValue: 5, grnValue: 4, poValue: 5, impact: 18.00 },
     ],
-    note: 'Fourth over-delivery this month from the Bidfood Leyton warehouse — flagging to ops.',
+    note: 'Bidfood Leyton short by 1 flour sack this delivery — credit note requested Thursday.',
     noteAuthor: 'Priya',
     noteUpdatedAt: 'today',
   },
@@ -539,6 +659,18 @@ export function vatCategoryLabel(category: VatCategory): string {
   if (category === 'alcohol') return 'Alcohol';
   if (category === 'non-food') return 'Non-food / cleaning';
   return 'Uncategorised';
+}
+
+export function getInvoiceStatusBadgeVariant(status: InvoiceMatchStatus): 'warning' | 'error' | 'success' | 'info' | 'default' {
+  switch (status) {
+    case 'Variance': return 'warning';
+    case 'Parse Failed': return 'error';
+    case 'Duplicate': return 'error';
+    case 'Matched': return 'success';
+    case 'Approved': return 'success';
+    case 'Matching in Progress': return 'info';
+    default: return 'default';
+  }
 }
 
 export type StatusNoteTone = 'info' | 'warning' | 'error' | 'success' | 'neutral';

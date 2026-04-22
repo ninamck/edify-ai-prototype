@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { FlaskConical, ChevronDown } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { FlaskConical, ChevronDown, RefreshCw, Play } from 'lucide-react';
 import { USERS, getRoleRules } from '@/components/Approvals/approvalsStore';
 import { BRIEFING_ROLES } from '@/components/briefing';
 import type { BriefingRole } from '@/components/briefing';
@@ -10,6 +11,8 @@ import {
   useDemoBriefingRole,
   setActingUser,
   setDemoBriefingRole,
+  resetDemo,
+  jumpToDemoAStart,
   type ActingUserId,
 } from './demoStore';
 
@@ -21,6 +24,7 @@ export default function DemoControls() {
   const briefingRole = useDemoBriefingRole();
   const actingUser = USERS.find(u => u.id === actingUserId);
   const rules = actingUser ? getRoleRules(actingUser.role) : null;
+  const router = useRouter();
 
   return (
     <div
@@ -151,6 +155,67 @@ export default function DemoControls() {
                     </button>
                   );
                 })}
+              </div>
+            </div>
+
+            {/* Reset / jump to Demo A */}
+            <div>
+              <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: '6px' }}>
+                Production demo
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    jumpToDemoAStart();
+                    router.push('/ordering');
+                    setOpen(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: '1.5px solid var(--color-accent-active)',
+                    background: 'var(--color-accent-active)',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-primary)',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    textAlign: 'left',
+                  }}
+                >
+                  <Play size={12} strokeWidth={2.4} />
+                  Jump to Demo A start
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetDemo();
+                    router.push('/');
+                    setOpen(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--color-border-subtle)',
+                    background: '#fff',
+                    color: 'var(--color-text-primary)',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-primary)',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    textAlign: 'left',
+                  }}
+                >
+                  <RefreshCw size={12} strokeWidth={2.2} />
+                  Reset demo state
+                </button>
               </div>
             </div>
 
