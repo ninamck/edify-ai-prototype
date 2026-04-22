@@ -46,7 +46,7 @@ function MatchContent() {
 
 export default function InvoiceMatchPage() {
   return (
-    <div style={{ padding: '28px 24px 48px', maxWidth: '1100px', margin: '0 auto' }}>
+    <div style={{ padding: '28px 32px 48px', maxWidth: '1500px', margin: '0 auto' }}>
       <Suspense>
         <MatchContent />
       </Suspense>

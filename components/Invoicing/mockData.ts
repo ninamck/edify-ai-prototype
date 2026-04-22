@@ -93,7 +93,7 @@ export const MOCK_INVOICES: Invoice[] = [
       { id: 'v-2', itemName: 'Free range eggs 15pk', sku: 'FRE-15', type: 'price', invoiceValue: 8.50, grnValue: 8.00, poValue: 8.00, impact: 6.00 },
       { id: 'v-6', itemName: 'Espresso blend 1kg', sku: 'EB-1KG', type: 'price', invoiceValue: 19.20, grnValue: 18.00, poValue: 18.00, impact: 12.00 },
     ],
-    note: 'Holding until Bidfood confirms the short-delivery credit on the milk line. Don\u2019t approve yet.',
+    note: 'Chased Bidfood Tuesday — ETA credit by Thursday close.',
     noteAuthor: 'Sam',
     noteUpdatedAt: '2h ago',
   },
@@ -217,7 +217,7 @@ export const MOCK_INVOICES: Invoice[] = [
     variances: [
       { id: 'v-9', itemName: 'Plain flour 10kg', sku: 'FLR-10', type: 'over-invoice', invoiceValue: 6, grnValue: 6, poValue: 5, impact: 18.00 },
     ],
-    note: 'Supplier delivered 6 sacks of flour but PO only asked for 5. They billed for 6. Need a credit for 1 sack before we approve.',
+    note: 'Fourth over-delivery this month from the Bidfood Leyton warehouse — flagging to ops.',
     noteAuthor: 'Priya',
     noteUpdatedAt: 'today',
   },
@@ -539,6 +539,89 @@ export function vatCategoryLabel(category: VatCategory): string {
   if (category === 'alcohol') return 'Alcohol';
   if (category === 'non-food') return 'Non-food / cleaning';
   return 'Uncategorised';
+}
+
+export type StatusNoteTone = 'info' | 'warning' | 'error' | 'success' | 'neutral';
+export interface AutoStatusNote {
+  text: string;
+  tone: StatusNoteTone;
+  reason: string;
+}
+
+export function getAutoStatusNote(invoice: Invoice): AutoStatusNote | null {
+  // Parse failed → blocker
+  if (invoice.status === 'Parse Failed') {
+    return {
+      text: `Parse failed — document couldn't be read. Re-upload the PDF or fix the fields manually before matching.`,
+      tone: 'error',
+      reason: 'invoice.status=Parse Failed',
+    };
+  }
+  // Duplicate → blocker
+  if (invoice.status === 'Duplicate') {
+    return {
+      text: `Possible duplicate — another invoice with the same number has already been processed. Verify with ${invoice.supplier} before proceeding.`,
+      tone: 'error',
+      reason: 'invoice.status=Duplicate',
+    };
+  }
+  // Matching in progress → awaiting delivery
+  if (invoice.status === 'Matching in Progress') {
+    return {
+      text: `Awaiting delivery — ${invoice.supplier} has invoiced but no GRN received yet. Parked until the delivery is logged.`,
+      tone: 'warning',
+      reason: 'invoice.status=Matching in Progress',
+    };
+  }
+  // Variance: subcategorise
+  if (invoice.status === 'Variance') {
+    const over = invoice.variances.find(v => v.type === 'over-invoice');
+    if (over) {
+      const extra = over.invoiceValue - over.poValue;
+      return {
+        text: `Holding — ${invoice.supplier} billed ${over.invoiceValue} ${over.itemName} (${extra > 0 ? '+' : ''}${extra} over PO). Credit note requested for £${Math.abs(over.impact).toFixed(2)}, awaiting confirmation.`,
+        tone: 'warning',
+        reason: 'variance.type=over-invoice',
+      };
+    }
+    const qtyShort = invoice.variances.find(v => v.type === 'qty' && v.grnValue < v.invoiceValue);
+    if (qtyShort) {
+      const shortBy = qtyShort.invoiceValue - qtyShort.grnValue;
+      return {
+        text: `Holding — ${invoice.supplier} short-delivered ${shortBy} unit${shortBy === 1 ? '' : 's'} of ${qtyShort.itemName} (billed ${qtyShort.invoiceValue}, received ${qtyShort.grnValue}). Credit note requested, awaiting confirmation.`,
+        tone: 'warning',
+        reason: 'variance.type=qty short',
+      };
+    }
+    const priceVariances = invoice.variances.filter(v => v.type === 'price');
+    if (priceVariances.length > 0) {
+      return {
+        text: `${priceVariances.length} price variance${priceVariances.length > 1 ? 's' : ''} pending reviewer resolution on ${invoice.supplier}'s invoice.`,
+        tone: 'warning',
+        reason: 'variance.type=price',
+      };
+    }
+    return {
+      text: `Variance detected — reviewer action required.`,
+      tone: 'warning',
+      reason: 'invoice.status=Variance (generic)',
+    };
+  }
+  if (invoice.status === 'Matched') {
+    return {
+      text: `All items matched and ready for approval.`,
+      tone: 'success',
+      reason: 'invoice.status=Matched',
+    };
+  }
+  if (invoice.status === 'Approved') {
+    return {
+      text: `Approved and synced to Xero.`,
+      tone: 'success',
+      reason: 'invoice.status=Approved',
+    };
+  }
+  return null;
 }
 
 export function needsReviewCount(): number {

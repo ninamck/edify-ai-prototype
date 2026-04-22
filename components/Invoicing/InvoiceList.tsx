@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import StatusBadge from '@/components/Receiving/StatusBadge';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import Link from 'next/link';
-import { MOCK_INVOICES, Invoice, InvoiceMatchStatus, needsReviewCount, autoMatchedCount, isSplitBillingInvoice, splitBillingCount } from './mockData';
+import { MOCK_INVOICES, Invoice, InvoiceMatchStatus, needsReviewCount, autoMatchedCount, isSplitBillingInvoice, splitBillingCount, getPOsForInvoice } from './mockData';
 import { getCreditNotesForInvoice } from '@/components/CreditNotes/mockData';
 import { MOCK_PASS_THROUGH_INVOICES, PassThroughInvoice, PassThroughStatus, grandTotal, vatAmount } from '@/components/PassThrough/mockData';
 import { recordSync } from './syncLog';
@@ -97,6 +97,16 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
 
   const approvedCount = MOCK_INVOICES.filter(i => i.status === 'Approved').length;
   const passThroughCount = MOCK_PASS_THROUGH_INVOICES.length;
+
+  // POs with 2+ non-excluded invoices — each gets a distinct accent color so siblings visually group
+  const splitPOs = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const inv of MOCK_INVOICES) {
+      if (inv.status === 'Duplicate' || inv.status === 'Parse Failed') continue;
+      for (const po of getPOsForInvoice(inv)) counts.set(po, (counts.get(po) ?? 0) + 1);
+    }
+    return Array.from(counts.entries()).filter(([, c]) => c > 1).map(([po]) => po);
+  }, []);
 
   const syncableFiltered = useMemo(
     () => filtered.filter(inv => isSyncable(inv) && !locallySynced.has(inv.id)),
@@ -364,7 +374,7 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
                     onToggle={toggleAll}
                   />
                 </th>
-                {['Invoice #', 'Supplier', 'Date', 'Total', 'GRN', 'Credit notes', 'Status', ''].map(h => (
+                {['Invoice #', 'Supplier', 'Date', 'Total', 'PO', 'GRN', 'Credit notes', 'Status', ''].map(h => (
                   <th
                     key={h}
                     style={{
@@ -391,6 +401,7 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
                   isSyncing={syncing.has(inv.id)}
                   syncable={isSyncable(inv)}
                   selected={selected.has(inv.id)}
+                  splitPOs={splitPOs}
                   onToggle={() => toggleSelect(inv.id)}
                   onView={() => onViewInvoice(inv.id)}
                 />
@@ -644,13 +655,27 @@ function PassThroughRow({ invoice, onView }: { invoice: PassThroughInvoice; onVi
   );
 }
 
-function InvoiceRow({ invoice, effectiveStatus, isLocallySynced, isSyncing, syncable, selected, onToggle, onView }: {
+const SPLIT_PO_PALETTE = [
+  { bar: '#224444', chipBg: 'rgba(34,68,68,0.09)',  chipText: '#224444', chipBorder: 'rgba(34,68,68,0.25)' },
+  { bar: '#0369A1', chipBg: 'rgba(3,105,161,0.09)', chipText: '#0369A1', chipBorder: 'rgba(3,105,161,0.25)' },
+  { bar: '#92400E', chipBg: 'rgba(146,64,14,0.09)', chipText: '#92400E', chipBorder: 'rgba(146,64,14,0.25)' },
+  { bar: '#6B21A8', chipBg: 'rgba(107,33,168,0.09)',chipText: '#6B21A8', chipBorder: 'rgba(107,33,168,0.25)' },
+];
+
+function colorForSplitPO(poNumber: string, splitPOs: string[]) {
+  const idx = splitPOs.indexOf(poNumber);
+  if (idx < 0) return null;
+  return SPLIT_PO_PALETTE[idx % SPLIT_PO_PALETTE.length];
+}
+
+function InvoiceRow({ invoice, effectiveStatus, isLocallySynced, isSyncing, syncable, selected, splitPOs, onToggle, onView }: {
   invoice: Invoice;
   effectiveStatus: InvoiceMatchStatus;
   isLocallySynced: boolean;
   isSyncing: boolean;
   syncable: boolean;
   selected: boolean;
+  splitPOs: string[];
   onToggle: () => void;
   onView: () => void;
 }) {
@@ -675,10 +700,14 @@ function InvoiceRow({ invoice, effectiveStatus, isLocallySynced, isSyncing, sync
         ? reason
         : 'Select for bulk sync';
 
+  // Row accent color — first split-billed PO this invoice is on, if any
+  const invoicePOs = getPOsForInvoice(invoice);
+  const accent = invoicePOs.map(po => colorForSplitPO(po, splitPOs)).find(c => c !== null) ?? null;
+
   return (
     <tr style={{ cursor: 'pointer', background: selected ? 'rgba(34, 68, 68, 0.04)' : undefined }} onClick={onView}>
       <td
-        style={{ padding: '12px 12px', borderBottom: '1px solid var(--color-border-subtle)', textAlign: 'center', width: '40px' }}
+        style={{ padding: '12px 12px', borderBottom: '1px solid var(--color-border-subtle)', textAlign: 'center', width: '40px', boxShadow: accent ? `inset 3px 0 0 ${accent.bar}` : undefined }}
         onClick={(e) => e.stopPropagation()}
       >
         {isLocallySynced ? (
@@ -702,7 +731,7 @@ function InvoiceRow({ invoice, effectiveStatus, isLocallySynced, isSyncing, sync
           />
         )}
       </td>
-      <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontWeight: 600, color: 'var(--color-accent-active)' }}>
+      <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontWeight: 600, color: 'var(--color-accent-active)', whiteSpace: 'nowrap' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           {invoice.invoiceNumber}
           {invoice.note && (
@@ -714,35 +743,19 @@ function InvoiceRow({ invoice, effectiveStatus, isLocallySynced, isSyncing, sync
               📝
             </span>
           )}
-          {isSplit && (
-            <span
-              aria-label="Part of split billing"
-              title="This invoice is one of several billed against a single PO"
-              style={{
-                fontSize: '10px',
-                fontWeight: 700,
-                padding: '2px 6px',
-                borderRadius: '4px',
-                background: 'rgba(3,105,161,0.1)',
-                color: 'var(--color-info)',
-                border: '1px solid rgba(3,105,161,0.25)',
-                letterSpacing: '0.02em',
-                textTransform: 'uppercase',
-              }}
-            >
-              Split
-            </span>
-          )}
         </span>
       </td>
       <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', color: 'var(--color-text-primary)' }}>
         {invoice.supplier}
       </td>
-      <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', color: 'var(--color-text-secondary)' }}>
+      <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
         {invoice.date}
       </td>
-      <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+      <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontWeight: 600, color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>
         £{invoice.total.toFixed(2)}
+      </td>
+      <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <POList invoice={invoice} splitPOs={splitPOs} />
       </td>
       <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', color: invoice.grnNumbers.length ? 'var(--color-accent-active)' : 'var(--color-text-secondary)', fontWeight: invoice.grnNumbers.length ? 600 : 400 }}>
         {invoice.grnNumbers.length > 0 ? invoice.grnNumbers.join(', ') : '—'}
@@ -782,6 +795,49 @@ function InvoiceRow({ invoice, effectiveStatus, isLocallySynced, isSyncing, sync
         </button>
       </td>
     </tr>
+  );
+}
+
+function POList({ invoice, splitPOs }: { invoice: Invoice; splitPOs: string[] }) {
+  const pos = getPOsForInvoice(invoice);
+  if (pos.length === 0) return <span style={{ color: 'var(--color-text-secondary)' }}>—</span>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+      {pos.map(po => {
+        const accent = colorForSplitPO(po, splitPOs);
+        if (accent) {
+          return (
+            <span
+              key={po}
+              title={`Multiple invoices share ${po}`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '2px 8px',
+                borderRadius: '100px',
+                background: accent.chipBg,
+                color: accent.chipText,
+                border: `1px solid ${accent.chipBorder}`,
+                fontSize: '11px',
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                width: 'fit-content',
+                lineHeight: 1.35,
+              }}
+            >
+              {po}
+              <span style={{ fontSize: '9px', fontWeight: 700, opacity: 0.85, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                · split
+              </span>
+            </span>
+          );
+        }
+        return (
+          <span key={po} style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-accent-active)' }}>{po}</span>
+        );
+      })}
+    </div>
   );
 }
 
