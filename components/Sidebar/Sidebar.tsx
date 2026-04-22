@@ -24,12 +24,14 @@ import {
 import NavGroup from './NavGroup';
 import NavItem from './NavItem';
 import { useApprovals } from '@/components/Approvals/approvalsStore';
+import { needsReviewCount } from '@/components/Invoicing/mockData';
 
 export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const approvals = useApprovals();
   const pendingApprovals = approvals.filter(a => a.status === 'pending').length;
+  const invoiceReviewCount = needsReviewCount();
   /** Icon-only rail (labels via tooltips); always minimised. */
   const compact = true;
   const is = (href: string) => pathname === href || pathname.startsWith(href + '/');
@@ -73,7 +75,7 @@ export default function Sidebar() {
         <NavGroup title="Stock & ordering" compact={compact}>
           <NavItem label="Review suggested orders" icon={ShoppingCart} compact={compact} badge={3} active={is('/assisted-ordering')} onClick={() => router.push('/assisted-ordering')} />
           <NavItem label="Count stock" icon={PackageSearch} compact={compact} active={is('/stock-count')} />
-          <NavItem label="Match invoices" icon={FileCheck} compact={compact} badge={2} active={is('/invoices')} onClick={() => router.push('/invoices')} />
+          <NavItem label="Match invoices" icon={FileCheck} compact={compact} badge={invoiceReviewCount || undefined} active={is('/invoices')} onClick={() => router.push('/invoices')} />
           <NavItem label="Review approvals" icon={ShieldCheck} compact={compact} badge={pendingApprovals || undefined} active={is('/approvals')} onClick={() => router.push('/approvals')} />
           <NavItem label="View order history" icon={Clock} compact={compact} active={is('/order-history')} onClick={() => router.push('/order-history')} />
           <NavItem label="Manage credit notes" icon={FileX} compact={compact} active={is('/credit-notes')} onClick={() => router.push('/credit-notes')} />

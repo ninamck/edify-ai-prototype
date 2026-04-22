@@ -1,27 +1,41 @@
 'use client';
 
 import StatusBadge from '@/components/Receiving/StatusBadge';
-import { Invoice } from './mockData';
+import { Invoice, getApprovedResolutions } from './mockData';
 
 interface ApprovedStateProps {
   invoice: Invoice;
   onBackToInvoices: () => void;
 }
 
-const COST_UPDATES = [
-  { item: 'Full cream milk 2L', oldPrice: 4.20, newPrice: 4.50, change: '+7.1%', recipes: 14 },
-  { item: 'Free range eggs 15pk', oldPrice: 8.00, newPrice: 8.50, change: '+6.3%', recipes: 8 },
-];
-
-const DELIVERY_ONLY = [
-  { item: 'Espresso blend 1kg', invoicePrice: 19.20, masterPrice: 18.00 },
-];
+interface CostUpdate { item: string; oldPrice: number; newPrice: number; change: string; }
+interface DeliveryOnly { item: string; invoicePrice: number; masterPrice: number; }
 
 export default function ApprovedState({ invoice, onBackToInvoices }: ApprovedStateProps) {
-  const creditNoteCount = invoice.variances.filter(v => v.type === 'qty').length;
-  const creditValue = invoice.variances
-    .filter(v => v.type === 'qty')
-    .reduce((s, v) => s + v.impact, 0);
+  const resolutions = getApprovedResolutions(invoice.id) ?? {};
+
+  const COST_UPDATES: CostUpdate[] = invoice.variances
+    .filter(v => v.type === 'price' && resolutions[v.id] === 'Accept & Update Cost in Edify')
+    .map(v => {
+      const pct = v.poValue > 0 ? ((v.invoiceValue - v.poValue) / v.poValue) * 100 : 0;
+      return {
+        item: v.itemName,
+        oldPrice: v.poValue,
+        newPrice: v.invoiceValue,
+        change: `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`,
+      };
+    });
+
+  const DELIVERY_ONLY: DeliveryOnly[] = invoice.variances
+    .filter(v => v.type === 'price' && resolutions[v.id] === 'Accept for this delivery')
+    .map(v => ({ item: v.itemName, invoicePrice: v.invoiceValue, masterPrice: v.poValue }));
+
+  const creditNoteVariances = invoice.variances.filter(v => {
+    const r = resolutions[v.id];
+    return r === 'Credit Note' || r === 'Dispute → Credit Note' || r === 'Request credit note';
+  });
+  const creditNoteCount = creditNoteVariances.length;
+  const creditValue = creditNoteVariances.reduce((s, v) => s + Math.abs(v.impact), 0);
 
   return (
     <div style={{ fontFamily: 'var(--font-primary)' }}>
@@ -121,7 +135,6 @@ export default function ApprovedState({ invoice, onBackToInvoices }: ApprovedSta
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <StatusBadge status={ci.change} variant="warning" />
-                  <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{ci.recipes} recipes affected</span>
                 </div>
               </div>
             ))}
@@ -157,8 +170,8 @@ export default function ApprovedState({ invoice, onBackToInvoices }: ApprovedSta
                   gap: '12px',
                   padding: '12px 14px',
                   borderRadius: '8px',
-                  background: 'var(--color-success-light)',
-                  border: '1px solid var(--color-success-border)',
+                  background: 'var(--color-bg-hover)',
+                  border: '1px solid var(--color-border-subtle)',
                   flexWrap: 'wrap',
                 }}
               >
@@ -168,7 +181,7 @@ export default function ApprovedState({ invoice, onBackToInvoices }: ApprovedSta
                     Charged £{d.invoicePrice.toFixed(2)}
                   </span>
                 </div>
-                <div style={{ fontSize: '12px', color: 'var(--color-success)', fontWeight: 600 }}>
+                <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
                   Master cost unchanged at £{d.masterPrice.toFixed(2)}
                 </div>
               </div>

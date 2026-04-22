@@ -1,6 +1,6 @@
 # Prototype context & handoff notes
 
-_Last updated: 2026-04-21_
+_Last updated: 2026-04-22_
 
 Context for future sessions on this prototype. Pair with `AGENTS.md` (which reminds you this is a custom / modified Next.js — check `node_modules/next/dist/docs/` before assuming APIs).
 
@@ -161,6 +161,35 @@ Inside the table:
 
 ---
 
+## Recent session summary (2026-04-22)
+
+Iteration on the invoice match view. Most design work was tone-and-clarity, plus one structural fix (status consistency). Chronology:
+
+1. **Multi-invoice → 1 PO visual stacking.** When a split-billing invoice has siblings, the three-way table now stacks each invoice as its own section below the primary. Section header is two-column (Invoice | GRN) with the column divider running through it — same visual pattern as multi-GRN. Primary gets a `THIS INVOICE` pill.
+2. **Sibling rows are editable** (not read-only). VAT dropdowns wire through shared `lineTaxRates`. Right panel header lists all GRNs involved across primary + siblings (`GRN-1248 + GRN-1249`).
+3. **Bulk approve siblings** from the match view. When a sibling is clean-matched, the Approve button reads *"Approve 2 invoices & Sync"* and the confirmation page lists both invoices with combined total.
+4. **Context chip bar (`MatchContextBar`)** replaces the stacked banners (auto-applied, AI suggestion, auto-link GRN, unmatched) with an accordion — one chip expands at a time. Chips start collapsed on load.
+5. **Sticky header.** Invoice # + status pill + "Three-way match · N of M resolved" + Approve button stays pinned to the top of the scroll container.
+6. **Auto-link suggested GRN** on mount. Previously required a manual Link click. Now banner says *"Auto-linked GRN-XXXX — we think this belongs here…"*, neutral styling (no heavy green). Unlinking adds the GRN to a dismissed set and the chip switches to *"Try GRN-YYYY instead"* pointing at the next same-supplier candidate.
+7. **✨ auto chip** (inline on auto-resolved variance rows) is now neutral, with a custom hover tooltip showing the rule + detail (*"AUTO-ACCEPTED BY RULE — Free range eggs +£0.50/unit — under Bidfood 10% rule."*).
+8. **Standalone "All items matched" banner removed.** Summary moved inside the expanded Auto-linked chip as a compact muted line, so it only shows when the user opens the chip.
+9. **Auto status note** at the top of the match view, above the Comment section. Rule-set in `getAutoStatusNote(invoice)`:
+   - Parse Failed / Duplicate → error
+   - Matching in Progress → "Awaiting delivery…"
+   - Variance → sub-categorised (over-invoice / qty short / price) with specific copy
+   - Matched → "All items matched and ready for approval."
+   - Approved → "Approved and synced to Xero."
+   - Has `✨ AUTO` label; tooltip shows the rule reason.
+10. **Comment section** (formerly "Note") is now explicitly for colleague-to-colleague context. 💬 icon, label `Comment for colleagues`, editable freeform. Mock data: status-style notes on inv-1 and inv-9 rewritten as colleague comments.
+11. **Invoice list: PO column.** Between Total and GRN. Split-billing POs get a distinct coloured chip with inline `· SPLIT` label. Rows sharing a split PO get a matching coloured left-border stripe so sibling invoices group visually. Palette is deterministic — first split PO is teal, second blue, third amber, fourth purple.
+12. **Layout**: both invoice list and match view bumped to `maxWidth: 1500px`. Invoice #, Date, Total cells `whiteSpace: nowrap` so rows stay one-line.
+13. **Dropped**: `Prev. inv` column (the stacked siblings make it redundant).
+14. **Status consistency fix** (truth-table audit). `invoice.status` is the single source of truth. Removed the list's local `effectiveStatus` override. Bulk-sync on the list and Approve in the match view both mutate `MOCK_INVOICES[x].status = 'Approved'` (and bulk siblings) before any routing, so list and detail can't disagree. New shared helper `getInvoiceStatusBadgeVariant(status)` used by both surfaces so colour tokens can't drift.
+
+**Demo-grade caveat**: status mutation is in-memory only (mock data array). Hard page reloads reset to the seed statuses. Fine for prototype.
+
+---
+
 ## Recent session summary (2026-04-19 → 2026-04-21)
 
 Heavy work on the **invoice matching area** — what was one list + one match view has grown into: bulk-sync, PO detail, pass-through bucket, invoicing rules, VAT defaults, credit-note linkage. Rough chronology:
@@ -226,6 +255,10 @@ Rough chronology of what shipped:
 - **Pass-through PDF preview is a placeholder box.** Real PDF rendering isn't wired — the left pane just says "PDF preview placeholder".
 - **SKU categorizer is prefix-based.** `categorizeSku()` uses hardcoded prefix arrays. Unknown SKUs fall through to the "Set VAT…" prompt — fine for now, but if the catalogue grows this will need a proper per-SKU category field.
 - **"View GRN" button was removed** from the match view. Accessing the GRN now goes through the PO detail page's GRN references. If finance needs direct GRN access from the invoice view, add it back.
+- **Status mutation is in-memory only.** `bulk-sync` in the list and `Approve` in the match view both write back to `MOCK_INVOICES[x].status`. This persists through SPA navigation within a session, but a hard reload reverts to the seed statuses. Fine for the prototype — no backend to write through.
+- **`invoice.note` now means "colleague comment" only.** Status sentences are auto-generated by `getAutoStatusNote`. If you add a new invoice to the mock, don't write status prose into `note` — it'll appear twice (once auto, once human). Write colleague-context only.
+- **Auto-link on mount** seeds `linkedGRNs` with `suggestedGRN.grnNumber`. If a new invoice has a `suggestedGRN` that shouldn't auto-link, leave `suggestedGRN` undefined in the mock.
+- **Match view's sibling rows reuse the same `lineTaxRates` map** as primary, keyed by line id. Line ids need to stay unique across all invoices in the mock — they already are.
 
 ---
 
@@ -325,6 +358,7 @@ Big area. Worth a dedicated exploration pass before building — start by mappin
    - `/invoices/pass-through?id=pt-3` — awaiting review, no category yet
    - `/purchase-orders/po-5` — PO-2907 coverage view (2 invoices, fully invoiced)
    - `/invoices/settings` — invoicing rules (demo-grade settings)
+   - From list: tick invoices with the checkbox column and `Sync now` — watch statuses flip to Approved; reopen one to see the detail view agrees.
 
 When iterating on briefing content, the single file to know is [MorningBriefingBody.tsx](components/Feed/MorningBriefingBody.tsx) — long but well-structured.
 When iterating on the invoice match view, [components/Invoicing/InvoiceMatchView.tsx](components/Invoicing/InvoiceMatchView.tsx) is the equivalent — ~1600 lines, well-structured with `/* ──────────── Banner Name ──────────── */` dividers between subcomponents.

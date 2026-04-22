@@ -38,7 +38,14 @@ function MatchContent() {
   return (
     <InvoiceMatchView
       invoice={invoice}
-      onApprove={() => router.push(`/invoices/approved?id=${invoice.id}`)}
+      onApprove={(approvedIds) => {
+        // Single source of truth: mutate the source records so the list agrees
+        for (const id of approvedIds) {
+          const row = MOCK_INVOICES.find(i => i.id === id);
+          if (row) row.status = 'Approved';
+        }
+        router.push(`/invoices/approved?id=${invoice.id}`);
+      }}
       onBack={() => router.push('/invoices')}
     />
   );

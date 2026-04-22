@@ -23,6 +23,7 @@ import {
   Settings,
 } from 'lucide-react';
 import SiteSwitcher from '@/components/Sidebar/SiteSwitcher';
+import { needsReviewCount } from '@/components/Invoicing/mockData';
 
 function DrawerNavItem({
   icon: Icon,
@@ -238,7 +239,7 @@ export default function MobileHamburgerDrawer({
             <div style={{ padding: '0 8px' }}>
               <DrawerNavItem icon={ShoppingCart} label="Review suggested orders" badge={3} onClick={() => go('/assisted-ordering')} />
               <DrawerNavItem icon={PackageSearch} label="Count stock" onClick={() => go('/')} />
-              <DrawerNavItem icon={FileCheck} label="Match invoices" badge={2} onClick={() => go('/invoices')} />
+              <DrawerNavItem icon={FileCheck} label="Match invoices" badge={needsReviewCount() || undefined} onClick={() => go('/invoices')} />
               <DrawerNavItem icon={Clock} label="View order history" onClick={() => go('/')} />
               <DrawerNavItem icon={FileX} label="Manage credit notes" onClick={() => go('/credit-notes')} />
             </div>

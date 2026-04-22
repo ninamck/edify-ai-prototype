@@ -272,7 +272,7 @@ export const MOCK_COMPLETED_DELIVERIES: GRN[] = [
     receivedBy: 'Aisha Nguyen',
     invoiceStatus: 'Pending Invoice',
     lines: [
-      { id: 'gl-15', poLineId: 'pl-21', name: 'Plain flour 10kg', sku: 'FLR-10', unit: 'SACK', price: 18.00, expectedQty: 5, receivedQty: 6 },
+      { id: 'gl-15', poLineId: 'pl-21', name: 'Plain flour 10kg', sku: 'FLR-10', unit: 'SACK', price: 18.00, expectedQty: 5, receivedQty: 4 },
     ],
   },
 ];

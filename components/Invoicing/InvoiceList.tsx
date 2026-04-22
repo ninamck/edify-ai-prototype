@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import StatusBadge from '@/components/Receiving/StatusBadge';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import Link from 'next/link';
-import { MOCK_INVOICES, Invoice, InvoiceMatchStatus, needsReviewCount, autoMatchedCount, isSplitBillingInvoice, splitBillingCount, getPOsForInvoice } from './mockData';
+import { MOCK_INVOICES, Invoice, InvoiceMatchStatus, needsReviewCount, autoMatchedCount, isSplitBillingInvoice, splitBillingCount, getPOsForInvoice, getInvoiceStatusBadgeVariant, getExternallySyncedIds } from './mockData';
 import { getCreditNotesForInvoice } from '@/components/CreditNotes/mockData';
 import { MOCK_PASS_THROUGH_INVOICES, PassThroughInvoice, PassThroughStatus, grandTotal, vatAmount } from '@/components/PassThrough/mockData';
 import { recordSync } from './syncLog';
@@ -41,9 +41,7 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
   const [pendingSync, setPendingSync] = useState<Invoice[] | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  const effectiveStatus = (inv: Invoice): InvoiceMatchStatus =>
-    locallySynced.has(inv.id) ? 'Approved' : inv.status;
-  const isSyncable = (inv: Invoice) => isSyncableStatus(effectiveStatus(inv));
+  const isSyncable = (inv: Invoice) => isSyncableStatus(inv.status);
 
   const clearSelection = () => setSelected(new Set());
   useEffect(() => { clearSelection(); }, [tab]);
@@ -52,6 +50,29 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
     const t = setTimeout(() => setToast(null), 4500);
     return () => clearTimeout(t);
   }, [toast]);
+
+  // Auto-sync cleanly-matched invoices (no variances, nothing to review) and merge any
+  // invoices synced via other flows (e.g. parse-failed recovery) into locallySynced so
+  // the list shows them with the ✓ and "Synced to Xero" subtext on return.
+  useEffect(() => {
+    const toAuto = MOCK_INVOICES.filter(
+      inv => inv.status === 'Matched' && inv.variances.length === 0
+    );
+    const externalIds = getExternallySyncedIds();
+    if (toAuto.length === 0 && externalIds.length === 0) return;
+    for (const inv of toAuto) inv.status = 'Approved';
+    setLocallySynced(prev => {
+      const next = new Set(prev);
+      toAuto.forEach(inv => next.add(inv.id));
+      externalIds.forEach(id => next.add(id));
+      return next;
+    });
+    if (toAuto.length > 0) {
+      const total = toAuto.reduce((s, i) => s + i.total, 0);
+      recordSync(toAuto.map(i => i.id), toAuto.map(i => i.invoiceNumber), total);
+      setToast(`${toAuto.length} auto-synced on arrival · £${total.toFixed(2)}`);
+    }
+  }, []);
 
   const toggleSelect = (id: string) => {
     setSelected(prev => {
@@ -66,6 +87,11 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
     const ids = invoices.map(i => i.id);
     setSyncing(new Set(ids));
     setTimeout(() => {
+      // Single source of truth: mutate the invoice records so the detail view agrees
+      for (const inv of invoices) {
+        const row = MOCK_INVOICES.find(i => i.id === inv.id);
+        if (row) row.status = 'Approved';
+      }
       setLocallySynced(prev => {
         const next = new Set(prev);
         ids.forEach(id => next.add(id));
@@ -136,7 +162,7 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
   };
 
   const readyApprovedInvoices = useMemo(
-    () => MOCK_INVOICES.filter(inv => effectiveStatus(inv) === 'Approved' && !locallySynced.has(inv.id)),
+    () => MOCK_INVOICES.filter(inv => inv.status === 'Approved' && !locallySynced.has(inv.id)),
     [locallySynced]
   );
   const showSelectionUI = tab !== 'pass-through';
@@ -396,7 +422,6 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
                 <InvoiceRow
                   key={inv.id}
                   invoice={inv}
-                  effectiveStatus={effectiveStatus(inv)}
                   isLocallySynced={locallySynced.has(inv.id)}
                   isSyncing={syncing.has(inv.id)}
                   syncable={isSyncable(inv)}
@@ -668,9 +693,8 @@ function colorForSplitPO(poNumber: string, splitPOs: string[]) {
   return SPLIT_PO_PALETTE[idx % SPLIT_PO_PALETTE.length];
 }
 
-function InvoiceRow({ invoice, effectiveStatus, isLocallySynced, isSyncing, syncable, selected, splitPOs, onToggle, onView }: {
+function InvoiceRow({ invoice, isLocallySynced, isSyncing, syncable, selected, splitPOs, onToggle, onView }: {
   invoice: Invoice;
-  effectiveStatus: InvoiceMatchStatus;
   isLocallySynced: boolean;
   isSyncing: boolean;
   syncable: boolean;
@@ -679,19 +703,9 @@ function InvoiceRow({ invoice, effectiveStatus, isLocallySynced, isSyncing, sync
   onToggle: () => void;
   onView: () => void;
 }) {
-  const statusVariant = (): 'warning' | 'error' | 'success' | 'info' | 'default' => {
-    switch (effectiveStatus) {
-      case 'Variance': return 'warning';
-      case 'Parse Failed': case 'Duplicate': return 'error';
-      case 'Approved': case 'Matched': return 'success';
-      case 'Matching in Progress': return 'info';
-      default: return 'default';
-    }
-  };
-
   const isSplit = isSplitBillingInvoice(invoice);
   const checkboxDisabled = !syncable || isLocallySynced || isSyncing;
-  const reason = blockedReason(effectiveStatus);
+  const reason = blockedReason(invoice.status);
   const checkboxTitle = isLocallySynced
     ? 'Already synced to Xero.'
     : isSyncing
@@ -769,9 +783,9 @@ function InvoiceRow({ invoice, effectiveStatus, isLocallySynced, isSyncing, sync
         <CreditNoteChip invoice={invoice} />
       </td>
       <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
-        <StatusBadge status={effectiveStatus} variant={statusVariant()} />
+        <StatusBadge status={invoice.status} variant={getInvoiceStatusBadgeVariant(invoice.status)} />
         {isLocallySynced && (
-          <span style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--color-success)', marginTop: '3px' }}>
+          <span style={{ display: 'block', fontSize: '11px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '3px' }}>
             Synced to Xero
           </span>
         )}

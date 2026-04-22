@@ -8,7 +8,9 @@ import {
   PriceResolution,
   QtyResolution,
   OverInvoiceResolution,
+  AnyResolution,
   MOCK_INVOICES,
+  updateInvoiceLine,
   getGRNsForInvoice,
   getUnmatchedInvoiceLines,
   invoiceGRNTotal,
@@ -17,11 +19,13 @@ import {
   POContextForInvoice,
   getAutoStatusNote,
   AutoStatusNote as AutoStatusNoteData,
+  getInvoiceStatusBadgeVariant,
   categorizeSku,
   defaultVatRate,
   vatCategoryLabel,
   VatCategory,
   GRN,
+  saveApprovedResolutions,
 } from './mockData';
 import {
   AUTO_APPLIED_VARIANCES,
@@ -31,11 +35,9 @@ import {
 import Link from 'next/link';
 import { MOCK_POS, MOCK_COMPLETED_DELIVERIES, POLine } from '@/components/Receiving/mockData';
 
-type AnyResolution = PriceResolution | QtyResolution | OverInvoiceResolution;
-
 interface InvoiceMatchViewProps {
   invoice: Invoice;
-  onApprove: () => void;
+  onApprove: (approvedIds: string[]) => void;
   onBack: () => void;
 }
 
@@ -96,6 +98,9 @@ function varianceDetailText(variance: MatchVariance): string {
 export default function InvoiceMatchView({ invoice, onApprove, onBack }: InvoiceMatchViewProps) {
   const [resolutions, setResolutions] = useState<Record<string, AnyResolution>>({});
   const [showConfirm, setShowConfirm] = useState(false);
+  // Forces a re-render after mutating invoice lines in place via updateInvoiceLine.
+  const [, setEditBump] = useState(0);
+  const bumpEdits = () => setEditBump(b => b + 1);
   // Auto-link the system-suggested GRN on mount. User can unlink from the chip banner if wrong.
   const initialSuggested = getSuggestedGRN(invoice);
   const [linkedGRNs, setLinkedGRNs] = useState<string[]>(
@@ -226,7 +231,12 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
         poContexts={poContexts}
         bulkInvoices={bulkApproveInvoices}
         onBack={() => setShowConfirm(false)}
-        onConfirm={onApprove}
+        onConfirm={() => {
+          for (const inv of bulkApproveInvoices) {
+            saveApprovedResolutions(inv.id, inv.id === invoice.id ? resolutions : {});
+          }
+          onApprove(bulkApproveInvoices.map(i => i.id));
+        }}
       />
     );
   }
@@ -261,13 +271,7 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
             <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
               {invoice.invoiceNumber} — {invoice.supplier}
             </h1>
-            <StatusBadge status={invoice.status} variant={
-              invoice.status === 'Variance' ? 'warning'
-              : invoice.status === 'Parse Failed' || invoice.status === 'Duplicate' ? 'error'
-              : invoice.status === 'Approved' || invoice.status === 'Matched' ? 'success'
-              : invoice.status === 'Matching in Progress' ? 'info'
-              : 'default'
-            } />
+            <StatusBadge status={invoice.status} variant={getInvoiceStatusBadgeVariant(invoice.status)} />
           </div>
           <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
             Three-way match · Invoice ↔ GRN{grns.length > 1 ? 's' : ''} ↔ PO
@@ -324,8 +328,8 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
         <MatchSummaryCard
           label="Variance"
           value={varianceTotal === 0 ? '£0.00' : `${varianceTotal > 0 ? '+' : ''}£${varianceTotal.toFixed(2)}`}
-          sub={hasUnmatched ? `${unmatchedLines.length} unmatched items` : varianceTotal === 0 ? 'Matched' : varianceTotal > 0 ? 'Invoice higher' : 'Invoice lower'}
-          variant={hasUnmatched ? 'error' : varianceTotal === 0 ? 'success' : 'error'}
+          sub={hasUnmatched ? `${unmatchedLines.length} unmatched items` : varianceTotal === 0 ? 'Matched' : allResolved ? 'All caught & cleared' : varianceTotal > 0 ? 'Invoice higher' : 'Invoice lower'}
+          variant={hasUnmatched ? 'error' : varianceTotal === 0 ? 'success' : allResolved ? 'default' : 'warning'}
         />
         {grns.length > 0 && (
           <MatchSummaryCard
@@ -375,7 +379,7 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
             id: 'auto-applied',
             icon: '✨',
             label: `${autoAppliedVariances.length} auto-accepted`,
-            tone: 'success',
+            tone: 'neutral',
             content: <AutoAppliedBanner variances={autoAppliedVariances} />,
           });
         }
@@ -456,7 +460,7 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
       })()}
 
       {/* Split view — variance resolution is inline within the table */}
-      <SplitView invoice={invoice} grns={grns} unmatchedLines={unmatchedLines} resolutions={resolutions} onResolve={setRes} lineTaxRates={lineTaxRates} setLineRate={setLineRate} totalTax={totalTax} anyTax={anyTax} siblingInvoices={siblingInvoicesAcrossPOs} />
+      <SplitView invoice={invoice} grns={grns} unmatchedLines={unmatchedLines} resolutions={resolutions} onResolve={setRes} lineTaxRates={lineTaxRates} setLineRate={setLineRate} totalTax={totalTax} anyTax={anyTax} siblingInvoices={siblingInvoicesAcrossPOs} onLineEdit={bumpEdits} />
 
       {/* Variance status banner */}
       {invoice.variances.length > 0 && !hasUnmatched && (
@@ -611,20 +615,20 @@ function AutoAppliedBanner({ variances }: { variances: MatchVariance[] }) {
     <div style={{
       padding: '14px 18px',
       borderRadius: '12px',
-      background: 'var(--color-success-light)',
-      border: '1px solid var(--color-success-border)',
+      background: 'var(--color-bg-hover)',
+      border: '1px solid var(--color-border-subtle)',
       marginBottom: '20px',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
         <span style={{ fontSize: '16px' }}>✨</span>
-        <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--color-success)' }}>
+        <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--color-text-primary)' }}>
           {entries.length} variance{entries.length === 1 ? '' : 's'} auto-accepted by rules
         </span>
         <div style={{ flex: 1 }} />
         <Link
           href="/invoices/settings"
           style={{
-            fontSize: '12px', fontWeight: 600, color: 'var(--color-success)',
+            fontSize: '12px', fontWeight: 600, color: 'var(--color-accent-deep)',
             textDecoration: 'none', whiteSpace: 'nowrap',
           }}
         >
@@ -1018,7 +1022,7 @@ function SuggestGRNBanner({ unmatchedLines, suggestedGRN, onLink, alternateMode,
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '12px' }}>
             {unmatchedLines.map(line => (
               <div key={line.sku} style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ color: 'var(--color-error)', fontWeight: 700 }}>✕</span>
+                <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600, opacity: 0.6 }}>–</span>
                 {line.description} <span style={{ opacity: 0.6 }}>({line.sku})</span>
               </div>
             ))}
@@ -1367,7 +1371,7 @@ function InvoiceCommentSection({ initialNote, initialAuthor, initialUpdatedAt }:
 
 /* ──────────── Split View ──────────── */
 
-function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, lineTaxRates, setLineRate, totalTax, anyTax, siblingInvoices }: {
+function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, lineTaxRates, setLineRate, totalTax, anyTax, siblingInvoices, onLineEdit }: {
   invoice: Invoice;
   grns: GRN[];
   unmatchedLines: { description: string; sku: string; qty: number; unitPrice: number; lineTotal: number }[];
@@ -1378,9 +1382,70 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
   totalTax: number;
   anyTax: boolean;
   siblingInvoices: Invoice[];
+  onLineEdit: () => void;
 }) {
   const [rightTab, setRightTab] = useState<'grn' | 'po'>('grn');
   const [expandedVariance, setExpandedVariance] = useState<string | null>(null);
+  const editable = invoice.editable === true;
+
+  const commitQty = (lineId: string, current: number, raw: string) => {
+    const n = parseFloat(raw);
+    if (isNaN(n) || n === current) return false;
+    updateInvoiceLine(invoice.id, lineId, { qty: n });
+    onLineEdit();
+    return true;
+  };
+  const commitPrice = (lineId: string, current: number, raw: string) => {
+    const n = parseFloat(raw);
+    if (isNaN(n) || n === current) return false;
+    updateInvoiceLine(invoice.id, lineId, { unitPrice: n });
+    onLineEdit();
+    return true;
+  };
+
+  const EditableQty = ({ lineId, value }: { lineId: string; value: number }) => (
+    <input
+      // key on value → input remounts when value changes via external mutation,
+      // picking up the new defaultValue.
+      key={`${lineId}-${value}`}
+      type="number"
+      defaultValue={value}
+      onBlur={e => {
+        if (!commitQty(lineId, value, e.target.value)) e.target.value = String(value);
+      }}
+      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+      style={{
+        width: '60px', padding: '4px 6px', borderRadius: '5px',
+        border: '1px solid var(--color-border)', fontSize: '13px',
+        fontFamily: 'var(--font-primary)', background: '#fff',
+        color: 'var(--color-text-primary)', textAlign: 'right',
+        outline: 'none',
+      }}
+    />
+  );
+
+  const EditablePrice = ({ lineId, value }: { lineId: string; value: number }) => (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+      <span style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>£</span>
+      <input
+        key={`${lineId}-${value}`}
+        type="number"
+        step="0.01"
+        defaultValue={value.toFixed(2)}
+        onBlur={e => {
+          if (!commitPrice(lineId, value, e.target.value)) e.target.value = value.toFixed(2);
+        }}
+        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+        style={{
+          width: '70px', padding: '4px 6px', borderRadius: '5px',
+          border: '1px solid var(--color-border)', fontSize: '13px',
+          fontFamily: 'var(--font-primary)', background: '#fff',
+          color: 'var(--color-text-primary)', textAlign: 'right',
+          outline: 'none',
+        }}
+      />
+    </span>
+  );
 
   const grnGroups = grns.map(grn => {
     const lines = grn.lines.map(gl => ({
@@ -1651,8 +1716,10 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const priceDiff = invLine ? invLine.unitPrice - grnLine.unitPrice : 0;
                   const variance = invoice.variances.find(v => v.sku === grnLine.sku);
                   const isExpanded = !!variance && expandedVariance === variance.id;
+                  const isAutoApplied = !!variance && !!getAutoAppliedForVariance(variance.id);
                   const isResolved = !!variance && !!resolutions[variance.id];
-                  const hasVar = (priceVar || variance?.type === 'qty') && !isResolved;
+                  const isCleared = isResolved || isAutoApplied;
+                  const hasVar = (priceVar || variance?.type === 'qty') && !isCleared;
                   const rowBg = hasVar ? 'rgba(217, 119, 6, 0.11)' : 'transparent';
                   const leftAccent: React.CSSProperties = hasVar ? { boxShadow: 'inset 4px 0 0 #D97706' } : {};
                   const qtyDiff = variance?.type === 'qty' ? variance.invoiceValue - variance.grnValue : 0;
@@ -1666,9 +1733,11 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                         <div style={{ fontWeight: hasVar ? 600 : 400 }}>{invLine?.description ?? grnLine.description}</div>
                         <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{grnLine.sku}</div>
                       </td>
-                      <td style={{ ...cell, fontWeight: variance?.type === 'qty' ? 700 : 400, color: variance?.type === 'qty' ? 'var(--color-warning)' : undefined }}>{invLine?.qty ?? '—'}</td>
-                      <td style={{ ...cell, fontWeight: priceVar ? 700 : 400, color: priceVar ? 'var(--color-warning)' : undefined }}>
-                        {invLine ? `£${invLine.unitPrice.toFixed(2)}` : '—'}
+                      <td style={{ ...cell, fontWeight: variance?.type === 'qty' && !isCleared ? 700 : 400, color: variance?.type === 'qty' && !isCleared ? 'var(--color-warning)' : undefined }}>
+                        {editable && invLine ? <EditableQty lineId={invLine.id} value={invLine.qty} /> : (invLine?.qty ?? '—')}
+                      </td>
+                      <td style={{ ...cell, fontWeight: priceVar && !isCleared ? 700 : 400, color: priceVar && !isCleared ? 'var(--color-warning)' : undefined }}>
+                        {editable && invLine ? <EditablePrice lineId={invLine.id} value={invLine.unitPrice} /> : (invLine ? `£${invLine.unitPrice.toFixed(2)}` : '—')}
                       </td>
                       <td style={{ ...cell, fontWeight: 600 }}>
                         {invLine ? `£${invLine.lineTotal.toFixed(2)}` : '—'}
@@ -1682,11 +1751,11 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                           : '—'}
                       </td>
                       <td style={{ ...cell, color: 'var(--color-text-secondary)', textAlign: 'center' }}>{grnLine.orderedQty}</td>
-                      <td style={{ ...cell, textAlign: 'center', fontWeight: isShort || variance?.type === 'qty' ? 700 : 600, color: isShort || variance?.type === 'qty' ? 'var(--color-warning)' : undefined }}>
+                      <td style={{ ...cell, textAlign: 'center', fontWeight: (isShort || variance?.type === 'qty') && !isCleared ? 700 : 600, color: (isShort || variance?.type === 'qty') && !isCleared ? 'var(--color-warning)' : undefined }}>
                         {grnLine.receivedQty}
                         {isShort && <span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--color-text-secondary)', marginLeft: '4px' }}>of {grnLine.orderedQty}</span>}
                       </td>
-                      <td style={{ ...cell, fontWeight: priceVar ? 700 : 400, color: priceVar ? 'var(--color-warning)' : undefined }}>£{grnLine.unitPrice.toFixed(2)}</td>
+                      <td style={{ ...cell, fontWeight: priceVar && !isCleared ? 700 : 400, color: priceVar && !isCleared ? 'var(--color-warning)' : undefined }}>£{grnLine.unitPrice.toFixed(2)}</td>
                       <td style={{ ...cell, fontWeight: 600 }}>£{grnLine.lineTotal.toFixed(2)}</td>
                       <td style={{ ...cell, color: 'var(--color-text-secondary)', fontWeight: 500 }}>
                         £{(grnLine.lineTotal * (invLine ? (lineTaxRates[invLine.id] ?? 10) : 10) / 100).toFixed(2)}
@@ -1696,7 +1765,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                           ? getAutoAppliedForVariance(variance.id)
                             ? <AutoAppliedChip varianceId={variance.id} />
                             : <VarBadge varianceId={variance.id} label={varLabel} />
-                          : <span style={{ color: 'var(--color-success)', fontSize: '13px', fontWeight: 600, opacity: 0.7 }}>✓</span>
+                          : <span style={{ color: 'var(--color-text-secondary)', fontSize: '13px', fontWeight: 600, opacity: 0.5 }}>✓</span>
                         }
                       </td>
                     </tr>
@@ -1723,7 +1792,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
                               <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--color-text-primary)' }}>{variance.itemName}</span>
                               <VarianceTypeChip type={variance.type} />
-                              <span style={{ fontWeight: 700, fontSize: '13px', color: variance.impact >= 0 ? 'var(--color-error)' : 'var(--color-success)' }}>{impactLabel}</span>
+                              <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--color-text-primary)' }}>{impactLabel}</span>
                             </div>
                             <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{detail}</div>
                           </div>
@@ -1766,21 +1835,25 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const lineTotal = poLine.price * poLine.expectedQty;
                   const variance = invoice.variances.find(v => v.sku === poLine.sku);
                   const isExpanded = !!variance && expandedVariance === variance.id;
+                  const isAutoApplied = !!variance && !!getAutoAppliedForVariance(variance.id);
                   const isResolved = !!variance && !!resolutions[variance.id];
-                  const rowBg = !priceMatch && !isResolved ? 'rgba(217, 119, 6, 0.11)' : 'transparent';
-                  const leftAccent: React.CSSProperties = !priceMatch && !isResolved ? { boxShadow: 'inset 4px 0 0 #D97706' } : {};
+                  const isCleared = isResolved || isAutoApplied;
+                  const rowBg = !priceMatch && !isCleared ? 'rgba(217, 119, 6, 0.11)' : 'transparent';
+                  const leftAccent: React.CSSProperties = !priceMatch && !isCleared ? { boxShadow: 'inset 4px 0 0 #D97706' } : {};
                   const thisQty = invLine?.qty ?? 0;
                   const overOnLine = thisQty > poLine.expectedQty;
 
                   const dataRow = (
                     <tr key={poLine.id} style={{ background: rowBg }}>
                       <td style={{ ...cell, ...leftAccent }}>
-                        <div style={{ fontWeight: !priceMatch ? 600 : 400 }}>{invLine?.description ?? poLine.name}</div>
+                        <div style={{ fontWeight: !priceMatch && !isCleared ? 600 : 400 }}>{invLine?.description ?? poLine.name}</div>
                         <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{poLine.sku}</div>
                       </td>
-                      <td style={cell}>{invLine?.qty ?? '—'}</td>
-                      <td style={{ ...cell, fontWeight: !priceMatch ? 700 : 400, color: !priceMatch ? 'var(--color-warning)' : undefined }}>
-                        {invLine ? `£${invLine.unitPrice.toFixed(2)}` : '—'}
+                      <td style={cell}>
+                        {editable && invLine ? <EditableQty lineId={invLine.id} value={invLine.qty} /> : (invLine?.qty ?? '—')}
+                      </td>
+                      <td style={{ ...cell, fontWeight: !priceMatch && !isCleared ? 700 : 400, color: !priceMatch && !isCleared ? 'var(--color-warning)' : undefined }}>
+                        {editable && invLine ? <EditablePrice lineId={invLine.id} value={invLine.unitPrice} /> : (invLine ? `£${invLine.unitPrice.toFixed(2)}` : '—')}
                       </td>
                       <td style={{ ...cell, fontWeight: 600 }}>
                         {invLine ? `£${invLine.lineTotal.toFixed(2)}` : '—'}
@@ -1794,7 +1867,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                           : '—'}
                       </td>
                       <td style={{ ...cell, color: 'var(--color-text-secondary)' }}>{poLine.expectedQty}</td>
-                      <td style={{ ...cell, fontWeight: !priceMatch ? 700 : 400, color: !priceMatch ? 'var(--color-warning)' : undefined }}>
+                      <td style={{ ...cell, fontWeight: !priceMatch && !isCleared ? 700 : 400, color: !priceMatch && !isCleared ? 'var(--color-warning)' : undefined }}>
                         £{poLine.price.toFixed(2)}
                       </td>
                       <td style={{ ...cell, fontWeight: 600 }}>£{lineTotal.toFixed(2)}</td>
@@ -1805,7 +1878,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                             : <VarBadge varianceId={variance.id} label={varianceShortLabel(variance, priceDiff)} />
                           : overOnLine
                             ? <span style={{ color: 'var(--color-error)', fontSize: '11px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'rgba(185,28,28,0.09)', border: '1px solid rgba(185,28,28,0.3)' }}>Over</span>
-                            : <span style={{ color: 'var(--color-success)', fontSize: '13px', fontWeight: 600, opacity: 0.7 }}>✓</span>
+                            : <span style={{ color: 'var(--color-text-secondary)', fontSize: '13px', fontWeight: 600, opacity: 0.5 }}>✓</span>
                         }
                       </td>
                     </tr>
@@ -1832,7 +1905,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
                               <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--color-text-primary)' }}>{variance.itemName}</span>
                               <VarianceTypeChip type={variance.type} />
-                              <span style={{ fontWeight: 700, fontSize: '13px', color: variance.impact >= 0 ? 'var(--color-error)' : 'var(--color-success)' }}>{impactLabel}</span>
+                              <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--color-text-primary)' }}>{impactLabel}</span>
                             </div>
                             <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{detail}</div>
                           </div>
@@ -1991,7 +2064,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                           <td style={{ ...cell, fontWeight: 600 }}>{grnMatch ? `£${grnMatch.lineTotal.toFixed(2)}` : '—'}</td>
                           <td style={cell}>{grnMatch && rate > 0 ? `£${(grnMatch.lineTotal * rate / 100).toFixed(2)}` : '—'}</td>
                           <td style={{ ...cell, textAlign: 'center' }}>
-                            <span style={{ color: 'var(--color-success)', fontSize: '13px', fontWeight: 600, opacity: 0.7 }}>✓</span>
+                            <span style={{ color: 'var(--color-text-secondary)', fontSize: '13px', fontWeight: 600, opacity: 0.5 }}>✓</span>
                           </td>
                         </>
                       ) : (
@@ -2000,7 +2073,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                           <td style={cell}>{poMatch ? `£${poMatch.price.toFixed(2)}` : '—'}</td>
                           <td style={{ ...cell, fontWeight: 600 }}>{poMatch ? `£${(poMatch.price * poMatch.expectedQty).toFixed(2)}` : '—'}</td>
                           <td style={{ ...cell, textAlign: 'center' }}>
-                            <span style={{ color: 'var(--color-success)', fontSize: '13px', fontWeight: 600, opacity: 0.7 }}>✓</span>
+                            <span style={{ color: 'var(--color-text-secondary)', fontSize: '13px', fontWeight: 600, opacity: 0.5 }}>✓</span>
                           </td>
                         </>
                       )}
@@ -2088,7 +2161,7 @@ function VarianceCard({ variance, resolution, onResolve }: { variance: MatchVari
           </div>
           <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '4px' }}>{detail}</div>
         </div>
-        <span style={{ fontWeight: 700, fontSize: '14px', color: variance.impact >= 0 ? 'var(--color-error)' : 'var(--color-success)', whiteSpace: 'nowrap' }}>{impactLabel}</span>
+        <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>{impactLabel}</span>
       </div>
 
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -2120,7 +2193,7 @@ function VarianceCard({ variance, resolution, onResolve }: { variance: MatchVari
         </div>
       )}
       {resolution === 'Accept for this delivery' && variance.type === 'price' && (
-        <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '8px', background: 'var(--color-success-light)', fontSize: '12px', fontWeight: 500, color: 'var(--color-success)' }}>
+        <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '8px', background: 'var(--color-bg-hover)', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
           Pays £{variance.invoiceValue.toFixed(2)} for this delivery only. Ingredient cost stays at £{variance.poValue.toFixed(2)}.
         </div>
       )}
@@ -2211,6 +2284,7 @@ function ApprovalConfirmation({ invoice, resolutions, grns, unmatchedLines, poCo
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {invoice.variances.map(v => {
             const res = resolutions[v.id];
+            const auto = getAutoAppliedForVariance(v.id);
             return (
               <div key={v.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '10px 14px', borderRadius: '8px', background: 'var(--color-bg-hover)', flexWrap: 'wrap' }}>
                 <div>
@@ -2219,7 +2293,24 @@ function ApprovalConfirmation({ invoice, resolutions, grns, unmatchedLines, poCo
                     {v.type === 'price' ? `£${v.poValue.toFixed(2)} → £${v.invoiceValue.toFixed(2)}` : `GRN: ${v.grnValue} vs Invoice: ${v.invoiceValue}`}
                   </span>
                 </div>
-                <StatusBadge status={res ?? 'Unresolved'} variant={res ? 'success' : 'error'} />
+                {auto ? (
+                  <span
+                    title={auto.note}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '5px',
+                      padding: '3px 10px', borderRadius: '100px',
+                      fontSize: '11px', fontWeight: 700,
+                      background: '#fff',
+                      color: 'var(--color-text-secondary)',
+                      border: '1px solid var(--color-border-subtle)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    ✨ Auto-accepted
+                  </span>
+                ) : (
+                  <StatusBadge status={res ?? 'Unresolved'} variant={res ? 'success' : 'error'} />
+                )}
               </div>
             );
           })}
@@ -2255,19 +2346,20 @@ function ApprovalConfirmation({ invoice, resolutions, grns, unmatchedLines, poCo
           {deliveryOnly.map(v => (
             <li key={v.id}>
               <strong>{v.itemName}</strong> charged at £{v.invoiceValue.toFixed(2)} for this delivery
-              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-success)', marginLeft: '6px' }}>Cost stays at £{v.poValue.toFixed(2)}</span>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginLeft: '6px' }}>Cost stays at £{v.poValue.toFixed(2)}</span>
             </li>
           ))}
           {poContexts.map(ctx => (
             <li key={ctx.poNumber}>
               {ctx.overInvoiceIfApproved ? (
                 <>
-                  <strong style={{ color: 'var(--color-error)' }}>{ctx.poNumber}</strong> over-invoiced by <strong>£{ctx.overBy.toFixed(2)}</strong> — dispute flow required before this approval can complete
+                  <strong>{ctx.poNumber}</strong> ends <strong>£{ctx.overBy.toFixed(2)}</strong> above PO amount
+                  <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginLeft: '6px' }}>Accounted for in your variance resolutions above</span>
                 </>
               ) : ctx.closesIfApproved ? (
                 <>
                   <strong>{ctx.poNumber}</strong> closes — fully invoiced at £{ctx.poAmount.toFixed(2)}
-                  <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-success)', marginLeft: '6px' }}>PO marked complete</span>
+                  <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginLeft: '6px' }}>PO marked complete</span>
                 </>
               ) : (
                 <>

@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { BriefingRole } from '@/components/briefing';
+import { needsReviewCount } from '@/components/Invoicing/mockData';
 
 type MobileTaskItem = {
   id: string;
@@ -23,19 +24,20 @@ type MobileTaskItem = {
   route: string;
 };
 
-const COMMON_TASKS: MobileTaskItem[] = [
-  { id: 'review-orders', icon: ShoppingCart, label: 'Review orders', badge: 3, route: '/assisted-ordering' },
-  { id: 'transfer-stock', icon: ArrowLeftRight, label: 'Transfer stock', route: '/' },
-  { id: 'count-stock', icon: PackageSearch, label: 'Count stock', route: '/' },
-  { id: 'match-invoices', icon: FileCheck, label: 'Match invoices', badge: 2, route: '/invoices' },
-  { id: 'credit-notes', icon: FileX, label: 'Manage credit notes', route: '/credit-notes' },
-];
+function commonTasks(): MobileTaskItem[] {
+  return [
+    { id: 'review-orders', icon: ShoppingCart, label: 'Review orders', badge: 3, route: '/assisted-ordering' },
+    { id: 'transfer-stock', icon: ArrowLeftRight, label: 'Transfer stock', route: '/' },
+    { id: 'count-stock', icon: PackageSearch, label: 'Count stock', route: '/' },
+    { id: 'match-invoices', icon: FileCheck, label: 'Match invoices', badge: needsReviewCount() || undefined, route: '/invoices' },
+    { id: 'credit-notes', icon: FileX, label: 'Manage credit notes', route: '/credit-notes' },
+  ];
+}
 
-const MOBILE_TASKS_BY_ROLE: Record<BriefingRole, MobileTaskItem[]> = {
-  ravi: COMMON_TASKS,
-  cheryl: COMMON_TASKS,
-  gm: COMMON_TASKS,
-};
+function mobileTasksFor(role: BriefingRole): MobileTaskItem[] {
+  void role;
+  return commonTasks();
+}
 
 function TaskRow({
   icon: Icon,
@@ -272,7 +274,7 @@ export default function MobileTasksDrawer({
               flexDirection: 'column',
               gap: '10px',
             }}>
-              {MOBILE_TASKS_BY_ROLE[role].map((task) => (
+              {mobileTasksFor(role).map((task) => (
                 <TaskRow
                   key={task.id}
                   icon={task.icon}

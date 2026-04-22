@@ -16,6 +16,10 @@ import {
 interface Props {
   invoice: PassThroughInvoice;
   onBack: () => void;
+  modeLabel?: string;
+  modeDescription?: string;
+  topContent?: React.ReactNode;
+  onSend?: (payload: { invoiceId: string; xeroRef: string; xeroAccount: string; grandTotal: number }) => void;
 }
 
 function statusVariant(s: PassThroughStatus): BadgeVariant {
@@ -27,7 +31,7 @@ function statusVariant(s: PassThroughStatus): BadgeVariant {
   }
 }
 
-export default function PassThroughDetailView({ invoice, onBack }: Props) {
+export default function PassThroughDetailView({ invoice, onBack, modeLabel, modeDescription, topContent, onSend }: Props) {
   const [supplier, setSupplier] = useState(invoice.supplier);
   const [invoiceNumber, setInvoiceNumber] = useState(invoice.invoiceNumber);
   const [dueDate, setDueDate] = useState(invoice.dueDate ?? '');
@@ -71,6 +75,9 @@ export default function PassThroughDetailView({ invoice, onBack }: Props) {
     setStatus('Sent to Xero');
     logEvent('sent', `Pushed to Xero · account "${xeroAccount}" · ref ${ref}.`);
     setShowConfirm(false);
+    if (onSend && xeroAccount) {
+      onSend({ invoiceId: invoice.id, xeroRef: ref, xeroAccount, grandTotal: grand });
+    }
   };
 
   return (
@@ -90,14 +97,16 @@ export default function PassThroughDetailView({ invoice, onBack }: Props) {
             </h1>
             <StatusBadge status={status} variant={statusVariant(status)} />
             <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'rgba(3,105,161,0.08)', color: 'var(--color-info)', border: '1px solid rgba(3,105,161,0.25)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Pass-through
+              {modeLabel ?? 'Pass-through'}
             </span>
           </div>
           <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
-            No PO, no GRN — skips matching, routes direct to Xero.
+            {modeDescription ?? 'No PO, no GRN — skips matching, routes direct to Xero.'}
           </p>
         </div>
       </div>
+
+      {topContent && <div style={{ marginBottom: '16px' }}>{topContent}</div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)', gap: '20px', alignItems: 'flex-start' }}>
         {/* PDF preview */}
