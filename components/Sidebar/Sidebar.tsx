@@ -26,6 +26,7 @@ import {
   PackageOpen,
   Trash2,
   LineChart,
+  type LucideIcon,
 } from 'lucide-react';
 
 import NavGroup from './NavGroup';
@@ -37,7 +38,7 @@ import { canSeeRoute } from '@/components/Production/roleFilter';
 
 type SidebarItem = {
   label: string;
-  icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
+  icon: LucideIcon;
   href: string;
   badge?: number;
 };
