@@ -60,17 +60,6 @@ export default function Sidebar() {
 
   const groups: SidebarGroup[] = [
     {
-      title: 'Make, plan & dispatch',
-      items: [
-        { label: 'Plan production', icon: CalendarClock, href: '/production/demand' },
-        { label: 'View production plan', icon: ClipboardList, href: '/production/plan/2026-04-22' },
-        { label: 'My bench', icon: ChefHat, href: '/production/bench/bench-bake/tasks' },
-        { label: 'Run PCR', icon: ClipboardCheck, href: '/production/pcr' },
-        { label: 'Pick list', icon: PackageCheck, href: '/production/pick/run-p2' },
-        { label: 'Dispatch to stores', icon: Send, href: '/production/dispatch' },
-      ],
-    },
-    {
       title: 'Spoke actions',
       items: [
         { label: 'Order for my site', icon: ShoppingBag, href: '/ordering' },
@@ -87,6 +76,17 @@ export default function Sidebar() {
         { label: 'Review approvals', icon: ShieldCheck, href: '/approvals', badge: pendingApprovals || undefined },
         { label: 'View order history', icon: Clock, href: '/order-history' },
         { label: 'Manage credit notes', icon: FileX, href: '/credit-notes' },
+      ],
+    },
+    {
+      title: 'Production',
+      items: [
+        { label: 'Demand', icon: CalendarClock, href: '/production/demand' },
+        { label: 'Plan', icon: ClipboardList, href: '/production/plan/2026-04-22' },
+        { label: 'Bench', icon: ChefHat, href: '/production/bench/bench-bake/tasks' },
+        { label: 'Check', icon: ClipboardCheck, href: '/production/pcr' },
+        { label: 'Pick', icon: PackageCheck, href: '/production/pick/run-p2' },
+        { label: 'Dispatch', icon: Send, href: '/production/dispatch' },
       ],
     },
     {

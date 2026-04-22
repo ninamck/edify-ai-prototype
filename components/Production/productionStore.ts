@@ -471,6 +471,213 @@ export function removeBenchAssignment(runId: string, productId: string): void {
   }));
 }
 
+// ---------- Slice 3 execute-flow mutators ----------
+
+export function startTask(runId: string, assignmentId: string): void {
+  mutate(s => ({
+    ...s,
+    productionRuns: s.productionRuns.map(r => {
+      if (r.id !== runId) return r;
+      return {
+        ...r,
+        status: r.status === 'locked' ? 'in_progress' : r.status,
+        benchAssignments: r.benchAssignments.map(a =>
+          a.id === assignmentId ? { ...a, status: 'in_progress' } : a,
+        ),
+      };
+    }),
+  }));
+}
+
+export interface CompleteTaskParams {
+  runId: string;
+  assignmentId: string;
+  actualQuantity: number;
+  rejectCount?: number;
+}
+
+// Complete a task → writes a MadeOutput ready for PCR.
+export function completeTask(params: CompleteTaskParams): string | null {
+  const madeOutputId = nextId('mo');
+  let createdId: string | null = null;
+  mutate(s => {
+    const run = s.productionRuns.find(r => r.id === params.runId);
+    const assignment = run?.benchAssignments.find(a => a.id === params.assignmentId);
+    if (!run || !assignment) return s;
+
+    const produced = Math.max(0, params.actualQuantity - (params.rejectCount ?? 0));
+    createdId = madeOutputId;
+    const madeOutput: MadeOutput = {
+      id: madeOutputId,
+      productionRunId: params.runId,
+      benchAssignmentId: params.assignmentId,
+      productId: assignment.productId,
+      quantityProduced: produced,
+      destination: 'dispatch',
+      shelfLifeExpiresAt: null, // starts at PCR pass
+    };
+
+    return {
+      ...s,
+      productionRuns: s.productionRuns.map(r => {
+        if (r.id !== params.runId) return r;
+        return {
+          ...r,
+          benchAssignments: r.benchAssignments.map(a =>
+            a.id === params.assignmentId
+              ? {
+                  ...a,
+                  status: 'complete',
+                  actualQuantity: params.actualQuantity,
+                  rejectCount: params.rejectCount ?? 0,
+                }
+              : a,
+          ),
+        };
+      }),
+      madeOutputs: [...s.madeOutputs, madeOutput],
+    };
+  });
+  return createdId;
+}
+
+export interface SubmitPcrParams {
+  madeOutputId: string;
+  qualityCheck: 'pass' | 'fail';
+  labelCheck: 'pass' | 'fail';
+  temperature?: number;
+  checkerName: string;
+  batchCode: string;
+  rejectQuantity?: number;
+  triggerReplacement?: boolean;
+}
+
+// Pass sets shelf-life from recipe.shelfLifeHours (or 24h default).
+// Fail can optionally spawn an on-demand replacement run.
+export function submitPcr(params: SubmitPcrParams): string {
+  const pcrId = nextId('pcr');
+  const checkedAt = new Date().toISOString();
+
+  mutate(s => {
+    const madeOutput = s.madeOutputs.find(m => m.id === params.madeOutputId);
+    if (!madeOutput) return s;
+
+    const parentRun = s.productionRuns.find(r => r.id === madeOutput.productionRunId);
+    const product = s.products.find(p => p.id === madeOutput.productId);
+    const pass = params.qualityCheck === 'pass' && params.labelCheck === 'pass';
+
+    let shelfLifeExpiresAt: string | null = madeOutput.shelfLifeExpiresAt;
+    if (pass) {
+      const hours = 24; // Default — recipe-step shelfLifeHours seeding in later slice
+      shelfLifeExpiresAt = new Date(Date.now() + hours * 3600 * 1000).toISOString();
+    }
+
+    let replacementRunId: string | undefined;
+    let newRun: ProductionRun | null = null;
+    if (!pass && params.triggerReplacement && product) {
+      replacementRunId = nextId('run');
+      newRun = {
+        id: replacementRunId,
+        name: `On-demand · ${product.name} replacement`,
+        runType: 'on_demand',
+        timeHorizon: 'on_demand',
+        scheduledDate: parentRun?.scheduledDate ?? new Date().toISOString().slice(0, 10),
+        scheduledStart: '',
+        scheduledEnd: '',
+        siteId: parentRun?.siteId ?? 'site-cpu',
+        status: 'draft',
+        benchAssignments: [],
+        linkedDemandLineIds: [],
+      };
+    }
+
+    const pcr: PcrCheck = {
+      id: pcrId,
+      madeOutputId: params.madeOutputId,
+      qualityCheck: params.qualityCheck,
+      labelCheck: params.labelCheck,
+      haccpData: {
+        temperature: params.temperature,
+        checkedAt,
+        batchCode: params.batchCode,
+      },
+      checkerName: params.checkerName,
+      rejectQuantity: params.rejectQuantity,
+      replacementRunId,
+    };
+
+    return {
+      ...s,
+      pcrChecks: [...s.pcrChecks, pcr],
+      madeOutputs: s.madeOutputs.map(m =>
+        m.id === params.madeOutputId ? { ...m, shelfLifeExpiresAt } : m,
+      ),
+      productionRuns: newRun ? [...s.productionRuns, newRun] : s.productionRuns,
+    };
+  });
+
+  return pcrId;
+}
+
+// Reserve stock for a pick-line. Caps at on-hand and flags shortage.
+export function reservePickLine(pickLineId: string, quantity: number): void {
+  mutate(s => {
+    const line = s.pickListLines.find(p => p.id === pickLineId);
+    if (!line) return s;
+    const product = s.products.find(p => p.id === line.productId);
+    if (!product?.supplierProductId) return s;
+    const sp = s.supplierProducts.find(x => x.id === product.supplierProductId);
+    if (!sp) return s;
+
+    const canReserve = Math.min(quantity, sp.onHand);
+    const isShort = canReserve < quantity;
+
+    return {
+      ...s,
+      supplierProducts: s.supplierProducts.map(x =>
+        x.id === sp.id ? { ...x, onHand: Math.max(0, x.onHand - canReserve) } : x,
+      ),
+      pickListLines: s.pickListLines.map(p =>
+        p.id === pickLineId
+          ? {
+              ...p,
+              quantityReserved: canReserve,
+              status: canReserve === 0 ? 'short' : isShort ? 'short' : 'reserved',
+            }
+          : p,
+      ),
+    };
+  });
+}
+
+// Attach a made output to the existing draft manifest for its destination.
+// Assumes the manifest was pre-linked at lockRun time.
+export function attachMadeOutputToManifest(madeOutputId: string, destinationSiteId: string): void {
+  mutate(s => {
+    const target = s.dispatchManifests.find(
+      m => m.destinationSiteId === destinationSiteId && m.status === 'draft',
+    );
+    if (!target) return s;
+    if (target.madeOutputIds.includes(madeOutputId)) return s;
+    return {
+      ...s,
+      dispatchManifests: s.dispatchManifests.map(m =>
+        m.id === target.id ? { ...m, madeOutputIds: [...m.madeOutputIds, madeOutputId] } : m,
+      ),
+    };
+  });
+}
+
+// Flip a manifest to 'loaded' — ready to leave the hub.
+export function confirmDispatch(manifestId: string): void {
+  mutate(s => ({
+    ...s,
+    dispatchManifests: s.dispatchManifests.map(m =>
+      m.id === manifestId ? { ...m, status: 'loaded' } : m,
+    ),
+  }));
+}
+
 // Locking a run cascades: creates PickListLines for stocked products linked
 // to the run, and pre-links a draft DispatchManifest per destination spoke.
 export function lockRun(runId: string): void {

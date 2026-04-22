@@ -5,6 +5,7 @@ import Sidebar from '@/components/Sidebar/Sidebar';
 import SiteSwitcher from '@/components/Sidebar/SiteSwitcher';
 import RoleSwitcher from './RoleSwitcher';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useCurrentRole } from '@/components/DemoControls/demoStore';
 import type { ReactNode } from 'react';
 
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
@@ -38,7 +39,12 @@ export default function ProductionShell({ children }: { children: ReactNode }) {
   const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
   const pathname = usePathname();
   const router = useRouter();
+  const role = useCurrentRole();
   const title = titleFromPath(pathname);
+  // Maker is on a wall-mounted tablet — suppress the sidebar to give the
+  // task cards room + lose the nav clutter the Maker doesn't need.
+  const showSidebar = !isMobile && role !== 'maker';
+  const isKitchenTablet = role === 'maker';
 
   return (
     <div
@@ -46,11 +52,11 @@ export default function ProductionShell({ children }: { children: ReactNode }) {
         display: 'flex',
         flexDirection: 'row',
         height: '100vh',
-        background: 'var(--color-bg-surface)',
+        background: isKitchenTablet ? 'var(--color-bg-hover)' : 'var(--color-bg-surface)',
         fontFamily: 'var(--font-primary)',
       }}
     >
-      {!isMobile && <Sidebar />}
+      {showSidebar && <Sidebar />}
 
       <div
         style={{
