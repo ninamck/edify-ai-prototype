@@ -1488,8 +1488,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
   const allGrnTotal = grnGroups.reduce((s, g) => s + g.lines.reduce((ss, l) => ss + l.lineTotal, 0), 0);
   const allPoTotal = grnGroups.reduce((s, g) => s + g.pos.reduce((ss, p) => ss + p.lines.reduce((sss, l) => sss + l.price * l.expectedQty, 0), 0), 0);
 
-  // right column count differs by tab
-  const RC = rightTab === 'grn' ? 6 : 4;
+  const RC = 6;
 
   const cell: React.CSSProperties = { padding: '8px 12px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: '12px' };
   const divider: React.CSSProperties = { borderRight: '2px solid var(--color-border)' };
@@ -1632,7 +1631,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                     <div className="split-tab-toggle">
                       <button className={rightTab === 'grn' ? 'active' : ''} onClick={() => setRightTab('grn')}>GRN</button>
-                      <button className={rightTab === 'po' ? 'active' : ''} onClick={() => setRightTab('po')}>PO Prices</button>
+                      <button className={rightTab === 'po' ? 'active' : ''} onClick={() => setRightTab('po')}>PO</button>
                     </div>
                   </div>
                 </div>
@@ -1647,28 +1646,17 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
               <th style={colLabelStyle}>Total</th>
               <th style={colLabelStyle}>VAT %</th>
               <th style={{ ...colLabelStyle, ...divider }}>VAT £</th>
-              {rightTab === 'grn' ? (
-                <>
-                  <th style={colLabelStyle}>Ordered</th>
-                  <th style={colLabelStyle}>Received</th>
-                  <th style={colLabelStyle}>Price</th>
-                  <th style={colLabelStyle}>Total</th>
-                  <th style={colLabelStyle}>VAT £</th>
-                  <th style={{ ...colLabelStyle, width: '32px' }}></th>
-                </>
-              ) : (
-                <>
-                  <th style={colLabelStyle}>Ordered</th>
-                  <th style={colLabelStyle}>PO Price</th>
-                  <th style={colLabelStyle}>Total</th>
-                  <th style={{ ...colLabelStyle, width: '32px' }}></th>
-                </>
-              )}
+              <th style={colLabelStyle}>Ordered</th>
+              <th style={colLabelStyle}>Received</th>
+              <th style={colLabelStyle}>Price</th>
+              <th style={colLabelStyle}>Total</th>
+              <th style={colLabelStyle}>VAT £</th>
+              <th style={{ ...colLabelStyle, width: '32px' }}></th>
             </tr>
           </thead>
 
           {/* ── GRN groups (per-GRN section header labels invoice | GRN) ── */}
-          {grnGroups.map(({ grn, lines, pos }) => {
+          {rightTab === 'grn' && grnGroups.map(({ grn, lines, pos }) => {
             const invGroupSkus = new Set(lines.map(l => l.sku));
             const invGroupTotal = invoice.lines.filter(il => invGroupSkus.has(il.sku)).reduce((s, l) => s + l.lineTotal, 0);
             const grnGroupTotal = lines.reduce((s, l) => s + l.lineTotal, 0);
@@ -1827,50 +1815,91 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   return [dataRow, expandRow];
                 })}
 
-                {/* PO Prices tab rows */}
-                {rightTab === 'po' && poLines.flatMap(poLine => {
-                  const invLine = invoice.lines.find(il => il.sku === poLine.sku);
-                  const priceMatch = invLine ? invLine.unitPrice === poLine.price : true;
-                  const priceDiff = invLine ? invLine.unitPrice - poLine.price : 0;
-                  const lineTotal = poLine.price * poLine.expectedQty;
-                  const variance = invoice.variances.find(v => v.sku === poLine.sku);
+              </tbody>
+            );
+          })}
+
+          {/* ── PO tab: flat list keyed on invoice lines (one row per invoice line, matched by SKU) ── */}
+          {rightTab === 'po' && (() => {
+            const poBySku = new Map<string, POLine>();
+            grnGroups.forEach(g => g.pos.forEach(p => p.lines.forEach(pl => {
+              if (!poBySku.has(pl.sku)) poBySku.set(pl.sku, pl);
+            })));
+            const allPoNumbers = Array.from(new Set(grnGroups.flatMap(g => g.pos.map(p => p.poNumber))));
+
+            return (
+              <tbody>
+                {(multiGroup || siblingInvoices.length > 0) && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '8px 14px', background: 'rgba(34, 68, 68, 0.06)', borderTop: '2px solid var(--color-accent-active)', borderBottom: '1px solid var(--color-border-subtle)', ...divider }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-accent-active)' }}>
+                          {invoice.invoiceNumber}
+                        </span>
+                        <span style={{ fontWeight: 500, fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+                          {invoice.date} · {invoice.supplier}
+                        </span>
+                        {siblingInvoices.length > 0 && (
+                          <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'var(--color-accent-active)', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                            This invoice
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td colSpan={RC} style={{ padding: '8px 14px', background: 'rgba(34, 68, 68, 0.06)', borderTop: '2px solid var(--color-accent-active)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-text-primary)' }}>
+                          {allPoNumbers.length > 0 ? allPoNumbers.join(' + ') : 'No PO'}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+
+                {invoice.lines.flatMap(invLine => {
+                  const poLine = poBySku.get(invLine.sku);
+                  const priceMatch = poLine ? invLine.unitPrice === poLine.price : true;
+                  const priceDiff = poLine ? invLine.unitPrice - poLine.price : 0;
+                  const lineTotal = poLine ? poLine.price * poLine.expectedQty : 0;
+                  const variance = invoice.variances.find(v => v.sku === invLine.sku);
                   const isExpanded = !!variance && expandedVariance === variance.id;
                   const isAutoApplied = !!variance && !!getAutoAppliedForVariance(variance.id);
                   const isResolved = !!variance && !!resolutions[variance.id];
                   const isCleared = isResolved || isAutoApplied;
                   const rowBg = !priceMatch && !isCleared ? 'rgba(217, 119, 6, 0.11)' : 'transparent';
                   const leftAccent: React.CSSProperties = !priceMatch && !isCleared ? { boxShadow: 'inset 4px 0 0 #D97706' } : {};
-                  const thisQty = invLine?.qty ?? 0;
-                  const overOnLine = thisQty > poLine.expectedQty;
+                  const overOnLine = poLine ? invLine.qty > poLine.expectedQty : false;
 
                   const dataRow = (
-                    <tr key={poLine.id} style={{ background: rowBg }}>
+                    <tr key={invLine.id} style={{ background: rowBg }}>
                       <td style={{ ...cell, ...leftAccent }}>
-                        <div style={{ fontWeight: !priceMatch && !isCleared ? 600 : 400 }}>{invLine?.description ?? poLine.name}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{poLine.sku}</div>
+                        <div style={{ fontWeight: !priceMatch && !isCleared ? 600 : 400 }}>{invLine.description}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{invLine.sku}</div>
                       </td>
                       <td style={cell}>
-                        {editable && invLine ? <EditableQty lineId={invLine.id} value={invLine.qty} /> : (invLine?.qty ?? '—')}
+                        {editable ? <EditableQty lineId={invLine.id} value={invLine.qty} /> : invLine.qty}
                       </td>
                       <td style={{ ...cell, fontWeight: !priceMatch && !isCleared ? 700 : 400, color: !priceMatch && !isCleared ? 'var(--color-warning)' : undefined }}>
-                        {editable && invLine ? <EditablePrice lineId={invLine.id} value={invLine.unitPrice} /> : (invLine ? `£${invLine.unitPrice.toFixed(2)}` : '—')}
+                        {editable ? <EditablePrice lineId={invLine.id} value={invLine.unitPrice} /> : `£${invLine.unitPrice.toFixed(2)}`}
                       </td>
-                      <td style={{ ...cell, fontWeight: 600 }}>
-                        {invLine ? `£${invLine.lineTotal.toFixed(2)}` : '—'}
-                      </td>
+                      <td style={{ ...cell, fontWeight: 600 }}>£{invLine.lineTotal.toFixed(2)}</td>
                       <td style={{ ...cell }}>
-                        {invLine && <TaxSelect lineId={invLine.id} sku={invLine.sku} />}
+                        <TaxSelect lineId={invLine.id} sku={invLine.sku} />
                       </td>
-                      <td style={{ ...cell, ...divider, fontWeight: 600, color: invLine && (lineTaxRates[invLine.id] ?? 0) > 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
-                        {invLine && (lineTaxRates[invLine.id] ?? 0) > 0
+                      <td style={{ ...cell, ...divider, fontWeight: 600, color: (lineTaxRates[invLine.id] ?? 0) > 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
+                        {(lineTaxRates[invLine.id] ?? 0) > 0
                           ? `£${(invLine.lineTotal * (lineTaxRates[invLine.id] ?? 0) / 100).toFixed(2)}`
                           : '—'}
                       </td>
-                      <td style={{ ...cell, color: 'var(--color-text-secondary)' }}>{poLine.expectedQty}</td>
+                      <td style={{ ...cell, color: 'var(--color-text-secondary)', textAlign: 'center' }}>{poLine ? poLine.expectedQty : '—'}</td>
+                      <td style={{ ...cell, textAlign: 'center', color: 'var(--color-text-secondary)' }}>—</td>
                       <td style={{ ...cell, fontWeight: !priceMatch && !isCleared ? 700 : 400, color: !priceMatch && !isCleared ? 'var(--color-warning)' : undefined }}>
-                        £{poLine.price.toFixed(2)}
+                        {poLine ? `£${poLine.price.toFixed(2)}` : '—'}
                       </td>
-                      <td style={{ ...cell, fontWeight: 600 }}>£{lineTotal.toFixed(2)}</td>
+                      <td style={{ ...cell, fontWeight: 600 }}>{poLine ? `£${lineTotal.toFixed(2)}` : '—'}</td>
+                      <td style={{ ...cell, color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                        {poLine ? `£${(lineTotal * (lineTaxRates[invLine.id] ?? 10) / 100).toFixed(2)}` : '—'}
+                      </td>
                       <td style={{ ...cell, padding: '6px 12px', textAlign: 'center' }}>
                         {variance
                           ? getAutoAppliedForVariance(variance.id)
@@ -1878,7 +1907,9 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                             : <VarBadge varianceId={variance.id} label={varianceShortLabel(variance, priceDiff)} />
                           : overOnLine
                             ? <span style={{ color: 'var(--color-error)', fontSize: '11px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'rgba(185,28,28,0.09)', border: '1px solid rgba(185,28,28,0.3)' }}>Over</span>
-                            : <span style={{ color: 'var(--color-text-secondary)', fontSize: '13px', fontWeight: 600, opacity: 0.5 }}>✓</span>
+                            : !poLine
+                              ? <span style={{ color: 'var(--color-text-secondary)', fontSize: '11px', fontWeight: 600, opacity: 0.6 }}>No PO</span>
+                              : <span style={{ color: 'var(--color-text-secondary)', fontSize: '13px', fontWeight: 600, opacity: 0.5 }}>✓</span>
                         }
                       </td>
                     </tr>
@@ -1888,7 +1919,6 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
 
                   const resolution = resolutions[variance.id] as AnyResolution | undefined;
                   const options = resolutionOptionsFor(variance.type);
-                  const vDiff = variance.invoiceValue - variance.poValue;
                   const detail = varianceDetailText(variance);
                   const impactLabel = variance.impact >= 0 ? `+£${variance.impact.toFixed(2)}` : `-£${Math.abs(variance.impact).toFixed(2)}`;
 
@@ -1896,7 +1926,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const expandAccentPo = isResolved ? 'inset 3px 0 0 var(--color-success)' : 'inset 3px 0 0 var(--color-warning)';
 
                   const expandRow = (
-                    <tr key={`expand-po-${poLine.id}`}>
+                    <tr key={`expand-po-${invLine.id}`}>
                       <td colSpan={6 + RC} style={{ padding: 0, background: expandBgPo, borderBottom: '1px solid var(--color-border-subtle)', boxShadow: expandAccentPo }}>
                         <div className="expand-row-outer">
                         <div className="expand-row-content">
@@ -1939,13 +1969,12 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
 
                   return [dataRow, expandRow];
                 })}
-
               </tbody>
             );
-          })}
+          })()}
 
-          {/* ── Unmatched invoice lines (no GRN) ── */}
-          {unmatchedInvRows.length > 0 && (
+          {/* ── Unmatched invoice lines (no GRN) — only in GRN tab; PO tab already lists every invoice line once ── */}
+          {rightTab === 'grn' && unmatchedInvRows.length > 0 && (
             <tbody>
               {unmatchedInvRows.map(il => {
                 const priceVar = invoice.variances.find(v => v.sku === il.sku && v.type === 'price');
@@ -2021,7 +2050,21 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   </td>
                   <td colSpan={RC} style={{ padding: '8px 14px', background: 'var(--color-bg-subtle, #fafafa)', borderTop: '2px solid var(--color-border)', borderBottom: '1px solid var(--color-border-subtle)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      {sibGRNs.length === 0 ? (
+                      {rightTab === 'po' ? (
+                        <span style={{
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          background: 'var(--color-success-light)',
+                          color: 'var(--color-success)',
+                          border: '1px solid rgba(16, 185, 129, 0.25)',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.04em',
+                        }}>
+                          Matched
+                        </span>
+                      ) : sibGRNs.length === 0 ? (
                         <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>No linked GRN</span>
                       ) : (
                         sibGRNs.map((g, i) => (
@@ -2070,8 +2113,10 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                       ) : (
                         <>
                           <td style={cell}>{poMatch?.expectedQty ?? '—'}</td>
+                          <td style={{ ...cell, color: 'var(--color-text-secondary)' }}>—</td>
                           <td style={cell}>{poMatch ? `£${poMatch.price.toFixed(2)}` : '—'}</td>
                           <td style={{ ...cell, fontWeight: 600 }}>{poMatch ? `£${(poMatch.price * poMatch.expectedQty).toFixed(2)}` : '—'}</td>
+                          <td style={cell}>{poMatch && rate > 0 ? `£${(poMatch.price * poMatch.expectedQty * rate / 100).toFixed(2)}` : '—'}</td>
                           <td style={{ ...cell, textAlign: 'center' }}>
                             <span style={{ color: 'var(--color-text-secondary)', fontSize: '13px', fontWeight: 600, opacity: 0.5 }}>✓</span>
                           </td>
@@ -2110,6 +2155,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                 <>
                   <td colSpan={2} />
                   <td style={{ padding: '8px 12px', fontWeight: 700 }}>£{allPoTotal.toFixed(2)}</td>
+                  <td style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>£{(allPoTotal * 0.10).toFixed(2)}</td>
                   <td />
                 </>
               )}

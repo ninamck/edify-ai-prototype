@@ -31,7 +31,7 @@ interface InvoiceListProps {
 }
 
 export default function InvoiceList({ onViewInvoice, onViewPassThrough }: InvoiceListProps) {
-  const [tab, setTab] = useState<Tab>('all');
+  const [tab, setTab] = useState<Tab>('needs-review');
   const [search, setSearch] = useState('');
   const isMobile = useMediaQuery('(max-width: 640px)');
 
@@ -235,10 +235,6 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
 
       {/* Tabs */}
       <div style={{ display: 'flex', background: 'var(--color-bg-hover)', borderRadius: '100px', padding: '3px', marginBottom: '16px', width: isMobile ? '100%' : 'fit-content' }}>
-        <button onClick={() => setTab('all')} style={tabStyle(tab === 'all')}>
-          All
-          <TabBadge count={MOCK_INVOICES.length} active={tab === 'all'} />
-        </button>
         <button onClick={() => setTab('needs-review')} style={tabStyle(tab === 'needs-review')}>
           Review
           <TabBadge count={reviewCount} active={tab === 'needs-review'} />
@@ -256,6 +252,10 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
         <button onClick={() => setTab('pass-through')} style={tabStyle(tab === 'pass-through')}>
           Pass-through
           <TabBadge count={passThroughCount} active={tab === 'pass-through'} />
+        </button>
+        <button onClick={() => setTab('all')} style={tabStyle(tab === 'all')}>
+          All
+          <TabBadge count={MOCK_INVOICES.length} active={tab === 'all'} />
         </button>
       </div>
 
