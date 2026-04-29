@@ -8,6 +8,7 @@ import ShellTopBar from '@/components/ShellTopBar';
 import type { ShellViewMode } from '@/components/ShellTopBar';
 import EstateDashboard from '@/components/Dashboard/EstateDashboard';
 import ManagerDashboard from '@/components/Dashboard/ManagerDashboard';
+import PlaytomicDashboard from '@/components/Dashboard/PlaytomicDashboard';
 import MorningBriefingTimeline from '@/components/Feed/MorningBriefingTimeline';
 import RightPanelSheetOverlay from '@/components/RightPanel/RightPanelSheetOverlay';
 import MobileInsightsBar from '@/components/MobileInsightsBar';
@@ -89,7 +90,7 @@ export default function HomeShell() {
     return <MobileShell />;
   }
 
-  const currentLayout = layoutByRole[briefingRole];
+  const currentLayout = layoutByRole[briefingRole] ?? [];
 
   function updateCurrentLayout(next: DashboardLayoutEntry[]) {
     setLayoutForRole(briefingRole, next);
@@ -241,7 +242,16 @@ export default function HomeShell() {
               background: 'var(--color-bg-surface)',
             }}
           >
-            {briefingRole === 'cheryl' ? (
+            {briefingRole === 'playtomic' ? (
+              <PlaytomicDashboard
+                layout={currentLayout}
+                editing={editingDashboard}
+                onLayoutChange={updateCurrentLayout}
+                onToggleEdit={() => setEditingDashboard((v) => !v)}
+                onAddInsight={() => setAddInsightOpen(true)}
+                onRemovePinned={removePinnedChart}
+              />
+            ) : briefingRole === 'cheryl' ? (
               <EstateDashboard
                 phase={effectivePhase}
                 layout={currentLayout}

@@ -134,6 +134,7 @@ export const DEFAULT_FLOOR_ACTIONS_BY_ROLE: Record<BriefingRole, FloorAction[]> 
     { id: 'log-waste', label: 'Log waste', iconKey: 'Trash2', visible: true },
     { id: 'receive-delivery', label: 'Receive delivery', iconKey: 'Truck', visible: true },
   ],
+  playtomic: DEFAULT_FLOOR_ACTIONS,
 };
 
 /* ── Icon picker mini-popup ── */

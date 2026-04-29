@@ -5,7 +5,8 @@ export type QuestionSegment =
   | 'cogs'
   | 'labour'
   | 'waste'
-  | 'production';
+  | 'production'
+  | 'padel';
 
 export type ProductionSubsegment =
   | 'general'
@@ -29,6 +30,7 @@ export const SEGMENT_LABELS: Record<QuestionSegment, string> = {
   labour: 'Labour',
   waste: 'Waste',
   production: 'Production',
+  padel: 'Padel & cafe',
 };
 
 export const PRODUCTION_SUBSEGMENT_LABELS: Record<ProductionSubsegment, string> = {
@@ -39,7 +41,7 @@ export const PRODUCTION_SUBSEGMENT_LABELS: Record<ProductionSubsegment, string> 
   efficiency: 'Efficiency',
 };
 
-export const SEGMENT_ORDER: QuestionSegment[] = ['sales', 'cogs', 'labour', 'waste', 'production'];
+export const SEGMENT_ORDER: QuestionSegment[] = ['sales', 'cogs', 'labour', 'waste', 'production', 'padel'];
 export const PRODUCTION_SUBSEGMENT_ORDER: ProductionSubsegment[] = [
   'general',
   'produced-v-sold',
@@ -1229,11 +1231,139 @@ export const QUESTION_LIBRARY: QuestionEntry[] = [
     text: 'Which products should we consider batch-producing centrally based on unit production time?',
     suggestedChartId: 'waste-top10',
   },
+
+  // ── Padel & cafe ─────────────────────────────────────────────────
+  // Curated for a padel-club operator that also runs cafes on site.
+  {
+    id: 'padel-which-courts-and-slots-below-historical',
+    segment: 'padel',
+    text: 'Which courts and slots are running below historical fill this month?',
+  },
+  {
+    id: 'padel-which-clubs-occupancy-dropped-most',
+    segment: 'padel',
+    text: 'Which clubs had the biggest occupancy drop this week?',
+  },
+  {
+    id: 'padel-peak-hours-by-day-this-month',
+    segment: 'padel',
+    text: 'What are the peak court hours by day of the week this month?',
+  },
+  {
+    id: 'padel-no-show-rate-by-slot',
+    segment: 'padel',
+    text: 'Which slots have the highest no-show rate over the last 30 days?',
+  },
+  {
+    id: 'padel-cancellation-by-club',
+    segment: 'padel',
+    text: 'How does the cancellation rate compare across clubs?',
+  },
+  {
+    id: 'padel-new-vs-returning-this-week',
+    segment: 'padel',
+    text: 'How many new vs returning players booked this week?',
+  },
+  {
+    id: 'padel-players-at-risk-of-lapsing',
+    segment: 'padel',
+    text: 'Which players are at risk of lapsing in the next two weeks?',
+  },
+  {
+    id: 'padel-lapsed-players-where-else-they-play',
+    segment: 'padel',
+    text: 'Where do lapsed Manchester players also play, and how far away?',
+  },
+  {
+    id: 'padel-coach-utilisation',
+    segment: 'padel',
+    text: 'Which coaches are over- or under-booked, and where?',
+  },
+  {
+    id: 'padel-coach-classes-attendance',
+    segment: 'padel',
+    text: 'Which coach classes drove the most repeat bookings last month?',
+  },
+  {
+    id: 'padel-cafe-attach-rate-by-club',
+    segment: 'padel',
+    text: 'What is the cafe attach rate per booking, by club?',
+  },
+  {
+    id: 'padel-cafe-spend-after-session',
+    segment: 'padel',
+    text: 'What is the average cafe spend after a 90-minute session?',
+  },
+  {
+    id: 'padel-cafe-best-selling-weekend-mornings',
+    segment: 'padel',
+    text: 'Top selling cafe items on weekend mornings, by club?',
+  },
+  {
+    id: 'padel-cafe-coffee-vs-cold-drinks',
+    segment: 'padel',
+    text: 'Coffee vs cold drinks split by site this month?',
+  },
+  {
+    id: 'padel-food-revenue-per-booking',
+    segment: 'padel',
+    text: 'F&B revenue per booking, ranked across clubs?',
+  },
+  {
+    id: 'padel-dwell-time-after-booking',
+    segment: 'padel',
+    text: 'How long do players stay on site after their booking ends?',
+  },
+  {
+    id: 'padel-compare-manchester-stockport-evenings',
+    segment: 'padel',
+    text: 'How does Manchester compare to Stockport on weekday evenings?',
+  },
+  {
+    id: 'padel-pricing-where-to-lift-price',
+    segment: 'padel',
+    text: 'Where could we lift price-per-hour without hurting bookings?',
+  },
+  {
+    id: 'padel-discount-impact-on-occupancy',
+    segment: 'padel',
+    text: 'What was the occupancy lift after the last off-peak discount?',
+  },
+  {
+    id: 'padel-weather-impact-on-cafe',
+    segment: 'padel',
+    text: 'How does rain affect cafe revenue on Sundays?',
+  },
+  {
+    id: 'padel-forward-pipeline-vs-typical',
+    segment: 'padel',
+    text: 'How is the forward 14-day pipeline tracking vs typical?',
+  },
+  {
+    id: 'padel-app-vs-web-booking-mix',
+    segment: 'padel',
+    text: 'iOS vs Android vs web booking mix, by club?',
+  },
+  {
+    id: 'padel-membership-tier-revenue',
+    segment: 'padel',
+    text: 'Which membership tier drives the most court revenue?',
+  },
+  {
+    id: 'padel-top-players-by-spend',
+    segment: 'padel',
+    text: 'Who are our top 20 players by 90-day spend?',
+  },
+  {
+    id: 'padel-tournament-impact-on-bookings',
+    segment: 'padel',
+    text: 'What is the bookings uplift on weekends with a tournament running?',
+  },
 ];
 
 export function countsBySegment(): Record<QuestionSegment, number> {
   const out: Record<QuestionSegment, number> = {
-    sales: 0, cogs: 0, labour: 0, waste: 0, production: 0,
+    sales: 0, cogs: 0, labour: 0, waste: 0, production: 0, padel: 0,
   };
   for (const q of QUESTION_LIBRARY) out[q.segment] += 1;
   return out;

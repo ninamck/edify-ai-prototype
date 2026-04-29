@@ -109,6 +109,9 @@ function LabourMiniCurve({ subtitle }: { subtitle: string }) {
 
 function LiveSnapshot({ role }: { role: BriefingRole }) {
   if (role === 'ravi') return null;
+  // Playtomic is a separate demo persona; its briefing surfaces padel-specific
+  // insights below and doesn't need the F&B P&L confidence header.
+  if (role === 'playtomic') return null;
 
   const pnlPct = role === 'cheryl' ? 72 : 78;
   const pnlLabel = role === 'cheryl' ? 'Gross margin confidence' : 'Live P&L confidence';
@@ -1779,11 +1782,266 @@ function ApprovalsSubcard({ pending }: { pending: ReturnType<typeof useApprovals
   );
 }
 
+// ── Playtomic (padel demo) ────────────────────────────────────────────────────
+// Insights tailored to a multi-club padel chain that also runs on-site cafes.
+
+const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
+  morning: [
+    {
+      category: 'needs-call',
+      items: [
+        {
+          id: 'play-m-n-1',
+          headline: 'Manchester occupancy fell 9 pts week-on-week — biggest drop in the chain',
+          detail:
+            'Drop concentrated in Tue, Wed, Thu evening slots. Forward 14d pipeline is tracking 22% under typical at this lead time. Quinn has drafted an off-peak weeknight discount and a recall to the 312 Manchester lapsed players — needs your sign-off before it goes out.',
+          actionLabel: 'Review campaign',
+          actionSecondary: 'Hold for now',
+        },
+        {
+          id: 'play-m-n-2',
+          headline: 'Stockport coach Diego off sick today — 3 classes affected',
+          detail:
+            'Beginners 10am, Junior 4pm, Adult drill 6pm. 28 players impacted. Quinn has Marco free for two of the three slots and a partner coach for the third. Approve the swap and Quinn will message all 28 players with the new line-up.',
+          actionLabel: 'Approve swaps',
+          actionSecondary: 'Cancel and refund',
+        },
+        {
+          id: 'play-m-n-3',
+          headline: 'Cafe basket for the weekend needs your go-ahead — £1,860',
+          detail:
+            'Weekend forecast is sun + tournament at North Leeds, so Quinn has bumped soft drinks +18% and pastries +12% across the 7 sites. Cut-off with the supplier is 11am.',
+          actionLabel: 'Review and send',
+          actionSecondary: 'Adjust quantities',
+        },
+      ],
+    },
+    {
+      category: 'handled',
+      summary: '54 court bookings auto-rebooked overnight · tournament fixture published · cafe restock confirmed',
+      items: [
+        {
+          id: 'play-m-h-1',
+          headline: '54 cancelled court slots auto-rebooked overnight from the waitlist',
+          detail:
+            '£1,212 of revenue saved versus letting them go empty. North Leeds and Alderley Park accounted for 42 of the 54. The full audit trail is in the bookings log if you want to spot-check.',
+        },
+        {
+          id: 'play-m-h-2',
+          headline: 'Saturday tournament fixture published to 1,420 members',
+          detail:
+            '32-team draw with court allocations across Manchester, Stockport and North Leeds. Confirmation rate already at 78%. Quinn will send a chase to the unconfirmed 22% at 10am.',
+        },
+        {
+          id: 'play-m-h-3',
+          headline: 'iOS push to lapsed players sent — open rate 41% in the first hour',
+          detail:
+            '312 lapsed Manchester players targeted with a 2-for-1 weeknight slot. 27 already rebooked overnight. Quinn will roll the same playbook to Lightwater on Friday if it converts.',
+        },
+      ],
+    },
+    {
+      category: 'worth-knowing',
+      summary: 'Forward pipeline · weather signal · retention split',
+      items: [
+        {
+          id: 'play-m-w-1',
+          headline: 'Forward 14d pipeline tracking 22% under typical at Manchester',
+          detail:
+            'Mostly Tue/Thu evenings. Same pattern as last quarter — that recovered after a £/hr cut. Quinn has the pricing test ready if you want to run it again.',
+        },
+        {
+          id: 'play-m-w-2',
+          headline: 'Rain forecast Thu and Fri — chain bookings expected ~15% below baseline',
+          detail:
+            'Indoor courts at Stockport and Alderley Park usually pick up some of the spillover. Cafe spend on rainy days runs 8% higher per booking.',
+        },
+        {
+          id: 'play-m-w-3',
+          headline: 'Coached members retain 84% over 90 days · new players retain 38%',
+          detail:
+            'The single biggest retention lever in the chain is getting a new player into a coach-led class within 14 days. Manchester onboarding is currently at 11% — Stockport runs at 34%.',
+        },
+      ],
+    },
+  ],
+  midday: [
+    {
+      category: 'needs-call',
+      items: [
+        {
+          id: 'play-d-n-1',
+          headline: 'Off-peak weeknight discount needs final approval before 2pm',
+          detail:
+            'Manchester Tue/Wed/Thu 5–7pm at £18/hr instead of £24/hr. Quinn projects 38% additional fill, +£2,840 weekly net of the discount. Goes live at 6pm if approved.',
+          actionLabel: 'Approve discount',
+          actionSecondary: 'Skip this week',
+        },
+        {
+          id: 'play-d-n-2',
+          headline: 'North Leeds running 84% occupancy — price test ready',
+          detail:
+            'You are leaving money on the table. Quinn proposes lifting peak £/hr from £31 to £34 (+10%) at North Leeds and watching for two weeks. Conservative model says +£1,210/week, no expected fill drop.',
+          actionLabel: 'Run the test',
+          actionSecondary: 'Hold',
+        },
+      ],
+    },
+    {
+      category: 'handled',
+      summary: 'Coach reassignments confirmed · welcome emails sent to 198 new members',
+      items: [
+        {
+          id: 'play-d-h-1',
+          headline: 'Coach swaps confirmed — all 28 affected Stockport players notified',
+          detail:
+            'Marco picked up the 4pm and 6pm sessions. Partner coach covering 10am. No refunds needed.',
+        },
+        {
+          id: 'play-d-h-2',
+          headline: 'Welcome sequence sent to this week\'s 198 new members',
+          detail:
+            'Includes a free coached class voucher to lift 90-day retention. Quinn will track conversion vs the control cohort and report next Wednesday.',
+        },
+      ],
+    },
+    {
+      category: 'worth-knowing',
+      summary: 'Channel mix · corporate slots',
+      items: [
+        {
+          id: 'play-d-w-1',
+          headline: 'iOS app drives 58% of bookings, Android 22%, web 12%',
+          detail:
+            'Worth weighting your push and in-app placements accordingly. Manchester recall campaign was iOS-only and converted 41% — the Android version goes out tomorrow.',
+        },
+        {
+          id: 'play-d-w-2',
+          headline: 'Lunchtime corporate slots up 14% week-on-week',
+          detail:
+            '12–2pm midweek bookings from corporate accounts (3+ players, single payer) are running ahead of forecast. Stockport and Alderley Park leading. Worth adding a corporate landing page if it keeps growing.',
+        },
+      ],
+    },
+  ],
+  afternoon: [
+    {
+      category: 'needs-call',
+      items: [
+        {
+          id: 'play-a-n-1',
+          headline: 'Saturday tournament dry-run at 5pm — Manchester ops sign-off',
+          detail:
+            'Court allocations, scoreboards and cafe staffing tested. Quinn will compile the checklist into a single sign-off — usually takes 90 seconds.',
+          actionLabel: 'Open checklist',
+          actionSecondary: 'Defer 30 min',
+        },
+        {
+          id: 'play-a-n-2',
+          headline: 'Tomorrow\'s rain — pre-empt cancellations with proactive rebook?',
+          detail:
+            '78 outdoor-court bookings tomorrow at 6am–10am could be impacted. Quinn can offer 1-tap rebook to Stockport / Alderley Park indoor courts at the same time. Saves an estimated £1,420.',
+          actionLabel: 'Send rebook offer',
+          actionSecondary: 'Wait and see',
+        },
+      ],
+    },
+    {
+      category: 'handled',
+      summary: 'Weekend roster +18% confirmed · cafe shipment landed at North Leeds',
+      items: [
+        {
+          id: 'play-a-h-1',
+          headline: 'Weekend roster lift +18% confirmed across all 7 sites',
+          detail:
+            'Sunday looks busy: tournament + sun + warm. Coaches and cafe staff confirmed for the lift. No further action needed.',
+        },
+        {
+          id: 'play-a-h-2',
+          headline: 'North Leeds cafe restock arrived — full match, signed off',
+          detail:
+            'All 32 lines matched. Soft drinks and pastries already on shelf for the Sunday rush.',
+        },
+      ],
+    },
+    {
+      category: 'worth-knowing',
+      summary: 'Pipeline · cross-site player movement',
+      items: [
+        {
+          id: 'play-a-w-1',
+          headline: 'Manchester forward pipeline still 22% under typical for next week',
+          detail:
+            'The off-peak discount lands tonight — Quinn will measure the lift in the morning briefing. If it works, the same play rolls out to Lightwater.',
+        },
+        {
+          id: 'play-a-w-2',
+          headline: '9 of 312 lapsed Manchester players also play at Stockport (12 min away)',
+          detail:
+            'Cross-site retention is a strong signal. Quinn can offer them a free guest pass at Manchester to pull them back — say the word and it goes out as a personalised email.',
+        },
+      ],
+    },
+  ],
+  evening: [
+    {
+      category: 'needs-call',
+      items: [
+        {
+          id: 'play-e-n-1',
+          headline: 'Tomorrow\'s 7am opening — Manchester roof leak check',
+          detail:
+            'Maintenance flagged a slow leak above court 3 yesterday. Quinn has booked the contractor for the 6:30am slot before opening. Confirm or reschedule.',
+          actionLabel: 'Confirm visit',
+          actionSecondary: 'Reschedule',
+        },
+      ],
+    },
+    {
+      category: 'handled',
+      summary: 'EOD revenue posted · staff ratings collected · close-checks logged',
+      items: [
+        {
+          id: 'play-e-h-1',
+          headline: 'EOD revenue posted · £18,420 court · £4,180 cafe',
+          detail:
+            'Court revenue +6% on yesterday, cafe -2% (rain affected the after-work crowd). All 7 sites closed cleanly. Tomorrow\'s opening checklists are pre-filled.',
+        },
+        {
+          id: 'play-e-h-2',
+          headline: 'Player ratings collected from today\'s 218 sessions',
+          detail:
+            'Average 4.7 / 5. Two flagged sessions (one at Manchester, one at Lightwater) — both about court lighting. Quinn has logged a maintenance ticket.',
+        },
+      ],
+    },
+    {
+      category: 'worth-knowing',
+      summary: 'Tomorrow\'s pipeline · weather · top-spend players',
+      items: [
+        {
+          id: 'play-e-w-1',
+          headline: 'Tomorrow\'s pipeline: 84% booked across the chain',
+          detail:
+            'Strong day. Manchester at 71% (up from 54% today after the discount went live), North Leeds at 92%. Cafe attach should follow.',
+        },
+        {
+          id: 'play-e-w-2',
+          headline: '5 top-spend players visited today — one is at risk of lapsing',
+          detail:
+            'Sofia Almeida (£312, 14 bookings · 90d) hasn\'t booked in the last 12 days. Worth a personal note from a coach. Quinn has drafted one if you want it.',
+        },
+      ],
+    },
+  ],
+};
+
 function BriefingContent({ role, phase }: { role: BriefingRole; phase: BriefingPhase }) {
   const byPhase =
     role === 'ravi' ? RAVI_INSIGHTS :
     role === 'cheryl' ? CHERYL_INSIGHTS :
     role === 'gm' ? GM_INSIGHTS :
+    role === 'playtomic' ? PLAYTOMIC_INSIGHTS :
     null;
   if (!byPhase) return null;
   return <InsightFeed key={`${role}-${phase}`} groups={byPhase[phase]} role={role} phase={phase} />;
