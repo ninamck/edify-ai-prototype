@@ -66,7 +66,7 @@ export default function Sidebar() {
 
         {/* Group 1 — Make, plan & dispatch (Manager+) */}
         <NavGroup title="Make, plan & dispatch" showDivider={true} compact={compact}>
-          <NavItem label="Plan production" icon={CalendarClock} compact={compact} active={is('/plan-production')} />
+          <NavItem label="Plan production" icon={CalendarClock} compact={compact} active={is('/production')} onClick={() => router.push('/production/board')} />
           <NavItem label="View production summary" icon={ClipboardList} compact={compact} active={is('/production-summary')} />
           <NavItem label="Dispatch to stores" icon={Send} compact={compact} active={is('/dispatch')} />
         </NavGroup>
