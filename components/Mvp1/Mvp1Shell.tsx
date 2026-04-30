@@ -19,6 +19,7 @@ import TablesTab, {
   type ChartInstance,
   type TableInstance,
 } from '@/components/Mvp1/Tables/TablesTab';
+import TableBuilderModal from '@/components/Mvp1/Tables/TableBuilderModal';
 import { fullSourceQuery, type TableQuery } from '@/components/Mvp1/Tables/query';
 import { pinnedChartIdOf, type DashboardLayoutEntry } from '@/components/Dashboard/layoutTypes';
 import type { BriefingPhase } from '@/components/briefing';
@@ -61,6 +62,17 @@ export default function Mvp1Shell() {
     title?: string;
     targetTabId: string | null;
     replacingTableId?: string;
+  } | null>(null);
+  /**
+   * When set, the TableBuilderModal is open in edit-in-place mode for the
+   * given table instance. Saving from the modal swaps the table on its host
+   * tab without leaving the current view.
+   */
+  const [tableBuilderState, setTableBuilderState] = useState<{
+    tabId: string;
+    tableId: string;
+    initialQuery: TableQuery;
+    initialTitle?: string;
   } | null>(null);
   const {
     tabs,
@@ -280,7 +292,7 @@ export default function Mvp1Shell() {
             flexDirection: 'column',
             minWidth: 0,
             minHeight: 0,
-            padding: '12px 12px 56px',
+            padding: '12px clamp(16px, 2.4vw, 32px) 56px',
             gap: 12,
             overflow: 'auto',
             background: 'var(--color-bg-surface)',
@@ -354,9 +366,11 @@ export default function Mvp1Shell() {
                 />
               </div>
               <TablesTab
+                key={activeTab.id}
                 editing={editingTablesView}
                 tables={activeTab.tables}
                 charts={activeTab.charts}
+                defaultFilters={activeTab.id === 'sales-deep-dive' ? [] : undefined}
                 onChange={(next) => updateTablesForTab(activeTab.id, next)}
                 onChartsChange={(next) => updateChartsForTab(activeTab.id, next)}
                 onAskQuinn={() => {
@@ -381,16 +395,12 @@ export default function Mvp1Shell() {
                   setAddInsightOpen(true);
                 }}
                 onEditQuery={(instance) => {
-                  setAddInsightShape('all');
-                  setAddInsightTargetTabId(activeTab.id);
-                  setTableChatState({
-                    prompt: `Help me modify "${instance.title?.trim() || 'this table'}".`,
-                    query: instance.query,
-                    title: instance.title || 'My table',
-                    targetTabId: activeTab.id,
-                    replacingTableId: instance.id,
+                  setTableBuilderState({
+                    tabId: activeTab.id,
+                    tableId: instance.id,
+                    initialQuery: instance.query,
+                    initialTitle: instance.title,
                   });
-                  setAddInsightOpen(true);
                 }}
               />
             </div>
@@ -495,6 +505,29 @@ export default function Mvp1Shell() {
             ],
           });
           setActiveId(newId);
+        }}
+      />
+
+      <TableBuilderModal
+        open={tableBuilderState !== null}
+        initialQuery={tableBuilderState?.initialQuery}
+        initialTitle={tableBuilderState?.initialTitle}
+        onClose={() => setTableBuilderState(null)}
+        onSave={({ title, query }) => {
+          if (!tableBuilderState) return;
+          const { tabId, tableId } = tableBuilderState;
+          const target = tabs.find((t) => t.id === tabId);
+          if (!target || target.kind !== 'tables') {
+            setTableBuilderState(null);
+            return;
+          }
+          const next = target.tables.map((t) =>
+            t.id === tableId
+              ? { ...t, title: title?.trim() ? title : t.title, query }
+              : t,
+          );
+          updateTablesForTab(tabId, next);
+          setTableBuilderState(null);
         }}
       />
 

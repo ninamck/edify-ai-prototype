@@ -13,6 +13,7 @@ import {
   QUESTION_LIBRARY,
   getQuestionTableQuery,
   questionShape,
+  resolveSuggestedChartId,
   type ProductionSubsegment,
   type QuestionEntry,
 } from '@/components/Dashboard/data/questionLibrary';
@@ -25,9 +26,10 @@ import {
   type ConversationEntry,
 } from '@/hooks/useConversationHistory';
 
-function resolveChartId(text: string): AnalyticsChartId | null {
+function resolveChartId(text: string, role?: BriefingRole): AnalyticsChartId | null {
   const entry = QUESTION_LIBRARY.find((q) => q.text === text);
-  return entry?.suggestedChartId ?? null;
+  if (!entry) return null;
+  return resolveSuggestedChartId(entry, role);
 }
 
 function isLibraryQuestion(text: string): boolean {
@@ -229,7 +231,7 @@ export default function AddInsightPopup({
     // Commit the previous chat (if any) before starting a new one.
     commitChatToHistory();
     setChatSeed(text);
-    setChatChartId(explicitChart === undefined ? resolveChartId(text) : explicitChart);
+    setChatChartId(explicitChart === undefined ? resolveChartId(text, briefingRole) : explicitChart);
     setChatTableQuery(null);
     setChatTableTitle('');
     setChatUserMessageCount(0);
@@ -468,9 +470,10 @@ export default function AddInsightPopup({
                   onShapeChange={setShape}
                   onSegmentChange={setSegment}
                   onSubsegmentChange={setSubsegment}
+                  briefingRole={briefingRole}
                   onPick={(entry) => {
-                    const tableQuery = getQuestionTableQuery(entry.id);
-                    const entryShape = questionShape(entry);
+                    const tableQuery = getQuestionTableQuery(entry.id, briefingRole);
+                    const entryShape = questionShape(entry, briefingRole);
                     // 1. Explicit table filter + parent ready: hand straight to view.
                     if (tableQuery && onPickTable && shape === 'table') {
                       onPickTable(entry, tableQuery);
@@ -497,7 +500,7 @@ export default function AddInsightPopup({
                       return;
                     }
                     // 4. Fall back to chart/text chat.
-                    enterChat(entry.text, entry.suggestedChartId ?? null);
+                    enterChat(entry.text, resolveSuggestedChartId(entry, briefingRole));
                   }}
                   recentConversations={history}
                   onResumeConversation={handleResumeFromHistory}
@@ -579,19 +582,16 @@ export default function AddInsightPopup({
                     onPickChart={() => {
                       const { entry } = pendingShapeChoice;
                       setPendingShapeChoice(null);
-                      enterChat(entry.text, entry.suggestedChartId ?? null);
+                      enterChat(entry.text, resolveSuggestedChartId(entry, briefingRole));
                     }}
                     onPickTable={() => {
                       const { entry, tableQuery } = pendingShapeChoice;
                       setPendingShapeChoice(null);
-                      // If the parent provided a direct add-to-view callback
-                      // (e.g. when called from a View's "Pick a question" CTA),
-                      // hand straight to it. Otherwise route via Quinn so the
-                      // user sees a preview with pin/open CTAs.
-                      if (onPickTable) {
-                        onPickTable(entry, tableQuery);
-                        return;
-                      }
+                      // Mirror the Chart branch: route via Quinn chat so the
+                      // user sees a preview with pin/open CTAs, regardless of
+                      // whether the parent supplied a direct add-to-view
+                      // callback. Pinning from chat still goes through the
+                      // parent's onPinTable to land on the active view.
                       enterChatWithTable(entry.text, tableQuery, entry.text);
                     }}
                     onCancel={() => setPendingShapeChoice(null)}

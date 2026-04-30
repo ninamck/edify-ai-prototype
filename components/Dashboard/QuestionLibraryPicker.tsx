@@ -12,10 +12,12 @@ import {
   countsByProductionSubsegment,
   searchQuestions,
   questionShape,
+  DUNKIN_WIRED_QUESTION_IDS,
   type QuestionEntry,
   type QuestionSegment,
   type ProductionSubsegment,
 } from '@/components/Dashboard/data/questionLibrary';
+import type { BriefingRole } from '@/components/briefing';
 import type { ConversationEntry } from '@/hooks/useConversationHistory';
 
 const ACCENT = 'var(--color-accent-deep)';
@@ -33,6 +35,7 @@ export default function QuestionLibraryPicker({
   onShapeChange,
   onSegmentChange,
   onSubsegmentChange,
+  briefingRole,
   onPick,
   recentConversations,
   onResumeConversation,
@@ -50,6 +53,9 @@ export default function QuestionLibraryPicker({
   onShapeChange?: (next: ShapeFilter) => void;
   onSegmentChange: (next: SegmentKey) => void;
   onSubsegmentChange: (next: ProductionSubsegment | null) => void;
+  /** Active briefing role. When 'dunkin', the library is filtered to the
+   *  questions we can answer with Dunkin franchise CSVs. */
+  briefingRole?: BriefingRole;
   /** Fires when the user clicks a library question. */
   onPick: (entry: QuestionEntry) => void;
   /** Optional list of past conversations to show at the bottom of the rail. */
@@ -58,8 +64,17 @@ export default function QuestionLibraryPicker({
   onRemoveConversation?: (id: string) => void;
   onClearConversations?: () => void;
 }) {
-  const segCounts = useMemo(countsBySegment, []);
-  const subCounts = useMemo(countsByProductionSubsegment, []);
+  const segCounts = useMemo(
+    () => countsBySegment(briefingRole === 'dunkin' ? DUNKIN_WIRED_QUESTION_IDS : undefined),
+    [briefingRole],
+  );
+  const subCounts = useMemo(
+    () =>
+      countsByProductionSubsegment(
+        briefingRole === 'dunkin' ? DUNKIN_WIRED_QUESTION_IDS : undefined,
+      ),
+    [briefingRole],
+  );
 
   const filtered = useMemo(() => {
     const shapeArg = shape === 'all' ? undefined : shape;
@@ -68,8 +83,9 @@ export default function QuestionLibraryPicker({
       segment === 'all' ? undefined : segment,
       segment === 'production' && subsegment ? subsegment : undefined,
       shapeArg,
+      briefingRole,
     );
-  }, [query, segment, subsegment, shape]);
+  }, [query, segment, subsegment, shape, briefingRole]);
 
   const canSend = query.trim().length > 0;
 
@@ -322,6 +338,7 @@ export default function QuestionLibraryPicker({
                 <QuestionRow
                   key={entry.id}
                   entry={entry}
+                  briefingRole={briefingRole}
                   onPick={() => onPick(entry)}
                 />
               ))}
@@ -389,12 +406,14 @@ function SegmentRow({
 
 function QuestionRow({
   entry,
+  briefingRole,
   onPick,
 }: {
   entry: QuestionEntry;
+  briefingRole?: BriefingRole;
   onPick: () => void;
 }) {
-  const shape = questionShape(entry);
+  const shape = questionShape(entry, briefingRole);
   return (
     <button
       type="button"

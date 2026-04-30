@@ -1,4 +1,4 @@
-import type { AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
+import type { AnalyticsChartId, DunkinAnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
 import type { TableQuery } from '@/components/Mvp1/Tables/query';
 
 export type QuestionShape = 'chart' | 'table' | 'both';
@@ -1364,19 +1364,27 @@ export const QUESTION_LIBRARY: QuestionEntry[] = [
   },
 ];
 
-export function countsBySegment(): Record<QuestionSegment, number> {
+export function countsBySegment(
+  visibleIds?: ReadonlySet<string>,
+): Record<QuestionSegment, number> {
   const out: Record<QuestionSegment, number> = {
     sales: 0, cogs: 0, labour: 0, waste: 0, production: 0, padel: 0,
   };
-  for (const q of QUESTION_LIBRARY) out[q.segment] += 1;
+  for (const q of QUESTION_LIBRARY) {
+    if (visibleIds && !visibleIds.has(q.id)) continue;
+    out[q.segment] += 1;
+  }
   return out;
 }
 
-export function countsByProductionSubsegment(): Record<ProductionSubsegment, number> {
+export function countsByProductionSubsegment(
+  visibleIds?: ReadonlySet<string>,
+): Record<ProductionSubsegment, number> {
   const out: Record<ProductionSubsegment, number> = {
     general: 0, 'produced-v-sold': 0, availability: 0, 'closing-range': 0, efficiency: 0,
   };
   for (const q of QUESTION_LIBRARY) {
+    if (visibleIds && !visibleIds.has(q.id)) continue;
     if (q.segment === 'production' && q.subsegment) out[q.subsegment] += 1;
   }
   return out;
@@ -1712,11 +1720,680 @@ export const QUESTION_TABLE_QUERIES: Record<string, TableQuery> = {
   },
 };
 
-export function getQuestionTableQuery(id: string): TableQuery | null {
+// ────────────────────────────────────────────────────────────────────────────
+// Dunkin demo overlay (MVP-1 only)
+// ────────────────────────────────────────────────────────────────────────────
+//
+// The Dunkin persona's question library should ONLY surface questions that
+// can be answered with the uploaded Dunkin franchise CSVs. The objects below
+// carry the table queries and chart-id overrides for that persona.
+//
+// At runtime, the helpers in this file accept an optional `BriefingRole`
+// argument: when role === 'dunkin', the overlay is consulted first; otherwise
+// every other demo (Estate, Manager, Playtomic, …) sees zero behaviour
+// change. Keep the legacy `QUESTION_LIBRARY` and `QUESTION_TABLE_QUERIES`
+// untouched.
+
+export const DUNKIN_QUESTION_TABLE_QUERIES: Record<string, TableQuery> = {
+  // ── Sales ────────────────────────────────────────────────────────────────
+  'sales-what-were-total-sales-across': {
+    sources: ['weeklyFlashTotals'],
+    columns: [
+      { kind: 'field', field: { source: 'weeklyFlashTotals', key: 'week_number' }, header: 'Week No.' },
+      { kind: 'field', field: { source: 'weeklyFlashTotals', key: 'week_start_date' }, header: 'Start Date' },
+      { kind: 'field', field: { source: 'weeklyFlashTotals', key: 'week_end_date' }, header: 'End Date' },
+      { kind: 'field', field: { source: 'weeklyFlashTotals', key: 'overall_total' }, header: 'Overall total' },
+      { kind: 'field', field: { source: 'weeklyFlashTotals', key: 'ec_total' }, header: 'EC total' },
+      { kind: 'field', field: { source: 'weeklyFlashTotals', key: 'non_ec_total' }, header: 'Non-EC total' },
+    ],
+    sort: [{ key: 'weeklyFlashTotals.week_start_date', dir: 'desc' }],
+    limit: 12,
+  },
+  'sales-which-site-had-the-highest': {
+    sources: ['weeklySalesBySite'],
+    columns: [
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'location' }, header: 'Location' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'dm' }, header: 'DM' },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'weeklySalesBySite', key: 'total_sales' },
+        header: 'Total sales',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'weeklySalesBySite', key: 'customer_count' },
+        header: 'Customers',
+        type: 'integer',
+      },
+      {
+        kind: 'agg',
+        agg: 'avg',
+        field: { source: 'weeklySalesBySite', key: 'average_ticket' },
+        header: 'Avg ticket',
+        type: 'currency',
+      },
+    ],
+    groupBy: [
+      { source: 'weeklySalesBySite', key: 'location' },
+      { source: 'weeklySalesBySite', key: 'name' },
+      { source: 'weeklySalesBySite', key: 'dm' },
+    ],
+    sort: [{ key: 'Total sales', dir: 'desc' }],
+    limit: 50,
+  },
+  'sales-how-did-sales-perform-this': {
+    sources: ['weeklySalesBySite'],
+    columns: [
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'location' }, header: 'Location' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'dm' }, header: 'DM' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'week_number' }, header: 'Week No.' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'total_sales' }, header: 'Total sales' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'total_sales_ly' }, header: 'Total sales LY' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'total_sales_ly_pct' }, header: 'Total LY %' },
+    ],
+    sort: [
+      { key: 'weeklySalesBySite.week_start_date', dir: 'desc' },
+      { key: 'weeklySalesBySite.total_sales', dir: 'desc' },
+    ],
+    limit: 60,
+  },
+  'sales-what-is-the-average-transaction': {
+    sources: ['flashReport'],
+    columns: [
+      { kind: 'field', field: { source: 'flashReport', key: 'location' }, header: 'Location' },
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      {
+        kind: 'agg',
+        agg: 'avg',
+        field: { source: 'flashReport', key: 'average_ticket' },
+        header: 'Avg transaction',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'flashReport', key: 'customer_count' },
+        header: 'Customers',
+        type: 'integer',
+      },
+    ],
+    groupBy: [
+      { source: 'flashReport', key: 'location' },
+      { source: 'flashReport', key: 'name' },
+    ],
+    sort: [{ key: 'Avg transaction', dir: 'desc' }],
+    limit: 50,
+  },
+  'sales-how-has-revenue-trended-over': {
+    sources: ['weeklyFlashTotals'],
+    columns: [
+      { kind: 'field', field: { source: 'weeklyFlashTotals', key: 'week_number' }, header: 'Week No.' },
+      { kind: 'field', field: { source: 'weeklyFlashTotals', key: 'week_start_date' }, header: 'Start Date' },
+      { kind: 'field', field: { source: 'weeklyFlashTotals', key: 'overall_total' }, header: 'Overall total' },
+    ],
+    sort: [{ key: 'weeklyFlashTotals.week_start_date', dir: 'desc' }],
+    limit: 12,
+  },
+  'sales-which-product-category-generates-the': {
+    sources: ['dailySalesByProductFamily'],
+    columns: [
+      {
+        kind: 'field',
+        field: { source: 'dailySalesByProductFamily', key: 'major_group_name' },
+        header: 'Major group',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'dailySalesByProductFamily', key: 'gross_sales' },
+        header: 'Gross sales',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'dailySalesByProductFamily', key: 'qty' },
+        header: 'Quantity',
+        type: 'integer',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'dailySalesByProductFamily', key: 'transaction_count' },
+        header: 'Transactions',
+        type: 'integer',
+      },
+    ],
+    groupBy: [{ source: 'dailySalesByProductFamily', key: 'major_group_name' }],
+    sort: [{ key: 'Gross sales', dir: 'desc' }],
+  },
+  'sales-which-site-has-shown-the': {
+    sources: ['weeklySalesBySite'],
+    columns: [
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'location' }, header: 'Location' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'dm' }, header: 'DM' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'week_number' }, header: 'Week No.' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'total_sales_ly_pct' }, header: 'Growth vs LY %' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'total_sales' }, header: 'Total sales' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'total_sales_ly' }, header: 'Total sales LY' },
+    ],
+    sort: [
+      { key: 'weeklySalesBySite.total_sales_ly_pct', dir: 'desc' },
+    ],
+    limit: 25,
+  },
+  'sales-what-is-the-revenue-per': {
+    sources: ['flashReport'],
+    columns: [
+      { kind: 'field', field: { source: 'flashReport', key: 'location' }, header: 'Location' },
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'flashReport', key: 'week_number' }, header: 'Week No.' },
+      { kind: 'field', field: { source: 'flashReport', key: 'total_sales' }, header: 'Total sales' },
+      { kind: 'field', field: { source: 'flashReport', key: 'labor_hours' }, header: 'Labor hrs' },
+      { kind: 'field', field: { source: 'flashReport', key: 'labor_earnings' }, header: 'Labor $' },
+      { kind: 'field', field: { source: 'flashReport', key: 'labor_sales_pct' }, header: 'Labor %' },
+    ],
+    sort: [
+      { key: 'flashReport.week_number', dir: 'desc' },
+      { key: 'flashReport.total_sales', dir: 'desc' },
+    ],
+    limit: 60,
+  },
+  'sales-what-is-the-average-basket': {
+    sources: ['flashReport'],
+    columns: [
+      { kind: 'field', field: { source: 'flashReport', key: 'location' }, header: 'Location' },
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      {
+        kind: 'agg',
+        agg: 'avg',
+        field: { source: 'flashReport', key: 'average_ticket' },
+        header: 'Avg basket',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'flashReport', key: 'customer_count' },
+        header: 'Customers',
+        type: 'integer',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'flashReport', key: 'total_sales' },
+        header: 'Total sales',
+        type: 'currency',
+      },
+    ],
+    groupBy: [
+      { source: 'flashReport', key: 'location' },
+      { source: 'flashReport', key: 'name' },
+    ],
+    sort: [{ key: 'Avg basket', dir: 'desc' }],
+    limit: 50,
+  },
+  'sales-how-does-site-performance-rank': {
+    sources: ['weeklySalesBySite'],
+    columns: [
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'location' }, header: 'Location' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'dm' }, header: 'DM' },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'weeklySalesBySite', key: 'total_sales' },
+        header: 'Total sales',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'avg',
+        field: { source: 'weeklySalesBySite', key: 'average_ticket' },
+        header: 'Avg ticket',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'weeklySalesBySite', key: 'customer_count' },
+        header: 'Customers',
+        type: 'integer',
+      },
+    ],
+    groupBy: [
+      { source: 'weeklySalesBySite', key: 'location' },
+      { source: 'weeklySalesBySite', key: 'name' },
+      { source: 'weeklySalesBySite', key: 'dm' },
+    ],
+    sort: [{ key: 'Total sales', dir: 'desc' }],
+    limit: 50,
+  },
+  'sales-which-sites-underperformed-against-their': {
+    sources: ['weeklySalesBySite'],
+    columns: [
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'location' }, header: 'Location' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'dm' }, header: 'DM' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'week_number' }, header: 'Week No.' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'total_sales' }, header: 'Total sales' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'total_sales_ly' }, header: 'Total sales LY' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'total_sales_ly_pct' }, header: 'Total LY %' },
+    ],
+    filters: [
+      {
+        field: { source: 'weeklySalesBySite', key: 'total_sales_ly_pct' },
+        op: 'lt',
+        value: 0,
+      },
+    ],
+    sort: [{ key: 'weeklySalesBySite.total_sales_ly_pct', dir: 'asc' }],
+    limit: 50,
+  },
+  'sales-how-has-our-average-transaction': {
+    sources: ['flashReport'],
+    columns: [
+      { kind: 'field', field: { source: 'flashReport', key: 'week_number' }, header: 'Week No.' },
+      { kind: 'field', field: { source: 'flashReport', key: 'week_start_date' }, header: 'Start Date' },
+      {
+        kind: 'agg',
+        agg: 'avg',
+        field: { source: 'flashReport', key: 'average_ticket' },
+        header: 'Avg ticket',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'flashReport', key: 'customer_count' },
+        header: 'Customers',
+        type: 'integer',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'flashReport', key: 'total_sales' },
+        header: 'Total sales',
+        type: 'currency',
+      },
+    ],
+    groupBy: [
+      { source: 'flashReport', key: 'week_number' },
+      { source: 'flashReport', key: 'week_start_date' },
+    ],
+    sort: [{ key: 'flashReport.week_start_date', dir: 'desc' }],
+    limit: 13,
+  },
+  // ── COGS ─────────────────────────────────────────────────────────────────
+  'cogs-what-is-our-cogs-as': {
+    sources: ['flashReport'],
+    columns: [
+      { kind: 'field', field: { source: 'flashReport', key: 'location' }, header: 'Location' },
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      {
+        kind: 'agg',
+        agg: 'avg',
+        field: { source: 'flashReport', key: 'food_supply_cost_sales_pct' },
+        header: 'Food cost %',
+        type: 'percent',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'flashReport', key: 'food_supply_cost' },
+        header: 'Food cost $',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'flashReport', key: 'total_sales' },
+        header: 'Total sales',
+        type: 'currency',
+      },
+    ],
+    groupBy: [
+      { source: 'flashReport', key: 'location' },
+      { source: 'flashReport', key: 'name' },
+    ],
+    sort: [{ key: 'Food cost %', dir: 'desc' }],
+    limit: 50,
+  },
+  'cogs-how-has-our-overall-cogs': {
+    sources: ['flashReport'],
+    columns: [
+      { kind: 'field', field: { source: 'flashReport', key: 'week_number' }, header: 'Week No.' },
+      { kind: 'field', field: { source: 'flashReport', key: 'week_start_date' }, header: 'Start Date' },
+      {
+        kind: 'agg',
+        agg: 'avg',
+        field: { source: 'flashReport', key: 'food_supply_cost_sales_pct' },
+        header: 'Food cost %',
+        type: 'percent',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'flashReport', key: 'food_supply_cost' },
+        header: 'Food cost $',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'flashReport', key: 'total_sales' },
+        header: 'Total sales',
+        type: 'currency',
+      },
+    ],
+    groupBy: [
+      { source: 'flashReport', key: 'week_number' },
+      { source: 'flashReport', key: 'week_start_date' },
+    ],
+    sort: [{ key: 'flashReport.week_start_date', dir: 'desc' }],
+    limit: 12,
+  },
+  'cogs-which-sites-are-consistently-over': {
+    sources: ['flashReport'],
+    columns: [
+      { kind: 'field', field: { source: 'flashReport', key: 'location' }, header: 'Location' },
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'flashReport', key: 'dm' }, header: 'DM' },
+      { kind: 'field', field: { source: 'flashReport', key: 'week_number' }, header: 'Week No.' },
+      {
+        kind: 'field',
+        field: { source: 'flashReport', key: 'food_supply_cost' },
+        header: 'Food cost $',
+      },
+      {
+        kind: 'field',
+        field: { source: 'flashReport', key: 'food_supply_cost_sales_pct' },
+        header: 'Food cost %',
+      },
+      { kind: 'field', field: { source: 'flashReport', key: 'total_sales' }, header: 'Total sales' },
+    ],
+    filters: [
+      {
+        field: { source: 'flashReport', key: 'food_supply_cost_sales_pct' },
+        op: 'gt',
+        value: 30,
+      },
+    ],
+    sort: [{ key: 'flashReport.food_supply_cost_sales_pct', dir: 'desc' }],
+    limit: 50,
+  },
+  // ── Labour ───────────────────────────────────────────────────────────────
+  'labour-what-is-labour-as-a': {
+    sources: ['flashReport'],
+    columns: [
+      { kind: 'field', field: { source: 'flashReport', key: 'location' }, header: 'Location' },
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      {
+        kind: 'agg',
+        agg: 'avg',
+        field: { source: 'flashReport', key: 'labor_sales_pct' },
+        header: 'Labor %',
+        type: 'percent',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'flashReport', key: 'labor_earnings' },
+        header: 'Labor $',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'flashReport', key: 'total_sales' },
+        header: 'Total sales',
+        type: 'currency',
+      },
+    ],
+    groupBy: [
+      { source: 'flashReport', key: 'location' },
+      { source: 'flashReport', key: 'name' },
+    ],
+    sort: [{ key: 'Labor %', dir: 'desc' }],
+    limit: 50,
+  },
+  'labour-which-site-has-the-highest': {
+    sources: ['flashReport'],
+    columns: [
+      { kind: 'field', field: { source: 'flashReport', key: 'location' }, header: 'Location' },
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'flashReport', key: 'week_number' }, header: 'Week No.' },
+      { kind: 'field', field: { source: 'flashReport', key: 'labor_earnings' }, header: 'Labor $' },
+      { kind: 'field', field: { source: 'flashReport', key: 'customer_count' }, header: 'Customers' },
+      { kind: 'field', field: { source: 'flashReport', key: 'labor_sales_pct' }, header: 'Labor %' },
+    ],
+    sort: [{ key: 'flashReport.labor_earnings', dir: 'desc' }],
+    limit: 50,
+  },
+  'labour-what-is-the-average-hourly': {
+    sources: ['weeklyLaborCosts'],
+    columns: [
+      { kind: 'field', field: { source: 'weeklyLaborCosts', key: 'location' }, header: 'Location' },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'weeklyLaborCosts', key: 'gross_pay' },
+        header: 'Gross pay',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'weeklyLaborCosts', key: 'total_hours' },
+        header: 'Total hrs',
+        type: 'number',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'weeklyLaborCosts', key: 'overtime_hours_total' },
+        header: 'OT hrs',
+        type: 'number',
+      },
+    ],
+    groupBy: [{ source: 'weeklyLaborCosts', key: 'location' }],
+    sort: [{ key: 'Total hrs', dir: 'desc' }],
+    limit: 50,
+  },
+  'labour-how-many-overtime-hours-were': {
+    sources: ['weeklyLaborCosts'],
+    columns: [
+      { kind: 'field', field: { source: 'weeklyLaborCosts', key: 'location' }, header: 'Location' },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'weeklyLaborCosts', key: 'overtime_hours_total' },
+        header: 'OT hrs',
+        type: 'number',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'weeklyLaborCosts', key: 'overtime_earnings_total' },
+        header: 'OT $',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'weeklyLaborCosts', key: 'total_hours' },
+        header: 'Total hrs',
+        type: 'number',
+      },
+    ],
+    groupBy: [{ source: 'weeklyLaborCosts', key: 'location' }],
+    sort: [{ key: 'OT hrs', dir: 'desc' }],
+    limit: 50,
+  },
+  'labour-which-site-has-the-best': {
+    sources: ['flashReport'],
+    columns: [
+      { kind: 'field', field: { source: 'flashReport', key: 'location' }, header: 'Location' },
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'flashReport', key: 'week_number' }, header: 'Week No.' },
+      { kind: 'field', field: { source: 'flashReport', key: 'total_sales' }, header: 'Total sales' },
+      { kind: 'field', field: { source: 'flashReport', key: 'labor_earnings' }, header: 'Labor $' },
+      { kind: 'field', field: { source: 'flashReport', key: 'labor_sales_pct' }, header: 'Labor %' },
+    ],
+    sort: [{ key: 'flashReport.labor_sales_pct', dir: 'asc' }],
+    limit: 50,
+  },
+  'labour-what-is-our-total-weekly': {
+    sources: ['weeklyLaborCosts'],
+    columns: [
+      { kind: 'field', field: { source: 'weeklyLaborCosts', key: 'location' }, header: 'Location' },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'weeklyLaborCosts', key: 'gross_pay' },
+        header: 'Gross pay',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'weeklyLaborCosts', key: 'total_hours' },
+        header: 'Total hrs',
+        type: 'number',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'weeklyLaborCosts', key: 'overtime_earnings_total' },
+        header: 'OT $',
+        type: 'currency',
+      },
+    ],
+    groupBy: [{ source: 'weeklyLaborCosts', key: 'location' }],
+    sort: [{ key: 'Gross pay', dir: 'desc' }],
+    limit: 50,
+  },
+  'labour-how-has-our-labour-trended': {
+    sources: ['flashReport'],
+    columns: [
+      { kind: 'field', field: { source: 'flashReport', key: 'week_number' }, header: 'Week No.' },
+      { kind: 'field', field: { source: 'flashReport', key: 'week_start_date' }, header: 'Start Date' },
+      {
+        kind: 'agg',
+        agg: 'avg',
+        field: { source: 'flashReport', key: 'labor_sales_pct' },
+        header: 'Labor %',
+        type: 'percent',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'flashReport', key: 'labor_earnings' },
+        header: 'Labor $',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'flashReport', key: 'total_sales' },
+        header: 'Total sales',
+        type: 'currency',
+      },
+    ],
+    groupBy: [
+      { source: 'flashReport', key: 'week_number' },
+      { source: 'flashReport', key: 'week_start_date' },
+    ],
+    sort: [{ key: 'flashReport.week_start_date', dir: 'desc' }],
+    limit: 12,
+  },
+};
+
+/** Chart-id overrides applied for the Dunkin demo only. Each id matches a
+ *  CSV-backed chart in `DunkinAnalyticsCharts.tsx`. */
+export const DUNKIN_QUESTION_CHART_OVERRIDES: Record<string, DunkinAnalyticsChartId> = {
+  // Sales
+  'sales-what-were-total-sales-across': 'dunkin-total-sales-last-week',
+  'sales-which-site-had-the-highest': 'dunkin-top-stores-30d',
+  'sales-how-did-sales-perform-this': 'dunkin-lfl-vs-ly',
+  'sales-what-is-the-average-transaction': 'dunkin-avg-ticket-by-site',
+  'sales-how-has-revenue-trended-over': 'dunkin-revenue-trend-12wk',
+  'sales-which-product-category-generates-the': 'dunkin-product-category-sales',
+  'sales-which-site-has-shown-the': 'dunkin-mom-growth-by-site',
+  'sales-what-is-the-revenue-per': 'dunkin-revenue-per-labour-hour',
+  'sales-what-is-the-average-basket': 'dunkin-basket-size-by-site',
+  'sales-how-does-site-performance-rank': 'dunkin-site-rank-vs-network',
+  'sales-which-sites-underperformed-against-their': 'dunkin-underperformers',
+  'sales-how-has-our-average-transaction': 'dunkin-avg-ticket-trend',
+  // COGS
+  'cogs-what-is-our-cogs-as': 'dunkin-food-cost-pct-by-site',
+  'cogs-how-has-our-overall-cogs': 'dunkin-food-cost-pct-trend',
+  'cogs-which-sites-are-consistently-over': 'dunkin-food-cost-over-30',
+  // Labour
+  'labour-what-is-labour-as-a': 'dunkin-labour-pct-by-site',
+  'labour-which-site-has-the-highest': 'dunkin-labour-cost-per-txn',
+  'labour-what-is-the-average-hourly': 'dunkin-avg-hourly-labour-cost',
+  'labour-how-many-overtime-hours-were': 'dunkin-overtime-by-week',
+  'labour-which-site-has-the-best': 'dunkin-revenue-to-labour',
+  'labour-what-is-our-total-weekly': 'dunkin-weekly-labour-by-site',
+  'labour-how-has-our-labour-trended': 'dunkin-labour-pct-trend',
+};
+
+/** Set of question ids the Dunkin demo can answer end-to-end. Used by the
+ *  question-library picker to filter the visible list when role==='dunkin'. */
+export const DUNKIN_WIRED_QUESTION_IDS: ReadonlySet<string> = new Set(
+  Object.keys(DUNKIN_QUESTION_TABLE_QUERIES),
+);
+
+/** Persona type — kept narrow here to avoid pulling the full BriefingRole
+ *  union into this file (it's strict-equal compared as a string). */
+type PersonaRole = string | undefined;
+
+function isDunkin(role: PersonaRole): boolean {
+  return role === 'dunkin';
+}
+
+export function getQuestionTableQuery(
+  id: string,
+  role?: PersonaRole,
+): TableQuery | null {
+  if (isDunkin(role) && id in DUNKIN_QUESTION_TABLE_QUERIES) {
+    return DUNKIN_QUESTION_TABLE_QUERIES[id]!;
+  }
   return QUESTION_TABLE_QUERIES[id] ?? null;
 }
 
-export function questionShape(entry: QuestionEntry): QuestionShape {
+/** Returns the chart id to use for a given entry, layered for the Dunkin
+ *  persona. Other roles always see the curated `suggestedChartId`. */
+export function resolveSuggestedChartId(
+  entry: QuestionEntry,
+  role?: PersonaRole,
+): AnalyticsChartId | null {
+  if (isDunkin(role) && entry.id in DUNKIN_QUESTION_CHART_OVERRIDES) {
+    return DUNKIN_QUESTION_CHART_OVERRIDES[entry.id]!;
+  }
+  return entry.suggestedChartId ?? null;
+}
+
+export function questionShape(
+  entry: QuestionEntry,
+  role?: PersonaRole,
+): QuestionShape {
+  if (isDunkin(role)) {
+    const hasTable = entry.id in DUNKIN_QUESTION_TABLE_QUERIES;
+    const hasChart = entry.id in DUNKIN_QUESTION_CHART_OVERRIDES;
+    if (hasTable && hasChart) return 'both';
+    if (hasTable) return 'table';
+    if (hasChart) return 'chart';
+    // Dunkin-unwired questions fall through to the legacy hint so the popup's
+    // generic "ask Quinn in chat" path can still pick them up if they slip in.
+  }
   const hasTable = entry.id in QUESTION_TABLE_QUERIES;
   const hasChart = Boolean(entry.suggestedChartId);
   if (hasTable && hasChart) return 'both';
@@ -1729,13 +2406,17 @@ export function searchQuestions(
   segment?: QuestionSegment,
   subsegment?: ProductionSubsegment,
   shape?: QuestionShape,
+  role?: PersonaRole,
 ): QuestionEntry[] {
   const q = query.trim().toLowerCase();
   return QUESTION_LIBRARY.filter((entry) => {
+    // Dunkin demo only surfaces questions we have CSV data for. Every other
+    // demo continues to see the full curated library.
+    if (isDunkin(role) && !DUNKIN_WIRED_QUESTION_IDS.has(entry.id)) return false;
     if (segment && entry.segment !== segment) return false;
     if (subsegment && entry.subsegment !== subsegment) return false;
     if (shape) {
-      const s = questionShape(entry);
+      const s = questionShape(entry, role);
       if (shape === 'table' && s === 'chart') return false;
       if (shape === 'chart' && s === 'table') return false;
       // 'both' filter is unusual; treat as "no shape filter"

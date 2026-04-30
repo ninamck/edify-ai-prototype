@@ -83,7 +83,23 @@ const DEFAULT_TABS: Mvp1Tab[] = [
     id: 'sales-deep-dive',
     name: 'Sales Deep Dive',
     kind: 'tables',
-    tables: [],
+    tables: [
+      {
+        id: 'daily-sales-by-site-default',
+        title: 'Daily Sales By Location',
+        query: fullSourceQuery('dailySalesBySite'),
+      },
+      {
+        id: 'daily-operations-by-site-default',
+        title: 'Operations Daily Totals',
+        query: fullSourceQuery('dailyOperationsBySite'),
+      },
+      {
+        id: 'sales-deep-dive-product-family-default',
+        title: 'Daily Sales By Menu Item',
+        query: fullSourceQuery('dailySalesByProductFamily'),
+      },
+    ],
     charts: [],
   },
 ];
@@ -209,35 +225,40 @@ function refreshFlashReportName(tabs: Mvp1Tab[]): Mvp1Tab[] {
     // Title the seeded flash-report table "Weekly P&L" if the user hasn't
     // already given it a custom title. Older stored sessions seeded the
     // table with no title (it fell through to the source label "Flash report").
-    let tables = renamedTab.tables.map((tableInstance) => {
+    const tables = renamedTab.tables.map((tableInstance) => {
       if (tableInstance.id !== 'flash-report-default') return tableInstance;
       if (tableInstance.title?.trim()) return tableInstance;
       return { ...tableInstance, title: 'Weekly P&L' };
     });
 
-    // Backfill any seeded tables that aren't already in the user's stored
-    // tab. Append-only and id-keyed so this is safe to re-run; the user's
-    // own additions and any reorderings are preserved.
-    const flashReportSeedTab = DEFAULT_TABS.find(
-      (def): def is Extract<Mvp1Tab, { kind: 'tables' }> =>
-        def.kind === 'tables' && def.id === 'flash-report',
-    );
-    if (flashReportSeedTab) {
-      const existingTableIds = new Set(tables.map((tableInstance) => tableInstance.id));
-      const missingSeeds = flashReportSeedTab.tables.filter(
-        (seed) => !existingTableIds.has(seed.id),
-      );
-      if (missingSeeds.length > 0) {
-        tables = [...tables, ...missingSeeds];
-      }
-    }
-
     return { ...renamedTab, tables };
   });
 }
 
+/**
+ * For every pinned tables-tab that ships with seeded tables, append any seed
+ * the user is missing (matched by table id). Append-only and id-keyed so this
+ * is safe to re-run; the user's own additions and reorderings are preserved.
+ */
+function appendMissingPinnedSeeds(tabs: Mvp1Tab[]): Mvp1Tab[] {
+  return tabs.map((t) => {
+    if (t.kind !== 'tables') return t;
+    if (!PINNED_TAB_IDS.has(t.id)) return t;
+    const seedTab = DEFAULT_TABS.find(
+      (def): def is Extract<Mvp1Tab, { kind: 'tables' }> =>
+        def.kind === 'tables' && def.id === t.id,
+    );
+    if (!seedTab || seedTab.tables.length === 0) return t;
+    const existingTableIds = new Set(t.tables.map((tableInstance) => tableInstance.id));
+    const missingSeeds = seedTab.tables.filter((seed) => !existingTableIds.has(seed.id));
+    if (missingSeeds.length === 0) return t;
+    return { ...t, tables: [...t.tables, ...missingSeeds] };
+  });
+}
+
 function ensurePinnedTabs(state: StoredState): StoredState {
-  const withCharts = backfillCharts({ ...state, tabs: refreshFlashReportName(state.tabs) });
+  const seeded = appendMissingPinnedSeeds(refreshFlashReportName(state.tabs));
+  const withCharts = backfillCharts({ ...state, tabs: seeded });
   const existingIds = new Set(withCharts.tabs.map((t) => t.id));
   const dashboardDefault = DEFAULT_TABS.find((t) => t.kind === 'dashboard');
 

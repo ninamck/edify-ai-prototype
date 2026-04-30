@@ -3,20 +3,35 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Sparkles, X } from 'lucide-react';
+import { getDunkinInsight } from '@/components/Analytics/DunkinAnalyticsInsights';
 
 /**
  * A small Sparkles icon button shown on charts that have a Quinn comment.
  * Click to toggle a popover with the insight text. Click outside / Esc to close.
+ *
+ * When a `chartId` is provided and that id has a registered live-insight
+ * builder (Dunkin charts only at the moment), the popover hydrates with a
+ * data-driven narrative computed from the underlying CSV. Other chart ids
+ * keep the static `text` prop as the popover content — so legacy demos are
+ * unaffected.
  */
 export default function QuinnInsightButton({
   text,
+  chartId,
   placement = 'below',
 }: {
   text: string;
+  /** Optional chart id; when matched by a live-insight builder the popover
+   *  will replace `text` with a CSV-backed narrative on first open. */
+  chartId?: string;
   /** Where the popover opens relative to the button. */
   placement?: 'below' | 'left';
 }) {
   const [open, setOpen] = useState(false);
+  // Live insight (only used when `chartId` resolves through the registry).
+  // `null` means "not yet requested", `''` means "loading", anything else
+  // is the resolved narrative.
+  const [liveInsight, setLiveInsight] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -35,6 +50,36 @@ export default function QuinnInsightButton({
       window.removeEventListener('keydown', onKey);
     };
   }, [open]);
+
+  // Lazily fetch a live insight the first time the popover opens. Subsequent
+  // opens reuse the cached narrative; if the chartId changes we re-fetch.
+  useEffect(() => {
+    if (!open || !chartId) return;
+    if (liveInsight !== null) return; // already loaded for this chartId
+    const promise = getDunkinInsight(chartId);
+    if (!promise) return; // legacy chart id — fall back to static text
+    let cancelled = false;
+    setLiveInsight('');
+    promise
+      .then((value) => {
+        if (cancelled) return;
+        setLiveInsight(value && value.trim().length > 0 ? value : text);
+      })
+      .catch(() => {
+        if (!cancelled) setLiveInsight(text);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, chartId, liveInsight, text]);
+
+  // Reset cached insight if the consumer swaps the chartId in place.
+  useEffect(() => {
+    setLiveInsight(null);
+  }, [chartId]);
+
+  const isLoading = liveInsight === '';
+  const popoverText = liveInsight && liveInsight.length > 0 ? liveInsight : text;
 
   const popoverStyle =
     placement === 'left'
@@ -131,7 +176,13 @@ export default function QuinnInsightButton({
               </button>
             </div>
             <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', lineHeight: 1.55 }}>
-              {renderMarkdownLite(text)}
+              {isLoading ? (
+                <span style={{ fontStyle: 'italic', color: 'var(--color-text-muted)' }}>
+                  Crunching the numbers…
+                </span>
+              ) : (
+                renderMarkdownLite(popoverText)
+              )}
             </div>
           </motion.div>
         )}

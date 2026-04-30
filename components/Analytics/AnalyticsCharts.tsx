@@ -27,7 +27,14 @@ import {
   ZAxis,
 } from 'recharts';
 
-export type AnalyticsChartId =
+import {
+  DUNKIN_ANALYTICS_CONFIG,
+  renderDunkinAnalyticsChart,
+  type DunkinAnalyticsChartId,
+} from '@/components/Analytics/DunkinAnalyticsCharts';
+
+/** Original chart ids, backed by the cafe-estate mock data. */
+type LegacyAnalyticsChartId =
   | 'sales'
   | 'hour'
   | 'trend'
@@ -48,6 +55,20 @@ export type AnalyticsChartId =
   | 'prod-avail-scatter'
   | 'waste-category-treemap'
   | 'labour-day-radial';
+
+/**
+ * Union of every chart id the app knows about. Legacy ids continue to drive
+ * the cafe-estate / Playtomic demos exactly as before; Dunkin-prefixed ids
+ * are CSV-backed and only surface for the Dunkin persona's MVP-1 question
+ * library and any charts pinned from chat in that persona.
+ */
+export type AnalyticsChartId = LegacyAnalyticsChartId | DunkinAnalyticsChartId;
+
+export type { DunkinAnalyticsChartId } from '@/components/Analytics/DunkinAnalyticsCharts';
+
+function isDunkinChartId(id: AnalyticsChartId): id is DunkinAnalyticsChartId {
+  return typeof id === 'string' && id.startsWith('dunkin-');
+}
 
 const ACCENT = 'var(--color-accent-deep)';
 const ACCENT_MID = 'var(--color-accent-mid)';
@@ -1103,6 +1124,9 @@ export function LabourDayRadialChart() {
 // ── Render helper ─────────────────────────────────────────────────────────────
 
 export function renderAnalyticsChart(chartId: AnalyticsChartId) {
+  if (isDunkinChartId(chartId)) {
+    return renderDunkinAnalyticsChart(chartId);
+  }
   switch (chartId) {
     case 'sales':                  return <SalesChart />;
     case 'hour':                   return <HourChart />;
@@ -1234,4 +1258,6 @@ export const ANALYTICS_CONFIG: Record<AnalyticsChartId, {
     chartLabel: 'Here\'s labour as a % of revenue, by day of the week:',
     reasoning: '**Sunday is by far the worst at 31.2%** — revenue is low but staffing hasn\'t been cut to match. Saturday is the leanest at 24.6% (high sales, standard crew). Weekdays sit in a tight 26–28% band. Biggest opportunity: cut one back-of-house shift on Sunday — would bring the day in line with Friday\'s 28% and save ~£180/week at the estate level.',
   },
+  // ── Dunkin (CSV-backed; only used by the Dunkin persona) ────────────────────
+  ...DUNKIN_ANALYTICS_CONFIG,
 };

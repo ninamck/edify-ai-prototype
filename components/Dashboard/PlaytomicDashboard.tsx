@@ -118,7 +118,7 @@ export default function PlaytomicDashboard({
           <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', flex: 1, minWidth: 0 }}>
             {ANALYTICS_CONFIG[chartId].label}
           </span>
-          <QuinnInsightButton text={ANALYTICS_CONFIG[chartId].reasoning} />
+          <QuinnInsightButton chartId={chartId} text={ANALYTICS_CONFIG[chartId].reasoning} />
         </div>
         {renderAnalyticsChart(chartId)}
       </div>

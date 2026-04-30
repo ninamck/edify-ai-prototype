@@ -22,6 +22,7 @@ import {
   renderAnalyticsChart,
   type AnalyticsChartId,
 } from '@/components/Analytics/AnalyticsCharts';
+import QuinnInsightButton from '@/components/Dashboard/parts/QuinnInsightButton';
 
 export type TableOrigin =
   | { kind: 'preset'; questionId: string; questionText: string }
@@ -56,6 +57,9 @@ type Props = {
   onEditQuery?: (instance: TableInstance) => void;
   charts?: ChartInstance[];
   onChartsChange?: (next: ChartInstance[]) => void;
+  /** Initial view-level filters for this tab. Defaults to the standard preset
+   *  (District Manager, Week No.). Pass `[]` for tabs that should start clean. */
+  defaultFilters?: ViewFilter[];
 } & EmptyStateActions;
 
 export function genTableId(): string {
@@ -111,10 +115,11 @@ export default function TablesTab({
   onBrowseLibrary,
   onOpenBuilder,
   onEditQuery,
+  defaultFilters = DEFAULT_VIEW_FILTERS,
 }: Props) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
-  const [viewFilters, setViewFilters] = useState<ViewFilter[]>(DEFAULT_VIEW_FILTERS);
+  const [viewFilters, setViewFilters] = useState<ViewFilter[]>(defaultFilters);
 
   function addBlankTable() {
     onChange([...tables, defaultBlankInstance()]);
@@ -575,17 +580,26 @@ function ChartCard({
             </span>
           )}
         </div>
-        {canRemove && (
-          <button
-            type="button"
-            onClick={onRemove}
-            style={iconButton}
-            aria-label="Remove chart"
-            title="Remove chart"
-          >
-            <Trash2 size={13} strokeWidth={2.2} />
-          </button>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {cfg?.reasoning && (
+            <QuinnInsightButton
+              chartId={instance.chartId}
+              text={cfg.reasoning}
+              placement="left"
+            />
+          )}
+          {canRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              style={iconButton}
+              aria-label="Remove chart"
+              title="Remove chart"
+            >
+              <Trash2 size={13} strokeWidth={2.2} />
+            </button>
+          )}
+        </div>
       </div>
       <div
         style={{

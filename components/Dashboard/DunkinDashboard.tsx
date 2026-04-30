@@ -110,7 +110,7 @@ export default function DunkinDashboard({
           >
             {ANALYTICS_CONFIG[chartId].label}
           </span>
-          <QuinnInsightButton text={ANALYTICS_CONFIG[chartId].reasoning} />
+          <QuinnInsightButton chartId={chartId} text={ANALYTICS_CONFIG[chartId].reasoning} />
         </div>
         {renderAnalyticsChart(chartId)}
       </div>

@@ -25,6 +25,7 @@ import type { BriefingRole } from '@/components/briefing';
 import { timeAwareGreeting } from '@/components/briefing';
 import type { AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
 import { renderAnalyticsChart, ANALYTICS_CONFIG } from '@/components/Analytics/AnalyticsCharts';
+import { getDunkinInsight } from '@/components/Analytics/DunkinAnalyticsInsights';
 import {
   runQuery,
   type TableQuery,
@@ -2129,15 +2130,34 @@ export default function Feed({
       return () => clearTimeout(t);
     }
     if (analyticsStep === 2) {
-      const t = setTimeout(() => {
+      let cancelled = false;
+      const fallback = ANALYTICS_CONFIG[analyticsType].reasoning;
+      const insightPromise = getDunkinInsight(analyticsType);
+      const t = setTimeout(async () => {
+        // For Dunkin chart ids the narrative is computed from the live CSV
+        // data so it actually tells the user what's in the chart. Other chart
+        // ids fall through to the static `reasoning` string instantly.
+        let text = fallback;
+        if (insightPromise) {
+          try {
+            const dynamic = await insightPromise;
+            if (dynamic && dynamic.trim().length > 0) text = dynamic;
+          } catch {
+            // Swallow — keep fallback narrative.
+          }
+        }
+        if (cancelled) return;
         setMessages(prev => [...prev, {
           id: `q-analytics-reasoning-${analyticsType}-${Date.now()}`,
           role: 'quinn' as const,
-          text: ANALYTICS_CONFIG[analyticsType].reasoning,
+          text,
         }]);
         setAnalyticsStep(3);
       }, 800);
-      return () => clearTimeout(t);
+      return () => {
+        cancelled = true;
+        clearTimeout(t);
+      };
     }
   }, [analyticsType, analyticsStep]);
 

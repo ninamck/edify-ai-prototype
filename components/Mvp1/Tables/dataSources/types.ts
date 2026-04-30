@@ -6,6 +6,10 @@ export type Column = {
   type: ColumnType;
   defaultVisible?: boolean;
   width?: number;
+  /** When 'left', the column stays glued to the left edge while other columns
+   *  scroll horizontally beneath it. The DataTable handles z-index, opaque
+   *  cell backgrounds, and a right divider automatically. */
+  pinned?: 'left';
 };
 
 export type DataSourceId =
@@ -18,7 +22,9 @@ export type DataSourceId =
   | 'foodSupplyCosts'
   | 'ndcpDivisions'
   | 'dailySalesByProductFamily'
-  | 'weeklyLaborCosts';
+  | 'weeklyLaborCosts'
+  | 'dailySalesBySite'
+  | 'dailyOperationsBySite';
 
 export type DataSource<TRow extends Record<string, unknown> = Record<string, unknown>> = {
   id: DataSourceId;

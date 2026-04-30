@@ -9,6 +9,8 @@ import { foodSupplyCostsSource } from './foodSupplyCosts';
 import { ndcpDivisionsSource } from './ndcpDivisions';
 import { dailySalesByProductFamilySource } from './dailySalesByProductFamily';
 import { weeklyLaborCostsSource } from './weeklyLaborCosts';
+import { dailySalesBySiteSource } from './dailySalesBySite';
+import { dailyOperationsBySiteSource } from './dailyOperationsBySite';
 
 export type { DataSourceId, DataSource, Column, ColumnType } from './types';
 export { formatCell } from './types';
@@ -22,6 +24,8 @@ export type { FoodSupplyCostRow } from './foodSupplyCosts';
 export type { NdcpDivisionRow } from './ndcpDivisions';
 export type { DailySalesByProductFamilyRow } from './dailySalesByProductFamily';
 export type { WeeklyLaborCostsRow } from './weeklyLaborCosts';
+export type { DailySalesBySiteRow } from './dailySalesBySite';
+export type { DailyOperationsBySiteRow } from './dailyOperationsBySite';
 
 export const DATA_SOURCES: Record<DataSourceId, DataSource> = {
   flashReport: flashReportSource as DataSource,
@@ -34,6 +38,8 @@ export const DATA_SOURCES: Record<DataSourceId, DataSource> = {
   ndcpDivisions: ndcpDivisionsSource as DataSource,
   dailySalesByProductFamily: dailySalesByProductFamilySource as DataSource,
   weeklyLaborCosts: weeklyLaborCostsSource as DataSource,
+  dailySalesBySite: dailySalesBySiteSource as DataSource,
+  dailyOperationsBySite: dailyOperationsBySiteSource as DataSource,
 };
 
 export const ALL_SOURCE_IDS: DataSourceId[] = [
@@ -47,4 +53,6 @@ export const ALL_SOURCE_IDS: DataSourceId[] = [
   'ndcpDivisions',
   'dailySalesByProductFamily',
   'weeklyLaborCosts',
+  'dailySalesBySite',
+  'dailyOperationsBySite',
 ];

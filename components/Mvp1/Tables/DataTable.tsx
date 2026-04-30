@@ -208,6 +208,21 @@ export default function DataTable<TRow extends Row>({
     return map;
   }, [columns]);
 
+  // Pre-compute the cumulative left offsets for any pinned-left columns so a
+  // future second pinned column would slot in next to the first without
+  // overlapping. Hidden columns don't take up offset space.
+  const pinnedLeftOffsetById = useMemo(() => {
+    const map = new Map<string, number>();
+    let runningLeft = 0;
+    for (const col of table.getVisibleLeafColumns()) {
+      const meta = colByKey.get(col.id);
+      if (meta?.pinned !== 'left') continue;
+      map.set(col.id, runningLeft);
+      runningLeft += col.getSize();
+    }
+    return map;
+  }, [colByKey, table, columnVisibility]);
+
   const totalRows = table.getFilteredRowModel().rows.length;
   const { pageIndex, pageSize } = table.getState().pagination;
   const start = totalRows === 0 ? 0 : pageIndex * pageSize + 1;
@@ -439,6 +454,8 @@ export default function DataTable<TRow extends Row>({
                     const filterValue = header.column.getFilterValue();
                     const hasFilter = filterValue !== undefined && filterValue !== '';
                     const isFilterOpen = filterPopover?.columnId === header.column.id;
+                    const pinnedLeft = pinnedLeftOffsetById.get(header.column.id);
+                    const isPinned = pinnedLeft !== undefined;
                     return (
                       <th
                         key={header.id}
@@ -458,6 +475,14 @@ export default function DataTable<TRow extends Row>({
                           borderBottom: '1px solid var(--color-border-subtle)',
                           textAlign: align,
                           verticalAlign: 'middle',
+                          ...(isPinned
+                            ? {
+                                position: 'sticky',
+                                left: pinnedLeft,
+                                zIndex: 3,
+                                boxShadow: '1px 0 0 var(--color-border-subtle)',
+                              }
+                            : null),
                         }}
                       >
                         <div
@@ -573,38 +598,52 @@ export default function DataTable<TRow extends Row>({
                   </td>
                 </tr>
               ) : (
-                table.getRowModel().rows.map((row, idx) => (
-                  <tr
-                    key={row.id}
-                    style={{
-                      background: idx % 2 === 0 ? '#fff' : 'rgba(58,48,40,0.018)',
-                    }}
-                  >
-                    {row.getVisibleCells().map((cell) => {
-                      const meta = colByKey.get(cell.column.id);
-                      const align = meta && meta.type !== 'string' && meta.type !== 'date' ? 'right' : 'left';
-                      return (
-                        <td
-                          key={cell.id}
-                          style={{
-                            padding: '7px 10px',
-                            borderBottom: '1px solid var(--color-border-faint, rgba(58,48,40,0.06))',
-                            color: 'var(--color-text-primary)',
-                            textAlign: align,
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            maxWidth: cell.column.getSize(),
-                            fontVariantNumeric: align === 'right' ? 'tabular-nums' : 'normal',
-                          }}
-                          title={String(cell.getValue() ?? '')}
-                        >
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))
+                table.getRowModel().rows.map((row, idx) => {
+                  // Pre-composite the striped row tint over white so pinned
+                  // cells (which need an opaque background to occlude scrolling
+                  // content beneath them) match the row colour exactly.
+                  const isOdd = idx % 2 !== 0;
+                  const rowBg = isOdd ? '#fff' : 'rgba(58,48,40,0.018)';
+                  const pinnedCellBg = isOdd ? '#fff' : 'rgb(251,250,250)';
+                  return (
+                    <tr key={row.id} style={{ background: rowBg }}>
+                      {row.getVisibleCells().map((cell) => {
+                        const meta = colByKey.get(cell.column.id);
+                        const align = meta && meta.type !== 'string' && meta.type !== 'date' ? 'right' : 'left';
+                        const pinnedLeft = pinnedLeftOffsetById.get(cell.column.id);
+                        const isPinned = pinnedLeft !== undefined;
+                        return (
+                          <td
+                            key={cell.id}
+                            style={{
+                              padding: '7px 10px',
+                              borderBottom: '1px solid var(--color-border-faint, rgba(58,48,40,0.06))',
+                              color: 'var(--color-text-primary)',
+                              textAlign: align,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              maxWidth: cell.column.getSize(),
+                              fontVariantNumeric: align === 'right' ? 'tabular-nums' : 'normal',
+                              ...(isPinned
+                                ? {
+                                    position: 'sticky',
+                                    left: pinnedLeft,
+                                    zIndex: 1,
+                                    background: pinnedCellBg,
+                                    boxShadow: '1px 0 0 var(--color-border-subtle)',
+                                  }
+                                : null),
+                            }}
+                            title={String(cell.getValue() ?? '')}
+                          >
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

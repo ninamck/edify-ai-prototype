@@ -23,7 +23,7 @@ export type WeeklyLaborCostsRow = {
 };
 
 export const WEEKLY_LABOR_COSTS_COLUMNS: Column[] = [
-  { key: 'location', header: 'Location', type: 'string', defaultVisible: true, width: 100 },
+  { key: 'location', header: 'Location', type: 'string', defaultVisible: true, width: 100, pinned: 'left' },
   { key: 'dm', header: 'DM', type: 'string', defaultVisible: true, width: 160 },
   { key: 'pay_period_end_date', header: 'Period end', type: 'date', defaultVisible: true, width: 130 },
   { key: 'week_number', header: 'Week No.', type: 'integer', defaultVisible: true, width: 90 },

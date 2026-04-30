@@ -137,7 +137,7 @@ export default function ManagerDashboard({
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', flex: 1, minWidth: 0 }}>
               {ANALYTICS_CONFIG[pinned].label}
             </span>
-            <QuinnInsightButton text={ANALYTICS_CONFIG[pinned].reasoning} />
+            <QuinnInsightButton chartId={pinned} text={ANALYTICS_CONFIG[pinned].reasoning} />
           </div>
           {renderAnalyticsChart(pinned)}
         </div>

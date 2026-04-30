@@ -263,6 +263,7 @@ function projectColumns(
       type: c.type ?? meta?.type ?? 'string',
       defaultVisible: meta?.defaultVisible ?? true,
       width: c.width ?? meta?.width,
+      pinned: meta?.pinned,
     };
   });
 
