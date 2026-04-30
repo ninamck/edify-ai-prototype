@@ -31,17 +31,70 @@ const DEFAULT_TABS: Mvp1Tab[] = [
   { id: 'dashboard', name: 'Dashboard', kind: 'dashboard' },
   {
     id: 'flash-report',
-    name: 'Reports',
+    name: 'Dashboard 2',
     kind: 'tables',
     tables: [
       {
         id: 'flash-report-default',
+        title: 'Weekly P&L',
         query: fullSourceQuery('flashReport'),
+      },
+      {
+        id: 'weekly-flash-totals-default',
+        title: 'Weekly P&L Totals',
+        query: fullSourceQuery('weeklyFlashTotals'),
+      },
+      {
+        id: 'weekly-sales-by-site-default',
+        title: 'Weekly Sales',
+        query: fullSourceQuery('weeklySalesBySite'),
+      },
+      {
+        id: 'food-supply-costs-default',
+        title: 'Weekly Food & Supply Cost',
+        query: fullSourceQuery('foodSupplyCosts'),
+      },
+      {
+        id: 'ndcp-divisions-default',
+        title: 'Daily Cost Per Location & NDCP Division',
+        query: fullSourceQuery('ndcpDivisions'),
+      },
+      {
+        id: 'daily-sales-by-product-family-default',
+        title: 'Daily Sales By Location & Product Family',
+        query: fullSourceQuery('dailySalesByProductFamily'),
+      },
+      {
+        id: 'weekly-labor-costs-default',
+        title: 'Labor Costs',
+        query: fullSourceQuery('weeklyLaborCosts'),
       },
     ],
     charts: [],
   },
+  {
+    id: 'summary-analysis',
+    name: 'Summary Analysis',
+    kind: 'tables',
+    tables: [],
+    charts: [],
+  },
+  {
+    id: 'sales-deep-dive',
+    name: 'Sales Deep Dive',
+    kind: 'tables',
+    tables: [],
+    charts: [],
+  },
 ];
+
+// Tabs the user is not allowed to remove. The Dashboard tab is enforced
+// separately by its `kind === 'dashboard'` discriminator.
+export const PINNED_TAB_IDS = new Set<string>([
+  'flash-report',
+  'summary-analysis',
+  'sales-deep-dive',
+]);
 
 const DEFAULT_STATE: StoredState = {
   tabs: DEFAULT_TABS,
@@ -60,7 +113,7 @@ function isValidStoredV4(parsed: unknown): parsed is StoredState {
     if (tab.kind === 'tables') {
       if (!Array.isArray(tab.tables)) return false;
       // `charts` is optional in older v4 payloads; we backfill it in
-      // `ensureDashboardTab` rather than failing validation here.
+      // `ensurePinnedTabs` rather than failing validation here.
       return tab.tables.every((entry) => {
         if (!entry || typeof entry !== 'object') return false;
         const ti = entry as { id?: unknown; query?: unknown };
@@ -115,10 +168,9 @@ function migrateV3ToV4(state: { tabs: LegacyMvp1Tab[]; activeId: string }): Stor
           query: fullSourceQuery(sourceId) as TableQuery,
         };
       });
-      // Rename the legacy "Report" tab to "Reports" while we're here (matches
-      // the rename done in 12:19 PM).
-      const name = tab.id === 'flash-report' && tab.name === 'Report' ? 'Reports' : tab.name;
-      return { ...tab, name, tables, charts: [] };
+      // `refreshFlashReportName` (called from ensurePinnedTabs) brings the
+      // legacy "Report"/"Reports" default in line with the current label.
+      return { ...tab, tables, charts: [] };
     }),
   };
 }
@@ -141,18 +193,79 @@ function backfillCharts(state: StoredState): StoredState {
   };
 }
 
-function ensureDashboardTab(state: StoredState): StoredState {
-  const hasDashboard = state.tabs.some((t) => t.kind === 'dashboard');
-  const withCharts = backfillCharts(state);
-  if (hasDashboard) {
-    const activeId = withCharts.tabs.some((t) => t.id === state.activeId)
-      ? state.activeId
-      : withCharts.tabs[0].id;
-    return { ...withCharts, activeId };
+// Older default names for the seeded "flash-report" tab. If a stored payload
+// still has one of these, we treat it as "user hasn't renamed" and bring it
+// in line with the current default ("Dashboard 2") so the live demo reflects
+// the latest copy without forcing a localStorage wipe.
+const FLASH_REPORT_LEGACY_NAMES = new Set<string>(['Report', 'Reports']);
+
+function refreshFlashReportName(tabs: Mvp1Tab[]): Mvp1Tab[] {
+  return tabs.map((t) => {
+    if (t.id !== 'flash-report' || t.kind !== 'tables') return t;
+
+    const renamedTab =
+      FLASH_REPORT_LEGACY_NAMES.has(t.name) ? { ...t, name: 'Dashboard 2' } : t;
+
+    // Title the seeded flash-report table "Weekly P&L" if the user hasn't
+    // already given it a custom title. Older stored sessions seeded the
+    // table with no title (it fell through to the source label "Flash report").
+    let tables = renamedTab.tables.map((tableInstance) => {
+      if (tableInstance.id !== 'flash-report-default') return tableInstance;
+      if (tableInstance.title?.trim()) return tableInstance;
+      return { ...tableInstance, title: 'Weekly P&L' };
+    });
+
+    // Backfill any seeded tables that aren't already in the user's stored
+    // tab. Append-only and id-keyed so this is safe to re-run; the user's
+    // own additions and any reorderings are preserved.
+    const flashReportSeedTab = DEFAULT_TABS.find(
+      (def): def is Extract<Mvp1Tab, { kind: 'tables' }> =>
+        def.kind === 'tables' && def.id === 'flash-report',
+    );
+    if (flashReportSeedTab) {
+      const existingTableIds = new Set(tables.map((tableInstance) => tableInstance.id));
+      const missingSeeds = flashReportSeedTab.tables.filter(
+        (seed) => !existingTableIds.has(seed.id),
+      );
+      if (missingSeeds.length > 0) {
+        tables = [...tables, ...missingSeeds];
+      }
+    }
+
+    return { ...renamedTab, tables };
+  });
+}
+
+function ensurePinnedTabs(state: StoredState): StoredState {
+  const withCharts = backfillCharts({ ...state, tabs: refreshFlashReportName(state.tabs) });
+  const existingIds = new Set(withCharts.tabs.map((t) => t.id));
+  const dashboardDefault = DEFAULT_TABS.find((t) => t.kind === 'dashboard');
+
+  // Build the next tab list: dashboard first (preserved if present, otherwise
+  // re-seeded from defaults), then existing tabs, then any missing pinned
+  // defaults appended at the end so they're always reachable.
+  let nextTabs: Mvp1Tab[];
+  if (existingIds.has('dashboard')) {
+    nextTabs = withCharts.tabs;
+  } else if (dashboardDefault) {
+    nextTabs = [dashboardDefault, ...withCharts.tabs];
+  } else {
+    nextTabs = withCharts.tabs;
   }
-  const tabs = [DEFAULT_TABS[0], ...withCharts.tabs];
-  const activeId = tabs.some((t) => t.id === state.activeId) ? state.activeId : tabs[0].id;
-  return { tabs, activeId };
+
+  const refreshedIds = new Set(nextTabs.map((t) => t.id));
+  for (const def of DEFAULT_TABS) {
+    if (def.id === 'dashboard') continue;
+    if (!PINNED_TAB_IDS.has(def.id)) continue;
+    if (refreshedIds.has(def.id)) continue;
+    nextTabs = [...nextTabs, def];
+  }
+
+  const activeId = nextTabs.some((t) => t.id === state.activeId)
+    ? state.activeId
+    : (nextTabs[0]?.id ?? 'dashboard');
+
+  return { tabs: nextTabs, activeId };
 }
 
 function loadStored(): StoredState | null {
@@ -162,7 +275,7 @@ function loadStored(): StoredState | null {
     const rawV4 = window.localStorage.getItem(STORAGE_KEY);
     if (rawV4) {
       const parsed = JSON.parse(rawV4);
-      if (isValidStoredV4(parsed)) return ensureDashboardTab(parsed);
+      if (isValidStoredV4(parsed)) return ensurePinnedTabs(parsed);
     }
 
     // 2. Fall back to v3 and migrate forward.
@@ -170,7 +283,7 @@ function loadStored(): StoredState | null {
     if (rawV3) {
       const parsed = JSON.parse(rawV3);
       if (isValidLegacyV3(parsed)) {
-        const migrated = ensureDashboardTab(migrateV3ToV4(parsed));
+        const migrated = ensurePinnedTabs(migrateV3ToV4(parsed));
         // Persist forward so we don't keep migrating on every load.
         try {
           window.localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
@@ -245,6 +358,7 @@ export function useMvp1Tabs() {
       setTabs((prev) => {
         const target = prev.find((t) => t.id === id);
         if (!target || target.kind === 'dashboard') return prev;
+        if (PINNED_TAB_IDS.has(id)) return prev;
         const next = prev.filter((t) => t.id !== id);
         return next.length > 0 ? next : DEFAULT_TABS;
       });

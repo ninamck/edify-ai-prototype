@@ -20,6 +20,7 @@ const DEFAULT_LAYOUT_BY_ROLE: LayoutByRole = {
   gm: MANAGER_DEFAULT_LAYOUT,
   cheryl: ESTATE_DEFAULT_LAYOUT,
   playtomic: [],
+  dunkin: [],
 };
 
 function mergeWithDefaults(
@@ -43,6 +44,7 @@ function loadStored(): LayoutByRole | null {
       gm: mergeWithDefaults(parsed.gm, MANAGER_DEFAULT_LAYOUT),
       cheryl: mergeWithDefaults(parsed.cheryl, ESTATE_DEFAULT_LAYOUT),
       playtomic: parsed.playtomic ?? [],
+      dunkin: parsed.dunkin ?? [],
     };
   } catch {
     return null;

@@ -12,7 +12,13 @@ export type DataSourceId =
   | 'flashReport'
   | 'sales'
   | 'waste'
-  | 'labour';
+  | 'labour'
+  | 'weeklyFlashTotals'
+  | 'weeklySalesBySite'
+  | 'foodSupplyCosts'
+  | 'ndcpDivisions'
+  | 'dailySalesByProductFamily'
+  | 'weeklyLaborCosts';
 
 export type DataSource<TRow extends Record<string, unknown> = Record<string, unknown>> = {
   id: DataSourceId;

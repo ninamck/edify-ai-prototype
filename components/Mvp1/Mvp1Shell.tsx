@@ -9,6 +9,7 @@ import DateRangePicker, { type DateRange } from '@/components/Mvp1/DateRangePick
 import EstateDashboard from '@/components/Dashboard/EstateDashboard';
 import ManagerDashboard from '@/components/Dashboard/ManagerDashboard';
 import PlaytomicDashboard from '@/components/Dashboard/PlaytomicDashboard';
+import DunkinDashboard from '@/components/Dashboard/DunkinDashboard';
 import AddInsightPopup from '@/components/Dashboard/AddInsightPopup';
 import DashboardEditToolbar from '@/components/Dashboard/DashboardEditToolbar';
 import Mvp1Tabs from '@/components/Mvp1/Tabs/Mvp1Tabs';
@@ -18,20 +19,23 @@ import TablesTab, {
   type ChartInstance,
   type TableInstance,
 } from '@/components/Mvp1/Tables/TablesTab';
-import TableBuilderModal from '@/components/Mvp1/Tables/TableBuilderModal';
-import type { TableQuery } from '@/components/Mvp1/Tables/query';
+import { fullSourceQuery, type TableQuery } from '@/components/Mvp1/Tables/query';
 import { pinnedChartIdOf, type DashboardLayoutEntry } from '@/components/Dashboard/layoutTypes';
 import type { BriefingPhase } from '@/components/briefing';
 import { phaseFromHour, timeAwareGreeting } from '@/components/briefing';
 import { useDemoBriefingRole } from '@/components/DemoControls/demoStore';
 import type { PhaseOverride } from '@/components/PhaseSwitcher';
-import type { AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
+import { ANALYTICS_CONFIG, type AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useDashboardLayout } from '@/hooks/useDashboardLayout';
 import { useMvp1Tabs } from '@/hooks/useMvp1Tabs';
 import MobileShell from '@/components/MobileShell/MobileShell';
 
 const MOBILE_SHELL_BREAKPOINT = '(max-width: 500px)';
+
+function truncate(value: string, max: number): string {
+  return value.length > max ? value.slice(0, max) + '…' : value;
+}
 
 export default function Mvp1Shell() {
   const router = useRouter();
@@ -45,13 +49,19 @@ export default function Mvp1Shell() {
   const [addInsightTargetTabId, setAddInsightTargetTabId] = useState<string | null>(null);
   const [phaseOverride, setPhaseOverride] = useState<PhaseOverride>('auto');
   const [dateRange, setDateRange] = useState<DateRange>('week');
-  const [builderState, setBuilderState] = useState<{
-    open: boolean;
-    initialQuery?: TableQuery;
-    initialTitle?: string;
+  /**
+   * When set, the AddInsightPopup opens directly into a Quinn-led chat seeded
+   * with this starter table. Used by the empty-state "Build manually" card and
+   * the per-table "Edit query" pencil. `replacingTableId` triggers an
+   * in-place table swap on pin (rather than appending a new card).
+   */
+  const [tableChatState, setTableChatState] = useState<{
+    prompt: string;
+    query: TableQuery;
+    title?: string;
     targetTabId: string | null;
     replacingTableId?: string;
-  }>({ open: false, targetTabId: null });
+  } | null>(null);
   const {
     tabs,
     activeId,
@@ -114,19 +124,47 @@ export default function Mvp1Shell() {
    * the active tab is a tables-style view, we append a ChartInstance to that
    * view so it renders alongside the user's tables.
    */
-  function pinChartToCurrentView(chartId: AnalyticsChartId) {
-    if (activeTab.kind === 'dashboard') {
+  /**
+   * Pin a chart to a specific tab. Used by the AddInsightPopup pin-target
+   * dropdown so the user can pick any of their views (dashboard included).
+   */
+  function pinChartToTarget(chartId: AnalyticsChartId, targetId: string) {
+    const target = tabs.find((t) => t.id === targetId);
+    if (!target) return;
+    if (target.kind === 'dashboard') {
       addPinnedChart(chartId);
       return;
     }
-    if (activeTab.charts.some((c) => c.chartId === chartId)) return;
+    if (target.charts.some((c) => c.chartId === chartId)) return;
     const newChart: ChartInstance = { id: genChartId(), chartId };
-    appendChartToTab(activeTab.id, newChart);
+    appendChartToTab(target.id, newChart);
   }
 
   /**
-   * Set of chart IDs already present in whichever view we'd currently pin to,
-   * so the AddInsightPopup can disable already-pinned chips.
+   * Create a brand-new tables-style view containing this chart. Returns the
+   * new tab id so the chat dropdown can mark it as pinned.
+   */
+  function pinChartToNewView(chartId: AnalyticsChartId): string {
+    const cfg = ANALYTICS_CONFIG[chartId];
+    const name = cfg?.label ? truncate(cfg.label, 24) : 'View';
+    const newId = addTablesTab({
+      name,
+      tables: [],
+    });
+    // Append the chart instance after the tab is created.
+    appendChartToTab(newId, { id: genChartId(), chartId });
+    return newId;
+  }
+
+  /** List of pin-target options shown in the chart pin dropdown. */
+  const chartPinTargets = tabs.map((t) => ({ id: t.id, label: t.name }));
+
+  /** Default-highlighted target (the currently visible tab). */
+  const defaultChartPinTargetId = activeTab.id;
+
+  /**
+   * Set of chart IDs already present in whichever view is currently visible.
+   * Used to grey out already-pinned chips in the question-library browse view.
    */
   const pinnedInCurrentTarget: Set<AnalyticsChartId> =
     activeTab.kind === 'dashboard'
@@ -144,8 +182,27 @@ export default function Mvp1Shell() {
 
   const greeting = timeAwareGreeting(briefingRole);
   const dateControls = <DateRangePicker value={dateRange} onChange={setDateRange} />;
+  const siteName =
+    briefingRole === 'dunkin'
+      ? "Dunkin'"
+      : briefingRole === 'playtomic'
+        ? 'Playtomic'
+        : 'Fitzroy Espresso';
 
   function renderDashboardTab() {
+    if (briefingRole === 'dunkin') {
+      return (
+        <DunkinDashboard
+          layout={currentLayout}
+          editing={editingDashboard}
+          onLayoutChange={updateCurrentLayout}
+          onToggleEdit={() => setEditingDashboard((v) => !v)}
+          onAddInsight={() => setAddInsightOpen(true)}
+          onRemovePinned={removePinnedChart}
+          toolbarLeadingControls={dateControls}
+        />
+      );
+    }
     if (briefingRole === 'playtomic') {
       return (
         <PlaytomicDashboard
@@ -211,7 +268,7 @@ export default function Mvp1Shell() {
         }}
       >
         <Mvp1TopBar
-          siteName="Fitzroy Espresso"
+          siteName={siteName}
           phaseOverride={phaseOverride}
           onPhaseOverrideChange={setPhaseOverride}
         />
@@ -223,7 +280,7 @@ export default function Mvp1Shell() {
             flexDirection: 'column',
             minWidth: 0,
             minHeight: 0,
-            padding: 12,
+            padding: '12px 12px 56px',
             gap: 12,
             overflow: 'auto',
             background: 'var(--color-bg-surface)',
@@ -297,6 +354,7 @@ export default function Mvp1Shell() {
                 />
               </div>
               <TablesTab
+                editing={editingTablesView}
                 tables={activeTab.tables}
                 charts={activeTab.charts}
                 onChange={(next) => updateTablesForTab(activeTab.id, next)}
@@ -311,23 +369,29 @@ export default function Mvp1Shell() {
                   setAddInsightTargetTabId(activeTab.id);
                   setAddInsightOpen(true);
                 }}
-                onOpenBuilder={() =>
-                  setBuilderState({
-                    open: true,
-                    initialQuery: undefined,
-                    initialTitle: undefined,
+                onOpenBuilder={() => {
+                  setAddInsightShape('all');
+                  setAddInsightTargetTabId(activeTab.id);
+                  setTableChatState({
+                    prompt: 'Help me build a custom table from scratch.',
+                    query: fullSourceQuery('flashReport'),
+                    title: 'Custom table',
                     targetTabId: activeTab.id,
-                  })
-                }
-                onEditQuery={(instance) =>
-                  setBuilderState({
-                    open: true,
-                    initialQuery: instance.query,
-                    initialTitle: instance.title,
+                  });
+                  setAddInsightOpen(true);
+                }}
+                onEditQuery={(instance) => {
+                  setAddInsightShape('all');
+                  setAddInsightTargetTabId(activeTab.id);
+                  setTableChatState({
+                    prompt: `Help me modify "${instance.title?.trim() || 'this table'}".`,
+                    query: instance.query,
+                    title: instance.title || 'My table',
                     targetTabId: activeTab.id,
                     replacingTableId: instance.id,
-                  })
-                }
+                  });
+                  setAddInsightOpen(true);
+                }}
               />
             </div>
           )}
@@ -336,9 +400,12 @@ export default function Mvp1Shell() {
 
       <AddInsightPopup
         open={addInsightOpen}
-        onClose={() => setAddInsightOpen(false)}
+        onClose={() => {
+          setAddInsightOpen(false);
+          setTableChatState(null);
+        }}
         briefingRole={briefingRole}
-        onAddToDashboard={pinChartToCurrentView}
+        onAddToDashboard={addPinnedChart}
         onViewDashboard={() => {
           setAddInsightOpen(false);
           router.push('/mvp-1');
@@ -347,6 +414,19 @@ export default function Mvp1Shell() {
         layout="side-sheet"
         defaultShape={addInsightShape}
         pinTarget="view"
+        pinTargets={chartPinTargets}
+        defaultPinTargetId={defaultChartPinTargetId}
+        onAddChartToTarget={pinChartToTarget}
+        onAddChartToNewView={pinChartToNewView}
+        autoChatTable={
+          tableChatState
+            ? {
+                prompt: tableChatState.prompt,
+                query: tableChatState.query,
+                title: tableChatState.title,
+              }
+            : undefined
+        }
         onPickTable={(entry, tableQuery) => {
           const tabId = addInsightTargetTabId ?? activeTab.id;
           const target = tabs.find((t) => t.id === tabId);
@@ -362,12 +442,12 @@ export default function Mvp1Shell() {
           setAddInsightOpen(false);
         }}
         onPinTable={({ title, query, prompt }) => {
-          const tabId = addInsightTargetTabId ?? activeTab.id;
+          const tabId = tableChatState?.targetTabId ?? addInsightTargetTabId ?? activeTab.id;
           const target = tabs.find((t) => t.id === tabId);
           if (!target || target.kind !== 'tables') {
             // No tables-tab to pin to — open as a new view instead.
             const newId = addTablesTab({
-              name: title.length > 24 ? title.slice(0, 24) + '…' : title,
+              name: truncate(title, 24),
               tables: [
                 {
                   id: genTableId(),
@@ -378,6 +458,20 @@ export default function Mvp1Shell() {
               ],
             });
             setActiveId(newId);
+            return;
+          }
+          // Edit-query flow: replace the original table in place. We clear the
+          // chat state so any subsequent pins in the same chat session add new
+          // tables rather than overwriting again.
+          if (tableChatState?.replacingTableId) {
+            const replacingId = tableChatState.replacingTableId;
+            const next = target.tables.map((t) =>
+              t.id === replacingId
+                ? { ...t, title, query, origin: { kind: 'quinn' as const, prompt } }
+                : t,
+            );
+            updateTablesForTab(tabId, next);
+            setTableChatState((prev) => (prev ? { ...prev, replacingTableId: undefined } : prev));
             return;
           }
           const newInstance: TableInstance = {
@@ -404,31 +498,6 @@ export default function Mvp1Shell() {
         }}
       />
 
-      <TableBuilderModal
-        open={builderState.open}
-        initialQuery={builderState.initialQuery}
-        initialTitle={builderState.initialTitle}
-        onClose={() => setBuilderState({ open: false, targetTabId: null })}
-        onSave={({ title, query }) => {
-          const tabId = builderState.targetTabId ?? activeTab.id;
-          const targetTab = tabs.find((t) => t.id === tabId);
-          if (!targetTab || targetTab.kind !== 'tables') return;
-          if (builderState.replacingTableId) {
-            const next = targetTab.tables.map((t) =>
-              t.id === builderState.replacingTableId ? { ...t, title, query } : t,
-            );
-            updateTablesForTab(tabId, next);
-          } else {
-            const newInstance: TableInstance = {
-              id: genTableId(),
-              title,
-              query,
-              origin: { kind: 'manual' },
-            };
-            updateTablesForTab(tabId, [...targetTab.tables, newInstance]);
-          }
-        }}
-      />
     </div>
   );
 }

@@ -135,6 +135,7 @@ export const DEFAULT_FLOOR_ACTIONS_BY_ROLE: Record<BriefingRole, FloorAction[]> 
     { id: 'receive-delivery', label: 'Receive delivery', iconKey: 'Truck', visible: true },
   ],
   playtomic: DEFAULT_FLOOR_ACTIONS,
+  dunkin: DEFAULT_FLOOR_ACTIONS,
 };
 
 /* ── Icon picker mini-popup ── */

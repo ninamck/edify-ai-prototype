@@ -1,10 +1,22 @@
 'use client';
 
-import { useEffect, useState, type CSSProperties } from 'react';
-import { Plus, Trash2, Database, Sparkles, ListChecks, Pencil } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import {
+  Plus,
+  Trash2,
+  Database,
+  Sparkles,
+  ListChecks,
+  Pencil,
+  GripVertical,
+} from 'lucide-react';
 import DataTable from './DataTable';
 import { DATA_SOURCES, type Column } from './dataSources';
-import { fullSourceQuery, runQuery, type TableQuery } from './query';
+import { fullSourceQuery, runQuery, type Filter, type TableQuery } from './query';
+import ViewFilterBar, {
+  DEFAULT_VIEW_FILTERS,
+  type ViewFilter,
+} from './ViewFilterBar';
 import {
   ANALYTICS_CONFIG,
   renderAnalyticsChart,
@@ -37,6 +49,8 @@ export type EmptyStateActions = {
 };
 
 type Props = {
+  /** When true, drag handles and remove affordances are visible. */
+  editing?: boolean;
   tables: TableInstance[];
   onChange: (next: TableInstance[]) => void;
   onEditQuery?: (instance: TableInstance) => void;
@@ -60,7 +74,35 @@ function defaultBlankInstance(): TableInstance {
   };
 }
 
+/**
+ * Merge view-level filters into a table's query. A filter only applies if at
+ * least one of the query's underlying sources actually has a column with that
+ * key — otherwise we silently skip it (e.g. Week No. doesn't apply to the
+ * NDCP daily table because that table doesn't have a `week_number` column).
+ */
+function applyViewFilters(query: TableQuery, viewFilters: ViewFilter[]): TableQuery {
+  const extras: Filter[] = [];
+  for (const vf of viewFilters) {
+    if (vf.selected.length === 0) continue;
+    const hasColumn = query.sources.some((sid) =>
+      DATA_SOURCES[sid].columns.some((c) => c.key === vf.columnKey),
+    );
+    if (!hasColumn) continue;
+    extras.push({
+      field: { key: vf.columnKey },
+      op: 'in',
+      value: vf.selected.slice(),
+    });
+  }
+  if (extras.length === 0) return query;
+  return {
+    ...query,
+    filters: [...(query.filters ?? []), ...extras],
+  };
+}
+
 export default function TablesTab({
+  editing = false,
   tables,
   onChange,
   charts = [],
@@ -70,6 +112,10 @@ export default function TablesTab({
   onOpenBuilder,
   onEditQuery,
 }: Props) {
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [viewFilters, setViewFilters] = useState<ViewFilter[]>(DEFAULT_VIEW_FILTERS);
+
   function addBlankTable() {
     onChange([...tables, defaultBlankInstance()]);
   }
@@ -80,6 +126,17 @@ export default function TablesTab({
 
   function renameTable(id: string, title: string) {
     onChange(tables.map((t) => (t.id === id ? { ...t, title } : t)));
+  }
+
+  function reorderTables(sourceId: string, targetId: string) {
+    if (sourceId === targetId) return;
+    const fromIdx = tables.findIndex((t) => t.id === sourceId);
+    const toIdx = tables.findIndex((t) => t.id === targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const next = tables.slice();
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    onChange(next);
   }
 
   function removeChart(id: string) {
@@ -108,22 +165,40 @@ export default function TablesTab({
         />
       ) : (
         <>
+          <ViewFilterBar filters={viewFilters} onChange={setViewFilters} />
           {tables.map((t, idx) => (
             <TableCard
               key={t.id}
               instance={t}
+              viewFilters={viewFilters}
               index={idx}
-              canRemove={tables.length + charts.length > 1}
+              canRemove={editing && tables.length + charts.length > 1}
+              canReorder={editing && tables.length > 1}
+              isDragging={draggingId === t.id}
+              isDropTarget={dropTargetId === t.id && draggingId !== null && draggingId !== t.id}
               onRemove={() => removeTable(t.id)}
               onRename={(title) => renameTable(t.id, title)}
               onEditQuery={onEditQuery ? () => onEditQuery(t) : undefined}
+              onDragStart={() => setDraggingId(t.id)}
+              onDragEnter={() => {
+                if (draggingId && draggingId !== t.id) setDropTargetId(t.id);
+              }}
+              onDragEnd={() => {
+                setDraggingId(null);
+                setDropTargetId(null);
+              }}
+              onDrop={(sourceId) => {
+                reorderTables(sourceId, t.id);
+                setDraggingId(null);
+                setDropTargetId(null);
+              }}
             />
           ))}
           {charts.map((c) => (
             <ChartCard
               key={c.id}
               instance={c}
-              canRemove={tables.length + charts.length > 1}
+              canRemove={editing && tables.length + charts.length > 1}
               onRemove={() => removeChart(c.id)}
             />
           ))}
@@ -154,33 +229,67 @@ export default function TablesTab({
   );
 }
 
+const DRAG_MIME = 'application/x-edify-table-id';
+
 function TableCard({
   instance,
+  viewFilters,
   index,
   canRemove,
+  canReorder,
+  isDragging,
+  isDropTarget,
   onRemove,
   onRename,
   onEditQuery,
+  onDragStart,
+  onDragEnter,
+  onDragEnd,
+  onDrop,
 }: {
   instance: TableInstance;
+  viewFilters: ViewFilter[];
   index: number;
   canRemove: boolean;
+  canReorder: boolean;
+  isDragging: boolean;
+  isDropTarget: boolean;
   onRemove: () => void;
   onRename: (title: string) => void;
   onEditQuery?: () => void;
+  onDragStart: () => void;
+  onDragEnter: () => void;
+  onDragEnd: () => void;
+  onDrop: (sourceId: string) => void;
 }) {
   const [columns, setColumns] = useState<Column[] | null>(null);
   const [rows, setRows] = useState<Record<string, unknown>[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [draftTitle, setDraftTitle] = useState(instance.title ?? '');
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  // Only draggable while the user is actively grabbing the grip handle. This
+  // prevents accidental drags from the title button or row content.
+  const [dragArmed, setDragArmed] = useState(false);
+
+  // Re-run when either the table's own query OR the view-level filters change.
+  // We pre-compute a stable signature for the filter set so referential
+  // identity changes (new array on every keystroke) don't cause spurious reloads.
+  const filterSignature = useMemo(() => {
+    return viewFilters
+      .filter((f) => f.selected.length > 0)
+      .map((f) => `${f.columnKey}:${f.selected.slice().sort().join(',')}`)
+      .sort()
+      .join('|');
+  }, [viewFilters]);
 
   useEffect(() => {
     let cancelled = false;
     setError(null);
     setRows(null);
     setColumns(null);
-    runQuery(instance.query)
+    const effectiveQuery = applyViewFilters(instance.query, viewFilters);
+    runQuery(effectiveQuery)
       .then((result) => {
         if (cancelled) return;
         setColumns(result.columns);
@@ -194,7 +303,8 @@ function TableCard({
     return () => {
       cancelled = true;
     };
-  }, [instance.query]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instance.query, filterSignature]);
 
   const primarySource = DATA_SOURCES[instance.query.sources[0]];
   const fallbackTitle = primarySource?.label ?? 'Table';
@@ -213,6 +323,29 @@ function TableCard({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        {canReorder && (
+          <span
+            role="button"
+            aria-label="Drag to reorder table"
+            title="Drag to reorder"
+            onMouseDown={() => setDragArmed(true)}
+            onMouseUp={() => setDragArmed(false)}
+            onMouseLeave={() => setDragArmed(false)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 22,
+              height: 22,
+              borderRadius: 4,
+              cursor: 'grab',
+              color: 'var(--color-text-muted)',
+              flexShrink: 0,
+            }}
+          >
+            <GripVertical size={14} strokeWidth={2.2} />
+          </span>
+        )}
         {editingTitle ? (
           <input
             autoFocus
@@ -311,13 +444,62 @@ function TableCard({
   );
 
   return (
-    <DataTable
-      columns={columns ?? []}
-      data={rows ?? []}
-      loading={(rows === null || columns === null) && !error}
-      error={error}
-      header={header}
-    />
+    <div
+      ref={cardRef}
+      draggable={canReorder && dragArmed}
+      onDragStart={(e) => {
+        if (!canReorder || !dragArmed) {
+          e.preventDefault();
+          return;
+        }
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData(DRAG_MIME, instance.id);
+        // Fallback for browsers that won't fire drop without text/plain.
+        e.dataTransfer.setData('text/plain', instance.id);
+        if (cardRef.current) {
+          // Use the card itself as the drag preview so the user sees what's moving.
+          e.dataTransfer.setDragImage(cardRef.current, 24, 24);
+        }
+        onDragStart();
+      }}
+      onDragEnter={() => {
+        if (canReorder) onDragEnter();
+      }}
+      onDragOver={(e) => {
+        if (!canReorder) return;
+        if (Array.from(e.dataTransfer.types).includes(DRAG_MIME) || e.dataTransfer.types.includes('text/plain')) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+        }
+      }}
+      onDrop={(e) => {
+        if (!canReorder) return;
+        const sourceId =
+          e.dataTransfer.getData(DRAG_MIME) || e.dataTransfer.getData('text/plain');
+        if (!sourceId) return;
+        e.preventDefault();
+        onDrop(sourceId);
+      }}
+      onDragEnd={() => {
+        setDragArmed(false);
+        onDragEnd();
+      }}
+      style={{
+        opacity: isDragging ? 0.4 : 1,
+        transition: 'opacity 0.12s ease, box-shadow 0.12s ease, outline 0.12s ease',
+        borderRadius: 12,
+        outline: isDropTarget ? '2px solid var(--color-accent-active)' : '2px solid transparent',
+        outlineOffset: -2,
+      }}
+    >
+      <DataTable
+        columns={columns ?? []}
+        data={rows ?? []}
+        loading={(rows === null || columns === null) && !error}
+        error={error}
+        header={header}
+      />
+    </div>
   );
 }
 
@@ -489,8 +671,8 @@ function EmptyState({
         {onOpenBuilder && (
           <ChoiceCard
             icon={<Database size={16} strokeWidth={2.2} color="var(--color-text-secondary)" />}
-            title="Build manually"
-            description="Pick sources, columns, filters and group-by yourself."
+            title="Build from scratch"
+            description="Quinn opens with a starter table you can refine in chat."
             onClick={onOpenBuilder}
           />
         )}

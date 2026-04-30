@@ -277,7 +277,7 @@ function PanelBody() {
 
       <div>
         <div style={sectionLabelStyle}>Briefing persona</div>
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
           {BRIEFING_ROLES.map((r) => {
             const active = briefingRole === r.id;
             return (
@@ -285,7 +285,7 @@ function PanelBody() {
                 key={r.id}
                 type="button"
                 onClick={() => setDemoBriefingRole(r.id as BriefingRole)}
-                style={pillOptionStyle(active)}
+                style={{ ...pillOptionStyle(active), flex: '0 1 auto' }}
               >
                 {r.short}
               </button>

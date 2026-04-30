@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Plus, X, Table2 } from 'lucide-react';
-import type { Mvp1Tab } from '@/hooks/useMvp1Tabs';
+import { PINNED_TAB_IDS, type Mvp1Tab } from '@/hooks/useMvp1Tabs';
 
 type Props = {
   tabs: Mvp1Tab[];
@@ -191,7 +191,7 @@ function Tab({
   const [draft, setDraft] = useState(tab.name);
   const [hovered, setHovered] = useState(false);
   const isDashboard = tab.kind === 'dashboard';
-  const canRemove = !isDashboard && tab.id !== 'flash-report';
+  const canRemove = !isDashboard && !PINNED_TAB_IDS.has(tab.id);
 
   function commit() {
     if (draft.trim()) onRename(draft);
