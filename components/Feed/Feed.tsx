@@ -1382,57 +1382,318 @@ function QuinnThinkingContent() {
 
 // ─── Analytics chart bubble content ─────────────────────────────────────────
 
+export type ChartPinTarget = {
+  id: string;
+  label: string;
+};
+
 function AnalyticsChartContent({
   chartId,
-  isPinned,
-  onAdd,
+  pinnedTargetIds,
+  pinTargets,
+  defaultPinTargetId,
+  onAddToTarget,
+  onAddToNewView,
   pinLabel,
   pinnedLabel,
 }: {
   chartId: AnalyticsChartId;
-  isPinned: boolean;
-  onAdd: () => void;
+  /** Targets this chart is already pinned into during this session. */
+  pinnedTargetIds: Set<string>;
+  /** When set, render a dropdown of view targets. Otherwise show the simple
+   *  single-target button (legacy dashboard flow). */
+  pinTargets?: ChartPinTarget[];
+  defaultPinTargetId?: string;
+  onAddToTarget: (targetId: string) => void;
+  onAddToNewView?: () => void;
   pinLabel: string;
   pinnedLabel: string;
 }) {
+  const hasMultiTarget = !!pinTargets && pinTargets.length > 0;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (!wrapperRef.current) return;
+      if (!wrapperRef.current.contains(e.target as Node)) setMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [menuOpen]);
+
+  const defaultTarget =
+    pinTargets?.find((t) => t.id === defaultPinTargetId) ?? pinTargets?.[0] ?? null;
+  const isDefaultPinned = defaultTarget ? pinnedTargetIds.has(defaultTarget.id) : false;
+  const allPinned =
+    hasMultiTarget && pinTargets!.every((t) => pinnedTargetIds.has(t.id));
+
+  // Single-target mode: simple Add-to-dashboard button (legacy / non-MVP1 flows).
+  if (!hasMultiTarget) {
+    const isPinned = isDefaultPinned || pinnedTargetIds.size > 0;
+    return (
+      <div style={{ marginTop: '10px' }}>
+        <div style={chartFrameStyle}>
+          {renderAnalyticsChart(chartId)}
+          {analyticsChartLegend(chartId)}
+        </div>
+        <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={() => onAddToTarget(defaultPinTargetId ?? 'dashboard')}
+            disabled={isPinned}
+            style={pinButtonStyle(isPinned)}
+          >
+            <Pin size={12} strokeWidth={2} />
+            {isPinned ? pinnedLabel : pinLabel}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ marginTop: '10px' }}>
-      <div style={{
-        borderRadius: '10px',
-        border: '1px solid var(--color-border-subtle)',
-        overflow: 'hidden',
-        background: '#fff',
-        padding: '12px 8px 8px',
-      }}>
+      <div style={chartFrameStyle}>
         {renderAnalyticsChart(chartId)}
         {analyticsChartLegend(chartId)}
       </div>
-      <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'flex-end' }}>
+      <div
+        ref={wrapperRef}
+        style={{
+          marginTop: '10px',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          position: 'relative',
+        }}
+      >
         <button
           type="button"
-          onClick={onAdd}
-          disabled={isPinned}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '7px 14px',
-            borderRadius: '100px',
-            border: isPinned ? 'none' : '1.5px solid var(--color-border)',
-            background: isPinned ? 'var(--color-success-light, #f0fdf4)' : '#fff',
-            color: isPinned ? '#166534' : 'var(--color-text-secondary)',
-            fontSize: '12px',
-            fontWeight: 600,
-            fontFamily: 'var(--font-primary)',
-            cursor: isPinned ? 'default' : 'pointer',
-          }}
+          onClick={() => setMenuOpen((v) => !v)}
+          disabled={allPinned}
+          style={pinButtonStyle(allPinned, true)}
         >
           <Pin size={12} strokeWidth={2} />
-          {isPinned ? pinnedLabel : pinLabel}
+          <span>
+            {allPinned
+              ? 'Pinned to all views'
+              : isDefaultPinned
+                ? `Pin to another view`
+                : pinLabel}
+          </span>
+          <ChevronDown size={12} strokeWidth={2.2} />
         </button>
+        <AnimatePresence>
+          {menuOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.12 }}
+              style={{
+                position: 'absolute',
+                bottom: 'calc(100% + 6px)',
+                right: 0,
+                zIndex: 10,
+                background: '#fff',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: 10,
+                boxShadow: '0 10px 30px rgba(3,28,89,0.12)',
+                padding: 4,
+                minWidth: 200,
+                fontFamily: 'var(--font-primary)',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  color: 'var(--color-text-muted)',
+                  padding: '6px 10px 4px',
+                }}
+              >
+                Pin to view
+              </div>
+              {pinTargets!.map((t) => {
+                const pinned = pinnedTargetIds.has(t.id);
+                const isDefault = t.id === defaultPinTargetId;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    disabled={pinned}
+                    onClick={() => {
+                      onAddToTarget(t.id);
+                      setMenuOpen(false);
+                    }}
+                    style={{
+                      display: 'flex',
+                      width: '100%',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                      padding: '7px 10px',
+                      borderRadius: 6,
+                      border: 'none',
+                      background: pinned ? 'var(--color-success-light, #f0fdf4)' : '#fff',
+                      color: pinned ? '#166534' : 'var(--color-text-primary)',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: pinned ? 'default' : 'pointer',
+                      textAlign: 'left',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!pinned) e.currentTarget.style.background = 'var(--color-bg-surface, #f8fafc)';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!pinned) e.currentTarget.style.background = '#fff';
+                    }}
+                  >
+                    <span
+                      style={{
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {t.label}
+                      {isDefault && (
+                        <span
+                          style={{
+                            marginLeft: 6,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            color: 'var(--color-text-muted)',
+                          }}
+                        >
+                          · current
+                        </span>
+                      )}
+                    </span>
+                    {pinned && (
+                      <CheckCircle2 size={13} strokeWidth={2.2} color="#166534" />
+                    )}
+                  </button>
+                );
+              })}
+              {onAddToNewView && (
+                <>
+                  <div
+                    style={{
+                      height: 1,
+                      background: 'var(--color-border-subtle)',
+                      margin: '4px 0',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onAddToNewView();
+                      setMenuOpen(false);
+                    }}
+                    style={{
+                      display: 'flex',
+                      width: '100%',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '7px 10px',
+                      borderRadius: 6,
+                      border: 'none',
+                      background: '#fff',
+                      color: 'var(--color-text-primary)',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'var(--color-bg-surface, #f8fafc)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#fff';
+                    }}
+                  >
+                    <Plus size={13} strokeWidth={2.2} />
+                    <span>New view…</span>
+                  </button>
+                </>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
+}
+
+const chartFrameStyle: React.CSSProperties = {
+  borderRadius: '10px',
+  border: '1px solid var(--color-border-subtle)',
+  overflow: 'hidden',
+  background: '#fff',
+  padding: '12px 8px 8px',
+};
+
+function pinButtonStyle(isPinned: boolean, withChevron = false): React.CSSProperties {
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: withChevron ? '5px' : '6px',
+    padding: '7px 14px',
+    borderRadius: '100px',
+    border: isPinned ? 'none' : '1.5px solid var(--color-border)',
+    background: isPinned ? 'var(--color-success-light, #f0fdf4)' : '#fff',
+    color: isPinned ? '#166534' : 'var(--color-text-secondary)',
+    fontSize: '12px',
+    fontWeight: 600,
+    fontFamily: 'var(--font-primary)',
+    cursor: isPinned ? 'default' : 'pointer',
+  };
+}
+
+/**
+ * Returns a short, source-aware "what stands out" insight for a Quinn-built
+ * table preview. We don't actually inspect the rows in this prototype — we
+ * just pick a canned observation per primary data source so the chat feels
+ * like Quinn is reading the result.
+ */
+function insightForTableQuery(query: TableQuery): string {
+  const primary = query.sources[0];
+  const isMultiSource = query.sources.length > 1;
+  if (isMultiSource) {
+    return [
+      "I joined these sources on **site** and **date** so you can compare them side-by-side.",
+      "A couple of things to look at: which sites show waste creeping up alongside flat sales, and where labour spend is rising faster than revenue.",
+      "Want me to add a filter, group by region, or surface the worst-performing rows?",
+    ].join(' ');
+  }
+  switch (primary) {
+    case 'flashReport':
+      return [
+        "A few things stand out from the flash report: most sites are tracking close to plan, but **Carlton's food cost** has crept up about 3 points week-on-week — worth a closer look.",
+        "Want me to add a margin column, filter to underperformers, or compare against last week?",
+      ].join(' ');
+    case 'sales':
+      return [
+        "Weekend trade is your bright spot here — Saturday afternoons consistently lead the week, especially at **Fitzroy**.",
+        "Want me to group this by daypart, add a 7-day moving average, or split out by site?",
+      ].join(' ');
+    case 'waste':
+      return [
+        "**Bakery** is your largest waste category by value, and a couple of stores show repeat overproduction late in the week.",
+        "Want me to filter to bakery only, group by site, or rank by total waste cost?",
+      ].join(' ');
+    case 'labour':
+      return [
+        "Labour ratio is climbing fastest at **Fitzroy**, and on Tuesdays your staffing peaks aren't quite lining up with sales peaks.",
+        "Want me to add a sales-vs-labour ratio, group by daypart, or filter to overstaffed shifts?",
+      ].join(' ');
+    default:
+      return "Looks like a clean dataset to start from. Tell me what you'd like to slice — by site, by date, by category — and I'll rebuild it.";
+  }
 }
 
 function TableResultBlock({
@@ -1589,6 +1850,10 @@ export default function Feed({
   onPinTable,
   onOpenTableInNewView,
   pinTarget = 'dashboard',
+  pinTargets,
+  defaultPinTargetId,
+  onAddChartToTarget,
+  onAddChartToNewView,
 }: {
   briefingRole: BriefingRole;
   quinnExpanded?: boolean;
@@ -1600,6 +1865,16 @@ export default function Feed({
   /** Where chat-pinned charts go: the legacy dashboard layout or the
    *  currently-active MVP1 view. Drives button copy and post-pin CTA. */
   pinTarget?: 'dashboard' | 'view';
+  /** When provided, the pin button becomes a dropdown over these targets
+   *  (one entry per dashboard / view). Only relevant in MVP1. */
+  pinTargets?: ChartPinTarget[];
+  /** Default-highlighted target in the pin dropdown (typically the active view). */
+  defaultPinTargetId?: string;
+  /** Called when the user picks a target from the pin dropdown. */
+  onAddChartToTarget?: (chartId: AnalyticsChartId, targetId: string) => void;
+  /** Called when the user picks "New view…" from the pin dropdown. Should
+   *  return the new target id so Feed can mark it as pinned in the dropdown. */
+  onAddChartToNewView?: (chartId: AnalyticsChartId) => string | undefined;
   seedUserPrompt?: string;
   /** If set, Feed simulates a user send with this text on mount. */
   autoSendPrompt?: string;
@@ -1650,6 +1925,12 @@ export default function Feed({
   const [pinnedChartIds, setPinnedChartIds] = useState<Set<AnalyticsChartId>>(
     () => new Set(alreadyPinned ?? []),
   );
+  /**
+   * Tracks chart→target pin pairs (key = `${chartId}:${targetId}`) so a single
+   * chart can be pinned into multiple views and each per-target row in the
+   * pin dropdown can show its own "pinned" state.
+   */
+  const [pinnedChartTargets, setPinnedChartTargets] = useState<Set<string>>(new Set());
 
   const greeting = timeAwareGreeting(briefingRole);
 
@@ -1860,17 +2141,65 @@ export default function Feed({
     }
   }, [analyticsType, analyticsStep]);
 
-  function handleAddChart(chartId: AnalyticsChartId) {
+  /**
+   * Pin a chart to a specific target. In multi-target mode (MVP1) we keep the
+   * legacy `pinnedChartIds` Set in sync so that the conversation-history
+   * "pinned count" heuristic still fires. The destination label is read from
+   * the matching `pinTargets` entry so the confirmation message names the
+   * actual view (e.g. "Reports" or "View 2").
+   */
+  function handleAddChart(chartId: AnalyticsChartId, targetId?: string) {
+    if (pinTargets && pinTargets.length > 0 && targetId) {
+      const key = `${chartId}:${targetId}`;
+      if (pinnedChartTargets.has(key)) return;
+      const target = pinTargets.find((t) => t.id === targetId);
+      const destinationLabel = target?.label ?? 'this view';
+      setPinnedChartTargets((prev) => new Set([...prev, key]));
+      setPinnedChartIds((prev) => new Set([...prev, chartId]));
+      onAddChartToTarget?.(chartId, targetId);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `q-analytics-pinned-${chartId}-${targetId}-${Date.now()}`,
+          role: 'quinn',
+          text: `Done — I've pinned **${ANALYTICS_CONFIG[chartId].label}** to **${destinationLabel}**.`,
+          msgType: 'analytics-pinned',
+        },
+      ]);
+      return;
+    }
+
+    // Legacy single-target path (e.g. HomeShell).
     if (pinnedChartIds.has(chartId)) return;
-    setPinnedChartIds(prev => new Set([...prev, chartId]));
+    setPinnedChartIds((prev) => new Set([...prev, chartId]));
     onAddToDashboard?.(chartId);
     const destination = pinTarget === 'view' ? 'this view' : 'your dashboard';
-    setMessages(prev => [...prev, {
-      id: `q-analytics-pinned-${chartId}-${Date.now()}`,
-      role: 'quinn',
-      text: `Done — I've pinned **${ANALYTICS_CONFIG[chartId].label}** to ${destination}.`,
-      msgType: 'analytics-pinned',
-    }]);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `q-analytics-pinned-${chartId}-${Date.now()}`,
+        role: 'quinn',
+        text: `Done — I've pinned **${ANALYTICS_CONFIG[chartId].label}** to ${destination}.`,
+        msgType: 'analytics-pinned',
+      },
+    ]);
+  }
+
+  function handleAddChartToNewView(chartId: AnalyticsChartId) {
+    const newTargetId = onAddChartToNewView?.(chartId);
+    if (newTargetId) {
+      setPinnedChartTargets((prev) => new Set([...prev, `${chartId}:${newTargetId}`]));
+    }
+    setPinnedChartIds((prev) => new Set([...prev, chartId]));
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `q-analytics-pinned-${chartId}-newview-${Date.now()}`,
+        role: 'quinn',
+        text: `Done — I've added **${ANALYTICS_CONFIG[chartId].label}** to a new view.`,
+        msgType: 'analytics-pinned',
+      },
+    ]);
   }
 
   function startRecipeFlow() {
@@ -2024,8 +2353,8 @@ export default function Feed({
               role: 'quinn' as const,
               text:
                 tableOpts.tableTitle
-                  ? `Here's a table for "${tableOpts.tableTitle}". You can pin it to the current view or open it as its own view.`
-                  : 'Here\'s a table built from your data. You can pin it to the current view or open it as its own view.',
+                  ? `Here's a table for "${tableOpts.tableTitle}". Pin it to a view, or tell me what you'd like to change.`
+                  : "Here's a table built from your data. Pin it to a view, or tell me what you'd like to change.",
               msgType: 'table-result',
               tableQuery: tableOpts.tableQuery,
               tableTitle: tableOpts.tableTitle ?? text,
@@ -2033,6 +2362,18 @@ export default function Feed({
           ];
         });
       }, 700);
+      // Follow up shortly after with a Quinn insight + suggestions, mirroring
+      // the chart flow's "what stands out" commentary.
+      window.setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `q-table-insight-${Date.now()}`,
+            role: 'quinn' as const,
+            text: insightForTableQuery(tableOpts.tableQuery),
+          },
+        ]);
+      }, 1500);
       return;
     }
 
@@ -2548,10 +2889,32 @@ export default function Feed({
                         {m.msgType === 'analytics-chart' && m.chartId && (
                           <AnalyticsChartContent
                             chartId={m.chartId as AnalyticsChartId}
-                            isPinned={pinnedChartIds.has(m.chartId as AnalyticsChartId)}
-                            onAdd={() => handleAddChart(m.chartId as AnalyticsChartId)}
-                            pinLabel={pinTarget === 'view' ? 'Pin to current view' : 'Add to dashboard'}
-                            pinnedLabel={pinTarget === 'view' ? 'Pinned to view' : 'Added to dashboard'}
+                            pinnedTargetIds={(() => {
+                              const chartId = m.chartId as AnalyticsChartId;
+                              const set = new Set<string>();
+                              for (const k of pinnedChartTargets) {
+                                if (k.startsWith(`${chartId}:`)) {
+                                  set.add(k.slice(chartId.length + 1));
+                                }
+                              }
+                              return set;
+                            })()}
+                            pinTargets={pinTargets}
+                            defaultPinTargetId={defaultPinTargetId}
+                            onAddToTarget={(targetId) =>
+                              handleAddChart(m.chartId as AnalyticsChartId, targetId)
+                            }
+                            onAddToNewView={
+                              onAddChartToNewView
+                                ? () => handleAddChartToNewView(m.chartId as AnalyticsChartId)
+                                : undefined
+                            }
+                            pinLabel={
+                              pinTarget === 'view' ? 'Pin to view' : 'Add to dashboard'
+                            }
+                            pinnedLabel={
+                              pinTarget === 'view' ? 'Pinned to view' : 'Added to dashboard'
+                            }
                           />
                         )}
                         {m.msgType === 'table-result' && m.tableQuery && (

@@ -47,6 +47,11 @@ export default function AddInsightPopup({
   onPinTable,
   onOpenTableInNewView,
   pinTarget = 'dashboard',
+  pinTargets,
+  defaultPinTargetId,
+  onAddChartToTarget,
+  onAddChartToNewView,
+  autoChatTable,
 }: {
   open: boolean;
   onClose: () => void;
@@ -72,6 +77,22 @@ export default function AddInsightPopup({
   /** Where chat-pinned charts go. 'view' renames the CTA to "Pin to current
    *  view" and skips the post-pin "View dashboard" jump. */
   pinTarget?: 'dashboard' | 'view';
+  /** When provided, the chat chart pin button becomes a dropdown of targets. */
+  pinTargets?: { id: string; label: string }[];
+  /** Default-highlighted target in the pin dropdown (typically the active view). */
+  defaultPinTargetId?: string;
+  /** Pin a chart from chat into a specific target view. */
+  onAddChartToTarget?: (chartId: AnalyticsChartId, targetId: string) => void;
+  /** Create a new view containing the chart; should return the new view's id. */
+  onAddChartToNewView?: (chartId: AnalyticsChartId) => string | undefined;
+  /** When set, the popup opens directly into chat mode with this starter table
+   *  loaded — used by the empty-state "Build manually" card and the per-table
+   *  "Edit query" pencil so Quinn can guide the user to refine the table. */
+  autoChatTable?: {
+    prompt: string;
+    query: TableQuery;
+    title?: string;
+  };
 }) {
   const [mode, setMode] = useState<'browse' | 'chat'>('browse');
   const [segment, setSegment] = useState<SegmentKey>('all');
@@ -98,6 +119,24 @@ export default function AddInsightPopup({
   useEffect(() => {
     if (open) setShape(defaultShape);
   }, [open, defaultShape]);
+
+  // When the popup is opened with a starter table (Build manually / Edit
+  // query), jump straight into chat mode with Quinn previewing the table.
+  // We key off the prompt+query identity so re-opening with the same starter
+  // re-enters the chat cleanly.
+  const autoChatRef = useRef<{ prompt: string; query: TableQuery; title?: string } | null>(null);
+  useEffect(() => {
+    if (!open) {
+      autoChatRef.current = null;
+      return;
+    }
+    if (!autoChatTable) return;
+    if (autoChatRef.current === autoChatTable) return;
+    autoChatRef.current = autoChatTable;
+    enterChatWithTable(autoChatTable.prompt, autoChatTable.query, autoChatTable.title);
+    // enterChatWithTable is a stable closure over setters; safe to omit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, autoChatTable]);
 
   const { history, addConversation, removeConversation, clearHistory } = useConversationHistory();
 
@@ -484,6 +523,25 @@ export default function AddInsightPopup({
                     alreadyPinned={effectivePinned}
                     onAddToDashboard={handleChatPin}
                     pinTarget={pinTarget}
+                    pinTargets={pinTargets}
+                    defaultPinTargetId={defaultPinTargetId}
+                    onAddChartToTarget={
+                      onAddChartToTarget
+                        ? (chartId, targetId) => {
+                            onAddChartToTarget(chartId, targetId);
+                            setChatPinnedCount((c) => c + 1);
+                          }
+                        : undefined
+                    }
+                    onAddChartToNewView={
+                      onAddChartToNewView
+                        ? (chartId) => {
+                            const newId = onAddChartToNewView(chartId);
+                            setChatPinnedCount((c) => c + 1);
+                            return newId;
+                          }
+                        : undefined
+                    }
                     onUserMessageCountChange={setChatUserMessageCount}
                     onPinTable={
                       onPinTable
