@@ -9,7 +9,7 @@ export type OtherActionItem = { id: string; title: string; detail: string; href:
 
 function getApprovals(role: BriefingRole): ApprovalItem[] {
   switch (role) {
-    case 'ravi':
+    case 'ed':
       return [
         { id: 'a1', title: 'Metro credit — £312', detail: 'Past the threshold agreed with finance — approve write-off path or escalate.' },
         { id: 'a2', title: 'Matcha estate order', detail: 'Two sites will stock out before inbound unless you authorise a top-up.' },
@@ -33,7 +33,7 @@ function getApprovals(role: BriefingRole): ApprovalItem[] {
 
 function getOtherActions(role: BriefingRole): OtherActionItem[] {
   switch (role) {
-    case 'ravi':
+    case 'ed':
       return [
         {
           id: 'o1',

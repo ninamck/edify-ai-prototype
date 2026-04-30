@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { ChevronRight, Sparkles, ArrowUp } from 'lucide-react';
+import { ChevronRight, Sparkles, ArrowUp, MessageSquare, X as XIcon, BarChart3, Table2 } from 'lucide-react';
 import {
   QUESTION_LIBRARY,
   SEGMENT_LABELS,
@@ -11,14 +11,17 @@ import {
   countsBySegment,
   countsByProductionSubsegment,
   searchQuestions,
+  questionShape,
   type QuestionEntry,
   type QuestionSegment,
   type ProductionSubsegment,
 } from '@/components/Dashboard/data/questionLibrary';
+import type { ConversationEntry } from '@/hooks/useConversationHistory';
 
 const ACCENT = 'var(--color-accent-deep)';
 
 export type SegmentKey = QuestionSegment | 'all';
+export type ShapeFilter = 'all' | 'chart' | 'table';
 
 export default function QuestionLibraryPicker({
   query,
@@ -26,9 +29,15 @@ export default function QuestionLibraryPicker({
   onSubmit,
   segment,
   subsegment,
+  shape = 'all',
+  onShapeChange,
   onSegmentChange,
   onSubsegmentChange,
   onPick,
+  recentConversations,
+  onResumeConversation,
+  onRemoveConversation,
+  onClearConversations,
 }: {
   query: string;
   onQueryChange: (next: string) => void;
@@ -36,21 +45,31 @@ export default function QuestionLibraryPicker({
   onSubmit: (text: string) => void;
   segment: SegmentKey;
   subsegment: ProductionSubsegment | null;
+  /** Filter the list to only questions that produce a chart or a table. */
+  shape?: ShapeFilter;
+  onShapeChange?: (next: ShapeFilter) => void;
   onSegmentChange: (next: SegmentKey) => void;
   onSubsegmentChange: (next: ProductionSubsegment | null) => void;
   /** Fires when the user clicks a library question. */
   onPick: (entry: QuestionEntry) => void;
+  /** Optional list of past conversations to show at the bottom of the rail. */
+  recentConversations?: ConversationEntry[];
+  onResumeConversation?: (entry: ConversationEntry) => void;
+  onRemoveConversation?: (id: string) => void;
+  onClearConversations?: () => void;
 }) {
   const segCounts = useMemo(countsBySegment, []);
   const subCounts = useMemo(countsByProductionSubsegment, []);
 
   const filtered = useMemo(() => {
+    const shapeArg = shape === 'all' ? undefined : shape;
     return searchQuestions(
       query,
       segment === 'all' ? undefined : segment,
       segment === 'production' && subsegment ? subsegment : undefined,
+      shapeArg,
     );
-  }, [query, segment, subsegment]);
+  }, [query, segment, subsegment, shape]);
 
   const canSend = query.trim().length > 0;
 
@@ -67,11 +86,28 @@ export default function QuestionLibraryPicker({
       {/* Prominent chat input — the primary way in */}
       <div
         style={{
-          padding: '16px 20px 14px',
+          padding: '24px 24px 20px',
           borderBottom: '1px solid var(--color-border-subtle)',
           background: '#fff',
         }}
       >
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            marginBottom: 10,
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: 'var(--color-text-muted)',
+          }}
+        >
+          <Sparkles size={11} color={ACCENT} strokeWidth={2.4} />
+          Ask Quinn
+        </div>
+
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -80,8 +116,8 @@ export default function QuestionLibraryPicker({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
-            padding: '10px 14px',
+            gap: 10,
+            padding: '12px 16px',
             borderRadius: 14,
             border: '1.5px solid var(--color-border-subtle)',
             background: '#fff',
@@ -97,11 +133,10 @@ export default function QuestionLibraryPicker({
             (e.currentTarget as HTMLFormElement).style.boxShadow = '0 2px 10px rgba(58,48,40,0.06)';
           }}
         >
-          <Sparkles size={16} color={ACCENT} strokeWidth={2.2} />
           <input
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Ask Quinn anything about your data…"
+            placeholder="Ask anything about your data…"
             autoFocus
             style={{
               flex: 1,
@@ -134,15 +169,67 @@ export default function QuestionLibraryPicker({
             <ArrowUp size={16} strokeWidth={2.4} />
           </button>
         </form>
+
         <div
+          aria-hidden="true"
           style={{
-            marginTop: 10,
-            fontSize: 12,
-            fontWeight: 500,
-            color: 'var(--color-text-muted)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            marginTop: 22,
+            marginBottom: 4,
           }}
         >
-          Or pick one of {QUESTION_LIBRARY.length} curated operator questions below.
+          <div style={{ flex: 1, height: 1, background: 'var(--color-border-subtle)' }} />
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              color: 'var(--color-text-muted)',
+            }}
+          >
+            Or browse
+          </span>
+          <div style={{ flex: 1, height: 1, background: 'var(--color-border-subtle)' }} />
+        </div>
+
+        <div
+          style={{
+            marginTop: 8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: 'var(--color-text-primary)',
+                fontFamily: 'var(--font-primary)',
+              }}
+            >
+              {QUESTION_LIBRARY.length} curated operator questions
+            </div>
+            <div
+              style={{
+                marginTop: 2,
+                fontSize: 12,
+                fontWeight: 500,
+                color: 'var(--color-text-muted)',
+              }}
+            >
+              Pick a category to narrow down, or scan the list below.
+            </div>
+          </div>
+          {onShapeChange && (
+            <ShapeToggle value={shape} onChange={onShapeChange} />
+          )}
         </div>
       </div>
 
@@ -205,6 +292,15 @@ export default function QuestionLibraryPicker({
               )}
             </div>
           ))}
+
+          {recentConversations && recentConversations.length > 0 && (
+            <RailRecentList
+              entries={recentConversations}
+              onResume={(e) => onResumeConversation?.(e)}
+              onRemove={(id) => onRemoveConversation?.(id)}
+              onClear={onClearConversations}
+            />
+          )}
         </div>
 
         <div
@@ -298,13 +394,14 @@ function QuestionRow({
   entry: QuestionEntry;
   onPick: () => void;
 }) {
+  const shape = questionShape(entry);
   return (
     <button
       type="button"
       onClick={onPick}
       style={{
         display: 'grid',
-        gridTemplateColumns: '1fr auto',
+        gridTemplateColumns: '1fr auto auto',
         gap: 10,
         alignItems: 'center',
         padding: '11px 14px',
@@ -326,8 +423,105 @@ function QuestionRow({
       <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', lineHeight: 1.4 }}>
         {entry.text}
       </span>
+      <ShapeBadge shape={shape} />
       <ChevronRight size={14} color="var(--color-text-muted)" strokeWidth={2} />
     </button>
+  );
+}
+
+function ShapeToggle({
+  value,
+  onChange,
+}: {
+  value: ShapeFilter;
+  onChange: (next: ShapeFilter) => void;
+}) {
+  const options: { id: ShapeFilter; label: string; icon: React.ReactNode }[] = [
+    { id: 'all', label: 'All', icon: null },
+    {
+      id: 'chart',
+      label: 'Charts',
+      icon: <BarChart3 size={11} strokeWidth={2.4} />,
+    },
+    {
+      id: 'table',
+      label: 'Tables',
+      icon: <Table2 size={11} strokeWidth={2.4} />,
+    },
+  ];
+  return (
+    <div
+      role="tablist"
+      aria-label="Filter by shape"
+      style={{
+        display: 'inline-flex',
+        padding: 3,
+        borderRadius: 999,
+        background: 'var(--color-bg-hover)',
+        border: '1px solid var(--color-border-subtle)',
+      }}
+    >
+      {options.map((o) => {
+        const active = value === o.id;
+        return (
+          <button
+            key={o.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(o.id)}
+            style={{
+              all: 'unset',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '4px 10px',
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 700,
+              color: active ? '#fff' : 'var(--color-text-muted)',
+              background: active ? 'var(--color-accent-active)' : 'transparent',
+            }}
+          >
+            {o.icon}
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ShapeBadge({ shape }: { shape: 'chart' | 'table' | 'both' }) {
+  const items: { icon: React.ReactNode; title: string }[] =
+    shape === 'both'
+      ? [
+          { icon: <BarChart3 size={11} strokeWidth={2.2} />, title: 'Chart available' },
+          { icon: <Table2 size={11} strokeWidth={2.2} />, title: 'Table available' },
+        ]
+      : shape === 'table'
+      ? [{ icon: <Table2 size={11} strokeWidth={2.2} />, title: 'Table available' }]
+      : [{ icon: <BarChart3 size={11} strokeWidth={2.2} />, title: 'Chart available' }];
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 3,
+        padding: '2px 6px',
+        borderRadius: 999,
+        background: 'var(--color-bg-hover)',
+        color: 'var(--color-text-muted)',
+      }}
+    >
+      {items.map((item, i) => (
+        <span key={i} title={item.title} style={{ display: 'inline-flex' }}>
+          {item.icon}
+        </span>
+      ))}
+    </span>
   );
 }
 
@@ -395,6 +589,176 @@ function EmptyState({ query, onAsk }: { query: string; onAsk: () => void }) {
           Ask Quinn: &ldquo;{q.length > 40 ? q.slice(0, 40) + '…' : q}&rdquo;
         </button>
       )}
+    </div>
+  );
+}
+
+function RailRecentList({
+  entries,
+  onResume,
+  onRemove,
+  onClear,
+}: {
+  entries: ConversationEntry[];
+  onResume: (entry: ConversationEntry) => void;
+  onRemove: (id: string) => void;
+  onClear?: () => void;
+}) {
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        paddingTop: 10,
+        borderTop: '1px solid var(--color-border-subtle)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '4px 10px 6px',
+        }}
+      >
+        <span
+          style={{
+            flex: 1,
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: 'var(--color-text-muted)',
+          }}
+        >
+          Recent
+        </span>
+        {onClear && entries.length > 0 && (
+          <button
+            type="button"
+            onClick={onClear}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              fontSize: 10,
+              fontWeight: 600,
+              color: 'var(--color-text-muted)',
+              padding: '2px 4px',
+              fontFamily: 'var(--font-primary)',
+            }}
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      {entries.map((entry) => (
+        <RailRecentRow
+          key={entry.id}
+          entry={entry}
+          onResume={() => onResume(entry)}
+          onRemove={() => onRemove(entry.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function RailRecentRow({
+  entry,
+  onResume,
+  onRemove,
+}: {
+  entry: ConversationEntry;
+  onResume: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div
+      style={{
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        borderRadius: 8,
+        transition: 'background 0.1s',
+      }}
+      className="rail-recent-row"
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLDivElement).style.background = 'var(--color-bg-hover)';
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLDivElement).style.background = 'transparent';
+      }}
+    >
+      <button
+        type="button"
+        onClick={onResume}
+        title={entry.question}
+        style={{
+          all: 'unset',
+          flex: 1,
+          minWidth: 0,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '7px 30px 7px 10px',
+        }}
+      >
+        <MessageSquare
+          size={12}
+          strokeWidth={2.2}
+          color="var(--color-text-muted)"
+          style={{ flexShrink: 0 }}
+        />
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: 12,
+            fontWeight: 500,
+            color: 'var(--color-text-secondary)',
+            fontFamily: 'var(--font-primary)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {entry.question}
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label="Remove conversation"
+        style={{
+          position: 'absolute',
+          right: 4,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          width: 22,
+          height: 22,
+          borderRadius: 6,
+          border: 'none',
+          background: 'transparent',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--color-text-muted)',
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.background = 'rgba(58,48,40,0.08)';
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+        }}
+      >
+        <XIcon size={11} strokeWidth={2.2} />
+      </button>
     </div>
   );
 }

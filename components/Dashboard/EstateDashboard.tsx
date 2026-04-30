@@ -78,6 +78,9 @@ export default function EstateDashboard({
   onToggleEdit,
   onAddInsight,
   onRemovePinned,
+  toolbarLeadingControls,
+  belowHeader,
+  heroGreeting,
 }: {
   phase: BriefingPhase;
   layout: DashboardLayoutEntry[];
@@ -86,6 +89,10 @@ export default function EstateDashboard({
   onToggleEdit: () => void;
   onAddInsight: () => void;
   onRemovePinned: (chartId: AnalyticsChartId) => void;
+  toolbarLeadingControls?: ReactNode;
+  belowHeader?: ReactNode;
+  /** When provided, render the page header in hero style (large greeting + airy spacing). */
+  heroGreeting?: string;
 }) {
   const defaultTo = SALES_TREND[SALES_TREND.length - 1].date;
   const defaultFrom = SALES_TREND[Math.max(0, SALES_TREND.length - 14)].date;
@@ -331,28 +338,71 @@ export default function EstateDashboard({
         width: '100%',
       }}
     >
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-        <div>
-          <h1
-            style={{
-              margin: '0 0 4px',
-              fontSize: '18px',
-              fontWeight: 700,
-              color: 'var(--color-text-primary)',
-            }}
-          >
-            Estate dashboard
-          </h1>
-          <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
-            Dummy data · Fitzroy Espresso estate · {estatePhaseSubtitle(phase)}
-          </p>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 12,
+          paddingTop: heroGreeting ? 20 : 0,
+          paddingBottom: heroGreeting ? 12 : 0,
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          {heroGreeting ? (
+            <>
+              <h1
+                style={{
+                  margin: 0,
+                  fontSize: 30,
+                  fontWeight: 600,
+                  letterSpacing: '-0.01em',
+                  color: 'var(--color-text-primary)',
+                  lineHeight: 1.15,
+                }}
+              >
+                {heroGreeting}
+              </h1>
+              <p
+                style={{
+                  margin: '8px 0 0',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: 'var(--color-text-muted)',
+                  lineHeight: 1.4,
+                }}
+              >
+                Fitzroy Espresso estate · {estatePhaseSubtitle(phase)}
+              </p>
+            </>
+          ) : (
+            <>
+              <h1
+                style={{
+                  margin: '0 0 4px',
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  color: 'var(--color-text-primary)',
+                }}
+              >
+                Estate dashboard
+              </h1>
+              <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
+                Dummy data · Fitzroy Espresso estate · {estatePhaseSubtitle(phase)}
+              </p>
+            </>
+          )}
         </div>
         <DashboardEditToolbar
           editing={editing}
           onToggleEdit={onToggleEdit}
           onAddInsight={onAddInsight}
+          leadingControls={toolbarLeadingControls}
         />
       </div>
+
+      {belowHeader}
 
       <div
         style={{

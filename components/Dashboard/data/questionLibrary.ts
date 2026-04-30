@@ -1,4 +1,7 @@
 import type { AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
+import type { TableQuery } from '@/components/Mvp1/Tables/query';
+
+export type QuestionShape = 'chart' | 'table' | 'both';
 
 export type QuestionSegment =
   | 'sales'
@@ -1379,15 +1382,364 @@ export function countsByProductionSubsegment(): Record<ProductionSubsegment, num
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Table-shaped questions
+// ---------------------------------------------------------------------------
+//
+// A subset of the curated questions can be answered as a *table* (versus
+// today's chart flow). Each entry below maps a question id to a canned
+// `TableQuery` over the in-memory mock data sources. Picking a tagged
+// question routes through the table flow (Quinn auto-builds the table or the
+// library picker hands it directly to the active view).
+//
+// Coverage is intentionally small (~20 entries) — enough to make the toggle
+// useful without aspiring to be exhaustive. Missing questions still work as
+// charts via `suggestedChartId` (or fall back to free-text answers).
+
+export const QUESTION_TABLE_QUERIES: Record<string, TableQuery> = {
+  // ─── Sales ────────────────────────────────────────────────────────────────
+  'sales-what-were-total-sales-across': {
+    sources: ['sales'],
+    columns: [
+      { kind: 'field', field: { source: 'sales', key: 'date' }, header: 'Date' },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'sales', key: 'revenue' },
+        header: 'Total revenue',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'sales', key: 'covers' },
+        header: 'Covers',
+        type: 'integer',
+      },
+    ],
+    groupBy: [{ source: 'sales', key: 'date' }],
+    sort: [{ key: 'sales.date', dir: 'desc' }],
+    limit: 7,
+  },
+  'sales-which-site-had-the-highest': {
+    sources: ['sales'],
+    columns: [
+      { kind: 'field', field: { source: 'sales', key: 'site_name' }, header: 'Site' },
+      { kind: 'field', field: { source: 'sales', key: 'region' }, header: 'Region' },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'sales', key: 'revenue' },
+        header: 'Revenue (30d)',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'avg',
+        field: { source: 'sales', key: 'avg_ticket' },
+        header: 'Avg ticket',
+        type: 'currency',
+      },
+    ],
+    groupBy: [
+      { source: 'sales', key: 'site_name' },
+      { source: 'sales', key: 'region' },
+    ],
+    sort: [{ key: 'Revenue (30d)', dir: 'desc' }],
+  },
+  'sales-what-is-the-average-transaction': {
+    sources: ['sales'],
+    columns: [
+      { kind: 'field', field: { source: 'sales', key: 'site_name' }, header: 'Site' },
+      {
+        kind: 'agg',
+        agg: 'avg',
+        field: { source: 'sales', key: 'avg_ticket' },
+        header: 'Avg transaction',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'sales', key: 'covers' },
+        header: 'Covers',
+        type: 'integer',
+      },
+    ],
+    groupBy: [{ source: 'sales', key: 'site_name' }],
+    sort: [{ key: 'Avg transaction', dir: 'desc' }],
+  },
+  'sales-how-does-site-performance-rank': {
+    sources: ['sales'],
+    columns: [
+      { kind: 'field', field: { source: 'sales', key: 'site_name' }, header: 'Site' },
+      { kind: 'field', field: { source: 'sales', key: 'region' }, header: 'Region' },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'sales', key: 'revenue' },
+        header: 'Revenue',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'sales', key: 'covers' },
+        header: 'Covers',
+        type: 'integer',
+      },
+    ],
+    groupBy: [
+      { source: 'sales', key: 'site_name' },
+      { source: 'sales', key: 'region' },
+    ],
+    sort: [{ key: 'Revenue', dir: 'desc' }],
+  },
+
+  // ─── Waste ────────────────────────────────────────────────────────────────
+  'waste-what-is-our-total-recorded': {
+    sources: ['waste'],
+    columns: [
+      { kind: 'field', field: { source: 'waste', key: 'site_name' }, header: 'Site' },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'waste', key: 'cost' },
+        header: 'Waste cost',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'waste', key: 'qty' },
+        header: 'Units',
+        type: 'integer',
+      },
+    ],
+    groupBy: [{ source: 'waste', key: 'site_name' }],
+    sort: [{ key: 'Waste cost', dir: 'desc' }],
+  },
+  'waste-what-are-the-top-10': {
+    sources: ['waste'],
+    columns: [
+      { kind: 'field', field: { source: 'waste', key: 'sku' }, header: 'SKU' },
+      { kind: 'field', field: { source: 'waste', key: 'category' }, header: 'Category' },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'waste', key: 'cost' },
+        header: 'Waste cost',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'waste', key: 'qty' },
+        header: 'Units',
+        type: 'integer',
+      },
+    ],
+    groupBy: [
+      { source: 'waste', key: 'sku' },
+      { source: 'waste', key: 'category' },
+    ],
+    sort: [{ key: 'Waste cost', dir: 'desc' }],
+    limit: 10,
+  },
+  'waste-which-category-generates-the-most': {
+    sources: ['waste'],
+    columns: [
+      { kind: 'field', field: { source: 'waste', key: 'category' }, header: 'Category' },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'waste', key: 'cost' },
+        header: 'Waste cost',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'waste', key: 'qty' },
+        header: 'Units',
+        type: 'integer',
+      },
+    ],
+    groupBy: [{ source: 'waste', key: 'category' }],
+    sort: [{ key: 'Waste cost', dir: 'desc' }],
+  },
+  'waste-which-items-are-most-frequently': {
+    sources: ['waste'],
+    columns: [
+      { kind: 'field', field: { source: 'waste', key: 'reason' }, header: 'Reason' },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'waste', key: 'cost' },
+        header: 'Waste cost',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'count',
+        field: { source: 'waste', key: 'sku' },
+        header: 'Events',
+        type: 'integer',
+      },
+    ],
+    groupBy: [{ source: 'waste', key: 'reason' }],
+    sort: [{ key: 'Waste cost', dir: 'desc' }],
+  },
+
+  // ─── Labour ───────────────────────────────────────────────────────────────
+  'labour-what-is-our-total-weekly': {
+    sources: ['labour'],
+    columns: [
+      { kind: 'field', field: { source: 'labour', key: 'site_name' }, header: 'Site' },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'labour', key: 'hours' },
+        header: 'Hours',
+        type: 'number',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'labour', key: 'cost' },
+        header: 'Labour cost',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'labour', key: 'shifts' },
+        header: 'Shifts',
+        type: 'integer',
+      },
+    ],
+    groupBy: [{ source: 'labour', key: 'site_name' }],
+    sort: [{ key: 'Labour cost', dir: 'desc' }],
+  },
+  'labour-which-role-type-accounts-for': {
+    sources: ['labour'],
+    columns: [
+      { kind: 'field', field: { source: 'labour', key: 'site_name' }, header: 'Site' },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'labour', key: 'manager_hours' },
+        header: 'Manager hrs',
+        type: 'number',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'labour', key: 'barista_hours' },
+        header: 'Barista hrs',
+        type: 'number',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'labour', key: 'kitchen_hours' },
+        header: 'Kitchen hrs',
+        type: 'number',
+      },
+    ],
+    groupBy: [{ source: 'labour', key: 'site_name' }],
+    sort: [{ key: 'Barista hrs', dir: 'desc' }],
+  },
+  'labour-which-site-has-the-best': {
+    // Cross-source: revenue per labour hour. Joins sales + labour on site/date,
+    // then aggregates per site.
+    sources: ['sales', 'labour'],
+    joins: [
+      {
+        rightSource: 'labour',
+        on: [
+          { leftKey: 'site_id', rightKey: 'site_id' },
+          { leftKey: 'date', rightKey: 'date' },
+        ],
+      },
+    ],
+    columns: [
+      { kind: 'field', field: { source: 'sales', key: 'site_name' }, header: 'Site' },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'sales', key: 'revenue' },
+        header: 'Revenue',
+        type: 'currency',
+      },
+      {
+        kind: 'agg',
+        agg: 'sum',
+        field: { source: 'labour', key: 'cost' },
+        header: 'Labour cost',
+        type: 'currency',
+      },
+    ],
+    groupBy: [{ source: 'sales', key: 'site_name' }],
+    sort: [{ key: 'Revenue', dir: 'desc' }],
+  },
+
+  // ─── COGS / Flash report (single-source) ──────────────────────────────────
+  'cogs-which-sites-are-consistently-over': {
+    sources: ['flashReport'],
+    columns: [
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'flashReport', key: 'dm' }, header: 'DM' },
+      {
+        kind: 'field',
+        field: { source: 'flashReport', key: 'food_supply_cost_sales_pct' },
+        header: 'Food cost %',
+      },
+      {
+        kind: 'field',
+        field: { source: 'flashReport', key: 'total_sales' },
+        header: 'Total sales',
+      },
+    ],
+    filters: [
+      {
+        field: { source: 'flashReport', key: 'food_supply_cost_sales_pct' },
+        op: 'gt',
+        value: 30,
+      },
+    ],
+    sort: [{ key: 'flashReport.food_supply_cost_sales_pct', dir: 'desc' }],
+  },
+};
+
+export function getQuestionTableQuery(id: string): TableQuery | null {
+  return QUESTION_TABLE_QUERIES[id] ?? null;
+}
+
+export function questionShape(entry: QuestionEntry): QuestionShape {
+  const hasTable = entry.id in QUESTION_TABLE_QUERIES;
+  const hasChart = Boolean(entry.suggestedChartId);
+  if (hasTable && hasChart) return 'both';
+  if (hasTable) return 'table';
+  return 'chart';
+}
+
 export function searchQuestions(
   query: string,
   segment?: QuestionSegment,
   subsegment?: ProductionSubsegment,
+  shape?: QuestionShape,
 ): QuestionEntry[] {
   const q = query.trim().toLowerCase();
   return QUESTION_LIBRARY.filter((entry) => {
     if (segment && entry.segment !== segment) return false;
     if (subsegment && entry.subsegment !== subsegment) return false;
+    if (shape) {
+      const s = questionShape(entry);
+      if (shape === 'table' && s === 'chart') return false;
+      if (shape === 'chart' && s === 'table') return false;
+      // 'both' filter is unusual; treat as "no shape filter"
+    }
     if (!q) return true;
     return entry.text.toLowerCase().includes(q);
   });

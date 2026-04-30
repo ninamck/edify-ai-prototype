@@ -25,6 +25,12 @@ import type { BriefingRole } from '@/components/briefing';
 import { timeAwareGreeting } from '@/components/briefing';
 import type { AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
 import { renderAnalyticsChart, ANALYTICS_CONFIG } from '@/components/Analytics/AnalyticsCharts';
+import {
+  runQuery,
+  type TableQuery,
+} from '@/components/Mvp1/Tables/query';
+import DataTable from '@/components/Mvp1/Tables/DataTable';
+import type { Column } from '@/components/Mvp1/Tables/dataSources';
 
 function QuinnAvatar({
   size = 30,
@@ -146,7 +152,15 @@ const INTEGRITY_CHECKS: IntegrityCheck[] = [
   { id: 'no-archived-ref', label: 'No recipes referencing archived ingredients', detail: 'No issues found', status: 'ok' },
 ];
 
-type ChatMsg = { id: string; role: 'user' | 'quinn'; text: string; msgType?: string; chartId?: string };
+type ChatMsg = {
+  id: string;
+  role: 'user' | 'quinn';
+  text: string;
+  msgType?: string;
+  chartId?: string;
+  tableQuery?: TableQuery;
+  tableTitle?: string;
+};
 
 type RecipeIngredient = { name: string; qty: string; unit: string };
 
@@ -1372,10 +1386,14 @@ function AnalyticsChartContent({
   chartId,
   isPinned,
   onAdd,
+  pinLabel,
+  pinnedLabel,
 }: {
   chartId: AnalyticsChartId;
   isPinned: boolean;
   onAdd: () => void;
+  pinLabel: string;
+  pinnedLabel: string;
 }) {
   return (
     <div style={{ marginTop: '10px' }}>
@@ -1410,8 +1428,123 @@ function AnalyticsChartContent({
           }}
         >
           <Pin size={12} strokeWidth={2} />
-          {isPinned ? 'Added to dashboard' : 'Add to dashboard'}
+          {isPinned ? pinnedLabel : pinLabel}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function TableResultBlock({
+  title,
+  tableQuery,
+  prompt,
+  onPinTable,
+  onOpenTableInNewView,
+}: {
+  title: string;
+  tableQuery: TableQuery;
+  prompt: string;
+  onPinTable?: (info: { title: string; query: TableQuery; prompt: string }) => void;
+  onOpenTableInNewView?: (info: { title: string; query: TableQuery; prompt: string }) => void;
+}) {
+  const [columns, setColumns] = useState<Column[] | null>(null);
+  const [rows, setRows] = useState<Record<string, unknown>[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pinned, setPinned] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setError(null);
+    runQuery(tableQuery)
+      .then((result) => {
+        if (cancelled) return;
+        setColumns(result.columns);
+        setRows(result.rows);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : 'Failed to run query';
+        setError(msg);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tableQuery]);
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div
+        style={{
+          borderRadius: 10,
+          border: '1px solid var(--color-border-subtle)',
+          overflow: 'hidden',
+          background: '#fff',
+        }}
+      >
+        <div style={{ maxHeight: 280, overflow: 'auto' }}>
+          <DataTable
+            columns={columns ?? []}
+            data={rows ?? []}
+            loading={(rows === null || columns === null) && !error}
+            error={error}
+          />
+        </div>
+      </div>
+      <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        {onOpenTableInNewView && (
+          <button
+            type="button"
+            onClick={() =>
+              onOpenTableInNewView({ title, query: tableQuery, prompt })
+            }
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '7px 14px',
+              borderRadius: 100,
+              border: '1.5px solid var(--color-border)',
+              background: '#fff',
+              color: 'var(--color-text-secondary)',
+              fontSize: 12,
+              fontWeight: 600,
+              fontFamily: 'var(--font-primary)',
+              cursor: 'pointer',
+            }}
+          >
+            <LayoutDashboard size={12} strokeWidth={2} />
+            Open as new view
+          </button>
+        )}
+        {onPinTable && (
+          <button
+            type="button"
+            onClick={() => {
+              if (pinned) return;
+              onPinTable({ title, query: tableQuery, prompt });
+              setPinned(true);
+            }}
+            disabled={pinned}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '7px 14px',
+              borderRadius: 100,
+              border: pinned ? 'none' : '1.5px solid var(--color-border)',
+              background: pinned ? 'var(--color-success-light, #f0fdf4)' : '#fff',
+              color: pinned ? '#166534' : 'var(--color-text-secondary)',
+              fontSize: 12,
+              fontWeight: 600,
+              fontFamily: 'var(--font-primary)',
+              cursor: pinned ? 'default' : 'pointer',
+            }}
+          >
+            <Pin size={12} strokeWidth={2} />
+            {pinned ? 'Pinned to view' : 'Pin to current view'}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -1448,8 +1581,14 @@ export default function Feed({
   seedUserPrompt,
   autoSendPrompt,
   autoSendChartId,
+  autoSendTableQuery,
+  autoSendTableTitle,
   alreadyPinned,
   autoStartFlow,
+  onUserMessageCountChange,
+  onPinTable,
+  onOpenTableInNewView,
+  pinTarget = 'dashboard',
 }: {
   briefingRole: BriefingRole;
   quinnExpanded?: boolean;
@@ -1458,17 +1597,37 @@ export default function Feed({
   noHeader?: boolean;
   onAddToDashboard?: (id: AnalyticsChartId) => void;
   onViewDashboard?: () => void;
+  /** Where chat-pinned charts go: the legacy dashboard layout or the
+   *  currently-active MVP1 view. Drives button copy and post-pin CTA. */
+  pinTarget?: 'dashboard' | 'view';
   seedUserPrompt?: string;
   /** If set, Feed simulates a user send with this text on mount. */
   autoSendPrompt?: string;
   /** Explicit chart for autoSendPrompt: id to force a chart, null for text-only, undefined to fall back to prefix detection. */
   autoSendChartId?: AnalyticsChartId | null;
+  /** Explicit table query for autoSendPrompt. When set, Quinn replies with a
+   *  table-result message instead of a chart/text. Takes precedence over
+   *  autoSendChartId. */
+  autoSendTableQuery?: TableQuery;
+  /** Optional friendly title for the auto-sent table (e.g. the question text). */
+  autoSendTableTitle?: string;
   /** Charts already pinned to the dashboard — their "Add to dashboard" buttons render as already-pinned. */
   alreadyPinned?: Set<AnalyticsChartId>;
   /** If set, auto-start the named guided flow on mount (e.g. from an external "Ask Quinn" entry point). */
   autoStartFlow?: 'recipe' | 'integrity';
+  /**
+   * Fires whenever the count of user-role messages in the chat changes.
+   * Used by AddInsightPopup to detect follow-up activity for history saving.
+   */
+  onUserMessageCountChange?: (count: number) => void;
+  /** Pin a Quinn-built table to the currently active view. */
+  onPinTable?: (info: { title: string; query: TableQuery; prompt: string }) => void;
+  /** Open a Quinn-built table as its own new view tab. */
+  onOpenTableInNewView?: (info: { title: string; query: TableQuery; prompt: string }) => void;
 }) {
-  const [chatStarted, setChatStarted] = useState(!!seedUserPrompt || !!autoSendPrompt);
+  const [chatStarted, setChatStarted] = useState(
+    !!seedUserPrompt || !!autoSendPrompt || !!autoSendTableQuery,
+  );
   const [messages, setMessages] = useState<ChatMsg[]>(() =>
     seedUserPrompt && !autoSendPrompt
       ? [{ id: 'q-seed', role: 'quinn', text: seedUserPrompt }]
@@ -1498,6 +1657,11 @@ export default function Feed({
     onChatStateChange?.(chatStarted && !chatMinimized);
   }, [chatStarted, chatMinimized, onChatStateChange]);
 
+  const userMessageCount = messages.filter((m) => m.role === 'user').length;
+  useEffect(() => {
+    onUserMessageCountChange?.(userMessageCount);
+  }, [userMessageCount, onUserMessageCountChange]);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, recipeFlow, productionFlow]);
@@ -1506,11 +1670,17 @@ export default function Feed({
   const didAutoSendRef = useRef(false);
   useEffect(() => {
     if (didAutoSendRef.current) return;
-    if (!autoSendPrompt) return;
+    if (!autoSendPrompt && !autoSendTableQuery) return;
     didAutoSendRef.current = true;
-    sendMessage(autoSendPrompt, autoSendChartId);
+    sendMessage(
+      autoSendPrompt ?? autoSendTableTitle ?? 'Build me a table',
+      autoSendTableQuery ? null : autoSendChartId,
+      autoSendTableQuery
+        ? { tableQuery: autoSendTableQuery, tableTitle: autoSendTableTitle }
+        : undefined,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSendPrompt]);
+  }, [autoSendPrompt, autoSendTableQuery]);
 
   // Auto-start a guided flow once on mount (used by the /recipes/intake "Ask Quinn" entry point).
   const didAutoStartRef = useRef(false);
@@ -1694,10 +1864,11 @@ export default function Feed({
     if (pinnedChartIds.has(chartId)) return;
     setPinnedChartIds(prev => new Set([...prev, chartId]));
     onAddToDashboard?.(chartId);
+    const destination = pinTarget === 'view' ? 'this view' : 'your dashboard';
     setMessages(prev => [...prev, {
       id: `q-analytics-pinned-${chartId}-${Date.now()}`,
       role: 'quinn',
-      text: `Done — I've pinned **${ANALYTICS_CONFIG[chartId].label}** to your dashboard.`,
+      text: `Done — I've pinned **${ANALYTICS_CONFIG[chartId].label}** to ${destination}.`,
       msgType: 'analytics-pinned',
     }]);
   }
@@ -1821,7 +1992,11 @@ export default function Feed({
 
   // ─────────────────────────────────────────────────────────────────────────
 
-  function sendMessage(overrideText?: string, explicitChart?: AnalyticsChartId | null) {
+  function sendMessage(
+    overrideText?: string,
+    explicitChart?: AnalyticsChartId | null,
+    tableOpts?: { tableQuery: TableQuery; tableTitle?: string },
+  ) {
     const raw = overrideText !== undefined ? overrideText : input;
     const text = raw.trim();
     if (!text) return;
@@ -1830,6 +2005,36 @@ export default function Feed({
     setChatStarted(true);
     setChatMinimized(false);
     setInput('');
+
+    // Table flow takes precedence when an explicit table query was provided.
+    if (tableOpts) {
+      const thinkingId = `q-table-thinking-${Date.now()}`;
+      setMessages((prev) => [
+        ...prev,
+        userMsg,
+        { id: thinkingId, role: 'quinn' as const, text: '', msgType: 'analytics-thinking' },
+      ]);
+      window.setTimeout(() => {
+        setMessages((prev) => {
+          const withoutThinking = prev.filter((m) => m.id !== thinkingId);
+          return [
+            ...withoutThinking,
+            {
+              id: `q-table-result-${Date.now()}`,
+              role: 'quinn' as const,
+              text:
+                tableOpts.tableTitle
+                  ? `Here's a table for "${tableOpts.tableTitle}". You can pin it to the current view or open it as its own view.`
+                  : 'Here\'s a table built from your data. You can pin it to the current view or open it as its own view.',
+              msgType: 'table-result',
+              tableQuery: tableOpts.tableQuery,
+              tableTitle: tableOpts.tableTitle ?? text,
+            },
+          ];
+        });
+      }, 700);
+      return;
+    }
 
     let detected: AnalyticsChartId | null = null;
     if (explicitChart !== undefined) {
@@ -2345,9 +2550,25 @@ export default function Feed({
                             chartId={m.chartId as AnalyticsChartId}
                             isPinned={pinnedChartIds.has(m.chartId as AnalyticsChartId)}
                             onAdd={() => handleAddChart(m.chartId as AnalyticsChartId)}
+                            pinLabel={pinTarget === 'view' ? 'Pin to current view' : 'Add to dashboard'}
+                            pinnedLabel={pinTarget === 'view' ? 'Pinned to view' : 'Added to dashboard'}
                           />
                         )}
-                        {m.msgType === 'analytics-pinned' && (
+                        {m.msgType === 'table-result' && m.tableQuery && (
+                          <TableResultBlock
+                            title={m.tableTitle ?? m.text}
+                            tableQuery={m.tableQuery}
+                            prompt={
+                              messages
+                                .slice(0, messages.indexOf(m))
+                                .reverse()
+                                .find((p) => p.role === 'user')?.text ?? ''
+                            }
+                            onPinTable={onPinTable}
+                            onOpenTableInNewView={onOpenTableInNewView}
+                          />
+                        )}
+                        {m.msgType === 'analytics-pinned' && pinTarget !== 'view' && (
                           <button
                             type="button"
                             onClick={() => onViewDashboard?.()}

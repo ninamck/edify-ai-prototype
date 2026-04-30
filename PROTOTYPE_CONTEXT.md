@@ -16,7 +16,7 @@ Three axes combine to drive content across the whole app:
 
 | Axis | Values | Where it lives |
 |---|---|---|
-| **Role** | `ravi` (Manager), `cheryl` (Admin), `gm` (Employee) | `components/briefing.ts` → `BriefingRole` |
+| **Role** | `ed` (Manager), `cheryl` (Admin), `gm` (Employee) | `components/briefing.ts` → `BriefingRole` |
 | **Phase** | `morning`, `midday`, `afternoon`, `evening` | `components/briefing.ts` → `BriefingPhase` |
 | **Shell view** | `command-centre`, `dashboard` | `components/ShellTopBar.tsx` → `ShellViewMode` |
 
@@ -139,7 +139,7 @@ Inside the table:
 
 ## Key patterns & conventions
 
-**Phase-keyed fixtures.** When content varies by phase, model it as `Record<BriefingPhase, T>`. Examples: `RAVI_INSIGHTS`, `PREP_TODAY_BY_PHASE`. Not `T[]` with phase as a field.
+**Phase-keyed fixtures.** When content varies by phase, model it as `Record<BriefingPhase, T>`. Examples: `ED_INSIGHTS`, `PREP_TODAY_BY_PHASE`. Not `T[]` with phase as a field.
 
 **Quinn's voice is "drafted → you approve".** Items should lead with what Quinn did, ask for a one-tap decision. Avoid generic reminders.
 
@@ -241,7 +241,7 @@ Rough chronology of what shipped:
 
 ## Known loose ends / small annoyances
 
-- **Greeting text on Feed.tsx** uses real clock, not phase override — so "Good evening, Ravi" can show with a "Morning briefing" header. Low priority; demo-aware copy would be a nice tidy-up.
+- **Greeting text on Feed.tsx** uses real clock, not phase override — so "Good evening, Ed" can show with a "Morning briefing" header. Low priority; demo-aware copy would be a nice tidy-up.
 - **Live snapshot bars** in the briefing panel (P&L confidence, labour curve) don't shift with phase — they reflect the fixture as-is. If phase-awareness matters there, extend the same pattern.
 - **`MorningBriefingActionsPanel.tsx`** is unused but left in the repo in case the separated "To Review" panel is wanted back. Safe to delete.
 - **`CURRENT_HOUR_INDEX`** constant in `managerMockData.ts` is retained for legacy but no longer used by the dashboard — `currentHourIndexForPhase()` is the live path.

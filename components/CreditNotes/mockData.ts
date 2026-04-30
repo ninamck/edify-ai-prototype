@@ -262,7 +262,7 @@ export const MOCK_CREDIT_NOTES: CreditNote[] = [
         date: '4 Apr 2026 · 14:10',
         type: 'raised',
         note: 'Dairy delivery short — 4 of 30 milk 2L not received. £16.80 credit requested.',
-        by: 'Ravi P.',
+        by: 'Ed P.',
       },
       {
         id: 'ce-18',

@@ -8,7 +8,7 @@ import Feed from '@/components/Feed/Feed';
 import QuinnOrb from '@/components/Sidebar/QuinnOrb';
 
 /** Routes where Quinn chat is already embedded — hide the floating card. */
-const SHELL_ROUTES = new Set(['/']);
+const SHELL_ROUTES = new Set(['/', '/mvp-1']);
 
 export default function QuinnFloatingCard() {
   const [open, setOpen] = useState(false);
@@ -113,7 +113,7 @@ export default function QuinnFloatingCard() {
 
             {/* Feed — no internal header since we provide our own */}
             <Feed
-              briefingRole="ravi"
+              briefingRole="ed"
               noHeader={true}
             />
           </motion.div>

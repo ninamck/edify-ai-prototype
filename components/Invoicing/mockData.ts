@@ -293,7 +293,7 @@ export const MOCK_INVOICES: Invoice[] = [
     ],
     variances: [],
     note: 'First of two deliveries against PO-2907 — dairy run. Eggs + flour arriving tomorrow on a separate truck.',
-    noteAuthor: 'Ravi',
+    noteAuthor: 'Ed',
     noteUpdatedAt: '4 Apr',
   },
   {

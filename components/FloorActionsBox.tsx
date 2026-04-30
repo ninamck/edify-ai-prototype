@@ -46,7 +46,7 @@ function loadStoredActions(): Record<BriefingRole, FloorAction[]> | null {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Record<BriefingRole, FloorAction[]>;
-    if (!parsed || !parsed.ravi || !parsed.cheryl || !parsed.gm) return null;
+    if (!parsed || !parsed.ed || !parsed.cheryl || !parsed.gm) return null;
     return parsed;
   } catch {
     return null;
@@ -207,7 +207,7 @@ export default function FloorActionsBox({
     if (stored) setActionsByRole(stored);
   }, []);
 
-  const role: BriefingRole = briefingRole ?? 'ravi';
+  const role: BriefingRole = briefingRole ?? 'ed';
   const actions = actionsByRole[role];
   const visibleActions = actions.filter((a) => a.visible);
 

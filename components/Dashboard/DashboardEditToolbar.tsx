@@ -1,18 +1,22 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { Plus, Pencil, Check } from 'lucide-react';
 
 export default function DashboardEditToolbar({
   editing,
   onToggleEdit,
   onAddInsight,
+  leadingControls,
 }: {
   editing: boolean;
   onToggleEdit: () => void;
   onAddInsight: () => void;
+  leadingControls?: ReactNode;
 }) {
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+      {leadingControls}
       <button
         type="button"
         onClick={onAddInsight}

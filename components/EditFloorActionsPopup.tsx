@@ -121,7 +121,7 @@ export const DEFAULT_FLOOR_ACTIONS: FloorAction[] = [
 ];
 
 export const DEFAULT_FLOOR_ACTIONS_BY_ROLE: Record<BriefingRole, FloorAction[]> = {
-  ravi: DEFAULT_FLOOR_ACTIONS,
+  ed: DEFAULT_FLOOR_ACTIONS,
   cheryl: [
     { id: 'review-orders', label: 'Review orders', iconKey: 'ShoppingCart', visible: true },
     { id: 'receive-delivery', label: 'Receive delivery', iconKey: 'Truck', visible: true },

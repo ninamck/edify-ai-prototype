@@ -1,6 +1,6 @@
 import type { CommandCentreVariant } from '@/components/Feed/CommandCentre';
 
-export type BriefingRole = 'ravi' | 'cheryl' | 'gm' | 'playtomic';
+export type BriefingRole = 'ed' | 'cheryl' | 'gm' | 'playtomic';
 
 export type BriefingPhase = 'morning' | 'midday' | 'afternoon' | 'evening';
 
@@ -13,7 +13,7 @@ export function phaseFromHour(hour: number): BriefingPhase {
 
 /** Role options for briefing + chat context (top bar); floor actions can key off this later. */
 export const BRIEFING_ROLES: { id: BriefingRole; label: string; short: string }[] = [
-  { id: 'ravi', label: 'Manager', short: 'Manager' },
+  { id: 'ed', label: 'Manager', short: 'Manager' },
   { id: 'cheryl', label: 'Admin', short: 'Admin' },
   { id: 'gm', label: 'Employee', short: 'Employee' },
   { id: 'playtomic', label: 'Playtomic (padel demo)', short: 'Playtomic' },
@@ -22,8 +22,8 @@ export const BRIEFING_ROLES: { id: BriefingRole; label: string; short: string }[
 /** One-line greeting for the top bar (matches timeline persona copy). */
 export function morningGreetingLine(role: BriefingRole): string {
   switch (role) {
-    case 'ravi':
-      return 'Good morning, Ravi.';
+    case 'ed':
+      return 'Good morning, Ed.';
     case 'cheryl':
       return 'Good morning, Cheryl.';
     case 'gm':
@@ -40,8 +40,8 @@ export function timeAwareGreeting(role: BriefingRole): string {
   const h = new Date().getHours();
   const tod = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
   switch (role) {
-    case 'ravi':
-      return `Good ${tod}, Ravi.`;
+    case 'ed':
+      return `Good ${tod}, Ed.`;
     case 'cheryl':
       return `Good ${tod}, Cheryl.`;
     case 'gm':
@@ -55,7 +55,7 @@ export function timeAwareGreeting(role: BriefingRole): string {
 
 export function commandCentreVariant(role: BriefingRole): CommandCentreVariant {
   switch (role) {
-    case 'ravi':
+    case 'ed':
       return 'chain';
     case 'cheryl':
       return 'finance';

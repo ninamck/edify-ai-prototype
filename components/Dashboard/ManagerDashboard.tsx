@@ -72,6 +72,9 @@ export default function ManagerDashboard({
   onToggleEdit,
   onAddInsight,
   onRemovePinned,
+  toolbarLeadingControls,
+  belowHeader,
+  heroGreeting,
 }: {
   phase: BriefingPhase;
   layout: DashboardLayoutEntry[];
@@ -80,6 +83,10 @@ export default function ManagerDashboard({
   onToggleEdit: () => void;
   onAddInsight: () => void;
   onRemovePinned: (chartId: AnalyticsChartId) => void;
+  toolbarLeadingControls?: ReactNode;
+  belowHeader?: ReactNode;
+  /** When provided, render the page header in hero style (large greeting + airy spacing). */
+  heroGreeting?: string;
 }) {
   const hourlyTrading = useMemo(() => hourlyTradingForPhase(phase), [phase]);
   const weatherHourly = useMemo(() => weatherHourlyForPhase(phase), [phase]);
@@ -245,22 +252,57 @@ export default function ManagerDashboard({
           justifyContent: 'space-between',
           gap: 12,
           flexWrap: 'wrap',
+          paddingTop: heroGreeting ? 20 : 0,
+          paddingBottom: heroGreeting ? 12 : 0,
         }}
       >
-        <div>
-          <h1 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            Fitzroy Espresso <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>· In shift</span>
-          </h1>
-          <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)' }}>
-            Dummy data · it's {nowHourLabel} · how the day is shaping up so far
-          </p>
+        <div style={{ minWidth: 0 }}>
+          {heroGreeting ? (
+            <>
+              <h1
+                style={{
+                  margin: 0,
+                  fontSize: 30,
+                  fontWeight: 600,
+                  letterSpacing: '-0.01em',
+                  color: 'var(--color-text-primary)',
+                  lineHeight: 1.15,
+                }}
+              >
+                {heroGreeting}
+              </h1>
+              <p
+                style={{
+                  margin: '8px 0 0',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: 'var(--color-text-muted)',
+                  lineHeight: 1.4,
+                }}
+              >
+                Fitzroy Espresso · it&apos;s {nowHourLabel} · how the day is shaping up so far
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                Fitzroy Espresso <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>· In shift</span>
+              </h1>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)' }}>
+                Dummy data · it&apos;s {nowHourLabel} · how the day is shaping up so far
+              </p>
+            </>
+          )}
         </div>
         <DashboardEditToolbar
           editing={editing}
           onToggleEdit={onToggleEdit}
           onAddInsight={onAddInsight}
+          leadingControls={toolbarLeadingControls}
         />
       </div>
+
+      {belowHeader}
 
       <div
         style={{

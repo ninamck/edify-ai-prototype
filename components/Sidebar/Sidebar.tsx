@@ -19,12 +19,14 @@ import {
   MapPin,
   User,
   Settings,
+  Table2,
 } from 'lucide-react';
 
 import NavGroup from './NavGroup';
 import NavItem from './NavItem';
 import { useApprovals } from '@/components/Approvals/approvalsStore';
 import { needsReviewCount } from '@/components/Invoicing/mockData';
+import { useDemoVersion } from '@/components/DemoControls/demoStore';
 
 export default function Sidebar() {
   const router = useRouter();
@@ -32,6 +34,8 @@ export default function Sidebar() {
   const approvals = useApprovals();
   const pendingApprovals = approvals.filter(a => a.status === 'pending').length;
   const invoiceReviewCount = needsReviewCount();
+  const demoVersion = useDemoVersion();
+  const homeHref = demoVersion === 'mvp1' ? '/mvp-1' : '/';
   /** Icon-only rail (labels via tooltips); always minimised. */
   const compact = true;
   const is = (href: string) => pathname === href || pathname.startsWith(href + '/');
@@ -57,7 +61,13 @@ export default function Sidebar() {
       {/* Zone 1 — Home (site switcher lives in ShellTopBar) */}
       <div style={{ marginTop: compact ? 0 : '2px' }}>
         <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-          <NavItem label="Home" icon={Home} active={pathname === '/'} compact={compact} onClick={() => router.push('/')} />
+          <NavItem
+            label="Home"
+            icon={Home}
+            active={pathname === homeHref}
+            compact={compact}
+            onClick={() => router.push(homeHref)}
+          />
         </ul>
       </div>
 
@@ -86,6 +96,12 @@ export default function Sidebar() {
           <NavItem label="View dashboard" icon={LayoutDashboard} compact={compact} active={is('/dashboard')} />
           <NavItem label="View analytics" icon={TrendingUp} compact={compact} active={is('/analytics')} />
           <NavItem label="Compare sites" icon={Layers} compact={compact} active={is('/compare')} />
+          <NavItem
+            label="Build a table"
+            icon={Table2}
+            compact={compact}
+            onClick={() => router.push('/mvp-1?build=table')}
+          />
         </NavGroup>
 
         {/* SETUP */}

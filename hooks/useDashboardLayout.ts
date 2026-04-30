@@ -16,7 +16,7 @@ type LayoutByRole = Record<BriefingRole, DashboardLayoutEntry[]>;
 const STORAGE_KEY = 'edify:dashboardLayoutByRole';
 
 const DEFAULT_LAYOUT_BY_ROLE: LayoutByRole = {
-  ravi: MANAGER_DEFAULT_LAYOUT,
+  ed: MANAGER_DEFAULT_LAYOUT,
   gm: MANAGER_DEFAULT_LAYOUT,
   cheryl: ESTATE_DEFAULT_LAYOUT,
   playtomic: [],
@@ -37,9 +37,9 @@ function loadStored(): LayoutByRole | null {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<LayoutByRole>;
-    if (!parsed || !parsed.ravi || !parsed.cheryl || !parsed.gm) return null;
+    if (!parsed || !parsed.ed || !parsed.cheryl || !parsed.gm) return null;
     return {
-      ravi: mergeWithDefaults(parsed.ravi, MANAGER_DEFAULT_LAYOUT),
+      ed: mergeWithDefaults(parsed.ed, MANAGER_DEFAULT_LAYOUT),
       gm: mergeWithDefaults(parsed.gm, MANAGER_DEFAULT_LAYOUT),
       cheryl: mergeWithDefaults(parsed.cheryl, ESTATE_DEFAULT_LAYOUT),
       playtomic: parsed.playtomic ?? [],

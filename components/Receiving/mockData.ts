@@ -155,7 +155,7 @@ export const MOCK_COMPLETED_DELIVERIES: GRN[] = [
     site: 'Fitzroy Espresso',
     status: 'Pending Invoice',
     dateReceived: '26 Mar 2026',
-    receivedBy: 'Ravi Patel',
+    receivedBy: 'Ed Barry',
     invoiceStatus: 'Pending Invoice',
     attachmentUrl: '/mock-grn-doc.pdf',
     lines: [
@@ -209,7 +209,7 @@ export const MOCK_COMPLETED_DELIVERIES: GRN[] = [
     site: 'City Centre',
     status: 'Closed',
     dateReceived: '21 Mar 2026',
-    receivedBy: 'Ravi Patel',
+    receivedBy: 'Ed Barry',
     invoiceNumber: 'INV-4380',
     invoiceStatus: 'Closed',
     lines: [
@@ -224,7 +224,7 @@ export const MOCK_COMPLETED_DELIVERIES: GRN[] = [
     site: 'Fitzroy Espresso',
     status: 'Pending Invoice',
     dateReceived: '4 Apr 2026',
-    receivedBy: 'Ravi Patel',
+    receivedBy: 'Ed Barry',
     invoiceStatus: 'Pending Invoice',
     lines: [
       { id: 'gl-9', poLineId: 'pl-15', name: 'Full cream milk 2L', sku: 'FCM-2L', unit: 'EA', price: 4.20, expectedQty: 30, receivedQty: 30 },
@@ -255,7 +255,7 @@ export const MOCK_COMPLETED_DELIVERIES: GRN[] = [
     site: 'Fitzroy Espresso',
     status: 'Pending Invoice',
     dateReceived: '7 Apr 2026',
-    receivedBy: 'Ravi Patel',
+    receivedBy: 'Ed Barry',
     invoiceStatus: 'Pending Invoice',
     lines: [
       { id: 'gl-14', poLineId: 'pl-20', name: 'Full cream milk 2L', sku: 'FCM-2L', unit: 'EA', price: 4.20, expectedQty: 20, receivedQty: 20 },

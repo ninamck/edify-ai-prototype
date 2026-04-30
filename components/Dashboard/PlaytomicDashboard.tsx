@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import PlaytomicOverview from '@/components/Dashboard/Playtomic/PlaytomicOverview';
 import ChainPulse from '@/components/Dashboard/Playtomic/ChainPulse';
 import ManchesterDeepDive from '@/components/Dashboard/Playtomic/ManchesterDeepDive';
@@ -36,6 +36,9 @@ export default function PlaytomicDashboard({
   onToggleEdit,
   onAddInsight,
   onRemovePinned,
+  toolbarLeadingControls,
+  belowHeader,
+  heroGreeting,
 }: {
   layout: DashboardLayoutEntry[];
   editing: boolean;
@@ -43,6 +46,10 @@ export default function PlaytomicDashboard({
   onToggleEdit: () => void;
   onAddInsight: () => void;
   onRemovePinned: (chartId: AnalyticsChartId) => void;
+  toolbarLeadingControls?: ReactNode;
+  belowHeader?: ReactNode;
+  /** When provided, render the page header in hero style (large greeting + airy spacing). */
+  heroGreeting?: string;
 }) {
   const [tab, setTab] = useState<PlaytomicTab>('overview');
   const widgetRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -137,22 +144,57 @@ export default function PlaytomicDashboard({
           justifyContent: 'space-between',
           gap: 12,
           flexWrap: 'wrap',
+          paddingTop: heroGreeting ? 20 : 0,
+          paddingBottom: heroGreeting ? 12 : 0,
         }}
       >
-        <div>
-          <h1 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            Playtomic <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>· chain dashboard</span>
-          </h1>
-          <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)' }}>
-            Dummy data · 7 open clubs · ask Quinn anything to add a chart
-          </p>
+        <div style={{ minWidth: 0 }}>
+          {heroGreeting ? (
+            <>
+              <h1
+                style={{
+                  margin: 0,
+                  fontSize: 30,
+                  fontWeight: 600,
+                  letterSpacing: '-0.01em',
+                  color: 'var(--color-text-primary)',
+                  lineHeight: 1.15,
+                }}
+              >
+                {heroGreeting}
+              </h1>
+              <p
+                style={{
+                  margin: '8px 0 0',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: 'var(--color-text-muted)',
+                  lineHeight: 1.4,
+                }}
+              >
+                7 open clubs across the chain · ask Quinn anything to add a chart
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                Playtomic <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>· chain dashboard</span>
+              </h1>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)' }}>
+                Dummy data · 7 open clubs · ask Quinn anything to add a chart
+              </p>
+            </>
+          )}
         </div>
         <DashboardEditToolbar
           editing={editing}
           onToggleEdit={onToggleEdit}
           onAddInsight={onAddInsight}
+          leadingControls={toolbarLeadingControls}
         />
       </div>
+
+      {belowHeader}
 
       {tab !== 'manchester' && (
         <div

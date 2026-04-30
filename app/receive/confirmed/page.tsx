@@ -20,7 +20,7 @@ function ConfirmedContent() {
       supplier={supplier}
       poNumbers={poNums}
       varianceCount={variances}
-      receivedBy="Ravi Patel"
+      receivedBy="Ed Barry"
       onBackToDeliveries={() => router.push('/receive')}
     />
   );

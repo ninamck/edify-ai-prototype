@@ -108,7 +108,7 @@ function LabourMiniCurve({ subtitle }: { subtitle: string }) {
 }
 
 function LiveSnapshot({ role }: { role: BriefingRole }) {
-  if (role === 'ravi') return null;
+  if (role === 'ed') return null;
   // Playtomic is a separate demo persona; its briefing surfaces padel-specific
   // insights below and doesn't need the F&B P&L confidence header.
   if (role === 'playtomic') return null;
@@ -570,13 +570,13 @@ function PinnedSection({
 
 // ── Role content ──────────────────────────────────────────────────────────────
 
-const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
+const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
   morning: [
     {
       category: 'needs-call',
       items: [
         {
-          id: 'ravi-m-n-1',
+          id: 'ed-m-n-1',
           headline: 'Bidvest delivery lands 11:10 — pre-check the GRN',
           detail:
             '14 lines, £412 on the drop. WTD spend on Bidvest already £10 over budget — scrutinise short-shipments before you sign so the overage doesn\'t grow.',
@@ -584,7 +584,7 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           actionSecondary: 'Log discrepancy',
         },
         {
-          id: 'ravi-m-n-2',
+          id: 'ed-m-n-2',
           headline: 'Metro credit £312 — past finance threshold',
           detail:
             'Approve the write-off path or escalate. It can\'t sit in the queue — period margin locks later today.',
@@ -592,7 +592,7 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           actionSecondary: 'Escalate',
         },
         {
-          id: 'ravi-m-n-3',
+          id: 'ed-m-n-3',
           headline: 'Matcha estate order — two sites will stock out before Friday',
           detail:
             'Authorise the top-up or the Friday stock-out is locked in. Quinn has the basket ready to send.',
@@ -600,7 +600,7 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           actionSecondary: 'Adjust basket',
         },
         {
-          id: 'ravi-m-n-4',
+          id: 'ed-m-n-4',
           headline: 'Morning bake adjusted +3 muffins — approve for today',
           detail:
             'Forecast pulled 11% higher than yesterday. Quinn has drafted the revised batch sheet for the AM team — approve before 7am or it locks to the standing plan.',
@@ -614,25 +614,25 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       summary: '£1,840 invoices posted overnight · yesterday\'s basket cleared · night close filed',
       items: [
         {
-          id: 'ravi-m-h-1',
+          id: 'ed-m-h-1',
           headline: 'Overnight invoice match · £1,840 posted, 2 held for variance',
           detail:
             '11 of 13 invoices auto-matched to POs and posted to the ledger. The two exceptions are queued for Cheryl — you don\'t need to touch them.',
         },
         {
-          id: 'ravi-m-h-2',
+          id: 'ed-m-h-2',
           headline: 'Yesterday\'s Bidfood basket cleared at 2pm · £1,180 confirmed',
           detail:
             'Sent to supplier, confirmation received, Thursday delivery slot held. Full audit trail in the order log if you want to check.',
         },
         {
-          id: 'ravi-m-h-3',
+          id: 'ed-m-h-3',
           headline: 'Urban Fresh GRN matched overnight — 3 lines auto-signed',
           detail:
             'All within tolerance, no discrepancies. Posted to period margin so the numbers you see above are current.',
         },
         {
-          id: 'ravi-m-h-4',
+          id: 'ed-m-h-4',
           headline: 'Night-shift close filed · EOD £19,820 vs plan £18,910',
           detail:
             'Yesterday\'s final close posted. Waste £24, markdowns £0. The £910 over-plan is already baked into today\'s stock forecast.',
@@ -644,20 +644,20 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       summary: 'Sales → stock → orders loop kicking in · muffin rollover risk · today warm again',
       items: [
         {
-          id: 'ravi-m-w-1',
+          id: 'ed-m-w-1',
           headline: 'Yesterday\'s warm spell pulled iced-drink cover down 3 days — Bidfood basket already bumped +1 case',
           detail:
             'This is what the sales → stock → orders loop looks like when it runs itself. No action needed — just so you can see the join-up working.',
         },
         {
-          id: 'ravi-m-w-2',
+          id: 'ed-m-w-2',
           headline: '6 blueberry muffins rolled over from yesterday — at risk of waste today',
           detail:
             'Yesterday\'s bake-off left 6 on the shelf this morning. Shelf life ends today — if they don\'t sell by close, they bin. Typical rollover at this store is 2. Worth moving them front-of-counter or tagging for staff to upsell.',
           actionLabel: 'Got it',
         },
         {
-          id: 'ravi-m-w-3',
+          id: 'ed-m-w-3',
           headline: 'Today\'s weather: 21° vs 15° forecast — pace expected to track yesterday',
           detail:
             'Another 6° warm-day swing. Plan your cold chain and iced-drink mise-en-place for the same lift you saw yesterday afternoon.',
@@ -670,7 +670,7 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       category: 'needs-call',
       items: [
         {
-          id: 'ravi-d-n-1',
+          id: 'ed-d-n-1',
           headline: 'Bidvest just landed — GRN ready to scan before signing',
           detail:
             '14 lines on the dock. Two short-shipment flags already raised by Quinn. Your sign-off locks period margin — worth the 2-minute walk-through.',
@@ -678,7 +678,7 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           actionSecondary: 'Log discrepancy',
         },
         {
-          id: 'ravi-d-n-2',
+          id: 'ed-d-n-2',
           headline: 'Lunch pace running hot — hold or cut the 3pm shift?',
           detail:
             'Covers 18% above forecast through 11:30. If flow stays, the planned 4 → 3 cut at 3pm will leave the floor short. Quinn can hold it — one tap.',
@@ -686,7 +686,7 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           actionSecondary: 'Keep as planned',
         },
         {
-          id: 'ravi-d-n-3',
+          id: 'ed-d-n-3',
           headline: 'Matcha top-up cut-off in 90 min — send the basket?',
           detail:
             'Last call before Bidfood closes at 2pm. Without it, two sites stock out by Friday. Basket as drafted is £280.',
@@ -694,7 +694,7 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           actionSecondary: 'Adjust first',
         },
         {
-          id: 'ravi-d-n-4',
+          id: 'ed-d-n-4',
           headline: 'Tomorrow\'s muffin batch — 9 or back to 12?',
           detail:
             'Today\'s rollover count is 0 so far. If it stays that way you may want to go back to 12 to catch the warm-weather rush tomorrow.',
@@ -708,19 +708,19 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       summary: 'Bidvest GRN 11/14 matched · tomatoes basket updated · lunch shift confirmed',
       items: [
         {
-          id: 'ravi-d-h-1',
+          id: 'ed-d-h-1',
           headline: 'Bidvest GRN: 11 of 14 lines matched · £381 posted · 3 flagged',
           detail:
             'Auto-match hit the tolerances on 11 lines. Three are open: 2 short-shipments and 1 price variance — all queued for Cheryl.',
         },
         {
-          id: 'ravi-d-h-2',
+          id: 'ed-d-h-2',
           headline: 'Reorder point triggered on tomatoes · Bidfood basket updated +2 trays',
           detail:
             'Morning sales pulled tomato cover below the safety threshold. Quinn added 2 trays to tomorrow\'s Bidfood basket. No decision needed.',
         },
         {
-          id: 'ravi-d-h-3',
+          id: 'ed-d-h-3',
           headline: 'Lunch shift reminders sent · Priya confirmed on time',
           detail:
             'Mid-shift handover nudge went to Priya at 11:30. Confirmed. Tom in for the afternoon from 2pm.',
@@ -732,20 +732,20 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       summary: 'Sales +11% vs forecast · ham & cheese pace · baguette retention',
       items: [
         {
-          id: 'ravi-d-w-1',
+          id: 'ed-d-w-1',
           headline: 'Sales +11% vs forecast at 11am — warm day pulling extra cover',
           detail:
             '£13,770 vs £12,390 forecast. Iced drinks and cold food over-indexing as expected — keep ice and cold-brew topped up.',
         },
         {
-          id: 'ravi-d-w-2',
+          id: 'ed-d-w-2',
           headline: 'Ham & cheese baguette prep running ahead of sales pace',
           detail:
             'Morning batch was 8; 5 sold, 3 still displayed. If the lunch pickup doesn\'t catch up by 11:30, chill the remainder to extend shelf.',
           actionLabel: 'Got it',
         },
         {
-          id: 'ravi-d-w-3',
+          id: 'ed-d-w-3',
           headline: 'Baguette buyers at lunch return 2.3× more often than coffee-only customers',
           detail:
             'A retention pattern, not just a margin line. Something to keep in mind when you\'re thinking about prep volumes for the 12–2pm window.',
@@ -758,7 +758,7 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       category: 'needs-call',
       items: [
         {
-          id: 'ravi-a-n-1',
+          id: 'ed-a-n-1',
           headline: 'Bidfood basket cut-off in 30 min — approve tomorrow\'s order',
           detail:
             '£1,240 est., matcha +1 case included. One screen to review, one tap to send before 2pm.',
@@ -766,7 +766,7 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           actionSecondary: 'Adjust',
         },
         {
-          id: 'ravi-a-n-2',
+          id: 'ed-a-n-2',
           headline: 'Cold-drink push — send to the floor for the 3pm peak?',
           detail:
             'Quinn\'s board spec (iced latte + cold-brew citrus) and a 5-min barista brief are ready. Approve to push now or hold.',
@@ -774,7 +774,7 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           actionSecondary: 'Hold',
         },
         {
-          id: 'ravi-a-n-3',
+          id: 'ed-a-n-3',
           headline: 'Muffin batch size for tomorrow AM — 12 or 9?',
           detail:
             'Today\'s rollover count held at 0. Forecast warmer again tomorrow. Quinn recommends going back to 12.',
@@ -782,7 +782,7 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           actionSecondary: 'Keep at 9',
         },
         {
-          id: 'ravi-a-n-4',
+          id: 'ed-a-n-4',
           headline: 'Evening roster: Tom to cover the no-show?',
           detail:
             'One evening slot just opened. Tom is on-site already and willing. Confirm and Quinn will update the roster + send the text.',
@@ -796,19 +796,19 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       summary: 'Lunch £8,240 · shift change done · GRN reconciled · drink spec pushed',
       items: [
         {
-          id: 'ravi-a-h-1',
+          id: 'ed-a-h-1',
           headline: 'Lunch service wrapped · £8,240 taken · 12% above yesterday',
           detail:
             'Strongest lunch of the week so far. Ham & cheese sold out by 13:45, coffee volumes flat, iced drinks up 30%.',
         },
         {
-          id: 'ravi-a-h-2',
+          id: 'ed-a-h-2',
           headline: '3pm shift change confirmed · 4 → 3 as planned',
           detail:
             'Priya off, Tom on for the afternoon. Flow is settling so the cut holds — check back if covers spike.',
         },
         {
-          id: 'ravi-a-h-3',
+          id: 'ed-a-h-3',
           headline: 'Bidvest GRN fully reconciled · 3 discrepancies queued for Cheryl',
           detail:
             'All 14 lines closed. Auto-credit workflow started on the two short-shipments. Nothing more for you on this delivery.',
@@ -820,19 +820,19 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       summary: 'EOD tracking £20,250 · warm-day loop closed · ham & cheese sold out early',
       items: [
         {
-          id: 'ravi-a-w-1',
+          id: 'ed-a-w-1',
           headline: 'Expected EOD £20,250 vs £18,910 plan — holding the pace',
           detail:
             'Pace suggests +£1.3k at close. That\'ll post through to period margin overnight — no action needed, just for your number.',
         },
         {
-          id: 'ravi-a-w-2',
+          id: 'ed-a-w-2',
           headline: 'Warm-day loop closed: sales +11% → stock −3 days → Bidfood +1 case',
           detail:
             'Full loop ran without a touch. Worth noting for the conversation with head office — this is the kind of automation payoff we\'ve been pitching.',
         },
         {
-          id: 'ravi-a-w-3',
+          id: 'ed-a-w-3',
           headline: 'Ham & cheese sold out at 13:45 — earliest this week',
           detail:
             'Tuesday was 14:20, Wednesday 14:10. Pattern suggests the lunch pull is accelerating — worth watching prep volumes next week.',
@@ -845,7 +845,7 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       category: 'needs-call',
       items: [
         {
-          id: 'ravi-e-n-1',
+          id: 'ed-e-n-1',
           headline: 'End-of-day cash-up — any waste or markdowns to log?',
           detail:
             'Close workflow ready. Quinn pre-filled waste (6 muffins, 2 baguettes) — review and submit, or adjust if anything\'s off.',
@@ -853,14 +853,14 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           actionSecondary: 'Review waste',
         },
         {
-          id: 'ravi-e-n-2',
+          id: 'ed-e-n-2',
           headline: 'Tomorrow\'s Fresh Direct basket sent 2pm — confirm when it lands',
           detail:
             'Basket is locked and delivery is booked for 11am tomorrow. Quinn will auto-log the GRN — you only need to sign.',
           actionLabel: 'Mark ready',
         },
         {
-          id: 'ravi-e-n-3',
+          id: 'ed-e-n-3',
           headline: 'Weekend roster gaps — 2 slots still open',
           detail:
             'Saturday 10–14 and Sunday 14–18 unfilled. Quinn has a shortlist of who\'s said yes before — one tap to send the asks.',
@@ -868,7 +868,7 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           actionSecondary: 'Escalate to HO',
         },
         {
-          id: 'ravi-e-n-4',
+          id: 'ed-e-n-4',
           headline: 'Tonight\'s compliance sign-off — temperature log + fire door',
           detail:
             'PM temperature log was auto-filled from sensor data. Fire door check took 30 seconds to pre-fill. Both need your signature before you leave.',
@@ -881,25 +881,25 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       summary: 'Today closed £20,180 · Bidfood sent · recipes recosted · PM temps logged',
       items: [
         {
-          id: 'ravi-e-h-1',
+          id: 'ed-e-h-1',
           headline: 'Today\'s close wrapped · EOD £20,180 vs £18,910 plan (+£1,270)',
           detail:
             'Final numbers in. Best Thursday this quarter. Period margin delta posting overnight.',
         },
         {
-          id: 'ravi-e-h-2',
+          id: 'ed-e-h-2',
           headline: 'Tomorrow\'s Bidfood basket sent at 2pm · £1,240 confirmed',
           detail:
             'Supplier confirmation received, delivery slot held. You\'ll see the basket again tomorrow morning as the GRN pre-check.',
         },
         {
-          id: 'ravi-e-h-3',
+          id: 'ed-e-h-3',
           headline: 'Tomorrow\'s recipes recosted after flour variance · margins refreshed',
           detail:
             '12 recipes using the affected flour SKU pushed through overnight. Cost pack updated with the new margins — ready for Cheryl.',
         },
         {
-          id: 'ravi-e-h-4',
+          id: 'ed-e-h-4',
           headline: 'PM temperature log completed automatically from sensor data',
           detail:
             '15-min reads from 5pm to close, all within range. Ready for your sign-off above.',
@@ -911,19 +911,19 @@ const RAVI_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       summary: 'Muffin rollover fixed · weekend weather split · evening labour cut worked',
       items: [
         {
-          id: 'ravi-e-w-1',
+          id: 'ed-e-w-1',
           headline: 'Muffin rollover didn\'t happen today — first time this week',
           detail:
             'The 12 → 9 batch tune-down worked. Worth holding for one more day to confirm the pattern, then it becomes the standing plan.',
         },
         {
-          id: 'ravi-e-w-2',
+          id: 'ed-e-w-2',
           headline: 'Weekend weather: warm Saturday (22°), cooler Sunday (16°)',
           detail:
             'Quinn has already adjusted Saturday\'s prep forecast up 8%, Sunday down 4%. Basket for Saturday will reflect the lift tomorrow.',
         },
         {
-          id: 'ravi-e-w-3',
+          id: 'ed-e-w-3',
           headline: 'Evening labour at 94% of plan — cut worked without hurting service',
           detail:
             'No covers reported missed, no waits over 4 min. The 4 → 3 call was right even with lunch running hot. Good data point for future days.',
@@ -1631,8 +1631,8 @@ function InsightFeed({ groups, role, phase }: { groups: InsightGroup[]; role: Br
     }
   }
 
-  // Close-of-day reconciliation nudge: operators only (ravi + gm), evening phase.
-  const showCloseNudge = phase === 'evening' && (role === 'ravi' || role === 'gm');
+  // Close-of-day reconciliation nudge: operators only (ed + gm), evening phase.
+  const showCloseNudge = phase === 'evening' && (role === 'ed' || role === 'gm');
 
   const approvalsPreamble = pendingApprovals.length > 0
     ? <ApprovalsSubcard pending={pendingApprovals} />
@@ -2038,7 +2038,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
 
 function BriefingContent({ role, phase }: { role: BriefingRole; phase: BriefingPhase }) {
   const byPhase =
-    role === 'ravi' ? RAVI_INSIGHTS :
+    role === 'ed' ? ED_INSIGHTS :
     role === 'cheryl' ? CHERYL_INSIGHTS :
     role === 'gm' ? GM_INSIGHTS :
     role === 'playtomic' ? PLAYTOMIC_INSIGHTS :
