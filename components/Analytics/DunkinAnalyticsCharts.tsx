@@ -239,7 +239,7 @@ function HBarChart({
         <YAxis type="category" dataKey="site" tick={DUNKIN_TICK_STYLE} width={140} axisLine={false} tickLine={false} />
         <Tooltip
           contentStyle={DUNKIN_TOOLTIP_STYLE}
-          formatter={(v: number) => valueFormatter(v)}
+          formatter={(value) => valueFormatter(Number(value))}
           labelStyle={{ color: 'var(--color-text-secondary)', fontWeight: 600 }}
         />
         <Bar dataKey="value" radius={[0, 4, 4, 0]} fill={barColor}>
@@ -268,7 +268,7 @@ function PairedBarChart({
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-faint, rgba(58,48,40,0.06))" />
         <XAxis dataKey="site" tick={DUNKIN_TICK_STYLE} angle={-25} textAnchor="end" interval={0} height={70} />
         <YAxis tick={DUNKIN_TICK_STYLE} tickFormatter={valueFormatter} axisLine={false} tickLine={false} />
-        <Tooltip contentStyle={DUNKIN_TOOLTIP_STYLE} formatter={(v: number) => valueFormatter(v)} />
+        <Tooltip contentStyle={DUNKIN_TOOLTIP_STYLE} formatter={(value) => valueFormatter(Number(value))} />
         <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'var(--font-primary)' }} />
         <Bar dataKey="current" name="This week" fill={ACCENT} radius={[3, 3, 0, 0]} />
         <Bar dataKey="comparison" name="Last year" fill={ACCENT_MID} radius={[3, 3, 0, 0]} />
@@ -296,7 +296,7 @@ function LinePoints({
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-faint, rgba(58,48,40,0.06))" />
         <XAxis dataKey="week" tick={DUNKIN_TICK_STYLE} axisLine={false} tickLine={false} />
         <YAxis tick={DUNKIN_TICK_STYLE} tickFormatter={valueFormatter} axisLine={false} tickLine={false} label={yLabel ? { value: yLabel, angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: 'var(--color-text-muted)' } } : undefined} />
-        <Tooltip contentStyle={DUNKIN_TOOLTIP_STYLE} formatter={(v: number) => valueFormatter(v)} />
+        <Tooltip contentStyle={DUNKIN_TOOLTIP_STYLE} formatter={(value) => valueFormatter(Number(value))} />
         <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={{ r: 3 }} />
       </LineChart>
     </ResponsiveContainer>
@@ -324,7 +324,7 @@ function AreaPoints({
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-faint, rgba(58,48,40,0.06))" />
         <XAxis dataKey="week" tick={DUNKIN_TICK_STYLE} axisLine={false} tickLine={false} />
         <YAxis tick={DUNKIN_TICK_STYLE} tickFormatter={valueFormatter} axisLine={false} tickLine={false} />
-        <Tooltip contentStyle={DUNKIN_TOOLTIP_STYLE} formatter={(v: number) => valueFormatter(v)} />
+        <Tooltip contentStyle={DUNKIN_TOOLTIP_STYLE} formatter={(value) => valueFormatter(Number(value))} />
         <Area type="monotone" dataKey="value" stroke={ACCENT} strokeWidth={2} fill="url(#dunkin-area-fill)" />
       </AreaChart>
     </ResponsiveContainer>
