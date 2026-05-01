@@ -87,8 +87,6 @@ export default function HomeUtilityBar({
                   justifyContent: 'center',
                   width: 26,
                   height: 26,
-                  borderRadius: 7,
-                  background: 'var(--color-bg-hover)',
                   position: 'relative',
                 }}
               >
@@ -125,7 +123,7 @@ export default function HomeUtilityBar({
             width: 30,
             height: 30,
             borderRadius: 7,
-            border: '1px dashed var(--color-border-subtle)',
+            border: '1px solid var(--color-border-subtle)',
             background: 'transparent',
             cursor: 'pointer',
             flexShrink: 0,
