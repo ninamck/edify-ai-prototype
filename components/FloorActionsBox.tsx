@@ -1,95 +1,9 @@
 'use client';
 
-import { type ReactNode, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import {
-  ListChecks,
-  Utensils,
-  Trash2,
-  Truck,
-  ArrowLeftRight,
-  Pencil,
-  ClipboardList,
-  Package,
-  ShoppingCart,
-  Thermometer,
-  Scale,
-  Clock,
-  FileText,
-  AlertTriangle,
-  CheckCircle,
-  CalendarClock,
-  Send,
-  PackageSearch,
-  FileCheck,
-  FileX,
-  LayoutDashboard,
-  TrendingUp,
-  Layers,
-  Star,
-  MapPin,
-  User,
-  Settings,
-  type LucideIcon,
-} from 'lucide-react';
+import { type ReactNode } from 'react';
+import { Pencil, ListChecks, type LucideIcon } from 'lucide-react';
 import type { BriefingRole } from '@/components/briefing';
-import EditFloorActionsPopup, {
-  type FloorAction,
-  DEFAULT_FLOOR_ACTIONS_BY_ROLE,
-} from '@/components/EditFloorActionsPopup';
-
-const STORAGE_KEY = 'edify:floorActionsByRole';
-
-function loadStoredActions(): Record<BriefingRole, FloorAction[]> | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Record<BriefingRole, FloorAction[]>;
-    if (!parsed || !parsed.ed || !parsed.cheryl || !parsed.gm) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function storeActions(actions: Record<BriefingRole, FloorAction[]>) {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(actions));
-  } catch {
-    /* quota / private mode — ignore */
-  }
-}
-
-const ICON_MAP: Record<string, LucideIcon> = {
-  ListChecks,
-  Utensils,
-  Trash2,
-  Truck,
-  ArrowLeftRight,
-  ClipboardList,
-  Package,
-  ShoppingCart,
-  Thermometer,
-  Scale,
-  Clock,
-  FileText,
-  AlertTriangle,
-  CheckCircle,
-  CalendarClock,
-  Send,
-  PackageSearch,
-  FileCheck,
-  FileX,
-  LayoutDashboard,
-  TrendingUp,
-  Layers,
-  Star,
-  MapPin,
-  User,
-  Settings,
-};
+import { useFloorActions, FLOOR_ACTION_ICON_MAP } from '@/components/useFloorActions';
 
 function FloorActionSquare({
   label,
@@ -109,11 +23,11 @@ function FloorActionSquare({
       type="button"
       onClick={onClick}
       style={{
-        width: '74px',
-        minWidth: '74px',
-        minHeight: '74px',
-        padding: '8px 6px',
-        borderRadius: '10px',
+        width: '88px',
+        minWidth: '88px',
+        minHeight: '88px',
+        padding: '10px 7px',
+        borderRadius: '12px',
         border: '1px solid var(--color-border-subtle)',
         background: '#fff',
         boxShadow: '0 1px 3px rgba(58,48,40,0.08), 0 0 0 1px rgba(58,48,40,0.03)',
@@ -121,7 +35,7 @@ function FloorActionSquare({
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'flex-start',
-        gap: '5px',
+        gap: '6px',
         cursor: 'pointer',
         fontFamily: 'var(--font-primary)',
         position: 'relative',
@@ -134,25 +48,25 @@ function FloorActionSquare({
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          width: '28px',
-          height: '28px',
-          borderRadius: '7px',
+          width: '34px',
+          height: '34px',
+          borderRadius: '8px',
           background: 'var(--color-bg-surface)',
         }}>
-          <Icon size={15} color="var(--color-text-secondary)" strokeWidth={2} />
+          <Icon size={17} color="var(--color-text-secondary)" strokeWidth={2} />
         </span>
         {badge != null && (
           <span style={{
             position: 'absolute',
-            top: '-5px',
-            right: '-9px',
-            minWidth: '16px',
-            height: '16px',
-            padding: '0 4px',
+            top: '-6px',
+            right: '-10px',
+            minWidth: '18px',
+            height: '18px',
+            padding: '0 5px',
             borderRadius: '100px',
             background: 'var(--color-accent-deep)',
             color: '#F4F1EC',
-            fontSize: '11px',
+            fontSize: '12px',
             fontWeight: 700,
             display: 'flex',
             alignItems: 'center',
@@ -175,11 +89,11 @@ function FloorActionSquare({
         )}
       </span>
       <span style={{
-        fontSize: '10.5px',
+        fontSize: '11px',
         fontWeight: 600,
         color: 'var(--color-text-secondary)',
         textAlign: 'center',
-        lineHeight: 1.2,
+        lineHeight: 1.25,
         maxWidth: '100%',
       }}>
         {label}
@@ -196,49 +110,16 @@ export default function FloorActionsBox({
   /** Picks which per-role action set to render + edit. */
   briefingRole?: BriefingRole;
 }) {
-  const router = useRouter();
-  const [editOpen, setEditOpen] = useState(false);
-  const [actionsByRole, setActionsByRole] =
-    useState<Record<BriefingRole, FloorAction[]>>(DEFAULT_FLOOR_ACTIONS_BY_ROLE);
-
-  // Hydrate from localStorage after mount (avoids SSR hydration mismatch).
-  useEffect(() => {
-    const stored = loadStoredActions();
-    if (stored) setActionsByRole(stored);
-  }, []);
-
   const role: BriefingRole = briefingRole ?? 'ed';
-  const actions = actionsByRole[role];
-  const visibleActions = actions.filter((a) => a.visible);
-
-  /* Route handler: built-ins use the switch; picker-added shortcuts use action.href. */
-  function handleActionClick(action: FloorAction) {
-    switch (action.id) {
-      case 'checklists':
-        router.push('/checklists/complete');
-        return;
-      case 'receive-delivery':
-        onReceiveDelivery?.();
-        return;
-      case 'log-waste':
-        router.push('/log-waste');
-        return;
-      case 'review-orders':
-        router.push('/assisted-ordering');
-        return;
-      case 'match-invoices':
-        router.push('/invoices');
-        return;
-    }
-    if (action.href) router.push(action.href);
-  }
+  const { visibleActions, handleActionClick, setEditOpen, editPopup } =
+    useFloorActions(role, onReceiveDelivery);
 
   return (
     <div
       style={{
         flexShrink: 0,
         width: '100%',
-        padding: '12px 16px',
+        padding: '14px 20px',
         borderRadius: '12px',
         background: '#fff',
         border: '2px solid rgba(217, 215, 212, 1)',
@@ -249,10 +130,10 @@ export default function FloorActionsBox({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: '10px',
+        marginBottom: '12px',
       }}>
         <span style={{
-          fontSize: '13px',
+          fontSize: '15px',
           fontWeight: 700,
           letterSpacing: '0.04em',
           color: 'var(--color-text-muted)',
@@ -279,14 +160,18 @@ export default function FloorActionsBox({
           <Pencil size={11} color="var(--color-text-muted)" strokeWidth={2} />
         </button>
       </div>
+      {/* Squares spread evenly across the full card width so the row never feels
+          left-stranded when the card sits at full width. */}
       <div style={{
         display: 'flex',
         flexWrap: 'wrap',
-        gap: '8px',
+        justifyContent: 'space-between',
+        rowGap: '12px',
+        columnGap: '12px',
         alignItems: 'flex-start',
       }}>
         {visibleActions.map((action) => {
-          const IconComp = ICON_MAP[action.iconKey] ?? ListChecks;
+          const IconComp: LucideIcon = FLOOR_ACTION_ICON_MAP[action.iconKey] ?? ListChecks;
           return (
             <FloorActionSquare
               key={action.id}
@@ -299,19 +184,7 @@ export default function FloorActionsBox({
         })}
       </div>
 
-      <EditFloorActionsPopup
-        open={editOpen}
-        onClose={() => setEditOpen(false)}
-        actions={actions}
-        role={role}
-        onSave={(updated) =>
-          setActionsByRole((prev) => {
-            const next = { ...prev, [role]: updated };
-            storeActions(next);
-            return next;
-          })
-        }
-      />
+      {editPopup}
     </div>
   );
 }
