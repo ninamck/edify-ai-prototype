@@ -13,11 +13,13 @@ import { PlanStoreProvider } from '@/components/Production/PlanStore';
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
 
 const SUB_TABS: Array<{ id: string; label: string; href: string }> = [
-  { id: 'amounts',    label: 'Amounts',           href: '/production/amounts' },
-  { id: 'board',      label: 'Board',             href: '/production/board' },
-  { id: 'plan',       label: 'Plan (5 days)',     href: '/production/plan' },
+  { id: 'amounts',    label: 'Today',             href: '/production/amounts' },
+  { id: 'board',      label: 'Benches',           href: '/production/board' },
+  { id: 'sales',      label: 'Sales (live)',      href: '/production/sales' },
   { id: 'pcr',        label: 'PCR queue',         href: '/production/pcr' },
+  { id: 'plan',       label: 'Plan',              href: '/production/plan' },
   { id: 'carry-over', label: 'Carry-over',        href: '/production/carry-over' },
+  { id: 'dispatch',   label: 'Dispatch',          href: '/production/dispatch' },
   { id: 'spokes',     label: 'Spoke submissions', href: '/production/spokes' },
   { id: 'settings',   label: 'Settings health',   href: '/production/settings-health' },
   { id: 'setup',      label: 'Setup (Quinn)',     href: '/production/setup' },
@@ -41,12 +43,25 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
       style={{
         display: 'flex',
         flexDirection: 'row',
-        height: '100vh',
+        minHeight: '100vh',
         background: 'var(--color-bg-surface)',
         fontFamily: 'var(--font-primary)',
+        alignItems: 'flex-start',
       }}
     >
-      {!isMobile && <Sidebar />}
+      {!isMobile && (
+        <div
+          style={{
+            position: 'sticky',
+            top: 0,
+            height: '100vh',
+            flexShrink: 0,
+            zIndex: 100,
+          }}
+        >
+          <Sidebar />
+        </div>
+      )}
 
       <div
         style={{
@@ -54,8 +69,6 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
           display: 'flex',
           flexDirection: 'column',
           minWidth: 0,
-          minHeight: 0,
-          overflow: 'hidden',
         }}
       >
         {/* Top bar */}
@@ -111,9 +124,13 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
           </div>
         </header>
 
-        {/* Sub-tabs */}
+        {/* Sub-tabs — pinned to the top of the viewport so it stays visible
+            as the rest of the page scrolls. */}
         <nav
           style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 150,
             flexShrink: 0,
             display: 'flex',
             gap: 4,
@@ -148,13 +165,12 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
           })}
         </nav>
 
-        {/* Page body */}
+        {/* Page body — flows in normal document scroll so the page itself
+            scrolls rather than an inner container. */}
         <div
           style={{
             flex: 1,
             minWidth: 0,
-            minHeight: 0,
-            overflow: 'auto',
             background: 'var(--color-bg-surface)',
             position: 'relative',
             zIndex: 1,

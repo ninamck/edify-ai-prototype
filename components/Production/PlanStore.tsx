@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useMemo, useState } from 'react
 import {
   amountsForSiteOnDate,
   benchesAt,
+  DEMO_TODAY,
   effectiveBatchRules,
   getRecipe,
   getWorkflow,
@@ -19,9 +20,16 @@ import {
   type ProductionPlan,
   type ProductionRecipe,
   type RecipeId,
+  type RunSchedule,
   type SiteId,
 } from './fixtures';
 import { hhmmToMinutes, minutesToHHMM } from './time';
+
+/**
+ * Demo wall-clock time. The Run-locking logic compares scheduled bench runs
+ * against this. Bumped when the demo needs to feel later in the day.
+ */
+export const DEMO_NOW_HHMM = '07:30';
 
 /**
  * One tray of filling weighs ~4kg in this demo. Used to convert gram-based
@@ -29,49 +37,160 @@ import { hhmmToMinutes, minutesToHHMM } from './time';
  */
 export const FILLING_TRAY_GRAMS = 4000;
 
-type Overrides = Record<ProductionItemId, number>;
+/**
+ * All override maps are keyed by `${date}|${itemId}` so the same Manager
+ * session can plan multiple days (today + tomorrow + later in the week)
+ * without overwriting each other. Helper below keeps the join consistent.
+ */
+type DatedKey = string;
+const keyFor = (date: string, itemId: ProductionItemId): DatedKey => `${date}|${itemId}`;
+const parseKey = (k: DatedKey): { date: string; itemId: ProductionItemId } => {
+  const idx = k.indexOf('|');
+  return { date: k.slice(0, idx), itemId: k.slice(idx + 1) };
+};
 
-type SetPlannedFn = (itemId: ProductionItemId, qty: number) => void;
-type ResetFn = (itemId: ProductionItemId) => void;
+type Overrides = Record<DatedKey, number>;
+/**
+ * Per-drop overrides for `mode === 'increment'` items. When present, this
+ * array is the source of truth for the day total (sum of entries) and
+ * supersedes the whole-day `overrides[date|itemId]` value, so Managers can
+ * plan varying quantities across the cadence drops.
+ */
+type PerDropOverrides = Record<DatedKey, number[]>;
+/**
+ * Variable additions layered on top of a Run-mode item's baseline. Once the
+ * primary run is locked (in progress or complete), the manager can still add
+ * variable top-ups for the rest of the day — this is where those extras live.
+ * Day total = `runPlanned + variablePlanned`.
+ */
+type VariableOverrides = Record<DatedKey, number>;
+
+type SetPlannedFn = (itemId: ProductionItemId, qty: number, date: string) => void;
+type ResetFn = (itemId: ProductionItemId, date: string) => void;
+type SetPerDropFn = (itemId: ProductionItemId, perDrop: number[], date: string) => void;
 
 type PlanStoreContextValue = {
-  /** Raw manager override per ProductionItem (empty = no override; use Quinn's proposal). */
+  /** Raw manager override per (date, ProductionItem) (empty = no override; use Quinn's proposal). */
   overrides: Overrides;
+  /** Per-drop overrides for segment items. */
+  perDropOverrides: PerDropOverrides;
+  /** Variable additions layered on top of Run-mode baselines. */
+  variableOverrides: VariableOverrides;
   setPlanned: SetPlannedFn;
+  setPerDropPlan: SetPerDropFn;
+  /** Set the variable add-on quantity for an item (does not touch the run baseline). */
+  setVariablePlan: SetPlannedFn;
   resetToQuinn: ResetFn;
-  resetAll: () => void;
-  /** Number of recipes the manager has manually overridden. */
-  overrideCount: number;
+  /** Reset overrides — pass a date to scope to that day, omit to clear everything. */
+  resetAll: (date?: string) => void;
+  /**
+   * Number of recipes the manager has manually overridden. Pass a date to
+   * scope the count to that day; omit for the cross-day total.
+   */
+  overrideCount: (date?: string) => number;
 };
 
 const PlanStoreContext = createContext<PlanStoreContextValue | null>(null);
 
 export function PlanStoreProvider({ children }: { children: React.ReactNode }) {
   const [overrides, setOverrides] = useState<Overrides>({});
+  const [perDropOverrides, setPerDropOverrides] = useState<PerDropOverrides>({});
+  const [variableOverrides, setVariableOverrides] = useState<VariableOverrides>({});
 
-  const setPlanned: SetPlannedFn = useCallback((itemId, qty) => {
-    setOverrides(prev => ({ ...prev, [itemId]: Math.max(0, Math.round(qty)) }));
-  }, []);
-
-  const resetToQuinn: ResetFn = useCallback(itemId => {
-    setOverrides(prev => {
+  const setPlanned: SetPlannedFn = useCallback((itemId, qty, date) => {
+    const k = keyFor(date, itemId);
+    setOverrides(prev => ({ ...prev, [k]: Math.max(0, Math.round(qty)) }));
+    // Editing the whole-day total resets any per-drop plan so the two surfaces
+    // never disagree about what's authoritative.
+    setPerDropOverrides(prev => {
+      if (!(k in prev)) return prev;
       const next = { ...prev };
-      delete next[itemId];
+      delete next[k];
       return next;
     });
   }, []);
 
-  const resetAll = useCallback(() => setOverrides({}), []);
+  const setPerDropPlan: SetPerDropFn = useCallback((itemId, perDrop, date) => {
+    const k = keyFor(date, itemId);
+    const cleaned = perDrop.map(n => Math.max(0, Math.round(n)));
+    setPerDropOverrides(prev => ({ ...prev, [k]: cleaned }));
+    // Mirror the day total into `overrides` so KPIs / variance / board logic
+    // that read `planned` from the whole-day map keep working without changes.
+    setOverrides(prev => ({ ...prev, [k]: cleaned.reduce((a, b) => a + b, 0) }));
+  }, []);
+
+  const setVariablePlan: SetPlannedFn = useCallback((itemId, qty, date) => {
+    const k = keyFor(date, itemId);
+    setVariableOverrides(prev => ({ ...prev, [k]: Math.max(0, Math.round(qty)) }));
+  }, []);
+
+  const resetToQuinn: ResetFn = useCallback((itemId, date) => {
+    const k = keyFor(date, itemId);
+    setOverrides(prev => {
+      if (!(k in prev)) return prev;
+      const next = { ...prev };
+      delete next[k];
+      return next;
+    });
+    setPerDropOverrides(prev => {
+      if (!(k in prev)) return prev;
+      const next = { ...prev };
+      delete next[k];
+      return next;
+    });
+    setVariableOverrides(prev => {
+      if (!(k in prev)) return prev;
+      const next = { ...prev };
+      delete next[k];
+      return next;
+    });
+  }, []);
+
+  const resetAll = useCallback((date?: string) => {
+    if (date == null) {
+      setOverrides({});
+      setPerDropOverrides({});
+      setVariableOverrides({});
+      return;
+    }
+    const dropForDate = <T,>(map: Record<DatedKey, T>) => {
+      const next: Record<DatedKey, T> = {};
+      for (const k of Object.keys(map)) {
+        if (parseKey(k).date !== date) next[k] = map[k];
+      }
+      return next;
+    };
+    setOverrides(prev => dropForDate(prev));
+    setPerDropOverrides(prev => dropForDate(prev));
+    setVariableOverrides(prev => dropForDate(prev));
+  }, []);
+
+  const overrideCount = useCallback(
+    (date?: string) => {
+      const collect = (map: Record<DatedKey, unknown>) =>
+        Object.keys(map).filter(k => date == null || parseKey(k).date === date);
+      return new Set([
+        ...collect(overrides),
+        ...collect(perDropOverrides),
+        ...collect(variableOverrides),
+      ]).size;
+    },
+    [overrides, perDropOverrides, variableOverrides],
+  );
 
   const value = useMemo<PlanStoreContextValue>(
     () => ({
       overrides,
+      perDropOverrides,
+      variableOverrides,
       setPlanned,
+      setPerDropPlan,
+      setVariablePlan,
       resetToQuinn,
       resetAll,
-      overrideCount: Object.keys(overrides).length,
+      overrideCount,
     }),
-    [overrides, setPlanned, resetToQuinn, resetAll],
+    [overrides, perDropOverrides, variableOverrides, setPlanned, setPerDropPlan, setVariablePlan, resetToQuinn, resetAll, overrideCount],
   );
 
   return <PlanStoreContext.Provider value={value}>{children}</PlanStoreContext.Provider>;
@@ -83,10 +202,14 @@ export function usePlanStore(): PlanStoreContextValue {
     // Safe fallback so components mounted outside the provider don't crash.
     return {
       overrides: {},
+      perDropOverrides: {},
+      variableOverrides: {},
       setPlanned: () => {},
+      setPerDropPlan: () => {},
+      setVariablePlan: () => {},
       resetToQuinn: () => {},
       resetAll: () => {},
-      overrideCount: 0,
+      overrideCount: () => 0,
     };
   }
   return ctx;
@@ -122,20 +245,71 @@ export type AssemblyDemand = {
  *  - `effectivePlanned` — how much will actually be produced (max of own plan + assemblyDemand)
  */
 export type PlanLine = AmountsLine & {
+  /** Day total = `runPlanned + variablePlanned` (or per-drop sum for segment). */
   planned: number;
+  /** The Run-mode baseline portion (or the only portion for non-Run items). */
+  runPlanned: number;
+  /** Variable additions layered on top of the run baseline. */
+  variablePlanned: number;
   isOverridden: boolean;
   assemblyDemand: AssemblyDemand;
   effectivePlanned: number;
+  /**
+   * Per-drop quantities for `mode === 'increment'` items. Always populated
+   * for segment items with a valid cadence (length === dropsCount); otherwise
+   * `undefined`. When the Manager has set a per-drop plan, this carries those
+   * values; otherwise it's the uniform fill of `planned / dropsCount`.
+   */
+  perDropPlan?: number[];
+  /**
+   * True when this is a Run-mode item AND its primary bench has at least one
+   * scheduled run that has already started (relative to `DEMO_NOW_HHMM`).
+   * The run baseline is read-only when locked; variable add-ons stay editable.
+   */
+  runLocked: boolean;
+  /**
+   * Run-mode items: short labels of the runs that have already started or
+   * finished (e.g. ["R1"]). Empty array for unlocked or non-Run items.
+   */
+  lockedRunLabels: string[];
 };
 
-export function resolvePlan(siteId: SiteId, date: string, overrides: Overrides): PlanLine[] {
+export function resolvePlan(
+  siteId: SiteId,
+  date: string,
+  overrides: Overrides,
+  perDropOverrides: PerDropOverrides = {},
+  variableOverrides: VariableOverrides = {},
+): PlanLine[] {
   const baseLines = amountsForSiteOnDate(siteId, date);
+  const nowMins = hhmmToMinutes(DEMO_NOW_HHMM);
+  // Compare days lexicographically — fixtures use ISO YYYY-MM-DD strings so
+  // string ordering matches calendar ordering.
+  const isPastDay = date < DEMO_TODAY;
+  const isFutureDay = date > DEMO_TODAY;
 
   // Pass 1: compute direct planned qty for every item.
+  // For Run-mode items, the override is the *run baseline*; variable additions
+  // layer on top to reach the day total used downstream.
+  const runPlan = new Map<ProductionItemId, number>();
+  const variablePlan = new Map<ProductionItemId, number>();
   const directPlan = new Map<ProductionItemId, number>();
   for (const line of baseLines) {
-    const override = overrides[line.item.id];
-    directPlan.set(line.item.id, override ?? line.quinnProposed);
+    const k = keyFor(date, line.item.id);
+    const perDrop = perDropOverrides[k];
+    if (perDrop && perDrop.length > 0) {
+      const sum = perDrop.reduce((a, b) => a + b, 0);
+      runPlan.set(line.item.id, sum);
+      variablePlan.set(line.item.id, 0);
+      directPlan.set(line.item.id, sum);
+      continue;
+    }
+    const baseOverride = overrides[k];
+    const baseline = baseOverride ?? line.quinnProposed;
+    const variable = line.item.mode === 'run' ? variableOverrides[k] ?? 0 : 0;
+    runPlan.set(line.item.id, baseline);
+    variablePlan.set(line.item.id, variable);
+    directPlan.set(line.item.id, baseline + variable);
   }
 
   // Pass 2: cascade assembly → component demand.
@@ -193,28 +367,99 @@ export function resolvePlan(siteId: SiteId, date: string, overrides: Overrides):
 
   // Pass 3: produce enriched lines.
   return baseLines.map(line => {
+    const k = keyFor(date, line.item.id);
     const planned = directPlan.get(line.item.id) ?? line.quinnProposed;
-    const isOverridden = overrides[line.item.id] !== undefined;
+    const runPlanned = runPlan.get(line.item.id) ?? line.quinnProposed;
+    const variablePlanned = variablePlan.get(line.item.id) ?? 0;
+    const perDropStored = perDropOverrides[k];
+    const isOverridden =
+      overrides[k] !== undefined ||
+      (perDropStored !== undefined && perDropStored.length > 0) ||
+      (variableOverrides[k] ?? 0) > 0;
     const assemblyDemand: AssemblyDemand =
       demandByComponent.get(line.item.id) ?? { totalUnits: 0, sources: [] };
+
+    // Lock state — date-aware. Past days are entirely in the rear-view so
+    // every Run-mode item is locked. Future days haven't started so nothing
+    // is locked. Today uses the existing nowHHMM-based logic per scheduled
+    // run on the primary bench.
+    let runLocked = false;
+    const lockedRunLabels: string[] = [];
+    if (line.item.mode === 'run') {
+      if (isPastDay) {
+        runLocked = true;
+        // For past days we don't know exactly which runs ran, so label
+        // the whole day as locked rather than enumerating.
+        lockedRunLabels.push('locked');
+      } else if (!isFutureDay && line.primaryBench?.runs?.length) {
+        for (const run of line.primaryBench.runs as RunSchedule[]) {
+          if (hhmmToMinutes(run.startTime) <= nowMins) {
+            runLocked = true;
+            lockedRunLabels.push(run.label);
+          }
+        }
+      }
+    }
     // Effective production = max of direct plan and inbound assembly demand.
     // If the Manager intentionally plans more than assemblies need, we honour it.
     // If they plan less, the floor becomes the assembly demand (and we surface a shortfall).
     const effectivePlanned = Math.max(planned, assemblyDemand.totalUnits);
+
+    // For segment items, expose a per-drop array. If the Manager has set a
+    // per-drop plan, use it (after normalising length to dropsCount); else
+    // distribute `planned` evenly with the remainder pushed onto the last
+    // drop so the sum still matches `planned` exactly.
+    let perDropPlan: number[] | undefined;
+    if (line.item.mode === 'increment' && line.item.cadence) {
+      const c = line.item.cadence;
+      const dropsCount = Math.max(
+        0,
+        Math.floor((hhmmToMinutes(c.endTime) - hhmmToMinutes(c.startTime)) / c.intervalMinutes) + 1,
+      );
+      if (dropsCount > 0) {
+        if (perDropStored && perDropStored.length > 0) {
+          // Normalise length: pad with the last value or truncate.
+          if (perDropStored.length === dropsCount) {
+            perDropPlan = perDropStored;
+          } else if (perDropStored.length > dropsCount) {
+            perDropPlan = perDropStored.slice(0, dropsCount);
+          } else {
+            const fill = perDropStored[perDropStored.length - 1] ?? 0;
+            perDropPlan = [...perDropStored, ...Array(dropsCount - perDropStored.length).fill(fill)];
+          }
+        } else {
+          const base = Math.floor(planned / dropsCount);
+          const rem = planned - base * dropsCount;
+          perDropPlan = Array(dropsCount).fill(base);
+          if (rem > 0 && perDropPlan.length > 0) {
+            perDropPlan[perDropPlan.length - 1] = base + rem;
+          }
+        }
+      }
+    }
+
     return {
       ...line,
       planned,
+      runPlanned,
+      variablePlanned,
       isOverridden,
       assemblyDemand,
       effectivePlanned,
+      perDropPlan,
+      runLocked,
+      lockedRunLabels,
     };
   });
 }
 
 /** Convenience hook that resolves the plan for a site/date using current overrides. */
 export function usePlan(siteId: SiteId, date: string): PlanLine[] {
-  const { overrides } = usePlanStore();
-  return useMemo(() => resolvePlan(siteId, date, overrides), [siteId, date, overrides]);
+  const { overrides, perDropOverrides, variableOverrides } = usePlanStore();
+  return useMemo(
+    () => resolvePlan(siteId, date, overrides, perDropOverrides, variableOverrides),
+    [siteId, date, overrides, perDropOverrides, variableOverrides],
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -254,8 +499,10 @@ export function deriveBoardPlan(
   siteId: SiteId,
   date: string,
   overrides: Overrides,
+  perDropOverrides: PerDropOverrides = {},
+  variableOverrides: VariableOverrides = {},
 ): ProductionPlan {
-  const lines = resolvePlan(siteId, date, overrides);
+  const lines = resolvePlan(siteId, date, overrides, perDropOverrides, variableOverrides);
 
   // Start from the authored fixture plan — only when we're on the same site.
   const basePlan = PRET_PLAN.siteId === siteId
@@ -445,8 +692,11 @@ export function deriveBoardPlan(
 
 /** Hook form — live-derived board plan reacting to Manager overrides. */
 export function useBoardPlan(siteId: SiteId, date: string): ProductionPlan {
-  const { overrides } = usePlanStore();
-  return useMemo(() => deriveBoardPlan(siteId, date, overrides), [siteId, date, overrides]);
+  const { overrides, perDropOverrides, variableOverrides } = usePlanStore();
+  return useMemo(
+    () => deriveBoardPlan(siteId, date, overrides, perDropOverrides, variableOverrides),
+    [siteId, date, overrides, perDropOverrides, variableOverrides],
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

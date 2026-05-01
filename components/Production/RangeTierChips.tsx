@@ -11,13 +11,19 @@ import {
   type SiteId,
 } from './fixtures';
 
+// Selection tags share one calm chip style; the label itself carries the meaning.
+const NEUTRAL_TAG_STYLE = {
+  bg: 'var(--color-bg-hover)',
+  color: 'var(--color-text-secondary)',
+};
+
 const TAG_STYLES: Record<SelectionTag, { bg: string; color: string; label: string }> = {
-  breakfast: { bg: '#FEF3C7', color: '#92400E', label: 'breakfast' },
-  morning:   { bg: '#E0F2FE', color: '#0369A1', label: 'morning' },
-  midday:    { bg: '#DCFCE7', color: '#15803D', label: 'midday' },
-  afternoon: { bg: '#FFE4E6', color: '#9F1239', label: 'afternoon' },
-  closing:   { bg: '#E0E7FF', color: '#3730A3', label: 'closing' },
-  core:      { bg: '#F5F4F2', color: '#3A3028', label: 'core' },
+  breakfast: { ...NEUTRAL_TAG_STYLE, label: 'breakfast' },
+  morning:   { ...NEUTRAL_TAG_STYLE, label: 'morning' },
+  midday:    { ...NEUTRAL_TAG_STYLE, label: 'midday' },
+  afternoon: { ...NEUTRAL_TAG_STYLE, label: 'afternoon' },
+  closing:   { ...NEUTRAL_TAG_STYLE, label: 'closing' },
+  core:      { ...NEUTRAL_TAG_STYLE, label: 'core' },
 };
 
 export function SelectionTagChip({ tag, size = 'sm' }: { tag: SelectionTag; size?: 'xs' | 'sm' }) {
@@ -31,7 +37,7 @@ export function SelectionTagChip({ tag, size = 'sm' }: { tag: SelectionTag; size
         borderRadius: 999,
         background: s.bg,
         color: s.color,
-        fontSize: size === 'xs' ? 10 : 11,
+        fontSize: size === 'xs' ? 9 : 10,
         fontWeight: 600,
         letterSpacing: '0.02em',
         whiteSpace: 'nowrap',

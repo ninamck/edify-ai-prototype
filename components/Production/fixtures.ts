@@ -155,7 +155,7 @@ export const PRET_SITES: Site[] = [
     name: 'London Central Hub',
     type: 'HUB',
     openingHours: { open: '04:30', close: '22:00' },
-    servesSiteIds: ['site-spoke-south'],
+    servesSiteIds: ['site-spoke-south', 'site-spoke-east', 'site-spoke-west'],
   },
   {
     id: 'site-standalone-north',
@@ -172,6 +172,24 @@ export const PRET_SITES: Site[] = [
     name: 'Clapham Junction',
     type: 'SPOKE',
     openingHours: { open: '06:00', close: '22:00' },
+    hubId: 'hub-central',
+  },
+  {
+    id: 'site-spoke-east',
+    estateId: 'estate-pret',
+    formatId: 'format-corner',
+    name: 'Shoreditch East',
+    type: 'SPOKE',
+    openingHours: { open: '06:30', close: '21:30' },
+    hubId: 'hub-central',
+  },
+  {
+    id: 'site-spoke-west',
+    estateId: 'estate-pret',
+    formatId: 'format-corner',
+    name: 'Notting Hill West',
+    type: 'SPOKE',
+    openingHours: { open: '06:30', close: '21:00' },
     hubId: 'hub-central',
   },
   {
@@ -1716,19 +1734,93 @@ export type SpokeSubmission = {
   };
 };
 
-export const PRET_SPOKE_SUBMISSION: SpokeSubmission = {
-  id: 'spoke-sub-south-friday',
-  fromSiteId: 'site-spoke-south',
-  toHubId: 'hub-central',
-  forDate: dayOffset(1),
-  cutoffDateTime: `${DEMO_TODAY}T15:00:00Z`,
-  status: 'draft',
-  lines: [
-    { skuId: 'sku-croissant',     recipeId: 'prec-croissant',        quinnProposedUnits: 30, confirmedUnits: null },
-    { skuId: 'sku-pain-au-choc',  recipeId: 'prec-pain-au-chocolat', quinnProposedUnits: 20, confirmedUnits: null },
-    { skuId: 'sku-club-sandwich', recipeId: 'prec-club-sandwich',    quinnProposedUnits: 40, confirmedUnits: null },
-  ],
-};
+/**
+ * Spoke submissions destined for the central hub. Two cohorts so both the
+ * Today amounts view and the Dispatch matrix have something to show:
+ *  - "Today" cohort: Spoke East has an acknowledged order for today, so
+ *    the hub's Today amounts already include dispatch on top of counter sales.
+ *  - "Tomorrow" cohort: South / East / West are all ordering for tomorrow
+ *    in a mix of statuses so the Dispatch tab demo flow stays rich.
+ */
+export const PRET_SPOKE_SUBMISSIONS: SpokeSubmission[] = [
+  {
+    id: 'spoke-sub-east-today',
+    fromSiteId: 'site-spoke-east',
+    toHubId: 'hub-central',
+    forDate: DEMO_TODAY,
+    cutoffDateTime: `${dayOffset(-1)}T15:00:00Z`,
+    status: 'acknowledged',
+    lines: [
+      { skuId: 'sku-croissant',     recipeId: 'prec-croissant',        quinnProposedUnits: 18, confirmedUnits: 18 },
+      { skuId: 'sku-pain-au-choc',  recipeId: 'prec-pain-au-chocolat', quinnProposedUnits: 12, confirmedUnits: 12 },
+      { skuId: 'sku-baguette',      recipeId: 'prec-baguette',         quinnProposedUnits: 10, confirmedUnits: 10 },
+      { skuId: 'sku-tuna-sandwich', recipeId: 'prec-tuna-sandwich',    quinnProposedUnits: 14, confirmedUnits: 14 },
+    ],
+  },
+  {
+    id: 'spoke-sub-south-friday',
+    fromSiteId: 'site-spoke-south',
+    toHubId: 'hub-central',
+    forDate: dayOffset(1),
+    cutoffDateTime: `${DEMO_TODAY}T15:00:00Z`,
+    status: 'draft',
+    lines: [
+      { skuId: 'sku-croissant',     recipeId: 'prec-croissant',        quinnProposedUnits: 30, confirmedUnits: null },
+      { skuId: 'sku-pain-au-choc',  recipeId: 'prec-pain-au-chocolat', quinnProposedUnits: 20, confirmedUnits: null },
+      { skuId: 'sku-club-sandwich', recipeId: 'prec-club-sandwich',    quinnProposedUnits: 40, confirmedUnits: null },
+    ],
+  },
+  {
+    id: 'spoke-sub-east-friday',
+    fromSiteId: 'site-spoke-east',
+    toHubId: 'hub-central',
+    forDate: dayOffset(1),
+    cutoffDateTime: `${DEMO_TODAY}T15:00:00Z`,
+    status: 'submitted',
+    lines: [
+      { skuId: 'sku-croissant',     recipeId: 'prec-croissant',        quinnProposedUnits: 24, confirmedUnits: 24 },
+      { skuId: 'sku-baguette',      recipeId: 'prec-baguette',         quinnProposedUnits: 12, confirmedUnits: 18 },
+      { skuId: 'sku-tuna-sandwich', recipeId: 'prec-tuna-sandwich',    quinnProposedUnits: 18, confirmedUnits: 18 },
+      { skuId: 'sku-club-sandwich', recipeId: 'prec-club-sandwich',    quinnProposedUnits: 32, confirmedUnits: 28 },
+    ],
+  },
+  {
+    id: 'spoke-sub-west-friday',
+    fromSiteId: 'site-spoke-west',
+    toHubId: 'hub-central',
+    forDate: dayOffset(1),
+    cutoffDateTime: `${DEMO_TODAY}T15:00:00Z`,
+    status: 'acknowledged',
+    lines: [
+      { skuId: 'sku-pain-au-choc',     recipeId: 'prec-pain-au-chocolat', quinnProposedUnits: 18, confirmedUnits: 18 },
+      { skuId: 'sku-almond-croissant', recipeId: 'prec-almond-croissant', quinnProposedUnits: 12, confirmedUnits: 12 },
+      { skuId: 'sku-granary',          recipeId: 'prec-granary',          quinnProposedUnits: 8,  confirmedUnits: 8  },
+      { skuId: 'sku-egg-mayo-sandwich', recipeId: 'prec-egg-mayo-sandwich', quinnProposedUnits: 22, confirmedUnits: 22 },
+      { skuId: 'sku-hummus-wrap',      recipeId: 'prec-hummus-wrap',      quinnProposedUnits: 14, confirmedUnits: 14 },
+    ],
+  },
+];
+
+/**
+ * Back-compat alias so existing single-submission consumers keep working
+ * unchanged. Points at South's draft for tomorrow — that's the submission
+ * the spoke-flow page surfaces as "the active draft to send".
+ */
+export const PRET_SPOKE_SUBMISSION: SpokeSubmission =
+  PRET_SPOKE_SUBMISSIONS.find(s => s.id === 'spoke-sub-south-friday') ?? PRET_SPOKE_SUBMISSIONS[0];
+
+/**
+ * All submissions destined for the given hub on the given date (or any
+ * date if `forDate` is omitted). Submissions are returned in the order
+ * they appear in `PRET_SPOKE_SUBMISSIONS` (typically South / East / West).
+ */
+export function submissionsForHub(hubId: SiteId, forDate?: string): SpokeSubmission[] {
+  return PRET_SPOKE_SUBMISSIONS.filter(s => {
+    if (s.toHubId !== hubId) return false;
+    if (forDate && s.forDate !== forDate) return false;
+    return true;
+  });
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Settings health — stale / unused / suspect cards
@@ -1976,12 +2068,60 @@ export function tierForSiteOnDate(siteId: SiteId, iso: string): Tier | undefined
 }
 
 /** Forecast lookup for (site, sku, date). */
+/**
+ * Day-of-week multiplier applied to today's forecast when projecting future
+ * (or past) days. Eyeballed to a Pret-style trade pattern: midweek peak,
+ * Sunday softer. Manager-confirmed forecasts in `PRET_FORECAST` always win
+ * over this projection.
+ */
+export const DOW_MULTIPLIER: Record<DayOfWeek, number> = {
+  Mon: 0.95,
+  Tue: 1.00,
+  Wed: 1.05,
+  Thu: 1.05,
+  Fri: 1.10,
+  Sat: 0.85,
+  Sun: 0.65,
+};
+
 export function forecastFor(
   siteId: SiteId,
   skuId: SkuId,
   date: string,
 ): DemandForecastEntry | undefined {
-  return PRET_FORECAST.find(f => f.siteId === siteId && f.skuId === skuId && f.date === date);
+  const exact = PRET_FORECAST.find(f => f.siteId === siteId && f.skuId === skuId && f.date === date);
+  if (exact) return exact;
+
+  // No hand-authored entry for this date — synthesise one from today's
+  // forecast for the same SKU, scaled by the day-of-week multiplier. Returns
+  // undefined when there's no anchor for today either (rare; means the SKU
+  // simply isn't on plan at this site).
+  const anchor = PRET_FORECAST.find(f => f.siteId === siteId && f.skuId === skuId && f.date === DEMO_TODAY);
+  if (!anchor) return undefined;
+
+  const multiplier = DOW_MULTIPLIER[dayOfWeek(date)] / DOW_MULTIPLIER[dayOfWeek(DEMO_TODAY)];
+  const scale = (n: number) => Math.max(0, Math.round(n * multiplier));
+  return {
+    siteId,
+    skuId,
+    date,
+    projectedUnits: scale(anchor.projectedUnits),
+    byPhase: anchor.byPhase
+      ? {
+          morning: scale(anchor.byPhase.morning),
+          midday: scale(anchor.byPhase.midday),
+          afternoon: scale(anchor.byPhase.afternoon),
+        }
+      : undefined,
+    signals: [
+      {
+        signal: 'sales-history',
+        weight: 1,
+        note: `Projected from ${dayOfWeek(DEMO_TODAY)} ${DEMO_TODAY} × ${dayOfWeek(date)} factor (${multiplier.toFixed(2)}×)`,
+      },
+    ],
+    status: 'draft',
+  };
 }
 
 /** Carry-over lookup (most recent entry for site/sku). */
@@ -2039,13 +2179,38 @@ export function benchesForItem(item: ProductionItem): Bench[] {
 // Plan amounts — derive Quinn's suggested qty per SKU from forecast + carry-over
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Per-spoke breakdown of how many units this hub owes a single spoke on the
+ * planned date. `units` uses the spoke's `confirmedUnits` when set, otherwise
+ * Quinn's proposed number — the same "effective" rule the dispatch matrix uses.
+ */
+export type DispatchDemandLine = {
+  spokeId: SiteId;
+  spokeName: string;
+  units: number;
+  /** True when the spoke hasn't confirmed yet — number is still Quinn-proposed. */
+  isQuinn: boolean;
+  status: SpokeSubmission['status'];
+};
+
 export type AmountsLine = {
   item: ProductionItem;
   recipe: ProductionRecipe;
   forecast?: DemandForecastEntry;
   carryOver?: CarryOverEntry;
-  /** Quinn-proposed quantity after considering forecast and carry-over. */
+  /** Quinn-proposed quantity after considering forecast, carry-over and dispatch. */
   quinnProposed: number;
+  /**
+   * Total units this site needs to dispatch to its spokes on `date` for this
+   * SKU. Always 0 for spoke sites (or hubs with no submissions for the date).
+   * Already factored into `quinnProposed`.
+   */
+  dispatchDemand: number;
+  /**
+   * Per-spoke breakdown when `dispatchDemand > 0`. Same order as
+   * `submissionsForHub()` returns submissions (typically South / East / West).
+   */
+  dispatchBySpoke?: DispatchDemandLine[];
   /** Primary bench (final stage). */
   primaryBench?: Bench;
   /** All benches in workflow order. */
@@ -2055,25 +2220,62 @@ export type AmountsLine = {
 /**
  * Build the ledger of recipes to plan for a given site/date.
  * Returns everything needed to render the Amounts view without further lookups.
+ *
+ * For HUB sites we additionally fold in spoke dispatch demand for `date`:
+ * each SKU's Quinn proposal becomes `max(0, counterSales + dispatch − carry)`,
+ * and per-line `dispatchDemand` + `dispatchBySpoke` carry the breakdown so
+ * the UI can show "Counter X · Dispatch Y" without re-querying submissions.
  */
 export function amountsForSiteOnDate(siteId: SiteId, date: string): AmountsLine[] {
   const items = productionItemsAt(siteId);
+  const site = getSite(siteId);
+  // Pre-build dispatch demand per SKU for this hub+date so each line is a
+  // simple Map lookup rather than a re-scan of all submissions.
+  const dispatchBySku = new Map<SkuId, DispatchDemandLine[]>();
+  if (site?.type === 'HUB') {
+    const subs = submissionsForHub(siteId, date);
+    for (const sub of subs) {
+      const spoke = getSite(sub.fromSiteId);
+      const spokeName = spoke?.name ?? sub.fromSiteId;
+      for (const ln of sub.lines) {
+        const isQuinn = ln.confirmedUnits === null;
+        const units = ln.confirmedUnits ?? ln.quinnProposedUnits;
+        if (units <= 0) continue;
+        const arr = dispatchBySku.get(ln.skuId) ?? [];
+        arr.push({
+          spokeId: sub.fromSiteId,
+          spokeName,
+          units,
+          isQuinn,
+          status: sub.status,
+        });
+        dispatchBySku.set(ln.skuId, arr);
+      }
+    }
+  }
+
   const lines: AmountsLine[] = [];
   for (const item of items) {
     const recipe = getRecipe(item.recipeId);
     if (!recipe) continue;
     const forecast = forecastFor(siteId, item.skuId, date);
     const carryOver = carryOverFor(siteId, item.skuId);
-    const base = forecast?.projectedUnits ?? 0;
+    const counter = forecast?.projectedUnits ?? 0;
     const carried = carryOver ? carryOver.carriedUnits : 0;
-    // Quinn proposal: forecast minus what's carried over. Don't go below zero.
-    const quinnProposed = Math.max(0, base - carried);
+    const dispatchLines = dispatchBySku.get(item.skuId);
+    const dispatchDemand = dispatchLines
+      ? dispatchLines.reduce((a, l) => a + l.units, 0)
+      : 0;
+    // Quinn proposal: own counter sales + dispatch − carry-over, never < 0.
+    const quinnProposed = Math.max(0, counter + dispatchDemand - carried);
     lines.push({
       item,
       recipe,
       forecast,
       carryOver,
       quinnProposed,
+      dispatchDemand,
+      dispatchBySpoke: dispatchLines,
       primaryBench: primaryBenchForItem(item),
       benches: benchesForItem(item),
     });

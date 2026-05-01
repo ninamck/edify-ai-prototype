@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import { ChevronRight, Clock, Repeat, Shuffle, User, Waves } from 'lucide-react';
+import { ChevronRight, Clock, Download, Repeat, Shuffle, User, Waves } from 'lucide-react';
 import {
   benchesAt,
   effectiveBatchRules,
@@ -14,6 +14,7 @@ import {
   type Site,
 } from './fixtures';
 import { computeRelatedItems, usePlan, type PlanLine } from './PlanStore';
+import { downloadBenchPdf } from '@/lib/pdf/productionPdfs';
 
 type HighlightMode = 'focus' | 'upstream' | 'downstream' | 'dim' | 'none';
 
@@ -26,6 +27,10 @@ type Props = {
   focusedItemId?: ProductionItemId | null;
   onFocusChange?: (itemId: ProductionItemId | null) => void;
   onClearFocus?: () => void;
+  /** When set to a specific mode, only benches whose primaryMode matches are shown. */
+  modeFilter?: ProductionMode | 'all';
+  /** Open the bench detail panel for the clicked bench. */
+  onBenchClick?: (benchId: string) => void;
 };
 
 // ─── Stubbed "assigned to" per bench — placeholder until users/roles are wired in ──
@@ -146,6 +151,8 @@ export default function BenchCardBoard({
   focusedItemId,
   onFocusChange,
   onClearFocus,
+  modeFilter = 'all',
+  onBenchClick,
 }: Props) {
   const lines = usePlan(site.id, date);
 
@@ -281,20 +288,32 @@ export default function BenchCardBoard({
     [focusedItemId, onFocusChange, onClearFocus],
   );
 
-  return (
-    <div style={{ padding: '16px 16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* Mode legend — teaches the visual language for Run / Variable / Increment */}
-      <ModeLegend />
+  // Download the per-bench PDF using the same `lines` snapshot the cards are
+  // rendered from, so any in-session manager overrides are reflected.
+  const downloadBench = useCallback(
+    (benchId: string) => {
+      downloadBenchPdf({ siteId: site.id, date, benchId, lines });
+    },
+    [site.id, date, lines],
+  );
 
+  // Filter cards by selected mode tab — keep benches whose primary mode matches.
+  const visibleCards = useMemo(() => {
+    if (modeFilter === 'all') return cards;
+    return cards.filter(c => c.bench.primaryMode === modeFilter);
+  }, [cards, modeFilter]);
+
+  return (
+    <div style={{ padding: '20px 20px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Grid of bench cards — 2 per row on wide screens */}
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(480px, 1fr))',
-          gap: 16,
+          gap: 28,
         }}
       >
-        {cards.map(card => (
+        {visibleCards.map(card => (
           <BenchCard
             key={card.bench.id}
             card={card}
@@ -302,9 +321,26 @@ export default function BenchCardBoard({
             highlightFor={highlightFor}
             hasFocus={focusedItemId != null}
             onRowClick={toggleFocus}
+            onBenchClick={onBenchClick}
+            onDownloadBench={downloadBench}
           />
         ))}
       </div>
+      {visibleCards.length === 0 && (
+        <div
+          style={{
+            padding: '40px 20px',
+            textAlign: 'center',
+            color: 'var(--color-text-muted)',
+            fontSize: 12,
+            border: '1px dashed var(--color-border-subtle)',
+            borderRadius: 'var(--radius-card)',
+            background: '#ffffff',
+          }}
+        >
+          No benches in this mode at this site.
+        </div>
+      )}
     </div>
   );
 }
@@ -319,12 +355,16 @@ function BenchCard({
   highlightFor,
   hasFocus,
   onRowClick,
+  onBenchClick,
+  onDownloadBench,
 }: {
   card: CardData;
   nowHHMM?: string;
   highlightFor: (itemId: string) => HighlightMode;
   hasFocus: boolean;
   onRowClick: (itemId: ProductionItemId) => void;
+  onBenchClick?: (benchId: string) => void;
+  onDownloadBench?: (benchId: string) => void;
 }) {
   const allRows = useMemo(() => card.modeGroups.flatMap(g => g.rows), [card.modeGroups]);
 
@@ -339,7 +379,6 @@ function BenchCard({
 
   const cardOpacity = hasFocus && !cardHasRelatedRow ? 0.4 : 1;
 
-  const overCapacity = card.totalMins > card.windowCapacityMins;
   const remainingMins = Math.max(0, card.windowCapacityMins - card.totalMins);
 
   // Find the next / active run for the header chip. We use the primary
@@ -354,7 +393,7 @@ function BenchCard({
     <section
       style={{
         background: '#ffffff',
-        border: `1px solid ${overCapacity ? 'var(--color-error)' : 'var(--color-border-subtle)'}`,
+        border: '2px solid var(--color-border)',
         borderRadius: 'var(--radius-card)',
         padding: 0,
         opacity: cardOpacity,
@@ -366,6 +405,20 @@ function BenchCard({
     >
       {/* Header — bench name + its assigned production mode (Pret convention: 1 bench = 1 mode) */}
       <header
+        onClick={() => onBenchClick?.(card.bench.id)}
+        role={onBenchClick ? 'button' : undefined}
+        tabIndex={onBenchClick ? 0 : undefined}
+        onKeyDown={
+          onBenchClick
+            ? e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onBenchClick(card.bench.id);
+                }
+              }
+            : undefined
+        }
+        title={onBenchClick ? 'View ingredient totals for this bench' : undefined}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -373,6 +426,7 @@ function BenchCard({
           padding: '12px 14px',
           borderBottom: '1px solid var(--color-border-subtle)',
           gap: 12,
+          cursor: onBenchClick ? 'pointer' : 'default',
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
@@ -395,7 +449,36 @@ function BenchCard({
             {!card.bench.online && <span style={{ color: 'var(--color-error)', marginLeft: 8 }}>OFFLINE</span>}
           </div>
         </div>
-        <AssigneeChip assignee={card.assignee} />
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <AssigneeChip assignee={card.assignee} />
+          {onDownloadBench && (
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                onDownloadBench(card.bench.id);
+              }}
+              onKeyDown={e => e.stopPropagation()}
+              aria-label={`Download ${card.bench.name} bench plan PDF`}
+              title="Download bench plan PDF"
+              style={{
+                width: 28,
+                height: 28,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 6,
+                background: '#ffffff',
+                border: '1px solid var(--color-border-subtle)',
+                color: 'var(--color-text-secondary)',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              <Download size={14} />
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Mode groups (runs). Primary first; secondary modes rendered under an
@@ -451,7 +534,7 @@ function BenchCard({
               paddingTop: 6,
               marginTop: 2,
               fontWeight: 700,
-              color: overCapacity ? 'var(--color-error)' : 'var(--color-text-primary)',
+              color: 'var(--color-text-primary)',
             }}
           >
             <span>Total time</span>
@@ -474,27 +557,8 @@ function BenchCard({
       >
         <StopwatchCell label="Start" value={minsToHHMM(card.windowStartMins)} />
         <StopwatchCell label="End" value={minsToHHMM(card.windowStartMins + card.totalMins)} />
-        <StopwatchCell
-          label="Remaining"
-          value={overCapacity ? `-${formatHMS(card.totalMins - card.windowCapacityMins)}` : formatHMS(remainingMins)}
-          emphasis={overCapacity ? 'error' : 'muted'}
-        />
+        <StopwatchCell label="Remaining" value={formatHMS(remainingMins)} emphasis="muted" />
       </footer>
-
-      {overCapacity && (
-        <div
-          style={{
-            padding: '8px 14px',
-            background: 'var(--color-error-light, #fee)',
-            borderTop: '1px solid var(--color-error)',
-            color: 'var(--color-error)',
-            fontSize: 11,
-            fontWeight: 600,
-          }}
-        >
-          Over capacity · planned {formatHMS(card.totalMins)} vs. window {formatHMS(card.windowCapacityMins)}
-        </div>
-      )}
 
       {nowHHMM && card.windowStartMins > 0 && nowAfterStart(nowHHMM, card.windowStartMins) && (
         <div
@@ -538,9 +602,8 @@ const MODE_TREATMENT: Record<ProductionMode, {
   increment: {
     icon: Waves,
     label: 'Increment',
-    headerBg: 'var(--color-info-light)',
+    headerBg: 'var(--color-bg-hover)',
     dashedBorder: false,
-    sectionTint: 'rgba(59, 130, 246, 0.04)',
   },
 };
 
@@ -558,7 +621,6 @@ function ModeGroupSection({
   onRowClick: (itemId: ProductionItemId) => void;
 }) {
   const treatment = MODE_TREATMENT[group.mode];
-  const Icon = treatment.icon;
   // Secondary (off-mode) groups are rendered muted so they read as
   // "incidental, post-service" work rather than a peer to the main run.
   const sectionOpacity = group.isPrimary ? 1 : 0.7;
@@ -614,9 +676,6 @@ function ModeGroupSection({
           }}
         >
           {formatHMS(group.productionMins)} · {group.rows.length} recipe{group.rows.length === 1 ? '' : 's'}
-          <span style={{ marginLeft: 6 }}>
-            <Icon size={11} style={{ verticalAlign: '-1px' }} />
-          </span>
         </span>
       </header>
 
@@ -698,7 +757,7 @@ function RunBucketSection({
 
   const statePillColor =
     state === 'active'   ? { bg: 'var(--color-success-light, rgba(34,197,94,0.15))', fg: 'var(--color-success, #15803d)' } :
-    state === 'upcoming' ? { bg: 'var(--color-info-light)',                            fg: 'var(--color-info)' } :
+    state === 'upcoming' ? { bg: 'var(--color-bg-hover)',                              fg: 'var(--color-text-secondary)' } :
                            { bg: 'var(--color-bg-hover)',                              fg: 'var(--color-text-muted)' };
 
   return (
@@ -775,50 +834,10 @@ function RunBucketSection({
   );
 }
 
-function ModeLegend() {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 14,
-        padding: '8px 12px',
-        borderRadius: 'var(--radius-card)',
-        border: '1px solid var(--color-border-subtle)',
-        background: '#ffffff',
-        fontSize: 11,
-        color: 'var(--color-text-secondary)',
-      }}
-    >
-      <span style={{ fontWeight: 700, color: 'var(--color-text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 10 }}>
-        Day view · each bench runs one mode
-      </span>
-      <LegendItem mode="run"       caption="Run benches — R1/R2 scheduled windows" />
-      <LegendItem mode="variable"  caption="Variable benches — built to order" />
-      <LegendItem mode="increment" caption="Increment benches — throughout day" />
-      <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic', marginLeft: 'auto' }}>
-        Off-mode work appears under "After service"
-      </span>
-    </div>
-  );
-}
-
-function LegendItem({ mode, caption }: { mode: ProductionMode; caption: string }) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <ModeBadge mode={mode} />
-      <span style={{ color: 'var(--color-text-muted)' }}>{caption}</span>
-    </span>
-  );
-}
-
 function ModeBadge({ mode }: { mode: ProductionMode }) {
   const treatment = MODE_TREATMENT[mode];
   const Icon = treatment.icon;
-  const styles =
-    mode === 'run'       ? { bg: 'var(--color-bg-hover)',       color: 'var(--color-text-secondary)' } :
-    mode === 'variable'  ? { bg: 'rgba(251, 191, 36, 0.14)',    color: '#92400e' } :
-                           { bg: 'var(--color-info-light)',      color: 'var(--color-info)' };
+  const styles = { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' };
   return (
     <span
       style={{
@@ -854,11 +873,11 @@ function RecipeRow({
   const { line, batches, totalQty, estMinutes } = row;
 
   const tone =
-    highlight === 'focus'      ? { bg: 'var(--color-info-light)',      accent: 'var(--color-accent-active)', opacity: 1 } :
-    highlight === 'upstream'   ? { bg: 'var(--color-info-light)',      accent: 'var(--color-info)',          opacity: 1 } :
-    highlight === 'downstream' ? { bg: 'rgba(251, 191, 36, 0.12)',     accent: 'var(--color-accent-mid)',    opacity: 1 } :
-    highlight === 'dim'        ? { bg: '#ffffff',                      accent: 'var(--color-text-muted)',    opacity: 0.35 } :
-                                 { bg: '#ffffff',                      accent: 'var(--color-text-muted)',    opacity: 1 };
+    highlight === 'focus'      ? { bg: 'var(--color-bg-hover)',  accent: 'var(--color-accent-active)', opacity: 1 } :
+    highlight === 'upstream'   ? { bg: 'var(--color-bg-hover)',  accent: 'var(--color-text-secondary)', opacity: 1 } :
+    highlight === 'downstream' ? { bg: 'var(--color-bg-hover)',  accent: 'var(--color-text-muted)',     opacity: 1 } :
+    highlight === 'dim'        ? { bg: '#ffffff',                accent: 'var(--color-text-muted)',     opacity: 0.35 } :
+                                 { bg: '#ffffff',                accent: 'var(--color-text-muted)',     opacity: 1 };
 
   const isAssembly = !!line.recipe.subRecipes && line.recipe.subRecipes.length > 0;
   const assemblyDemand = line.assemblyDemand.totalUnits;
@@ -881,8 +900,8 @@ function RecipeRow({
         border: 'none',
         borderBottom: '1px solid var(--color-border-subtle)',
         borderLeft: highlight === 'focus' ? '3px solid var(--color-accent-active)' :
-                    highlight === 'upstream' ? '3px solid var(--color-info)' :
-                    highlight === 'downstream' ? '3px solid var(--color-accent-mid)' :
+                    highlight === 'upstream' ? '3px solid var(--color-text-secondary)' :
+                    highlight === 'downstream' ? '3px solid var(--color-text-muted)' :
                     '3px solid transparent',
         textAlign: 'left',
         width: '100%',
@@ -1010,10 +1029,8 @@ function StopwatchCell({
 
 function Tag({ label, tone }: { label: string; tone: 'info' | 'warn' | 'accent' | 'error' }) {
   const styles =
-    tone === 'info'   ? { bg: 'var(--color-info-light)',   color: 'var(--color-info)' } :
-    tone === 'warn'   ? { bg: 'rgba(251, 191, 36, 0.18)',  color: '#92400e' } :
-    tone === 'accent' ? { bg: 'rgba(245, 158, 11, 0.18)',  color: '#92400e' } :
-                        { bg: 'rgba(248, 113, 113, 0.18)', color: 'var(--color-error)' };
+    tone === 'error'  ? { bg: 'var(--color-error-light)', color: 'var(--color-error)' } :
+                        { bg: 'var(--color-bg-hover)',    color: 'var(--color-text-secondary)' };
   return (
     <span
       style={{
@@ -1236,7 +1253,7 @@ function NextRunChip({ info }: { info: NextRunInfo }) {
                            `Runs complete · ${bucket.run.label} done`;
   const styles =
     state === 'active'   ? { bg: 'var(--color-success-light, rgba(34,197,94,0.14))', fg: 'var(--color-success, #15803d)' } :
-    state === 'upcoming' ? { bg: 'var(--color-info-light)',                           fg: 'var(--color-info)' } :
+    state === 'upcoming' ? { bg: 'var(--color-bg-hover)',                             fg: 'var(--color-text-secondary)' } :
                            { bg: 'var(--color-bg-hover)',                             fg: 'var(--color-text-muted)' };
   return (
     <span

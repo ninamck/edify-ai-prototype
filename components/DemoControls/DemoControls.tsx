@@ -26,7 +26,7 @@ export default function DemoControls() {
     <div
       style={{
         position: 'fixed',
-        bottom: '16px',
+        top: '16px',
         left: '72px',
         zIndex: 900,
         fontFamily: 'var(--font-primary)',

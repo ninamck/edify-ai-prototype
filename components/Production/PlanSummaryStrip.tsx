@@ -23,6 +23,7 @@ export default function PlanSummaryStrip({ siteId, date, linkToAmounts = true }:
   const { overrideCount, resetAll } = usePlanStore();
   const { can } = useRole();
   const canEdit = can('plan.editQuantity');
+  const dateOverrideCount = overrideCount(date);
 
   const summary = useMemo(() => {
     let units = 0;
@@ -48,11 +49,7 @@ export default function PlanSummaryStrip({ siteId, date, linkToAmounts = true }:
         gap: 14,
         padding: '8px 14px',
         borderBottom: '1px solid var(--color-border-subtle)',
-        background: summary.shortfalls > 0
-          ? 'var(--color-error-light)'
-          : overrideCount > 0
-          ? 'var(--color-warning-light)'
-          : 'var(--color-info-light)',
+        background: summary.shortfalls > 0 ? 'var(--color-error-light)' : '#ffffff',
         flexWrap: 'wrap',
       }}
     >
@@ -68,15 +65,15 @@ export default function PlanSummaryStrip({ siteId, date, linkToAmounts = true }:
           color: 'var(--color-text-muted)',
         }}
       >
-        <Sparkles size={11} color="var(--color-info)" /> Today&rsquo;s plan
+        <Sparkles size={11} color="var(--color-text-muted)" /> Today&rsquo;s plan
       </span>
       <SummaryChip label="Recipes" value={summary.recipeCount} />
       <SummaryChip label="Units" value={summary.units} emphasise />
       <SummaryChip label="Batches" value={summary.batches} />
-      {overrideCount > 0 && (
+      {dateOverrideCount > 0 && (
         <SummaryChip
           label="Manager edits"
-          value={`${overrideCount} · ${formatSigned(summary.variance)} vs Quinn`}
+          value={`${dateOverrideCount} · ${formatSigned(summary.variance)} vs Quinn`}
           tone="warning"
         />
       )}
@@ -89,10 +86,10 @@ export default function PlanSummaryStrip({ siteId, date, linkToAmounts = true }:
         />
       )}
       <div style={{ flex: 1 }} />
-      {overrideCount > 0 && canEdit && (
+      {dateOverrideCount > 0 && canEdit && (
         <button
           type="button"
-          onClick={resetAll}
+          onClick={() => resetAll(date)}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -112,7 +109,7 @@ export default function PlanSummaryStrip({ siteId, date, linkToAmounts = true }:
         </button>
       )}
       {linkToAmounts && (
-        <Link
+          <Link
           href="/production/amounts"
           style={{
             display: 'inline-flex',
@@ -124,8 +121,8 @@ export default function PlanSummaryStrip({ siteId, date, linkToAmounts = true }:
             fontWeight: 700,
             fontFamily: 'var(--font-primary)',
             background: '#ffffff',
-            color: 'var(--color-info)',
-            border: '1px solid var(--color-info)',
+            color: 'var(--color-text-secondary)',
+            border: '1px solid var(--color-border)',
             cursor: 'pointer',
             textDecoration: 'none',
           }}
@@ -151,9 +148,7 @@ function SummaryChip({
   icon?: React.ReactNode;
 }) {
   const color =
-    tone === 'warning'
-      ? 'var(--color-warning)'
-      : tone === 'error'
+    tone === 'error'
       ? 'var(--color-error)'
       : 'var(--color-text-primary)';
   return (

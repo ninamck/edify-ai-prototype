@@ -77,7 +77,7 @@ export function getQuinnNudges(): QuinnNudge[] {
       id: 'nudge-spoke-submission',
       surface: 'spokes',
       tone: 'warning',
-      title: `Spoke order draft — cutoff ${PRET_SPOKE_SUBMISSION.cutoff}`,
+      title: `Spoke order draft — cutoff ${PRET_SPOKE_SUBMISSION.cutoffDateTime}`,
       body: 'Submit before cutoff or the hub won’t cover tomorrow’s opening.',
       cta: { label: 'Submit order', href: '/production/spokes' },
     });
