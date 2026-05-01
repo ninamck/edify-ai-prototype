@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Sidebar from '@/components/Sidebar/Sidebar';
 import Mvp1TopBar from '@/components/Mvp1/Mvp1TopBar';
 import AskQuinnBar from '@/components/Mvp1/AskQuinnBar';
+import FloorActionsBox from '@/components/FloorActionsBox';
 import DateRangePicker, { type DateRange } from '@/components/Mvp1/DateRangePicker';
 import EstateDashboard from '@/components/Dashboard/EstateDashboard';
 import ManagerDashboard from '@/components/Dashboard/ManagerDashboard';
@@ -90,6 +91,10 @@ export default function Mvp1Shell() {
   const effectivePhase: BriefingPhase =
     phaseOverride === 'auto' ? phaseFromHour(new Date().getHours()) : phaseOverride;
   const isMobileShell = useMediaQuery(MOBILE_SHELL_BREAKPOINT);
+  // Stack the Actions + Ask row vertically below ~900px viewport. The Ask
+  // bar's own pill-hide media query also kicks in at this bound, so it's a
+  // natural breakpoint for the pair.
+  const stackActionsAndAsk = useMediaQuery('(max-width: 900px)');
 
   // ?build=table opens the Tables-filtered Add insight popup pointed at the
   // first available tables tab (or creates one if there isn't one yet). The
@@ -314,7 +319,41 @@ export default function Mvp1Shell() {
               </h1>
             </div>
 
-            <AskQuinnBar onAsk={handleAsk} />
+            {/* Actions + Ask row. Cards split 50/50 on desktop; stacks vertically
+                below ~900px viewport (where half a row would be narrower than the
+                FloorActionsBox's natural 434px content width and the squares would
+                wrap). align-items: stretch keeps both cards the same height so the
+                row reads as a balanced pair. */}
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: stackActionsAndAsk ? 'column' : 'row',
+                alignItems: 'stretch',
+                gap: 14,
+              }}
+            >
+              <div
+                style={
+                  stackActionsAndAsk
+                    ? { width: '100%' }
+                    : { flex: '1 1 0', minWidth: 434, display: 'grid' }
+                }
+              >
+                <FloorActionsBox
+                  briefingRole={briefingRole}
+                  onReceiveDelivery={() => router.push('/receive')}
+                />
+              </div>
+              <div
+                style={
+                  stackActionsAndAsk
+                    ? { width: '100%' }
+                    : { flex: '1 1 0', minWidth: 0, display: 'grid' }
+                }
+              >
+                <AskQuinnBar onAsk={handleAsk} />
+              </div>
+            </div>
 
             <Mvp1Tabs
               tabs={tabs}

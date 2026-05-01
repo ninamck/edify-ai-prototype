@@ -1,6 +1,6 @@
 'use client';
 
-import { MessageSquare, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 const SUGGESTIONS = [
   'Labour % by hour',
@@ -18,68 +18,83 @@ export default function AskQuinnBar({
     <div
       style={{
         display: 'flex',
-        alignItems: 'center',
-        gap: '14px',
-        padding: '10px 14px',
+        flexDirection: 'column',
+        width: '100%',
+        height: '100%',
+        padding: '12px 16px',
         borderRadius: '12px',
-        border: '1px solid var(--color-border-subtle)',
-        background: 'var(--color-bg-surface)',
-        boxShadow: '0 1px 0 rgba(58,48,40,0.04)',
+        background: '#fff',
+        border: '2px solid rgba(217, 215, 212, 1)',
+        boxShadow: '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.03)',
         fontFamily: 'var(--font-primary)',
-        minHeight: '64px',
+        boxSizing: 'border-box',
       }}
     >
+      {/* Header — mirrors the "On the floor" treatment on the sibling card */}
       <div
         style={{
-          flexShrink: 0,
-          width: '36px',
-          height: '36px',
-          borderRadius: '10px',
-          background: 'var(--color-accent-active)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '8px',
         }}
-        aria-hidden="true"
       >
-        <MessageSquare size={18} strokeWidth={2.2} color="#fff" />
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-        <div
+        <span
           style={{
             fontSize: '13px',
             fontWeight: 700,
-            color: 'var(--color-text-primary)',
-            lineHeight: 1.2,
-          }}
-        >
-          Add your next chart
-        </div>
-        <div
-          style={{
-            fontSize: '12px',
+            letterSpacing: '0.04em',
             color: 'var(--color-text-muted)',
-            lineHeight: 1.3,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
           }}
         >
-          Ask me anything about your data &mdash; I&rsquo;ll draw it, then you can pin it here.
-        </div>
+          Ask Quinn
+        </span>
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '20px',
+            height: '20px',
+            borderRadius: '6px',
+            background: 'var(--color-accent-active)',
+          }}
+          aria-hidden="true"
+        >
+          <Sparkles size={11} strokeWidth={2.4} color="#fff" />
+        </span>
       </div>
 
-      <div style={{ flex: 1 }} />
+      {/* Prompt + subtitle on a single tight block */}
+      <div
+        style={{
+          fontSize: '13px',
+          fontWeight: 700,
+          color: 'var(--color-text-primary)',
+          lineHeight: 1.25,
+        }}
+      >
+        Add your next chart
+      </div>
+      <div
+        style={{
+          fontSize: '11.5px',
+          color: 'var(--color-text-muted)',
+          lineHeight: 1.35,
+          marginBottom: '10px',
+        }}
+      >
+        Ask anything about your data &mdash; I&rsquo;ll draw it, then you can pin it here.
+      </div>
 
+      {/* Suggestion pills */}
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          flexShrink: 0,
+          flexWrap: 'wrap',
+          gap: '5px',
+          marginBottom: '10px',
         }}
-        className="ask-quinn-suggestions"
       >
         {SUGGESTIONS.map((s) => (
           <button
@@ -89,24 +104,27 @@ export default function AskQuinnBar({
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '5px',
-              padding: '6px 10px',
+              gap: '4px',
+              padding: '4px 9px',
               borderRadius: '100px',
               border: '1px solid var(--color-border-subtle)',
-              background: '#fff',
+              background: 'var(--color-bg-surface)',
               cursor: 'pointer',
               fontFamily: 'var(--font-primary)',
-              fontSize: '11px',
+              fontSize: '10.5px',
               fontWeight: 600,
               color: 'var(--color-text-secondary)',
               whiteSpace: 'nowrap',
             }}
           >
-            <Sparkles size={11} strokeWidth={2.2} color="var(--color-text-muted)" />
+            <Sparkles size={10} strokeWidth={2.2} color="var(--color-text-muted)" />
             <span>{s}</span>
           </button>
         ))}
       </div>
+
+      {/* Spacer pushes the CTA to the bottom so the card reads as a proper panel */}
+      <div style={{ flex: 1 }} />
 
       <button
         type="button"
@@ -114,31 +132,25 @@ export default function AskQuinnBar({
         style={{
           display: 'inline-flex',
           alignItems: 'center',
+          justifyContent: 'center',
+          alignSelf: 'flex-start',
           gap: '6px',
-          padding: '8px 14px',
+          padding: '7px 14px',
           borderRadius: '100px',
           border: 'none',
           background: 'var(--color-accent-active)',
           color: '#fff',
           cursor: 'pointer',
           fontFamily: 'var(--font-primary)',
-          fontSize: '12px',
+          fontSize: '11.5px',
           fontWeight: 600,
           boxShadow: '0 2px 8px rgba(34,68,68,0.25)',
           whiteSpace: 'nowrap',
         }}
       >
-        <Sparkles size={12} strokeWidth={2.2} />
-        <span>Ask Quinn</span>
+        <Sparkles size={11} strokeWidth={2.2} />
+        <span>Ask Quinn anything</span>
       </button>
-
-      <style>{`
-        @media (max-width: 900px) {
-          .ask-quinn-suggestions {
-            display: none !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }

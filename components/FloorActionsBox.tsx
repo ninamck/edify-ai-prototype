@@ -109,11 +109,11 @@ function FloorActionSquare({
       type="button"
       onClick={onClick}
       style={{
-        width: '88px',
-        minWidth: '88px',
-        minHeight: '88px',
-        padding: '10px 7px',
-        borderRadius: '12px',
+        width: '74px',
+        minWidth: '74px',
+        minHeight: '74px',
+        padding: '8px 6px',
+        borderRadius: '10px',
         border: '1px solid var(--color-border-subtle)',
         background: '#fff',
         boxShadow: '0 1px 3px rgba(58,48,40,0.08), 0 0 0 1px rgba(58,48,40,0.03)',
@@ -121,7 +121,7 @@ function FloorActionSquare({
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'flex-start',
-        gap: '6px',
+        gap: '5px',
         cursor: 'pointer',
         fontFamily: 'var(--font-primary)',
         position: 'relative',
@@ -134,25 +134,25 @@ function FloorActionSquare({
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          width: '34px',
-          height: '34px',
-          borderRadius: '8px',
+          width: '28px',
+          height: '28px',
+          borderRadius: '7px',
           background: 'var(--color-bg-surface)',
         }}>
-          <Icon size={17} color="var(--color-text-secondary)" strokeWidth={2} />
+          <Icon size={15} color="var(--color-text-secondary)" strokeWidth={2} />
         </span>
         {badge != null && (
           <span style={{
             position: 'absolute',
-            top: '-6px',
-            right: '-10px',
-            minWidth: '18px',
-            height: '18px',
-            padding: '0 5px',
+            top: '-5px',
+            right: '-9px',
+            minWidth: '16px',
+            height: '16px',
+            padding: '0 4px',
             borderRadius: '100px',
             background: 'var(--color-accent-deep)',
             color: '#F4F1EC',
-            fontSize: '12px',
+            fontSize: '11px',
             fontWeight: 700,
             display: 'flex',
             alignItems: 'center',
@@ -175,11 +175,11 @@ function FloorActionSquare({
         )}
       </span>
       <span style={{
-        fontSize: '11px',
+        fontSize: '10.5px',
         fontWeight: 600,
         color: 'var(--color-text-secondary)',
         textAlign: 'center',
-        lineHeight: 1.25,
+        lineHeight: 1.2,
         maxWidth: '100%',
       }}>
         {label}
@@ -238,7 +238,7 @@ export default function FloorActionsBox({
       style={{
         flexShrink: 0,
         width: '100%',
-        padding: '14px 20px',
+        padding: '12px 16px',
         borderRadius: '12px',
         background: '#fff',
         border: '2px solid rgba(217, 215, 212, 1)',
@@ -249,10 +249,10 @@ export default function FloorActionsBox({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: '12px',
+        marginBottom: '10px',
       }}>
         <span style={{
-          fontSize: '15px',
+          fontSize: '13px',
           fontWeight: 700,
           letterSpacing: '0.04em',
           color: 'var(--color-text-muted)',
@@ -282,7 +282,7 @@ export default function FloorActionsBox({
       <div style={{
         display: 'flex',
         flexWrap: 'wrap',
-        gap: '12px',
+        gap: '8px',
         alignItems: 'flex-start',
       }}>
         {visibleActions.map((action) => {
