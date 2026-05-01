@@ -15,7 +15,7 @@ export type NdcpDivisionRow = {
 
 export const NDCP_DIVISION_COLUMNS: Column[] = [
   { key: 'location', header: 'Location', type: 'string', defaultVisible: true, width: 100, pinned: 'left' },
-  { key: 'name', header: 'Store', type: 'string', defaultVisible: true, width: 220 },
+  { key: 'name', header: 'Name', type: 'string', defaultVisible: true, width: 220 },
   { key: 'dm', header: 'DM', type: 'string', defaultVisible: true, width: 160 },
   { key: 'invoice_date', header: 'Invoice date', type: 'date', defaultVisible: true, width: 120 },
   { key: 'division_code', header: 'Division #', type: 'integer', width: 100 },

@@ -21,7 +21,7 @@ export type FoodSupplyCostRow = {
 
 export const FOOD_SUPPLY_COST_COLUMNS: Column[] = [
   { key: 'location', header: 'Location', type: 'string', width: 90, pinned: 'left' },
-  { key: 'name', header: 'Store', type: 'string', defaultVisible: true, width: 220 },
+  { key: 'name', header: 'Name', type: 'string', defaultVisible: true, width: 220 },
   { key: 'dm', header: 'DM', type: 'string', defaultVisible: true, width: 160 },
   { key: 'cost_date', header: 'Date', type: 'date', defaultVisible: true, width: 120 },
   { key: 'dcp_food', header: 'DCP food', type: 'currency', defaultVisible: true, width: 120 },

@@ -76,7 +76,18 @@ const DEFAULT_TABS: Mvp1Tab[] = [
     id: 'summary-analysis',
     name: 'Summary Analysis',
     kind: 'tables',
-    tables: [],
+    tables: [
+      // Dunkin-only seed. Swap `weeklyFlashTotals` for whichever data source
+      // matches the table you added in the live demo. The id is stable so
+      // `appendMissingPinnedSeeds` re-injects it on every load without
+      // duplicating it. `roleScope` keeps it hidden for non-Dunkin roles.
+      {
+        id: 'summary-analysis-dunkin-1',
+        title: 'Weekly P&L Totals',
+        query: fullSourceQuery('weeklyFlashTotals'),
+        roleScope: ['dunkin'],
+      },
+    ],
     charts: [],
   },
   {

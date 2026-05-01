@@ -32,7 +32,7 @@ type FilterPreset = Omit<ViewFilter, 'selected'>;
 const ADDABLE_FILTER_PRESETS: FilterPreset[] = [
   {
     id: 'name',
-    label: 'Store',
+    label: 'Name',
     columnKey: 'name',
     type: 'string',
     optionsSource: 'flashReport',

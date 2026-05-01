@@ -23,6 +23,7 @@ import {
   type AnalyticsChartId,
 } from '@/components/Analytics/AnalyticsCharts';
 import QuinnInsightButton from '@/components/Dashboard/parts/QuinnInsightButton';
+import type { BriefingRole } from '@/components/briefing';
 
 export type TableOrigin =
   | { kind: 'preset'; questionId: string; questionText: string }
@@ -34,6 +35,12 @@ export type TableInstance = {
   title?: string;
   query: TableQuery;
   origin?: TableOrigin;
+  /**
+   * If set, this table only renders when the current demo role is in the list.
+   * Filtering happens at render time in `Mvp1Shell`; the entry stays in
+   * persisted state regardless of role so toggling the role pill is reversible.
+   */
+  roleScope?: BriefingRole[];
 };
 
 export type ChartInstance = {
@@ -177,6 +184,7 @@ export default function TablesTab({
               instance={t}
               viewFilters={viewFilters}
               index={idx}
+              editing={editing}
               canRemove={editing && tables.length + charts.length > 1}
               canReorder={editing && tables.length > 1}
               isDragging={draggingId === t.id}
@@ -240,6 +248,7 @@ function TableCard({
   instance,
   viewFilters,
   index,
+  editing,
   canRemove,
   canReorder,
   isDragging,
@@ -255,6 +264,9 @@ function TableCard({
   instance: TableInstance;
   viewFilters: ViewFilter[];
   index: number;
+  /** Parent edit mode. When true, the title is always shown as an editable
+   *  input — no need to double-click. */
+  editing: boolean;
   canRemove: boolean;
   canReorder: boolean;
   isDragging: boolean;
@@ -273,6 +285,20 @@ function TableCard({
   const [editingTitle, setEditingTitle] = useState(false);
   const [draftTitle, setDraftTitle] = useState(instance.title ?? '');
   const cardRef = useRef<HTMLDivElement | null>(null);
+
+  // Keep the draft in sync if the title changes from elsewhere (e.g. Quinn
+  // chat replaces this table) and reset double-click edit mode whenever the
+  // parent's edit toggle flips off.
+  useEffect(() => {
+    setDraftTitle(instance.title ?? '');
+  }, [instance.title]);
+  useEffect(() => {
+    if (!editing) setEditingTitle(false);
+  }, [editing]);
+
+  // In parent edit mode the title is always shown as an input. Outside edit
+  // mode, double-clicking the title flips this on locally.
+  const showTitleInput = editing || editingTitle;
   // Only draggable while the user is actively grabbing the grip handle. This
   // prevents accidental drags from the title button or row content.
   const [dragArmed, setDragArmed] = useState(false);
@@ -351,23 +377,25 @@ function TableCard({
             <GripVertical size={14} strokeWidth={2.2} />
           </span>
         )}
-        {editingTitle ? (
+        {showTitleInput ? (
           <input
-            autoFocus
+            autoFocus={editingTitle && !editing}
             value={draftTitle}
             onChange={(e) => setDraftTitle(e.target.value)}
             onBlur={() => {
-              onRename(draftTitle);
-              setEditingTitle(false);
+              const trimmed = draftTitle.trim();
+              if (trimmed && trimmed !== (instance.title ?? '')) onRename(trimmed);
+              else setDraftTitle(instance.title ?? '');
+              if (!editing) setEditingTitle(false);
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                onRename(draftTitle);
-                setEditingTitle(false);
+                (e.target as HTMLInputElement).blur();
               }
               if (e.key === 'Escape') {
                 setDraftTitle(instance.title ?? '');
-                setEditingTitle(false);
+                if (!editing) setEditingTitle(false);
+                (e.target as HTMLInputElement).blur();
               }
             }}
             placeholder={fallbackTitle}

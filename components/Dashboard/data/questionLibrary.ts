@@ -1696,7 +1696,7 @@ export const QUESTION_TABLE_QUERIES: Record<string, TableQuery> = {
   'cogs-which-sites-are-consistently-over': {
     sources: ['flashReport'],
     columns: [
-      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Name' },
       { kind: 'field', field: { source: 'flashReport', key: 'dm' }, header: 'DM' },
       {
         kind: 'field',
@@ -1753,7 +1753,7 @@ export const DUNKIN_QUESTION_TABLE_QUERIES: Record<string, TableQuery> = {
     sources: ['weeklySalesBySite'],
     columns: [
       { kind: 'field', field: { source: 'weeklySalesBySite', key: 'location' }, header: 'Location' },
-      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'name' }, header: 'Name' },
       { kind: 'field', field: { source: 'weeklySalesBySite', key: 'dm' }, header: 'DM' },
       {
         kind: 'agg',
@@ -1789,7 +1789,7 @@ export const DUNKIN_QUESTION_TABLE_QUERIES: Record<string, TableQuery> = {
     sources: ['weeklySalesBySite'],
     columns: [
       { kind: 'field', field: { source: 'weeklySalesBySite', key: 'location' }, header: 'Location' },
-      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'name' }, header: 'Name' },
       { kind: 'field', field: { source: 'weeklySalesBySite', key: 'dm' }, header: 'DM' },
       { kind: 'field', field: { source: 'weeklySalesBySite', key: 'week_number' }, header: 'Week No.' },
       { kind: 'field', field: { source: 'weeklySalesBySite', key: 'total_sales' }, header: 'Total sales' },
@@ -1806,7 +1806,7 @@ export const DUNKIN_QUESTION_TABLE_QUERIES: Record<string, TableQuery> = {
     sources: ['flashReport'],
     columns: [
       { kind: 'field', field: { source: 'flashReport', key: 'location' }, header: 'Location' },
-      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Name' },
       {
         kind: 'agg',
         agg: 'avg',
@@ -1876,7 +1876,7 @@ export const DUNKIN_QUESTION_TABLE_QUERIES: Record<string, TableQuery> = {
     sources: ['weeklySalesBySite'],
     columns: [
       { kind: 'field', field: { source: 'weeklySalesBySite', key: 'location' }, header: 'Location' },
-      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'name' }, header: 'Name' },
       { kind: 'field', field: { source: 'weeklySalesBySite', key: 'dm' }, header: 'DM' },
       { kind: 'field', field: { source: 'weeklySalesBySite', key: 'week_number' }, header: 'Week No.' },
       { kind: 'field', field: { source: 'weeklySalesBySite', key: 'total_sales_ly_pct' }, header: 'Growth vs LY %' },
@@ -1892,7 +1892,7 @@ export const DUNKIN_QUESTION_TABLE_QUERIES: Record<string, TableQuery> = {
     sources: ['flashReport'],
     columns: [
       { kind: 'field', field: { source: 'flashReport', key: 'location' }, header: 'Location' },
-      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Name' },
       { kind: 'field', field: { source: 'flashReport', key: 'week_number' }, header: 'Week No.' },
       { kind: 'field', field: { source: 'flashReport', key: 'total_sales' }, header: 'Total sales' },
       { kind: 'field', field: { source: 'flashReport', key: 'labor_hours' }, header: 'Labor hrs' },
@@ -1909,7 +1909,7 @@ export const DUNKIN_QUESTION_TABLE_QUERIES: Record<string, TableQuery> = {
     sources: ['flashReport'],
     columns: [
       { kind: 'field', field: { source: 'flashReport', key: 'location' }, header: 'Location' },
-      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Name' },
       {
         kind: 'agg',
         agg: 'avg',
@@ -1943,7 +1943,7 @@ export const DUNKIN_QUESTION_TABLE_QUERIES: Record<string, TableQuery> = {
     sources: ['weeklySalesBySite'],
     columns: [
       { kind: 'field', field: { source: 'weeklySalesBySite', key: 'location' }, header: 'Location' },
-      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'name' }, header: 'Name' },
       { kind: 'field', field: { source: 'weeklySalesBySite', key: 'dm' }, header: 'DM' },
       {
         kind: 'agg',
@@ -1979,7 +1979,7 @@ export const DUNKIN_QUESTION_TABLE_QUERIES: Record<string, TableQuery> = {
     sources: ['weeklySalesBySite'],
     columns: [
       { kind: 'field', field: { source: 'weeklySalesBySite', key: 'location' }, header: 'Location' },
-      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'weeklySalesBySite', key: 'name' }, header: 'Name' },
       { kind: 'field', field: { source: 'weeklySalesBySite', key: 'dm' }, header: 'DM' },
       { kind: 'field', field: { source: 'weeklySalesBySite', key: 'week_number' }, header: 'Week No.' },
       { kind: 'field', field: { source: 'weeklySalesBySite', key: 'total_sales' }, header: 'Total sales' },
@@ -2035,7 +2035,7 @@ export const DUNKIN_QUESTION_TABLE_QUERIES: Record<string, TableQuery> = {
     sources: ['flashReport'],
     columns: [
       { kind: 'field', field: { source: 'flashReport', key: 'location' }, header: 'Location' },
-      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Name' },
       {
         kind: 'agg',
         agg: 'avg',
@@ -2103,7 +2103,7 @@ export const DUNKIN_QUESTION_TABLE_QUERIES: Record<string, TableQuery> = {
     sources: ['flashReport'],
     columns: [
       { kind: 'field', field: { source: 'flashReport', key: 'location' }, header: 'Location' },
-      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Name' },
       { kind: 'field', field: { source: 'flashReport', key: 'dm' }, header: 'DM' },
       { kind: 'field', field: { source: 'flashReport', key: 'week_number' }, header: 'Week No.' },
       {
@@ -2133,7 +2133,7 @@ export const DUNKIN_QUESTION_TABLE_QUERIES: Record<string, TableQuery> = {
     sources: ['flashReport'],
     columns: [
       { kind: 'field', field: { source: 'flashReport', key: 'location' }, header: 'Location' },
-      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Name' },
       {
         kind: 'agg',
         agg: 'avg',
@@ -2167,7 +2167,7 @@ export const DUNKIN_QUESTION_TABLE_QUERIES: Record<string, TableQuery> = {
     sources: ['flashReport'],
     columns: [
       { kind: 'field', field: { source: 'flashReport', key: 'location' }, header: 'Location' },
-      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Name' },
       { kind: 'field', field: { source: 'flashReport', key: 'week_number' }, header: 'Week No.' },
       { kind: 'field', field: { source: 'flashReport', key: 'labor_earnings' }, header: 'Labor $' },
       { kind: 'field', field: { source: 'flashReport', key: 'customer_count' }, header: 'Customers' },
@@ -2240,7 +2240,7 @@ export const DUNKIN_QUESTION_TABLE_QUERIES: Record<string, TableQuery> = {
     sources: ['flashReport'],
     columns: [
       { kind: 'field', field: { source: 'flashReport', key: 'location' }, header: 'Location' },
-      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Store' },
+      { kind: 'field', field: { source: 'flashReport', key: 'name' }, header: 'Name' },
       { kind: 'field', field: { source: 'flashReport', key: 'week_number' }, header: 'Week No.' },
       { kind: 'field', field: { source: 'flashReport', key: 'total_sales' }, header: 'Total sales' },
       { kind: 'field', field: { source: 'flashReport', key: 'labor_earnings' }, header: 'Labor $' },

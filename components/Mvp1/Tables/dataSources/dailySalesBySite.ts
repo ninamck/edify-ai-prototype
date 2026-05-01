@@ -15,7 +15,7 @@ export type DailySalesBySiteRow = {
 
 export const DAILY_SALES_BY_SITE_COLUMNS: Column[] = [
   { key: 'location', header: 'Location', type: 'string', defaultVisible: true, width: 100, pinned: 'left' },
-  { key: 'name', header: 'Store', type: 'string', defaultVisible: true, width: 220 },
+  { key: 'name', header: 'Name', type: 'string', defaultVisible: true, width: 220 },
   { key: 'dm', header: 'DM', type: 'string', defaultVisible: true, width: 160 },
   { key: 'business_date', header: 'Date', type: 'date', defaultVisible: true, width: 120 },
   { key: 'dd_sales', header: 'DD sales', type: 'currency', defaultVisible: true, width: 120 },

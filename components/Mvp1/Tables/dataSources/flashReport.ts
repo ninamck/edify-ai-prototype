@@ -34,7 +34,7 @@ export type FlashReportRow = {
 
 export const FLASH_REPORT_COLUMNS: Column[] = [
   { key: 'location', header: 'Location', type: 'string', width: 90, pinned: 'left' },
-  { key: 'name', header: 'Store', type: 'string', defaultVisible: true, width: 220 },
+  { key: 'name', header: 'Name', type: 'string', defaultVisible: true, width: 220 },
   { key: 'dm', header: 'DM', type: 'string', defaultVisible: true, width: 160 },
   { key: 'year', header: 'Year', type: 'integer', width: 80 },
   { key: 'week_number', header: 'Week No.', type: 'integer', width: 90 },

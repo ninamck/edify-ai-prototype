@@ -19,7 +19,7 @@ export type DailySalesByProductFamilyRow = {
 
 export const DAILY_SALES_BY_PRODUCT_FAMILY_COLUMNS: Column[] = [
   { key: 'location', header: 'Location', type: 'string', defaultVisible: true, width: 100, pinned: 'left' },
-  { key: 'name', header: 'Store', type: 'string', defaultVisible: true, width: 220 },
+  { key: 'name', header: 'Name', type: 'string', defaultVisible: true, width: 220 },
   { key: 'dm', header: 'DM', type: 'string', width: 160 },
   { key: 'business_date', header: 'Date', type: 'date', defaultVisible: true, width: 120 },
   { key: 'major_group_name', header: 'Major group', type: 'string', defaultVisible: true, width: 150 },

@@ -348,16 +348,12 @@ export default function Mvp1Shell() {
                   flexWrap: 'wrap',
                 }}
               >
-                <h2
-                  style={{
-                    margin: 0,
-                    fontSize: 18,
-                    fontWeight: 700,
-                    color: 'var(--color-text-primary)',
-                  }}
-                >
-                  {activeTab.name}
-                </h2>
+                <EditableTabHeading
+                  key={activeTab.id}
+                  name={activeTab.name}
+                  editing={editingTablesView}
+                  onCommit={(next) => renameTab(activeTab.id, next)}
+                />
                 <DashboardEditToolbar
                   editing={editingTablesView}
                   onToggleEdit={() => setEditingTablesView((v) => !v)}
@@ -368,10 +364,19 @@ export default function Mvp1Shell() {
               <TablesTab
                 key={activeTab.id}
                 editing={editingTablesView}
-                tables={activeTab.tables}
+                tables={activeTab.tables.filter(
+                  (t) => !t.roleScope || t.roleScope.includes(briefingRole),
+                )}
                 charts={activeTab.charts}
                 defaultFilters={activeTab.id === 'sales-deep-dive' ? [] : undefined}
-                onChange={(next) => updateTablesForTab(activeTab.id, next)}
+                onChange={(next) => {
+                  // Merge back any tables hidden for this role so toggling the
+                  // role pill stays reversible.
+                  const hidden = activeTab.tables.filter(
+                    (t) => t.roleScope && !t.roleScope.includes(briefingRole),
+                  );
+                  updateTablesForTab(activeTab.id, [...next, ...hidden]);
+                }}
                 onChartsChange={(next) => updateChartsForTab(activeTab.id, next)}
                 onAskQuinn={() => {
                   setAddInsightShape('all');
@@ -532,5 +537,76 @@ export default function Mvp1Shell() {
       />
 
     </div>
+  );
+}
+
+/**
+ * The active tables-tab heading. Renders as a static h2 outside edit mode and
+ * an inline editable input when the tab is in edit mode. Reset by `key` on
+ * tab change in the parent so the draft never leaks between tabs.
+ */
+function EditableTabHeading({
+  name,
+  editing,
+  onCommit,
+}: {
+  name: string;
+  editing: boolean;
+  onCommit: (next: string) => void;
+}) {
+  const [draft, setDraft] = useState(name);
+
+  // Keep the local draft in lock-step with external rename sources.
+  useEffect(() => {
+    setDraft(name);
+  }, [name]);
+
+  if (!editing) {
+    return (
+      <h2
+        style={{
+          margin: 0,
+          fontSize: 18,
+          fontWeight: 700,
+          color: 'var(--color-text-primary)',
+        }}
+      >
+        {name}
+      </h2>
+    );
+  }
+
+  return (
+    <input
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        const trimmed = draft.trim();
+        if (trimmed && trimmed !== name) onCommit(trimmed);
+        else setDraft(name);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+        if (e.key === 'Escape') {
+          setDraft(name);
+          (e.currentTarget as HTMLInputElement).blur();
+        }
+      }}
+      placeholder="Tab name"
+      aria-label="Rename tab"
+      style={{
+        margin: 0,
+        fontFamily: 'var(--font-primary)',
+        fontSize: 18,
+        fontWeight: 700,
+        color: 'var(--color-text-primary)',
+        padding: '4px 10px',
+        border: '1px solid var(--color-border-subtle)',
+        borderRadius: 8,
+        background: '#fff',
+        outline: 'none',
+        minWidth: 220,
+      }}
+    />
   );
 }
