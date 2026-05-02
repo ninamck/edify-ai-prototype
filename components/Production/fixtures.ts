@@ -141,14 +141,27 @@ export type Site = {
   type: SiteType;
   /** Opening hours (HH:MM). */
   openingHours: { open: string; close: string };
-  /** For SPOKE + HYBRID sites: the hub they pull from. */
+  /**
+   * For SPOKE + HYBRID sites: the hub they pull from.
+   * For STANDALONE sites with `linkType: 'linked'` (PAC139 dark-kitchen
+   * pattern): the hub that produces on their behalf so the hub gets full
+   * visibility on what must be produced and can transfer in bulk.
+   */
   hubId?: SiteId;
-  /** For HUB + HYBRID sites: spokes they supply. */
+  /**
+   * Whether a STANDALONE site is fully self-producing or has been linked to
+   * a hub kitchen for some / all production. SPOKE sites are always linked
+   * by definition; HYBRID sites are always partially linked. STANDALONE
+   * defaults to 'self' when omitted.
+   */
+  linkType?: 'self' | 'linked';
+  /** For HUB + HYBRID sites: spokes / linked-standalones they supply. */
   servesSiteIds?: SiteId[];
   /**
-   * Demand size relative to the parent hub for SPOKE + HYBRID sites. Used to
-   * derive a per-spoke forecast from the hub's hand-authored forecast when no
-   * spoke-specific entry exists. Roughly: spokeForecast = hubForecast × salesFactor.
+   * Demand size relative to the parent hub for hub-linked sites. Used to
+   * derive a per-site forecast from the hub's hand-authored forecast when
+   * no site-specific entry exists. Roughly:
+   *   linkedForecast = hubForecast × salesFactor
    * Defaults to 0.4 when not set.
    */
   salesFactor?: number;
@@ -162,7 +175,12 @@ export const PRET_SITES: Site[] = [
     name: 'London Central Hub',
     type: 'HUB',
     openingHours: { open: '04:30', close: '22:00' },
-    servesSiteIds: ['site-spoke-south', 'site-spoke-east', 'site-spoke-west'],
+    servesSiteIds: [
+      'site-spoke-south',
+      'site-spoke-east',
+      'site-spoke-west',
+      'site-standalone-north',
+    ],
   },
   {
     id: 'site-standalone-north',
@@ -171,6 +189,13 @@ export const PRET_SITES: Site[] = [
     name: 'Islington North',
     type: 'STANDALONE',
     openingHours: { open: '06:00', close: '22:00' },
+    // PAC139 — dark-kitchen pattern. Site keeps its own counter + minimal
+    // prep kit but the bakery range is produced by the hub and dispatched
+    // overnight. Sales factor is higher than a typical spoke because this
+    // is its own front-of-house, not a satellite.
+    hubId: 'hub-central',
+    linkType: 'linked',
+    salesFactor: 0.55,
   },
   {
     id: 'site-spoke-south',
@@ -1843,6 +1868,24 @@ export const PRET_SPOKE_SUBMISSIONS: SpokeSubmission[] = [
       { skuId: 'sku-hummus-wrap',      recipeId: 'prec-hummus-wrap',      quinnProposedUnits: 14, confirmedUnits: 14 },
     ],
   },
+  // PAC139 — Islington North is now a linked standalone (dark-kitchen
+  // pattern). Same submission shape as a spoke; the dispatch matrix
+  // treats it as another receiver column.
+  {
+    id: 'sub-north-friday',
+    fromSiteId: 'site-standalone-north',
+    toHubId: 'hub-central',
+    forDate: dayOffset(1),
+    cutoffDateTime: `${DEMO_TODAY}T15:00:00Z`,
+    status: 'submitted',
+    lines: [
+      { skuId: 'sku-croissant',        recipeId: 'prec-croissant',        quinnProposedUnits: 22, confirmedUnits: 22 },
+      { skuId: 'sku-pain-au-choc',     recipeId: 'prec-pain-au-chocolat', quinnProposedUnits: 14, confirmedUnits: 16 },
+      { skuId: 'sku-almond-croissant', recipeId: 'prec-almond-croissant', quinnProposedUnits: 10, confirmedUnits: 10 },
+      { skuId: 'sku-baguette',         recipeId: 'prec-baguette',         quinnProposedUnits: 8,  confirmedUnits: 8  },
+      { skuId: 'sku-tuna-sandwich',    recipeId: 'prec-tuna-sandwich',    quinnProposedUnits: 12, confirmedUnits: 12 },
+    ],
+  },
 ];
 
 /**
@@ -1876,6 +1919,32 @@ export function submissionFor(spokeId: SiteId, hubId: SiteId, forDate: string): 
   return PRET_SPOKE_SUBMISSIONS.find(
     s => s.fromSiteId === spokeId && s.toHubId === hubId && s.forDate === forDate,
   );
+}
+
+/**
+ * All sites that pull from the given hub — regular SPOKEs and STANDALONEs
+ * with `linkType: 'linked'` (PAC139 dark-kitchen pattern). HYBRIDs are
+ * included too since they also receive partial production. Used by the
+ * spoke-flow page selector and any UI that needs to enumerate the hub's
+ * downstream receivers.
+ *
+ * Returned in the order they appear in `PRET_SITES`.
+ */
+export function linkedReceiversFor(hubId: SiteId): Site[] {
+  return PRET_SITES.filter(s => {
+    if (s.hubId !== hubId) return false;
+    if (s.type === 'SPOKE' || s.type === 'HYBRID') return true;
+    if (s.type === 'STANDALONE' && s.linkType === 'linked') return true;
+    return false;
+  });
+}
+
+/** True when a site receives some / all production from a hub. */
+export function isHubLinked(site: Site | undefined): boolean {
+  if (!site || !site.hubId) return false;
+  if (site.type === 'SPOKE' || site.type === 'HYBRID') return true;
+  if (site.type === 'STANDALONE' && site.linkType === 'linked') return true;
+  return false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2328,17 +2397,25 @@ export function forecastFor(
   const sameSiteAnchor = PRET_FORECAST.find(f => f.siteId === siteId && f.skuId === skuId && f.date === DEMO_TODAY);
   if (sameSiteAnchor) return projectAnchor(sameSiteAnchor, siteId, date);
 
-  // Spoke fallback — spokes don't carry their own per-SKU forecast in
-  // fixtures (those are hand-authored on the hub only). Recurse into the
-  // hub for a date-projected number, then scale it by the spoke's sales
-  // factor so the spoke order page can show a forecast for the full hub
-  // recipe range without us having to triple-author every fixture row.
+  // Hub-linked fallback — sites that pull from a hub (regular spokes and
+  // linked standalones / dark kitchens, PAC139) don't carry their own
+  // per-SKU forecast in fixtures. Recurse into the hub for a date-projected
+  // number, then scale by the site's sales factor so the spoke order page
+  // can show a forecast for the full hub recipe range without us having to
+  // hand-author every fixture row.
   const site = getSite(siteId);
-  if (site?.type === 'SPOKE' && site.hubId) {
-    const hubProjected = forecastFor(site.hubId, skuId, date);
+  const isHubLinked =
+    !!site?.hubId &&
+    (site.type === 'SPOKE' ||
+      site.type === 'HYBRID' ||
+      (site.type === 'STANDALONE' && site.linkType === 'linked'));
+  if (site && isHubLinked) {
+    const hubProjected = forecastFor(site.hubId!, skuId, date);
     if (!hubProjected) return undefined;
     const factor = site.salesFactor ?? 0.4;
     const scale = (n: number) => Math.max(0, Math.round(n * factor));
+    const linkLabel =
+      site.type === 'STANDALONE' ? 'Linked standalone' : site.type === 'HYBRID' ? 'Hybrid' : 'Spoke';
     return {
       ...hubProjected,
       siteId,
@@ -2355,7 +2432,7 @@ export function forecastFor(
         {
           signal: 'sales-history',
           weight: 1,
-          note: `Spoke factor ${factor.toFixed(2)} × ${getSite(site.hubId)?.name ?? 'hub'} forecast`,
+          note: `${linkLabel} factor ${factor.toFixed(2)} × ${getSite(site.hubId!)?.name ?? 'hub'} forecast`,
         },
       ],
       status: 'draft',

@@ -10,6 +10,7 @@ import {
   RotateCcw,
   Search,
   X,
+  Link2,
 } from 'lucide-react';
 import Link from 'next/link';
 import StatusPill from './StatusPill';
@@ -23,6 +24,7 @@ import {
   type DispatchTransfer,
   type DispatchTransferLine,
   type ProductionRecipe,
+  type Site,
   type SiteId,
   type SkuId,
   type SpokeSubmission,
@@ -441,6 +443,7 @@ export default function HubSpokeBreakdown({
                     >
                       {spoke?.name ?? sub.fromSiteId}
                     </span>
+                    {spoke && <LinkTypeChip site={spoke} />}
                     <StatusChip status={sub.status} />
                   </div>
                   <div
@@ -600,19 +603,34 @@ export default function HubSpokeBreakdown({
                     gap: 2,
                   }}
                 >
-                  <span
+                  <div
                     style={{
-                      fontWeight: 700,
-                      color: 'var(--color-text-primary)',
-                      fontSize: 10,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
                       maxWidth: '100%',
                     }}
                   >
-                    {spoke?.name ?? sub.fromSiteId}
-                  </span>
+                    {spoke?.type === 'STANDALONE' && spoke.linkType === 'linked' && (
+                      <Link2
+                        size={9}
+                        color="var(--color-text-muted)"
+                        aria-label="Linked standalone"
+                      />
+                    )}
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        color: 'var(--color-text-primary)',
+                        fontSize: 10,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {spoke?.name ?? sub.fromSiteId}
+                    </span>
+                  </div>
                   {transfer && (
                     <span
                       title={`Sent ${transfer.totalUnits} units at ${formatSentClock(
@@ -1127,6 +1145,64 @@ function SummaryChip({ label, value, bold = false }: { label: string; value: num
       </span>
     </span>
   );
+}
+
+/**
+ * Compact "what is this site" badge surfaced beside the site name on the
+ * spoke status card. Spoke is the implicit default so we leave it bare;
+ * STANDALONE-linked sites get a "Linked" tag with a Link2 icon and a
+ * tooltip explaining the dark-kitchen pattern; HYBRID sites get a "Hybrid"
+ * tag. Helps the hub manager see at a glance which receivers depend
+ * entirely on them vs which produce some things themselves.
+ */
+function LinkTypeChip({ site }: { site: Site }) {
+  if (site.type === 'STANDALONE' && site.linkType === 'linked') {
+    return (
+      <span
+        title="Linked standalone — dark kitchen, all bakery production from this hub"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 3,
+          padding: '2px 6px',
+          borderRadius: 4,
+          fontSize: 9,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
+          background: 'var(--color-bg-hover)',
+          color: 'var(--color-text-secondary)',
+          border: '1px solid var(--color-border-subtle)',
+        }}
+      >
+        <Link2 size={9} />
+        Linked
+      </span>
+    );
+  }
+  if (site.type === 'HYBRID') {
+    return (
+      <span
+        title="Hybrid — produces some items locally, receives the rest from this hub"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '2px 6px',
+          borderRadius: 4,
+          fontSize: 9,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
+          background: 'var(--color-bg-hover)',
+          color: 'var(--color-text-secondary)',
+          border: '1px solid var(--color-border-subtle)',
+        }}
+      >
+        Hybrid
+      </span>
+    );
+  }
+  return null;
 }
 
 function StatusChip({ status }: { status: SpokeSubmission['status'] }) {

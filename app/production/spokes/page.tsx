@@ -23,6 +23,7 @@ import {
   PRET_SITES,
   getSite,
   hubSettingsFor,
+  isHubLinked,
   spokeOrderForDate,
   dayOfWeek,
   dayOffset,
@@ -33,6 +34,7 @@ import {
   type SpokeSubmission,
   type ProductionRecipe,
 } from '@/components/Production/fixtures';
+import { Link2 } from 'lucide-react';
 
 type DisplayStatus = SpokeSubmission['status'] | 'derived';
 
@@ -55,7 +57,10 @@ export default function SpokeSubmissionsPage() {
   const canAdjust = can('spoke.adjust');
   const canSubmit = can('spoke.submit');
 
-  const spokes = useMemo(() => PRET_SITES.filter(s => s.type === 'SPOKE'), []);
+  // Hub-linked receivers: regular spokes + dark-kitchen standalones (PAC139)
+  // + hybrids. The page is now a generic "site → hub" order editor, not just
+  // for SPOKE-typed sites.
+  const spokes = useMemo(() => PRET_SITES.filter(isHubLinked), []);
   const [spokeId, setSpokeId] = useState<SiteId>(spokes[0]?.id ?? 'site-spoke-south');
   const spoke = getSite(spokeId);
   const hubId = spoke?.hubId ?? 'hub-central';
@@ -242,17 +247,28 @@ export default function SpokeSubmissionsPage() {
             letterSpacing: '0.05em',
           }}
         >
-          Spoke
+          Site
         </span>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {spokes.map(s => {
             const active = s.id === spokeId;
+            const isLinkedStandalone = s.type === 'STANDALONE' && s.linkType === 'linked';
             return (
               <button
                 key={s.id}
                 type="button"
                 onClick={() => setSpokeId(s.id)}
+                title={
+                  isLinkedStandalone
+                    ? `${s.name} — linked standalone (dark kitchen)`
+                    : s.type === 'HYBRID'
+                      ? `${s.name} — hybrid site`
+                      : s.name
+                }
                 style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
                   padding: '8px 12px',
                   borderRadius: 8,
                   fontSize: 11,
@@ -265,13 +281,23 @@ export default function SpokeSubmissionsPage() {
                   whiteSpace: 'nowrap',
                 }}
               >
+                {isLinkedStandalone && (
+                  <Link2
+                    size={11}
+                    color={active ? 'var(--color-text-on-active)' : 'var(--color-text-muted)'}
+                  />
+                )}
                 {s.name}
               </button>
             );
           })}
         </div>
         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-muted)' }}>
-          Ordering from <strong style={{ color: 'var(--color-text-secondary)' }}>{hub?.name}</strong>
+          {spoke?.type === 'STANDALONE' && spoke?.linkType === 'linked' ? (
+            <>Linked standalone — ordering from <strong style={{ color: 'var(--color-text-secondary)' }}>{hub?.name}</strong></>
+          ) : (
+            <>Ordering from <strong style={{ color: 'var(--color-text-secondary)' }}>{hub?.name}</strong></>
+          )}
         </span>
       </div>
 
