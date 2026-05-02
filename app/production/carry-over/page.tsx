@@ -8,6 +8,7 @@ import {
   PRET_CARRY_OVER,
   PRET_SITES,
   getRecipe,
+  getSite,
   type CarryOverEntry,
 } from '@/components/Production/fixtures';
 
@@ -151,7 +152,14 @@ export default function CarryOverPage() {
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
               <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Quinn's carry-over draft</h2>
               <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
-                Yesterday&rsquo;s unsold items within shelf life reduce today&rsquo;s plan. Review each line, adjust if needed, and confirm. Expired items are logged to waste automatically.
+                Yesterday&rsquo;s unsold counter items within shelf life reduce today&rsquo;s plan. Review each line, adjust if needed, and confirm. Expired items are logged to waste automatically.
+                {getSite(siteId)?.type === 'HUB' && (
+                  <>
+                    {' '}<span style={{ color: 'var(--color-text-muted)' }}>
+                      Units dispatched to spokes yesterday left the building, so they don&rsquo;t appear here — only counter unsold accumulates as carry-over.
+                    </span>
+                  </>
+                )}
               </p>
             </div>
             <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>

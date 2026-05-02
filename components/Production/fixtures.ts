@@ -145,6 +145,13 @@ export type Site = {
   hubId?: SiteId;
   /** For HUB + HYBRID sites: spokes they supply. */
   servesSiteIds?: SiteId[];
+  /**
+   * Demand size relative to the parent hub for SPOKE + HYBRID sites. Used to
+   * derive a per-spoke forecast from the hub's hand-authored forecast when no
+   * spoke-specific entry exists. Roughly: spokeForecast = hubForecast × salesFactor.
+   * Defaults to 0.4 when not set.
+   */
+  salesFactor?: number;
 };
 
 export const PRET_SITES: Site[] = [
@@ -173,6 +180,7 @@ export const PRET_SITES: Site[] = [
     type: 'SPOKE',
     openingHours: { open: '06:00', close: '22:00' },
     hubId: 'hub-central',
+    salesFactor: 0.30,
   },
   {
     id: 'site-spoke-east',
@@ -182,6 +190,7 @@ export const PRET_SITES: Site[] = [
     type: 'SPOKE',
     openingHours: { open: '06:30', close: '21:30' },
     hubId: 'hub-central',
+    salesFactor: 0.45,
   },
   {
     id: 'site-spoke-west',
@@ -191,6 +200,7 @@ export const PRET_SITES: Site[] = [
     type: 'SPOKE',
     openingHours: { open: '06:30', close: '21:00' },
     hubId: 'hub-central',
+    salesFactor: 0.40,
   },
   {
     id: 'site-hybrid-airport',
@@ -1703,6 +1713,40 @@ export const PRET_CARRY_OVER: CarryOverEntry[] = [
     status: 'confirmed',
     reason: '2 sandwiches expired (>8h shelf). Logged to waste, no carry-over.',
   },
+  // Spoke carry-over — small numbers because spokes don't bake but they do
+  // hold a thin overnight buffer of long-shelf bakery items received late
+  // in the day yesterday. Used by the spoke order page to show "you've
+  // already got N from yesterday — Quinn nets that out of today's order".
+  {
+    id: 'co-spoke-east-croissant',
+    siteId: 'site-spoke-east',
+    skuId: 'sku-croissant',
+    recipeId: 'prec-croissant',
+    carriedUnits: 3,
+    planAdjustment: -3,
+    status: 'draft',
+    reason: '3 croissants from late drop yesterday, within shelf. Net order: −3.',
+  },
+  {
+    id: 'co-spoke-west-pain',
+    siteId: 'site-spoke-west',
+    skuId: 'sku-pain-au-choc',
+    recipeId: 'prec-pain-au-chocolat',
+    carriedUnits: 2,
+    planAdjustment: -2,
+    status: 'draft',
+    reason: '2 pain au choc from late drop yesterday. Net order: −2.',
+  },
+  {
+    id: 'co-spoke-south-baguette',
+    siteId: 'site-spoke-south',
+    skuId: 'sku-baguette',
+    recipeId: 'prec-baguette',
+    carriedUnits: 4,
+    planAdjustment: -4,
+    status: 'draft',
+    reason: '4 baguettes left over from yesterday. Net order: −4.',
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1727,7 +1771,7 @@ export type SpokeSubmission = {
   /** Cutoff — must submit before this. */
   cutoffDateTime: string; // ISO datetime
   lines: SpokeSubmissionLine[];
-  status: 'draft' | 'submitted' | 'acknowledged' | 'modified-by-hub';
+  status: 'draft' | 'submitted' | 'acknowledged' | 'modified-by-hub' | 'auto-finalised';
   /** If hub modified, reasons + deltas. */
   hubModifications?: {
     byLine: Record<SkuId, { fromUnits: number; toUnits: number; reason: string }>;
@@ -1820,6 +1864,155 @@ export function submissionsForHub(hubId: SiteId, forDate?: string): SpokeSubmiss
     if (forDate && s.forDate !== forDate) return false;
     return true;
   });
+}
+
+/**
+ * Find the seeded submission a spoke has placed (or is drafting) with a
+ * given hub for a given date. Returns undefined when the spoke hasn't
+ * touched that day yet — callers should treat that as "Quinn-only draft,
+ * spoke hasn't started yet".
+ */
+export function submissionFor(spokeId: SiteId, hubId: SiteId, forDate: string): SpokeSubmission | undefined {
+  return PRET_SPOKE_SUBMISSIONS.find(
+    s => s.fromSiteId === spokeId && s.toHubId === hubId && s.forDate === forDate,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Spoke order ledger — the spoke-side equivalent of `amountsForSiteOnDate`
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One row on the spoke order page: the recipe the spoke could ask the hub
+ * for, the spoke's own forecast for it, any carry-over they're sitting on,
+ * Quinn's proposed order, plus whatever the spoke has currently dialled in
+ * (from a seeded submission line if one exists, otherwise the Quinn default).
+ */
+export type SpokeOrderLine = {
+  recipe: ProductionRecipe;
+  skuId: SkuId;
+  recipeId: RecipeId;
+  forecast?: DemandForecastEntry;
+  carryOver?: CarryOverEntry;
+  /** Forecast minus carry-over, never below zero. */
+  quinnProposed: number;
+  /**
+   * What the spoke is currently asking for. Comes from the seeded submission's
+   * `confirmedUnits` when present, falls back to `quinnProposedUnits`, and
+   * falls back to the derived `quinnProposed` when there's no seeded line at
+   * all (i.e. spoke hasn't touched this recipe).
+   */
+  confirmed: number;
+  /** True when the line came from a seeded submission (spoke has touched it). */
+  hasSeeded: boolean;
+};
+
+export type SpokeOrderSummary = {
+  spokeId: SiteId;
+  hubId: SiteId;
+  date: string;
+  /** The seeded submission backing this date, if any. */
+  submission?: SpokeSubmission;
+  cutoffDateTime: string;
+  status: SpokeSubmission['status'] | 'derived';
+  lines: SpokeOrderLine[];
+};
+
+/**
+ * Build the full ledger of recipes a spoke could order from its hub for a
+ * given date. Recipes are sourced from the hub's `productionItemsAt(hub)`
+ * (i.e. anything the hub bakes), each annotated with the spoke's derived
+ * forecast and any carry-over they have. Seeded submission lines (when
+ * present) override the Quinn default for that line so the spoke sees the
+ * numbers they (or Quinn-on-their-behalf) actually committed.
+ *
+ * `cutoffDateTime` is taken from a seeded submission when one exists; the
+ * fallback is "15:00 UTC the day before `forDate`", matching the seeded
+ * pattern.
+ */
+export function spokeOrderForDate(spokeId: SiteId, hubId: SiteId, forDate: string): SpokeOrderSummary {
+  const submission = submissionFor(spokeId, hubId, forDate);
+  const seededBySku = new Map<SkuId, SpokeSubmissionLine>();
+  if (submission) {
+    for (const ln of submission.lines) seededBySku.set(ln.skuId, ln);
+  }
+
+  // The spoke's order menu = whatever the hub bakes. We dedupe by SKU to
+  // collapse any duplicate hub items.
+  const hubItems = productionItemsAt(hubId);
+  const seenSku = new Set<SkuId>();
+  const lines: SpokeOrderLine[] = [];
+  for (const item of hubItems) {
+    if (seenSku.has(item.skuId)) continue;
+    seenSku.add(item.skuId);
+    const recipe = getRecipe(item.recipeId);
+    if (!recipe) continue;
+
+    const forecast = forecastFor(spokeId, item.skuId, forDate);
+    const carryOver = carryOverFor(spokeId, item.skuId);
+    const base = forecast?.projectedUnits ?? 0;
+    const carried = carryOver?.carriedUnits ?? 0;
+    const quinnProposed = Math.max(0, base - carried);
+
+    const seeded = seededBySku.get(item.skuId);
+    const confirmed = seeded
+      ? (seeded.confirmedUnits ?? seeded.quinnProposedUnits)
+      : quinnProposed;
+
+    lines.push({
+      recipe,
+      skuId: item.skuId,
+      recipeId: item.recipeId,
+      forecast,
+      carryOver,
+      quinnProposed,
+      confirmed,
+      hasSeeded: !!seeded,
+    });
+  }
+
+  // Stable category order, then recipe name.
+  const CATEGORY_ORDER: ProductionRecipe['category'][] = ['Bakery', 'Sandwich', 'Salad', 'Snack', 'Beverage'];
+  lines.sort((a, b) => {
+    const ai = CATEGORY_ORDER.indexOf(a.recipe.category);
+    const bi = CATEGORY_ORDER.indexOf(b.recipe.category);
+    if (ai !== bi) return ai - bi;
+    return a.recipe.name.localeCompare(b.recipe.name);
+  });
+
+  const defaultCutoff = `${dayOffset(-1, forDate)}T15:00:00Z`;
+  return {
+    spokeId,
+    hubId,
+    date: forDate,
+    submission,
+    cutoffDateTime: submission?.cutoffDateTime ?? defaultCutoff,
+    status: submission?.status ?? 'derived',
+    lines,
+  };
+}
+
+/**
+ * Hub-level policy knobs the Support Centre owns. The prototype only honours
+ * `spokeCutoffPolicy` so far:
+ *  - 'lock' (default): when `cutoffDateTime` passes and a spoke draft hasn't
+ *    been submitted yet, lock the steppers and auto-promote the status to
+ *    `'auto-finalised'` using Quinn's proposed numbers. This is what real
+ *    Pret hubs need so a missed cutoff doesn't leave the bake order unknown.
+ *  - 'soft': just badge the page as overdue but stay editable. Useful for
+ *    smaller hubs that prefer a softer reminder loop.
+ */
+export type HubSettings = {
+  hubId: SiteId;
+  spokeCutoffPolicy: 'lock' | 'soft';
+};
+
+export const PRET_HUB_SETTINGS: HubSettings[] = [
+  { hubId: 'hub-central', spokeCutoffPolicy: 'lock' },
+];
+
+export function hubSettingsFor(hubId: SiteId): HubSettings | undefined {
+  return PRET_HUB_SETTINGS.find(s => s.hubId === hubId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2092,18 +2285,59 @@ export function forecastFor(
   const exact = PRET_FORECAST.find(f => f.siteId === siteId && f.skuId === skuId && f.date === date);
   if (exact) return exact;
 
-  // No hand-authored entry for this date — synthesise one from today's
-  // forecast for the same SKU, scaled by the day-of-week multiplier. Returns
-  // undefined when there's no anchor for today either (rare; means the SKU
-  // simply isn't on plan at this site).
-  const anchor = PRET_FORECAST.find(f => f.siteId === siteId && f.skuId === skuId && f.date === DEMO_TODAY);
-  if (!anchor) return undefined;
+  // Same-site anchor — synthesise from today's hand-authored forecast for
+  // the same SKU at the same site, scaled by the day-of-week multiplier.
+  const sameSiteAnchor = PRET_FORECAST.find(f => f.siteId === siteId && f.skuId === skuId && f.date === DEMO_TODAY);
+  if (sameSiteAnchor) return projectAnchor(sameSiteAnchor, siteId, date);
 
+  // Spoke fallback — spokes don't carry their own per-SKU forecast in
+  // fixtures (those are hand-authored on the hub only). Recurse into the
+  // hub for a date-projected number, then scale it by the spoke's sales
+  // factor so the spoke order page can show a forecast for the full hub
+  // recipe range without us having to triple-author every fixture row.
+  const site = getSite(siteId);
+  if (site?.type === 'SPOKE' && site.hubId) {
+    const hubProjected = forecastFor(site.hubId, skuId, date);
+    if (!hubProjected) return undefined;
+    const factor = site.salesFactor ?? 0.4;
+    const scale = (n: number) => Math.max(0, Math.round(n * factor));
+    return {
+      ...hubProjected,
+      siteId,
+      projectedUnits: scale(hubProjected.projectedUnits),
+      byPhase: hubProjected.byPhase
+        ? {
+            morning:   scale(hubProjected.byPhase.morning),
+            midday:    scale(hubProjected.byPhase.midday),
+            afternoon: scale(hubProjected.byPhase.afternoon),
+          }
+        : undefined,
+      signals: [
+        ...hubProjected.signals,
+        {
+          signal: 'sales-history',
+          weight: 1,
+          note: `Spoke factor ${factor.toFixed(2)} × ${getSite(site.hubId)?.name ?? 'hub'} forecast`,
+        },
+      ],
+      status: 'draft',
+    };
+  }
+
+  return undefined;
+}
+
+function projectAnchor(
+  anchor: DemandForecastEntry,
+  siteId: SiteId,
+  date: string,
+): DemandForecastEntry {
+  if (date === DEMO_TODAY) return { ...anchor, siteId, date };
   const multiplier = DOW_MULTIPLIER[dayOfWeek(date)] / DOW_MULTIPLIER[dayOfWeek(DEMO_TODAY)];
   const scale = (n: number) => Math.max(0, Math.round(n * multiplier));
   return {
     siteId,
-    skuId,
+    skuId: anchor.skuId,
     date,
     projectedUnits: scale(anchor.projectedUnits),
     byPhase: anchor.byPhase

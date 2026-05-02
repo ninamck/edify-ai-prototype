@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import { ChevronRight, Clock, Download, Repeat, Shuffle, User, Waves } from 'lucide-react';
+import { ChevronRight, Clock, Download, Repeat, Shuffle, Truck, User, Waves } from 'lucide-react';
 import {
   benchesAt,
   effectiveBatchRules,
@@ -882,6 +882,8 @@ function RecipeRow({
   const isAssembly = !!line.recipe.subRecipes && line.recipe.subRecipes.length > 0;
   const assemblyDemand = line.assemblyDemand.totalUnits;
   const shortfall = assemblyDemand > line.planned;
+  const dispatchUnits = line.dispatchDemand;
+  const spokeCount = line.dispatchBySpoke?.length ?? 0;
 
   return (
     <button
@@ -927,9 +929,36 @@ function RecipeRow({
           {line.assemblyDemand.sources.length > 0 && <Tag label="Component" tone="warn" />}
           {line.isOverridden && <Tag label="Manager edit" tone="accent" />}
           {shortfall && <Tag label="Short" tone="error" />}
+          {dispatchUnits > 0 && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 3,
+                padding: '1px 6px',
+                borderRadius: 4,
+                background: 'var(--color-bg-hover)',
+                color: 'var(--color-text-secondary)',
+                fontWeight: 700,
+                letterSpacing: '0.02em',
+                textTransform: 'uppercase',
+                fontVariantNumeric: 'tabular-nums',
+              }}
+              title={`${dispatchUnits} of ${totalQty} ship to ${spokeCount} spoke${spokeCount === 1 ? '' : 's'} — pack separately`}
+            >
+              <Truck size={9} />→ {dispatchUnits} {spokeCount === 1 ? 'spoke' : 'spokes'}
+            </span>
+          )}
         </span>
       </span>
-      <span style={{ textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+      <span
+        style={{ textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}
+        title={
+          dispatchUnits > 0
+            ? `${totalQty} total · ${totalQty - dispatchUnits} for counter · ${dispatchUnits} for spoke dispatch`
+            : undefined
+        }
+      >
         {totalQty}
       </span>
       <span

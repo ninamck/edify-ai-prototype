@@ -361,6 +361,7 @@ function StatusChip({ status }: { status: SpokeSubmission['status'] }) {
     submitted:       { label: 'Submitted',    bg: 'var(--color-info-light)',    color: 'var(--color-info)',    border: 'var(--color-info)' },
     acknowledged:    { label: 'Acknowledged', bg: 'var(--color-bg-hover)',      color: 'var(--color-text-secondary)', border: 'var(--color-border-subtle)' },
     'modified-by-hub': { label: 'Modified',   bg: 'var(--color-bg-hover)',      color: 'var(--color-text-secondary)', border: 'var(--color-border-subtle)' },
+    'auto-finalised':  { label: 'Auto-locked', bg: 'var(--color-bg-hover)',     color: 'var(--color-text-secondary)', border: 'var(--color-border-subtle)' },
   };
   const t = treatments[status];
   return (
