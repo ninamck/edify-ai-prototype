@@ -312,6 +312,10 @@ export const PRET_BENCHES: Bench[] = [
     online: true,
     primaryMode: 'run',
     runs: [
+      // Night shift — long-ferment doughs and overnight-cool items get
+      // started here so they're ready for handover by 05:00. Order within
+      // this run is governed by PRET_NIGHT_SHIFT_POLICY (PAC070).
+      { id: 'n1', label: 'N1', startTime: '00:00', durationMinutes: 300 },
       { id: 'r1', label: 'R1', startTime: '05:00', durationMinutes: 180 },
       { id: 'r2', label: 'R2', startTime: '10:30', durationMinutes: 90 },
     ],
@@ -324,6 +328,9 @@ export const PRET_BENCHES: Bench[] = [
     online: true,
     primaryMode: 'run',
     runs: [
+      // Night shift on cold prep handles fillings that need to chill several
+      // hours before assembly hits R1 sandwich build at 05:30.
+      { id: 'n1', label: 'N1', startTime: '00:00', durationMinutes: 240 },
       { id: 'r1', label: 'R1', startTime: '05:30', durationMinutes: 150 },
       { id: 'r2', label: 'R2', startTime: '10:30', durationMinutes: 90 },
     ],
@@ -2082,6 +2089,72 @@ export const PRET_HUB_SETTINGS: HubSettings[] = [
 
 export function hubSettingsFor(hubId: SiteId): HubSettings | undefined {
   return PRET_HUB_SETTINGS.find(s => s.hubId === hubId);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Night-shift policy (PAC070)
+//
+// Pret-style night shift handles overnight prep: long-ferment doughs, items
+// that need to bake then cool before pack, slow roasts. The "correct order"
+// of work on a night-shift run is set centrally — Quinn applies it on the
+// bench cards so a new GM doesn't have to remember the sequence.
+//
+// The policy has two parts:
+//   • firstOrder — explicit SKUs that MUST go first (long ferments, things
+//     that need overnight cooling). Sorted in this exact sequence so cooling
+//     items hit the rack before they block other work.
+//   • categoryOrder — fallback priority for everything else. Within a
+//     category we tie-break by shelf-life ascending so the most fragile
+//     items finish closest to handover.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type NightShiftPolicy = {
+  /** HH:MM start of the night-shift window (inclusive). */
+  nightStart: string;
+  /** HH:MM end of the night-shift window (exclusive). */
+  nightEnd: string;
+  /**
+   * Recipes that must be produced first within a night-shift run, in this
+   * exact sequence. Catches long-ferment / long-cool / long-roast items.
+   */
+  firstOrder: SkuId[];
+  /**
+   * Category priority within a night-shift run for everything not in
+   * firstOrder. Within the same category, tie-break by shelf-life ascending.
+   */
+  categoryOrder: ProductionRecipe['category'][];
+};
+
+export const PRET_NIGHT_SHIFT_POLICY: NightShiftPolicy = {
+  nightStart: '22:00',
+  nightEnd: '05:00',
+  firstOrder: [
+    'sku-granary',           // overnight-fermented loaf — needs long proof
+    'sku-baguette',          // overnight-fermented baguette
+    'sku-egg-mayo-filling',  // needs 4h+ chill before assembly
+    'sku-tuna-mayo-filling', // needs 4h+ chill before assembly
+    'sku-granola-pot',       // bake & cool overnight before pack
+    'sku-roast-chicken',     // slow-roast tray — cool before slice
+  ],
+  categoryOrder: ['Bakery', 'Snack', 'Sandwich', 'Salad', 'Beverage'],
+};
+
+/**
+ * True when an HH:MM time falls inside the night-shift window. Window may
+ * wrap midnight (e.g. 22:00 → 05:00) — we handle that by checking either
+ * side of the wrap.
+ */
+export function isNightShiftHHMM(hhmm: string, policy: NightShiftPolicy = PRET_NIGHT_SHIFT_POLICY): boolean {
+  const toMins = (h: string) => {
+    const [hh, mm] = h.split(':').map(Number);
+    return hh * 60 + mm;
+  };
+  const start = toMins(policy.nightStart);
+  const end = toMins(policy.nightEnd);
+  const now = toMins(hhmm);
+  if (start <= end) return now >= start && now < end;
+  // Wraps midnight — anything from start..23:59 OR 00:00..end counts.
+  return now >= start || now < end;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

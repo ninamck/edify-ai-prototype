@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import { ChevronRight, Clock, Download, Repeat, Shuffle, Truck, User, Waves } from 'lucide-react';
+import { ChevronRight, Clock, Download, Moon, Repeat, Shuffle, Sparkles, Truck, User, Waves } from 'lucide-react';
 import {
   benchesAt,
   effectiveBatchRules,
   getWorkflow,
+  isNightShiftHHMM,
+  PRET_NIGHT_SHIFT_POLICY,
   proposeBatchSplit,
   type Bench,
   type ProductionItemId,
@@ -754,11 +756,19 @@ function RunBucketSection({
 }) {
   const nowMins = nowHHMM ? hhmmToMins(nowHHMM) : -1;
   const state: RunTiming | null = nowMins >= 0 ? runTiming(bucket, nowMins) : null;
+  const isNight = isNightBucket(bucket);
 
   const statePillColor =
     state === 'active'   ? { bg: 'var(--color-success-light, rgba(34,197,94,0.15))', fg: 'var(--color-success, #15803d)' } :
     state === 'upcoming' ? { bg: 'var(--color-bg-hover)',                              fg: 'var(--color-text-secondary)' } :
                            { bg: 'var(--color-bg-hover)',                              fg: 'var(--color-text-muted)' };
+
+  // PAC070 — night-shift runs get a darker header tint and a moon icon to
+  // visually separate overnight prep from the day's bake/build runs. The
+  // policy caption sits underneath so the GM can see why the order looks
+  // different from a normal R1.
+  const headerBg = isNight ? 'var(--color-bg-surface)' : 'var(--color-bg-hover)';
+  const labelBorder = isNight ? 'var(--color-text-muted)' : 'var(--color-border-subtle)';
 
   return (
     <div
@@ -774,12 +784,15 @@ function RunBucketSection({
           justifyContent: 'space-between',
           gap: 10,
           padding: '6px 14px',
-          background: 'var(--color-bg-hover)',
+          background: headerBg,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           <span
             style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
               fontSize: 11,
               fontWeight: 800,
               letterSpacing: '0.06em',
@@ -787,12 +800,26 @@ function RunBucketSection({
               padding: '2px 7px',
               borderRadius: 4,
               background: '#ffffff',
-              border: '1px solid var(--color-border-subtle)',
+              border: `1px solid ${labelBorder}`,
               fontVariantNumeric: 'tabular-nums',
             }}
           >
+            {isNight && <Moon size={10} color="var(--color-text-secondary)" />}
             {bucket.run.label}
           </span>
+          {isNight && (
+            <span
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                color: 'var(--color-text-secondary)',
+              }}
+            >
+              Night shift
+            </span>
+          )}
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
             <Clock size={11} />
             {minsToHHMM(bucket.startMins)} → {minsToHHMM(bucket.endMins)}
@@ -820,6 +847,8 @@ function RunBucketSection({
         )}
       </div>
 
+      {isNight && <NightShiftPolicyCaption rows={bucket.rows} />}
+
       <ColumnHeader />
 
       {bucket.rows.map(row => (
@@ -830,6 +859,57 @@ function RunBucketSection({
           onClick={() => onRowClick(row.line.item.id)}
         />
       ))}
+    </div>
+  );
+}
+
+/**
+ * Quinn-attributed caption explaining the night-shift ordering rule that's
+ * been applied to a bucket. Surfaces the policy so a new GM doesn't have to
+ * remember the rule — and so the team can see when an item slid up the
+ * order because of an overnight-prep tag.
+ */
+function NightShiftPolicyCaption({ rows }: { rows: RowData[] }) {
+  const firstOrderInBucket = rows
+    .map(r => r.line.item.skuId)
+    .filter(sku => PRET_NIGHT_SHIFT_POLICY.firstOrder.includes(sku));
+  const firstOrderNames = firstOrderInBucket
+    .map(sku => rows.find(r => r.line.item.skuId === sku)?.line.recipe.name)
+    .filter(Boolean) as string[];
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 6,
+        padding: '6px 14px',
+        background: 'var(--color-bg-surface)',
+        borderBottom: '1px dashed var(--color-border-subtle)',
+        fontSize: 10,
+        color: 'var(--color-text-secondary)',
+        lineHeight: 1.5,
+      }}
+    >
+      <Sparkles size={11} color="var(--color-text-muted)" style={{ flexShrink: 0, marginTop: 1 }} />
+      <span>
+        <strong style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>
+          Quinn applied night-shift policy
+        </strong>
+        {firstOrderNames.length > 0 ? (
+          <>
+            {' · '}long-prep first ({firstOrderNames.join(', ')})
+            {', then '}
+            {PRET_NIGHT_SHIFT_POLICY.categoryOrder.slice(0, 3).join(' → ')}
+          </>
+        ) : (
+          <>
+            {' · '}categories sequenced{' '}
+            {PRET_NIGHT_SHIFT_POLICY.categoryOrder.slice(0, 3).join(' → ')}, shelf-life
+            ascending within
+          </>
+        )}
+      </span>
     </div>
   );
 }
@@ -1204,6 +1284,14 @@ function bucketRowsIntoRuns(rows: RowData[], runs: RunSchedule[]): RunBucket[] {
     bucket.productionMins += row.estMinutes;
   }
 
+  // PAC070 — within a night-shift bucket, override the default desc-by-time
+  // sort with the central night-shift policy: firstOrder SKUs in their
+  // exact sequence, then categoryOrder, then shelf-life ascending so the
+  // most fragile items finish closest to handover.
+  for (const bucket of buckets) {
+    if (isNightBucket(bucket)) sortNightBucket(bucket);
+  }
+
   // Drop empty buckets so we don't render ghost sections.
   return buckets.filter(b => b.rows.length > 0);
 }
@@ -1211,19 +1299,31 @@ function bucketRowsIntoRuns(rows: RowData[], runs: RunSchedule[]): RunBucket[] {
 function pickRunIndex(row: RowData, runs: RunSchedule[]): number {
   if (runs.length === 1) return 0;
 
+  // PAC070 — first-order SKUs go straight to the night-shift run if one
+  // exists. The policy lists them in the exact sequence they should come
+  // off the bench (long-ferment first, then long-cool items).
+  const skuId = row.line.item.skuId;
+  const isNightFirst = PRET_NIGHT_SHIFT_POLICY.firstOrder.includes(skuId);
+  if (isNightFirst) {
+    const nightIdx = runs.findIndex(r => isNightShiftHHMM(r.startTime));
+    if (nightIdx !== -1) return nightIdx;
+  }
+
   const phases = row.line.forecast?.byPhase;
   if (phases) {
     // Map each phase to minutes-from-midnight, pick the phase with the
-    // biggest demand, then pick the run whose window is closest.
+    // biggest demand, then pick the run whose window is closest. Skip night
+    // runs from the proximity match — phase data is for daytime sales.
     const morningMins = 7 * 60 + 30;
     const middayMins  = 12 * 60;
     const afternoonMins = 15 * 60;
     const peakMins = phases.midday + phases.afternoon > phases.morning
       ? (phases.midday >= phases.afternoon ? middayMins : afternoonMins)
       : morningMins;
-    let bestIdx = 0;
+    let bestIdx = -1;
     let bestDelta = Infinity;
     runs.forEach((r, i) => {
+      if (isNightShiftHHMM(r.startTime)) return;
       const start = hhmmToMins(r.startTime);
       const delta = Math.abs(peakMins - start);
       if (delta < bestDelta) {
@@ -1231,14 +1331,52 @@ function pickRunIndex(row: RowData, runs: RunSchedule[]): number {
         bestIdx = i;
       }
     });
-    return bestIdx;
+    if (bestIdx !== -1) return bestIdx;
   }
 
-  // Fallback: category-based. Recipes tagged "morning"/"breakfast" go to R1;
-  // anything else to the last run.
+  // Fallback: category-based. Recipes tagged "morning"/"breakfast" go to
+  // the first non-night run; anything else to the last run.
   const tags = row.line.recipe.selectionTags ?? [];
-  if (tags.includes('morning') || tags.includes('breakfast')) return 0;
+  const firstDayIdx = runs.findIndex(r => !isNightShiftHHMM(r.startTime));
+  if (tags.includes('morning') || tags.includes('breakfast')) {
+    return firstDayIdx === -1 ? 0 : firstDayIdx;
+  }
   return runs.length - 1;
+}
+
+/** True when this bucket's run starts inside the central night-shift window. */
+function isNightBucket(bucket: RunBucket): boolean {
+  return isNightShiftHHMM(bucket.run.startTime);
+}
+
+/**
+ * Apply PRET_NIGHT_SHIFT_POLICY ordering to a night-shift bucket, in place.
+ * firstOrder SKUs come first in their declared sequence; everything else
+ * is ordered by categoryOrder index then shelf-life ascending.
+ */
+function sortNightBucket(bucket: RunBucket): void {
+  const firstOrderRank = (skuId: string): number => {
+    const idx = PRET_NIGHT_SHIFT_POLICY.firstOrder.indexOf(skuId);
+    return idx === -1 ? Infinity : idx;
+  };
+  const categoryRank = (cat: string): number => {
+    const idx = PRET_NIGHT_SHIFT_POLICY.categoryOrder.indexOf(
+      cat as (typeof PRET_NIGHT_SHIFT_POLICY.categoryOrder)[number],
+    );
+    return idx === -1 ? Infinity : idx;
+  };
+
+  bucket.rows.sort((a, b) => {
+    const fa = firstOrderRank(a.line.item.skuId);
+    const fb = firstOrderRank(b.line.item.skuId);
+    if (fa !== fb) return fa - fb;
+    const ca = categoryRank(a.line.recipe.category);
+    const cb = categoryRank(b.line.recipe.category);
+    if (ca !== cb) return ca - cb;
+    const sa = a.line.recipe.shelfLifeMinutes ?? 24 * 60;
+    const sb = b.line.recipe.shelfLifeMinutes ?? 24 * 60;
+    return sa - sb;
+  });
 }
 
 /**
