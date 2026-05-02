@@ -1,18 +1,91 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import HubSpokeBreakdown from '@/components/Production/HubSpokeBreakdown';
-import { PRET_SITES, dayOffset, dayOfWeek, type SiteId } from '@/components/Production/fixtures';
+import HubSpokeBreakdown, {
+  type SpokeDispatchRequest,
+} from '@/components/Production/HubSpokeBreakdown';
+import DispatchConfirmSheet, {
+  type DispatchManifestEntry,
+} from '@/components/Production/DispatchConfirmSheet';
+import {
+  DispatchTransferStoreProvider,
+  useDispatchTransfers,
+} from '@/components/Production/dispatchStore';
+import {
+  PRET_SITES,
+  dayOffset,
+  dayOfWeek,
+  type DispatchTransfer,
+  type SiteId,
+} from '@/components/Production/fixtures';
+import { useRole } from '@/components/Production/RoleContext';
 
 /**
  * Dispatch — hub-side aggregated view of what each spoke has ordered for
  * the next dispatch day. Pairs with the spoke-side `/production/spokes`
  * page where individual spoke managers confirm or edit Quinn's draft.
+ *
+ * PAC137 — one-click bulk transfer. The matrix surfaces a "Send" action on
+ * each spoke control card (and a "Send all submitted" action in the
+ * dispatch summary card header); confirming opens a manifest sheet, then
+ * writes a `DispatchTransfer` to the page-scoped store so the matrix can
+ * render the sent state immediately.
  */
 export default function DispatchPage() {
+  return (
+    <DispatchTransferStoreProvider>
+      <DispatchPageInner />
+    </DispatchTransferStoreProvider>
+  );
+}
+
+function DispatchPageInner() {
   const hubs = useMemo(() => PRET_SITES.filter(s => s.type === 'HUB'), []);
   const [hubId, setHubId] = useState<SiteId>(hubs[0]?.id ?? 'hub-central');
   const forDate = dayOffset(1);
+
+  // Pending requests fed into the confirm sheet — `null` means closed.
+  const [pendingRequests, setPendingRequests] = useState<SpokeDispatchRequest[] | null>(null);
+  const { recordBulkTransfer } = useDispatchTransfers();
+  const { user } = useRole();
+  const sentBy = user?.name ?? 'Hub manager';
+
+  function openSingle(req: SpokeDispatchRequest) {
+    setPendingRequests([req]);
+  }
+
+  function openBulk(reqs: SpokeDispatchRequest[]) {
+    setPendingRequests(reqs);
+  }
+
+  function handleConfirm(note: string | undefined) {
+    if (!pendingRequests) return;
+    const nowISO = new Date().toISOString();
+    const transfers: DispatchTransfer[] = pendingRequests.map(req => ({
+      id: `transfer-${hubId}-${req.spokeId}-${req.forDate}-${Date.now()}`,
+      hubId,
+      spokeId: req.spokeId,
+      forDate: req.forDate,
+      sentAtISO: nowISO,
+      sentBy,
+      lines: req.lines,
+      totalUnits: req.totalUnits,
+      note,
+    }));
+    recordBulkTransfer(transfers);
+    setPendingRequests(null);
+  }
+
+  // Shape the pending requests into the confirm sheet's manifest format.
+  const manifest: DispatchManifestEntry[] = useMemo(() => {
+    if (!pendingRequests) return [];
+    return pendingRequests.map(req => ({
+      spokeId: req.spokeId,
+      lines: req.lines,
+      totalUnits: req.totalUnits,
+      submissionStatus: req.submissionStatus,
+    }));
+  }, [pendingRequests]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -72,7 +145,23 @@ export default function DispatchPage() {
         </span>
       </div>
 
-      <HubSpokeBreakdown hubId={hubId} forDate={forDate} />
+      <HubSpokeBreakdown
+        hubId={hubId}
+        forDate={forDate}
+        onSendSpoke={openSingle}
+        onSendAll={openBulk}
+      />
+
+      {pendingRequests && pendingRequests.length > 0 && (
+        <DispatchConfirmSheet
+          hubId={hubId}
+          forDate={forDate}
+          manifest={manifest}
+          sentBy={sentBy}
+          onCancel={() => setPendingRequests(null)}
+          onConfirm={handleConfirm}
+        />
+      )}
     </div>
   );
 }

@@ -2016,6 +2016,44 @@ export function hubSettingsFor(hubId: SiteId): HubSettings | undefined {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Dispatch transfers — hub-side action recording (PAC137)
+//
+// When a hub manager hits "Send" on the dispatch matrix, we record a
+// DispatchTransfer summarising what physically left the hub for that spoke
+// on that day. The store lives in components/Production/dispatchStore.tsx
+// (provider + hook); these types are the shared schema.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type DispatchTransferLine = {
+  skuId: SkuId;
+  recipeId: RecipeId;
+  units: number;
+  /**
+   * True when the source quantity was Quinn's proposal (the spoke hadn't
+   * confirmed yet). False when the spoke confirmed the number themselves.
+   * Used by the audit panel and the Sent toast so the hub manager knows
+   * which lines went out on best-guess vs explicit confirmation.
+   */
+  wasQuinnProposed: boolean;
+};
+
+export type DispatchTransfer = {
+  id: string;
+  hubId: SiteId;
+  spokeId: SiteId;
+  /** Date the dispatch is for (the spoke's order day). */
+  forDate: string;
+  /** ISO timestamp when the manager confirmed Send. */
+  sentAtISO: string;
+  /** Display name of the operator who sent it (demo). */
+  sentBy: string;
+  lines: DispatchTransferLine[];
+  totalUnits: number;
+  /** Optional override note — surfaced on the audit panel. */
+  note?: string;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Settings health — stale / unused / suspect cards
 // ─────────────────────────────────────────────────────────────────────────────
 
