@@ -3,6 +3,7 @@
 import SiteSwitcher from '@/components/Sidebar/SiteSwitcher';
 import PhaseSwitcher from '@/components/PhaseSwitcher';
 import type { PhaseOverride } from '@/components/PhaseSwitcher';
+import DemoControls from '@/components/DemoControls/DemoControls';
 
 export type ShellViewMode = 'command-centre' | 'dashboard';
 
@@ -112,6 +113,7 @@ export default function ShellTopBar({
           justifySelf: 'end',
         }}
       >
+        <DemoControls inline />
         <PhaseSwitcher phaseOverride={phaseOverride} onPhaseOverrideChange={onPhaseOverrideChange} />
       </div>
     </header>

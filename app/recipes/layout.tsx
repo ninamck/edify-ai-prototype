@@ -2,6 +2,7 @@
 
 import Sidebar from '@/components/Sidebar/Sidebar';
 import SiteSwitcher from '@/components/Sidebar/SiteSwitcher';
+import DemoControls from '@/components/DemoControls/DemoControls';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useRouter } from 'next/navigation';
 
@@ -63,7 +64,8 @@ export default function RecipesLayout({ children }: { children: React.ReactNode 
             </span>
           </div>
 
-          <div style={{ minWidth: 0, maxWidth: '240px', display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ minWidth: 0, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }}>
+            <DemoControls inline />
             <button
               onClick={() => router.push('/')}
               style={{

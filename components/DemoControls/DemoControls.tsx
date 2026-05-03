@@ -34,11 +34,20 @@ export default function DemoControls({ inline = false }: Props) {
   const actingUser = USERS.find(u => u.id === actingUserId);
   const rules = actingUser ? getRoleRules(actingUser.role) : null;
 
-  // The global (root-layout) mount yields control to the inline mount on
-  // production routes — otherwise both render and we end up with two
-  // floating triggers on the same screen.
-  if (!inline && pathname.startsWith('/production')) {
-    return null;
+  // The global (root-layout) mount yields control to the inline mount
+  // on every route that already docks the trigger into its own header
+  // — otherwise both render and we end up with two triggers on the
+  // same screen. Inline mounts always render regardless of route.
+  if (!inline) {
+    const isHome = pathname === '/' || pathname === '';
+    if (
+      isHome ||
+      pathname.startsWith('/production') ||
+      pathname.startsWith('/recipes') ||
+      pathname.startsWith('/settings')
+    ) {
+      return null;
+    }
   }
 
   const wrapperStyle: React.CSSProperties = inline

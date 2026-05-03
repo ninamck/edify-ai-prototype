@@ -34,7 +34,7 @@ export default function NavGroup({
               fontSize: '12px',
               fontWeight: 700,
               letterSpacing: '0.04em',
-              color: 'var(--color-text-secondary)',
+              color: '#ffffff',
               fontFamily: 'var(--font-primary)',
             }}
           >

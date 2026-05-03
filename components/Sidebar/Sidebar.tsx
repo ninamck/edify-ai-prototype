@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   Home,
@@ -19,6 +20,8 @@ import {
   MapPin,
   User,
   Settings,
+  PanelLeftOpen,
+  PanelLeftClose,
 } from 'lucide-react';
 
 import NavGroup from './NavGroup';
@@ -33,8 +36,13 @@ export default function Sidebar() {
   const approvals = useApprovals();
   const pendingApprovals = approvals.filter(a => a.status === 'pending').length;
   const invoiceReviewCount = needsReviewCount();
-  /** Icon-only rail (labels via tooltips); always minimised. */
-  const compact = true;
+  /**
+   * Sidebar starts collapsed (icon-only rail, 68px). The toggle pinned
+   * to the bottom of the rail expands it to the labelled view (240px).
+   * Each refresh starts collapsed again so the demo always opens with
+   * the trim shell.
+   */
+  const [compact, setCompact] = useState(true);
   const is = (href: string) => pathname === href || pathname.startsWith(href + '/');
 
   // Persona-aware nav. The HUB sees the full operator set; the SPOKE sees
@@ -138,14 +146,50 @@ export default function Sidebar() {
 
       </div>
 
-      {/* Brand mark — pinned to the bottom of the rail */}
+      {/* Expand / collapse toggle — pinned just above the brand mark.
+          The icon flips to communicate the action's direction
+          (PanelLeftOpen when collapsed, PanelLeftClose when expanded). */}
+      <div
+        style={{
+          flexShrink: 0,
+          display: 'flex',
+          justifyContent: compact ? 'center' : 'flex-end',
+          padding: compact ? '6px 0 4px' : '6px 4px 4px',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setCompact(c => !c)}
+          aria-label={compact ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={compact ? 'Expand sidebar' : 'Collapse sidebar'}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 8,
+            border: '1px solid var(--color-border-subtle)',
+            background: '#ffffff',
+            color: 'var(--color-text-secondary)',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontFamily: 'var(--font-primary)',
+          }}
+        >
+          {compact ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+        </button>
+      </div>
+
+      {/* Brand mark — pinned to the bottom of the rail. Centred when
+          the rail is collapsed; left-aligned when expanded so it sits
+          flush with the nav labels. */}
       <div
         style={{
           flexShrink: 0,
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          padding: compact ? '12px 0 8px' : '12px 8px 8px',
+          justifyContent: compact ? 'center' : 'flex-start',
+          padding: compact ? '8px 0 8px' : '8px 12px 8px',
         }}
       >
         <img
