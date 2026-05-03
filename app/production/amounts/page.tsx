@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AmountsView from '@/components/Production/AmountsView';
 import { useRole } from '@/components/Production/RoleContext';
@@ -40,6 +40,14 @@ const VALID_REASONS: FocusReason[] = ['stockcap', 'assembly-short', 'override', 
  *      / re-renders don't keep re-pulsing the same row
  */
 export default function TodayPage() {
+  return (
+    <Suspense fallback={null}>
+      <TodayPageInner />
+    </Suspense>
+  );
+}
+
+function TodayPageInner() {
   const { can, user } = useRole();
   const canEdit = can('plan.editQuantity');
   const router = useRouter();
