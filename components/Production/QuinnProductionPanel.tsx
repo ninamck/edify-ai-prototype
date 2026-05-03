@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Sparkles, X, ArrowRight, AlertTriangle, Info, CheckCircle2 } from 'lucide-react';
+import { X, ArrowRight, AlertTriangle, Info, CheckCircle2 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { getQuinnNudges, type QuinnNudge, type QuinnNudgeTone } from './quinnNudges';
+import { getQuinnNudges, getSpokeSubmissionNudges, type QuinnNudge, type QuinnNudgeTone } from './quinnNudges';
 import { usePlanNudges } from './PlanStore';
 import { useRejectNudges } from './rejectsStore';
 import { useHubAdhocNudges, useSpokeAdhocNudges } from './adhocStore';
@@ -41,6 +42,7 @@ export default function QuinnProductionPanel() {
   // since the hub has actively offered them more capacity.
   const spokeUnlockNudges = useSpokeUnlockNudges('site-spoke-south');
   const staticNudges = useMemo(() => getQuinnNudges(), []);
+  const spokeStaticNudges = useMemo(() => getSpokeSubmissionNudges(), []);
   const nudges = useMemo<QuinnNudge[]>(() => {
     // Lift plan nudges to the shared shape (surface = 'plan' so existing filter keeps working).
     const planAsGeneric: QuinnNudge[] = planNudges.map(n => ({
@@ -118,6 +120,7 @@ export default function QuinnProductionPanel() {
       return [
         ...spokeRemakeAsGeneric,
         ...spokeUnlockAsGeneric,
+        ...spokeStaticNudges,
         ...spokeAdhocAsGeneric,
       ].filter(n => !dismissed.has(n.id));
     }
@@ -135,7 +138,7 @@ export default function QuinnProductionPanel() {
       ...planAsGeneric,
       ...staticNudges,
     ].filter(n => !dismissed.has(n.id));
-  }, [isSpoke, planNudges, rejectNudges, hubAdhocNudges, spokeAdhocNudges, hubRemakeNudges, spokeRemakeNudges, spokeUnlockNudges, staticNudges, dismissed]);
+  }, [isSpoke, planNudges, rejectNudges, hubAdhocNudges, spokeAdhocNudges, hubRemakeNudges, spokeRemakeNudges, spokeUnlockNudges, staticNudges, spokeStaticNudges, dismissed]);
   const visible = nudges.length;
 
   // Keep the panel relevant to the current surface first
@@ -174,7 +177,7 @@ export default function QuinnProductionPanel() {
           boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
         }}
       >
-        <Sparkles size={22} />
+        <EdifyMark size={22} />
         {visible > 0 && (
           <span
             style={{
@@ -259,7 +262,7 @@ export default function QuinnProductionPanel() {
                     justifyContent: 'center',
                   }}
                 >
-                  <Sparkles size={16} />
+                  <EdifyMark size={16} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 700 }}>Quinn — today at a glance</div>

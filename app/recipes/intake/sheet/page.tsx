@@ -18,9 +18,14 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, ArrowRight, Check, FileSpreadsheet, Sparkles, Upload,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  FileSpreadsheet,
+  Upload,
   ChevronRight,
 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import QuinnOrb from '@/components/Sidebar/QuinnOrb';
 import { FITZROY_SHEET_INTAKE } from '@/components/Recipe/sheetIntakeFixtures';
 
@@ -251,7 +256,7 @@ function DropStage({
           display: 'flex', alignItems: 'center', gap: '10px',
         }}
       >
-        <Sparkles size={14} color="var(--color-accent-active)" strokeWidth={2} />
+        <EdifyMark size={14} color="var(--color-accent-active)" strokeWidth={2} />
         <span style={{ fontSize: '12px', color: 'var(--color-text-muted)', flex: 1 }}>
           Demo tip: click to jump straight to the mapped preview with fitzroy-brunch-costing.xlsx.
         </span>
@@ -416,7 +421,7 @@ function PreviewStage({
       <div style={{ marginTop: '18px', display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
         <button onClick={onBack} style={secondaryBtn}>Back to mapping</button>
         <button onClick={onDraftAll} style={primaryBtn}>
-          <Sparkles size={13} strokeWidth={2} />
+          <EdifyMark size={13} strokeWidth={2} />
           Draft all {data.totalRecipes} with Quinn
         </button>
       </div>

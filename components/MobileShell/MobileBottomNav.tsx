@@ -1,7 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Truck, ClipboardList, LayoutGrid, Trash2, Sparkles } from 'lucide-react';
+import { Truck, ClipboardList, LayoutGrid, Trash2 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 
 type NavTab = 'receive' | 'checklists' | 'tasks' | 'waste' | 'insights';
 
@@ -152,7 +153,7 @@ export default function MobileBottomNav({
         onClick={() => onTabChange('waste')}
       />
       <NavButton
-        icon={Sparkles}
+        icon={EdifyMark}
         label="Quinn"
         active={activeTab === 'insights'}
         onClick={() => onTabChange('insights')}

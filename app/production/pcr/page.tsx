@@ -8,7 +8,6 @@ import { useRole, StaffLockBanner } from '@/components/Production/RoleContext';
 import { DEMO_NOW_HHMM, useBoardPlan } from '@/components/Production/PlanStore';
 import {
   DEMO_TODAY,
-  PRET_SITES,
   benchesAt,
   getProductionItem,
   type BenchId,
@@ -16,13 +15,14 @@ import {
   type BatchStatus,
 } from '@/components/Production/fixtures';
 import { hhmmToMinutes } from '@/components/Production/time';
+import { useProductionSite } from '@/components/Production/ProductionSiteContext';
 
 type BenchFilter = 'all' | BenchId;
 
 export default function PCRQueuePage() {
   const { can } = useRole();
   const canSign = can('pcr.sign');
-  const [siteId, setSiteId] = useState('hub-central');
+  const { siteId } = useProductionSite();
   const [benchFilter, setBenchFilter] = useState<BenchFilter>('all');
   /** Map of batchId -> signed PCR draft (locally captured this session). */
   const [signed, setSigned] = useState<Record<string, PCRDraft>>({});
@@ -137,56 +137,20 @@ export default function PCRQueuePage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {/* Header — site selector + view toggle */}
+      {/* Page caption — site picker lives in the layout (shared) */}
       <div
         style={{
-          padding: '10px 16px',
+          padding: '8px 16px',
           display: 'flex',
           alignItems: 'center',
           gap: 10,
           borderBottom: '1px solid var(--color-border-subtle)',
           background: '#ffffff',
           flexWrap: 'wrap',
+          justifyContent: 'flex-end',
         }}
       >
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: 'var(--color-text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}
-        >
-          Site
-        </span>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {PRET_SITES.map(s => {
-            const active = s.id === siteId;
-            return (
-              <button
-                key={s.id}
-                onClick={() => setSiteId(s.id)}
-                style={{
-                  padding: '6px 10px',
-                  borderRadius: 8,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  fontFamily: 'var(--font-primary)',
-                  background: active ? 'var(--color-accent-active)' : '#ffffff',
-                  color: active ? 'var(--color-text-on-active)' : 'var(--color-text-secondary)',
-                  border: `1px solid ${active ? 'var(--color-accent-active)' : 'var(--color-border)'}`,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {s.name} · {s.type}
-              </button>
-            );
-          })}
-        </div>
-
-        <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
           {awaiting.length} awaiting · {signedToday.length} reviewed · {failedToday.length} failed
         </span>
       </div>

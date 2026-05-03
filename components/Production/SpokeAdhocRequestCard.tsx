@@ -7,7 +7,6 @@ import {
   Send,
   ChevronDown,
   ChevronRight,
-  Sparkles,
   Check,
   X,
   AlertCircle,
@@ -15,6 +14,7 @@ import {
   RotateCcw,
   MessageSquarePlus,
 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import QtyStepper from './QtyStepper';
 import {
   ADHOC_REQUEST_REASON_LABEL,
@@ -468,7 +468,7 @@ function AdhocRequestModal({
               flexShrink: 0,
             }}
           >
-            <Sparkles size={16} color="var(--color-info)" />
+            <EdifyMark size={16} color="var(--color-info)" />
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
               <span style={{ fontSize: 13, fontWeight: 700 }}>Send an ad-hoc request to the hub</span>
               <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>

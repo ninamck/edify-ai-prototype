@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Sparkles,
   Clock,
   Send,
   AlertCircle,
@@ -16,6 +15,7 @@ import {
   ChevronRight,
   RotateCcw,
 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import StatusPill from '@/components/Production/StatusPill';
 import QtyStepper from '@/components/Production/QtyStepper';
 import { useRole, StaffLockBanner } from '@/components/Production/RoleContext';
@@ -24,7 +24,6 @@ import { useHubUnlocks } from '@/components/Production/hubUnlockStore';
 import {
   PRET_SITES,
   getSite,
-  hubSettingsFor,
   isHubLinked,
   spokeOrderForDate,
   dayOfWeek,
@@ -38,6 +37,7 @@ import {
 } from '@/components/Production/fixtures';
 import { Link2 } from 'lucide-react';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+import { useSiteSettings } from '@/components/Settings/siteSettingsStore';
 
 // When the demo's active persona is a SPOKE, this page locks onto the
 // matching fixture site and presents the persona names in the header
@@ -99,8 +99,13 @@ export default function SpokeSubmissionsPage() {
     isSpoke && spokeId === SPOKE_PERSONA_SITE_ID ? SPOKE_PERSONA_SITE_NAME : (spoke?.name ?? 'Spoke');
   const hubDisplayName =
     isSpoke && hubId === SPOKE_PERSONA_HUB_ID ? SPOKE_PERSONA_HUB_NAME : (hub?.name ?? 'Hub');
-  const hubSettings = hubSettingsFor(hubId);
-  const cutoffPolicy = hubSettings?.spokeCutoffPolicy ?? 'lock';
+  // Cutoff policy + cutoff time both flow through SiteSettingsStore so a
+  // change made on /settings (or the production Settings sub-tab) shows
+  // up here without a refresh. We resolve against the *hub*'s settings
+  // because the cutoff is a hub-side knob in the data model.
+  const hubSettings = useSiteSettings(hubId);
+  const cutoffPolicy = hubSettings.effective.cutoffs.lockPolicy;
+  const effectiveCutoffTime = hubSettings.effective.cutoffs.cutoffTime;
 
   const [date, setDate] = useState<string>(dayOffset(1));
   const [query, setQuery] = useState('');
@@ -121,10 +126,16 @@ export default function SpokeSubmissionsPage() {
   // Build (and cache) the editor state for the active (spoke, date). If
   // we already have edits for this key we keep them; otherwise we hydrate
   // from the seeded submission / Quinn defaults.
-  const order: SpokeOrderSummary = useMemo(
-    () => spokeOrderForDate(spokeId, hubId, date),
-    [spokeId, hubId, date],
-  );
+  const order: SpokeOrderSummary = useMemo(() => {
+    const base = spokeOrderForDate(spokeId, hubId, date);
+    // Overlay the hub's effective cutoff time onto the order's
+    // `cutoffDateTime`. The base value is `dayOffset(-1, forDate)` +
+    // 15:00 UTC; we keep the date and swap in the configured HH:MM.
+    const [h, m] = effectiveCutoffTime.split(':');
+    const cutoffDay = dayOffset(-1, date); // day before forDate
+    const overridden = `${cutoffDay}T${h ?? '15'}:${m ?? '00'}:00Z`;
+    return { ...base, cutoffDateTime: overridden };
+  }, [spokeId, hubId, date, effectiveCutoffTime]);
   const key = dayKey(spokeId, date);
   useEffect(() => {
     setDayStates(prev => {
@@ -373,6 +384,7 @@ export default function SpokeSubmissionsPage() {
         selectedDate={date}
         nowISO={nowISO}
         cutoffPolicy={cutoffPolicy}
+        cutoffTime={effectiveCutoffTime}
         dayStates={dayStates}
         onSelect={setDate}
       />
@@ -538,7 +550,7 @@ export default function SpokeSubmissionsPage() {
                 alignItems: 'flex-start',
               }}
             >
-              <Sparkles size={16} color="var(--color-info)" style={{ flexShrink: 0, marginTop: 1 }} />
+              <EdifyMark size={16} color="var(--color-info)" style={{ flexShrink: 0, marginTop: 1 }} />
               <div style={{ flex: 1, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
                 <strong style={{ color: 'var(--color-text-primary)' }}>
                   Quinn has drafted your full {dayOfWeek(date)} order.
@@ -806,6 +818,7 @@ function DayStrip({
   selectedDate,
   nowISO,
   cutoffPolicy,
+  cutoffTime,
   dayStates,
   onSelect,
 }: {
@@ -814,6 +827,7 @@ function DayStrip({
   selectedDate: string;
   nowISO: string;
   cutoffPolicy: 'lock' | 'soft';
+  cutoffTime: string;
   dayStates: Record<string, DayState>;
   onSelect: (date: string) => void;
 }) {
@@ -841,6 +855,7 @@ function DayStrip({
             selected={d === selectedDate}
             nowISO={nowISO}
             cutoffPolicy={cutoffPolicy}
+            cutoffTime={cutoffTime}
             dayState={dayStates[`${spokeId}|${d}`]}
             onSelect={() => onSelect(d)}
           />
@@ -857,6 +872,7 @@ function DayCard({
   selected,
   nowISO,
   cutoffPolicy,
+  cutoffTime,
   dayState,
   onSelect,
 }: {
@@ -866,13 +882,18 @@ function DayCard({
   selected: boolean;
   nowISO: string;
   cutoffPolicy: 'lock' | 'soft';
+  cutoffTime: string;
   dayState?: DayState;
   onSelect: () => void;
 }) {
   // Re-derive the day's snapshot so the strip is accurate even if the day
   // hasn't been visited yet (we want totals for unloaded days too).
   const order = useMemo(() => spokeOrderForDate(spokeId, hubId, date), [spokeId, hubId, date]);
-  const cutoff = new Date(order.cutoffDateTime);
+  // Override the cutoff to honour the hub's effective settings (mirrors
+  // the page-level computation above).
+  const [h, m] = cutoffTime.split(':');
+  const overriddenCutoff = `${dayOffset(-1, date)}T${h ?? '15'}:${m ?? '00'}:00Z`;
+  const cutoff = new Date(overriddenCutoff);
   const now = new Date(nowISO);
   const past = cutoff.getTime() < now.getTime();
 
@@ -1112,7 +1133,7 @@ function SpokeOrderRow({
 
         <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <Sparkles size={11} color="var(--color-text-muted)" />
+            <EdifyMark size={11} color="var(--color-text-muted)" />
             {quinnProposed}
           </span>
         </div>
@@ -1214,7 +1235,7 @@ function SpokeOrderRow({
               <LedgerLine label="Forecast" value={forecast?.projectedUnits ?? 0} />
               <LedgerLine label="Carry-over" value={-(carriedUnits)} />
               <div style={{ borderTop: '1px dashed var(--color-border-subtle)', paddingTop: 4, marginTop: 2, display: 'flex', gap: 6 }}>
-                <Sparkles size={11} color="var(--color-text-muted)" />
+                <EdifyMark size={11} color="var(--color-text-muted)" />
                 <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Quinn proposes</span>
                 <span style={{ marginLeft: 'auto', fontWeight: 700, color: 'var(--color-text-primary)' }}>{quinnProposed}</span>
               </div>

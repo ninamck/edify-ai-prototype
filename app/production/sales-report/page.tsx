@@ -20,7 +20,6 @@
 
 import { useMemo, useState } from 'react';
 import {
-  Sparkles,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -32,13 +31,13 @@ import {
   ChevronDown,
   Lightbulb,
 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import {
   DEMO_TODAY,
   dayOffset,
   type ProductionRecipe,
-  type SiteId,
 } from '@/components/Production/fixtures';
-import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+import { useProductionSite } from '@/components/Production/ProductionSiteContext';
 import {
   siteSalesReport,
   formatSignedPct,
@@ -52,10 +51,9 @@ import {
 type RangeOpt = 'today' | 'yesterday' | 'last7';
 
 export default function SalesReportPage() {
-  // Persona drives the site — site picker UI was removed so the page
-  // always reports on the active persona's site.
-  const { isSpoke } = useActiveSite();
-  const siteId: SiteId = isSpoke ? 'site-spoke-south' : 'hub-central';
+  // Site comes from the shared ProductionSiteContext — picker lives in
+  // the production layout above the nav.
+  const { siteId } = useProductionSite();
   const [range, setRange] = useState<RangeOpt>('last7');
   const [recipeFilter, setRecipeFilter] = useState<'all' | 'overshoot' | 'undershoot' | 'on-target' | 'mixed'>('all');
   const [recipeSort, setRecipeSort] = useState<{
@@ -140,7 +138,7 @@ export default function SalesReportPage() {
               alignItems: 'flex-start',
             }}
           >
-            <Sparkles size={20} color={headline.iconColor} style={{ flexShrink: 0, marginTop: 2 }} />
+            <EdifyMark size={20} color={headline.iconColor} style={{ flexShrink: 0, marginTop: 2 }} />
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
               <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{headline.title}</h2>
               <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>

@@ -4,10 +4,10 @@ import { useMemo, useState } from 'react';
 import { Activity, Search, X } from 'lucide-react';
 import {
   DEMO_TODAY,
-  PRET_SITES,
   type ProductionRecipe,
 } from '@/components/Production/fixtures';
 import { DEMO_NOW_HHMM } from '@/components/Production/PlanStore';
+import { useProductionSite } from '@/components/Production/ProductionSiteContext';
 import {
   buildHourlySalesByRecipe,
   formatHour,
@@ -30,7 +30,7 @@ const MODE_LABEL: Record<string, string> = {
 };
 
 export default function LiveSalesPage() {
-  const [siteId, setSiteId] = useState('hub-central');
+  const { siteId } = useProductionSite();
   const [categoryFilter, setCategoryFilter] = useState<'All' | ProductionRecipe['category']>('All');
   const [query, setQuery] = useState('');
 
@@ -90,37 +90,9 @@ export default function LiveSalesPage() {
           gap: 10,
         }}
       >
-        {/* Site selector row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Site
-          </label>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {PRET_SITES.map(s => {
-              const active = s.id === siteId;
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => setSiteId(s.id)}
-                  style={{
-                    padding: '10px 14px',
-                    borderRadius: 8,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    fontFamily: 'var(--font-primary)',
-                    background: active ? 'var(--color-accent-active)' : '#ffffff',
-                    color: active ? 'var(--color-text-on-active)' : 'var(--color-text-secondary)',
-                    border: `1px solid ${active ? 'var(--color-accent-active)' : 'var(--color-border)'}`,
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {s.name} · {s.type}
-                </button>
-              );
-            })}
-          </div>
-          <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        {/* Live indicator caption — site picker lives in the layout */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <span style={{ fontSize: 10, color: 'var(--color-text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <span
               style={{
                 width: 6,

@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import { ChevronRight, Clock, Download, Moon, Repeat, Shuffle, Sparkles, Truck, User, Waves } from 'lucide-react';
+import { ChevronRight, Clock, Download, Moon, Repeat, Shuffle, Truck, User, Waves } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import {
   benchesAt,
   effectiveBatchRules,
@@ -891,7 +892,7 @@ function NightShiftPolicyCaption({ rows }: { rows: RowData[] }) {
         lineHeight: 1.5,
       }}
     >
-      <Sparkles size={11} color="var(--color-text-muted)" style={{ flexShrink: 0, marginTop: 1 }} />
+      <EdifyMark size={11} color="var(--color-text-muted)" style={{ flexShrink: 0, marginTop: 1 }} />
       <span>
         <strong style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>
           Quinn applied night-shift policy

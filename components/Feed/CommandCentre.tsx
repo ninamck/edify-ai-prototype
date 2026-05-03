@@ -3,10 +3,10 @@
 import { motion } from 'framer-motion';
 import {
   Activity,
-  Sparkles,
   ClipboardCheck,
   AlertTriangle,
 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 
 export type CommandCentreVariant = 'store' | 'chain' | 'finance';
 
@@ -183,7 +183,7 @@ export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso',
           width: '28px', height: '28px', borderRadius: '8px',
           background: 'var(--color-quinn-bg)',
         }}>
-          <Sparkles size={14} color="var(--color-accent-quinn)" strokeWidth={2} />
+          <EdifyMark size={14} color="var(--color-accent-quinn)" strokeWidth={2} />
         </span>
         <div>
           <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>

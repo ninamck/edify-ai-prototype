@@ -3,7 +3,8 @@
 import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Check, AlertTriangle, Sparkles, ArrowRight, BookOpen } from 'lucide-react';
+import { Check, AlertTriangle, ArrowRight, BookOpen } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 
 type GroupSummary = { name: string; count: number };
 
@@ -126,7 +127,7 @@ function DonePage() {
                       display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                     }}
                   >
-                    <Sparkles size={15} color="var(--color-accent-active)" strokeWidth={2} />
+                    <EdifyMark size={15} color="var(--color-accent-active)" strokeWidth={2} />
                   </span>
                   <span style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--color-text-primary)', flex: 1 }}>
                     {g.name}

@@ -5,9 +5,20 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Plus, Search, Check, Edit3, Copy, Archive, X, ChevronDown, AlertTriangle,
-  Sparkles, Tags, RefreshCw, Undo2,
+  Plus,
+  Search,
+  Check,
+  Edit3,
+  Copy,
+  Archive,
+  X,
+  ChevronDown,
+  AlertTriangle,
+  Tags,
+  RefreshCw,
+  Undo2,
 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import {
   FITZROY_RECIPES, Recipe, RecipeCategory, formatCost,
 } from '@/components/Recipe/libraryFixtures';
@@ -777,7 +788,7 @@ function BulkMenu({
   }, [onClose]);
 
   const items: { id: BulkAction; label: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; hint?: string }[] = [
-    { id: 'attach-group',    label: 'Attach modifier group\u2026', icon: Sparkles, hint: 'e.g. Alt milks to every coffee' },
+    { id: 'attach-group',    label: 'Attach modifier group\u2026', icon: EdifyMark, hint: 'e.g. Alt milks to every coffee' },
     { id: 'update-category', label: 'Change category\u2026',       icon: Tags },
     { id: 'recompute',       label: 'Recompute costs',            icon: RefreshCw, hint: 'Re-pull latest contract prices' },
     { id: 'archive',         label: 'Archive',                    icon: Archive },

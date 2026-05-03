@@ -18,7 +18,6 @@
 
 import { useMemo, useState } from 'react';
 import {
-  Sparkles,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -32,12 +31,13 @@ import {
   ChevronDown,
   ArrowUpDown,
 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import {
-  PRET_SITES,
   DEMO_TODAY,
   dayOffset,
   type SiteId,
 } from '@/components/Production/fixtures';
+import { useProductionSite } from '@/components/Production/ProductionSiteContext';
 import {
   siteProductivity,
   formatDelta,
@@ -50,7 +50,7 @@ import {
 type DateRange = 'today' | 'yesterday' | 'last7';
 
 export default function ProductivityPage() {
-  const [siteId, setSiteId] = useState<SiteId>('hub-central');
+  const { siteId } = useProductionSite();
   const [range, setRange] = useState<DateRange>('yesterday');
   const [batchSort, setBatchSort] = useState<{
     by: 'date' | 'recipe' | 'worker' | 'bench' | 'qty' | 'duration' | 'delta';
@@ -113,17 +113,6 @@ export default function ProductivityPage() {
           flexWrap: 'wrap',
         }}
       >
-        <span style={LABEL_STYLE}>Site</span>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {PRET_SITES.map(s => (
-            <button key={s.id} onClick={() => setSiteId(s.id)} style={pillStyle(s.id === siteId)}>
-              {s.name}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ width: 1, height: 24, background: 'var(--color-border-subtle)' }} />
-
         <span style={LABEL_STYLE}>Period</span>
         <div style={{ display: 'flex', gap: 4 }}>
           {([
@@ -159,7 +148,7 @@ export default function ProductivityPage() {
               alignItems: 'flex-start',
             }}
           >
-            <Sparkles size={20} color={headline.iconColor} style={{ flexShrink: 0, marginTop: 2 }} />
+            <EdifyMark size={20} color={headline.iconColor} style={{ flexShrink: 0, marginTop: 2 }} />
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
               <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{headline.title}</h2>
               <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>

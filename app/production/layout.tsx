@@ -12,6 +12,8 @@ import { AdhocRequestStoreProvider } from '@/components/Production/adhocStore';
 import { RemakeRequestStoreProvider } from '@/components/Production/remakeStore';
 import { HubUnlockStoreProvider } from '@/components/Production/hubUnlockStore';
 import { DemoNotificationsProvider } from '@/components/Production/demoNotificationsStore';
+import { ProductionSiteProvider } from '@/components/Production/ProductionSiteContext';
+import ProductionSiteSelector from '@/components/Production/ProductionSiteSelector';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import DemoControls from '@/components/DemoControls/DemoControls';
 import SpokeAdhocRequestCard from '@/components/Production/SpokeAdhocRequestCard';
@@ -33,9 +35,10 @@ const HUB_SUB_TABS: SubTab[] = [
   { id: 'dispatch',   label: 'Dispatch',          href: '/production/dispatch' },
   { id: 'spokes',     label: 'Spoke submissions', href: '/production/spokes' },
   { id: 'productivity', label: 'Productivity',    href: '/production/productivity' },
-  { id: 'sales-report', label: 'Sales vs forecast', href: '/production/sales-report' },
-  { id: 'settings',   label: 'Settings health',   href: '/production/settings-health' },
-  { id: 'setup',      label: 'Setup (Quinn)',     href: '/production/setup' },
+  { id: 'sales-report',   label: 'Sales vs forecast', href: '/production/sales-report' },
+  { id: 'site-settings',  label: 'Settings',          href: '/production/settings' },
+  { id: 'settings-health', label: 'Settings health',  href: '/production/settings-health' },
+  { id: 'setup',          label: 'Setup (Quinn)',     href: '/production/setup' },
 ];
 
 // Spokes don't bake — they receive. So the production view bar trims down
@@ -48,8 +51,9 @@ const SPOKE_SUB_TABS: SubTab[] = [
   { id: 'sales',        label: 'Sales (live)',      href: '/production/sales' },
   { id: 'carry-over',   label: 'Carry-over',        href: '/production/carry-over' },
   { id: 'spokes',       label: 'Order',             href: '/production/spokes' },
-  { id: 'sales-report', label: 'Sales vs forecast', href: '/production/sales-report' },
-  { id: 'settings',     label: 'Settings health',   href: '/production/settings-health' },
+  { id: 'sales-report',    label: 'Sales vs forecast', href: '/production/sales-report' },
+  { id: 'site-settings',   label: 'Settings',          href: '/production/settings' },
+  { id: 'settings-health', label: 'Settings health',   href: '/production/settings-health' },
 ];
 
 export default function ProductionLayout({ children }: { children: React.ReactNode }) {
@@ -70,6 +74,7 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
     <RemakeRequestStoreProvider>
     <HubUnlockStoreProvider>
     <DemoNotificationsProvider>
+    <ProductionSiteProvider>
     <div
       style={{
         display: 'flex',
@@ -211,6 +216,11 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
           )}
         </nav>
 
+        {/* Shared site selector — single source of truth for which site
+            every production sub-page operates on. Hidden for the spoke
+            persona since they're locked to their own site. */}
+        <ProductionSiteSelector />
+
         {/* Page body — flows in normal document scroll so the page itself
             scrolls rather than an inner container. */}
         <div
@@ -228,6 +238,7 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
 
       <QuinnProductionPanel />
     </div>
+    </ProductionSiteProvider>
     </DemoNotificationsProvider>
     </HubUnlockStoreProvider>
     </RemakeRequestStoreProvider>

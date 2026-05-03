@@ -74,17 +74,9 @@ export function getQuinnNudges(): QuinnNudge[] {
     });
   }
 
-  // 4) Spoke submission not yet submitted
-  if (PRET_SPOKE_SUBMISSION.status === 'draft') {
-    nudges.push({
-      id: 'nudge-spoke-submission',
-      surface: 'spokes',
-      tone: 'warning',
-      title: `Spoke order draft — cutoff ${PRET_SPOKE_SUBMISSION.cutoffDateTime}`,
-      body: 'Submit before cutoff or the hub won’t cover tomorrow’s opening.',
-      cta: { label: 'Submit order', href: '/production/spokes' },
-    });
-  }
+  // 4) Spoke submission nudges live on the spoke persona only — see
+  //    `getSpokeSubmissionNudges` below. The hub's Quinn doesn't surface
+  //    them because the hub doesn't draft the spoke's order.
 
   // 5) Settings health — surface the most impactful stale/suspect items
   const healthIssues = PRET_SETTINGS_HEALTH.filter(i => i.status === 'stale' || i.status === 'suspect');
@@ -174,5 +166,26 @@ export function getQuinnNudges(): QuinnNudge[] {
     }
   }
 
+  return nudges;
+}
+
+/**
+ * Spoke-only nudges — surfaced in the spoke manager's Quinn panel.
+ * Today this is just the "submit your draft before cutoff" reminder, but
+ * over time anything that is purely the spoke's responsibility (e.g.
+ * count stock, review approvals) should slot in here.
+ */
+export function getSpokeSubmissionNudges(): QuinnNudge[] {
+  const nudges: QuinnNudge[] = [];
+  if (PRET_SPOKE_SUBMISSION.status === 'draft') {
+    nudges.push({
+      id: 'nudge-spoke-submission',
+      surface: 'spokes',
+      tone: 'warning',
+      title: `Spoke order draft — cutoff ${PRET_SPOKE_SUBMISSION.cutoffDateTime}`,
+      body: 'Submit before cutoff or the hub won’t cover tomorrow’s opening.',
+      cta: { label: 'Submit order', href: '/production/spokes' },
+    });
+  }
   return nudges;
 }

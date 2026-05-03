@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { Search, Mic, Sparkles, Clock, Check, Trash2, Undo2, AlertTriangle } from 'lucide-react';
+import { Search, Mic, Clock, Check, Trash2, Undo2, AlertTriangle } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import {
   WASTE_PRODUCTS,
   WASTE_REASONS,
@@ -199,7 +200,7 @@ export default function WasteLogPicker({ phase }: { phase: BriefingPhase }) {
           {/* Likely to bin */}
           {likely.length > 0 && (
             <Section
-              icon={<Sparkles size={12} color="var(--color-accent-quinn)" strokeWidth={2.2} />}
+              icon={<EdifyMark size={12} color="var(--color-accent-quinn)" strokeWidth={2.2} />}
               label="Likely to bin"
               sublabel="Quinn · based on today's pace"
             >

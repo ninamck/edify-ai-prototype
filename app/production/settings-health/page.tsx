@@ -1,8 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-  Sparkles,
   Settings,
   ArchiveRestore,
   PencilLine,
@@ -11,7 +11,9 @@ import {
   AlertTriangle,
   Eye,
   Check,
+  ArrowRight,
 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import StatusPill from '@/components/Production/StatusPill';
 import { useRole, StaffLockBanner } from '@/components/Production/RoleContext';
 import {
@@ -19,6 +21,7 @@ import {
   getSite,
   type SettingsHealthItem,
   type SettingsHealthStatus,
+  type SiteId,
 } from '@/components/Production/fixtures';
 
 const STATUS_META: Record<SettingsHealthStatus, { label: string; tone: 'warning' | 'info' | 'error'; icon: React.ReactNode }> = {
@@ -31,11 +34,12 @@ const REMEDIATION_ICONS = {
   archive: <ArchiveRestore size={12} />,
   refresh: <RefreshCw size={12} />,
   edit: <PencilLine size={12} />,
-  'ask-quinn': <Sparkles size={12} />,
+  'ask-quinn': <EdifyMark size={12} />,
 };
 
 export default function SettingsHealthPage() {
   const { can } = useRole();
+  const router = useRouter();
   const canRemediate = can('settings.remediate');
   const [scopeFilter, setScopeFilter] = useState<'all' | 'estate' | 'format' | 'site'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | SettingsHealthStatus>('all');
@@ -140,6 +144,10 @@ export default function SettingsHealthPage() {
               item={item}
               canRemediate={canRemediate}
               onResolve={() => resolve(item.id)}
+              onOpenInSettings={() => {
+                const { siteId, tab } = settingsDeepLink(item);
+                router.push(`/settings?site=${siteId}&tab=${tab}`);
+              }}
             />
           ))}
           {filtered.length === 0 && (
@@ -168,10 +176,12 @@ function HealthCard({
   item,
   canRemediate,
   onResolve,
+  onOpenInSettings,
 }: {
   item: SettingsHealthItem;
   canRemediate: boolean;
   onResolve: () => void;
+  onOpenInSettings: () => void;
 }) {
   const meta = STATUS_META[item.status];
   const scopeLabel = scopeToLabel(item.scope);
@@ -242,6 +252,29 @@ function HealthCard({
       </div>
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', borderTop: '1px solid var(--color-border-subtle)', paddingTop: 10, marginTop: 2 }}>
+        <button
+          type="button"
+          onClick={onOpenInSettings}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '8px 12px',
+            borderRadius: 8,
+            fontSize: 11,
+            fontWeight: 700,
+            fontFamily: 'var(--font-primary)',
+            background: '#ffffff',
+            color: 'var(--color-info)',
+            border: '1px solid var(--color-info)',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            marginRight: 'auto',
+          }}
+          title="Jump straight to the relevant tab in the settings editor"
+        >
+          Open in settings <ArrowRight size={11} />
+        </button>
         {item.remediations.map(r => (
           <button
             key={r.id}
@@ -364,4 +397,23 @@ function surfaceLabel(surface: SettingsHealthItem['surface']): string {
     'ranges': 'Ranges',
   };
   return labels[surface];
+}
+
+/**
+ * Map a Settings Health item to the (site, tab) the editor should open
+ * on. Estate / format scoped items deep-link to the hub site since the
+ * cascade default lives there.
+ */
+function settingsDeepLink(item: SettingsHealthItem): { siteId: SiteId; tab: string } {
+  const SURFACE_TO_TAB: Record<SettingsHealthItem['surface'], string> = {
+    'batch-rules': 'benches',
+    'bench-capabilities': 'benches',
+    'cutoffs': 'cutoffs',
+    'selection-tags': 'range-tiers',
+    'ranges': 'range-tiers',
+  };
+  const tab = SURFACE_TO_TAB[item.surface];
+  const siteId: SiteId =
+    item.scope.kind === 'site' ? (item.scope.id as SiteId) : ('hub-central' as SiteId);
+  return { siteId, tab };
 }

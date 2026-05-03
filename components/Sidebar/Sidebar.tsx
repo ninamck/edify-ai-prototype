@@ -133,7 +133,7 @@ export default function Sidebar() {
           <NavItem label="Manage suppliers" icon={MapPin} compact={compact} active={is('/suppliers')} />
           <NavItem label="Manage users" icon={User} compact={compact} active={is('/users')} />
           <NavItem label="Manage checklists" icon={ClipboardList} compact={compact} active={is('/checklists')} onClick={() => router.push('/checklists')} />
-          <NavItem label="Configure settings" icon={Settings} compact={compact} active={is('/settings')} />
+          <NavItem label="Configure settings" icon={Settings} compact={compact} active={is('/settings')} onClick={() => router.push('/settings')} />
         </NavGroup>
 
       </div>

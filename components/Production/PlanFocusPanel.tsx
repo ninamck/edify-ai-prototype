@@ -4,7 +4,6 @@ import { useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Sparkles,
   X,
   Package,
   AlertTriangle,
@@ -13,6 +12,7 @@ import {
   Info,
   Check,
 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import type { PlanLine, FocusReason } from './PlanStore';
 
 /**
@@ -131,7 +131,7 @@ export default function PlanFocusPanel({
         >
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-              <Sparkles size={16} color={palette.icon} />
+              <EdifyMark size={16} color={palette.icon} />
               <span
                 style={{
                   fontSize: 10,

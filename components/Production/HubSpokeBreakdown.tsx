@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 import {
   Truck,
-  Sparkles,
   ChevronRight,
   ChevronDown,
   Check,
@@ -12,6 +11,7 @@ import {
   X,
   Link2,
 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import Link from 'next/link';
 import StatusPill from './StatusPill';
 import {
@@ -910,7 +910,7 @@ function DispatchRecipeRow({
               >
                 {displayValue}
                 {c.isQuinn && !empty && !wasSent && (
-                  <Sparkles size={10} color="var(--color-text-muted)" />
+                  <EdifyMark size={10} color="var(--color-text-muted)" />
                 )}
               </div>
               {rejects > 0 && !wasSent && (
@@ -1050,7 +1050,7 @@ function DispatchRecipeRow({
                           color: 'var(--color-warning)',
                         }}
                       >
-                        <Sparkles size={10} /> Quinn proposal
+                        <EdifyMark size={10} /> Quinn proposal
                       </span>
                     )}
                     {transfer && (

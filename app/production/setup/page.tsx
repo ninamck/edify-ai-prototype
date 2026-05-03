@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Sparkles, Check, ArrowRight, RotateCcw } from 'lucide-react';
+import { Check, ArrowRight, RotateCcw } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import StatusPill from '@/components/Production/StatusPill';
 import {
   PRET_QUINN_SETUP_INTERVIEW,
@@ -95,7 +96,7 @@ export default function QuinnSetupPage() {
           background: '#ffffff',
         }}
       >
-        <Sparkles size={16} color="var(--color-info)" />
+        <EdifyMark size={16} color="var(--color-info)" />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span style={{ fontSize: 13, fontWeight: 700 }}>{scenario.title}</span>
           <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{scenario.subtitle}</span>
@@ -298,7 +299,7 @@ function Bubble({ role, children }: { role: 'quinn' | 'user'; children: React.Re
             border: '1px solid var(--color-info)',
           }}
         >
-          <Sparkles size={16} />
+          <EdifyMark size={16} />
         </div>
         <div
           style={{

@@ -6,10 +6,10 @@ import {
   Check,
   X,
   Clock,
-  Sparkles,
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import QtyStepper from './QtyStepper';
 import {
   ADHOC_REQUEST_REASON_LABEL,
@@ -264,7 +264,7 @@ function RequestRow({
                 color: 'var(--color-text-secondary)',
               }}
             >
-              <Sparkles size={11} color="var(--color-info)" style={{ marginRight: 6, verticalAlign: 'middle' }} />
+              <EdifyMark size={11} color="var(--color-info)" style={{ marginRight: 6, verticalAlign: 'middle' }} />
               <strong>From the spoke:</strong> {request.notes}
             </div>
           )}

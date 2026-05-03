@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo } from 'react';
-import { ChevronRight, Sparkles, ArrowUp } from 'lucide-react';
+import { ChevronRight, ArrowUp } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import {
   QUESTION_LIBRARY,
   SEGMENT_LABELS,
@@ -97,7 +98,7 @@ export default function QuestionLibraryPicker({
             (e.currentTarget as HTMLFormElement).style.boxShadow = '0 2px 10px rgba(58,48,40,0.06)';
           }}
         >
-          <Sparkles size={16} color={ACCENT} strokeWidth={2.2} />
+          <EdifyMark size={16} color={ACCENT} strokeWidth={2.2} />
           <input
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
@@ -355,7 +356,7 @@ function EmptyState({ query, onAsk }: { query: string; onAsk: () => void }) {
           justifyContent: 'center',
         }}
       >
-        <Sparkles size={20} color={ACCENT} strokeWidth={2} />
+        <EdifyMark size={20} color={ACCENT} strokeWidth={2} />
       </div>
       <div>
         <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)' }}>

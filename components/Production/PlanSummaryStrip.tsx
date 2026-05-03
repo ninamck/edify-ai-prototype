@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Sparkles, AlertTriangle, RotateCcw } from 'lucide-react';
+import { ArrowRight, AlertTriangle, RotateCcw } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { useMemo } from 'react';
 import { usePlan, usePlanStore } from './PlanStore';
 import { effectiveBatchRules, proposeBatchSplit, type SiteId } from './fixtures';
@@ -65,7 +66,7 @@ export default function PlanSummaryStrip({ siteId, date, linkToAmounts = true }:
           color: 'var(--color-text-muted)',
         }}
       >
-        <Sparkles size={11} color="var(--color-text-muted)" /> Today&rsquo;s plan
+        <EdifyMark size={11} color="var(--color-text-muted)" /> Today&rsquo;s plan
       </span>
       <SummaryChip label="Recipes" value={summary.recipeCount} />
       <SummaryChip label="Units" value={summary.units} emphasise />

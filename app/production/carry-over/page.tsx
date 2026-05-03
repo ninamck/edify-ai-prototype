@@ -1,10 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Sparkles, CheckCircle2, Trash2, ArrowDown } from 'lucide-react';
+import { CheckCircle2, Trash2, ArrowDown } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import StatusPill from '@/components/Production/StatusPill';
 import { useRole, StaffLockBanner } from '@/components/Production/RoleContext';
-import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+import { useProductionSite } from '@/components/Production/ProductionSiteContext';
 import {
   PRET_CARRY_OVER,
   getRecipe,
@@ -18,10 +19,9 @@ export default function CarryOverPage() {
   const { can } = useRole();
   const canAdjust = can('carry-over.adjust');
   const canConfirm = can('carry-over.confirm');
-  // Persona drives the site — site picker UI was removed so the page
-  // always shows the active persona's carry-over.
-  const { isSpoke } = useActiveSite();
-  const siteId = isSpoke ? 'site-spoke-south' : 'hub-central';
+  // Site comes from the shared ProductionSiteContext — picker lives in
+  // the production layout above the nav.
+  const { siteId } = useProductionSite();
   // Local ephemeral adjustments (carriedUnits overrides + status changes)
   const [overrides, setOverrides] = useState<
     Record<string, { carriedUnits?: number; status?: DisplayStatus }>
@@ -97,7 +97,7 @@ export default function CarryOverPage() {
               alignItems: 'flex-start',
             }}
           >
-            <Sparkles size={20} color="var(--color-info)" style={{ flexShrink: 0, marginTop: 2 }} />
+            <EdifyMark size={20} color="var(--color-info)" style={{ flexShrink: 0, marginTop: 2 }} />
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
               <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Quinn's carry-over draft</h2>
               <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>

@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Sparkles,
   ArrowRight,
   ChevronDown,
   ChevronRight,
@@ -21,6 +22,7 @@ import {
   Truck,
   Package,
 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import Link from 'next/link';
 import StatusPill from './StatusPill';
 import { getStepperButtonStyle } from './QtyStepper';
@@ -224,12 +226,18 @@ export default function AmountsView({
   }, [filtered]);
 
   const totals = useMemo(() => {
-    let shortfalls = 0;
+    const shortfallLines: PlanLine[] = [];
     for (const l of lines) {
-      if (l.assemblyDemand.totalUnits > l.planned) shortfalls += 1;
+      if (l.assemblyDemand.totalUnits > l.planned) shortfallLines.push(l);
     }
-    return { shortfalls };
+    return { shortfalls: shortfallLines.length, shortfallLines };
   }, [lines]);
+
+  // Shortfalls modal — opened from the header chip. Each row drills into
+  // a component recipe whose downstream assembly demand outstrips the
+  // current plan, with a per-source breakdown so the manager can see
+  // exactly which assemblies are creating the deficit.
+  const [shortfallsOpen, setShortfallsOpen] = useState(false);
 
   function bump(line: PlanLine, delta: number) {
     const step = line.recipe.batchRules?.multipleOf ?? 1;
@@ -284,6 +292,7 @@ export default function AmountsView({
   const showFocusPanel = !!focusedLine && !!focusReason;
 
   return (
+    <>
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       {banner}
       {showFocusPanel && (
@@ -358,7 +367,10 @@ export default function AmountsView({
         </div>
         <div style={{ flex: 1 }} />
         {totals.shortfalls > 0 && (
-          <span
+          <button
+            type="button"
+            onClick={() => setShortfallsOpen(true)}
+            title="See which components are short and which assemblies need them"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -370,11 +382,14 @@ export default function AmountsView({
               background: 'var(--color-error-light)',
               color: 'var(--color-error)',
               border: '1px solid var(--color-error-border)',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-primary)',
             }}
           >
             <AlertTriangle size={12} /> {totals.shortfalls} component shortfall
             {totals.shortfalls === 1 ? '' : 's'}
-          </span>
+            <ChevronRight size={11} style={{ marginLeft: 2, opacity: 0.7 }} />
+          </button>
         )}
         {dateOverrideCount > 0 && editable && (
           <button
@@ -632,6 +647,20 @@ export default function AmountsView({
         </div>
       </div>
     </div>
+    <AnimatePresence>
+      {shortfallsOpen && (
+        <ShortfallsModal
+          key="shortfalls-modal"
+          lines={totals.shortfallLines}
+          onClose={() => setShortfallsOpen(false)}
+          onOpenRow={id => {
+            setShortfallsOpen(false);
+            openRowInTable(id);
+          }}
+        />
+      )}
+    </AnimatePresence>
+    </>
   );
 }
 
@@ -921,7 +950,7 @@ function AmountRow({
             style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
             title={segmentEditable ? `${perDropQuinn} per drop · ${quinnProposed}/day` : undefined}
           >
-            <Sparkles size={11} color="var(--color-text-muted)" />
+            <EdifyMark size={11} color="var(--color-text-muted)" />
             {segmentEditable ? perDropQuinn : quinnProposed}
           </div>
           {stockCap && stockCap.cap < quinnProposed && (
@@ -1486,7 +1515,7 @@ function AmountRow({
                     color: 'var(--color-text-primary)',
                   }}
                 >
-                  <Sparkles size={11} color="var(--color-text-muted)" />
+                  <EdifyMark size={11} color="var(--color-text-muted)" />
                   <span>Quinn proposes</span>
                   <span style={{ marginLeft: 'auto' }}>{quinnProposed}</span>
                 </div>
@@ -1808,7 +1837,7 @@ function DispatchLedgerRow({
       </span>
       {sub && (
         <span style={{ fontSize: 10, color: 'var(--color-text-muted)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-          {quinn && <Sparkles size={9} color="var(--color-text-muted)" />}
+          {quinn && <EdifyMark size={9} color="var(--color-text-muted)" />}
           {sub}
         </span>
       )}
@@ -2247,4 +2276,337 @@ function miniStepBtn(disabled: boolean): React.CSSProperties {
 
 function stepBtn(disabled: boolean): React.CSSProperties {
   return getStepperButtonStyle('emphasized', disabled);
+}
+
+// ─── Shortfalls modal ────────────────────────────────────────────────────────
+// Opened from the header chip when one or more component recipes have
+// downstream assembly demand exceeding the current plan. For each shortfall
+// row we surface: the gap, every parent assembly creating the demand, and
+// a CTA to drop into the row's editor with a pulse highlight.
+function ShortfallsModal({
+  lines,
+  onClose,
+  onOpenRow,
+}: {
+  lines: PlanLine[];
+  onClose: () => void;
+  onOpenRow: (itemId: string) => void;
+}) {
+  if (typeof window === 'undefined') return null;
+
+  return createPortal(
+    <>
+      <motion.div
+        key="shortfalls-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.15 }}
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(12, 20, 44, 0.55)',
+          zIndex: 1300,
+        }}
+      />
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 1301,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16,
+          pointerEvents: 'none',
+        }}
+      >
+        <motion.div
+          key="shortfalls-card"
+          role="dialog"
+          aria-label="Component shortfalls"
+          initial={{ y: 16, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 16, opacity: 0 }}
+          transition={{ type: 'spring', damping: 24, stiffness: 300 }}
+          style={{
+            width: 'min(720px, 100%)',
+            maxHeight: 'calc(100vh - 32px)',
+            overflow: 'hidden',
+            borderRadius: 'var(--radius-card)',
+            background: '#ffffff',
+            boxShadow: '0 24px 64px rgba(12,20,44,0.32)',
+            fontFamily: 'var(--font-primary)',
+            display: 'flex',
+            flexDirection: 'column',
+            pointerEvents: 'auto',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '14px 16px',
+              borderBottom: '1px solid var(--color-border-subtle)',
+              flexShrink: 0,
+            }}
+          >
+            <div
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 8,
+                background: 'var(--color-error-light)',
+                color: 'var(--color-error)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <AlertTriangle size={15} />
+            </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>
+                {lines.length} component shortfall{lines.length === 1 ? '' : 's'}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                Assemblies need more of these components than the current plan covers.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 6,
+                border: '1px solid var(--color-border)',
+                background: '#ffffff',
+                color: 'var(--color-text-secondary)',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <X size={14} />
+            </button>
+          </div>
+
+          <div
+            style={{
+              padding: 14,
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+            }}
+          >
+            {lines.length === 0 ? (
+              <div
+                style={{
+                  padding: 16,
+                  borderRadius: 10,
+                  background: 'var(--color-success-light)',
+                  border: '1px solid var(--color-success-border)',
+                  color: 'var(--color-success)',
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                All components covered.
+              </div>
+            ) : (
+              lines.map(line => (
+                <ShortfallRow
+                  key={line.item.id}
+                  line={line}
+                  onOpenRow={() => onOpenRow(line.item.id)}
+                />
+              ))
+            )}
+          </div>
+        </motion.div>
+      </div>
+    </>,
+    document.body,
+  );
+}
+
+function ShortfallRow({
+  line,
+  onOpenRow,
+}: {
+  line: PlanLine;
+  onOpenRow: () => void;
+}) {
+  const need = line.assemblyDemand.totalUnits;
+  const planned = line.planned;
+  const shortBy = Math.max(0, need - planned);
+  const sources = line.assemblyDemand.sources;
+
+  return (
+    <div
+      style={{
+        border: '1px solid var(--color-error-border)',
+        borderRadius: 10,
+        background: '#ffffff',
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          padding: '10px 12px',
+          background: 'var(--color-error-light)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+            {line.recipe.name}
+          </span>
+          <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)', fontWeight: 600 }}>
+            {line.recipe.category}
+            {line.primaryBench ? ` · ${line.primaryBench.name}` : ''}
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Metric label="Plan" value={planned} />
+          <Metric label="Need" value={need} tone="error" />
+          <Metric label="Short" value={shortBy} tone="error" emphasis />
+        </div>
+        <button
+          type="button"
+          onClick={onOpenRow}
+          style={{
+            padding: '7px 12px',
+            borderRadius: 8,
+            border: '1px solid var(--color-accent-active)',
+            background: 'var(--color-accent-active)',
+            color: 'var(--color-text-on-active)',
+            fontFamily: 'var(--font-primary)',
+            fontSize: 11,
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          Open row <ArrowRight size={12} />
+        </button>
+      </div>
+
+      <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span
+          style={{
+            fontSize: 9.5,
+            fontWeight: 700,
+            color: 'var(--color-text-muted)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+          }}
+        >
+          Demand from
+        </span>
+        {sources.length === 0 ? (
+          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+            No active assembly sources.
+          </span>
+        ) : (
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {sources.map((s, i) => {
+              const parentRecipe = getRecipe(s.parentRecipeId);
+              const parentName = parentRecipe?.name ?? s.parentRecipeId;
+              return (
+                <li
+                  key={`${s.parentItem.id}-${i}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '6px 8px',
+                    borderRadius: 6,
+                    background: 'var(--color-bg-subtle, #f7f8fb)',
+                    fontSize: 11,
+                    color: 'var(--color-text-primary)',
+                  }}
+                >
+                  <Layers size={11} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+                  <span style={{ flex: 1, minWidth: 0, fontWeight: 600 }}>
+                    {parentName}
+                  </span>
+                  <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>
+                    plan {s.parentPlannedQty} × {s.quantityPerUnit}
+                    {s.unit ? ` ${s.unit}` : ''}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      color: 'var(--color-error)',
+                      minWidth: 56,
+                      textAlign: 'right',
+                    }}
+                  >
+                    +{s.contributedUnits}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Metric({
+  label,
+  value,
+  tone = 'neutral',
+  emphasis = false,
+}: {
+  label: string;
+  value: number;
+  tone?: 'neutral' | 'error';
+  emphasis?: boolean;
+}) {
+  const color =
+    tone === 'error'
+      ? 'var(--color-error)'
+      : 'var(--color-text-primary)';
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        flexDirection: 'column',
+        alignItems: 'flex-end',
+        padding: '4px 8px',
+        borderRadius: 6,
+        background: emphasis ? 'rgba(220,38,38,0.12)' : 'transparent',
+        minWidth: 46,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 8.5,
+          fontWeight: 700,
+          color: 'var(--color-text-muted)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+        }}
+      >
+        {label}
+      </span>
+      <span style={{ fontSize: 14, fontWeight: 800, color, lineHeight: 1.1 }}>{value}</span>
+    </div>
+  );
 }

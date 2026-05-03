@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Truck, X, Sparkles, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Truck, X, AlertTriangle, ChevronRight } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import {
   dayOfWeek,
   getRecipe,
@@ -216,7 +217,7 @@ export default function DispatchConfirmSheet({
                   color: 'var(--color-warning)',
                 }}
               >
-                <Sparkles size={11} /> {quinnLineCount} on Quinn proposal
+                <EdifyMark size={11} /> {quinnLineCount} on Quinn proposal
               </span>
             )}
           </div>
@@ -304,7 +305,7 @@ export default function DispatchConfirmSheet({
                         color: 'var(--color-warning)',
                       }}
                     >
-                      <Sparkles size={10} /> {quinnCount}
+                      <EdifyMark size={10} /> {quinnCount}
                     </span>
                   )}
                   <span
@@ -505,7 +506,7 @@ function ManifestLineRow({ line }: { line: DispatchTransferLine }) {
               fontWeight: 700,
             }}
           >
-            <Sparkles size={9} /> Quinn
+            <EdifyMark size={9} /> Quinn
           </span>
         )}
       </div>

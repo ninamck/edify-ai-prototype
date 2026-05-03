@@ -12,6 +12,7 @@ import {
   DEMO_TODAY,
   dayOfWeek,
 } from '@/components/Production/fixtures';
+import { useProductionSite } from '@/components/Production/ProductionSiteContext';
 
 type PlanView = 'overview' | 'detailed';
 
@@ -36,7 +37,7 @@ const DAY_STRIP_RANGE = [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 export default function ProductionPlanPage() {
   const { can } = useRole();
   const canEdit = can('plan.editQuantity');
-  const [siteId, setSiteId] = useState('hub-central');
+  const { siteId } = useProductionSite();
   const [selectedDate, setSelectedDate] = useState(DEMO_TODAY);
   const [view, setView] = useState<PlanView>('detailed');
   const site = getSite(siteId) ?? PRET_SITES[0];
@@ -47,49 +48,19 @@ export default function ProductionPlanPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {/* Header: site selector + view toggle */}
+      {/* Header: view toggle (site picker lives in the layout) */}
       <div
         style={{
-          padding: '10px 16px',
+          padding: '8px 16px',
           display: 'flex',
           alignItems: 'center',
           gap: 12,
           borderBottom: '1px solid var(--color-border-subtle)',
           background: '#ffffff',
           flexWrap: 'wrap',
+          justifyContent: 'flex-end',
         }}
       >
-        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Site
-        </span>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {PRET_SITES.map(s => {
-            const active = s.id === siteId;
-            return (
-              <button
-                key={s.id}
-                onClick={() => setSiteId(s.id)}
-                style={{
-                  padding: '6px 10px',
-                  borderRadius: 8,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  fontFamily: 'var(--font-primary)',
-                  background: active ? 'var(--color-accent-active)' : '#ffffff',
-                  color: active ? 'var(--color-text-on-active)' : 'var(--color-text-secondary)',
-                  border: `1px solid ${active ? 'var(--color-accent-active)' : 'var(--color-border)'}`,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {s.name} · {s.type}
-              </button>
-            );
-          })}
-        </div>
-
-        <div style={{ flex: 1 }} />
-
         <div
           role="tablist"
           aria-label="Plan view"

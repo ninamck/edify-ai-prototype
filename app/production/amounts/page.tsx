@@ -12,21 +12,13 @@ import UrgentRemakeBanner from '@/components/Production/UrgentRemakeBanner';
 import SpokeTodayPanel from '@/components/Production/SpokeTodayPanel';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import { useDemoNotifications } from '@/components/Production/demoNotificationsStore';
+import { useProductionSite } from '@/components/Production/ProductionSiteContext';
 
 // The active "persona" SPOKE in the demo maps to this fixture spoke.
 // Keeping the mapping in one place so the spoke surfaces all read from
 // the same data row.
 const SPOKE_PERSONA_SITE_ID = 'site-spoke-south';
 const SPOKE_PERSONA_HUB_ID = 'hub-central';
-
-// The site picker on the hub Today screen mirrors the persona setup —
-// only the user's own hub and the spoke persona's site. Other fixture
-// sites stay in the data graph (forecasts, dispatch demand, etc.) but
-// don't clutter the demo's picker.
-const PERSONA_SITE_OPTIONS: Array<{ id: string; label: string; tag: string }> = [
-  { id: 'hub-central',      label: 'Fitzroy Espresso',     tag: 'YOUR SITE' },
-  { id: 'site-spoke-south', label: "Fitzroy King's Cross", tag: 'SPOKE' },
-];
 
 const VALID_REASONS: FocusReason[] = ['stockcap', 'assembly-short', 'override', 'draft-forecast'];
 
@@ -54,8 +46,7 @@ export default function TodayPage() {
   const searchParams = useSearchParams();
   const { isSpoke } = useActiveSite();
   const demoFlags = useDemoNotifications();
-
-  const [siteId, setSiteId] = useState('hub-central');
+  const { siteId, setSiteId } = useProductionSite();
   const site = getSite(siteId);
   const isHub = site?.type === 'HUB';
   const recordedBy = user?.name ?? 'Hub manager';
@@ -100,61 +91,21 @@ export default function TodayPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* Page caption — site picker lives in the layout (shared across
+          every production sub-page); we just show the date context. */}
       <div
         style={{
-          padding: '12px 16px',
+          padding: '8px 16px',
           borderBottom: '1px solid var(--color-border-subtle)',
           background: '#ffffff',
           display: 'flex',
           alignItems: 'center',
           gap: 12,
           flexWrap: 'wrap',
+          justifyContent: 'flex-end',
         }}
       >
-        <label
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            fontSize: 10,
-            color: 'var(--color-text-muted)',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}
-        >
-          Site
-        </label>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {/* Picker is scoped to the two demo personas so the hub manager
-              switches between their own site and the spoke persona's
-              site (`site-spoke-south`) — same row the spoke writes to,
-              so any edit on Fitzroy King's Cross shows up here too. */}
-          {PERSONA_SITE_OPTIONS.map(opt => {
-            const active = opt.id === siteId;
-            return (
-              <button
-                key={opt.id}
-                onClick={() => setSiteId(opt.id)}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  fontFamily: 'var(--font-primary)',
-                  background: active ? 'var(--color-accent-active)' : '#ffffff',
-                  color: active ? 'var(--color-text-on-active)' : 'var(--color-text-secondary)',
-                  border: `1px solid ${active ? 'var(--color-accent-active)' : 'var(--color-border)'}`,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {opt.label} · {opt.tag}
-              </button>
-            );
-          })}
-        </div>
-        <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
           Planning {DEMO_TODAY} ({dayOfWeek(DEMO_TODAY)})
         </span>
       </div>

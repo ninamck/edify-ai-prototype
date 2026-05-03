@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Minus, Plus, Sparkles } from 'lucide-react';
+import { X, Minus, Plus } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import StatusPill from './StatusPill';
 import { SelectionTagChip, AvailabilityWindows } from './RangeTierChips';
 import {
@@ -316,7 +317,7 @@ function QuinnProvenance({ quinnProposed, overridden }: { quinnProposed: boolean
         gap: 10,
       }}
     >
-      <Sparkles size={16} color={overridden ? 'var(--color-warning)' : 'var(--color-info)'} style={{ flexShrink: 0, marginTop: 1 }} />
+      <EdifyMark size={16} color={overridden ? 'var(--color-warning)' : 'var(--color-info)'} style={{ flexShrink: 0, marginTop: 1 }} />
       <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-primary)', lineHeight: 1.5 }}>
         {overridden
           ? 'This cadence was overridden at the hub. Quinn is no longer maintaining it against forecast.'

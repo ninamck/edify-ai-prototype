@@ -16,6 +16,7 @@ import {
   benchesAt,
 } from '@/components/Production/fixtures';
 import { usePlan } from '@/components/Production/PlanStore';
+import { useProductionSite } from '@/components/Production/ProductionSiteContext';
 import { downloadAllIngredientsPdf } from '@/lib/pdf/productionPdfs';
 
 type ModeTabId = 'all' | ProductionMode;
@@ -28,7 +29,7 @@ const MODE_TABS: Array<{ id: ModeTabId; label: string }> = [
 ];
 
 export default function ProductionBoardPage() {
-  const [siteId] = useState('hub-central');
+  const { siteId } = useProductionSite();
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [selectedCadenceId, setSelectedCadenceId] = useState<string | null>(null);
   const [selectedBenchId, setSelectedBenchId] = useState<string | null>(null);
