@@ -7,13 +7,12 @@ import {
   ChevronUp,
   CheckCircle2,
   Lock,
-  Minus,
-  Plus,
   Tag,
   Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
 import StatusPill from './StatusPill';
+import QtyStepper from './QtyStepper';
 import { useRole } from './RoleContext';
 import { wasteLogUrlForBatch } from './wasteRouting';
 import { defaultOperatorForSite, operatorsForSite } from './pcrFixtures';
@@ -401,26 +400,14 @@ function Stepper({
   min?: number;
 }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        background: disabled ? 'var(--color-bg-hover)' : '#ffffff',
-        border: '1px solid var(--color-border)',
-        borderRadius: 8,
-        padding: '4px 6px',
-        height: 38,
-      }}
+    <QtyStepper
+      size="default"
+      disabled={disabled}
+      canDecrement={value > min}
+      onDecrement={() => onChange(Math.max(min, value - 1))}
+      onIncrement={() => onChange(value + 1)}
+      style={{ display: 'flex', height: 38 }}
     >
-      <button
-        type="button"
-        onClick={() => onChange(Math.max(min, value - 1))}
-        disabled={disabled || value <= min}
-        style={stepBtn(disabled || value <= min)}
-        aria-label="Decrease"
-      >
-        <Minus size={14} />
-      </button>
       <input
         type="number"
         value={value}
@@ -444,16 +431,7 @@ function Stepper({
           MozAppearance: 'textfield',
         }}
       />
-      <button
-        type="button"
-        onClick={() => onChange(value + 1)}
-        disabled={disabled}
-        style={stepBtn(!!disabled)}
-        aria-label="Increase"
-      >
-        <Plus size={14} />
-      </button>
-    </div>
+    </QtyStepper>
   );
 }
 
@@ -607,23 +585,6 @@ function cardShell(dense: boolean): React.CSSProperties {
     background: '#ffffff',
     fontFamily: 'var(--font-primary)',
     boxShadow: dense ? 'none' : '0 1px 2px rgba(12,20,44,0.04)',
-  };
-}
-
-function stepBtn(disabled: boolean): React.CSSProperties {
-  return {
-    width: 28,
-    height: 28,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 5,
-    background: disabled ? 'transparent' : '#ffffff',
-    border: '1px solid var(--color-border-subtle)',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    color: disabled ? 'var(--color-text-muted)' : 'var(--color-text-primary)',
-    opacity: disabled ? 0.5 : 1,
-    flexShrink: 0,
   };
 }
 

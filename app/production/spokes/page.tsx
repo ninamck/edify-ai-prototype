@@ -8,17 +8,19 @@ import {
   AlertCircle,
   CheckCircle2,
   Lock,
+  Unlock,
   FastForward,
   Search,
   X,
   ChevronDown,
   ChevronRight,
   RotateCcw,
-  Plus,
-  Minus,
 } from 'lucide-react';
 import StatusPill from '@/components/Production/StatusPill';
+import QtyStepper from '@/components/Production/QtyStepper';
 import { useRole, StaffLockBanner } from '@/components/Production/RoleContext';
+import SpokeRejectsCard from '@/components/Production/SpokeRejectsCard';
+import { useHubUnlocks } from '@/components/Production/hubUnlockStore';
 import {
   PRET_SITES,
   getSite,
@@ -35,6 +37,17 @@ import {
   type ProductionRecipe,
 } from '@/components/Production/fixtures';
 import { Link2 } from 'lucide-react';
+import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+
+// When the demo's active persona is a SPOKE, this page locks onto the
+// matching fixture site and presents the persona names in the header
+// (top-bar says "Fitzroy King's Cross" / "Fitzroy Espresso", so the
+// page should too — even though the underlying fixtures are still
+// keyed by `site-spoke-south` / `hub-central`).
+const SPOKE_PERSONA_SITE_ID: SiteId = 'site-spoke-south';
+const SPOKE_PERSONA_HUB_ID: SiteId = 'hub-central';
+const SPOKE_PERSONA_SITE_NAME = "Fitzroy King's Cross";
+const SPOKE_PERSONA_HUB_NAME = 'Fitzroy Espresso';
 
 type DisplayStatus = SpokeSubmission['status'] | 'derived';
 
@@ -53,18 +66,39 @@ type DayState = {
 const DAY_RANGE = [-1, 0, 1, 2, 3, 4, 5];
 
 export default function SpokeSubmissionsPage() {
-  const { can } = useRole();
+  const { can, user } = useRole();
   const canAdjust = can('spoke.adjust');
   const canSubmit = can('spoke.submit');
+  const recordedBy = user?.name ?? 'Spoke manager';
+
+  const { isSpoke } = useActiveSite();
 
   // Hub-linked receivers: regular spokes + dark-kitchen standalones (PAC139)
   // + hybrids. The page is now a generic "site → hub" order editor, not just
   // for SPOKE-typed sites.
   const spokes = useMemo(() => PRET_SITES.filter(isHubLinked), []);
-  const [spokeId, setSpokeId] = useState<SiteId>(spokes[0]?.id ?? 'site-spoke-south');
+  // Spoke persona: lock to the persona's fixture site so the page opens
+  // already viewing the spoke the manager is "logged in" as.
+  const initialSpokeId: SiteId = isSpoke
+    ? SPOKE_PERSONA_SITE_ID
+    : (spokes[0]?.id ?? 'site-spoke-south');
+  const [spokeId, setSpokeIdState] = useState<SiteId>(initialSpokeId);
+  // When the persona toggles, snap the page to the right fixture site.
+  useEffect(() => {
+    if (isSpoke) setSpokeIdState(SPOKE_PERSONA_SITE_ID);
+  }, [isSpoke]);
+  // Spokes never see the picker, so this is hub-only.
+  const setSpokeId = setSpokeIdState;
   const spoke = getSite(spokeId);
   const hubId = spoke?.hubId ?? 'hub-central';
   const hub = getSite(hubId);
+
+  // Display names — when SPOKE persona is active, swap in the persona
+  // names so the surface matches the top-bar / sidebar branding.
+  const spokeDisplayName =
+    isSpoke && spokeId === SPOKE_PERSONA_SITE_ID ? SPOKE_PERSONA_SITE_NAME : (spoke?.name ?? 'Spoke');
+  const hubDisplayName =
+    isSpoke && hubId === SPOKE_PERSONA_HUB_ID ? SPOKE_PERSONA_HUB_NAME : (hub?.name ?? 'Hub');
   const hubSettings = hubSettingsFor(hubId);
   const cutoffPolicy = hubSettings?.spokeCutoffPolicy ?? 'lock';
 
@@ -138,17 +172,39 @@ export default function SpokeSubmissionsPage() {
   }, [dayState, key]);
 
   const status: DisplayStatus = dayState?.status ?? order.status;
-  const locked = status === 'submitted' || status === 'acknowledged' || status === 'auto-finalised';
-  const autoFinalised = status === 'auto-finalised';
+
+  // PAC-unlock — when the hub manager has reopened this order past
+  // cutoff, we treat it as editable again (regardless of the underlying
+  // status) and surface the unlock context to the manager so they know
+  // why the steppers came alive.
+  const { isActive: isUnlockActive, get: getUnlock, markConsumed: markUnlockConsumed } =
+    useHubUnlocks();
+  const isUnlocked = isUnlockActive(hubId, spokeId, date);
+  const unlockRecord = getUnlock(hubId, spokeId, date);
+  /** Per-SKU floor for the additive stepper (only set when unlocked). */
+  const unlockBaseline: Record<SkuId, number> | null = isUnlocked
+    ? unlockRecord?.baselineBySku ?? null
+    : null;
+
+  const baseLocked =
+    status === 'submitted' || status === 'acknowledged' || status === 'auto-finalised';
+  const locked = baseLocked && !isUnlocked;
+  const autoFinalised = status === 'auto-finalised' && !isUnlocked;
 
   function setLineUnits(sku: SkuId, units: number) {
+    // Additive-only floor: when the hub has unlocked this order past
+    // cutoff, the spoke can only ADD on top of the locked baseline (per
+    // the PAC-unlock semantic in PRODUCTION_BRIEF). Reducing committed
+    // units would silently shrink the hub's plan, which the brief
+    // explicitly disallows.
+    const floor = unlockBaseline?.[sku] ?? 0;
     setDayStates(prev => {
       const cur = prev[key] ?? { lines: {}, status: order.status };
       return {
         ...prev,
         [key]: {
           ...cur,
-          lines: { ...cur.lines, [sku]: Math.max(0, units) },
+          lines: { ...cur.lines, [sku]: Math.max(floor, units) },
           // Touching anything promotes a derived state to a real draft.
           status: cur.status === 'derived' ? 'draft' : cur.status,
         },
@@ -172,6 +228,10 @@ export default function SpokeSubmissionsPage() {
   }
 
   function submitDay() {
+    // If we're closing out an unlock window, mark the unlock consumed
+    // so the audit trail reflects the resubmit and the hub matrix can
+    // re-show the Send affordance against the new totals.
+    if (isUnlocked) markUnlockConsumed(hubId, spokeId, date);
     setDayStates(prev => ({ ...prev, [key]: { ...prev[key], status: 'submitted' } }));
   }
 
@@ -226,7 +286,11 @@ export default function SpokeSubmissionsPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Header — spoke selector + ordering-from caption */}
+      {/* Header — spoke selector + ordering-from caption.
+          Hidden entirely for the spoke persona: they only ever view
+          their own site and the top-bar already shows who they are,
+          so this row is pure noise on the spoke side. */}
+      {!isSpoke && (
       <div
         style={{
           padding: '12px 16px',
@@ -294,12 +358,13 @@ export default function SpokeSubmissionsPage() {
         </div>
         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-muted)' }}>
           {spoke?.type === 'STANDALONE' && spoke?.linkType === 'linked' ? (
-            <>Linked standalone — ordering from <strong style={{ color: 'var(--color-text-secondary)' }}>{hub?.name}</strong></>
+            <>Linked standalone — ordering from <strong style={{ color: 'var(--color-text-secondary)' }}>{hubDisplayName}</strong></>
           ) : (
-            <>Ordering from <strong style={{ color: 'var(--color-text-secondary)' }}>{hub?.name}</strong></>
+            <>Ordering from <strong style={{ color: 'var(--color-text-secondary)' }}>{hubDisplayName}</strong></>
           )}
         </span>
       </div>
+      )}
 
       {/* Day strip — one tile per day, status badge + total order units */}
       <DayStrip
@@ -314,6 +379,14 @@ export default function SpokeSubmissionsPage() {
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '14px 16px 32px' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* PAC140 — log rejects against the most-recent received drop. The
+              card is a no-op when this site hasn't received a hub dispatch yet. */}
+          <div style={{ margin: '0 -16px' }}>
+            <SpokeRejectsCard spokeId={spokeId} hubId={hubId} recordedBy={recordedBy} />
+          </div>
+          {/* Ad-hoc request trigger now lives in the production sub-tab nav
+              (see app/production/layout.tsx) so it stays one click away
+              without taking page real estate. */}
           <StaffLockBanner reason="Spoke orders are confirmed by the Manager before cutoff." />
 
           {/* Day header — day caption + cutoff marker + submit action all
@@ -346,7 +419,7 @@ export default function SpokeSubmissionsPage() {
                   letterSpacing: '0.05em',
                 }}
               >
-                {spoke?.name} → {hub?.name}
+                {spokeDisplayName} → {hubDisplayName}
               </div>
               <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-text-primary)' }}>
                 Order for {dayOfWeek(date)} {date}
@@ -358,7 +431,7 @@ export default function SpokeSubmissionsPage() {
               </div>
               {(status === 'draft' || status === 'derived') && (
                 <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 2 }}>
-                  Submit before <strong>{formatCutoff(order.cutoffDateTime)}</strong> so {hub?.name} can plan.
+                  Submit before <strong>{formatCutoff(order.cutoffDateTime)}</strong> so {hubDisplayName} can plan.
                 </span>
               )}
             </div>
@@ -371,8 +444,38 @@ export default function SpokeSubmissionsPage() {
             />
 
             {/* Action area — varies by status. Submit/demo controls when
-                editable, soft confirmations otherwise. */}
-            {(status === 'draft' || status === 'derived') && (
+                editable, soft confirmations otherwise. The unlocked branch
+                takes precedence so the spoke always gets a clear way to
+                resubmit additions while the window is open. */}
+            {isUnlocked ? (
+              <button
+                type="button"
+                onClick={submitDay}
+                disabled={!canSubmit}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '10px 16px',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-primary)',
+                  background: !canSubmit ? 'var(--color-bg-hover)' : 'var(--color-success)',
+                  color: !canSubmit ? 'var(--color-text-muted)' : '#ffffff',
+                  border: `1px solid ${!canSubmit ? 'var(--color-border)' : 'var(--color-success)'}`,
+                  cursor: !canSubmit ? 'not-allowed' : 'pointer',
+                  minHeight: 38,
+                }}
+                title={
+                  canSubmit
+                    ? 'Submit your additions to the hub'
+                    : 'Only the spoke manager can submit'
+                }
+              >
+                <Send size={14} /> {canSubmit ? 'Submit additions' : 'Manager submits additions'}
+              </button>
+            ) : (status === 'draft' || status === 'derived') ? (
               <>
                 {!past && (
                   <button
@@ -407,22 +510,19 @@ export default function SpokeSubmissionsPage() {
                   <Send size={14} /> {canSubmit ? 'Submit to hub' : 'Manager submits'}
                 </button>
               </>
-            )}
-            {status === 'submitted' && (
+            ) : status === 'submitted' ? (
               <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Sending to hub…</span>
-            )}
-            {status === 'acknowledged' && (
+            ) : status === 'acknowledged' ? (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-primary)', fontWeight: 600 }}>
                 <CheckCircle2 size={16} color="var(--color-success)" />
                 Acknowledged · scheduled for {dayOfWeek(date)} dispatch
               </span>
-            )}
-            {status === 'auto-finalised' && (
+            ) : status === 'auto-finalised' ? (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)', fontWeight: 600 }}>
                 <Lock size={14} color="var(--color-text-secondary)" />
-                Locked at cutoff · {totalConfirmed} units on {hub?.name}&rsquo;s plan
+                Locked at cutoff · {totalConfirmed} units on {hubDisplayName}&rsquo;s plan
               </span>
-            )}
+            ) : null}
           </div>
 
           {/* Quinn intro (only on draft / derived) */}
@@ -452,7 +552,8 @@ export default function SpokeSubmissionsPage() {
             </div>
           )}
 
-          {/* Auto-finalised banner */}
+          {/* Auto-finalised banner — hidden when the hub has unlocked the
+              order, since the unlocked banner below supersedes it. */}
           {autoFinalised && (
             <div
               style={{
@@ -471,7 +572,7 @@ export default function SpokeSubmissionsPage() {
                   Auto-finalised at cutoff
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
-                  The {formatCutoff(order.cutoffDateTime)} cutoff passed before you submitted, so {hub?.name} is on
+                  The {formatCutoff(order.cutoffDateTime)} cutoff passed before you submitted, so {hubDisplayName} is on
                   the hook for Quinn&rsquo;s draft as-is ({totalConfirmed} units). The order is locked and
                   acknowledged on the hub side.
                 </div>
@@ -484,6 +585,38 @@ export default function SpokeSubmissionsPage() {
               >
                 Demo: rewind
               </button>
+            </div>
+          )}
+
+          {/* Hub-unlock banner — shown when the hub manager has reopened
+              this order past cutoff. Trumps any "locked" or "auto-finalised"
+              messaging because the spoke can now ADD to the order. */}
+          {isUnlocked && unlockRecord && (
+            <div
+              style={{
+                padding: '14px 16px',
+                borderRadius: 'var(--radius-card)',
+                border: '1px solid var(--color-success-border)',
+                background: 'var(--color-success-light)',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 12,
+              }}
+            >
+              <Unlock size={18} color="var(--color-success)" style={{ flexShrink: 0, marginTop: 1 }} />
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                  {hubDisplayName} reopened your order — add what you need
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+                  <strong>{unlockRecord.unlockedBy}</strong> unlocked at{' '}
+                  {new Date(unlockRecord.unlockedAtISO).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                  : &ldquo;{unlockRecord.reason}&rdquo;. Your locked baseline is{' '}
+                  <strong>{Object.values(unlockRecord.baselineBySku).reduce((a, b) => a + b, 0)} units</strong>{' '}
+                  — you can only <strong>increase</strong> from there. Resubmit when you&rsquo;re done so
+                  the hub can dispatch the new total.
+                </div>
+              </div>
             </div>
           )}
 
@@ -651,6 +784,7 @@ export default function SpokeSubmissionsPage() {
                       onResetLine={() => setLineUnits(row.skuId, row.quinnProposed)}
                       locked={locked}
                       canAdjust={canAdjust}
+                      floor={unlockBaseline?.[row.skuId] ?? 0}
                     />
                   ))}
                 </div>
@@ -883,6 +1017,7 @@ function SpokeOrderRow({
   onResetLine,
   locked,
   canAdjust,
+  floor = 0,
 }: {
   row: ReturnType<typeof spokeOrderForDate>['lines'][number];
   units: number;
@@ -893,6 +1028,12 @@ function SpokeOrderRow({
   onResetLine: () => void;
   locked: boolean;
   canAdjust: boolean;
+  /**
+   * Lower bound for the stepper. Used by the PAC-unlock flow to enforce
+   * "spoke can only ADD on top of the locked baseline" — when set > 0,
+   * the minus button refuses to dip below `floor`.
+   */
+  floor?: number;
 }) {
   const { recipe, forecast, carryOver, quinnProposed } = row;
   const carriedUnits = carryOver?.carriedUnits ?? 0;
@@ -981,20 +1122,18 @@ function SpokeOrderRow({
           style={{ display: 'flex', justifyContent: 'center' }}
           onClick={e => e.stopPropagation()}
         >
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '4px 6px',
-              borderRadius: 8,
-              background: 'var(--color-bg-hover)',
-              border: '1px solid var(--color-border-subtle)',
-            }}
+          <QtyStepper
+            size="default"
+            disabled={!editable}
+            canDecrement={editable && units > floor}
+            onDecrement={() => onBump(-1)}
+            onIncrement={() => onBump(1)}
+            decrementLabel={
+              floor > 0 && units <= floor
+                ? `Hub locked ${floor} units already — additions only while unlocked`
+                : 'Decrease'
+            }
           >
-            <button type="button" onClick={() => onBump(-1)} disabled={!editable || units === 0} style={stepBtn(!editable || units === 0)} aria-label="Decrease">
-              <Minus size={13} />
-            </button>
             <input
               type="number"
               value={units}
@@ -1015,10 +1154,7 @@ function SpokeOrderRow({
                 MozAppearance: 'textfield',
               }}
             />
-            <button type="button" onClick={() => onBump(1)} disabled={!editable} style={stepBtn(!editable)} aria-label="Increase">
-              <Plus size={13} />
-            </button>
-          </div>
+          </QtyStepper>
         </div>
 
         <div style={{ textAlign: 'right', fontSize: 14, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
@@ -1245,22 +1381,6 @@ function LedgerLine({ label, value }: { label: string; value: number }) {
 function formatCutoff(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-}
-
-function stepBtn(disabled = false): React.CSSProperties {
-  return {
-    width: 26,
-    height: 26,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 6,
-    background: '#ffffff',
-    border: '1px solid var(--color-border)',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    color: disabled ? 'var(--color-text-muted)' : 'var(--color-text-primary)',
-    opacity: disabled ? 0.5 : 1,
-  };
 }
 
 function demoBtn(variant: 'solid' | 'dashed' = 'solid'): React.CSSProperties {

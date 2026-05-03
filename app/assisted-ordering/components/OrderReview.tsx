@@ -135,9 +135,9 @@ function NewSupplierSection({
         style={{
           padding: '10px 14px',
           borderRadius: 'var(--radius-item) var(--radius-item) 0 0',
-          background: isNew ? 'rgba(146,64,14,0.06)' : 'var(--color-bg-hover)',
+          background: isNew ? 'rgba(234,88,12,0.06)' : 'var(--color-bg-hover)',
           border: isNew
-            ? '1px solid rgba(146,64,14,0.22)'
+            ? '1px solid rgba(234,88,12,0.22)'
             : '1px solid var(--color-border-subtle)',
           borderBottom: 'none',
           display: 'flex',
@@ -151,7 +151,7 @@ function NewSupplierSection({
             style={{
               fontSize: '13px',
               fontWeight: 700,
-              color: isNew ? '#92400E' : 'var(--color-text-primary)',
+              color: isNew ? 'var(--color-warning)' : 'var(--color-text-primary)',
               fontFamily: 'var(--font-primary)',
             }}
           >
@@ -162,8 +162,8 @@ function NewSupplierSection({
               style={{
                 padding: '2px 7px',
                 borderRadius: 'var(--radius-badge)',
-                background: 'rgba(146,64,14,0.12)',
-                color: '#92400E',
+                background: 'rgba(234,88,12,0.12)',
+                color: 'var(--color-warning)',
                 fontSize: '11px',
                 fontWeight: 700,
                 fontFamily: 'var(--font-primary)',
@@ -177,7 +177,7 @@ function NewSupplierSection({
             <span
               style={{
                 fontSize: '12px',
-                color: '#92400E',
+                color: 'var(--color-warning)',
                 fontFamily: 'var(--font-primary)',
                 marginLeft: '2px',
               }}
@@ -203,7 +203,7 @@ function NewSupplierSection({
       <div
         style={{
           border: isNew
-            ? '1px solid rgba(146,64,14,0.22)'
+            ? '1px solid rgba(234,88,12,0.22)'
             : '1px solid var(--color-border-subtle)',
           borderRadius: '0 0 var(--radius-item) var(--radius-item)',
           background: 'var(--color-bg-surface)',
@@ -325,9 +325,9 @@ function NewSupplierSection({
                       width: '100%',
                       padding: '10px 14px',
                       borderRadius: 'var(--radius-item)',
-                      border: '1.5px dashed rgba(146,64,14,0.35)',
-                      background: 'rgba(146,64,14,0.04)',
-                      color: '#92400E',
+                      border: '1.5px dashed rgba(234,88,12,0.35)',
+                      background: 'rgba(234,88,12,0.04)',
+                      color: 'var(--color-warning)',
                       fontSize: '13px',
                       fontWeight: 600,
                       fontFamily: 'var(--font-primary)',
@@ -340,13 +340,13 @@ function NewSupplierSection({
                     }}
                     onMouseEnter={(e) => {
                       const el = e.currentTarget as HTMLButtonElement;
-                      el.style.background = 'rgba(146,64,14,0.08)';
-                      el.style.borderColor = 'rgba(146,64,14,0.50)';
+                      el.style.background = 'rgba(234,88,12,0.08)';
+                      el.style.borderColor = 'rgba(234,88,12,0.50)';
                     }}
                     onMouseLeave={(e) => {
                       const el = e.currentTarget as HTMLButtonElement;
-                      el.style.background = 'rgba(146,64,14,0.04)';
-                      el.style.borderColor = 'rgba(146,64,14,0.35)';
+                      el.style.background = 'rgba(234,88,12,0.04)';
+                      el.style.borderColor = 'rgba(234,88,12,0.35)';
                     }}
                   >
                     <span style={{ fontSize: '15px', lineHeight: 1 }}>+</span>
@@ -356,15 +356,15 @@ function NewSupplierSection({
                   <div
                     style={{
                       borderRadius: 'var(--radius-item)',
-                      border: '1px solid rgba(146,64,14,0.22)',
-                      background: 'rgba(146,64,14,0.03)',
+                      border: '1px solid rgba(234,88,12,0.22)',
+                      background: 'rgba(234,88,12,0.03)',
                       overflow: 'hidden',
                     }}
                   >
                     <div
                       style={{
                         padding: '10px 12px',
-                        borderBottom: '1px solid rgba(146,64,14,0.15)',
+                        borderBottom: '1px solid rgba(234,88,12,0.15)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
@@ -374,7 +374,7 @@ function NewSupplierSection({
                         style={{
                           fontSize: '12px',
                           fontWeight: 700,
-                          color: '#92400E',
+                          color: 'var(--color-warning)',
                           fontFamily: 'var(--font-primary)',
                           letterSpacing: '0.03em',
                         }}
@@ -449,9 +449,9 @@ function NewSupplierSection({
                               style={{
                                 padding: '6px 14px',
                                 borderRadius: 'var(--radius-item)',
-                                border: '1px solid rgba(146,64,14,0.30)',
-                                background: 'rgba(146,64,14,0.08)',
-                                color: '#92400E',
+                                border: '1px solid rgba(234,88,12,0.30)',
+                                background: 'rgba(234,88,12,0.08)',
+                                color: 'var(--color-warning)',
                                 fontSize: '12px',
                                 fontWeight: 700,
                                 fontFamily: 'var(--font-primary)',
@@ -461,10 +461,10 @@ function NewSupplierSection({
                                 whiteSpace: 'nowrap',
                               }}
                               onMouseEnter={(e) => {
-                                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(146,64,14,0.15)';
+                                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(234,88,12,0.15)';
                               }}
                               onMouseLeave={(e) => {
-                                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(146,64,14,0.08)';
+                                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(234,88,12,0.08)';
                               }}
                             >
                               + Add · £{product.unitCost}

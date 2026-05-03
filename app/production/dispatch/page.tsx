@@ -11,6 +11,8 @@ import {
   DispatchTransferStoreProvider,
   useDispatchTransfers,
 } from '@/components/Production/dispatchStore';
+import { useSpokeRejects } from '@/components/Production/rejectsStore';
+import { useHubUnlocks } from '@/components/Production/hubUnlockStore';
 import {
   PRET_SITES,
   dayOffset,
@@ -22,8 +24,15 @@ import { useRole } from '@/components/Production/RoleContext';
 
 /**
  * Dispatch — hub-side aggregated view of what each spoke has ordered for
- * the next dispatch day. Pairs with the spoke-side `/production/spokes`
- * page where individual spoke managers confirm or edit Quinn's draft.
+ * the next dispatch day, plus the controls to SEND those drops. Pairs
+ * with the spoke-side `/production/spokes` page where individual spoke
+ * managers confirm or edit Quinn's draft.
+ *
+ * Scope: outbound only. Incoming-from-spokes triage (rejects, ad-hoc
+ * requests, urgent remakes) lives on the Today screen (/production/amounts)
+ * so the hub manager has one inbox. The matrix here still consumes the
+ * same stores so approved ad-hoc qty + unrolled rejects keep showing as
+ * cell augmentations — but the *triage* happens on Today.
  *
  * PAC137 — one-click bulk transfer. The matrix surfaces a "Send" action on
  * each spoke control card (and a "Send all submitted" action in the
@@ -47,6 +56,8 @@ function DispatchPageInner() {
   // Pending requests fed into the confirm sheet — `null` means closed.
   const [pendingRequests, setPendingRequests] = useState<SpokeDispatchRequest[] | null>(null);
   const { recordBulkTransfer } = useDispatchTransfers();
+  const { forHub: rejectsForHub, markRolled } = useSpokeRejects();
+  const { hasRecord: hubHasUnlockRecord, markClosed: markUnlockClosed } = useHubUnlocks();
   const { user } = useRole();
   const sentBy = user?.name ?? 'Hub manager';
 
@@ -73,6 +84,29 @@ function DispatchPageInner() {
       note,
     }));
     recordBulkTransfer(transfers);
+
+    // PAC142 — mark any prior unrolled rejects for these (hub, spoke)
+    // pairs as rolled now, so the matrix doesn't keep adding the same
+    // rejects to every future drop. We mark by spoke (any reject for
+    // that spoke + hub that hasn't been rolled) since the new transfer
+    // is the make-up shipment by definition.
+    const sentSpokeIds = new Set(transfers.map(t => t.spokeId));
+    for (const r of rejectsForHub(hubId)) {
+      if (!r.rolledIntoNext && sentSpokeIds.has(r.spokeId)) {
+        markRolled(r.id);
+      }
+    }
+
+    // PAC-unlock — close any open / consumed unlock records for the
+    // (hub, spoke, day) tuples we just dispatched. The audit chip on
+    // the matrix disappears once the loop is closed; the spoke-side
+    // banner clears too.
+    for (const t of transfers) {
+      if (hubHasUnlockRecord(t.hubId, t.spokeId, t.forDate)) {
+        markUnlockClosed(t.hubId, t.spokeId, t.forDate);
+      }
+    }
+
     setPendingRequests(null);
   }
 
@@ -145,6 +179,12 @@ function DispatchPageInner() {
         </span>
       </div>
 
+      {/* Dispatch is for SENDING only. Incoming-from-spokes triage
+          (rejects, ad-hoc requests, urgent remakes) lives on the Today
+          screen so the hub manager has a single inbox for things needing
+          their attention. The dispatch matrix below still reads from the
+          same stores, so approved ad-hoc + unrolled rejects still
+          augment the cells with their chips. */}
       <HubSpokeBreakdown
         hubId={hubId}
         forDate={forDate}

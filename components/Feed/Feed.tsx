@@ -647,7 +647,7 @@ function AllergenCard({ confirmed, onToggle, onConfirm }: { confirmed: Set<strin
                 padding: '6px 8px',
                 borderRadius: '6px',
                 border: 'none',
-                background: isSelected ? (isDetected ? 'rgba(146,64,14,0.07)' : 'rgba(34,68,68,0.05)') : 'transparent',
+                background: isSelected ? (isDetected ? 'rgba(234,88,12,0.07)' : 'rgba(34,68,68,0.05)') : 'transparent',
                 cursor: 'pointer',
                 fontFamily: 'var(--font-primary)',
                 textAlign: 'left',

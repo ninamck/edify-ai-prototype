@@ -196,9 +196,9 @@ const CATEGORY = {
   },
   'worth-knowing': {
     label: 'Worth knowing',
-    color: '#92400E',
-    bg: 'rgba(146,64,14,0.055)',
-    borderColor: 'rgba(146,64,14,0.22)',
+    color: 'var(--color-warning)',
+    bg: 'rgba(234,88,12,0.055)',
+    borderColor: 'rgba(234,88,12,0.22)',
     dot: '#F59E0B',
   },
 } as const;

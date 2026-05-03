@@ -1,4 +1,4 @@
-import type { ProductionBatch, RecipeId } from './fixtures';
+import type { ProductionBatch, RecipeId, SpokeRejectLine } from './fixtures';
 import { getProductionItem, getRecipe } from './fixtures';
 
 /**
@@ -29,6 +29,25 @@ export function wasteLogUrlForBatch(batch: ProductionBatch): string {
     qty: String(batch.actualQty),
     reason: 'damaged', // failed production → damaged in waste taxonomy
   });
+  return `/log-waste?${params.toString()}`;
+}
+
+/**
+ * Build a deep-link to /log-waste for a single spoke reject line (PAC141 —
+ * "captures recorded information of rejects under Hub waste"). Reuses the
+ * recipe → waste-product mapping above, with `damaged` as the default
+ * waste reason when the spoke didn't pick a specific one.
+ */
+export function wasteLogUrlForRejectLine(line: SpokeRejectLine, recordedAtISO?: string): string {
+  const recipe = getRecipe(line.recipeId);
+  const wasteProductId =
+    (recipe && RECIPE_TO_WASTE_PRODUCT[recipe.id]) ?? 'croissant-plain';
+  const params = new URLSearchParams({
+    itemId: wasteProductId,
+    qty: String(line.rejectedUnits),
+    reason: line.reason === 'damaged' ? 'damaged' : line.reason === 'short-life' ? 'expired' : 'damaged',
+  });
+  if (recordedAtISO) params.set('source', 'spoke-reject');
   return `/log-waste?${params.toString()}`;
 }
 

@@ -24,6 +24,7 @@ import type { AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useDashboardLayout } from '@/hooks/useDashboardLayout';
 import MobileShell from '@/components/MobileShell/MobileShell';
+import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 
 
 
@@ -33,6 +34,7 @@ const MOBILE_SHELL_BREAKPOINT = '(max-width: 500px)';
 export default function HomeShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { activeSite } = useActiveSite();
   const flowParam = searchParams?.get('flow');
   const autoStartFlow = flowParam === 'recipe' || flowParam === 'integrity' ? flowParam : undefined;
 
@@ -127,7 +129,7 @@ export default function HomeShell() {
         }}
       >
       <ShellTopBar
-        siteName="Fitzroy Espresso"
+        siteName={activeSite.name}
         shellView={shellView}
         onShellViewChange={setShellView}
         phaseOverride={phaseOverride}

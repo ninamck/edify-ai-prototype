@@ -6,7 +6,7 @@ import { MOCK_INSTANCES } from '../mockData';
 import type { ChecklistInstance, InstanceStatus, UserRole } from '../types';
 
 const STATUS_CONFIG: Record<InstanceStatus, { label: string; bg: string; text: string }> = {
-  pending: { label: 'Pending', bg: '#FFF7ED', text: '#C2410C' },
+  pending: { label: 'Pending', bg: '#FFF7ED', text: '#EA580C' },
   in_progress: { label: 'In progress', bg: '#EFF6FF', text: '#1D4ED8' },
   complete: { label: 'Complete', bg: '#F0FDF4', text: '#15803D' },
 };

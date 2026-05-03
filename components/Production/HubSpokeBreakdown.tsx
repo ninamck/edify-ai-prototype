@@ -31,6 +31,11 @@ import {
   type SpokeSubmissionLine,
 } from './fixtures';
 import { useDispatchTransfers, formatSentClock } from './dispatchStore';
+import { useSpokeRejects } from './rejectsStore';
+import { useAdhocRequests } from './adhocStore';
+import { useHubUnlocks } from './hubUnlockStore';
+import { useRole } from './RoleContext';
+import SpokeUnlockControl from './SpokeUnlockControl';
 
 /**
  * Manifest line built by the matrix for a single spoke — the unit of work
@@ -121,6 +126,8 @@ export default function HubSpokeBreakdown({
 }: Props) {
   const submissions = useMemo(() => submissionsForHub(hubId, forDate), [hubId, forDate]);
   const { transferFor, undoTransfer } = useDispatchTransfers();
+  const { user } = useRole();
+  const unlockedBy = user?.name ?? 'Hub manager';
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState<Set<SkuId>>(new Set());
 
@@ -483,6 +490,20 @@ export default function HubSpokeBreakdown({
                       />
                     )}
                   </div>
+                  {/* Unlock affordance — appears when cutoff has passed and the
+                      hub manager wants to reopen the spoke order for additions.
+                      Hidden otherwise so the row stays calm. */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <SpokeUnlockControl
+                      hubId={hubId}
+                      spokeId={sub.fromSiteId}
+                      forDate={forDate}
+                      submission={sub}
+                      cutoffPassed={new Date(sub.cutoffDateTime).getTime() < Date.now()}
+                      hasTransfer={!!transfer}
+                      unlockedBy={unlockedBy}
+                    />
+                  </div>
                 </div>
               );
             })}
@@ -740,7 +761,23 @@ function DispatchRecipeRow({
   onToggle: () => void;
 }) {
   const { transferFor } = useDispatchTransfers();
-  const hasOrders = row.rowTotal > 0;
+  const { unrolledUnitsFor } = useSpokeRejects();
+  const { approvedUnitsFor } = useAdhocRequests();
+  // PAC142 — the inflated row total includes any unrolled rejects so the
+  // header summary stays truthful ("3 spokes · 84 units" includes the +3
+  // croissants going back out for Clapham).
+  const rejectUnitsBySpoke = submissions.map(sub =>
+    unrolledUnitsFor(hubId, sub.fromSiteId, row.skuId),
+  );
+  // Approved ad-hoc requests for this (hub, spoke, sku, forDate) flow into
+  // the matrix the same way as reject roll-forwards, so the hub manager
+  // sees the augmented qty they actually need to send.
+  const adhocUnitsBySpoke = submissions.map(sub =>
+    approvedUnitsFor(hubId, sub.fromSiteId, row.skuId, forDate),
+  );
+  const totalRejects = rejectUnitsBySpoke.reduce((a, n) => a + n, 0);
+  const totalAdhoc = adhocUnitsBySpoke.reduce((a, n) => a + n, 0);
+  const hasOrders = row.rowTotal > 0 || totalRejects > 0 || totalAdhoc > 0;
 
   return (
     <>
@@ -826,41 +863,89 @@ function DispatchRecipeRow({
         {row.cells.map((c, i) => {
           const sub = submissions[i];
           const wasSent = !!transferFor(hubId, sub.fromSiteId, forDate);
-          const empty = c.value === null;
+          const rejects = rejectUnitsBySpoke[i];
+          const adhoc = adhocUnitsBySpoke[i];
+          const ordered = c.value ?? 0;
+          const empty = c.value === null && rejects === 0 && adhoc === 0;
+          // The displayed qty is the spoke's order + reject roll-forward
+          // + any approved ad-hoc top-ups for this date. Each augmentation
+          // gets its own chip so the hub sees where the units came from.
+          const displayValue = empty ? '—' : ordered + rejects + adhoc;
           return (
             <div
               key={sub.fromSiteId}
               style={{
-                textAlign: 'right',
-                fontSize: 13,
-                fontWeight: empty ? 400 : 700,
-                color: empty
-                  ? 'var(--color-text-muted)'
-                  : wasSent
-                    ? 'var(--color-text-muted)'
-                    : 'var(--color-text-primary)',
-                fontVariantNumeric: 'tabular-nums',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'flex-end',
-                gap: 4,
-                textDecoration: wasSent && !empty ? 'line-through' : 'none',
-                textDecorationColor: 'var(--color-text-muted)',
-                opacity: wasSent && !empty ? 0.7 : 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-end',
+                gap: 1,
               }}
-              title={
-                empty
-                  ? `${getSite(sub.fromSiteId)?.name ?? sub.fromSiteId} did not order this`
-                  : wasSent
-                    ? 'Already dispatched'
-                    : c.isQuinn
-                      ? 'Quinn-proposed (not yet confirmed by spoke)'
-                      : 'Confirmed by spoke'
-              }
             >
-              {empty ? '—' : c.value}
-              {c.isQuinn && !empty && !wasSent && (
-                <Sparkles size={10} color="var(--color-text-muted)" />
+              <div
+                style={{
+                  textAlign: 'right',
+                  fontSize: 13,
+                  fontWeight: empty ? 400 : 700,
+                  color: empty
+                    ? 'var(--color-text-muted)'
+                    : wasSent
+                      ? 'var(--color-text-muted)'
+                      : 'var(--color-text-primary)',
+                  fontVariantNumeric: 'tabular-nums',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  gap: 4,
+                  textDecoration: wasSent && !empty ? 'line-through' : 'none',
+                  textDecorationColor: 'var(--color-text-muted)',
+                  opacity: wasSent && !empty ? 0.7 : 1,
+                }}
+                title={
+                  empty
+                    ? `${getSite(sub.fromSiteId)?.name ?? sub.fromSiteId} did not order this`
+                    : wasSent
+                      ? 'Already dispatched'
+                      : tooltipFor(ordered, rejects, adhoc, c.isQuinn)
+                }
+              >
+                {displayValue}
+                {c.isQuinn && !empty && !wasSent && (
+                  <Sparkles size={10} color="var(--color-text-muted)" />
+                )}
+              </div>
+              {rejects > 0 && !wasSent && (
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color: 'var(--color-warning)',
+                    background: 'var(--color-warning-bg)',
+                    border: '1px solid var(--color-warning-border)',
+                    padding: '0 4px',
+                    borderRadius: 3,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                  title="Rejects from prior drop being made up"
+                >
+                  ↺ +{rejects} rejects
+                </span>
+              )}
+              {adhoc > 0 && !wasSent && (
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color: 'var(--color-info)',
+                    background: 'var(--color-info-light)',
+                    border: '1px solid var(--color-info)',
+                    padding: '0 4px',
+                    borderRadius: 3,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                  title="Approved ad-hoc top-up from spoke request"
+                >
+                  + {adhoc} ad-hoc
+                </span>
               )}
             </div>
           );
@@ -874,7 +959,7 @@ function DispatchRecipeRow({
             fontVariantNumeric: 'tabular-nums',
           }}
         >
-          {row.rowTotal || '—'}
+          {hasOrders ? row.rowTotal + totalRejects : '—'}
         </span>
       </div>
 
@@ -1233,4 +1318,15 @@ function StatusChip({ status }: { status: SpokeSubmission['status'] }) {
       {t.label}
     </span>
   );
+}
+
+/** Build a single-line tooltip explaining where each chunk of the cell qty came from. */
+function tooltipFor(ordered: number, rejects: number, adhoc: number, isQuinn: boolean): string {
+  const parts: string[] = [];
+  if (ordered > 0) parts.push(isQuinn ? `Quinn-proposed ${ordered}` : `Spoke ordered ${ordered}`);
+  if (rejects > 0) parts.push(`+${rejects} from rejects`);
+  if (adhoc > 0)   parts.push(`+${adhoc} approved ad-hoc`);
+  return parts.length === 0
+    ? (isQuinn ? 'Quinn-proposed (not yet confirmed by spoke)' : 'Confirmed by spoke')
+    : parts.join(' · ');
 }

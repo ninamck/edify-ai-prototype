@@ -15,10 +15,70 @@
 
 import {
   amountsForSiteOnDate,
+  carryOverFor,
+  demandBiasFor,
+  forecastFor,
+  getRecipe,
+  getSite,
+  productionItemsAt,
   type AmountsLine,
   type SiteId,
 } from './fixtures';
 import { hhmmToMinutes } from './time';
+
+/**
+ * Effective amount lines for the actuals synthesiser.
+ *
+ * Hubs / true standalones bake their own menu, so `amountsForSiteOnDate`
+ * is the right answer. SPOKE / HYBRID / linked-standalone sites are
+ * "receive-only" — they don't carry production items — but they still
+ * sell at counter, so for sales surfaces we need a row per recipe their
+ * hub sends them, with the spoke's own forecast.
+ *
+ * `forecastFor(spoke, sku, date)` already recurses into the hub forecast
+ * and scales it by the spoke's `salesFactor`, so the per-recipe forecast
+ * here is the spoke's projected counter sales for the day.
+ */
+function amountsForSalesActuals(siteId: SiteId, date: string): AmountsLine[] {
+  const site = getSite(siteId);
+  const isHubLinked =
+    !!site?.hubId &&
+    (site.type === 'SPOKE' ||
+      site.type === 'HYBRID' ||
+      (site.type === 'STANDALONE' && site.linkType === 'linked'));
+  if (!site || !isHubLinked) {
+    return amountsForSiteOnDate(siteId, date);
+  }
+
+  const hubId = site.hubId!;
+  const items = productionItemsAt(hubId);
+  const seen = new Set<string>();
+  const lines: AmountsLine[] = [];
+  for (const item of items) {
+    if (seen.has(item.skuId)) continue;
+    seen.add(item.skuId);
+    const recipe = getRecipe(item.recipeId);
+    if (!recipe) continue;
+    const forecast = forecastFor(siteId, item.skuId, date);
+    if (!forecast || forecast.projectedUnits <= 0) continue;
+    const carryOver = carryOverFor(siteId, item.skuId);
+    const carried = carryOver?.carriedUnits ?? 0;
+    const quinnProposed = Math.max(0, forecast.projectedUnits - carried);
+    lines.push({
+      item,
+      recipe,
+      forecast,
+      carryOver,
+      quinnProposed,
+      dispatchDemand: 0,
+      dispatchBySpoke: undefined,
+      stockCap: undefined,
+      primaryBench: undefined,
+      benches: [],
+    });
+  }
+  return lines;
+}
 
 export const KITCHEN_OPEN_HOUR = 6;
 export const KITCHEN_CLOSE_HOUR = 19;
@@ -64,6 +124,31 @@ function seededNoise(seed: string): number {
 }
 
 /**
+ * Day-level macro factor: a deterministic ±~12% swing per (site, date).
+ * Models the things SKU bias + per-hour wobble can't capture — footfall,
+ * weather, day-of-week traffic, school holidays. Without this the per-SKU
+ * over/undershoot biases roughly cancel at the day total level, leaving
+ * the daily-trend chart looking suspiciously flat. With it, different
+ * days clearly swing up or down.
+ *
+ * Two seeded components: a base swing keyed on (site, date) and a
+ * day-of-week tilt so weekends / Mondays feel distinct from mid-week.
+ * Combined range: ~0.85 .. ~1.15.
+ */
+function dayMacroFactor(siteId: SiteId, date: string): number {
+  const baseNoise = seededNoise(`day-macro|${siteId}|${date}`);
+  const baseSwing = 0.92 + baseNoise * 0.16; // 0.92 .. 1.08
+  const dow = new Date(`${date}T00:00:00Z`).getUTCDay(); // 0 = Sun
+  const dowTilt =
+    dow === 0 ? 0.94 :  // Sunday quieter
+    dow === 6 ? 0.97 :  // Saturday slightly quieter
+    dow === 1 ? 1.04 :  // Monday rebound
+    dow === 5 ? 1.06 :  // Friday peak
+    1.00;
+  return baseSwing * dowTilt;
+}
+
+/**
  * Distribute a SKU's `byPhase` totals across the open hours and apply the
  * deterministic wobble for past/current hours. Returns an entry per kitchen
  * hour with both forecast and actual (or null if the hour hasn't started).
@@ -94,6 +179,13 @@ function distributeAcrossHours(
     }
   }
 
+  // Per-SKU bias: some recipes consistently outperform/undershoot. The
+  // bias is multiplied on top of the per-hour forecast so the wobble keeps
+  // its hour-to-hour variation around a shifted mean.
+  const bias = demandBiasFor(line.item.skuId);
+  // Day-level macro factor — see `dayMacroFactor`. Applies to actuals only.
+  const dayFactor = dayMacroFactor(siteId, date);
+
   for (let hour = KITCHEN_OPEN_HOUR; hour <= KITCHEN_CLOSE_HOUR; hour++) {
     const fcRaw = forecastByHour.get(hour) ?? 0;
     const forecast = Math.max(0, Math.round(fcRaw));
@@ -108,14 +200,14 @@ function distributeAcrossHours(
     if (isPast) {
       const noise = seededNoise(`${siteId}|${line.item.skuId}|${date}|${hour}`);
       const wobble = 0.85 + noise * 0.3;
-      actual = Math.max(0, Math.round(forecast * wobble));
+      actual = Math.max(0, Math.round(forecast * bias * wobble * dayFactor));
       forecastSoFar = forecast;
     } else if (isCurrent) {
       const minutesIn = nowMins - hourStart;
       const noise = seededNoise(`${siteId}|${line.item.skuId}|${date}|${hour}|partial`);
       const wobble = 0.85 + noise * 0.3;
       const partialForecast = (forecast * minutesIn) / 60;
-      actual = Math.max(0, Math.round(partialForecast * wobble));
+      actual = Math.max(0, Math.round(partialForecast * bias * wobble * dayFactor));
       forecastSoFar = Math.round(partialForecast);
     }
 
@@ -163,7 +255,7 @@ export type SalesByRecipeData = {
 };
 
 export function buildHourlySalesByRecipe(siteId: SiteId, date: string, nowHHMM: string): SalesByRecipeData {
-  const lines = amountsForSiteOnDate(siteId, date);
+  const lines = amountsForSalesActuals(siteId, date);
   const nowMins = hhmmToMinutes(nowHHMM);
 
   const rows: RecipeSalesRow[] = [];

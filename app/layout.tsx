@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import DemoControls from "@/components/DemoControls/DemoControls";
+import { ActiveSiteProvider } from "@/components/ActiveSite/ActiveSiteContext";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -22,8 +23,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${plusJakartaSans.variable} h-full`}>
       <body className="h-full">
-        {children}
-        <DemoControls />
+        <ActiveSiteProvider>
+          {children}
+          <DemoControls />
+        </ActiveSiteProvider>
       </body>
     </html>
   );

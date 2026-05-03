@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { FlaskConical, ChevronDown } from 'lucide-react';
 import { USERS, getRoleRules } from '@/components/Approvals/approvalsStore';
 import { BRIEFING_ROLES } from '@/components/briefing';
@@ -15,34 +16,108 @@ import {
 
 const USER_ORDER: ActingUserId[] = ['u-manager', 'u-sam', 'u-jordan', 'u-reese'];
 
-export default function DemoControls() {
+type Props = {
+  /**
+   * When true, the wrapper renders inline (no `position: fixed`) so the
+   * caller can place the trigger inside their own header. The opened
+   * panel anchors over the trigger using `position: absolute` so it
+   * doesn't push surrounding header elements around.
+   */
+  inline?: boolean;
+};
+
+export default function DemoControls({ inline = false }: Props) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname() ?? '';
   const actingUserId = useActingUser();
   const briefingRole = useDemoBriefingRole();
   const actingUser = USERS.find(u => u.id === actingUserId);
   const rules = actingUser ? getRoleRules(actingUser.role) : null;
 
-  return (
-    <div
-      style={{
+  // The global (root-layout) mount yields control to the inline mount on
+  // production routes — otherwise both render and we end up with two
+  // floating triggers on the same screen.
+  if (!inline && pathname.startsWith('/production')) {
+    return null;
+  }
+
+  const wrapperStyle: React.CSSProperties = inline
+    ? {
+        position: 'relative',
+        zIndex: 1,
+        fontFamily: 'var(--font-primary)',
+      }
+    : {
         position: 'fixed',
         top: '16px',
         left: '72px',
         zIndex: 900,
         fontFamily: 'var(--font-primary)',
-      }}
-    >
+      };
+
+  // When inline, the open panel floats over neighbouring header content
+  // (anchored to the trigger's right edge) so the row doesn't reflow.
+  const panelStyle: React.CSSProperties = inline
+    ? {
+        position: 'absolute',
+        top: 'calc(100% + 6px)',
+        right: 0,
+        width: '280px',
+        background: '#fff',
+        border: '1px solid var(--color-border-subtle)',
+        borderRadius: '14px',
+        boxShadow: '0 12px 32px rgba(10,20,25,0.18)',
+        overflow: 'hidden',
+        zIndex: 1000,
+      }
+    : {
+        width: '280px',
+        background: '#fff',
+        border: '1px solid var(--color-border-subtle)',
+        borderRadius: '14px',
+        boxShadow: '0 12px 32px rgba(10,20,25,0.18)',
+        overflow: 'hidden',
+      };
+
+  // Inline triggers are tucked into a busy header — drop the heavy
+  // shadow and shrink the chrome so it sits comfortably next to the
+  // role switcher / Home button.
+  const triggerStyle: React.CSSProperties = inline
+    ? {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '6px 10px',
+        borderRadius: '100px',
+        background: '#fff',
+        border: '1px solid var(--color-border)',
+        cursor: 'pointer',
+        fontFamily: 'var(--font-primary)',
+        fontSize: '11px',
+        fontWeight: 600,
+        color: 'var(--color-text-primary)',
+        whiteSpace: 'nowrap',
+      }
+    : {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '7px',
+        padding: '8px 12px',
+        borderRadius: '100px',
+        background: '#fff',
+        border: '1px solid var(--color-border-subtle)',
+        boxShadow: '0 6px 20px rgba(10,20,25,0.14)',
+        cursor: 'pointer',
+        fontFamily: 'var(--font-primary)',
+        fontSize: '12px',
+        fontWeight: 600,
+        color: 'var(--color-text-primary)',
+      };
+
+  return (
+    <div style={wrapperStyle}>
       {open ? (
-        <div
-          style={{
-            width: '280px',
-            background: '#fff',
-            border: '1px solid var(--color-border-subtle)',
-            borderRadius: '14px',
-            boxShadow: '0 12px 32px rgba(10,20,25,0.18)',
-            overflow: 'hidden',
-          }}
-        >
+        <div style={panelStyle}>
           <button
             type="button"
             onClick={() => setOpen(false)}
@@ -163,21 +238,7 @@ export default function DemoControls() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '7px',
-            padding: '8px 12px',
-            borderRadius: '100px',
-            background: '#fff',
-            border: '1px solid var(--color-border-subtle)',
-            boxShadow: '0 6px 20px rgba(10,20,25,0.14)',
-            cursor: 'pointer',
-            fontFamily: 'var(--font-primary)',
-            fontSize: '12px',
-            fontWeight: 600,
-            color: 'var(--color-text-primary)',
-          }}
+          style={triggerStyle}
           aria-label="Open demo controls"
         >
           <FlaskConical size={13} color="var(--color-accent-active)" strokeWidth={2.2} />

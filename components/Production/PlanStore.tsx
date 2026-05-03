@@ -787,15 +787,65 @@ export type PlanNudge = {
 
 /**
  * Derive live Quinn nudges from the current plan state. Surfaces:
+ *  - ingredient stock caps that bind below the current plan (PAC045)
  *  - component shortfalls (an assembly is planned but its component isn't)
  *  - aggressive manager overrides (large +/- swings vs Quinn)
  *  - recipes still on draft forecast
  */
+/**
+ * Reasons we deep-link the user from a Quinn nudge into AmountsView.
+ * The reason drives the contextual banner shown above the table on arrival
+ * (so the user can read at a glance why they're here, what to do, and how
+ * to dismiss).
+ */
+export type FocusReason = 'stockcap' | 'assembly-short' | 'override' | 'draft-forecast';
+
+/** Build a deep-link href into Amounts that pre-focuses a row. */
+function amountsFocusHref(siteId: SiteId, itemId: string | null, reason: FocusReason): string {
+  const params = new URLSearchParams();
+  params.set('site', siteId);
+  if (itemId) params.set('focus', itemId);
+  params.set('reason', reason);
+  return `/production/amounts?${params.toString()}`;
+}
+
 export function usePlanNudges(siteId: SiteId, date: string): PlanNudge[] {
   const lines = usePlan(siteId, date);
 
   return useMemo(() => {
     const nudges: PlanNudge[] = [];
+
+    // PAC045 — ingredient stock cap binds below the current plan. Most
+    // urgent because it affects what can physically be produced today;
+    // surfaced before assembly shortfalls so the manager fixes the
+    // upstream constraint first.
+    const stockCapped = lines.filter(l => l.stockCap && l.effectivePlanned > l.stockCap.cap);
+    if (stockCapped.length > 0) {
+      const first = stockCapped[0];
+      const binding = first.stockCap!.bindingIngredients[0];
+      const ingredientName = binding?.ingredientName ?? 'an ingredient';
+      const shortBy = first.effectivePlanned - first.stockCap!.cap;
+      nudges.push({
+        id: `plan-stockcap-${first.item.id}`,
+        tone: 'error',
+        surface: 'amounts',
+        title:
+          stockCapped.length === 1
+            ? `Out of ${ingredientName.toLowerCase()} for ${shortBy} ${first.recipe.name.toLowerCase()}${shortBy === 1 ? '' : 's'}`
+            : `${stockCapped.length} recipes capped by ingredient stock`,
+        body:
+          stockCapped.length === 1
+            ? `Plan ${first.effectivePlanned}, but ${ingredientName.toLowerCase()} stock only covers ${first.stockCap!.cap}. Either drop the plan to ${first.stockCap!.cap} or top up ${ingredientName.toLowerCase()} before R1.`
+            : stockCapped
+                .slice(0, 3)
+                .map(l => {
+                  const b = l.stockCap!.bindingIngredients[0];
+                  return `${l.recipe.name}: ${b?.ingredientName.toLowerCase() ?? 'stock'} caps at ${l.stockCap!.cap} (plan ${l.effectivePlanned})`;
+                })
+                .join(' · '),
+        cta: { label: 'Open Amounts', href: amountsFocusHref(siteId, first.item.id, 'stockcap') },
+      });
+    }
 
     const shortfalls = lines.filter(l => l.assemblyDemand.totalUnits > l.planned);
     if (shortfalls.length > 0) {
@@ -815,7 +865,7 @@ export function usePlanNudges(siteId: SiteId, date: string): PlanNudge[] {
                 .slice(0, 3)
                 .map(l => `${l.recipe.name}: need ${l.assemblyDemand.totalUnits}, plan ${l.planned}`)
                 .join(' · '),
-        cta: { label: 'Open Amounts', href: '/production/amounts' },
+        cta: { label: 'Open Amounts', href: amountsFocusHref(siteId, first.item.id, 'assembly-short') },
       });
     }
 
@@ -831,7 +881,7 @@ export function usePlanNudges(siteId: SiteId, date: string): PlanNudge[] {
         surface: 'amounts',
         title: `${bigOverrides.length} recipes are ±25% off Quinn’s forecast`,
         body: 'Worth a sanity check before the first run — big swings on multiple SKUs usually share a cause (event, weather, promo).',
-        cta: { label: 'Review amounts', href: '/production/amounts' },
+        cta: { label: 'Review amounts', href: amountsFocusHref(siteId, bigOverrides[0].item.id, 'override') },
       });
     }
 
@@ -843,10 +893,10 @@ export function usePlanNudges(siteId: SiteId, date: string): PlanNudge[] {
         surface: 'amounts',
         title: `${draftForecasts.length} forecast${draftForecasts.length === 1 ? '' : 's'} still in draft`,
         body: 'I flagged these for a quick Manager confirmation before the first run.',
-        cta: { label: 'Confirm forecasts', href: '/production/amounts' },
+        cta: { label: 'Confirm forecasts', href: amountsFocusHref(siteId, draftForecasts[0].item.id, 'draft-forecast') },
       });
     }
 
     return nudges;
-  }, [lines]);
+  }, [lines, siteId]);
 }

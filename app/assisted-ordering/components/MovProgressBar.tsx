@@ -12,8 +12,8 @@ export default function MovProgressBar({ current, minimum }: Props) {
   const met = current >= minimum;
   const close = pct >= 70;
 
-  const barColor = met ? '#15803D' : close ? '#92400E' : '#B91C1C';
-  const bgColor = met ? 'rgba(21,128,61,0.10)' : close ? 'rgba(146,64,14,0.10)' : 'rgba(185,28,28,0.10)';
+  const barColor = met ? '#15803D' : close ? '#EA580C' : '#B91C1C';
+  const bgColor = met ? 'rgba(21,128,61,0.10)' : close ? 'rgba(234,88,12,0.10)' : 'rgba(185,28,28,0.10)';
 
   return (
     <div style={{ marginTop: '12px' }}>

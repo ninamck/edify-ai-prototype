@@ -3,7 +3,7 @@ export type BadgeVariant = 'default' | 'success' | 'warning' | 'error' | 'info';
 const VARIANT_STYLES: Record<BadgeVariant, { bg: string; color: string; dot: string }> = {
   default: { bg: '#F0EFED', color: 'var(--color-text-secondary)', dot: '#A8A29E' },
   success: { bg: '#DCFCE7', color: '#15803D', dot: '#22C55E' },
-  warning: { bg: '#FEF3C7', color: '#92400E', dot: '#F59E0B' },
+  warning: { bg: 'var(--color-warning-light)', color: 'var(--color-warning)', dot: '#F59E0B' },
   error:   { bg: '#FEE2E2', color: '#B91C1C', dot: '#EF4444' },
   info:    { bg: '#DBEAFE', color: '#1D4ED8', dot: '#3B82F6' },
 };

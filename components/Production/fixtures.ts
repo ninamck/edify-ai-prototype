@@ -753,49 +753,56 @@ export type ProductionItem = {
    * bench even though they have generic 'prep' capability.
    */
   preferredBenchId?: BenchId;
+  /**
+   * Bench-time target for a single default-sized batch (minutes).
+   * Used by the productivity report (PAC169/172) to compute "vs target %"
+   * for completed batches. Scales linearly with actualQty / batchSize for
+   * batches that were larger or smaller than default.
+   */
+  targetMinutes?: number;
 };
 
 export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
   // hub-central — full bakery
   // ─── hub-central — 7-bench layout ────────────────────────────────────────
   // Bakery runs (all preferredBenchId: bench-run-bakery) -----------------
-  { id: 'pi-central-croissant',        siteId: 'hub-central', recipeId: 'prec-croissant',        skuId: 'sku-croissant',        mode: 'run', batchSize: 12, preferredBenchId: 'bench-run-bakery' },
-  { id: 'pi-central-pain',             siteId: 'hub-central', recipeId: 'prec-pain-au-chocolat', skuId: 'sku-pain-au-choc',     mode: 'run', batchSize: 12, preferredBenchId: 'bench-run-bakery' },
-  { id: 'pi-central-ciabatta',         siteId: 'hub-central', recipeId: 'prec-ciabatta',         skuId: 'sku-ciabatta',         mode: 'run', batchSize: 18, preferredBenchId: 'bench-run-bakery' },
-  { id: 'pi-central-almond-croissant', siteId: 'hub-central', recipeId: 'prec-almond-croissant', skuId: 'sku-almond-croissant', mode: 'run', batchSize: 12, preferredBenchId: 'bench-run-bakery' },
-  { id: 'pi-central-cinnamon-swirl',   siteId: 'hub-central', recipeId: 'prec-cinnamon-swirl',   skuId: 'sku-cinnamon-swirl',   mode: 'run', batchSize: 12, preferredBenchId: 'bench-run-bakery' },
-  { id: 'pi-central-baguette',         siteId: 'hub-central', recipeId: 'prec-baguette',         skuId: 'sku-baguette',         mode: 'run', batchSize: 18, preferredBenchId: 'bench-run-bakery' },
-  { id: 'pi-central-granary',          siteId: 'hub-central', recipeId: 'prec-granary',          skuId: 'sku-granary',          mode: 'run', batchSize: 12, preferredBenchId: 'bench-run-bakery' },
-  { id: 'pi-central-focaccia',         siteId: 'hub-central', recipeId: 'prec-focaccia',         skuId: 'sku-focaccia',         mode: 'run', batchSize: 8,  preferredBenchId: 'bench-run-bakery' },
-  { id: 'pi-central-blueberry-muffin', siteId: 'hub-central', recipeId: 'prec-blueberry-muffin', skuId: 'sku-blueberry-muffin', mode: 'run', batchSize: 12, preferredBenchId: 'bench-run-bakery' },
-  { id: 'pi-central-banana-bread',     siteId: 'hub-central', recipeId: 'prec-banana-bread',     skuId: 'sku-banana-bread',     mode: 'run', batchSize: 16, preferredBenchId: 'bench-run-bakery' },
-  { id: 'pi-central-brownie',          siteId: 'hub-central', recipeId: 'prec-brownie',          skuId: 'sku-brownie',          mode: 'run', batchSize: 16, preferredBenchId: 'bench-run-bakery' },
+  { id: 'pi-central-croissant',        siteId: 'hub-central', recipeId: 'prec-croissant',        skuId: 'sku-croissant',        mode: 'run', batchSize: 12, preferredBenchId: 'bench-run-bakery', targetMinutes: 16 },
+  { id: 'pi-central-pain',             siteId: 'hub-central', recipeId: 'prec-pain-au-chocolat', skuId: 'sku-pain-au-choc',     mode: 'run', batchSize: 12, preferredBenchId: 'bench-run-bakery', targetMinutes: 18 },
+  { id: 'pi-central-ciabatta',         siteId: 'hub-central', recipeId: 'prec-ciabatta',         skuId: 'sku-ciabatta',         mode: 'run', batchSize: 18, preferredBenchId: 'bench-run-bakery', targetMinutes: 22 },
+  { id: 'pi-central-almond-croissant', siteId: 'hub-central', recipeId: 'prec-almond-croissant', skuId: 'sku-almond-croissant', mode: 'run', batchSize: 12, preferredBenchId: 'bench-run-bakery', targetMinutes: 18 },
+  { id: 'pi-central-cinnamon-swirl',   siteId: 'hub-central', recipeId: 'prec-cinnamon-swirl',   skuId: 'sku-cinnamon-swirl',   mode: 'run', batchSize: 12, preferredBenchId: 'bench-run-bakery', targetMinutes: 17 },
+  { id: 'pi-central-baguette',         siteId: 'hub-central', recipeId: 'prec-baguette',         skuId: 'sku-baguette',         mode: 'run', batchSize: 18, preferredBenchId: 'bench-run-bakery', targetMinutes: 24 },
+  { id: 'pi-central-granary',          siteId: 'hub-central', recipeId: 'prec-granary',          skuId: 'sku-granary',          mode: 'run', batchSize: 12, preferredBenchId: 'bench-run-bakery', targetMinutes: 18 },
+  { id: 'pi-central-focaccia',         siteId: 'hub-central', recipeId: 'prec-focaccia',         skuId: 'sku-focaccia',         mode: 'run', batchSize: 8,  preferredBenchId: 'bench-run-bakery', targetMinutes: 14 },
+  { id: 'pi-central-blueberry-muffin', siteId: 'hub-central', recipeId: 'prec-blueberry-muffin', skuId: 'sku-blueberry-muffin', mode: 'run', batchSize: 12, preferredBenchId: 'bench-run-bakery', targetMinutes: 12 },
+  { id: 'pi-central-banana-bread',     siteId: 'hub-central', recipeId: 'prec-banana-bread',     skuId: 'sku-banana-bread',     mode: 'run', batchSize: 16, preferredBenchId: 'bench-run-bakery', targetMinutes: 20 },
+  { id: 'pi-central-brownie',          siteId: 'hub-central', recipeId: 'prec-brownie',          skuId: 'sku-brownie',          mode: 'run', batchSize: 16, preferredBenchId: 'bench-run-bakery', targetMinutes: 18 },
 
   // Cold-prep runs: fillings, dips, dressings → bench-run-cold-prep ------
-  { id: 'pi-central-filling',      siteId: 'hub-central', recipeId: 'prec-chicken-mayo-filling', skuId: 'sku-chicken-mayo-filling', mode: 'run', batchSize: 2, preferredBenchId: 'bench-run-cold-prep' },
-  { id: 'pi-central-egg-filling',  siteId: 'hub-central', recipeId: 'prec-egg-mayo-filling',     skuId: 'sku-egg-mayo-filling',     mode: 'run', batchSize: 2, preferredBenchId: 'bench-run-cold-prep' },
-  { id: 'pi-central-tuna-filling', siteId: 'hub-central', recipeId: 'prec-tuna-mayo-filling',    skuId: 'sku-tuna-mayo-filling',    mode: 'run', batchSize: 2, preferredBenchId: 'bench-run-cold-prep' },
-  { id: 'pi-central-hummus',       siteId: 'hub-central', recipeId: 'prec-hummus',               skuId: 'sku-hummus',               mode: 'run', batchSize: 2, preferredBenchId: 'bench-run-cold-prep' },
+  { id: 'pi-central-filling',      siteId: 'hub-central', recipeId: 'prec-chicken-mayo-filling', skuId: 'sku-chicken-mayo-filling', mode: 'run', batchSize: 2, preferredBenchId: 'bench-run-cold-prep', targetMinutes: 14 },
+  { id: 'pi-central-egg-filling',  siteId: 'hub-central', recipeId: 'prec-egg-mayo-filling',     skuId: 'sku-egg-mayo-filling',     mode: 'run', batchSize: 2, preferredBenchId: 'bench-run-cold-prep', targetMinutes: 12 },
+  { id: 'pi-central-tuna-filling', siteId: 'hub-central', recipeId: 'prec-tuna-mayo-filling',    skuId: 'sku-tuna-mayo-filling',    mode: 'run', batchSize: 2, preferredBenchId: 'bench-run-cold-prep', targetMinutes: 10 },
+  { id: 'pi-central-hummus',       siteId: 'hub-central', recipeId: 'prec-hummus',               skuId: 'sku-hummus',               mode: 'run', batchSize: 2, preferredBenchId: 'bench-run-cold-prep', targetMinutes: 12 },
 
   // Hot-prep runs: roasts, slow-cooks → bench-run-hot-prep ---------------
-  { id: 'pi-central-roast-chicken', siteId: 'hub-central', recipeId: 'prec-roast-chicken', skuId: 'sku-roast-chicken', mode: 'run', batchSize: 8,  preferredBenchId: 'bench-run-hot-prep' },
-  { id: 'pi-central-bolognese',     siteId: 'hub-central', recipeId: 'prec-bolognese',     skuId: 'sku-bolognese',     mode: 'run', batchSize: 12, preferredBenchId: 'bench-run-hot-prep' },
-  { id: 'pi-central-pulled-pork',   siteId: 'hub-central', recipeId: 'prec-pulled-pork',   skuId: 'sku-pulled-pork',   mode: 'run', batchSize: 6,  preferredBenchId: 'bench-run-hot-prep' },
+  { id: 'pi-central-roast-chicken', siteId: 'hub-central', recipeId: 'prec-roast-chicken', skuId: 'sku-roast-chicken', mode: 'run', batchSize: 8,  preferredBenchId: 'bench-run-hot-prep', targetMinutes: 35 },
+  { id: 'pi-central-bolognese',     siteId: 'hub-central', recipeId: 'prec-bolognese',     skuId: 'sku-bolognese',     mode: 'run', batchSize: 12, preferredBenchId: 'bench-run-hot-prep', targetMinutes: 45 },
+  { id: 'pi-central-pulled-pork',   siteId: 'hub-central', recipeId: 'prec-pulled-pork',   skuId: 'sku-pulled-pork',   mode: 'run', batchSize: 6,  preferredBenchId: 'bench-run-hot-prep', targetMinutes: 40 },
 
   // Grill bench: hot components for sandwich assembly → bench-grill ------
-  { id: 'pi-central-grilled-chicken',  siteId: 'hub-central', recipeId: 'prec-grilled-chicken',  skuId: 'sku-grilled-chicken',  mode: 'run', batchSize: 10, preferredBenchId: 'bench-grill' },
-  { id: 'pi-central-grilled-halloumi', siteId: 'hub-central', recipeId: 'prec-grilled-halloumi', skuId: 'sku-grilled-halloumi', mode: 'run', batchSize: 8,  preferredBenchId: 'bench-grill' },
-  { id: 'pi-central-chargrilled-veg',  siteId: 'hub-central', recipeId: 'prec-chargrilled-veg',  skuId: 'sku-chargrilled-veg',  mode: 'run', batchSize: 8,  preferredBenchId: 'bench-grill' },
-  { id: 'pi-central-crispy-bacon',     siteId: 'hub-central', recipeId: 'prec-crispy-bacon',     skuId: 'sku-crispy-bacon',     mode: 'run', batchSize: 10, preferredBenchId: 'bench-grill' },
+  { id: 'pi-central-grilled-chicken',  siteId: 'hub-central', recipeId: 'prec-grilled-chicken',  skuId: 'sku-grilled-chicken',  mode: 'run', batchSize: 10, preferredBenchId: 'bench-grill', targetMinutes: 16 },
+  { id: 'pi-central-grilled-halloumi', siteId: 'hub-central', recipeId: 'prec-grilled-halloumi', skuId: 'sku-grilled-halloumi', mode: 'run', batchSize: 8,  preferredBenchId: 'bench-grill', targetMinutes: 12 },
+  { id: 'pi-central-chargrilled-veg',  siteId: 'hub-central', recipeId: 'prec-chargrilled-veg',  skuId: 'sku-chargrilled-veg',  mode: 'run', batchSize: 8,  preferredBenchId: 'bench-grill', targetMinutes: 14 },
+  { id: 'pi-central-crispy-bacon',     siteId: 'hub-central', recipeId: 'prec-crispy-bacon',     skuId: 'sku-crispy-bacon',     mode: 'run', batchSize: 10, preferredBenchId: 'bench-grill', targetMinutes: 10 },
 
   // Assembly (variable): sandwiches + salads → bench-assembly ------------
-  { id: 'pi-central-club',         siteId: 'hub-central', recipeId: 'prec-club-sandwich',         skuId: 'sku-club-sandwich',        mode: 'variable', batchSize: 10, preferredBenchId: 'bench-assembly' },
-  { id: 'pi-central-egg-mayo-sw',  siteId: 'hub-central', recipeId: 'prec-egg-mayo-sandwich',     skuId: 'sku-egg-mayo-sandwich',    mode: 'variable', batchSize: 10, preferredBenchId: 'bench-assembly' },
-  { id: 'pi-central-ham-cheese',   siteId: 'hub-central', recipeId: 'prec-ham-cheese-baguette',   skuId: 'sku-ham-cheese-baguette',  mode: 'variable', batchSize: 8,  preferredBenchId: 'bench-assembly' },
-  { id: 'pi-central-tuna-sw',      siteId: 'hub-central', recipeId: 'prec-tuna-sandwich',         skuId: 'sku-tuna-sandwich',        mode: 'variable', batchSize: 10, preferredBenchId: 'bench-assembly' },
-  { id: 'pi-central-hummus-wrap',  siteId: 'hub-central', recipeId: 'prec-hummus-wrap',           skuId: 'sku-hummus-wrap',          mode: 'variable', batchSize: 8,  preferredBenchId: 'bench-assembly' },
-  { id: 'pi-central-turkey-brie',  siteId: 'hub-central', recipeId: 'prec-turkey-brie-baguette',  skuId: 'sku-turkey-brie-baguette', mode: 'variable', batchSize: 8,  preferredBenchId: 'bench-assembly' },
-  { id: 'pi-central-salad',        siteId: 'hub-central', recipeId: 'prec-salad-bowl',            skuId: 'sku-salad-bowl',           mode: 'variable', batchSize: 1,  preferredBenchId: 'bench-assembly' },
+  { id: 'pi-central-club',         siteId: 'hub-central', recipeId: 'prec-club-sandwich',         skuId: 'sku-club-sandwich',        mode: 'variable', batchSize: 10, preferredBenchId: 'bench-assembly', targetMinutes: 8 },
+  { id: 'pi-central-egg-mayo-sw',  siteId: 'hub-central', recipeId: 'prec-egg-mayo-sandwich',     skuId: 'sku-egg-mayo-sandwich',    mode: 'variable', batchSize: 10, preferredBenchId: 'bench-assembly', targetMinutes: 6 },
+  { id: 'pi-central-ham-cheese',   siteId: 'hub-central', recipeId: 'prec-ham-cheese-baguette',   skuId: 'sku-ham-cheese-baguette',  mode: 'variable', batchSize: 8,  preferredBenchId: 'bench-assembly', targetMinutes: 7 },
+  { id: 'pi-central-tuna-sw',      siteId: 'hub-central', recipeId: 'prec-tuna-sandwich',         skuId: 'sku-tuna-sandwich',        mode: 'variable', batchSize: 10, preferredBenchId: 'bench-assembly', targetMinutes: 7 },
+  { id: 'pi-central-hummus-wrap',  siteId: 'hub-central', recipeId: 'prec-hummus-wrap',           skuId: 'sku-hummus-wrap',          mode: 'variable', batchSize: 8,  preferredBenchId: 'bench-assembly', targetMinutes: 6 },
+  { id: 'pi-central-turkey-brie',  siteId: 'hub-central', recipeId: 'prec-turkey-brie-baguette',  skuId: 'sku-turkey-brie-baguette', mode: 'variable', batchSize: 8,  preferredBenchId: 'bench-assembly', targetMinutes: 7 },
+  { id: 'pi-central-salad',        siteId: 'hub-central', recipeId: 'prec-salad-bowl',            skuId: 'sku-salad-bowl',           mode: 'variable', batchSize: 1,  preferredBenchId: 'bench-assembly', targetMinutes: 4 },
   { id: 'pi-central-caesar',       siteId: 'hub-central', recipeId: 'prec-chicken-caesar',        skuId: 'sku-chicken-caesar',       mode: 'variable', batchSize: 1,  preferredBenchId: 'bench-assembly' },
   { id: 'pi-central-grain',        siteId: 'hub-central', recipeId: 'prec-med-grain-bowl',        skuId: 'sku-med-grain-bowl',       mode: 'variable', batchSize: 1,  preferredBenchId: 'bench-assembly' },
   { id: 'pi-central-pasta',        siteId: 'hub-central', recipeId: 'prec-chicken-pasta',         skuId: 'sku-chicken-pasta',        mode: 'variable', batchSize: 1,  preferredBenchId: 'bench-assembly' },
@@ -813,6 +820,7 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
     mode: 'increment', batchSize: 8,
     cadence: { intervalMinutes: 45, startTime: '08:00', endTime: '18:00', quinnProposed: true },
     preferredBenchId: 'bench-increment-hot',
+    targetMinutes: 12,
   },
   {
     id: 'pi-central-coffee',
@@ -820,6 +828,7 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
     mode: 'increment', batchSize: 1,
     cadence: { intervalMinutes: 30, startTime: '06:00', endTime: '20:00', quinnProposed: true },
     preferredBenchId: 'bench-increment-hot',
+    targetMinutes: 5,
   },
   {
     id: 'pi-central-iced-coffee',
@@ -1313,6 +1322,12 @@ export type ProductionBatch = {
   status: BatchStatus;
   /** When failed, the reason. */
   failureReason?: 'burnt' | 'under-proofed' | 'allergen-cross-contact' | 'equipment' | 'other';
+  /**
+   * Employee who ran the batch. Captured when the staffer hits "Start" on
+   * the bench card; surfaced in PCR queue and the productivity report
+   * (PAC169 / PAC172).
+   */
+  assignedUserId?: UserId;
 };
 
 export type PCRType = 'batch' | 'on-demand' | 'preparation' | 'repackaging';
@@ -1589,6 +1604,7 @@ export const PRET_PLAN: ProductionPlan = {
       endTime: '05:50',
       actualQty: 24,
       status: 'reviewed',
+      assignedUserId: 'user-staff-central',
     },
     // Croissant bake 06:00 — in progress
     {
@@ -1601,6 +1617,7 @@ export const PRET_PLAN: ProductionPlan = {
       endTime: '06:18',
       actualQty: 24,
       status: 'in-progress',
+      assignedUserId: 'user-staff-central',
     },
     // Pain au choc bake — FAILED (burnt) → will route through waste
     {
@@ -1614,6 +1631,7 @@ export const PRET_PLAN: ProductionPlan = {
       actualQty: 36,
       status: 'failed',
       failureReason: 'burnt',
+      assignedUserId: 'user-staff-central-3',
     },
     // Cookie 08:00 bake — planned (not yet started)
     {
@@ -1638,6 +1656,7 @@ export const PRET_PLAN: ProductionPlan = {
       endTime: '07:06',
       actualQty: 1,
       status: 'complete',
+      assignedUserId: 'user-staff-central-2',
     },
     // On-demand batch — customer walked in, no planned instance
     {
@@ -1649,6 +1668,178 @@ export const PRET_PLAN: ProductionPlan = {
       endTime: '11:04',
       actualQty: 1,
       status: 'reviewed',
+      assignedUserId: 'user-staff-central-4',
+    },
+
+    // ─── Yesterday (D-1) — historical run for productivity trend ────────
+    // Bakery oven — Dev knocked out the early bakes consistently on/under
+    {
+      id: 'batch-y-croissant-0530',
+      productionItemId: 'pi-central-croissant',
+      benchId: 'bench-run-bakery',
+      date: dayOffset(-1),
+      startTime: '05:30', endTime: '05:44',
+      actualQty: 24, status: 'reviewed',
+      assignedUserId: 'user-staff-central',
+    },
+    {
+      id: 'batch-y-pain-0600',
+      productionItemId: 'pi-central-pain',
+      benchId: 'bench-run-bakery',
+      date: dayOffset(-1),
+      startTime: '06:00', endTime: '06:14',
+      actualQty: 12, status: 'reviewed',
+      assignedUserId: 'user-staff-central',
+    },
+    {
+      id: 'batch-y-almond-0620',
+      productionItemId: 'pi-central-almond-croissant',
+      benchId: 'bench-run-bakery',
+      date: dayOffset(-1),
+      startTime: '06:20', endTime: '06:36',
+      actualQty: 12, status: 'reviewed',
+      assignedUserId: 'user-staff-central',
+    },
+    {
+      id: 'batch-y-cinnamon-0700',
+      productionItemId: 'pi-central-cinnamon-swirl',
+      benchId: 'bench-run-bakery',
+      date: dayOffset(-1),
+      startTime: '07:00', endTime: '07:21',
+      actualQty: 12, status: 'reviewed',
+      assignedUserId: 'user-staff-central-3',
+    },
+    {
+      id: 'batch-y-baguette-0730',
+      productionItemId: 'pi-central-baguette',
+      benchId: 'bench-run-bakery',
+      date: dayOffset(-1),
+      startTime: '07:30', endTime: '08:05',
+      actualQty: 18, status: 'reviewed',
+      assignedUserId: 'user-staff-central-3',
+    },
+    // Cold prep — Sara on fillings
+    {
+      id: 'batch-y-egg-0530',
+      productionItemId: 'pi-central-egg-filling',
+      benchId: 'bench-run-cold-prep',
+      date: dayOffset(-1),
+      startTime: '05:30', endTime: '05:41',
+      actualQty: 2, status: 'reviewed',
+      assignedUserId: 'user-staff-central-2',
+    },
+    {
+      id: 'batch-y-tuna-0545',
+      productionItemId: 'pi-central-tuna-filling',
+      benchId: 'bench-run-cold-prep',
+      date: dayOffset(-1),
+      startTime: '05:45', endTime: '05:54',
+      actualQty: 2, status: 'reviewed',
+      assignedUserId: 'user-staff-central-2',
+    },
+    {
+      id: 'batch-y-chicken-mayo-0600',
+      productionItemId: 'pi-central-filling',
+      benchId: 'bench-run-cold-prep',
+      date: dayOffset(-1),
+      startTime: '06:00', endTime: '06:13',
+      actualQty: 2, status: 'reviewed',
+      assignedUserId: 'user-staff-central-2',
+    },
+    // Hot prep — Marco roast tray, ran a touch long
+    {
+      id: 'batch-y-roast-0600',
+      productionItemId: 'pi-central-roast-chicken',
+      benchId: 'bench-run-hot-prep',
+      date: dayOffset(-1),
+      startTime: '06:00', endTime: '06:42',
+      actualQty: 8, status: 'reviewed',
+      assignedUserId: 'user-staff-central-3',
+    },
+    // Grill — Marco on chicken
+    {
+      id: 'batch-y-grilled-0830',
+      productionItemId: 'pi-central-grilled-chicken',
+      benchId: 'bench-grill',
+      date: dayOffset(-1),
+      startTime: '08:30', endTime: '08:49',
+      actualQty: 10, status: 'reviewed',
+      assignedUserId: 'user-staff-central-3',
+    },
+    // Assembly — Ade fast on club + egg-mayo
+    {
+      id: 'batch-y-club-0900',
+      productionItemId: 'pi-central-club',
+      benchId: 'bench-assembly',
+      date: dayOffset(-1),
+      startTime: '09:00', endTime: '09:07',
+      actualQty: 10, status: 'reviewed',
+      assignedUserId: 'user-staff-central-4',
+    },
+    {
+      id: 'batch-y-egg-sw-0915',
+      productionItemId: 'pi-central-egg-mayo-sw',
+      benchId: 'bench-assembly',
+      date: dayOffset(-1),
+      startTime: '09:15', endTime: '09:20',
+      actualQty: 10, status: 'reviewed',
+      assignedUserId: 'user-staff-central-4',
+    },
+    {
+      id: 'batch-y-tuna-sw-0930',
+      productionItemId: 'pi-central-tuna-sw',
+      benchId: 'bench-assembly',
+      date: dayOffset(-1),
+      startTime: '09:30', endTime: '09:36',
+      actualQty: 10, status: 'reviewed',
+      assignedUserId: 'user-staff-central-4',
+    },
+    {
+      id: 'batch-y-hummus-wrap-0945',
+      productionItemId: 'pi-central-hummus-wrap',
+      benchId: 'bench-assembly',
+      date: dayOffset(-1),
+      startTime: '09:45', endTime: '09:52',
+      actualQty: 8, status: 'reviewed',
+      assignedUserId: 'user-staff-central-4',
+    },
+    // Cookie increments through the day
+    {
+      id: 'batch-y-cookie-0900',
+      productionItemId: 'pi-central-cookie',
+      benchId: 'bench-increment-hot',
+      date: dayOffset(-1),
+      startTime: '09:00', endTime: '09:13',
+      actualQty: 8, status: 'reviewed',
+      assignedUserId: 'user-staff-central-3',
+    },
+    {
+      id: 'batch-y-cookie-1100',
+      productionItemId: 'pi-central-cookie',
+      benchId: 'bench-increment-hot',
+      date: dayOffset(-1),
+      startTime: '11:00', endTime: '11:18',
+      actualQty: 8, status: 'reviewed',
+      assignedUserId: 'user-staff-central-3',
+    },
+    // Coffee restocks — fast
+    {
+      id: 'batch-y-coffee-0700',
+      productionItemId: 'pi-central-coffee',
+      benchId: 'bench-increment-hot',
+      date: dayOffset(-1),
+      startTime: '07:00', endTime: '07:04',
+      actualQty: 1, status: 'reviewed',
+      assignedUserId: 'user-staff-central-2',
+    },
+    {
+      id: 'batch-y-coffee-0930',
+      productionItemId: 'pi-central-coffee',
+      benchId: 'bench-increment-hot',
+      date: dayOffset(-1),
+      startTime: '09:30', endTime: '09:33',
+      actualQty: 1, status: 'reviewed',
+      assignedUserId: 'user-staff-central-2',
     },
   ],
 
@@ -1810,6 +2001,44 @@ export type SpokeSubmission = {
   };
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Hub unlock past cutoff
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// PAC-unlock — hub-side override that re-opens a spoke's locked order
+// after cutoff. Per the brief: "HUB manager can unlock a SPOKE past
+// cutoff (`ignoreCutoff`). Post-unlock, spoke quantities are added to
+// the hub's existing plan (not replaced). Unlock auto-resets after
+// submission."
+//
+// We capture the audit trail (who unlocked, when, why) so the spoke can
+// see context and the hub has a record. The "added not replaced"
+// semantic is enforced UX-side: the spoke's stepper floor for each line
+// becomes the locked baseline, so they can only ADD to what's already
+// committed — never reduce.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type SpokeUnlock = {
+  /** Composite key components — one unlock per (hub, spoke, date). */
+  hubId: SiteId;
+  spokeId: SiteId;
+  forDate: string;
+  /** Audit. */
+  unlockedAtISO: string;
+  unlockedBy: string;
+  reason: string;
+  /**
+   * Snapshot of the locked baseline at unlock time, per SKU. Used
+   * spoke-side as the floor on the additive steppers so the spoke can
+   * only add — not reduce committed quantities.
+   */
+  baselineBySku: Record<SkuId, number>;
+  /** When the spoke resubmits, we keep the audit but mark it consumed. */
+  consumedAtISO?: string;
+  /** When the hub sends the dispatch, the unlock is closed entirely. */
+  closedAtISO?: string;
+};
+
 /**
  * Spoke submissions destined for the central hub. Two cohorts so both the
  * Today amounts view and the Dispatch matrix have something to show:
@@ -1834,6 +2063,39 @@ export const PRET_SPOKE_SUBMISSIONS: SpokeSubmission[] = [
     ],
   },
   {
+    // Today's drop — acknowledged by the hub overnight, currently in
+    // transit to the South spoke. Gives the spoke's Today panel a
+    // realistic "Arriving today" payload across all categories.
+    id: 'spoke-sub-south-today',
+    fromSiteId: 'site-spoke-south',
+    toHubId: 'hub-central',
+    forDate: DEMO_TODAY,
+    cutoffDateTime: `${dayOffset(-1)}T15:00:00Z`,
+    status: 'acknowledged',
+    lines: [
+      { skuId: 'sku-croissant',           recipeId: 'prec-croissant',           quinnProposedUnits: 22, confirmedUnits: 22 },
+      { skuId: 'sku-pain-au-choc',        recipeId: 'prec-pain-au-chocolat',    quinnProposedUnits: 14, confirmedUnits: 14 },
+      { skuId: 'sku-almond-croissant',    recipeId: 'prec-almond-croissant',    quinnProposedUnits: 10, confirmedUnits: 10 },
+      { skuId: 'sku-cinnamon-swirl',      recipeId: 'prec-cinnamon-swirl',      quinnProposedUnits: 6,  confirmedUnits: 6  },
+      { skuId: 'sku-blueberry-muffin',    recipeId: 'prec-blueberry-muffin',    quinnProposedUnits: 12, confirmedUnits: 12 },
+      { skuId: 'sku-banana-bread',        recipeId: 'prec-banana-bread',        quinnProposedUnits: 8,  confirmedUnits: 8  },
+      { skuId: 'sku-brownie',             recipeId: 'prec-brownie',             quinnProposedUnits: 8,  confirmedUnits: 8  },
+      { skuId: 'sku-baguette',            recipeId: 'prec-baguette',            quinnProposedUnits: 12, confirmedUnits: 12 },
+      { skuId: 'sku-granary',             recipeId: 'prec-granary',             quinnProposedUnits: 6,  confirmedUnits: 6  },
+      { skuId: 'sku-egg-mayo-sandwich',   recipeId: 'prec-egg-mayo-sandwich',   quinnProposedUnits: 16, confirmedUnits: 16 },
+      { skuId: 'sku-tuna-sandwich',       recipeId: 'prec-tuna-sandwich',       quinnProposedUnits: 12, confirmedUnits: 12 },
+      { skuId: 'sku-ham-cheese-baguette', recipeId: 'prec-ham-cheese-baguette', quinnProposedUnits: 10, confirmedUnits: 10 },
+      { skuId: 'sku-turkey-brie-baguette',recipeId: 'prec-turkey-brie-baguette',quinnProposedUnits: 8,  confirmedUnits: 8  },
+      { skuId: 'sku-hummus-wrap',         recipeId: 'prec-hummus-wrap',         quinnProposedUnits: 10, confirmedUnits: 10 },
+      { skuId: 'sku-chicken-caesar',      recipeId: 'prec-chicken-caesar',      quinnProposedUnits: 10, confirmedUnits: 10 },
+      { skuId: 'sku-med-grain-bowl',      recipeId: 'prec-med-grain-bowl',      quinnProposedUnits: 8,  confirmedUnits: 8  },
+      { skuId: 'sku-falafel-bowl',        recipeId: 'prec-falafel-bowl',        quinnProposedUnits: 6,  confirmedUnits: 6  },
+      { skuId: 'sku-fruit-pot',           recipeId: 'prec-fruit-pot',           quinnProposedUnits: 12, confirmedUnits: 12 },
+      { skuId: 'sku-yogurt-pot',          recipeId: 'prec-yogurt-pot',          quinnProposedUnits: 10, confirmedUnits: 10 },
+      { skuId: 'sku-granola-pot',         recipeId: 'prec-granola-pot',         quinnProposedUnits: 8,  confirmedUnits: 8  },
+    ],
+  },
+  {
     id: 'spoke-sub-south-friday',
     fromSiteId: 'site-spoke-south',
     toHubId: 'hub-central',
@@ -1841,9 +2103,31 @@ export const PRET_SPOKE_SUBMISSIONS: SpokeSubmission[] = [
     cutoffDateTime: `${DEMO_TODAY}T15:00:00Z`,
     status: 'draft',
     lines: [
-      { skuId: 'sku-croissant',     recipeId: 'prec-croissant',        quinnProposedUnits: 30, confirmedUnits: null },
-      { skuId: 'sku-pain-au-choc',  recipeId: 'prec-pain-au-chocolat', quinnProposedUnits: 20, confirmedUnits: null },
-      { skuId: 'sku-club-sandwich', recipeId: 'prec-club-sandwich',    quinnProposedUnits: 40, confirmedUnits: null },
+      // Bakery
+      { skuId: 'sku-croissant',           recipeId: 'prec-croissant',           quinnProposedUnits: 30, confirmedUnits: null },
+      { skuId: 'sku-pain-au-choc',        recipeId: 'prec-pain-au-chocolat',    quinnProposedUnits: 20, confirmedUnits: null },
+      { skuId: 'sku-almond-croissant',    recipeId: 'prec-almond-croissant',    quinnProposedUnits: 12, confirmedUnits: null },
+      { skuId: 'sku-cinnamon-swirl',      recipeId: 'prec-cinnamon-swirl',      quinnProposedUnits: 8,  confirmedUnits: null },
+      { skuId: 'sku-blueberry-muffin',    recipeId: 'prec-blueberry-muffin',    quinnProposedUnits: 12, confirmedUnits: null },
+      { skuId: 'sku-banana-bread',        recipeId: 'prec-banana-bread',        quinnProposedUnits: 8,  confirmedUnits: null },
+      { skuId: 'sku-brownie',             recipeId: 'prec-brownie',             quinnProposedUnits: 8,  confirmedUnits: null },
+      { skuId: 'sku-baguette',            recipeId: 'prec-baguette',            quinnProposedUnits: 12, confirmedUnits: null },
+      { skuId: 'sku-granary',             recipeId: 'prec-granary',             quinnProposedUnits: 8,  confirmedUnits: null },
+      // Sandwich
+      { skuId: 'sku-club-sandwich',       recipeId: 'prec-club-sandwich',       quinnProposedUnits: 18, confirmedUnits: null },
+      { skuId: 'sku-egg-mayo-sandwich',   recipeId: 'prec-egg-mayo-sandwich',   quinnProposedUnits: 18, confirmedUnits: null },
+      { skuId: 'sku-tuna-sandwich',       recipeId: 'prec-tuna-sandwich',       quinnProposedUnits: 14, confirmedUnits: null },
+      { skuId: 'sku-ham-cheese-baguette', recipeId: 'prec-ham-cheese-baguette', quinnProposedUnits: 12, confirmedUnits: null },
+      { skuId: 'sku-turkey-brie-baguette',recipeId: 'prec-turkey-brie-baguette',quinnProposedUnits: 10, confirmedUnits: null },
+      { skuId: 'sku-hummus-wrap',         recipeId: 'prec-hummus-wrap',         quinnProposedUnits: 12, confirmedUnits: null },
+      // Salad
+      { skuId: 'sku-chicken-caesar',      recipeId: 'prec-chicken-caesar',      quinnProposedUnits: 12, confirmedUnits: null },
+      { skuId: 'sku-med-grain-bowl',      recipeId: 'prec-med-grain-bowl',      quinnProposedUnits: 10, confirmedUnits: null },
+      { skuId: 'sku-falafel-bowl',        recipeId: 'prec-falafel-bowl',        quinnProposedUnits: 8,  confirmedUnits: null },
+      // Snack
+      { skuId: 'sku-fruit-pot',           recipeId: 'prec-fruit-pot',           quinnProposedUnits: 12, confirmedUnits: null },
+      { skuId: 'sku-yogurt-pot',          recipeId: 'prec-yogurt-pot',          quinnProposedUnits: 10, confirmedUnits: null },
+      { skuId: 'sku-granola-pot',         recipeId: 'prec-granola-pot',         quinnProposedUnits: 8,  confirmedUnits: null },
     ],
   },
   {
@@ -2195,6 +2479,465 @@ export type DispatchTransfer = {
   note?: string;
 };
 
+/**
+ * Seeded dispatch transfers (yesterday only) so the spoke-side rejects
+ * card has a concrete shipment to log against on first load. The runtime
+ * `dispatchStore` overlays additional transfers a manager creates in-app.
+ *
+ * Lines mirror the spoke's previous-day submission so the demo feels
+ * coherent ("hub sent 18 croissants → spoke rejected 3 of them").
+ */
+export const PRET_DISPATCH_TRANSFER_SEEDS: DispatchTransfer[] = [
+  {
+    id: 'transfer-seed-clapham-yesterday',
+    hubId: 'hub-central',
+    spokeId: 'site-spoke-south',
+    forDate: dayOffset(-1),
+    sentAtISO: `${dayOffset(-1)}T05:30:00Z`,
+    sentBy: 'Hub manager (demo)',
+    lines: [
+      // Bakery — opening peak
+      { skuId: 'sku-croissant',          recipeId: 'prec-croissant',          units: 18, wasQuinnProposed: false },
+      { skuId: 'sku-pain-au-choc',       recipeId: 'prec-pain-au-chocolat',   units: 12, wasQuinnProposed: false },
+      { skuId: 'sku-almond-croissant',   recipeId: 'prec-almond-croissant',   units: 8,  wasQuinnProposed: false },
+      { skuId: 'sku-cinnamon-swirl',     recipeId: 'prec-cinnamon-swirl',     units: 6,  wasQuinnProposed: false },
+      { skuId: 'sku-blueberry-muffin',   recipeId: 'prec-blueberry-muffin',   units: 12, wasQuinnProposed: false },
+      { skuId: 'sku-banana-bread',       recipeId: 'prec-banana-bread',       units: 8,  wasQuinnProposed: false },
+      { skuId: 'sku-brownie',            recipeId: 'prec-brownie',            units: 8,  wasQuinnProposed: false },
+      { skuId: 'sku-baguette',           recipeId: 'prec-baguette',           units: 12, wasQuinnProposed: false },
+      { skuId: 'sku-granary',            recipeId: 'prec-granary',            units: 6,  wasQuinnProposed: false },
+      // Sandwich — lunch core
+      { skuId: 'sku-egg-mayo-sandwich',  recipeId: 'prec-egg-mayo-sandwich',  units: 14, wasQuinnProposed: false },
+      { skuId: 'sku-tuna-sandwich',      recipeId: 'prec-tuna-sandwich',      units: 10, wasQuinnProposed: false },
+      { skuId: 'sku-ham-cheese-baguette',recipeId: 'prec-ham-cheese-baguette',units: 10, wasQuinnProposed: false },
+      { skuId: 'sku-turkey-brie-baguette',recipeId: 'prec-turkey-brie-baguette',units: 8, wasQuinnProposed: false },
+      { skuId: 'sku-hummus-wrap',        recipeId: 'prec-hummus-wrap',        units: 10, wasQuinnProposed: false },
+      // Salad — midday
+      { skuId: 'sku-chicken-caesar',     recipeId: 'prec-chicken-caesar',     units: 8,  wasQuinnProposed: false },
+      { skuId: 'sku-med-grain-bowl',     recipeId: 'prec-med-grain-bowl',     units: 6,  wasQuinnProposed: false },
+      { skuId: 'sku-falafel-bowl',       recipeId: 'prec-falafel-bowl',       units: 6,  wasQuinnProposed: false },
+      // Snacks
+      { skuId: 'sku-fruit-pot',          recipeId: 'prec-fruit-pot',          units: 10, wasQuinnProposed: false },
+      { skuId: 'sku-yogurt-pot',         recipeId: 'prec-yogurt-pot',         units: 8,  wasQuinnProposed: false },
+      { skuId: 'sku-granola-pot',        recipeId: 'prec-granola-pot',        units: 6,  wasQuinnProposed: false },
+    ],
+    totalUnits: 186,
+  },
+  {
+    id: 'transfer-seed-east-yesterday',
+    hubId: 'hub-central',
+    spokeId: 'site-spoke-east',
+    forDate: dayOffset(-1),
+    sentAtISO: `${dayOffset(-1)}T05:35:00Z`,
+    sentBy: 'Hub manager (demo)',
+    lines: [
+      { skuId: 'sku-croissant',         recipeId: 'prec-croissant',         units: 24, wasQuinnProposed: false },
+      { skuId: 'sku-almond-croissant',  recipeId: 'prec-almond-croissant',  units: 8,  wasQuinnProposed: false },
+      { skuId: 'sku-egg-mayo-sandwich', recipeId: 'prec-egg-mayo-sandwich', units: 16, wasQuinnProposed: false },
+    ],
+    totalUnits: 48,
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Spoke rejects — PAC140 / PAC141 / PAC142
+//
+// When a spoke receives a hub dispatch, some units may arrive damaged, with
+// short shelf life or wrong-spec. The spoke records these rejections, the
+// hub sees them on its dispatch surface (and in waste totals), and the
+// rejected qty is auto-rolled into the next drop so the spoke isn't short.
+//
+// Data model goals:
+//  - One reject record per (spoke, hub, transferId) — i.e. per shipment
+//  - Multiple lines per record (1 line per SKU rejected)
+//  - Lifecycle: 'recorded' → 'acknowledged' (hub has seen it)
+//  - Roll-forward: when the next transfer is sent for that spoke + sku,
+//    the reject's `rolledIntoNext` flips so it isn't double-counted.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type SpokeRejectId = string;
+
+export type SpokeRejectReason = 'damaged' | 'short-life' | 'wrong-spec' | 'other';
+
+export const SPOKE_REJECT_REASON_LABEL: Record<SpokeRejectReason, string> = {
+  damaged: 'Damaged in transit',
+  'short-life': 'Short shelf life',
+  'wrong-spec': 'Wrong spec',
+  other: 'Other',
+};
+
+export type SpokeRejectLine = {
+  skuId: SkuId;
+  recipeId: RecipeId;
+  /** How many units arrived rejectable. */
+  rejectedUnits: number;
+  reason: SpokeRejectReason;
+  note?: string;
+};
+
+export type SpokeReject = {
+  id: SpokeRejectId;
+  spokeId: SiteId;
+  hubId: SiteId;
+  /**
+   * Date the rejected dispatch was for. The reject record itself was
+   * `recordedAtISO` later (typically the same day, after receipt).
+   */
+  forDate: string;
+  recordedAtISO: string;
+  recordedBy?: string;
+  /** Source dispatch transfer (when known). Optional for ad-hoc records. */
+  transferId?: string;
+  lines: SpokeRejectLine[];
+  /** Sum of `lines[].rejectedUnits` — cached for header summaries. */
+  totalRejectedUnits: number;
+  /** True once the hub manager has marked it seen on the dispatch page. */
+  hubAcknowledged: boolean;
+  /**
+   * True once the rejected qty has been folded into a subsequent dispatch
+   * (so the matrix doesn't keep adding the same rejects to every future
+   * day's drop).
+   */
+  rolledIntoNext: boolean;
+};
+
+/**
+ * One seeded reject so the demo opens with the loop populated:
+ * Clapham received yesterday's drop, 3 of the 18 croissants arrived
+ * damaged. The hub side surfaces it on dispatch; tomorrow's drop will
+ * show "+3 (rejects from Thu)" until rolled.
+ */
+export const PRET_SPOKE_REJECT_SEEDS: SpokeReject[] = [
+  {
+    id: 'reject-seed-clapham-yesterday',
+    spokeId: 'site-spoke-south',
+    hubId: 'hub-central',
+    forDate: dayOffset(-1),
+    recordedAtISO: `${dayOffset(-1)}T08:15:00Z`,
+    recordedBy: 'Spoke manager (demo)',
+    transferId: 'transfer-seed-clapham-yesterday',
+    lines: [
+      {
+        skuId: 'sku-croissant',
+        recipeId: 'prec-croissant',
+        rejectedUnits: 3,
+        reason: 'damaged',
+        note: 'Crushed in tray — likely stacking issue at the hub.',
+      },
+    ],
+    totalRejectedUnits: 3,
+    hubAcknowledged: false,
+    rolledIntoNext: false,
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Spoke ad-hoc requests (PAC-adhoc)
+// ─────────────────────────────────────────────────────────────────────────────
+// Story:
+//  - A spoke needs MORE than they originally ordered (or didn't order
+//    something and needs it now). They send an ad-hoc request to their hub.
+//  - The hub manager reviews on /production/dispatch and either approves
+//    as-is, approves with a smaller qty, or rejects with a reason.
+//  - Approved units flow into the dispatch matrix as an augmentation
+//    (visible alongside the regular order + rejects roll-forward).
+//  - Lifecycle per record: 'pending' → 'approved' | 'partial' | 'rejected'
+//  - Per-line: 'pending' → 'approved' | 'partial' | 'rejected'
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type AdhocRequestId = string;
+
+export type AdhocRequestReason =
+  | 'unexpected-demand'
+  | 'event-booking'
+  | 'shortage'
+  | 'quality-issue'
+  | 'other';
+
+export const ADHOC_REQUEST_REASON_LABEL: Record<AdhocRequestReason, string> = {
+  'unexpected-demand': 'Unexpected demand',
+  'event-booking':     'Event / pre-order',
+  'shortage':          'Ran out earlier than planned',
+  'quality-issue':     'Quality issue with stock on hand',
+  'other':             'Other',
+};
+
+export type AdhocRequestLineStatus = 'pending' | 'approved' | 'partial' | 'rejected';
+
+export type AdhocRequestLine = {
+  id: string;
+  skuId: SkuId;
+  recipeId: RecipeId;
+  /** What the spoke originally asked for. */
+  requestedUnits: number;
+  /**
+   * What the hub agreed to send. Undefined while the request is still
+   * pending. When `lineStatus === 'partial'` this is < requestedUnits;
+   * when 'approved' it equals requestedUnits; 'rejected' = 0.
+   */
+  approvedUnits?: number;
+  lineStatus: AdhocRequestLineStatus;
+  /** Hub's note when partial/rejected (e.g. "out of butter"). */
+  hubNote?: string;
+};
+
+export type AdhocRequestStatus = 'pending' | 'approved' | 'partial' | 'rejected';
+
+export type AdhocRequest = {
+  id: AdhocRequestId;
+  spokeId: SiteId;
+  hubId: SiteId;
+  /** Day the units are needed. Drives which dispatch matrix the approval lands in. */
+  forDate: string;
+  /** When the spoke submitted. */
+  submittedAtISO: string;
+  submittedBy?: string;
+  reason: AdhocRequestReason;
+  /** Optional free-text context from the spoke. */
+  notes?: string;
+  lines: AdhocRequestLine[];
+  /** Sum of `lines[].requestedUnits` — cached for headers. */
+  totalRequestedUnits: number;
+  /** Sum of `lines[].approvedUnits` (treats undefined as 0) — cached. */
+  totalApprovedUnits: number;
+  status: AdhocRequestStatus;
+  /** Hub-side response metadata, set when status moves off 'pending'. */
+  hubResponse?: {
+    respondedAtISO: string;
+    respondedBy?: string;
+    notes?: string;
+  };
+};
+
+/**
+ * One pending request so the demo opens with the loop populated:
+ * Clapham Junction had a busy lunch and needs another 6 croissants +
+ * 4 egg-mayo sandwiches for tomorrow's drop. Hub sees it on dispatch.
+ */
+export const PRET_ADHOC_REQUEST_SEEDS: AdhocRequest[] = [
+  {
+    id: 'adhoc-seed-clapham-tomorrow',
+    spokeId: 'site-spoke-south',
+    hubId: 'hub-central',
+    forDate: dayOffset(1),
+    submittedAtISO: `${DEMO_TODAY}T13:42:00Z`,
+    submittedBy: 'Spoke manager (demo)',
+    reason: 'unexpected-demand',
+    notes: 'Lunch trade was 30% up — looks like the new office across the road is busier than expected.',
+    lines: [
+      {
+        id: 'adhoc-seed-line-1',
+        skuId: 'sku-croissant',
+        recipeId: 'prec-croissant',
+        requestedUnits: 6,
+        lineStatus: 'pending',
+      },
+      {
+        id: 'adhoc-seed-line-2',
+        skuId: 'sku-egg-mayo-sandwich',
+        recipeId: 'prec-egg-mayo-sandwich',
+        requestedUnits: 4,
+        lineStatus: 'pending',
+      },
+    ],
+    totalRequestedUnits: 10,
+    totalApprovedUnits: 0,
+    status: 'pending',
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Spoke urgent remake requests (PAC-remake)
+// ─────────────────────────────────────────────────────────────────────────────
+// Critical-incident loop, distinct from rejects + ad-hoc:
+//  - Spoke receives a drop, discovers the WHOLE shipment is unsafe (e.g.
+//    the cold chain broke and the temperature exceeded 5°C in transit).
+//  - The spoke submits an urgent remake request against the source
+//    transfer. Every line + qty from that transfer is duplicated as the
+//    remake spec — they're not picking, the whole drop has to be remade.
+//  - The hub manager sees a high-priority banner at the top of dispatch.
+//    They either ACCEPT (committing to a specific delivery slot — next
+//    available production run) or DECLINE with a reason (e.g. ingredient
+//    shortage means same-day remake isn't possible).
+//  - Once accepted, the slot shows on the spoke side so the spoke knows
+//    when to expect the make-up shipment. The original transfer flips to
+//    a "remade-by" reference for the audit trail.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type RemakeRequestId = string;
+
+export type RemakeReason =
+  | 'temperature-breach'
+  | 'contamination'
+  | 'allergen-cross-contact'
+  | 'vehicle-failure'
+  | 'packaging-failure'
+  | 'other';
+
+export const REMAKE_REASON_LABEL: Record<RemakeReason, string> = {
+  'temperature-breach':     'Temperature breach (>5°C)',
+  'contamination':          'Contamination',
+  'allergen-cross-contact': 'Allergen cross-contact',
+  'vehicle-failure':        'Vehicle failure / late arrival',
+  'packaging-failure':      'Packaging compromised',
+  'other':                  'Other critical issue',
+};
+
+export type RemakeStatus =
+  | 'pending'        // spoke submitted, hub hasn't responded
+  | 'accepted'       // hub has committed to a delivery slot
+  | 'declined'       // hub can't fulfil
+  | 'in-production'  // hub manager started the remake batches
+  | 'dispatched';    // remake transfer sent — closes the loop
+
+export type RemakeDeliverySlot = {
+  /** ISO datetime the hub commits to. */
+  proposedISO: string;
+  /** Plain-English label e.g. "Today 14:00 run". */
+  label: string;
+};
+
+export type RemakeRequestLine = {
+  skuId: SkuId;
+  recipeId: RecipeId;
+  /** Units copied from the source transfer line. */
+  units: number;
+};
+
+export type RemakeEvidence = {
+  /** Highest temperature reading observed on the load. */
+  temperatureC?: number;
+  /** Time the load was held above safe temperature (minutes). */
+  holdTimeMinutes?: number;
+  /** Free-text additional context (mandatory). */
+  notes: string;
+};
+
+export type RemakeRequest = {
+  id: RemakeRequestId;
+  spokeId: SiteId;
+  hubId: SiteId;
+  /** The dispatch transfer that arrived bad. */
+  sourceTransferId: string;
+  /** When that transfer was originally for. */
+  sourceTransferDate: string;
+  submittedAtISO: string;
+  submittedBy?: string;
+  reason: RemakeReason;
+  evidence: RemakeEvidence;
+  /** Lines + qty mirrored from the source transfer. */
+  lines: RemakeRequestLine[];
+  totalUnits: number;
+  status: RemakeStatus;
+  /** Hub-side response — populated when status leaves 'pending'. */
+  hubResponse?: {
+    respondedAtISO: string;
+    respondedBy?: string;
+    notes?: string;
+    /** Set when accepted — the delivery slot the hub commits to. */
+    slot?: RemakeDeliverySlot;
+    /** Set when declined — reason for the decline. */
+    declineReason?: string;
+  };
+  /** When dispatched, the new transfer that fulfilled the remake. */
+  fulfilmentTransferId?: string;
+};
+
+/**
+ * One pending remake to demo the critical-incident loop:
+ * Clapham Junction received yesterday's drop and the cold-chain logger
+ * showed the load held at 8.5°C for 47 minutes (vehicle compressor
+ * failure). The whole shipment is unsafe and a full remake is needed.
+ */
+export const PRET_REMAKE_REQUEST_SEEDS: RemakeRequest[] = [
+  {
+    id: 'remake-seed-clapham-yesterday',
+    spokeId: 'site-spoke-south',
+    hubId: 'hub-central',
+    sourceTransferId: 'transfer-seed-clapham-yesterday',
+    sourceTransferDate: dayOffset(-1),
+    submittedAtISO: `${DEMO_TODAY}T07:42:00Z`,
+    submittedBy: 'Spoke manager (demo)',
+    reason: 'temperature-breach',
+    evidence: {
+      temperatureC: 8.5,
+      holdTimeMinutes: 47,
+      notes: 'Refrigeration unit on the van failed between drop 2 and our delivery. Driver flagged it on arrival; cold-chain logger confirmed 47 mins above 5°C. Stock cannot be sold.',
+    },
+    lines: [
+      { skuId: 'sku-croissant',           recipeId: 'prec-croissant',           units: 18 },
+      { skuId: 'sku-pain-au-choc',        recipeId: 'prec-pain-au-chocolat',    units: 12 },
+      { skuId: 'sku-egg-mayo-sandwich',   recipeId: 'prec-egg-mayo-sandwich',   units: 14 },
+      { skuId: 'sku-club-sandwich',       recipeId: 'prec-club-sandwich',       units: 10 },
+      { skuId: 'sku-tuna-sandwich',       recipeId: 'prec-tuna-sandwich',       units: 8  },
+      { skuId: 'sku-chicken-mayo-filling',recipeId: 'prec-chicken-mayo-filling',units: 2  },
+    ],
+    totalUnits: 64,
+    status: 'pending',
+  },
+];
+
+// ─── Lookups ────────────────────────────────────────────────────────────────
+
+/**
+ * Convenience seed-only lookup: returns the dispatch transfer recorded in
+ * fixtures (NOT including any in-flight transfers from the runtime store).
+ * UI consumers should also overlay store transfers via `useDispatchTransfers`
+ * so a freshly-sent shipment becomes log-against-able immediately.
+ */
+export function dispatchTransferSeed(
+  hubId: SiteId,
+  spokeId: SiteId,
+  forDate: string,
+): DispatchTransfer | undefined {
+  return PRET_DISPATCH_TRANSFER_SEEDS.find(
+    t => t.hubId === hubId && t.spokeId === spokeId && t.forDate === forDate,
+  );
+}
+
+/** Most-recent dispatch transfer (seeded) the spoke could log rejects against. */
+export function lastDispatchToSpoke(
+  hubId: SiteId,
+  spokeId: SiteId,
+): DispatchTransfer | undefined {
+  return [...PRET_DISPATCH_TRANSFER_SEEDS]
+    .filter(t => t.hubId === hubId && t.spokeId === spokeId)
+    .sort((a, b) => (a.forDate < b.forDate ? 1 : -1))[0];
+}
+
+/** All seeded rejects for a given hub (for the IncomingRejectsStrip). */
+export function rejectSeedsForHub(hubId: SiteId): SpokeReject[] {
+  return PRET_SPOKE_REJECT_SEEDS.filter(r => r.hubId === hubId);
+}
+
+/** All seeded rejects this spoke recorded (for the spoke history list). */
+export function rejectSeedsForSpoke(spokeId: SiteId): SpokeReject[] {
+  return PRET_SPOKE_REJECT_SEEDS.filter(r => r.spokeId === spokeId);
+}
+
+/**
+ * Compute the unrolled reject units for a (hub, spoke, sku) combo. Used by
+ * the dispatch matrix + amounts feed-through to add a "+N (rejects)" floor
+ * to the next dispatch demand. Walks BOTH the seeded rejects and any
+ * runtime store-created records (passed in by the caller — fixtures.ts has
+ * no view of React state).
+ */
+export function unrolledRejectUnits(
+  rejects: SpokeReject[],
+  hubId: SiteId,
+  spokeId: SiteId,
+  skuId: SkuId,
+): number {
+  let total = 0;
+  for (const r of rejects) {
+    if (r.hubId !== hubId || r.spokeId !== spokeId || r.rolledIntoNext) continue;
+    for (const ln of r.lines) {
+      if (ln.skuId === skuId) total += ln.rejectedUnits;
+    }
+  }
+  return total;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Settings health — stale / unused / suspect cards
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2389,6 +3132,9 @@ export type User = {
 export const PRET_USERS: User[] = [
   { id: 'user-manager-central', name: 'Priya — Manager, London Central', role: 'Manager', siteId: 'hub-central' },
   { id: 'user-staff-central',   name: 'Dev — Staff, London Central',    role: 'Staff',   siteId: 'hub-central' },
+  { id: 'user-staff-central-2', name: 'Sara — Staff, London Central',   role: 'Staff',   siteId: 'hub-central' },
+  { id: 'user-staff-central-3', name: 'Marco — Staff, London Central',  role: 'Staff',   siteId: 'hub-central' },
+  { id: 'user-staff-central-4', name: 'Ade — Staff, London Central',    role: 'Staff',   siteId: 'hub-central' },
   { id: 'user-manager-south',   name: 'Nia — Manager, Clapham Junction', role: 'Manager', siteId: 'site-spoke-south' },
   { id: 'user-manager-north',   name: 'Jules — Manager, Islington North', role: 'Manager', siteId: 'site-standalone-north' },
   { id: 'user-staff-airport',   name: 'Rae — Staff, Heathrow T5',        role: 'Staff',   siteId: 'site-hybrid-airport' },
@@ -2615,6 +3361,243 @@ export type DispatchDemandLine = {
   status: SpokeSubmission['status'];
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Ingredient stock — F3 + PAC045
+//
+// A first-pass inventory model: raw ingredients (flour, butter, eggs, …) +
+// per-recipe consumption + per-site stock-on-hand snapshot. Lets the plan
+// surface a "stock cap" — the max units of each base recipe producible
+// from current ingredient stock — and flag the binding ingredient when
+// Quinn's forecast-driven proposal exceeds it.
+//
+// Scope: applies to BASE recipes (no subRecipes). Assemblies inherit the
+// constraint via the existing assembly-demand cascade — if ciabatta caps
+// at 30 loaves, club sandwich automatically shows the cascade shortfall.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type IngredientId = string;
+
+export type IngredientCategory =
+  | 'flour'
+  | 'dairy'
+  | 'protein'
+  | 'produce'
+  | 'pantry'
+  | 'packaging';
+
+export type Ingredient = {
+  id: IngredientId;
+  name: string;
+  /** Canonical unit for stock-on-hand and per-unit consumption. */
+  canonicalUnit: 'g' | 'ml' | 'unit';
+  category: IngredientCategory;
+};
+
+export const PRET_INGREDIENTS: Ingredient[] = [
+  { id: 'ing-flour',       name: 'Strong white flour',  canonicalUnit: 'g',    category: 'flour'   },
+  { id: 'ing-butter',      name: 'Cultured butter',     canonicalUnit: 'g',    category: 'dairy'   },
+  { id: 'ing-egg',         name: 'Free-range eggs',     canonicalUnit: 'unit', category: 'protein' },
+  { id: 'ing-mayo',        name: 'Mayonnaise',          canonicalUnit: 'g',    category: 'pantry'  },
+  { id: 'ing-tuna',        name: 'Tuna (skipjack)',     canonicalUnit: 'g',    category: 'protein' },
+  { id: 'ing-chicken',     name: 'Roast chicken',       canonicalUnit: 'g',    category: 'protein' },
+  { id: 'ing-chocolate',   name: 'Dark chocolate batons', canonicalUnit: 'g',  category: 'pantry'  },
+  { id: 'ing-cocoa-powder', name: 'Cocoa powder',       canonicalUnit: 'g',    category: 'pantry'  },
+];
+
+export type IngredientUsage = {
+  recipeId: RecipeId;
+  ingredientId: IngredientId;
+  /** Quantity of the ingredient consumed per ONE produced unit of the recipe. */
+  quantityPerUnit: number;
+  /** Unit (must match the ingredient's canonicalUnit). */
+  unit: 'g' | 'ml' | 'unit';
+};
+
+/**
+ * Per-recipe ingredient consumption. Defined for base (non-assembly) recipes
+ * only. Assemblies' constraints flow through their sub-recipes via the
+ * existing assembly-demand cascade in PlanStore.resolvePlan.
+ */
+export const PRET_INGREDIENT_USAGE: IngredientUsage[] = [
+  // Bakery — viennoiserie use a lot of butter, which is the demo bottleneck.
+  { recipeId: 'prec-croissant',         ingredientId: 'ing-flour',  quantityPerUnit: 60, unit: 'g' },
+  { recipeId: 'prec-croissant',         ingredientId: 'ing-butter', quantityPerUnit: 35, unit: 'g' },
+  { recipeId: 'prec-pain-au-chocolat',  ingredientId: 'ing-flour',  quantityPerUnit: 60, unit: 'g' },
+  { recipeId: 'prec-pain-au-chocolat',  ingredientId: 'ing-butter', quantityPerUnit: 35, unit: 'g' },
+  { recipeId: 'prec-pain-au-chocolat',  ingredientId: 'ing-chocolate', quantityPerUnit: 12, unit: 'g' },
+  { recipeId: 'prec-almond-croissant',  ingredientId: 'ing-flour',  quantityPerUnit: 60, unit: 'g' },
+  { recipeId: 'prec-almond-croissant',  ingredientId: 'ing-butter', quantityPerUnit: 40, unit: 'g' },
+  // Loaves — flour-heavy, no butter so they don't compete.
+  { recipeId: 'prec-baguette',          ingredientId: 'ing-flour',  quantityPerUnit: 250, unit: 'g' },
+  { recipeId: 'prec-granary',           ingredientId: 'ing-flour',  quantityPerUnit: 350, unit: 'g' },
+  { recipeId: 'prec-ciabatta',          ingredientId: 'ing-flour',  quantityPerUnit: 220, unit: 'g' },
+  // Cookies — chocolate + cocoa heavy, share butter pool.
+  { recipeId: 'prec-cookie',            ingredientId: 'ing-flour',     quantityPerUnit: 35, unit: 'g' },
+  { recipeId: 'prec-cookie',            ingredientId: 'ing-butter',    quantityPerUnit: 25, unit: 'g' },
+  { recipeId: 'prec-cookie',            ingredientId: 'ing-chocolate', quantityPerUnit: 20, unit: 'g' },
+  { recipeId: 'prec-cookie',            ingredientId: 'ing-cocoa-powder', quantityPerUnit: 8, unit: 'g' },
+  // Fillings — protein-driven.
+  { recipeId: 'prec-egg-mayo-filling',   ingredientId: 'ing-egg',  quantityPerUnit: 28, unit: 'unit' }, // per tray (~4kg)
+  { recipeId: 'prec-egg-mayo-filling',   ingredientId: 'ing-mayo', quantityPerUnit: 600, unit: 'g' },
+  { recipeId: 'prec-tuna-mayo-filling',  ingredientId: 'ing-tuna', quantityPerUnit: 2400, unit: 'g' },
+  { recipeId: 'prec-tuna-mayo-filling',  ingredientId: 'ing-mayo', quantityPerUnit: 800, unit: 'g' },
+  { recipeId: 'prec-chicken-mayo-filling', ingredientId: 'ing-chicken', quantityPerUnit: 2800, unit: 'g' },
+  { recipeId: 'prec-chicken-mayo-filling', ingredientId: 'ing-mayo',    quantityPerUnit: 600, unit: 'g' },
+  // Roasts.
+  { recipeId: 'prec-roast-chicken',      ingredientId: 'ing-chicken', quantityPerUnit: 1800, unit: 'g' }, // per tray
+];
+
+export type IngredientStock = {
+  siteId: SiteId;
+  ingredientId: IngredientId;
+  /** Quantity on hand right now in the ingredient's canonicalUnit. */
+  onHand: number;
+  /** Last counted/updated timestamp — for stale-stock callouts later. */
+  lastUpdatedISO: string;
+};
+
+/**
+ * Site stock-on-hand. The hub's butter total is intentionally tight: croissant
+ * + pain au choc + almond croissant + cookie all draw from the same butter
+ * pool, so ramping bakery items quickly hits the cap and Quinn flags it.
+ */
+export const PRET_INGREDIENT_STOCK: IngredientStock[] = [
+  // hub-central
+  { siteId: 'hub-central', ingredientId: 'ing-flour',        onHand: 28000, lastUpdatedISO: `${DEMO_TODAY}T05:00:00Z` }, // 28kg
+  // 2.2kg butter — intentionally tight. Croissant @ 35g/ea caps at 62 units;
+  // hub Quinn proposal for today is 66 (48 own + 18 spoke dispatch), so the
+  // stock-cap chip visibly bites on the croissant row from the Today tab.
+  { siteId: 'hub-central', ingredientId: 'ing-butter',       onHand:  2200, lastUpdatedISO: `${DEMO_TODAY}T05:00:00Z` },
+  { siteId: 'hub-central', ingredientId: 'ing-egg',          onHand:   180, lastUpdatedISO: `${DEMO_TODAY}T05:00:00Z` }, // 180 eggs
+  { siteId: 'hub-central', ingredientId: 'ing-mayo',         onHand:  6000, lastUpdatedISO: `${DEMO_TODAY}T05:00:00Z` }, // 6kg
+  { siteId: 'hub-central', ingredientId: 'ing-tuna',         onHand:  4800, lastUpdatedISO: `${DEMO_TODAY}T05:00:00Z` }, // 4.8kg (~2 trays worth)
+  { siteId: 'hub-central', ingredientId: 'ing-chicken',      onHand:  9000, lastUpdatedISO: `${DEMO_TODAY}T05:00:00Z` }, // 9kg
+  { siteId: 'hub-central', ingredientId: 'ing-chocolate',    onHand:  2400, lastUpdatedISO: `${DEMO_TODAY}T05:00:00Z` }, // 2.4kg
+  { siteId: 'hub-central', ingredientId: 'ing-cocoa-powder', onHand:   600, lastUpdatedISO: `${DEMO_TODAY}T05:00:00Z` }, // 600g
+  // site-standalone-north (own kitchen, smaller scale)
+  { siteId: 'site-standalone-north', ingredientId: 'ing-flour',  onHand: 8000, lastUpdatedISO: `${DEMO_TODAY}T05:00:00Z` },
+  { siteId: 'site-standalone-north', ingredientId: 'ing-butter', onHand: 1200, lastUpdatedISO: `${DEMO_TODAY}T05:00:00Z` },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sales-vs-forecast bias (demo only)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Per-SKU demand bias used by the sales actuals synthesiser to make some
+ * recipes consistently outperform or underperform their forecast. Without
+ * this, the noise wobble averages out close to zero across a day and the
+ * Sales report reads as "everything on target", which isn't a useful demo.
+ *
+ * Bias is a multiplier applied on top of the forecast before the per-hour
+ * wobble is added. `1.18` = roughly 18% over forecast, `0.78` = ~22%
+ * under. SKUs not listed default to 1.0 (forecast bang-on).
+ */
+export const PRET_SKU_DEMAND_BIAS: Record<SkuId, number> = {
+  // Strong overshooters — Quinn should suggest uplifting these
+  'sku-croissant':           1.22,
+  'sku-almond-croissant':    1.18,
+  'sku-cookie':              1.16,
+  'sku-flat-white':          1.12,
+  // Mild overshooters
+  'sku-egg-mayo-sandwich':   1.08,
+  'sku-iced-coffee':         1.10,
+  // Strong undershooters — Quinn should suggest scaling back
+  'sku-tuna-sandwich':       0.78,
+  'sku-banana-bread':        0.82,
+  'sku-hummus-wrap':         0.84,
+  'sku-falafel-bowl':        0.80,
+  // Mild undershooters
+  'sku-pain-au-choc':        0.92,
+  'sku-fruit-pot':           0.91,
+};
+
+/** Returns the demand bias for a SKU, defaulting to 1.0 (no bias). */
+export function demandBiasFor(skuId: SkuId): number {
+  return PRET_SKU_DEMAND_BIAS[skuId] ?? 1.0;
+}
+
+export function getIngredient(id: IngredientId): Ingredient | undefined {
+  return PRET_INGREDIENTS.find(i => i.id === id);
+}
+
+export function ingredientUsageFor(recipeId: RecipeId): IngredientUsage[] {
+  return PRET_INGREDIENT_USAGE.filter(u => u.recipeId === recipeId);
+}
+
+export function ingredientStockFor(siteId: SiteId, ingredientId: IngredientId): IngredientStock | undefined {
+  return PRET_INGREDIENT_STOCK.find(s => s.siteId === siteId && s.ingredientId === ingredientId);
+}
+
+/**
+ * Return the maximum number of units of `recipeId` that the given site can
+ * produce from its current ingredient stock, plus a list of ingredients
+ * that are at (or close to) the binding limit.
+ *
+ * Returns `cap = Infinity` when the recipe has no declared ingredient usage
+ * (we can't constrain what we don't model). Returns `cap = 0` when at
+ * least one declared ingredient is fully out.
+ *
+ * Assembly recipes (those with subRecipes) always return Infinity — their
+ * constraint flows through the assembly-demand cascade by design, not via
+ * a direct ingredient cap.
+ */
+export type StockCapBinding = {
+  ingredientId: IngredientId;
+  ingredientName: string;
+  /** Stock on hand in the ingredient's canonical unit. */
+  onHand: number;
+  /** Quantity required per ONE unit of the recipe. */
+  perUnit: number;
+  /** Units of the recipe this ingredient alone allows (floor). */
+  unitsAvailable: number;
+  unit: string;
+};
+
+export type StockCap = {
+  /** Max units producible. Infinity when no usage is declared. */
+  cap: number;
+  /** All ingredients drawn on, with their per-ingredient cap, ordered ascending. */
+  ingredients: StockCapBinding[];
+  /** The most-binding ingredient(s) — those at the floor. */
+  bindingIngredients: StockCapBinding[];
+};
+
+export function maxUnitsFromStock(siteId: SiteId, recipeId: RecipeId): StockCap {
+  const recipe = getRecipe(recipeId);
+  if (!recipe || (recipe.subRecipes && recipe.subRecipes.length > 0)) {
+    return { cap: Infinity, ingredients: [], bindingIngredients: [] };
+  }
+  const usage = ingredientUsageFor(recipeId);
+  if (usage.length === 0) {
+    return { cap: Infinity, ingredients: [], bindingIngredients: [] };
+  }
+
+  const bindings: StockCapBinding[] = [];
+  for (const u of usage) {
+    const ing = getIngredient(u.ingredientId);
+    if (!ing) continue;
+    const stock = ingredientStockFor(siteId, u.ingredientId);
+    const onHand = stock?.onHand ?? 0;
+    const unitsAvailable = u.quantityPerUnit > 0 ? Math.floor(onHand / u.quantityPerUnit) : Infinity;
+    bindings.push({
+      ingredientId: u.ingredientId,
+      ingredientName: ing.name,
+      onHand,
+      perUnit: u.quantityPerUnit,
+      unitsAvailable,
+      unit: u.unit,
+    });
+  }
+
+  bindings.sort((a, b) => a.unitsAvailable - b.unitsAvailable);
+  const cap = bindings.length === 0 ? Infinity : bindings[0].unitsAvailable;
+  const bindingIngredients = bindings.filter(b => b.unitsAvailable === cap);
+  return { cap, ingredients: bindings, bindingIngredients };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export type AmountsLine = {
   item: ProductionItem;
   recipe: ProductionRecipe;
@@ -2633,6 +3616,13 @@ export type AmountsLine = {
    * `submissionsForHub()` returns submissions (typically South / East / West).
    */
   dispatchBySpoke?: DispatchDemandLine[];
+  /**
+   * F3 + PAC045 — max units producible from current ingredient stock.
+   * `undefined` when the recipe has no declared ingredient usage (i.e.
+   * we can't constrain it). Assemblies are always undefined here — their
+   * constraint flows through the assembly-demand cascade.
+   */
+  stockCap?: StockCap;
   /** Primary bench (final stage). */
   primaryBench?: Bench;
   /** All benches in workflow order. */
@@ -2690,6 +3680,11 @@ export function amountsForSiteOnDate(siteId: SiteId, date: string): AmountsLine[
       : 0;
     // Quinn proposal: own counter sales + dispatch − carry-over, never < 0.
     const quinnProposed = Math.max(0, counter + dispatchDemand - carried);
+    // F3 + PAC045 — cap by ingredient stock when the recipe has declared
+    // usage. `undefined` keeps the existing UI behaviour for un-modelled
+    // recipes; assemblies are always undefined here on purpose.
+    const stockCapResult = maxUnitsFromStock(siteId, item.recipeId);
+    const stockCap = stockCapResult.cap === Infinity ? undefined : stockCapResult;
     lines.push({
       item,
       recipe,
@@ -2698,6 +3693,7 @@ export function amountsForSiteOnDate(siteId: SiteId, date: string): AmountsLine[
       quinnProposed,
       dispatchDemand,
       dispatchBySpoke: dispatchLines,
+      stockCap,
       primaryBench: primaryBenchForItem(item),
       benches: benchesForItem(item),
     });

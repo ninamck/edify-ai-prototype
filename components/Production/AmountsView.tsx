@@ -19,12 +19,15 @@ import {
   X,
   Lock,
   Truck,
+  Package,
 } from 'lucide-react';
 import Link from 'next/link';
 import StatusPill from './StatusPill';
+import { getStepperButtonStyle } from './QtyStepper';
 import { SelectionTagChip } from './RangeTierChips';
 import { StaffLockBanner } from './RoleContext';
-import { usePlan, usePlanStore, FILLING_TRAY_GRAMS, type PlanLine } from './PlanStore';
+import { usePlan, usePlanStore, FILLING_TRAY_GRAMS, type PlanLine, type FocusReason } from './PlanStore';
+import PlanFocusPanel from './PlanFocusPanel';
 import {
   effectiveBatchRules,
   proposeBatchSplit,
@@ -34,6 +37,7 @@ import {
   type ProductionRecipe,
   type ProductionMode,
   type DemandSignal,
+  type StockCap,
 } from './fixtures';
 import { hhmmToMinutes, minutesToHHMM } from './time';
 
@@ -73,6 +77,17 @@ const SIGNAL_LABELS: Record<DemandSignal, string> = {
 export type AmountsViewProps = {
   siteId: SiteId;
   date: string;
+  /**
+   * Optional production-item id to focus on mount (Quinn deep-link). When
+   * present, the view clears any active filter that would hide the row,
+   * expands it, scrolls it into view and pulses it for ~2s. The host owns
+   * the state so it can also clear it from the URL.
+   */
+  focusedItemId?: string | null;
+  /** Reason for the focus — drives the contextual banner at the top of the table. */
+  focusReason?: FocusReason | null;
+  /** Called when the manager dismisses the focus banner. */
+  onClearFocus?: () => void;
   canEdit: boolean;
   /**
    * Optional banner rendered above the mode-tab strip (e.g. "Showing past
@@ -81,12 +96,23 @@ export type AmountsViewProps = {
   topBanner?: React.ReactNode;
 };
 
-export default function AmountsView({ siteId, date, canEdit, topBanner }: AmountsViewProps) {
+export default function AmountsView({
+  siteId,
+  date,
+  canEdit,
+  topBanner,
+  focusedItemId = null,
+  focusReason = null,
+  onClearFocus,
+}: AmountsViewProps) {
   const { setPlanned, setPerDropPlan, setVariablePlan, resetToQuinn, resetAll, overrideCount } = usePlanStore();
   const [modeTab, setModeTab] = useState<ModeTabId>('all');
   const [categoryFilter, setCategoryFilter] = useState<'All' | ProductionRecipe['category']>('All');
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Transient flag that drives the row's pulse animation. Cleared by a
+  // timer ~2s after focus lands so the highlight is calm/not permanent.
+  const [pulsingItemId, setPulsingItemId] = useState<string | null>(null);
 
   const lines = usePlan(siteId, date);
   // Past days are showing history — disable all editing affordances even
@@ -147,6 +173,45 @@ export default function AmountsView({ siteId, date, canEdit, topBanner }: Amount
       setCategoryFilter('All');
     }
   }, [categoryFilter, categoriesInMode]);
+
+  // Quinn deep-link landing: when `focusedItemId` arrives we open the
+  // PlanFocusPanel (the action-oriented workflow). Clearing the filters
+  // up front ensures the corresponding row is visible underneath the
+  // panel, so when the manager hits "Open row" the scroll-to-row flow
+  // works without first having to undo a filter. The actual scroll +
+  // pulse happens in `openRowInTable` below — triggered by the panel's
+  // "Open row" button — not on initial focus, because the panel is the
+  // primary surface and stealing scroll under it would feel disorienting.
+  useEffect(() => {
+    if (!focusedItemId) return;
+    const target = lines.find(l => l.item.id === focusedItemId);
+    if (!target) return;
+    setModeTab('all');
+    setCategoryFilter('All');
+    setQuery('');
+    setExpanded(prev => {
+      if (prev.has(focusedItemId)) return prev;
+      const next = new Set(prev);
+      next.add(focusedItemId);
+      return next;
+    });
+  }, [focusedItemId, siteId, date, lines]);
+
+  // Triggered by the focus panel's "Open row" CTA. Closes the panel (via
+  // onClearFocus on the host) and scrolls / pulses the row so the manager
+  // can drill into the inline detail (ingredient breakdown, batch rules,
+  // workflow walk) for a manual edit.
+  function openRowInTable(itemId: string) {
+    setPulsingItemId(itemId);
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-amount-row-id="${itemId}"]`);
+      if (el && el instanceof HTMLElement) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+    window.setTimeout(() => setPulsingItemId(null), 2400);
+    onClearFocus?.();
+  }
 
   const grouped = useMemo(() => {
     const map = new Map<ProductionRecipe['category'], PlanLine[]>();
@@ -212,9 +277,28 @@ export default function AmountsView({ siteId, date, canEdit, topBanner }: Amount
       </div>
     ) : null);
 
+  // Lookup the focused line — we still need this to decide whether to
+  // mount the side panel. Defensive: the line may not exist when the user
+  // is on a different site/day than the nudge originated from.
+  const focusedLine = focusedItemId ? lines.find(l => l.item.id === focusedItemId) ?? null : null;
+  const showFocusPanel = !!focusedLine && !!focusReason;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       {banner}
+      {showFocusPanel && (
+        <PlanFocusPanel
+          lines={lines}
+          focusedItemId={focusedLine!.item.id}
+          reason={focusReason!}
+          onSetPlanned={(itemId, units) => setPlanned(itemId, units, date)}
+          onOpenRow={openRowInTable}
+          onClose={() => {
+            setPulsingItemId(null);
+            onClearFocus?.();
+          }}
+        />
+      )}
       {/* Mode tabs + global actions — sits at the top of the editor so the tab
           strip frames the table area. Site/date selection live in the host page. */}
       <div
@@ -332,7 +416,7 @@ export default function AmountsView({ siteId, date, canEdit, topBanner }: Amount
             textDecoration: 'none',
           }}
         >
-          Open on board <ArrowRight size={12} />
+          See benches <ArrowRight size={12} />
         </Link>
       </div>
 
@@ -540,6 +624,7 @@ export default function AmountsView({ siteId, date, canEdit, topBanner }: Amount
                   onSetVariable={v => setVariablePlan(line.item.id, v, date)}
                   onResetToQuinn={() => resetToQuinn(line.item.id, date)}
                   onAbsorb={() => absorbAssemblyDemand(line)}
+                  pulsing={pulsingItemId === line.item.id}
                 />
               ))}
             </div>
@@ -563,6 +648,7 @@ function AmountRow({
   onSetVariable,
   onResetToQuinn,
   onAbsorb,
+  pulsing = false,
 }: {
   line: PlanLine;
   expanded: boolean;
@@ -574,8 +660,10 @@ function AmountRow({
   onSetVariable: (v: number) => void;
   onResetToQuinn: () => void;
   onAbsorb: () => void;
+  /** When true, show a transient highlight glow (Quinn deep-link landing). */
+  pulsing?: boolean;
 }) {
-  const { recipe, forecast, carryOver, quinnProposed, dispatchDemand, dispatchBySpoke, primaryBench, benches, planned, runPlanned, variablePlanned, runLocked, lockedRunLabels, effectivePlanned, assemblyDemand } = line;
+  const { recipe, forecast, carryOver, quinnProposed, dispatchDemand, dispatchBySpoke, stockCap, primaryBench, benches, planned, runPlanned, variablePlanned, runLocked, lockedRunLabels, effectivePlanned, assemblyDemand } = line;
   const counterUnits = forecast?.projectedUnits ?? 0;
   const hasDispatch = dispatchDemand > 0;
   const eff = effectiveBatchRules(recipe.batchRules, primaryBench?.batchRules);
@@ -636,12 +724,13 @@ function AmountRow({
 
   // Shortfalls get a thin left-edge accent rather than a full red wash;
   // the "Cover" CTA below the stepper still carries the urgent colour.
-  const rowBg = '#ffffff';
+  const rowBg = pulsing ? 'var(--color-warning-bg)' : '#ffffff';
   const rowBorderLeft = assemblyShort ? '3px solid var(--color-error)' : '3px solid transparent';
 
   return (
     <>
       <div
+        data-amount-row-id={line.item.id}
         style={{
           display: 'grid',
           gridTemplateColumns: 'minmax(260px, 1.6fr) 100px 100px 110px 200px 180px 150px',
@@ -653,6 +742,13 @@ function AmountRow({
           background: rowBg,
           cursor: 'pointer',
           fontSize: 11,
+          // ~120px gives the row breathing room under the sticky page
+          // header / site selector when scrollIntoView lands.
+          scrollMarginTop: 120,
+          // Box-shadow ring + smooth transition stand in for a CSS
+          // keyframes pulse without needing a global stylesheet edit.
+          boxShadow: pulsing ? '0 0 0 2px var(--color-warning) inset, 0 4px 14px rgba(245,166,35,0.18)' : 'none',
+          transition: 'background 0.4s ease, box-shadow 0.4s ease',
         }}
         onClick={onToggle}
       >
@@ -809,7 +905,18 @@ function AmountRow({
         </div>
 
         {/* Quinn */}
-        <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+        <div
+          style={{
+            textAlign: 'right',
+            fontSize: 13,
+            fontWeight: 700,
+            fontVariantNumeric: 'tabular-nums',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            gap: 2,
+          }}
+        >
           <div
             style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
             title={segmentEditable ? `${perDropQuinn} per drop · ${quinnProposed}/day` : undefined}
@@ -817,6 +924,9 @@ function AmountRow({
             <Sparkles size={11} color="var(--color-text-muted)" />
             {segmentEditable ? perDropQuinn : quinnProposed}
           </div>
+          {stockCap && stockCap.cap < quinnProposed && (
+            <StockCapChip stockCap={stockCap} />
+          )}
         </div>
 
         {/* You plan stepper */}
@@ -864,7 +974,7 @@ function AmountRow({
               )}
               title={runLocked ? 'Run is locked — adjust variable top-ups inside the expanded row' : dropsVary ? 'Drops vary — adjust them in the expanded panel' : undefined}
             >
-              <Minus size={12} />
+              <Minus size={14} />
             </button>
             {dropsVary ? (
               <span
@@ -919,7 +1029,7 @@ function AmountRow({
               style={stepBtn(!canEdit || runLocked || (isSegment && !segmentEditable) || dropsVary)}
               title={runLocked ? 'Run is locked — adjust variable top-ups inside the expanded row' : dropsVary ? 'Drops vary — adjust them in the expanded panel' : undefined}
             >
-              <Plus size={12} />
+              <Plus size={14} />
             </button>
             {deltaFromQuinn !== 0 && canEdit && !runLocked && (
               <button
@@ -1483,6 +1593,9 @@ function AmountRow({
             </div>
           )}
 
+          {/* Ingredient stock cap (F3 + PAC045) — base recipes only. */}
+          {stockCap && <StockCapPanel stockCap={stockCap} planned={effectivePlanned} />}
+
           {/* Batch rule breakdown */}
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', marginBottom: 8 }}>
@@ -1713,6 +1826,126 @@ function DispatchLedgerRow({
   );
 }
 
+// ─── Stock-cap chip + panel (F3 + PAC045) ───────────────────────────────────
+//
+// `StockCapChip` is the in-row warning shown next to Quinn's proposal when
+// the proposal exceeds what current ingredient stock can produce. It names
+// the binding ingredient and the unit cap. The expanded `StockCapPanel`
+// lists every ingredient drawn on by the recipe with its individual cap so
+// the GM can see how close the next-tightest constraint is.
+
+function StockCapChip({ stockCap }: { stockCap: StockCap }) {
+  const binding = stockCap.bindingIngredients[0];
+  if (!binding) return null;
+  return (
+    <div
+      style={{
+        marginTop: 1,
+        fontSize: 9,
+        fontWeight: 700,
+        color: 'var(--color-warning)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 3,
+        padding: '1px 5px',
+        borderRadius: 3,
+        background: 'var(--color-warning-bg)',
+        border: '1px solid var(--color-warning-border)',
+      }}
+      title={
+        `Cap ${stockCap.cap} · binding on ${binding.ingredientName} ` +
+        `(${formatStockUnits(binding.onHand, binding.unit)} on hand, ` +
+        `${formatStockUnits(binding.perUnit, binding.unit)}/unit)`
+      }
+    >
+      <Package size={9} />Cap {stockCap.cap}
+    </div>
+  );
+}
+
+function StockCapPanel({ stockCap, planned }: { stockCap: StockCap; planned: number }) {
+  const overCap = planned > stockCap.cap;
+  return (
+    <div>
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', marginBottom: 8 }}>
+        Ingredient stock
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {stockCap.ingredients.map((b, i) => {
+          const isBinding = stockCap.bindingIngredients.some(x => x.ingredientId === b.ingredientId);
+          const needed = planned * b.perUnit;
+          const short = needed > b.onHand;
+          return (
+            <div
+              key={b.ingredientId}
+              style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                gap: 8,
+                fontSize: 11,
+                color: 'var(--color-text-secondary)',
+                padding: '4px 6px',
+                borderRadius: 4,
+                background: isBinding ? 'var(--color-warning-bg)' : 'transparent',
+                border: isBinding ? '1px solid var(--color-warning-border)' : '1px solid transparent',
+              }}
+            >
+              <Package size={10} style={{ color: isBinding ? 'var(--color-warning)' : 'var(--color-text-muted)', flexShrink: 0 }} />
+              <span style={{ fontWeight: 600, color: 'var(--color-text-primary)', minWidth: 130 }}>
+                {b.ingredientName}
+                {i === 0 && <span style={{ marginLeft: 6, fontSize: 9, color: 'var(--color-warning)', fontWeight: 700 }}>BINDING</span>}
+              </span>
+              <span style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                {formatStockUnits(b.onHand, b.unit)} ÷ {formatStockUnits(b.perUnit, b.unit)}/ea
+              </span>
+              <span
+                style={{
+                  marginLeft: 'auto',
+                  fontWeight: 700,
+                  color: short ? 'var(--color-error)' : 'var(--color-text-primary)',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+                title={short ? `Plan needs ${formatStockUnits(needed, b.unit)}; only ${formatStockUnits(b.onHand, b.unit)} on hand` : undefined}
+              >
+                {b.unitsAvailable === Infinity ? '∞' : `${b.unitsAvailable} units`}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {overCap && (
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 11,
+            color: 'var(--color-error)',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 6,
+          }}
+        >
+          <AlertTriangle size={12} style={{ marginTop: 1, flexShrink: 0 }} />
+          <span>
+            Plan {planned} exceeds stock cap {stockCap.cap}. Either drop the plan to {stockCap.cap}
+            {stockCap.bindingIngredients.length > 0 && ` or top up ${stockCap.bindingIngredients[0].ingredientName}`}.
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatStockUnits(qty: number, unit: string): string {
+  if (unit === 'g') {
+    return qty >= 1000 ? `${(qty / 1000).toFixed(qty % 1000 === 0 ? 0 : 1)}kg` : `${qty}g`;
+  }
+  if (unit === 'ml') {
+    return qty >= 1000 ? `${(qty / 1000).toFixed(qty % 1000 === 0 ? 0 : 1)}L` : `${qty}ml`;
+  }
+  return `${qty}`;
+}
+
 // ─── Dual-mode stepper (Run baseline + Variable add-ons) ────────────────────
 //
 // Shown for Run-mode items that have entered their variable phase: the
@@ -1815,7 +2048,7 @@ function DualModeStepper({
               disabled={!canEdit || runPlanned === 0}
               style={miniStepBtn(!canEdit || runPlanned === 0)}
             >
-              <Minus size={10} />
+              <Minus size={11} />
             </button>
             <input
               type="number"
@@ -1846,7 +2079,7 @@ function DualModeStepper({
               disabled={!canEdit}
               style={miniStepBtn(!canEdit)}
             >
-              <Plus size={10} />
+              <Plus size={11} />
             </button>
           </>
         )}
@@ -1885,7 +2118,7 @@ function DualModeStepper({
           disabled={!canEdit || variablePlanned === 0}
           style={miniStepBtn(!canEdit || variablePlanned === 0)}
         >
-          <Minus size={10} />
+          <Minus size={11} />
         </button>
         <input
           type="number"
@@ -1916,7 +2149,7 @@ function DualModeStepper({
           disabled={!canEdit}
           style={miniStepBtn(!canEdit)}
         >
-          <Plus size={10} />
+          <Plus size={11} />
         </button>
       </div>
 
@@ -2002,35 +2235,16 @@ function DualModeStepper({
   );
 }
 
+// Both step button helpers delegate to the shared QtyStepper sizing so
+// every stepper across the production app — rejects, adhoc, spoke order,
+// PCR, and these embedded planner controls — match pixel-for-pixel.
+//
+//   - stepBtn      → emphasized (32×32, icon 14)  — main planner / per-drop
+//   - miniStepBtn  → compact    (22×22, icon 11)  — embedded run/var rows
 function miniStepBtn(disabled: boolean): React.CSSProperties {
-  return {
-    width: 22,
-    height: 22,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 5,
-    background: disabled ? 'transparent' : '#ffffff',
-    border: '1px solid var(--color-border-subtle)',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    color: disabled ? 'var(--color-text-muted)' : 'var(--color-text-primary)',
-    opacity: disabled ? 0.45 : 1,
-    flexShrink: 0,
-  };
+  return getStepperButtonStyle('compact', disabled);
 }
 
 function stepBtn(disabled: boolean): React.CSSProperties {
-  return {
-    width: 32,
-    height: 32,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 6,
-    background: disabled ? 'var(--color-bg-hover)' : '#ffffff',
-    border: '1px solid var(--color-border-subtle)',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    color: disabled ? 'var(--color-text-muted)' : 'var(--color-text-primary)',
-    opacity: disabled ? 0.5 : 1,
-  };
+  return getStepperButtonStyle('emphasized', disabled);
 }

@@ -4,9 +4,9 @@ import { useMemo, useState } from 'react';
 import { Sparkles, CheckCircle2, Trash2, ArrowDown } from 'lucide-react';
 import StatusPill from '@/components/Production/StatusPill';
 import { useRole, StaffLockBanner } from '@/components/Production/RoleContext';
+import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import {
   PRET_CARRY_OVER,
-  PRET_SITES,
   getRecipe,
   getSite,
   type CarryOverEntry,
@@ -18,7 +18,10 @@ export default function CarryOverPage() {
   const { can } = useRole();
   const canAdjust = can('carry-over.adjust');
   const canConfirm = can('carry-over.confirm');
-  const [siteId, setSiteId] = useState('hub-central');
+  // Persona drives the site — site picker UI was removed so the page
+  // always shows the active persona's carry-over.
+  const { isSpoke } = useActiveSite();
+  const siteId = isSpoke ? 'site-spoke-south' : 'hub-central';
   // Local ephemeral adjustments (carriedUnits overrides + status changes)
   const [overrides, setOverrides] = useState<
     Record<string, { carriedUnits?: number; status?: DisplayStatus }>
@@ -39,7 +42,6 @@ export default function CarryOverPage() {
   });
 
   const draftCount = enriched.filter(x => x.status === 'draft').length;
-  const confirmedCount = enriched.filter(x => x.status !== 'draft').length;
   const totalCarried = enriched.reduce((a, b) => a + b.carried, 0);
   const totalAdjustment = enriched.reduce((a, b) => a + b.adjustment, 0);
 
@@ -80,59 +82,6 @@ export default function CarryOverPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Header strip */}
-      <div
-        style={{
-          padding: '10px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          borderBottom: '1px solid var(--color-border-subtle)',
-          background: '#ffffff',
-          flexWrap: 'wrap',
-        }}
-      >
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: 'var(--color-text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}
-        >
-          Site
-        </span>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {PRET_SITES.map(s => {
-            const active = s.id === siteId;
-            return (
-              <button
-                key={s.id}
-                onClick={() => setSiteId(s.id)}
-                style={{
-                  padding: '6px 10px',
-                  borderRadius: 8,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  fontFamily: 'var(--font-primary)',
-                  background: active ? 'var(--color-accent-active)' : '#ffffff',
-                  color: active ? 'var(--color-text-on-active)' : 'var(--color-text-secondary)',
-                  border: `1px solid ${active ? 'var(--color-accent-active)' : 'var(--color-border)'}`,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {s.name} · {s.type}
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-muted)' }}>
-          {draftCount} drafts · {confirmedCount} confirmed
-        </div>
-      </div>
-
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px 16px 32px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <StaffLockBanner reason="Managers confirm carry-over before the first run." />
