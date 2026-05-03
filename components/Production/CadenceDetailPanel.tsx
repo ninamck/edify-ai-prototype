@@ -42,7 +42,7 @@ export default function CadenceDetailPanel({ productionItemId, date, onClose }: 
       pi => pi.productionItemId === item.id && pi.date === date,
     );
     const bench = cadencePIs[0] ? getBench(cadencePIs[0].benchId) : undefined;
-    const eff = bench ? effectiveBatchRules(recipe.batchRules, bench.batchRules) : effectiveBatchRules(recipe.batchRules);
+    const eff = effectiveBatchRules(recipe.batchRules, bench?.batchRules);
     return { item, recipe, cadencePIs, bench, eff };
   }, [productionItemId, date]);
 
@@ -116,7 +116,9 @@ export default function CadenceDetailPanel({ productionItemId, date, onClose }: 
                 overridden={!!overridden}
               />
 
-              <ShelfLifeCard shelfLifeMinutes={data.recipe.shelfLifeMinutes} intervalMinutes={activeInterval} />
+              {data.recipe.shelfLifeMinutes != null && (
+                <ShelfLifeCard shelfLifeMinutes={data.recipe.shelfLifeMinutes} intervalMinutes={activeInterval} />
+              )}
 
               <BatchSizeLine qty={data.item.batchSize ?? data.eff.min} unit={data.recipe.id === 'prec-brewed-coffee' ? 'urns' : 'units'} eff={data.eff} />
 
