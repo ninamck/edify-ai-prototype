@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Sparkles, X } from 'lucide-react';
+import { X } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { getDunkinInsight } from '@/components/Analytics/DunkinAnalyticsInsights';
 
 /**
- * A small Sparkles icon button shown on charts that have a Quinn comment.
+ * A small EdifyMark icon button shown on charts that have a Quinn comment.
  * Click to toggle a popover with the insight text. Click outside / Esc to close.
  *
  * When a `chartId` is provided and that id has a registered live-insight
@@ -113,7 +114,7 @@ export default function QuinnInsightButton({
           transition: 'background 0.12s, border-color 0.12s',
         }}
       >
-        <Sparkles size={12} strokeWidth={2.2} />
+        <EdifyMark size={12} strokeWidth={2.2} />
         Quinn
       </button>
 
@@ -148,7 +149,7 @@ export default function QuinnInsightButton({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Sparkles size={13} color="var(--color-accent-deep)" strokeWidth={2.2} />
+                <EdifyMark size={13} color="var(--color-accent-deep)" strokeWidth={2.2} />
                 <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
                   Quinn · What I&rsquo;m seeing
                 </span>

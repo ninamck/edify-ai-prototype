@@ -129,7 +129,7 @@ Edify is used in kitchens, at loading docks, and on shop floors — not at a des
 | `--color-text-primary` | `#3A3028` | All primary body text |
 | `--color-text-secondary` | `#6B5E55` | Labels, metadata, secondary copy |
 | `--color-success` | `#15803D` | Confirmed, matched, approved |
-| `--color-warning` | `#92400E` | Needs attention, price variance |
+| `--color-warning` | `#EA580C` | Needs attention, price variance |
 | `--color-error` | `#B91C1C` | Dispute, mismatch, short delivery |
 
 The palette is **warm not cold** — warm whites and warm browns instead of grey tones. This keeps the UI approachable and human, appropriate for food and hospitality.

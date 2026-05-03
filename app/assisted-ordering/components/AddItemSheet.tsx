@@ -288,9 +288,9 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
                     padding: '12px 14px',
                     borderRadius: 'var(--radius-card)',
                     border: isNew
-                      ? '1.5px solid rgba(146,64,14,0.30)'
+                      ? '1.5px solid rgba(234,88,12,0.30)'
                       : '1.5px solid var(--color-border-subtle)',
-                    background: isNew ? 'rgba(146,64,14,0.03)' : 'var(--color-bg-surface)',
+                    background: isNew ? 'rgba(234,88,12,0.03)' : 'var(--color-bg-surface)',
                     cursor: 'pointer',
                     textAlign: 'left',
                     width: '100%',
@@ -304,8 +304,8 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
                   }}
                   onMouseLeave={(e) => {
                     const el = e.currentTarget as HTMLButtonElement;
-                    el.style.borderColor = isNew ? 'rgba(146,64,14,0.30)' : 'var(--color-border-subtle)';
-                    el.style.background = isNew ? 'rgba(146,64,14,0.03)' : 'var(--color-bg-surface)';
+                    el.style.borderColor = isNew ? 'rgba(234,88,12,0.30)' : 'var(--color-border-subtle)';
+                    el.style.background = isNew ? 'rgba(234,88,12,0.03)' : 'var(--color-bg-surface)';
                   }}
                 >
                   <div style={{ minWidth: 0 }}>
@@ -314,7 +314,7 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
                         {supplier.name}
                       </p>
                       {isNew ? (
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#92400E', fontFamily: 'var(--font-primary)', letterSpacing: '0.04em' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-warning)', fontFamily: 'var(--font-primary)', letterSpacing: '0.04em' }}>
                           NOT ON THIS ORDER
                         </span>
                       ) : (
@@ -327,7 +327,7 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
                       {product.unitName} · 📦 {supplier.deliveryDate} · cutoff {supplier.cutOffTime}
                     </p>
                     {isNew && (
-                      <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#92400E', fontFamily: 'var(--font-primary)' }}>
+                      <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--color-warning)', fontFamily: 'var(--font-primary)' }}>
                         This will add a new supplier to your order
                       </p>
                     )}
@@ -376,7 +376,7 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
             {isNewSupplier && (
               <>
                 <span>·</span>
-                <span style={{ color: '#92400E', fontWeight: 600 }}>New supplier on order</span>
+                <span style={{ color: 'var(--color-warning)', fontWeight: 600 }}>New supplier on order</span>
               </>
             )}
           </div>

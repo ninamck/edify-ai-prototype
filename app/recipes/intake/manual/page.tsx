@@ -19,8 +19,16 @@ import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, Plus, X, Check, Sparkles, ChevronRight, ChevronDown, Image as ImageIcon, AlertTriangle,
+  ArrowLeft,
+  Plus,
+  X,
+  Check,
+  ChevronRight,
+  ChevronDown,
+  Image as ImageIcon,
+  AlertTriangle,
 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import QuinnOrb from '@/components/Sidebar/QuinnOrb';
 
 // ── Constants & types ────────────────────────────────────────────────────────
@@ -419,7 +427,7 @@ export default function ManualRecipePage() {
                     Not now
                   </button>
                   <button onClick={applySuggestion} style={primaryBtnStyleSm}>
-                    <Sparkles size={12} strokeWidth={2} />
+                    <EdifyMark size={12} strokeWidth={2} />
                     Apply
                   </button>
                 </motion.div>

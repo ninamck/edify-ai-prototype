@@ -15,9 +15,9 @@ const CONFIG: Record<
   },
   medium: {
     label: 'MED',
-    bg: 'rgba(146, 64, 14, 0.10)',
-    text: '#92400E',
-    border: 'rgba(146, 64, 14, 0.25)',
+    bg: 'rgba(234, 88, 12, 0.10)',
+    text: 'var(--color-warning)',
+    border: 'rgba(234, 88, 12, 0.25)',
   },
   low: {
     label: 'LOW',

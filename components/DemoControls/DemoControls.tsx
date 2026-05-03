@@ -31,10 +31,22 @@ type Props = {
 };
 
 export default function DemoControls({ variant = 'floating' }: Props) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
 
-  if (variant === 'floating' && pathname?.startsWith('/mvp-1')) {
-    return null;
+  // The floating mount yields control to whichever inline mount lives in
+  // the route's own header — otherwise both render and we end up with
+  // two triggers on the same screen. Inline mounts always render.
+  if (variant === 'floating') {
+    const isHome = pathname === '/' || pathname === '';
+    if (
+      isHome ||
+      pathname.startsWith('/mvp-1') ||
+      pathname.startsWith('/production') ||
+      pathname.startsWith('/recipes') ||
+      pathname.startsWith('/settings')
+    ) {
+      return null;
+    }
   }
 
   return variant === 'inline' ? <InlineDemoControls /> : <FloatingDemoControls />;
@@ -49,8 +61,8 @@ function FloatingDemoControls() {
     <div
       style={{
         position: 'fixed',
-        bottom: '16px',
-        left: '72px',
+        top: 16,
+        left: 72,
         zIndex: 900,
         fontFamily: 'var(--font-primary)',
       }}

@@ -23,7 +23,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
 const ROLE_COLORS: Record<UserRole, { bg: string; text: string }> = {
   kitchen: { bg: '#EEF4FF', text: '#3B5BDB' },
   manager: { bg: '#F0FDF4', text: '#15803D' },
-  admin: { bg: '#FFF7ED', text: '#C2410C' },
+  admin: { bg: '#FFF7ED', text: '#EA580C' },
 };
 
 function Pill({ label, color }: { label: string; color?: { bg: string; text: string } }) {

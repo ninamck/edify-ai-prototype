@@ -40,10 +40,10 @@
   --color-success-light:   #DCFCE7;
   --color-success-border:  #BBF7D0;
 
-  /* SEMANTIC — WARNING */
-  --color-warning:         #92400E;
-  --color-warning-light:   #FEF3C7;
-  --color-warning-border:  #FDE68A;
+  /* SEMANTIC — WARNING (clean orange, not brown) */
+  --color-warning:         #EA580C;
+  --color-warning-light:   #FFEDD5;
+  --color-warning-border:  #FDBA74;
 
   /* SEMANTIC — ERROR */
   --color-error:           #B91C1C;
@@ -81,4 +81,17 @@ body {
   font-family: var(--font-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Hide native number-input spinners so values render truly centred. */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  margin: 0;
+  display: none;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }

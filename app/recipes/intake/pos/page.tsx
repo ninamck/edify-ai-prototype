@@ -4,9 +4,16 @@ import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  ArrowLeft, Search, Check, ChevronRight, Sparkles, X, CheckCircle2,
-  AlertTriangle, Info,
+  ArrowLeft,
+  Search,
+  Check,
+  ChevronRight,
+  X,
+  CheckCircle2,
+  AlertTriangle,
+  Info,
 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import QuinnOrb from '@/components/Sidebar/QuinnOrb';
 import {
   FITZROY_POS_INTAKE, matchStatusLabel, matchStatusVariant,
@@ -329,7 +336,7 @@ export default function POSIntakePage() {
               gap: '8px',
             }}
           >
-            <Sparkles size={14} strokeWidth={2} />
+            <EdifyMark size={14} strokeWidth={2} />
             Draft {selectedCount} with Quinn
           </button>
         </div>
@@ -404,7 +411,7 @@ function PatternRow({
       >
         {accepted
           ? <CheckCircle2 size={18} color="var(--color-success)" strokeWidth={2} />
-          : <Sparkles size={16} color="var(--color-accent-active)" strokeWidth={2} />
+          : <EdifyMark size={16} color="var(--color-accent-active)" strokeWidth={2} />
         }
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -686,7 +693,7 @@ function PatternConfirmModal({
             borderBottom: '1px solid var(--color-border-subtle)',
           }}
         >
-          <Sparkles size={18} color="var(--color-accent-active)" strokeWidth={2} />
+          <EdifyMark size={18} color="var(--color-accent-active)" strokeWidth={2} />
           <h3 style={{ fontSize: '15px', fontWeight: 700, margin: 0, flex: 1, color: 'var(--color-text-primary)' }}>
             New shared group: {pattern.name}
           </h3>

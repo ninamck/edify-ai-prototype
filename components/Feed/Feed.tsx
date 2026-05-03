@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import {
   Send,
-  Sparkles,
   Maximize2,
   Minimize2,
   Plus,
@@ -19,6 +18,7 @@ import {
   LayoutDashboard,
   Pin,
 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { motion, AnimatePresence } from 'framer-motion';
 import QuinnOrb from '@/components/Sidebar/QuinnOrb';
 import type { BriefingRole } from '@/components/briefing';
@@ -61,7 +61,7 @@ function QuinnAvatar({
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       flexShrink: 0,
     }}>
-      <Sparkles size={size * 0.45} color="var(--color-accent-quinn)" strokeWidth={2} />
+      <EdifyMark size={size * 0.45} color="var(--color-accent-quinn)" strokeWidth={2} />
     </div>
   );
 }
@@ -662,7 +662,7 @@ function AllergenCard({ confirmed, onToggle, onConfirm }: { confirmed: Set<strin
                 padding: '6px 8px',
                 borderRadius: '6px',
                 border: 'none',
-                background: isSelected ? (isDetected ? 'rgba(146,64,14,0.07)' : 'rgba(34,68,68,0.05)') : 'transparent',
+                background: isSelected ? (isDetected ? 'rgba(234,88,12,0.07)' : 'rgba(34,68,68,0.05)') : 'transparent',
                 cursor: 'pointer',
                 fontFamily: 'var(--font-primary)',
                 textAlign: 'left',
@@ -2613,7 +2613,7 @@ export default function Feed({
                   gap: '12px',
                   flexWrap: 'wrap',
                 }}>
-                  <Sparkles size={22} color="var(--color-accent-quinn)" strokeWidth={2} style={{ flexShrink: 0 }} />
+                  <EdifyMark size={22} color="var(--color-accent-quinn)" strokeWidth={2} style={{ flexShrink: 0 }} />
                   <span style={{
                     fontFamily: 'Georgia, "Times New Roman", serif',
                     fontSize: 'clamp(22px, 4vw, 28px)',
@@ -2751,7 +2751,7 @@ export default function Feed({
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           flexShrink: 0,
                         }}>
-                          <Sparkles size={14} color="var(--color-accent-quinn)" strokeWidth={2} />
+                          <EdifyMark size={14} color="var(--color-accent-quinn)" strokeWidth={2} />
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{

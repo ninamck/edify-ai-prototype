@@ -24,7 +24,7 @@ function statusVariant(status: CreditNoteStatus): BadgeVariant {
 }
 
 const EVENT_ICON: Record<ChaseEvent['type'], React.ReactNode> = {
-  raised:    <AlertTriangle size={13} strokeWidth={2} color="#92400E" />,
+  raised:    <AlertTriangle size={13} strokeWidth={2} color="var(--color-warning)" />,
   chased:    <Mail size={13} strokeWidth={2} color="#1D4ED8" />,
   escalated: <ArrowUpRight size={13} strokeWidth={2} color="#B91C1C" />,
   received:  <CheckCircle2 size={13} strokeWidth={2} color="#15803D" />,

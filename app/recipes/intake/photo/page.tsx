@@ -15,9 +15,16 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, ArrowRight, Camera, Check, Image as ImageIcon, Plus,
-  Sparkles, X, ChevronRight,
+  ArrowLeft,
+  ArrowRight,
+  Camera,
+  Check,
+  Image as ImageIcon,
+  Plus,
+  X,
+  ChevronRight,
 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import QuinnOrb from '@/components/Sidebar/QuinnOrb';
 import {
   PHOTO_INTAKE_FIXTURE, OcrRecipe, OcrIngredient, Confidence, confidenceColor,
@@ -189,7 +196,7 @@ function CaptureStage({
           display: 'flex', alignItems: 'center', gap: '10px',
         }}
       >
-        <Sparkles size={14} color="var(--color-accent-active)" strokeWidth={2} />
+        <EdifyMark size={14} color="var(--color-accent-active)" strokeWidth={2} />
         <span style={{ fontSize: '12px', color: 'var(--color-text-muted)', flex: 1 }}>
           Demo tip: jump straight to a parsed handwritten card (House banana bread).
         </span>
@@ -267,7 +274,7 @@ function ReviewStage({
             fontSize: '12.5px', color: 'var(--color-text-secondary)',
           }}
         >
-          <Sparkles size={13} color="var(--color-accent-active)" strokeWidth={2} />
+          <EdifyMark size={13} color="var(--color-accent-active)" strokeWidth={2} />
           <span style={{ flex: 1 }}>
             I&apos;m confident on most of it.
             {mediumCount > 0 && <> <strong>{mediumCount} field{mediumCount === 1 ? '' : 's'}</strong> worth a glance</>}
@@ -384,7 +391,7 @@ function ReviewStage({
         <div style={{ marginTop: '18px', display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
           <button onClick={onBack} style={secondaryBtn}>Retake</button>
           <button onClick={onSubmit} style={primaryBtn}>
-            <Sparkles size={13} strokeWidth={2} /> Send to Quinn <ArrowRight size={13} strokeWidth={2} />
+            <EdifyMark size={13} strokeWidth={2} /> Send to Quinn <ArrowRight size={13} strokeWidth={2} />
           </button>
         </div>
       </div>

@@ -214,7 +214,7 @@ function CreditNoteRow({ creditNote: cn, onView }: { creditNote: CreditNote; onV
   const daysColor = isOverdue
     ? '#B91C1C'
     : cn.daysOutstanding >= 14
-    ? '#92400E'
+    ? 'var(--color-warning)'
     : 'var(--color-text-secondary)';
 
   return (
