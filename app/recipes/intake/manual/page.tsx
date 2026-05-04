@@ -20,57 +20,55 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
-  Plus,
-  X,
   Check,
-  ChevronRight,
-  ChevronDown,
   Image as ImageIcon,
-  AlertTriangle,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import QuinnOrb from '@/components/Sidebar/QuinnOrb';
+import { useRecipes } from '@/components/Recipe/recipeStore';
+import { type ComponentRow, type ItemComponent } from '@/components/Recipe/libraryFixtures';
+import {
+  type FormCategory as Category,
+  type VariableRow,
+  type PackagingRow,
+  ALLERGENS,
+  PRODUCT_CLASSES,
+  STATUSES,
+  YIELD_UOMS,
+  SHELF_LIFE_UNITS,
+  BAKERY_HOT_PRODUCTION,
+  PRODUCTION_VIS,
+  SITES,
+  CATEGORY_DEFAULTS,
+  newId,
+  emptyVariable,
+  emptyPackaging,
+  Card,
+  CollapsibleCard,
+  SectionHeader,
+  FieldLabel,
+  Soft,
+  PillMulti,
+  PillSingle,
+  TagInput,
+  CheckRow,
+  ComponentTable,
+  VariableTable,
+  PackagingTable,
+  PriceCard,
+  inputStyle,
+  nameInputStyle,
+  selectStyle,
+  textareaStyle,
+  primaryBtnStyle,
+  primaryBtnStyleSm,
+  secondaryBtnStyle,
+  dismissBtnStyle,
+} from '@/components/Recipe/RecipeFormParts';
 
-// ── Constants & types ────────────────────────────────────────────────────────
-
-type Category = 'Coffee' | 'Tea' | 'Pastry' | 'Food' | 'Wine' | 'Spirits' | 'Kids';
+// "Build recipe manually" only displays a subset of categories — keep the
+// original 7 here so the UI doesn't grow Pret-only categories on this page.
 const CATEGORIES: Category[] = ['Coffee', 'Tea', 'Pastry', 'Food', 'Wine', 'Spirits', 'Kids'];
-
-const SITES = ['Fitzroy Espresso', 'Brixton Outpost', 'Shoreditch Roast', 'Soho Annex'];
-
-const SUPPLIERS = ['Bidvest', 'Fresh Earth Produce', 'Rise Bakery', 'The Cheese Board', 'CPU — Central Kitchen', 'In-house'];
-
-const UOMS = ['g', 'kg', 'ml', 'L', 'unit', 'slice', 'tsp', 'tbsp', 'cup'];
-
-const ALLERGENS = [
-  'Dairy', 'Eggs', 'Cereals containing gluten', 'Nuts', 'Peanuts',
-  'Soya', 'Sesame Seeds', 'Mustard', 'Celery', 'Lupin',
-  'Crustaceans', 'Fish', 'Molluscs', 'Sulphites',
-];
-
-const PRODUCT_CLASSES = ['Beverage', 'Food', 'Retail', 'Other'];
-const STATUSES = ['Draft', 'Active', 'Archived'];
-const YIELD_UOMS = ['serving', 'portion', 'kg', 'L', 'unit'];
-const SHELF_LIFE_UNITS = ['minutes', 'hours', 'days'];
-const BAKERY_HOT_PRODUCTION = ['None', 'Bakery', 'Hot production', 'Both'];
-const PRODUCTION_VIS = ['Bar', 'Kitchen', 'Pastry', 'Variable'];
-
-// Category-driven smart defaults
-const CATEGORY_DEFAULTS: Record<Category, {
-  hotCold: 'hot' | 'cold' | null;
-  production: string[];
-  shelfLifeMin: number | null;
-  prepSec: number;
-  desiredMargin: number;
-}> = {
-  Coffee:  { hotCold: 'hot',  production: ['Bar'],     shelfLifeMin: null,  prepSec: 90,  desiredMargin: 75 },
-  Tea:     { hotCold: 'hot',  production: ['Bar'],     shelfLifeMin: null,  prepSec: 60,  desiredMargin: 85 },
-  Pastry:  { hotCold: 'cold', production: ['Pastry'],  shelfLifeMin: 480,   prepSec: 30,  desiredMargin: 65 },
-  Food:    { hotCold: 'hot',  production: ['Kitchen'], shelfLifeMin: 30,    prepSec: 240, desiredMargin: 70 },
-  Wine:    { hotCold: 'cold', production: ['Bar'],     shelfLifeMin: null,  prepSec: 30,  desiredMargin: 60 },
-  Spirits: { hotCold: 'cold', production: ['Bar'],     shelfLifeMin: null,  prepSec: 30,  desiredMargin: 78 },
-  Kids:    { hotCold: 'hot',  production: ['Bar'],     shelfLifeMin: null,  prepSec: 45,  desiredMargin: 80 },
-};
 
 // Quinn pattern-match → pre-fill suggestion
 type NameSuggestion = {
@@ -172,39 +170,6 @@ function findNameSuggestion(name: string): NameSuggestion | null {
   return NAME_SUGGESTIONS.find((s) => q.includes(s.match)) ?? null;
 }
 
-// ── Types for rows ────────────────────────────────────────────────────────────
-
-type IngredientRow = {
-  id: string;
-  name: string;
-  supplier: string;
-  qty: number | '';
-  uom: string;
-  unitCostP: number; // pence per UoM unit (computed/fallback)
-};
-
-type VariableRow = IngredientRow & {
-  type: string;
-};
-
-type PackagingRow = IngredientRow;
-
-function newId() {
-  return Math.random().toString(36).slice(2, 10);
-}
-
-function emptyIngredient(): IngredientRow {
-  return { id: newId(), name: '', supplier: '', qty: '', uom: 'g', unitCostP: 0 };
-}
-
-function emptyVariable(): VariableRow {
-  return { id: newId(), name: '', supplier: '', qty: '', uom: 'g', unitCostP: 0, type: 'Alternative' };
-}
-
-function emptyPackaging(): PackagingRow {
-  return { id: newId(), name: '', supplier: '', qty: '', uom: 'unit', unitCostP: 0 };
-}
-
 // ── Form page ────────────────────────────────────────────────────────────────
 
 export default function ManualRecipePage() {
@@ -222,8 +187,10 @@ export default function ManualRecipePage() {
   const [allergens, setAllergens] = useState<string[]>([]);
   const [photoName, setPhotoName] = useState<string | null>(null);
 
-  // Ingredients
-  const [ingredients, setIngredients] = useState<IngredientRow[]>([]);
+  // Components (ingredients + sub-recipes — unified)
+  const allLibraryRecipes = useRecipes();
+  const recipesById = useMemo(() => new Map(allLibraryRecipes.map((r) => [r.id, r])), [allLibraryRecipes]);
+  const [components, setComponents] = useState<ComponentRow[]>([]);
   const [showVariable, setShowVariable] = useState(false);
   const [variables, setVariables] = useState<VariableRow[]>([]);
   const [showPackaging, setShowPackaging] = useState(false);
@@ -285,17 +252,20 @@ export default function ManualRecipePage() {
     if (!suggestion) return;
     setCategory(suggestion.category);
     setAllergens(Array.from(new Set([...allergens, ...suggestion.allergens])));
-    // pre-fill ingredients (append, don't clobber manual entries)
-    const newRows: IngredientRow[] = suggestion.ingredients.map((i) => ({
+    // pre-fill components as item rows (append, don't clobber manual entries)
+    const newRows: ItemComponent[] = suggestion.ingredients.map((i) => ({
       id: newId(),
+      kind: 'item',
       name: i.name,
       supplier: i.supplier,
       qty: i.qty,
       uom: i.uom,
       unitCostP: i.unitCostP,
     }));
-    setIngredients((prev) => [...prev.filter((p) => p.name.trim()), ...newRows]);
-    // category-driven smart defaults
+    setComponents((prev) => [
+      ...prev.filter((p) => p.kind !== 'item' || (p as ItemComponent).name.trim()),
+      ...newRows,
+    ]);
     applyCategoryDefaults(suggestion.category);
     setSuggestionApplied(true);
     setSuggestion(null);
@@ -313,13 +283,15 @@ export default function ManualRecipePage() {
     }
   }
 
-  // Computed totals
+  // Computed totals — sum item-row cost (qty × unitCostP/100) + sub-recipe cost (qty × that recipe's ingredientCost)
   const ingredientCost = useMemo(() => {
-    return ingredients.reduce((sum, r) => {
+    return components.reduce((sum, r) => {
       const q = typeof r.qty === 'number' ? r.qty : 0;
-      return sum + (q * r.unitCostP) / 100;
+      if (r.kind === 'item') return sum + (q * r.unitCostP) / 100;
+      const sub = recipesById.get(r.recipeId);
+      return sum + q * (sub?.ingredientCost ?? 0);
     }, 0);
-  }, [ingredients]);
+  }, [components, recipesById]);
 
   const packagingCost = useMemo(() => {
     return packaging.reduce((sum, r) => {
@@ -341,24 +313,13 @@ export default function ManualRecipePage() {
     return Math.round(Number(srpEx) * (1 + vatPct / 100) * 100) / 100;
   }
 
-  // Actions
-  function addIngredient() {
-    setIngredients((rows) => [...rows, emptyIngredient()]);
-  }
-  function updateIngredient(id: string, patch: Partial<IngredientRow>) {
-    setIngredients((rows) => rows.map((r) => r.id === id ? { ...r, ...patch } : r));
-  }
-  function removeIngredient(id: string) {
-    setIngredients((rows) => rows.filter((r) => r.id !== id));
-  }
-
   function addTag() {
     const t = tagDraft.trim();
     if (t && !tags.includes(t)) setTags((prev) => [...prev, t]);
     setTagDraft('');
   }
 
-  const canPublish = name.trim() && category && ingredients.some((r) => r.name.trim());
+  const canPublish = name.trim() && category && components.some((r) => r.kind === 'recipe' || (r.kind === 'item' && r.name.trim()));
 
   return (
     <div style={{ padding: '20px 24px 120px', maxWidth: '1260px', margin: '0 auto', fontFamily: 'var(--font-primary)' }}>
@@ -488,16 +449,16 @@ export default function ManualRecipePage() {
             </div>
           </Card>
 
-          {/* Ingredients card */}
+          {/* Recipe components — unified ingredients + sub-recipes */}
           <Card>
-            <SectionHeader title="Ingredients" hint="Type a name to search your library. Quinn matches suppliers automatically." />
-            <IngredientTable
-              rows={ingredients}
-              onChange={(id, patch) => updateIngredient(id, patch)}
-              onRemove={removeIngredient}
-              onAdd={addIngredient}
-              onAddEnter={addIngredient}
-              suggestionIngredients={suggestion?.ingredients.map((i) => i.name) ?? []}
+            <SectionHeader
+              title="Recipe components"
+              hint="Add raw ingredients or pull in another recipe as a sub-recipe. Build order = top to bottom."
+            />
+            <ComponentTable
+              rows={components}
+              recipesById={recipesById}
+              onChange={setComponents}
             />
           </Card>
 
@@ -795,864 +756,3 @@ export default function ManualRecipePage() {
   );
 }
 
-// ── Sub-components ───────────────────────────────────────────────────────────
-
-function Card({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        padding: '16px',
-        borderRadius: '12px',
-        border: '1px solid var(--color-border-subtle)',
-        background: '#fff',
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-function CollapsibleCard({
-  label, hint, open, onToggle, children,
-}: {
-  label: string; hint?: string; open: boolean; onToggle: () => void; children: React.ReactNode;
-}) {
-  return (
-    <div
-      style={{
-        borderRadius: '12px',
-        border: '1px solid var(--color-border-subtle)',
-        background: '#fff',
-        overflow: 'hidden',
-      }}
-    >
-      <button
-        onClick={onToggle}
-        style={{
-          width: '100%',
-          display: 'flex', alignItems: 'center', gap: '10px',
-          padding: '14px 16px', border: 'none', background: '#fff',
-          cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-primary)',
-        }}
-      >
-        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{label}</span>
-        {hint && <span style={{ flex: 1, fontSize: '12.5px', color: 'var(--color-text-muted)' }}>{hint}</span>}
-      </button>
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            style={{ overflow: 'hidden', borderTop: '1px solid var(--color-border-subtle)' }}
-          >
-            <div style={{ padding: '14px 16px' }}>{children}</div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function SectionHeader({ title, hint }: { title: string; hint?: string }) {
-  return (
-    <div style={{ marginBottom: '10px' }}>
-      <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: '2px' }}>
-        {title}
-      </div>
-      {hint && <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{hint}</div>}
-    </div>
-  );
-}
-
-function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
-  return (
-    <div style={{
-      fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-      color: 'var(--color-text-muted)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px',
-    }}>
-      {children}
-      {required && <span style={{ color: 'var(--color-error)' }}>*</span>}
-    </div>
-  );
-}
-
-function Soft({ children }: { children: React.ReactNode }) {
-  return <span style={{ color: 'var(--color-text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>{children}</span>;
-}
-
-function PillMulti({
-  options, selected, onChange,
-}: {
-  options: string[]; selected: string[]; onChange: (sel: string[]) => void;
-}) {
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-      {options.map((opt) => {
-        const on = selected.includes(opt);
-        return (
-          <button
-            key={opt}
-            onClick={() => onChange(on ? selected.filter((s) => s !== opt) : [...selected, opt])}
-            style={{
-              padding: '6px 12px',
-              borderRadius: '100px',
-              border: on ? '1px solid transparent' : '1px solid var(--color-border-subtle)',
-              background: on ? 'var(--color-accent-active)' : '#fff',
-              color: on ? '#fff' : 'var(--color-text-secondary)',
-              fontSize: '12px', fontWeight: 600,
-              cursor: 'pointer', fontFamily: 'var(--font-primary)',
-              display: 'inline-flex', alignItems: 'center', gap: '5px',
-            }}
-          >
-            {on && <Check size={11} strokeWidth={2.6} />}
-            {opt}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function PillSingle({
-  options, selected, onChange, allowClear,
-}: {
-  options: readonly string[];
-  selected: string;
-  onChange: (v: string) => void;
-  allowClear?: boolean;
-}) {
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-      {options.map((opt) => {
-        const on = selected === opt;
-        return (
-          <button
-            key={opt}
-            onClick={() => onChange(allowClear && on ? '' : opt)}
-            style={{
-              padding: '6px 12px',
-              borderRadius: '100px',
-              border: on ? '1px solid transparent' : '1px solid var(--color-border-subtle)',
-              background: on ? 'var(--color-accent-active)' : '#fff',
-              color: on ? '#fff' : 'var(--color-text-secondary)',
-              fontSize: '12px', fontWeight: 600,
-              cursor: 'pointer', fontFamily: 'var(--font-primary)',
-              display: 'inline-flex', alignItems: 'center', gap: '5px',
-            }}
-          >
-            {on && <Check size={11} strokeWidth={2.6} />}
-            {opt}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function TagInput({
-  value, onChange, placeholder,
-}: {
-  value: string[]; onChange: (v: string[]) => void; placeholder?: string;
-}) {
-  const [draft, setDraft] = useState('');
-  function addDraft() {
-    const t = draft.trim();
-    if (t && !value.includes(t)) onChange([...value, t]);
-    setDraft('');
-  }
-  return (
-    <div
-      style={{
-        display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center',
-        padding: '6px 8px', borderRadius: '8px', border: '1px solid var(--color-border)',
-      }}
-    >
-      {value.map((t) => (
-        <span
-          key={t}
-          style={{
-            padding: '3px 8px 3px 10px',
-            borderRadius: '100px',
-            background: 'var(--color-bg-hover)',
-            color: 'var(--color-text-primary)',
-            fontSize: '12px', fontWeight: 600,
-            display: 'inline-flex', alignItems: 'center', gap: '6px',
-          }}
-        >
-          {t}
-          <button
-            onClick={() => onChange(value.filter((v) => v !== t))}
-            aria-label={`Remove ${t}`}
-            style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 0, color: 'var(--color-text-muted)' }}
-          >
-            <X size={11} />
-          </button>
-        </span>
-      ))}
-      <input
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addDraft(); } }}
-        onBlur={addDraft}
-        placeholder={placeholder}
-        style={{
-          border: 'none', outline: 'none', background: 'transparent',
-          flex: 1, minWidth: '120px', fontSize: '13px',
-          fontFamily: 'var(--font-primary)', color: 'var(--color-text-primary)',
-          padding: '4px 4px',
-        }}
-      />
-    </div>
-  );
-}
-
-function CheckRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      onClick={() => onChange(!checked)}
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: '7px',
-        padding: '7px 12px', borderRadius: '8px',
-        border: '1px solid ' + (checked ? 'transparent' : 'var(--color-border-subtle)'),
-        background: checked ? 'var(--color-accent-active)' : '#fff',
-        color: checked ? '#fff' : 'var(--color-text-secondary)',
-        fontSize: '12.5px', fontWeight: 600, cursor: 'pointer',
-        fontFamily: 'var(--font-primary)',
-      }}
-    >
-      <span
-        style={{
-          width: '14px', height: '14px', borderRadius: '4px',
-          border: '1.5px solid ' + (checked ? '#fff' : 'var(--color-border)'),
-          background: checked ? 'transparent' : '#fff',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-        }}
-      >
-        {checked && <Check size={10} color="#fff" strokeWidth={3} />}
-      </span>
-      {label}
-    </button>
-  );
-}
-
-// Ingredient row tables
-
-function IngredientTable({
-  rows, onChange, onRemove, onAdd, onAddEnter, suggestionIngredients,
-}: {
-  rows: IngredientRow[];
-  onChange: (id: string, patch: Partial<IngredientRow>) => void;
-  onRemove: (id: string) => void;
-  onAdd: () => void;
-  onAddEnter: () => void;
-  suggestionIngredients: string[];
-}) {
-  return (
-    <>
-      <div style={tableHeaderStyle(['26px', '2fr', '1.5fr', '70px', '80px', '80px', '28px'])}>
-        <span />
-        <span>Name</span>
-        <span>Supplier</span>
-        <span>Qty</span>
-        <span>UoM</span>
-        <span style={{ textAlign: 'right' }}>Cost</span>
-        <span />
-      </div>
-      {rows.length === 0 && (
-        <div style={{ padding: '16px 8px', textAlign: 'center', fontSize: '12.5px', color: 'var(--color-text-muted)' }}>
-          No ingredients yet.
-        </div>
-      )}
-      {rows.map((row, i) => (
-        <IngredientRowEdit
-          key={row.id}
-          row={row}
-          onChange={(patch) => onChange(row.id, patch)}
-          onRemove={() => onRemove(row.id)}
-          onEnter={() => { if (i === rows.length - 1) onAddEnter(); }}
-        />
-      ))}
-      <button
-        onClick={onAdd}
-        style={{
-          marginTop: '10px',
-          padding: '9px 12px',
-          borderRadius: '8px',
-          border: '1px dashed var(--color-border)',
-          background: 'var(--color-bg-hover)',
-          color: 'var(--color-text-primary)',
-          fontSize: '12.5px', fontWeight: 600,
-          cursor: 'pointer', fontFamily: 'var(--font-primary)',
-          display: 'inline-flex', alignItems: 'center', gap: '6px',
-        }}
-      >
-        <Plus size={13} strokeWidth={2.2} /> Add ingredient
-      </button>
-    </>
-  );
-}
-
-function IngredientRowEdit({
-  row, onChange, onRemove, onEnter,
-}: {
-  row: IngredientRow;
-  onChange: (patch: Partial<IngredientRow>) => void;
-  onRemove: () => void;
-  onEnter: () => void;
-}) {
-  const cost = (typeof row.qty === 'number' ? row.qty : 0) * row.unitCostP / 100;
-  return (
-    <div style={tableRowStyle(['26px', '2fr', '1.5fr', '70px', '80px', '80px', '28px'])}>
-      <span style={{ color: 'var(--color-text-muted)', fontSize: '11px' }}>•</span>
-      <input
-        value={row.name}
-        onChange={(e) => onChange({ name: e.target.value })}
-        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onEnter(); } }}
-        placeholder="Start typing..."
-        style={cellInput}
-      />
-      <select value={row.supplier} onChange={(e) => onChange({ supplier: e.target.value })} style={cellSelect}>
-        <option value="">—</option>
-        {SUPPLIERS.map((s) => <option key={s} value={s}>{s}</option>)}
-      </select>
-      <input
-        type="number"
-        min={0}
-        step="any"
-        value={row.qty}
-        onChange={(e) => onChange({ qty: e.target.value === '' ? '' : Number(e.target.value) })}
-        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onEnter(); } }}
-        style={cellInput}
-      />
-      <select value={row.uom} onChange={(e) => onChange({ uom: e.target.value })} style={cellSelect}>
-        {UOMS.map((u) => <option key={u} value={u}>{u}</option>)}
-      </select>
-      <span style={{ textAlign: 'right', fontSize: '12.5px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-        £{cost.toFixed(2)}
-      </span>
-      <button
-        onClick={onRemove}
-        aria-label="Remove"
-        style={rowRemoveStyle}
-      >
-        <X size={14} />
-      </button>
-    </div>
-  );
-}
-
-function VariableTable({
-  rows, onChange, onRemove, onAdd,
-}: {
-  rows: VariableRow[];
-  onChange: (id: string, patch: Partial<VariableRow>) => void;
-  onRemove: (id: string) => void;
-  onAdd: () => void;
-}) {
-  return (
-    <>
-      <div style={tableHeaderStyle(['26px', '2fr', '1fr', '1.5fr', '70px', '80px', '28px'])}>
-        <span />
-        <span>Name</span>
-        <span>Type</span>
-        <span>Supplier</span>
-        <span>Qty</span>
-        <span>UoM</span>
-        <span />
-      </div>
-      {rows.length === 0 && (
-        <div style={{ padding: '14px 8px', fontSize: '12.5px', color: 'var(--color-text-muted)' }}>
-          Nothing yet. Add if this recipe has variations that sit inside it (e.g. milk alternatives for one coffee).
-        </div>
-      )}
-      {rows.map((row) => (
-        <div key={row.id} style={tableRowStyle(['26px', '2fr', '1fr', '1.5fr', '70px', '80px', '28px'])}>
-          <span style={{ color: 'var(--color-text-muted)', fontSize: '11px' }}>•</span>
-          <input
-            value={row.name}
-            onChange={(e) => onChange(row.id, { name: e.target.value })}
-            placeholder="e.g. Oat milk"
-            style={cellInput}
-          />
-          <select value={row.type} onChange={(e) => onChange(row.id, { type: e.target.value })} style={cellSelect}>
-            <option>Alternative</option>
-            <option>Add-on</option>
-            <option>Upgrade</option>
-          </select>
-          <select value={row.supplier} onChange={(e) => onChange(row.id, { supplier: e.target.value })} style={cellSelect}>
-            <option value="">—</option>
-            {SUPPLIERS.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <input
-            type="number"
-            min={0}
-            step="any"
-            value={row.qty}
-            onChange={(e) => onChange(row.id, { qty: e.target.value === '' ? '' : Number(e.target.value) })}
-            style={cellInput}
-          />
-          <select value={row.uom} onChange={(e) => onChange(row.id, { uom: e.target.value })} style={cellSelect}>
-            {UOMS.map((u) => <option key={u} value={u}>{u}</option>)}
-          </select>
-          <button onClick={() => onRemove(row.id)} style={rowRemoveStyle} aria-label="Remove">
-            <X size={14} />
-          </button>
-        </div>
-      ))}
-      <button
-        onClick={onAdd}
-        style={{
-          marginTop: '10px',
-          padding: '9px 12px', borderRadius: '8px',
-          border: '1px dashed var(--color-border)', background: 'var(--color-bg-hover)',
-          color: 'var(--color-text-primary)', fontSize: '12.5px', fontWeight: 600,
-          cursor: 'pointer', fontFamily: 'var(--font-primary)',
-          display: 'inline-flex', alignItems: 'center', gap: '6px',
-        }}
-      >
-        <Plus size={13} strokeWidth={2.2} /> Add variable ingredient
-      </button>
-      <div
-        style={{
-          marginTop: '10px',
-          padding: '10px 12px',
-          borderRadius: '8px',
-          background: 'var(--color-bg-hover)',
-          fontSize: '12px', color: 'var(--color-text-muted)',
-          display: 'flex', alignItems: 'flex-start', gap: '8px',
-        }}
-      >
-        <AlertTriangle size={13} strokeWidth={2} color="var(--color-warning)" style={{ flexShrink: 0, marginTop: '2px' }} />
-        <span>Variations that apply across many recipes (e.g. alt milks, cup sizes) are usually cleaner as a shared modifier group.</span>
-      </div>
-    </>
-  );
-}
-
-function PackagingTable({
-  rows, onChange, onRemove, onAdd,
-}: {
-  rows: PackagingRow[];
-  onChange: (id: string, patch: Partial<PackagingRow>) => void;
-  onRemove: (id: string) => void;
-  onAdd: () => void;
-}) {
-  return (
-    <>
-      <div style={tableHeaderStyle(['26px', '2fr', '1.5fr', '70px', '80px', '80px', '28px'])}>
-        <span />
-        <span>Name</span>
-        <span>Supplier</span>
-        <span>Qty</span>
-        <span>UoM</span>
-        <span style={{ textAlign: 'right' }}>Cost</span>
-        <span />
-      </div>
-      {rows.length === 0 && (
-        <div style={{ padding: '14px 8px', fontSize: '12.5px', color: 'var(--color-text-muted)' }}>
-          Nothing yet. Add for takeaway / delivery-specific packaging.
-        </div>
-      )}
-      {rows.map((row) => {
-        const cost = (typeof row.qty === 'number' ? row.qty : 0) * row.unitCostP / 100;
-        return (
-          <div key={row.id} style={tableRowStyle(['26px', '2fr', '1.5fr', '70px', '80px', '80px', '28px'])}>
-            <span style={{ color: 'var(--color-text-muted)', fontSize: '11px' }}>•</span>
-            <input value={row.name} onChange={(e) => onChange(row.id, { name: e.target.value })} placeholder="e.g. 8oz cup" style={cellInput} />
-            <select value={row.supplier} onChange={(e) => onChange(row.id, { supplier: e.target.value })} style={cellSelect}>
-              <option value="">—</option>
-              {SUPPLIERS.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <input
-              type="number"
-              min={0}
-              step="any"
-              value={row.qty}
-              onChange={(e) => onChange(row.id, { qty: e.target.value === '' ? '' : Number(e.target.value) })}
-              style={cellInput}
-            />
-            <select value={row.uom} onChange={(e) => onChange(row.id, { uom: e.target.value })} style={cellSelect}>
-              {UOMS.map((u) => <option key={u} value={u}>{u}</option>)}
-            </select>
-            <span style={{ textAlign: 'right', fontSize: '12.5px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-              £{cost.toFixed(2)}
-            </span>
-            <button onClick={() => onRemove(row.id)} style={rowRemoveStyle} aria-label="Remove">
-              <X size={14} />
-            </button>
-          </div>
-        );
-      })}
-      <button
-        onClick={onAdd}
-        style={{
-          marginTop: '10px',
-          padding: '9px 12px', borderRadius: '8px',
-          border: '1px dashed var(--color-border)', background: 'var(--color-bg-hover)',
-          color: 'var(--color-text-primary)', fontSize: '12.5px', fontWeight: 600,
-          cursor: 'pointer', fontFamily: 'var(--font-primary)',
-          display: 'inline-flex', alignItems: 'center', gap: '6px',
-        }}
-      >
-        <Plus size={13} strokeWidth={2.2} /> Add packaging
-      </button>
-    </>
-  );
-}
-
-// Price card (right column)
-
-function PriceCard({
-  totalCost, ingredientCost, packagingCost,
-  desiredMargin, onDesiredMargin, vatPct, onVat,
-  hotCold, onHotCold,
-  srpDineInEx, onSrpDineIn, marginDineIn, srpIncDineIn,
-  srpTakeawayEx, onSrpTakeaway, marginTakeaway, srpIncTakeaway,
-  srpDeliveryEx, onSrpDelivery, deliveryCommission, onDeliveryCommission, marginDelivery, srpIncDelivery,
-}: {
-  totalCost: number; ingredientCost: number; packagingCost: number;
-  desiredMargin: number | ''; onDesiredMargin: (v: number | '') => void;
-  vatPct: number | ''; onVat: (v: number | '') => void;
-  hotCold: 'hot' | 'cold' | null; onHotCold: (v: 'hot' | 'cold' | null) => void;
-  srpDineInEx: number | ''; onSrpDineIn: (v: number | '') => void;
-  marginDineIn: number | null; srpIncDineIn: number | null;
-  srpTakeawayEx: number | ''; onSrpTakeaway: (v: number | '') => void;
-  marginTakeaway: number | null; srpIncTakeaway: number | null;
-  srpDeliveryEx: number | ''; onSrpDelivery: (v: number | '') => void;
-  deliveryCommission: number | ''; onDeliveryCommission: (v: number | '') => void;
-  marginDelivery: number | null; srpIncDelivery: number | null;
-}) {
-  return (
-    <div
-      style={{
-        borderRadius: '12px', border: '1px solid var(--color-border-subtle)',
-        background: '#fff', padding: '16px',
-      }}
-    >
-      <div
-        style={{
-          fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em',
-          textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: '12px',
-        }}
-      >
-        Price breakdown
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-        <div>
-          <FieldLabel>Desired margin</FieldLabel>
-          <div style={inputSuffixWrap}>
-            <input
-              type="number"
-              value={desiredMargin}
-              onChange={(e) => onDesiredMargin(e.target.value === '' ? '' : Number(e.target.value))}
-              style={{ ...inputStyle, paddingRight: '28px' }}
-            />
-            <span style={inputSuffix}>%</span>
-          </div>
-        </div>
-        <div>
-          <FieldLabel>VAT</FieldLabel>
-          <div style={inputSuffixWrap}>
-            <input
-              type="number"
-              value={vatPct}
-              onChange={(e) => onVat(e.target.value === '' ? '' : Number(e.target.value))}
-              style={{ ...inputStyle, paddingRight: '28px' }}
-            />
-            <span style={inputSuffix}>%</span>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
-        <button
-          onClick={() => onHotCold(hotCold === 'hot' ? null : 'hot')}
-          style={smallToggleStyle(hotCold === 'hot')}
-        >
-          {hotCold === 'hot' && <Check size={11} strokeWidth={2.6} />} Hot
-        </button>
-        <button
-          onClick={() => onHotCold(hotCold === 'cold' ? null : 'cold')}
-          style={smallToggleStyle(hotCold === 'cold')}
-        >
-          {hotCold === 'cold' && <Check size={11} strokeWidth={2.6} />} Cold
-        </button>
-      </div>
-
-      <PriceChannel
-        label="Dine in"
-        ingCost={ingredientCost}
-        pkgCost={packagingCost}
-        srpEx={srpDineInEx}
-        onSrp={onSrpDineIn}
-        srpInc={srpIncDineIn}
-        margin={marginDineIn}
-      />
-      <PriceChannel
-        label="Takeaway"
-        ingCost={ingredientCost}
-        pkgCost={packagingCost}
-        srpEx={srpTakeawayEx}
-        onSrp={onSrpTakeaway}
-        srpInc={srpIncTakeaway}
-        margin={marginTakeaway}
-      />
-      <PriceChannel
-        label="Delivery"
-        ingCost={ingredientCost}
-        pkgCost={packagingCost}
-        srpEx={srpDeliveryEx}
-        onSrp={onSrpDelivery}
-        srpInc={srpIncDelivery}
-        margin={marginDelivery}
-        commission={deliveryCommission}
-        onCommission={onDeliveryCommission}
-      />
-
-      <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--color-border-subtle)', fontSize: '12px', color: 'var(--color-text-muted)' }}>
-        Totals auto-compute from ingredients + packaging. Enter an SRP, or leave blank to set from desired margin.
-      </div>
-    </div>
-  );
-}
-
-function PriceChannel({
-  label, ingCost, pkgCost, srpEx, onSrp, srpInc, margin, commission, onCommission,
-}: {
-  label: string; ingCost: number; pkgCost: number;
-  srpEx: number | ''; onSrp: (v: number | '') => void;
-  srpInc: number | null; margin: number | null;
-  commission?: number | ''; onCommission?: (v: number | '') => void;
-}) {
-  return (
-    <div
-      style={{
-        padding: '12px 10px',
-        borderTop: '1px solid var(--color-border-subtle)',
-        display: 'flex', flexDirection: 'column', gap: '8px',
-      }}
-    >
-      <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{label}</div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-        <span>Ingredient cost</span>
-        <strong style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>£{ingCost.toFixed(2)}</strong>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-        <span>Packaging cost</span>
-        <strong style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>£{pkgCost.toFixed(2)}</strong>
-      </div>
-      {onCommission && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
-          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', flex: 1 }}>Commission</span>
-          <div style={{ ...inputSuffixWrap, width: '80px' }}>
-            <input
-              type="number"
-              value={commission}
-              onChange={(e) => onCommission(e.target.value === '' ? '' : Number(e.target.value))}
-              style={{ ...inputStyle, paddingRight: '24px', padding: '5px 24px 5px 8px', fontSize: '12px' }}
-              placeholder="0"
-            />
-            <span style={{ ...inputSuffix, right: '8px', fontSize: '11px' }}>%</span>
-          </div>
-        </div>
-      )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', flex: 1 }}>SRP ex VAT</span>
-        <div style={{ ...inputSuffixWrap, width: '96px' }}>
-          <span style={{ ...inputSuffix, left: '8px', right: 'auto', fontSize: '11px' }}>£</span>
-          <input
-            type="number"
-            min={0}
-            step="0.01"
-            value={srpEx}
-            onChange={(e) => onSrp(e.target.value === '' ? '' : Number(e.target.value))}
-            style={{ ...inputStyle, padding: '5px 8px 5px 22px', fontSize: '12px' }}
-          />
-        </div>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-        <span style={{ color: 'var(--color-text-secondary)' }}>SRP inc VAT</span>
-        <strong style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-          {srpInc == null ? '—' : `£${srpInc.toFixed(2)}`}
-        </strong>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-        <span style={{ color: 'var(--color-text-secondary)' }}>Margin</span>
-        <strong
-          style={{
-            color: margin == null ? 'var(--color-text-muted)' :
-                   margin >= 60 ? 'var(--color-success)' :
-                   margin >= 40 ? 'var(--color-warning)' : 'var(--color-error)',
-            fontWeight: 700,
-          }}
-        >
-          {margin == null ? '—' : `${margin}%`}
-        </strong>
-      </div>
-    </div>
-  );
-}
-
-// ── Inline styles ────────────────────────────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '8px 10px',
-  borderRadius: '8px',
-  border: '1px solid var(--color-border)',
-  fontSize: '13px',
-  fontFamily: 'var(--font-primary)',
-  color: 'var(--color-text-primary)',
-  background: '#fff',
-  outline: 'none',
-  boxSizing: 'border-box',
-};
-
-const nameInputStyle: React.CSSProperties = {
-  ...inputStyle,
-  fontSize: '16px',
-  fontWeight: 600,
-  padding: '11px 12px',
-};
-
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-};
-
-const textareaStyle: React.CSSProperties = {
-  ...inputStyle,
-  resize: 'vertical',
-  minHeight: '70px',
-  fontFamily: 'var(--font-primary)',
-};
-
-const cellInput: React.CSSProperties = {
-  width: '100%',
-  padding: '6px 8px',
-  borderRadius: '6px',
-  border: '1px solid var(--color-border-subtle)',
-  fontSize: '12.5px',
-  fontFamily: 'var(--font-primary)',
-  color: 'var(--color-text-primary)',
-  background: '#fff',
-  outline: 'none',
-  boxSizing: 'border-box',
-};
-
-const cellSelect: React.CSSProperties = { ...cellInput };
-
-const primaryBtnStyle: React.CSSProperties = {
-  padding: '10px 16px',
-  borderRadius: '10px',
-  border: 'none',
-  background: 'var(--color-accent-active)',
-  fontSize: '13px',
-  fontWeight: 600,
-  color: '#fff',
-  fontFamily: 'var(--font-primary)',
-  cursor: 'pointer',
-};
-
-const primaryBtnStyleSm: React.CSSProperties = {
-  padding: '6px 12px',
-  borderRadius: '8px',
-  border: 'none',
-  background: 'var(--color-accent-active)',
-  fontSize: '12px',
-  fontWeight: 600,
-  color: '#fff',
-  fontFamily: 'var(--font-primary)',
-  cursor: 'pointer',
-  display: 'inline-flex', alignItems: 'center', gap: '5px',
-};
-
-const secondaryBtnStyle: React.CSSProperties = {
-  padding: '10px 16px',
-  borderRadius: '10px',
-  border: '1px solid var(--color-border)',
-  background: '#fff',
-  fontSize: '13px',
-  fontWeight: 600,
-  color: 'var(--color-text-primary)',
-  fontFamily: 'var(--font-primary)',
-  cursor: 'pointer',
-};
-
-const dismissBtnStyle: React.CSSProperties = {
-  padding: '6px 10px',
-  borderRadius: '8px',
-  border: '1px solid var(--color-border-subtle)',
-  background: 'transparent',
-  fontSize: '12px',
-  fontWeight: 600,
-  color: 'var(--color-text-secondary)',
-  fontFamily: 'var(--font-primary)',
-  cursor: 'pointer',
-};
-
-const rowRemoveStyle: React.CSSProperties = {
-  width: '26px', height: '26px',
-  border: 'none', background: 'transparent',
-  cursor: 'pointer', color: 'var(--color-text-muted)',
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  borderRadius: '6px',
-};
-
-const inputSuffixWrap: React.CSSProperties = {
-  position: 'relative',
-  display: 'inline-flex',
-  width: '100%',
-};
-
-const inputSuffix: React.CSSProperties = {
-  position: 'absolute',
-  right: '10px',
-  top: '50%',
-  transform: 'translateY(-50%)',
-  fontSize: '12px',
-  color: 'var(--color-text-muted)',
-  pointerEvents: 'none',
-};
-
-function smallToggleStyle(active: boolean): React.CSSProperties {
-  return {
-    flex: 1,
-    padding: '7px 10px',
-    borderRadius: '8px',
-    border: active ? '1px solid transparent' : '1px solid var(--color-border-subtle)',
-    background: active ? 'var(--color-accent-active)' : '#fff',
-    color: active ? '#fff' : 'var(--color-text-secondary)',
-    fontSize: '12px',
-    fontWeight: 600,
-    cursor: 'pointer',
-    fontFamily: 'var(--font-primary)',
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-  };
-}
-
-function tableHeaderStyle(cols: string[]): React.CSSProperties {
-  return {
-    display: 'grid',
-    gridTemplateColumns: cols.join(' '),
-    gap: '8px',
-    padding: '8px 0',
-    borderBottom: '1px solid var(--color-border-subtle)',
-    fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em',
-    textTransform: 'uppercase', color: 'var(--color-text-muted)',
-  };
-}
-
-function tableRowStyle(cols: string[]): React.CSSProperties {
-  return {
-    display: 'grid',
-    gridTemplateColumns: cols.join(' '),
-    gap: '8px',
-    padding: '8px 0',
-    alignItems: 'center',
-    borderBottom: '1px solid var(--color-border-subtle)',
-  };
-}

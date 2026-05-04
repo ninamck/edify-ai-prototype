@@ -149,7 +149,7 @@ function lastTableY(doc: jsPDF): number {
 const MODE_LABEL: Record<ProductionMode, string> = {
   run: 'Run',
   variable: 'Variable',
-  increment: 'Segment',
+  increment: 'Drops',
 };
 
 type RecipeRow = {
@@ -447,6 +447,141 @@ export function downloadBenchSummaryPdf(opts: {
 
   drawFooters(doc, new Date());
   doc.save(filename('bench-summary', site.name, bench.name, date));
+}
+
+// ─── Builder: every bench summary in one PDF ────────────────────────────────
+
+/**
+ * One combined PDF, one section per bench that has scheduled work today.
+ * Each bench gets its info strip → components-needed table → recipes-on-this-
+ * bench table, mirroring `downloadBenchSummaryPdf` but for every bench at
+ * the site. New benches start on their own page so prep teams can rip them
+ * apart and hand each section to whoever's running that station.
+ */
+export function downloadAllBenchSummariesPdf(opts: {
+  siteId: SiteId;
+  date: string;
+  lines: PlanLine[];
+}) {
+  const { siteId, date, lines } = opts;
+  const site = getSite(siteId);
+  if (!site) return;
+
+  const doc = newDoc();
+  const cursor = drawHeader(
+    doc,
+    'Bench summaries',
+    `Component staging & recipes per bench at ${site.name}.`,
+    { site: site.name, date: formatDateLong(date) },
+  );
+
+  const benchIds = uniqueBenchIdsFromLines(lines);
+  if (benchIds.length === 0) {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(10);
+    doc.setTextColor(...MUTED_COLOR);
+    doc.text('No benches with work scheduled today.', PAGE_MARGIN, cursor.y);
+  } else {
+    benchIds.forEach((benchId, idx) => {
+      const bench = getBench(benchId);
+      if (!bench) return;
+      const rows = rowsForBench(lines, benchId);
+      const components = rollupComponentsForBench(lines, benchId);
+      if (rows.length === 0) return;
+
+      // Each bench starts on a fresh page after the first so prep teams
+      // can detach and hand around.
+      if (idx > 0) {
+        doc.addPage();
+        cursor.y = 18;
+      }
+
+      drawBenchInfoStrip(doc, cursor, bench);
+
+      sectionTitle(
+        doc,
+        cursor,
+        'Components needed',
+        components.length === 0
+          ? 'No assemblies on this bench — nothing to stage.'
+          : `Aggregated across ${rows.length} recipe${rows.length === 1 ? '' : 's'}.`,
+      );
+      drawComponentsTable(doc, cursor, components);
+
+      sectionTitle(
+        doc,
+        cursor,
+        'Recipes on this bench',
+        `${rows.length} recipe${rows.length === 1 ? '' : 's'} planned today.`,
+      );
+      drawBenchRecipesTable(doc, cursor, rows);
+    });
+  }
+
+  drawFooters(doc, new Date());
+  doc.save(filename('bench-summaries', site.name, undefined, date));
+}
+
+// ─── Builder: every individual bench plan in one PDF ────────────────────────
+
+/**
+ * One combined PDF, one bench plan per page — same content as
+ * `downloadBenchPdf` but rolled across every bench with scheduled work.
+ * Designed for the "print all individual benches" workflow where each
+ * station gets the recipes-scheduled view on its own page.
+ */
+export function downloadAllBenchPlansPdf(opts: {
+  siteId: SiteId;
+  date: string;
+  lines: PlanLine[];
+}) {
+  const { siteId, date, lines } = opts;
+  const site = getSite(siteId);
+  if (!site) return;
+
+  const doc = newDoc();
+  const cursor = drawHeader(
+    doc,
+    'Bench plans',
+    `Every bench at ${site.name}, one per page.`,
+    { site: site.name, date: formatDateLong(date) },
+  );
+
+  const benchIds = uniqueBenchIdsFromLines(lines);
+  if (benchIds.length === 0) {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(10);
+    doc.setTextColor(...MUTED_COLOR);
+    doc.text('No benches with work scheduled today.', PAGE_MARGIN, cursor.y);
+  } else {
+    benchIds.forEach((benchId, idx) => {
+      const bench = getBench(benchId);
+      if (!bench) return;
+      const rows = rowsForBench(lines, benchId);
+      if (rows.length === 0) return;
+
+      if (idx > 0) {
+        doc.addPage();
+        cursor.y = 18;
+      }
+
+      drawBenchInfoStrip(doc, cursor, bench);
+
+      sectionTitle(
+        doc,
+        cursor,
+        'Recipes scheduled',
+        `${rows.length} recipe${rows.length === 1 ? '' : 's'} totalling ${rows.reduce(
+          (s, r) => s + r.qty,
+          0,
+        )} units across ${rows.reduce((s, r) => s + r.batches.length, 0)} batches.`,
+      );
+      drawBenchRecipesTable(doc, cursor, rows);
+    });
+  }
+
+  drawFooters(doc, new Date());
+  doc.save(filename('bench-plans', site.name, undefined, date));
 }
 
 // ─── Builder: entire production day ingredient list ─────────────────────────

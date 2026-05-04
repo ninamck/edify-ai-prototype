@@ -137,24 +137,6 @@ export default function PCRQueuePage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {/* Page caption — site picker lives in the layout (shared) */}
-      <div
-        style={{
-          padding: '8px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          borderBottom: '1px solid var(--color-border-subtle)',
-          background: '#ffffff',
-          flexWrap: 'wrap',
-          justifyContent: 'flex-end',
-        }}
-      >
-        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-          {awaiting.length} awaiting · {signedToday.length} reviewed · {failedToday.length} failed
-        </span>
-      </div>
-
       {/* Bench filter strip — All + one tab per bench at the site */}
       <div
         style={{
@@ -217,7 +199,7 @@ export default function PCRQueuePage() {
         </div>
       </div>
 
-      <div style={{ padding: '16px 16px 32px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: 18 }}>
         <StaffLockBanner reason="Only Managers can sign off PCR." />
             <Section
               icon={<ClipboardCheck size={14} color="var(--color-warning)" />}

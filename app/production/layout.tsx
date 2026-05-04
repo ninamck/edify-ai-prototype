@@ -5,14 +5,8 @@ import SiteSwitcher from '@/components/Sidebar/SiteSwitcher';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useRouter, usePathname } from 'next/navigation';
 import QuinnProductionPanel from '@/components/Production/QuinnProductionPanel';
-import { RoleProvider, RoleSwitcher } from '@/components/Production/RoleContext';
-import { PlanStoreProvider } from '@/components/Production/PlanStore';
-import { SpokeRejectStoreProvider } from '@/components/Production/rejectsStore';
-import { AdhocRequestStoreProvider } from '@/components/Production/adhocStore';
-import { RemakeRequestStoreProvider } from '@/components/Production/remakeStore';
-import { HubUnlockStoreProvider } from '@/components/Production/hubUnlockStore';
-import { DemoNotificationsProvider } from '@/components/Production/demoNotificationsStore';
-import { ProductionSiteProvider } from '@/components/Production/ProductionSiteContext';
+import { RoleSwitcher } from '@/components/Production/RoleContext';
+import HubOperatorProviders from '@/components/Operator/HubOperatorProviders';
 import ProductionSiteSelector from '@/components/Production/ProductionSiteSelector';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import DemoControls from '@/components/DemoControls/DemoControls';
@@ -32,8 +26,6 @@ const HUB_SUB_TABS: SubTab[] = [
   { id: 'pcr',        label: 'PCR queue',         href: '/production/pcr' },
   { id: 'plan',       label: 'Plan',              href: '/production/plan' },
   { id: 'carry-over', label: 'Carry-over',        href: '/production/carry-over' },
-  { id: 'dispatch',   label: 'Dispatch',          href: '/production/dispatch' },
-  { id: 'spokes',     label: 'Spoke submissions', href: '/production/spokes' },
   { id: 'productivity', label: 'Productivity',    href: '/production/productivity' },
   { id: 'sales-report',   label: 'Sales vs forecast', href: '/production/sales-report' },
   { id: 'site-settings',  label: 'Settings',          href: '/production/settings' },
@@ -67,14 +59,7 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
   const subTabs = isSpoke ? SPOKE_SUB_TABS : HUB_SUB_TABS;
 
   return (
-    <RoleProvider>
-    <PlanStoreProvider>
-    <SpokeRejectStoreProvider>
-    <AdhocRequestStoreProvider>
-    <RemakeRequestStoreProvider>
-    <HubUnlockStoreProvider>
-    <DemoNotificationsProvider>
-    <ProductionSiteProvider>
+    <HubOperatorProviders>
     <div
       style={{
         display: 'flex',
@@ -218,8 +203,11 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
 
         {/* Shared site selector — single source of truth for which site
             every production sub-page operates on. Hidden for the spoke
-            persona since they're locked to their own site. */}
-        <ProductionSiteSelector />
+            persona since they're locked to their own site, and hidden
+            on hub-kitchen-only views (Benches, PCR queue) where the
+            selector would just be noise. */}
+        {!pathname.startsWith('/production/board') &&
+          !pathname.startsWith('/production/pcr') && <ProductionSiteSelector />}
 
         {/* Page body — flows in normal document scroll so the page itself
             scrolls rather than an inner container. */}
@@ -238,13 +226,6 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
 
       <QuinnProductionPanel />
     </div>
-    </ProductionSiteProvider>
-    </DemoNotificationsProvider>
-    </HubUnlockStoreProvider>
-    </RemakeRequestStoreProvider>
-    </AdhocRequestStoreProvider>
-    </SpokeRejectStoreProvider>
-    </PlanStoreProvider>
-    </RoleProvider>
+    </HubOperatorProviders>
   );
 }

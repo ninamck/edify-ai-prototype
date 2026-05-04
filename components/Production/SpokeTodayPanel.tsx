@@ -17,18 +17,18 @@ import {
 import { useDispatchTransfers, formatSentClock } from './dispatchStore';
 
 /**
- * SpokeTodayPanel — read-only "what's coming today" view for a spoke
- * manager. Lives on /production/amounts when the active persona is a
- * spoke. Designed to be lighter than the hub's editor: spokes don't
- * bake, so there's no quantity stepper, no benches, no carry-over —
- * just three short sections so the manager can answer:
+ * SpokeTodayPanel — read-only summary of the hub→spoke transfer pipeline,
+ * scoped to one spoke for one day. Used in two places:
  *
- *   1. What's already arrived today? (yesterday's drop)
- *   2. What's on the way / pending today? (today's drop)
- *   3. What did we just send the hub for tomorrow?
+ *  - perspective="spoke" (default): the spoke manager's own Today screen.
+ *    Framed as "what's coming to me" — Arriving today / Recent /
+ *    Sent to hub for tomorrow. They don't bake, so no stepper / no
+ *    benches / no carry-over.
  *
- * No edit affordances. The "Hub Order" tab is where the spoke goes to
- * actually change tomorrow's submission.
+ *  - perspective="hub": when a hub manager picks a spoke from the
+ *    site selector on Today. Same data, flipped framing — this is
+ *    the amount the hub is making to send to that spoke today, plus
+ *    yesterday's drop and the order they've placed for tomorrow.
  */
 
 type Props = {
@@ -36,6 +36,12 @@ type Props = {
   spokeId: SiteId;
   /** PRET_SITES id of the hub feeding the spoke (e.g. 'hub-central'). */
   hubId: SiteId;
+  /**
+   * Which side of the hub→spoke pipeline is reading this view.
+   * Drives all on-screen wording (titles, subtitles, status labels).
+   * Defaults to `'spoke'` so the spoke persona's own Today is unchanged.
+   */
+  perspective?: 'spoke' | 'hub';
 };
 
 type ShipmentStatus = 'delivered' | 'on-the-way' | 'pending' | 'draft';
@@ -87,8 +93,9 @@ function submissionStatus(s: SpokeSubmission): ShipmentStatus {
   return 'draft';
 }
 
-export default function SpokeTodayPanel({ spokeId, hubId }: Props) {
+export default function SpokeTodayPanel({ spokeId, hubId, perspective = 'spoke' }: Props) {
   const { transfers } = useDispatchTransfers();
+  const isHubView = perspective === 'hub';
 
   const spoke = getSite(spokeId);
   const hub = getSite(hubId);
@@ -189,28 +196,42 @@ export default function SpokeTodayPanel({ spokeId, hubId }: Props) {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            Today at {spoke?.name ?? 'the spoke'}
+            {isHubView
+              ? `Sending to ${spoke?.name ?? 'the spoke'} today`
+              : `Today at ${spoke?.name ?? 'the spoke'}`}
           </div>
           <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
-            {DEMO_TODAY} ({dayOfWeek(DEMO_TODAY)}) · Receiving from {hub?.name ?? 'the hub'}
+            {DEMO_TODAY} ({dayOfWeek(DEMO_TODAY)}) ·{' '}
+            {isHubView
+              ? `Producing at ${hub?.name ?? 'the hub'}`
+              : `Receiving from ${hub?.name ?? 'the hub'}`}
           </div>
         </div>
       </div>
 
-      {/* Arriving today */}
+      {/* Today's drop — framed as "arriving" for the spoke or "sending" for the hub */}
       <Section
-        title="Arriving today"
+        title={isHubView ? 'Sending today' : 'Arriving today'}
         subtitle={
           arrivingToday.length > 0
-            ? `Sent ${arrivingToday.map(t => formatSentClock(t.sentAtISO)).join(', ')} · ${todayUnits} units`
+            ? isHubView
+              ? `Loaded out ${arrivingToday.map(t => formatSentClock(t.sentAtISO)).join(', ')} · ${todayUnits} units`
+              : `Sent ${arrivingToday.map(t => formatSentClock(t.sentAtISO)).join(', ')} · ${todayUnits} units`
             : todaySubmission
-              ? `Hub acknowledged · ${todayUnits} units expected`
+              ? isHubView
+                ? `Order acknowledged · ${todayUnits} units to make`
+                : `Hub acknowledged · ${todayUnits} units expected`
               : 'No drop scheduled'
         }
         status={todayStatus}
+        statusLabelOverride={
+          isHubView && todayStatus === 'pending' ? 'Awaiting send' : undefined
+        }
       >
         {todayLines.length === 0 ? (
-          <EmptyRow text="Nothing scheduled to land today." />
+          <EmptyRow
+            text={isHubView ? 'Nothing to send today.' : 'Nothing scheduled to land today.'}
+          />
         ) : (
           <LineList lines={todayLines} />
         )}
@@ -218,7 +239,7 @@ export default function SpokeTodayPanel({ spokeId, hubId }: Props) {
 
       {/* Recent — yesterday */}
       <Section
-        title="Recent"
+        title={isHubView ? 'Sent yesterday' : 'Recent'}
         subtitle={
           arrivedYesterday.length > 0
             ? `${dayOffset(-1)} · ${arrivedYesterday.reduce((s, t) => s + t.totalUnits, 0)} units`
@@ -238,15 +259,18 @@ export default function SpokeTodayPanel({ spokeId, hubId }: Props) {
         )}
       </Section>
 
-      {/* Tomorrow — what we just ordered */}
+      {/* Tomorrow — what's been ordered */}
       {tomorrowSubmission && (
         <Section
-          title="Sent to hub for tomorrow"
+          title={isHubView ? 'Their order for tomorrow' : 'Sent to hub for tomorrow'}
           subtitle={`${dayOffset(1)} · ${tomorrowSubmission.lines.reduce(
             (s, l) => s + (l.confirmedUnits ?? l.quinnProposedUnits),
             0,
           )} units · Cutoff ${tomorrowSubmission.cutoffDateTime.slice(11, 16)}`}
           status={tomorrowSubmission.status === 'draft' ? 'draft' : 'pending'}
+          statusLabelOverride={
+            isHubView && tomorrowSubmission.status !== 'draft' ? 'To make tomorrow' : undefined
+          }
           icon={<Calendar size={11} />}
         >
           <LineList
@@ -256,7 +280,7 @@ export default function SpokeTodayPanel({ spokeId, hubId }: Props) {
             }))}
             faded={tomorrowSubmission.status === 'draft'}
           />
-          {tomorrowSubmission.status === 'draft' && (
+          {tomorrowSubmission.status === 'draft' && !isHubView && (
             <div
               style={{
                 marginTop: 8,
@@ -266,6 +290,18 @@ export default function SpokeTodayPanel({ spokeId, hubId }: Props) {
               }}
             >
               Draft only — open the Hub Order tab to confirm before cutoff.
+            </div>
+          )}
+          {tomorrowSubmission.status === 'draft' && isHubView && (
+            <div
+              style={{
+                marginTop: 8,
+                fontSize: 11,
+                color: 'var(--color-warning)',
+                fontWeight: 600,
+              }}
+            >
+              Spoke hasn&rsquo;t confirmed yet — numbers may move before cutoff.
             </div>
           )}
         </Section>
@@ -284,6 +320,7 @@ function Section({
   status,
   muted = false,
   icon,
+  statusLabelOverride,
   children,
 }: {
   title: string;
@@ -291,9 +328,12 @@ function Section({
   status: ShipmentStatus;
   muted?: boolean;
   icon?: React.ReactNode;
+  /** Optional replacement for the default `STATUS_STYLE.label` text. */
+  statusLabelOverride?: string;
   children: React.ReactNode;
 }) {
   const s = STATUS_STYLE[status];
+  const label = statusLabelOverride ?? s.label;
   return (
     <div
       style={{
@@ -339,7 +379,7 @@ function Section({
           }}
         >
           {icon ?? s.icon}
-          {s.label}
+          {label}
         </span>
       </div>
       <div style={{ padding: '8px 14px 12px' }}>{children}</div>

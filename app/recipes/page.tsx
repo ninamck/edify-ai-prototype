@@ -20,34 +20,44 @@ import {
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import {
-  FITZROY_RECIPES, Recipe, RecipeCategory, formatCost,
+  Recipe, RecipeCategory,
+  buildUsedInIndex, formatCost,
 } from '@/components/Recipe/libraryFixtures';
-
-const MODIFIER_GROUPS = [
-  { id: 'mg-alt-milks', name: 'Alt milks',   optionsCount: 3, attachedCount: 14 },
-  { id: 'mg-cup-sizes', name: 'Cup sizes',   optionsCount: 3, attachedCount: 22 },
-  { id: 'mg-pour-size', name: 'Pour size',   optionsCount: 2, attachedCount: 37 },
-  { id: 'mg-mixers',    name: 'Mixers',      optionsCount: 6, attachedCount: 37 },
-  { id: 'mg-syrups',    name: 'Syrup shots', optionsCount: 5, attachedCount: 18 },
-  { id: 'mg-extras',    name: 'Extras',      optionsCount: 4, attachedCount: 9 },
-];
+import {
+  type ProductionWorkflow,
+  type WorkflowId,
+} from '@/components/Production/fixtures';
+import { useRecipes, useWorkflows, setRecipes as storeSetRecipes } from '@/components/Recipe/recipeStore';
+import {
+  KindPill,
+  WorkflowDiagram,
+  MODIFIER_GROUPS,
+  formatShelfLife,
+  kindToModeLabel,
+} from '@/components/Recipe/RecipeEditors';
 
 type BulkAction = 'attach-group' | 'detach-group' | 'update-category' | 'recompute' | 'archive' | null;
 
 type CategoryFilter = 'All' | RecipeCategory;
 
 const CATEGORY_ORDER: CategoryFilter[] = [
-  'All', 'Coffee', 'Tea', 'Pastry', 'Food', 'Wine', 'Spirits', 'Kids',
+  'All',
+  'Coffee', 'Tea', 'Pastry', 'Food', 'Wine', 'Spirits', 'Kids',
+  'Bakery', 'Sandwich', 'Salad', 'Snack', 'Beverage',
 ];
 
 export default function RecipesLibraryPage() {
   const router = useRouter();
-  const [recipes, setRecipes] = useState<Recipe[]>(FITZROY_RECIPES);
+  const recipes = useRecipes();
+  const workflows = useWorkflows();
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('All');
   const [needsAttentionOnly, setNeedsAttentionOnly] = useState(false);
+  const [componentsOnly, setComponentsOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
+
+  const usedInIndex = useMemo(() => buildUsedInIndex(recipes), [recipes]);
 
   // Bulk edit
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
@@ -63,14 +73,16 @@ export default function RecipesLibraryPage() {
     let list = recipes;
     if (categoryFilter !== 'All') list = list.filter((r) => r.category === categoryFilter);
     if (needsAttentionOnly) list = list.filter((r) => r.flag !== null);
+    if (componentsOnly) list = list.filter((r) => r.kind === 'component' || r.isPrep === true);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((r) => r.name.toLowerCase().includes(q));
     }
     return list;
-  }, [recipes, categoryFilter, needsAttentionOnly, search]);
+  }, [recipes, categoryFilter, needsAttentionOnly, componentsOnly, search]);
 
   const needsAttentionCount = recipes.filter((r) => r.flag !== null).length;
+  const componentsCount = recipes.filter((r) => r.kind === 'component' || r.isPrep === true).length;
   const draftCount = recipes.filter((r) => r.status === 'Draft').length;
   const selectedCount = selectedIds.size;
   const openRecipe = openId ? recipes.find((r) => r.id === openId) ?? null : null;
@@ -83,7 +95,7 @@ export default function RecipesLibraryPage() {
   ) {
     const previous = recipes;
     const applyPredicate = affectOnly ?? ((r: Recipe) => selectedIds.has(r.id));
-    setRecipes((prev) => prev.map((r) => applyPredicate(r) ? mutate(r) : r));
+    storeSetRecipes(recipes.map((r) => applyPredicate(r) ? mutate(r) : r));
     setBulkAction(null);
     setBulkMenuOpen(false);
     const id = Date.now();
@@ -96,7 +108,7 @@ export default function RecipesLibraryPage() {
 
   function undoBulk() {
     if (!undoToast) return;
-    setRecipes(undoToast.previous);
+    storeSetRecipes(undoToast.previous);
     setUndoToast(null);
     if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
   }
@@ -139,7 +151,7 @@ export default function RecipesLibraryPage() {
         </button>
       </div>
       <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', margin: '0 0 20px' }}>
-        {FITZROY_RECIPES.length} recipes · 3 shared modifier groups
+        {recipes.length} recipes · {componentsCount} components &amp; prep · 3 shared modifier groups
       </p>
 
       {/* Filter strip */}
@@ -222,6 +234,29 @@ export default function RecipesLibraryPage() {
           }} />
           Needs attention ({needsAttentionCount})
         </button>
+        <button
+          onClick={() => setComponentsOnly((v) => !v)}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '6px 12px',
+            borderRadius: '100px',
+            border: componentsOnly ? '1px solid var(--color-accent-active)' : '1px solid var(--color-border-subtle)',
+            background: componentsOnly ? 'rgba(3,28,89,0.05)' : '#fff',
+            color: componentsOnly ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
+            fontSize: '12px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            fontFamily: 'var(--font-primary)',
+          }}
+        >
+          <span style={{
+            width: '6px', height: '6px', borderRadius: '50%',
+            background: componentsOnly ? 'var(--color-accent-active)' : 'var(--color-border)',
+          }} />
+          Components &amp; prep ({componentsCount})
+        </button>
         {draftCount > 0 && (
           <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
             · {draftCount} draft{draftCount === 1 ? '' : 's'}
@@ -234,7 +269,7 @@ export default function RecipesLibraryPage() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '32px 2fr 1fr 90px 90px 1fr 1fr',
+            gridTemplateColumns: '32px 2fr 1fr 130px 80px 80px 1fr 1fr',
             gap: '14px',
             padding: '10px 14px',
             borderBottom: '1px solid var(--color-border-subtle)',
@@ -249,6 +284,7 @@ export default function RecipesLibraryPage() {
           <span />
           <span>Name</span>
           <span>Category</span>
+          <span>Type</span>
           <span>Cost</span>
           <span>Margin</span>
           <span>Status</span>
@@ -266,6 +302,7 @@ export default function RecipesLibraryPage() {
             key={r.id}
             recipe={r}
             selected={selectedIds.has(r.id)}
+            usedInCount={usedInIndex.get(r.id)?.length ?? 0}
             onToggle={() => toggleOne(r.id)}
             onOpen={() => setOpenId(r.id)}
           />
@@ -369,7 +406,15 @@ export default function RecipesLibraryPage() {
       {/* Detail drawer */}
       <AnimatePresence>
         {openRecipe && (
-          <RecipeDrawer recipe={openRecipe} onClose={() => setOpenId(null)} />
+          <RecipeDrawer
+            recipe={openRecipe}
+            recipes={recipes}
+            workflows={workflows}
+            usedInIds={usedInIndex.get(openRecipe.id) ?? []}
+            onClose={() => setOpenId(null)}
+            onSelectRecipe={(id) => setOpenId(id)}
+            onEdit={() => router.push(`/recipes/${openRecipe.id}/edit`)}
+          />
         )}
       </AnimatePresence>
 
@@ -441,16 +486,21 @@ export default function RecipesLibraryPage() {
 // ──────────────────────────────────────────────────────────────────────────────
 
 function RecipeRow({
-  recipe, selected, onToggle, onOpen,
+  recipe, selected, usedInCount, onToggle, onOpen,
 }: {
-  recipe: Recipe; selected: boolean; onToggle: () => void; onOpen: () => void;
+  recipe: Recipe;
+  selected: boolean;
+  usedInCount: number;
+  onToggle: () => void;
+  onOpen: () => void;
 }) {
+  const noPrice = recipe.priceDineIn === 0;
   return (
     <div
       onClick={onOpen}
       style={{
         display: 'grid',
-        gridTemplateColumns: '32px 2fr 1fr 90px 90px 1fr 1fr',
+        gridTemplateColumns: '32px 2fr 1fr 130px 80px 80px 1fr 1fr',
         gap: '14px',
         alignItems: 'center',
         padding: '12px 14px',
@@ -474,8 +524,13 @@ function RecipeRow({
       </span>
       <span style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{recipe.name}</span>
       <span style={{ fontSize: '12.5px', color: 'var(--color-text-muted)' }}>{recipe.category}</span>
-      <span style={{ fontSize: '12.5px', color: 'var(--color-text-secondary)' }}>{formatCost(recipe.ingredientCost)}</span>
-      <span style={{ fontSize: '12.5px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>{recipe.marginPct}%</span>
+      <TypeCell recipe={recipe} usedInCount={usedInCount} />
+      <span style={{ fontSize: '12.5px', color: 'var(--color-text-secondary)' }}>
+        {noPrice ? <Dash /> : formatCost(recipe.ingredientCost)}
+      </span>
+      <span style={{ fontSize: '12.5px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+        {noPrice ? <Dash /> : `${recipe.marginPct}%`}
+      </span>
       <StatusPill status={recipe.status} />
       <span>
         {recipe.flag ? (
@@ -497,9 +552,36 @@ function RecipeRow({
             {recipe.flag.label}
           </span>
         ) : (
-          <span style={{ color: 'var(--color-border)', fontSize: '13px' }}>—</span>
+          <Dash />
         )}
       </span>
+    </div>
+  );
+}
+
+function Dash() {
+  return <span style={{ color: 'var(--color-border)', fontSize: '13px' }}>—</span>;
+}
+
+function TypeCell({ recipe, usedInCount }: { recipe: Recipe; usedInCount: number }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
+      <KindPill kind={recipe.kind} isPrep={recipe.isPrep} />
+      {recipe.kind === 'component' && usedInCount > 0 && (
+        <span style={{ fontSize: '10.5px', color: 'var(--color-text-muted)', fontWeight: 500, lineHeight: 1.3 }}>
+          Make first · used by {usedInCount}
+        </span>
+      )}
+      {recipe.kind === 'assembly' && recipe.subRecipes && recipe.subRecipes.length > 0 && (
+        <span style={{ fontSize: '10.5px', color: 'var(--color-text-muted)', fontWeight: 500, lineHeight: 1.3 }}>
+          {recipe.subRecipes.length} sub-recipe{recipe.subRecipes.length === 1 ? '' : 's'}
+        </span>
+      )}
+      {recipe.isPrep && (
+        <span style={{ fontSize: '10.5px', color: 'var(--color-text-muted)', fontWeight: 500, lineHeight: 1.3 }}>
+          Day-end prep
+        </span>
+      )}
     </div>
   );
 }
@@ -534,10 +616,25 @@ function StatusPill({ status }: { status: Recipe['status'] }) {
 // ──────────────────────────────────────────────────────────────────────────────
 // Detail drawer
 
-function RecipeDrawer({ recipe, onClose }: { recipe: Recipe; onClose: () => void }) {
+function RecipeDrawer({
+  recipe, recipes, workflows, usedInIds, onClose, onSelectRecipe, onEdit,
+}: {
+  recipe: Recipe;
+  recipes: Recipe[];
+  workflows: Record<WorkflowId, ProductionWorkflow>;
+  usedInIds: string[];
+  onClose: () => void;
+  onSelectRecipe: (id: string) => void;
+  onEdit: () => void;
+}) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+
   if (!mounted) return null;
+
+  const recipesById = new Map(recipes.map((r) => [r.id, r]));
+  const view = recipe;
+  const noPrice = view.priceDineIn === 0;
 
   return createPortal(
     <>
@@ -589,22 +686,36 @@ function RecipeDrawer({ recipe, onClose }: { recipe: Recipe; onClose: () => void
               <X size={18} />
             </button>
             <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, flex: 1, color: 'var(--color-text-primary)' }}>
-              {recipe.name}
+              {view.name}
             </h2>
-            <StatusPill status={recipe.status} />
+            <StatusPill status={view.status} />
           </div>
-          <div style={{ fontSize: '12.5px', color: 'var(--color-text-muted)', marginTop: '4px', paddingLeft: '38px' }}>
-            {recipe.category} · Ingredient cost {formatCost(recipe.ingredientCost)} · Margin {recipe.marginPct}%
+          <div style={{ fontSize: '12.5px', color: 'var(--color-text-muted)', marginTop: '4px', paddingLeft: '38px', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+            <span>{view.category}</span>
+            <span>·</span>
+            <KindPill kind={view.kind} isPrep={view.isPrep} />
+            {!noPrice && (
+              <>
+                <span>·</span>
+                <span>Ingredient cost {formatCost(view.ingredientCost)}</span>
+                <span>·</span>
+                <span>Margin {view.marginPct}%</span>
+              </>
+            )}
+            {view.production.shelfLifeMinutes != null && (
+              <>
+                <span>·</span>
+                <span>Shelf life {formatShelfLife(view.production.shelfLifeMinutes)}</span>
+              </>
+            )}
           </div>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <Section label="Menu items using this recipe">
-            {recipe.menuItems.length === 0 ? (
-              <Empty>No linked menu items</Empty>
-            ) : (
+          {view.menuItems.length > 0 && (
+            <Section label="Menu items using this recipe">
               <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {recipe.menuItems.map((mi) => (
+                {view.menuItems.map((mi) => (
                   <li
                     key={mi.name}
                     style={{
@@ -625,37 +736,107 @@ function RecipeDrawer({ recipe, onClose }: { recipe: Recipe; onClose: () => void
                   </li>
                 ))}
               </ul>
-            )}
-          </Section>
+            </Section>
+          )}
 
-          <Section label="Ingredients">
-            <div style={{ border: '1px solid var(--color-border-subtle)', borderRadius: '10px', overflow: 'hidden' }}>
-              {recipe.ingredients.map((ing, i) => (
-                <div
-                  key={ing.name}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr auto 1fr',
-                    gap: '12px',
-                    padding: '8px 12px',
-                    borderBottom: i < recipe.ingredients.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
-                    fontSize: '12.5px',
-                  }}
-                >
-                  <span style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>{ing.name}</span>
-                  <span style={{ color: 'var(--color-text-secondary)' }}>{ing.qty}</span>
-                  <span style={{ color: 'var(--color-text-muted)', textAlign: 'right' }}>{ing.supplier}</span>
-                </div>
-              ))}
-            </div>
-          </Section>
+          {(view.ingredients.length > 0 || (view.subRecipes && view.subRecipes.length > 0)) && (
+            <Section label="Recipe components">
+              <div style={{ border: '1px solid var(--color-border-subtle)', borderRadius: '10px', overflow: 'hidden' }}>
+                {/* Sub-recipes first (build order) */}
+                {view.subRecipes?.map((sub, idx) => {
+                  const subRec = recipesById.get(sub.recipeId);
+                  const isLast =
+                    idx === (view.subRecipes!.length - 1) &&
+                    view.ingredients.length === 0;
+                  return (
+                    <button
+                      key={`sub-${sub.recipeId}`}
+                      onClick={() => subRec && onSelectRecipe(subRec.id)}
+                      disabled={!subRec}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '20px 1fr auto auto',
+                        gap: '10px',
+                        padding: '8px 12px',
+                        alignItems: 'center',
+                        width: '100%',
+                        border: 'none',
+                        borderBottom: isLast ? 'none' : '1px solid var(--color-border-subtle)',
+                        background: '#fff',
+                        cursor: subRec ? 'pointer' : 'default',
+                        textAlign: 'left',
+                        fontFamily: 'var(--font-primary)',
+                        fontSize: '12.5px',
+                      }}
+                      onMouseEnter={(e) => { if (subRec) e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
+                    >
+                      <span
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          width: '20px', height: '20px', borderRadius: '50%',
+                          background: 'var(--color-bg-hover)',
+                          color: 'var(--color-text-secondary)',
+                          fontSize: '11px', fontWeight: 700, flexShrink: 0,
+                        }}
+                      >
+                        {idx + 1}
+                      </span>
+                      <span style={{ color: 'var(--color-text-primary)', fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {subRec ? subRec.name : sub.recipeId}
+                      </span>
+                      <span style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>
+                        {sub.quantityPerUnit}{sub.unit === 'unit' ? '' : ` ${sub.unit}`}
+                      </span>
+                      {subRec ? <KindPill kind={subRec.kind} isPrep={subRec.isPrep} /> : <span />}
+                    </button>
+                  );
+                })}
 
-          <Section label="Attached modifier groups">
-            {recipe.modifierGroups.length === 0 ? (
-              <Empty>None attached</Empty>
-            ) : (
+                {/* Then raw ingredients */}
+                {view.ingredients.map((ing, i) => {
+                  const isLast = i === view.ingredients.length - 1;
+                  const startIdx = (view.subRecipes?.length ?? 0) + i;
+                  return (
+                    <div
+                      key={`ing-${ing.name}-${i}`}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '20px 1fr auto auto',
+                        gap: '10px',
+                        padding: '8px 12px',
+                        alignItems: 'center',
+                        borderBottom: isLast ? 'none' : '1px solid var(--color-border-subtle)',
+                        fontSize: '12.5px',
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          width: '20px', height: '20px', borderRadius: '50%',
+                          background: 'var(--color-bg-hover)',
+                          color: 'var(--color-text-muted)',
+                          fontSize: '11px', fontWeight: 700, flexShrink: 0,
+                        }}
+                      >
+                        {startIdx + 1}
+                      </span>
+                      <span style={{ color: 'var(--color-text-primary)', fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {ing.name}
+                      </span>
+                      <span style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>{ing.qty}</span>
+                      <span style={{ color: 'var(--color-text-muted)', fontSize: '11.5px', textAlign: 'right' }}>{ing.supplier || '—'}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </Section>
+          )}
+
+          {view.modifierGroups.length > 0 && (
+            <Section label="Attached modifier groups">
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {recipe.modifierGroups.map((g) => (
+                {view.modifierGroups.map((g) => (
                   <span
                     key={g}
                     style={{
@@ -667,29 +848,69 @@ function RecipeDrawer({ recipe, onClose }: { recipe: Recipe; onClose: () => void
                   </span>
                 ))}
               </div>
-            )}
-          </Section>
+            </Section>
+          )}
 
-          <Section label="Price & margin">
-            <PriceRow label="Dine in" price={recipe.priceDineIn} cost={recipe.ingredientCost} />
-            <PriceRow label="Takeaway" price={recipe.priceTakeaway} cost={recipe.ingredientCost} />
-            <PriceRow label="Delivery" price={recipe.priceDelivery} cost={recipe.ingredientCost} />
-          </Section>
+          {!noPrice && (
+            <Section label="Price & margin">
+              <PriceRow label="Dine in" price={view.priceDineIn} cost={view.ingredientCost} />
+              <PriceRow label="Takeaway" price={view.priceTakeaway} cost={view.ingredientCost} />
+              <PriceRow label="Delivery" price={view.priceDelivery} cost={view.ingredientCost} />
+            </Section>
+          )}
 
-          <Section label="Production">
-            <div style={{ fontSize: '12.5px', color: 'var(--color-text-secondary)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 18px' }}>
-              <KV k="Visibility" v={recipe.production.visibility ?? '—'} />
-              <KV k="Shelf life"
-                  v={recipe.production.shelfLifeMinutes != null ? `${recipe.production.shelfLifeMinutes} min` : '—'} />
-              <KV k="Prep time"
-                  v={recipe.production.prepTimeSeconds != null ? `${recipe.production.prepTimeSeconds} s` : '—'} />
-              <KV k="Batch" v="1 × 1" />
+          {/* Production flow — Used in / Workflow DAG */}
+          {usedInIds.length > 0 && (
+            <Section label={`Used in (${usedInIds.length} assembl${usedInIds.length === 1 ? 'y' : 'ies'})`}>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {usedInIds.map((id) => {
+                  const parent = recipesById.get(id);
+                  if (!parent) return null;
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => onSelectRecipe(id)}
+                      style={{
+                        padding: '5px 11px', borderRadius: '8px',
+                        background: 'var(--color-bg-hover)',
+                        border: '1px solid var(--color-border-subtle)',
+                        color: 'var(--color-text-primary)',
+                        fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                        fontFamily: 'var(--font-primary)',
+                      }}
+                    >
+                      {parent.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </Section>
+          )}
+
+          <Section label="Workflow">
+            <WorkflowDiagram
+              recipe={view}
+              recipesById={recipesById}
+              workflows={workflows}
+            />
+            <div style={{ fontSize: '11.5px', color: 'var(--color-text-muted)', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '10px 18px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 18px' }}>
+                <KV k="Mode" v={kindToModeLabel(view)} />
+                <KV k="Shelf life"
+                    v={view.production.shelfLifeMinutes != null ? formatShelfLife(view.production.shelfLifeMinutes) : '—'} />
+                {view.production.visibility && (
+                  <KV k="Visibility" v={view.production.visibility} />
+                )}
+                {view.production.prepTimeSeconds != null && (
+                  <KV k="Prep time" v={`${view.production.prepTimeSeconds} s`} />
+                )}
+              </div>
             </div>
           </Section>
         </div>
 
         <div style={{ borderTop: '1px solid var(--color-border-subtle)', padding: '12px 18px', display: 'flex', gap: '8px' }}>
-          <DrawerButton icon={Edit3} label="Edit" />
+          <DrawerButton icon={Edit3} label="Edit" onClick={onEdit} />
           <DrawerButton icon={Copy} label="Duplicate" />
           <DrawerButton icon={Archive} label="Archive" />
         </div>
@@ -715,10 +936,6 @@ function Section({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function Empty({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: '12.5px', color: 'var(--color-text-muted)' }}>{children}</div>;
-}
-
 function PriceRow({ label, price, cost }: { label: string; price: number; cost: number }) {
   const margin = Math.round(((price - cost) / price) * 100);
   return (
@@ -742,10 +959,17 @@ function KV({ k, v }: { k: string; v: string | number }) {
   );
 }
 
-function DrawerButton({ icon: Icon, label }: { icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; label: string }) {
+
+function DrawerButton({
+  icon: Icon, label, onClick,
+}: {
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  label: string;
+  onClick?: () => void;
+}) {
   return (
     <button
-      onClick={() => alert(`${label} — not wired in this slice.`)}
+      onClick={onClick ?? (() => alert(`${label} — not wired in this slice.`))}
       style={{
         flex: 1,
         padding: '9px 10px',
@@ -1199,3 +1423,4 @@ const sectionLabelStyle: React.CSSProperties = {
   textTransform: 'uppercase', color: 'var(--color-text-muted)',
   marginBottom: '8px',
 };
+

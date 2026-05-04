@@ -94,8 +94,8 @@ export default function Sidebar() {
 
         {/* Group 1 — Make, plan & dispatch (Manager+)
             Spoke sees only "Plan production" (their own order form on
-            /production/spokes) and "View production summary". Dispatch
-            is hub-only — spokes receive, they don't send. */}
+            /production/spokes). Dispatch is hub-only — spokes receive,
+            they don't send. */}
         <NavGroup title={isSpoke ? 'Plan & order' : 'Make, plan & dispatch'} showDivider={true} compact={compact}>
           {/* Demo: hardcoded badge mirrors the Quinn floating-button counter
               so the sidebar shows there's something needing attention inside
@@ -109,9 +109,14 @@ export default function Sidebar() {
             active={is('/production')}
             onClick={() => router.push('/production/amounts')}
           />
-          <NavItem label="View production summary" icon={ClipboardList} compact={compact} active={is('/production-summary')} />
           {!isSpoke && (
-            <NavItem label="Dispatch to stores" icon={Send} compact={compact} active={is('/dispatch')} />
+            <NavItem
+              label="Dispatch to stores"
+              icon={Send}
+              compact={compact}
+              active={is('/dispatch')}
+              onClick={() => router.push('/dispatch')}
+            />
           )}
         </NavGroup>
 

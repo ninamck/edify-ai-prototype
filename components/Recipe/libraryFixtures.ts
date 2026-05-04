@@ -1,10 +1,114 @@
-export type RecipeCategory = 'Coffee' | 'Tea' | 'Pastry' | 'Food' | 'Wine' | 'Spirits' | 'Kids';
+export type RecipeCategory =
+  | 'Coffee' | 'Tea' | 'Pastry' | 'Food' | 'Wine' | 'Spirits' | 'Kids'
+  | 'Bakery' | 'Sandwich' | 'Salad' | 'Snack' | 'Beverage';
 export type RecipeStatus = 'Active' | 'Draft' | 'Archived';
 export type RecipeFlag =
   | { type: 'cost-drift'; label: string }
   | { type: 'missing-prod'; label: string }
   | { type: 'missing-size'; label: string }
   | null;
+
+export type RecipeKind = 'standalone' | 'component' | 'assembly';
+
+export type RecipeSubRecipe = {
+  recipeId: string;
+  quantityPerUnit: number;
+  unit: string;
+};
+
+/**
+ * Rich row used by the new full-page editor (manual-intake-style). When set on
+ * a recipe these take precedence over `ingredients` / `packaging` for editing.
+ * The lighter `ingredients` array is still used by the read-only drawer view
+ * for back-compat with existing fixtures.
+ */
+export type RichRow = {
+  id: string;
+  name: string;
+  supplier: string;
+  qty: number | '';
+  uom: string;
+  unitCostP: number;
+};
+
+export type RichVariableRow = RichRow & { type: string };
+
+/**
+ * Unified "what goes into this recipe" row. A recipe component is either:
+ *   - a raw ingredient (kind: 'item') — name + supplier + qty + uom + cost, OR
+ *   - a sub-recipe (kind: 'recipe') — references another Recipe by id.
+ *
+ * The order of rows is the build order (top → bottom in the UI). On save the
+ * page splits these into the legacy `Recipe.ingredients` and `Recipe.subRecipes`
+ * arrays for back-compat with read-only views.
+ */
+export type ItemComponent = {
+  id: string;
+  kind: 'item';
+  name: string;
+  supplier: string;
+  qty: number | '';
+  uom: string;
+  unitCostP: number;
+};
+
+export type RecipeComponent = {
+  id: string;
+  kind: 'recipe';
+  recipeId: string;
+  qty: number | '';
+  uom: string;
+};
+
+export type ComponentRow = ItemComponent | RecipeComponent;
+
+export type RecipeFormExtras = {
+  yieldQty?: number | '';
+  yieldUom?: string;
+  sites?: string[];
+  instructions?: string;
+  allergens?: string[];
+  photoName?: string | null;
+  /** Unified component list (items + sub-recipes). When set, takes precedence
+   *  over `Recipe.ingredients` and `Recipe.subRecipes` for editing purposes. */
+  components?: ComponentRow[];
+  /** @deprecated kept for back-compat; use `components` */
+  detailedIngredients?: RichRow[];
+  variableIngredients?: RichVariableRow[];
+  packaging?: RichRow[];
+  productionExtras?: {
+    visibility?: string[];
+    prepSeconds?: number | '';
+    productionRef?: string;
+    keyIngredients?: string[];
+    tags?: string[];
+    minBatch?: number | '';
+    maxBatch?: number | '' | 'unlimited';
+    batchMultiple?: number | '';
+  };
+  advanced?: {
+    productClass?: string;
+    isSubRecipe?: boolean;
+    countInStockTake?: boolean;
+    excludeFromCogs?: boolean;
+    shelfLifeValue?: number | '';
+    shelfLifeUnit?: 'minutes' | 'hours' | 'days';
+    closingRange?: string;
+    bakeryHot?: string;
+    allowCarryOver?: boolean;
+    enablePcr?: boolean;
+    usedFor?: string[];
+  };
+  pricing?: {
+    desiredMargin?: number | '';
+    vatPct?: number | '';
+    hotCold?: 'hot' | 'cold' | null;
+    srpDineInEx?: number | '';
+    srpTakeawayEx?: number | '';
+    srpDeliveryEx?: number | '';
+    deliveryCommission?: number | '';
+  };
+};
 
 export type Recipe = {
   id: string;
@@ -25,6 +129,17 @@ export type Recipe = {
     shelfLifeMinutes: number | null;
     prepTimeSeconds: number | null;
   };
+  /** Stand-alone / component / assembly. Drives the Type pill and Components filter. */
+  kind: RecipeKind;
+  /** When this recipe is an assembly: ordered components consumed per unit. */
+  subRecipes?: RecipeSubRecipe[];
+  /** Links to PRET_WORKFLOWS for the production-flow DAG view. */
+  workflowId?: string;
+  /** Orphan prep flag (e.g. end-of-day mise that no current assembly explicitly pulls). */
+  isPrep?: boolean;
+  /** Rich form fields edited via the full-page recipe editor. All optional so
+   *  existing fixtures don't need to fill them in. */
+  formExtras?: RecipeFormExtras;
 };
 
 const coffeeIngs = (withMilkMl: number | null) => {
@@ -37,7 +152,7 @@ const coffeeIngs = (withMilkMl: number | null) => {
   return list;
 };
 
-export const FITZROY_RECIPES: Recipe[] = [
+export const FITZROY_RECIPES: Omit<Recipe, 'kind'>[] = [
   {
     id: 'rec-flat-white',
     name: 'Flat white (8oz)',
@@ -434,4 +549,70 @@ export function flagVariant(flag: RecipeFlag): 'warning' | 'error' | null {
 
 export function formatCost(n: number): string {
   return `£${n.toFixed(2)}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pret library entries — derived from production fixtures so the Recipes page
+// shows every product on the production board, with sub-recipe dependencies
+// and a workflow id intact for the drawer DAG.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { PRET_RECIPES } from '@/components/Production/fixtures';
+
+const PRET_CONSUMED_IDS: Set<string> = new Set(
+  PRET_RECIPES.flatMap((r) => r.subRecipes?.map((s) => s.recipeId) ?? []),
+);
+
+function deriveKind(r: typeof PRET_RECIPES[number]): RecipeKind {
+  if (r.subRecipes && r.subRecipes.length > 0) return 'assembly';
+  if (PRET_CONSUMED_IDS.has(r.id)) return 'component';
+  return 'standalone';
+}
+
+export const PRET_LIBRARY_RECIPES: Recipe[] = PRET_RECIPES.map((r) => ({
+  id: r.id,
+  name: r.name,
+  category: r.category as RecipeCategory,
+  ingredientCost: 0,
+  priceDineIn: 0,
+  priceTakeaway: 0,
+  priceDelivery: 0,
+  marginPct: 0,
+  status: 'Active' as RecipeStatus,
+  flag: null,
+  menuItems: [],
+  ingredients: [],
+  modifierGroups: [],
+  production: {
+    visibility: null,
+    shelfLifeMinutes: r.shelfLifeMinutes,
+    prepTimeSeconds: null,
+  },
+  kind: deriveKind(r),
+  subRecipes: r.subRecipes?.map((s) => ({
+    recipeId: s.recipeId,
+    quantityPerUnit: s.quantityPerUnit,
+    unit: s.unit,
+  })),
+  workflowId: r.workflowId,
+  isPrep: r.isPrep,
+}));
+
+export const ALL_LIBRARY_RECIPES: Recipe[] = [
+  ...FITZROY_RECIPES.map((r): Recipe => ({ ...r, kind: 'standalone' })),
+  ...PRET_LIBRARY_RECIPES,
+];
+
+/** Inverse of subRecipes: which recipes consume this one. */
+export function buildUsedInIndex(recipes: Recipe[]): Map<string, string[]> {
+  const idx = new Map<string, string[]>();
+  for (const r of recipes) {
+    if (!r.subRecipes) continue;
+    for (const sub of r.subRecipes) {
+      const list = idx.get(sub.recipeId) ?? [];
+      list.push(r.id);
+      idx.set(sub.recipeId, list);
+    }
+  }
+  return idx;
 }

@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
-import { ChevronRight, Clock, Download, Moon, Repeat, Shuffle, Truck, User, Waves } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRightLeft, Check, ChevronRight, Clock, Download, Moon, Repeat, Shuffle, Truck, User, UserMinus, Waves } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import {
   benchesAt,
@@ -54,6 +54,19 @@ const ASSIGNEE_BY_BENCH: Record<string, string> = {
   'bench-airport-prep':     'Jon F.',
   'bench-airport-assemble': 'Nadia B.',
 };
+
+// Roster shown in the assign-to picker. Combines everyone seeded above
+// with a few "extras on shift" so the popover always has spare hands to
+// reassign work to during a demo. Sentinel string for the "Unassigned"
+// row keeps the picker model simple — empty string means no one.
+const UNASSIGNED = '';
+const STAFF_ROSTER: string[] = (() => {
+  const seeded = Array.from(new Set(Object.values(ASSIGNEE_BY_BENCH)));
+  const extras = ['Hana M.', 'Theo C.', 'Yusuf A.', 'Liv R.'];
+  const merged = Array.from(new Set([...seeded, ...extras]));
+  merged.sort((a, b) => a.localeCompare(b));
+  return merged;
+})();
 
 // ─── Stubbed cleaning & duties times per bench (minutes) ─────────────────────
 const CLEANING_MINS_BY_BENCH: Record<string, number> = {
@@ -159,16 +172,42 @@ export default function BenchCardBoard({
 }: Props) {
   const lines = usePlan(site.id, date);
 
+  // Local manager-applied assignment overrides. Sentinel `UNASSIGNED`
+  // means the manager explicitly cleared the seeded assignee. Lives in
+  // local state so the demo can reassign benches around the team
+  // without persisting anywhere — closes/reloads return to the stub
+  // map. When users + roles ship, this hook is the place to swap to a
+  // real store.
+  const [assignmentOverrides, setAssignmentOverrides] = useState<Record<string, string>>({});
+
+  const setAssignment = useCallback((benchId: string, name: string) => {
+    setAssignmentOverrides(prev => ({ ...prev, [benchId]: name }));
+  }, []);
+
+  // Per-line bench overrides — manager moves work between benches via
+  // the row's "move to" picker. Keyed by ProductionItemId → destination
+  // benchId. Same demo-scope rationale as `assignmentOverrides`: lives
+  // in memory, resets on reload. Wins over the line's natural
+  // `primaryBench.id` when bucketing rows into bench cards.
+  const [benchOverrides, setBenchOverrides] = useState<Record<string, string>>({});
+
+  const moveLineToBench = useCallback((itemId: string, benchId: string) => {
+    setBenchOverrides(prev => ({ ...prev, [itemId]: benchId }));
+  }, []);
+
+  const siteBenches = useMemo(() => benchesAt(site.id), [site.id]);
+
   // Group lines by their primary bench.
   const cards = useMemo<CardData[]>(() => {
-    const siteBenches = benchesAt(site.id);
     const byBench = new Map<string, PlanLine[]>();
     for (const line of lines) {
       if (line.effectivePlanned <= 0) continue;
-      if (!line.primaryBench) continue;
-      const arr = byBench.get(line.primaryBench.id) ?? [];
+      const overrideBenchId = benchOverrides[line.item.id];
+      const benchId = overrideBenchId ?? line.primaryBench?.id;
+      if (!benchId) continue;
+      const arr = byBench.get(benchId) ?? [];
       arr.push(line);
-      byBench.set(line.primaryBench.id, arr);
+      byBench.set(benchId, arr);
     }
 
     return siteBenches.map(bench => {
@@ -252,9 +291,18 @@ export default function BenchCardBoard({
         : DEFAULT_WINDOW_END_MINS;
       const windowCapacityMins = Math.max(0, windowEndMins - windowStartMins);
 
+      // Override wins; falls back to the seeded stub; finally Unassigned.
+      const overridden = assignmentOverrides[bench.id];
+      const assignee =
+        overridden !== undefined
+          ? overridden === UNASSIGNED
+            ? 'Unassigned'
+            : overridden
+          : ASSIGNEE_BY_BENCH[bench.id] ?? 'Unassigned';
+
       return {
         bench,
-        assignee: ASSIGNEE_BY_BENCH[bench.id] ?? 'Unassigned',
+        assignee,
         modeGroups,
         productionMins,
         cleaningMins,
@@ -266,7 +314,7 @@ export default function BenchCardBoard({
         hasWork: rows.length > 0,
       };
     });
-  }, [lines, site.id]);
+  }, [lines, siteBenches, assignmentOverrides, benchOverrides]);
 
   // Dependency-highlight resolver (same machinery as KitchenBoard).
   const highlightFor = useMemo<(itemId: string) => HighlightMode>(() => {
@@ -307,26 +355,41 @@ export default function BenchCardBoard({
   }, [cards, modeFilter]);
 
   return (
-    <div style={{ padding: '20px 20px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Grid of bench cards — 2 per row on wide screens */}
+    <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Masonry-style bench card layout via CSS multi-column.
+          We use columns (not Grid) so a short card doesn't waste vertical
+          space waiting for the tallest card in its row to end — the next
+          card simply stacks under it within the same column. `break-inside:
+          avoid` keeps each card whole rather than splitting across columns. */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(480px, 1fr))',
-          gap: 28,
+          columnWidth: 480,
+          columnGap: 28,
         }}
       >
         {visibleCards.map(card => (
-          <BenchCard
+          <div
             key={card.bench.id}
-            card={card}
-            nowHHMM={nowHHMM}
-            highlightFor={highlightFor}
-            hasFocus={focusedItemId != null}
-            onRowClick={toggleFocus}
-            onBenchClick={onBenchClick}
-            onDownloadBench={downloadBench}
-          />
+            style={{
+              breakInside: 'avoid',
+              pageBreakInside: 'avoid',
+              marginBottom: 28,
+              display: 'block',
+            }}
+          >
+            <BenchCard
+              card={card}
+              nowHHMM={nowHHMM}
+              highlightFor={highlightFor}
+              hasFocus={focusedItemId != null}
+              onRowClick={toggleFocus}
+              onBenchClick={onBenchClick}
+              onDownloadBench={downloadBench}
+              onAssign={setAssignment}
+              siteBenches={siteBenches}
+              onMoveLine={moveLineToBench}
+            />
+          </div>
         ))}
       </div>
       {visibleCards.length === 0 && (
@@ -360,6 +423,9 @@ function BenchCard({
   onRowClick,
   onBenchClick,
   onDownloadBench,
+  onAssign,
+  siteBenches,
+  onMoveLine,
 }: {
   card: CardData;
   nowHHMM?: string;
@@ -368,6 +434,11 @@ function BenchCard({
   onRowClick: (itemId: ProductionItemId) => void;
   onBenchClick?: (benchId: string) => void;
   onDownloadBench?: (benchId: string) => void;
+  onAssign?: (benchId: string, name: string) => void;
+  /** All benches at the active site — destinations the row picker offers. */
+  siteBenches: Bench[];
+  /** Move a planned recipe row from this bench to another bench. */
+  onMoveLine?: (itemId: ProductionItemId, benchId: string) => void;
 }) {
   const allRows = useMemo(() => card.modeGroups.flatMap(g => g.rows), [card.modeGroups]);
 
@@ -453,7 +524,10 @@ function BenchCard({
           </div>
         </div>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <AssigneeChip assignee={card.assignee} />
+          <AssigneeChip
+            assignee={card.assignee}
+            onAssign={onAssign ? name => onAssign(card.bench.id, name) : undefined}
+          />
           {onDownloadBench && (
             <button
               type="button"
@@ -500,6 +574,9 @@ function BenchCard({
                   nowHHMM={nowHHMM}
                   highlightFor={highlightFor}
                   onRowClick={onRowClick}
+                  currentBenchId={card.bench.id}
+                  siteBenches={siteBenches}
+                  onMoveLine={onMoveLine}
                 />
               </div>
             );
@@ -616,12 +693,18 @@ function ModeGroupSection({
   nowHHMM,
   highlightFor,
   onRowClick,
+  currentBenchId,
+  siteBenches,
+  onMoveLine,
 }: {
   group: ModeGroup;
   isFirst: boolean;
   nowHHMM?: string;
   highlightFor: (itemId: string) => HighlightMode;
   onRowClick: (itemId: ProductionItemId) => void;
+  currentBenchId: string;
+  siteBenches: Bench[];
+  onMoveLine?: (itemId: ProductionItemId, benchId: string) => void;
 }) {
   const treatment = MODE_TREATMENT[group.mode];
   // Secondary (off-mode) groups are rendered muted so they read as
@@ -693,6 +776,9 @@ function ModeGroupSection({
             nowHHMM={nowHHMM}
             highlightFor={highlightFor}
             onRowClick={onRowClick}
+            currentBenchId={currentBenchId}
+            siteBenches={siteBenches}
+            onMoveLine={onMoveLine}
           />
         ))
       ) : (
@@ -704,6 +790,9 @@ function ModeGroupSection({
               row={row}
               highlight={highlightFor(row.line.item.id)}
               onClick={() => onRowClick(row.line.item.id)}
+              currentBenchId={currentBenchId}
+              siteBenches={siteBenches}
+              onMoveLine={onMoveLine}
             />
           ))}
         </>
@@ -730,8 +819,8 @@ function ColumnHeader() {
     >
       <span>Recipe</span>
       <span style={{ textAlign: 'right', minWidth: 36 }}>Qty</span>
-      <span style={{ textAlign: 'right', minWidth: 80 }}>Batches</span>
       <span style={{ textAlign: 'right', minWidth: 56 }}>Time</span>
+      <span style={{ width: 22 }} />
       <span style={{ width: 14 }} />
     </div>
   );
@@ -748,12 +837,18 @@ function RunBucketSection({
   nowHHMM,
   highlightFor,
   onRowClick,
+  currentBenchId,
+  siteBenches,
+  onMoveLine,
 }: {
   bucket: RunBucket;
   isFirst: boolean;
   nowHHMM?: string;
   highlightFor: (itemId: string) => HighlightMode;
   onRowClick: (itemId: ProductionItemId) => void;
+  currentBenchId: string;
+  siteBenches: Bench[];
+  onMoveLine?: (itemId: ProductionItemId, benchId: string) => void;
 }) {
   const nowMins = nowHHMM ? hhmmToMins(nowHHMM) : -1;
   const state: RunTiming | null = nowMins >= 0 ? runTiming(bucket, nowMins) : null;
@@ -858,6 +953,9 @@ function RunBucketSection({
           row={row}
           highlight={highlightFor(row.line.item.id)}
           onClick={() => onRowClick(row.line.item.id)}
+          currentBenchId={currentBenchId}
+          siteBenches={siteBenches}
+          onMoveLine={onMoveLine}
         />
       ))}
     </div>
@@ -946,12 +1044,18 @@ function RecipeRow({
   row,
   highlight,
   onClick,
+  currentBenchId,
+  siteBenches,
+  onMoveLine,
 }: {
   row: RowData;
   highlight: HighlightMode;
   onClick: () => void;
+  currentBenchId: string;
+  siteBenches: Bench[];
+  onMoveLine?: (itemId: ProductionItemId, benchId: string) => void;
 }) {
-  const { line, batches, totalQty, estMinutes } = row;
+  const { line, totalQty, estMinutes } = row;
 
   const tone =
     highlight === 'focus'      ? { bg: 'var(--color-bg-hover)',  accent: 'var(--color-accent-active)', opacity: 1 } :
@@ -966,10 +1070,20 @@ function RecipeRow({
   const dispatchUnits = line.dispatchDemand;
   const spokeCount = line.dispatchBySpoke?.length ?? 0;
 
+  // Outer is now a `div role="button"` rather than a real <button>, so it can
+  // contain interactive children (the "move to bench" picker). Behaviour
+  // matches the previous button: click + Enter / Space fire `onClick`.
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       style={{
         display: 'grid',
         gridTemplateColumns: '1fr auto auto auto auto',
@@ -1047,23 +1161,18 @@ function RecipeRow({
           textAlign: 'right',
           fontVariantNumeric: 'tabular-nums',
           color: 'var(--color-text-secondary)',
-          minWidth: 80,
-        }}
-      >
-        {formatBatches(batches)}
-      </span>
-      <span
-        style={{
-          textAlign: 'right',
-          fontVariantNumeric: 'tabular-nums',
-          color: 'var(--color-text-secondary)',
           minWidth: 56,
         }}
       >
         {formatHMS(estMinutes)}
       </span>
+      <MoveBenchButton
+        currentBenchId={currentBenchId}
+        siteBenches={siteBenches}
+        onMove={benchId => onMoveLine?.(line.item.id, benchId)}
+      />
       <ChevronRight size={14} color="var(--color-text-muted)" style={{ opacity: highlight === 'focus' ? 1 : 0.4 }} />
-    </button>
+    </div>
   );
 }
 
@@ -1071,8 +1180,203 @@ function RecipeRow({
 // Small UI bits
 // ─────────────────────────────────────────────────────────────────────────────
 
-function AssigneeChip({ assignee }: { assignee: string }) {
+/**
+ * Per-row "move this work to another bench" picker. Renders as a small
+ * arrow icon in the row's action column. Click → popover lists every
+ * other bench at the active site, keyed by the line's current bench so
+ * the destination it's already on is hidden.
+ *
+ * Manager flow: open the row, realise the egg cracker queue is jammed →
+ * tap the arrow → pick "Bakery prep" → the row hops onto that card.
+ * Override lives in BenchCardBoard state; refresh wipes it.
+ */
+function MoveBenchButton({
+  currentBenchId,
+  siteBenches,
+  onMove,
+}: {
+  currentBenchId: string;
+  siteBenches: Bench[];
+  /** Called with the destination benchId. Picker closes automatically. */
+  onMove?: (benchId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      if (!wrapperRef.current) return;
+      if (!wrapperRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const destinations = useMemo(
+    () => siteBenches.filter(b => b.id !== currentBenchId),
+    [siteBenches, currentBenchId],
+  );
+
+  if (!onMove || destinations.length === 0) {
+    // Reserve grid slot so column alignment doesn't jump.
+    return <span style={{ width: 22, height: 22 }} />;
+  }
+
   return (
+    <div
+      ref={wrapperRef}
+      style={{ position: 'relative', width: 22, height: 22, display: 'inline-flex' }}
+      onClick={e => e.stopPropagation()}
+    >
+      <button
+        type="button"
+        aria-label="Move recipe to another bench"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: 22,
+          height: 22,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 0,
+          borderRadius: 6,
+          background: open ? 'var(--color-bg-hover)' : 'transparent',
+          border: '1px solid transparent',
+          color: 'var(--color-text-secondary)',
+          cursor: 'pointer',
+        }}
+        title="Move to another bench"
+      >
+        <ArrowRightLeft size={12} />
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          aria-label="Pick destination bench"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            right: 0,
+            zIndex: 60,
+            minWidth: 220,
+            maxHeight: 280,
+            overflowY: 'auto',
+            background: '#ffffff',
+            border: '1px solid var(--color-border)',
+            borderRadius: 10,
+            boxShadow: '0 12px 32px rgba(10, 20, 25, 0.18)',
+            padding: 4,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+          }}
+        >
+          <div
+            style={{
+              padding: '6px 10px 4px',
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: 'var(--color-text-muted)',
+            }}
+          >
+            Move to bench
+          </div>
+          {destinations.map(b => (
+            <button
+              key={b.id}
+              type="button"
+              role="option"
+              onClick={() => {
+                onMove(b.id);
+                setOpen(false);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 10px',
+                background: 'transparent',
+                border: 'none',
+                borderRadius: 6,
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontFamily: 'var(--font-primary)',
+                color: 'var(--color-text-primary)',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              <span style={{ flex: 1, fontWeight: 600 }}>{b.name}</span>
+              {b.capabilities.length > 0 && (
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    color: 'var(--color-text-muted)',
+                  }}
+                >
+                  {b.capabilities[0]}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AssigneeChip({
+  assignee,
+  onAssign,
+}: {
+  assignee: string;
+  /** When provided, the chip becomes a button that opens a staff picker. */
+  onAssign?: (name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  // Close the popover on outside click + Escape. Mounting the listeners
+  // only while open keeps cards without an open picker free of global
+  // event handlers.
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      if (!wrapperRef.current) return;
+      if (!wrapperRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const isUnassigned = assignee === 'Unassigned';
+  const interactive = !!onAssign;
+
+  const chip = (
     <span
       style={{
         display: 'inline-flex',
@@ -1080,16 +1384,144 @@ function AssigneeChip({ assignee }: { assignee: string }) {
         gap: 6,
         padding: '4px 8px',
         borderRadius: 999,
-        background: 'var(--color-bg-hover)',
-        color: 'var(--color-text-secondary)',
+        background: isUnassigned ? 'var(--color-bg-hover)' : 'var(--color-info-light)',
+        color: isUnassigned ? 'var(--color-text-secondary)' : 'var(--color-info)',
         fontSize: 11,
         fontWeight: 600,
         whiteSpace: 'nowrap',
+        border: `1px solid ${isUnassigned ? 'var(--color-border-subtle)' : 'var(--color-info-light)'}`,
       }}
     >
       <User size={12} />
       {assignee}
     </span>
+  );
+
+  if (!interactive) return chip;
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative', display: 'inline-flex' }}>
+      <button
+        type="button"
+        onClick={e => {
+          e.stopPropagation();
+          setOpen(o => !o);
+        }}
+        onKeyDown={e => e.stopPropagation()}
+        title={isUnassigned ? 'Assign a team member' : `Assigned to ${assignee} — click to change`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        style={{
+          padding: 0,
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          fontFamily: 'var(--font-primary)',
+        }}
+      >
+        {chip}
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          aria-label="Assign bench to"
+          onClick={e => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            right: 0,
+            zIndex: 50,
+            minWidth: 180,
+            maxHeight: 280,
+            overflowY: 'auto',
+            background: '#ffffff',
+            border: '1px solid var(--color-border)',
+            borderRadius: 8,
+            boxShadow: '0 8px 24px rgba(12, 20, 44, 0.16)',
+            padding: 4,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+            fontFamily: 'var(--font-primary)',
+          }}
+        >
+          <div
+            style={{
+              padding: '6px 10px 4px',
+              fontSize: 9.5,
+              fontWeight: 700,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: 'var(--color-text-muted)',
+            }}
+          >
+            Assign bench to
+          </div>
+          <PickerOption
+            label="Unassigned"
+            icon={<UserMinus size={12} />}
+            selected={isUnassigned}
+            onSelect={() => {
+              onAssign(UNASSIGNED);
+              setOpen(false);
+            }}
+          />
+          <div style={{ height: 1, background: 'var(--color-border-subtle)', margin: '2px 0' }} />
+          {STAFF_ROSTER.map(name => (
+            <PickerOption
+              key={name}
+              label={name}
+              icon={<User size={12} />}
+              selected={!isUnassigned && name === assignee}
+              onSelect={() => {
+                onAssign(name);
+                setOpen(false);
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PickerOption({
+  label,
+  icon,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={selected}
+      onClick={onSelect}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '7px 10px',
+        background: selected ? 'var(--color-info-light)' : 'transparent',
+        color: selected ? 'var(--color-info)' : 'var(--color-text-primary)',
+        border: 'none',
+        borderRadius: 6,
+        fontSize: 12,
+        fontWeight: selected ? 700 : 500,
+        cursor: 'pointer',
+        textAlign: 'left',
+        fontFamily: 'var(--font-primary)',
+      }}
+    >
+      <span style={{ flexShrink: 0, opacity: 0.8 }}>{icon}</span>
+      <span style={{ flex: 1 }}>{label}</span>
+      {selected && <Check size={12} />}
+    </button>
   );
 }
 

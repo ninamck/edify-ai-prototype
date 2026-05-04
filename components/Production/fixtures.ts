@@ -470,6 +470,15 @@ export type ProductionRecipe = {
   workflowId: WorkflowId;
   /** Default mode — but still per-SKU authoritative on ProductionItem. */
   defaultMode: ProductionMode;
+  /**
+   * Marks the recipe as a prep / sub-recipe component even when no current
+   * assembly explicitly pulls it (e.g. day-end mise for tomorrow). The
+   * Today view groups it under the Components tab so a manager can find
+   * all prep work in one place. Items that ARE pulled by today's
+   * assemblies surface as components automatically — this flag is only
+   * needed for orphan prep batches.
+   */
+  isPrep?: boolean;
 };
 
 export const PRET_RECIPES: ProductionRecipe[] = [
@@ -555,6 +564,9 @@ export const PRET_RECIPES: ProductionRecipe[] = [
     subRecipes: [
       { recipeId: 'prec-ciabatta', quantityPerUnit: 1, unit: 'unit' },
       { recipeId: 'prec-chicken-mayo-filling', quantityPerUnit: 80, unit: 'g' },
+      // 1 strip of crispy bacon per club sandwich — wires the bacon prep
+      // line into the assembly cascade so its production qty is derived.
+      { recipeId: 'prec-crispy-bacon', quantityPerUnit: 1, unit: 'unit' },
     ],
     allowCarryOver: true,
     selectionTags: ['core', 'midday'],
@@ -630,9 +642,9 @@ export const PRET_RECIPES: ProductionRecipe[] = [
   { id: 'prec-pizza-slice',    name: 'Pizza slice',             category: 'Bakery', shelfLifeMinutes: 90,     batchRules: { min: 4, max: 12, multipleOf: 2 }, skuId: 'sku-pizza-slice',    allowCarryOver: false, selectionTags: ['midday', 'afternoon'],           workflowId: 'wf-cookie', defaultMode: 'increment' },
 
   // ─── End-of-day next-day prep (off-mode on run benches) ─────────────────
-  { id: 'prec-eod-chicken-prep', name: 'Tomorrow: chicken filling mise', category: 'Sandwich', shelfLifeMinutes: 12 * 60, batchRules: { min: 1, max: 4, multipleOf: 1 }, skuId: 'sku-eod-chicken-prep', allowCarryOver: false, selectionTags: ['closing'], workflowId: 'wf-filling', defaultMode: 'variable' },
-  { id: 'prec-eod-dough-prep',   name: 'Tomorrow: dough proof',          category: 'Bakery',   shelfLifeMinutes: 18 * 60, batchRules: { min: 1, max: 6, multipleOf: 1 }, skuId: 'sku-eod-dough-prep',   allowCarryOver: false, selectionTags: ['closing'], workflowId: 'wf-filling', defaultMode: 'variable' },
-  { id: 'prec-eod-roast-prep',   name: 'Tomorrow: roast & stock prep',   category: 'Sandwich', shelfLifeMinutes: 18 * 60, batchRules: { min: 1, max: 4, multipleOf: 1 }, skuId: 'sku-eod-roast-prep',   allowCarryOver: false, selectionTags: ['closing'], workflowId: 'wf-filling', defaultMode: 'variable' },
+  { id: 'prec-eod-chicken-prep', name: 'Tomorrow: chicken filling mise', category: 'Sandwich', shelfLifeMinutes: 12 * 60, batchRules: { min: 1, max: 4, multipleOf: 1 }, skuId: 'sku-eod-chicken-prep', allowCarryOver: false, selectionTags: ['closing'], workflowId: 'wf-filling', defaultMode: 'variable', isPrep: true },
+  { id: 'prec-eod-dough-prep',   name: 'Tomorrow: dough proof',          category: 'Bakery',   shelfLifeMinutes: 18 * 60, batchRules: { min: 1, max: 6, multipleOf: 1 }, skuId: 'sku-eod-dough-prep',   allowCarryOver: false, selectionTags: ['closing'], workflowId: 'wf-filling', defaultMode: 'variable', isPrep: true },
+  { id: 'prec-eod-roast-prep',   name: 'Tomorrow: roast & stock prep',   category: 'Sandwich', shelfLifeMinutes: 18 * 60, batchRules: { min: 1, max: 4, multipleOf: 1 }, skuId: 'sku-eod-roast-prep',   allowCarryOver: false, selectionTags: ['closing'], workflowId: 'wf-filling', defaultMode: 'variable', isPrep: true },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

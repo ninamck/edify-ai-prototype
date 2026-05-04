@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AmountsView from '@/components/Production/AmountsView';
 import { useRole } from '@/components/Production/RoleContext';
-import { PRET_SITES, DEMO_TODAY, dayOfWeek, getSite } from '@/components/Production/fixtures';
+import { PRET_SITES, DEMO_TODAY, getSite } from '@/components/Production/fixtures';
 import type { FocusReason } from '@/components/Production/PlanStore';
 import IncomingRejectsStrip from '@/components/Production/IncomingRejectsStrip';
 import IncomingAdhocRequestsStrip from '@/components/Production/IncomingAdhocRequestsStrip';
@@ -57,6 +57,17 @@ function TodayPageInner() {
   const { siteId, setSiteId } = useProductionSite();
   const site = getSite(siteId);
   const isHub = site?.type === 'HUB';
+  // "Hub-fed" = a site that doesn't bake for itself: regular SPOKEs,
+  // HYBRIDs, and STANDALONEs that have been linked to a hub kitchen
+  // (PAC139 dark-kitchen pattern). When the hub manager picks one of
+  // these from the site selector on Today, they don't want the bake
+  // editor (there's nothing to edit) — they want the spoke's incoming
+  // delivery view, same shape as the spoke persona's own Today.
+  const isHubFedSite =
+    !!site?.hubId &&
+    (site.type === 'SPOKE' ||
+      site.type === 'HYBRID' ||
+      (site.type === 'STANDALONE' && site.linkType === 'linked'));
   const recordedBy = user?.name ?? 'Hub manager';
   const [focus, setFocus] = useState<{ itemId: string; reason: FocusReason } | null>(null);
 
@@ -99,25 +110,6 @@ function TodayPageInner() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {/* Page caption — site picker lives in the layout (shared across
-          every production sub-page); we just show the date context. */}
-      <div
-        style={{
-          padding: '8px 32px',
-          borderBottom: '1px solid var(--color-border-subtle)',
-          background: '#ffffff',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          flexWrap: 'wrap',
-          justifyContent: 'flex-end',
-        }}
-      >
-        <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
-          Planning {DEMO_TODAY} ({dayOfWeek(DEMO_TODAY)})
-        </span>
-      </div>
-
       {/* Incoming-from-spokes surfaces — only relevant when the hub manager
           is viewing one of their own hubs. The Today screen is the single
           place where the hub manager triages everything that's landed on
@@ -132,14 +124,27 @@ function TodayPageInner() {
         </>
       )}
 
-      <AmountsView
-        siteId={siteId}
-        date={DEMO_TODAY}
-        canEdit={canEdit}
-        focusedItemId={focus?.itemId ?? null}
-        focusReason={focus?.reason ?? null}
-        onClearFocus={() => setFocus(null)}
-      />
+      {/* When the hub manager picks a hub-fed site from the selector on
+          Today (e.g. Fitzroy King's Cross), swap the bake editor for the
+          same hub→spoke summary panel — but flipped to the hub's
+          perspective. Same data, re-skinned as "what we're sending
+          today" rather than the spoke's "what's arriving". */}
+      {isHubFedSite ? (
+        <SpokeTodayPanel
+          spokeId={siteId}
+          hubId={site!.hubId!}
+          perspective="hub"
+        />
+      ) : (
+        <AmountsView
+          siteId={siteId}
+          date={DEMO_TODAY}
+          canEdit={canEdit}
+          focusedItemId={focus?.itemId ?? null}
+          focusReason={focus?.reason ?? null}
+          onClearFocus={() => setFocus(null)}
+        />
+      )}
     </div>
   );
 }

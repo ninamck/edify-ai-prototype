@@ -160,7 +160,7 @@ export function StaffLockBanner({ reason }: { reason: string }) {
         fontWeight: 600,
         color: 'var(--color-warning)',
         fontFamily: 'var(--font-primary)',
-        margin: '0 0 12px 0',
+        margin: '16px 0 12px 0',
       }}
     >
       <Lock size={12} /> Read-only as Staff — {reason}

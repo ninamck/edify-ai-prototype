@@ -5,16 +5,17 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowRight,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
-  Split,
+  CornerDownRight,
   Layers,
   Plus,
   Minus,
+  Power,
   RotateCcw,
   AlertTriangle,
   Info,
-  ArrowDown,
   Combine,
   Search,
   X,
@@ -23,12 +24,10 @@ import {
   Package,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
-import Link from 'next/link';
-import StatusPill from './StatusPill';
 import { getStepperButtonStyle } from './QtyStepper';
 import { SelectionTagChip } from './RangeTierChips';
 import { StaffLockBanner } from './RoleContext';
-import { usePlan, usePlanStore, FILLING_TRAY_GRAMS, type PlanLine, type FocusReason } from './PlanStore';
+import { usePlan, usePlanStore, FILLING_TRAY_GRAMS, type PlanLine, type FocusReason, type AssemblyDemand } from './PlanStore';
 import PlanFocusPanel from './PlanFocusPanel';
 import {
   effectiveBatchRules,
@@ -54,16 +53,17 @@ const CATEGORY_ORDER: ProductionRecipe['category'][] = [
 const MODE_STYLE = {
   run: { bg: 'var(--color-accent-active)', color: 'var(--color-text-on-active)', label: 'Run' },
   variable: { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)', label: 'Variable' },
-  increment: { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)', label: 'Segment' },
+  increment: { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)', label: 'Drops' },
 } as const;
 
-type ModeTabId = 'all' | ProductionMode;
+type ModeTabId = 'all' | ProductionMode | 'components';
 
 const MODE_TABS: Array<{ id: ModeTabId; label: string; hint: string }> = [
-  { id: 'all', label: 'All', hint: 'Every recipe across run, variable, and segment production' },
-  { id: 'run', label: 'Run amounts', hint: 'Planned in advance, made to a target quantity' },
+  { id: 'all', label: 'All', hint: 'Every product across run, variable, and drop production' },
+  { id: 'run', label: 'Run', hint: 'Planned in advance, made to a target quantity' },
   { id: 'variable', label: 'Variable', hint: 'Made on the floor on demand — assemble as needed' },
-  { id: 'increment', label: 'Segment', hint: 'Cadence drops throughout the day (coffees, smoothies)' },
+  { id: 'increment', label: 'Drops', hint: 'Made fresh in drops throughout the day (coffees, smoothies)' },
+  { id: 'components', label: 'Components', hint: 'Sub-recipe prep that feeds finished products (sandwich fillings, sauces). Quantities are summed from the products that use them.' },
 ];
 
 const SIGNAL_LABELS: Record<DemandSignal, string> = {
@@ -107,7 +107,7 @@ export default function AmountsView({
   focusReason = null,
   onClearFocus,
 }: AmountsViewProps) {
-  const { setPlanned, setPerDropPlan, setVariablePlan, resetToQuinn, resetAll, overrideCount } = usePlanStore();
+  const { setPlanned, setPerDropPlan, setPerRunPlan, setVariablePlan, resetToQuinn, resetAll, overrideCount } = usePlanStore();
   const [modeTab, setModeTab] = useState<ModeTabId>('all');
   const [categoryFilter, setCategoryFilter] = useState<'All' | ProductionRecipe['category']>('All');
   const [query, setQuery] = useState('');
@@ -126,11 +126,20 @@ export default function AmountsView({
   // gone variable (locked baseline + add-ons) counts under both Run and
   // Variable so the manager can find it from either entry point.
   const tabCounts = useMemo(() => {
-    const counts: Record<ModeTabId, number> = { all: lines.length, run: 0, variable: 0, increment: 0 };
+    const counts: Record<ModeTabId, number> = { all: lines.length, run: 0, variable: 0, increment: 0, components: 0 };
     for (const l of lines) {
       counts[l.item.mode] += 1;
       if (l.item.mode === 'run' && (l.runLocked || l.variablePlanned > 0)) {
         counts.variable += 1;
+      }
+      // A component is any recipe pulled by an assembly today, OR any
+      // recipe explicitly tagged as prep / mise (orphan prep batches like
+      // day-end chicken-filling mise that don't have a today-assembly to
+      // derive demand from). Counted under its production mode AND under
+      // the dedicated Components tab so the manager can find it from
+      // either entry point.
+      if (l.assemblyDemand.totalUnits > 0 || l.recipe.isPrep) {
+        counts.components += 1;
       }
     }
     return counts;
@@ -138,6 +147,9 @@ export default function AmountsView({
 
   const inMode = useMemo(() => {
     if (modeTab === 'all') return lines;
+    if (modeTab === 'components') {
+      return lines.filter(l => l.assemblyDemand.totalUnits > 0 || l.recipe.isPrep);
+    }
     if (modeTab === 'variable') {
       return lines.filter(l => {
         if (l.item.mode === 'variable') return true;
@@ -215,14 +227,31 @@ export default function AmountsView({
     onClearFocus?.();
   }
 
+  // Group rows under their natural product category, but split out anything
+  // that's a component (assembly-driven) or an explicit prep batch into a
+  // single dedicated "Components" group at the bottom. Keeps the products a
+  // customer can buy at the top of the table — bacon, fillings, mise etc.
+  // collect underneath as the support work that feeds them.
   const grouped = useMemo(() => {
-    const map = new Map<ProductionRecipe['category'], PlanLine[]>();
+    const productMap = new Map<ProductionRecipe['category'], PlanLine[]>();
+    const components: PlanLine[] = [];
     for (const l of filtered) {
-      const arr = map.get(l.recipe.category) ?? [];
-      arr.push(l);
-      map.set(l.recipe.category, arr);
+      if (l.assemblyDemand.totalUnits > 0 || l.recipe.isPrep) {
+        components.push(l);
+      } else {
+        const arr = productMap.get(l.recipe.category) ?? [];
+        arr.push(l);
+        productMap.set(l.recipe.category, arr);
+      }
     }
-    return CATEGORY_ORDER.filter(c => map.has(c)).map(c => ({ category: c, rows: map.get(c)! }));
+    const groups: Array<{ category: string; rows: PlanLine[]; isComponentGroup: boolean }> =
+      CATEGORY_ORDER
+        .filter(c => productMap.has(c))
+        .map(c => ({ category: c, rows: productMap.get(c)!, isComponentGroup: false }));
+    if (components.length > 0) {
+      groups.push({ category: 'Components', rows: components, isComponentGroup: true });
+    }
+    return groups;
   }, [filtered]);
 
   const totals = useMemo(() => {
@@ -238,6 +267,28 @@ export default function AmountsView({
   // current plan, with a per-source breakdown so the manager can see
   // exactly which assemblies are creating the deficit.
   const [shortfallsOpen, setShortfallsOpen] = useState(false);
+
+  // End-of-day sign-off — local-only flag keyed by `${siteId}-${date}` so
+  // the demo can flip a day to "ended" and back without persisting state.
+  // Wiring real lock-down (disabling steppers, freezing assignments) would
+  // be a follow-up; for now ending production stamps the time, swaps the
+  // header CTA, and surfaces an inline confirmation banner.
+  const [endedRecord, setEndedRecord] = useState<Record<string, string | undefined>>({});
+  const endedKey = `${siteId}-${date}`;
+  const endedAt = endedRecord[endedKey];
+  const [confirmEndOpen, setConfirmEndOpen] = useState(false);
+  function endProduction() {
+    const stamp = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    setEndedRecord(prev => ({ ...prev, [endedKey]: stamp }));
+    setConfirmEndOpen(false);
+  }
+  function reopenProduction() {
+    setEndedRecord(prev => {
+      const next = { ...prev };
+      delete next[endedKey];
+      return next;
+    });
+  }
 
   function bump(line: PlanLine, delta: number) {
     const step = line.recipe.batchRules?.multipleOf ?? 1;
@@ -413,31 +464,126 @@ export default function AmountsView({
             <RotateCcw size={12} /> Reset {dateOverrideCount} to Quinn
           </button>
         )}
-        <Link
-          href="/production/board"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '10px 14px',
-            borderRadius: 8,
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: 'var(--font-primary)',
-            background: '#ffffff',
-            color: 'var(--color-text-secondary)',
-            border: '1px solid var(--color-border)',
-            cursor: 'pointer',
-            textDecoration: 'none',
-          }}
-        >
-          See benches <ArrowRight size={12} />
-        </Link>
+        {/* End / reopen production. Once ended, the button flips to a
+            muted "Production ended" state with an inline reopen affordance
+            for demo undo. Editable-only — past days never expose this. */}
+        {editable && (endedAt ? (
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 12px',
+              borderRadius: 8,
+              fontSize: 11,
+              fontWeight: 700,
+              background: '#ffffff',
+              color: 'var(--color-text-secondary)',
+              border: '1px solid var(--color-border)',
+              fontFamily: 'var(--font-primary)',
+            }}
+            title={`Production ended at ${endedAt}`}
+          >
+            <CheckCircle2 size={13} color="var(--color-success)" />
+            <span style={{ color: 'var(--color-text-primary)' }}>
+              Production ended · {endedAt}
+            </span>
+            <button
+              type="button"
+              onClick={reopenProduction}
+              style={{
+                marginLeft: 4,
+                padding: '4px 8px',
+                fontSize: 10,
+                fontWeight: 700,
+                background: 'var(--color-bg-hover)',
+                color: 'var(--color-text-secondary)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontFamily: 'var(--font-primary)',
+              }}
+            >
+              Reopen
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmEndOpen(true)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '10px 16px',
+              borderRadius: 8,
+              fontSize: 11,
+              fontWeight: 700,
+              fontFamily: 'var(--font-primary)',
+              background: 'var(--color-accent-active)',
+              color: 'var(--color-text-on-active)',
+              border: '1px solid var(--color-accent-active)',
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(12,20,44,0.08)',
+            }}
+            title="Lock today's plan and signal the kitchen to wind down"
+          >
+            <Power size={12} /> End production
+          </button>
+        ))}
       </div>
 
-      {/* Body */}
-      <div style={{ padding: '24px 32px 32px', background: 'var(--color-bg-surface)' }}>
+      {/* Body — modest 16px top so the table card has a small breathing
+          gap beneath the mode-tab strip without the previous 24px+caption
+          combo reading as a mystery white band. */}
+      <div style={{ padding: '16px 32px 32px', background: 'var(--color-bg-surface)' }}>
         <StaffLockBanner reason="Managers finalise the amounts plan before the first run." />
+
+        {endedAt && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '12px 16px',
+              marginTop: 16,
+              marginBottom: 16,
+              background: '#ffffff',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: 'var(--radius-card)',
+              color: 'var(--color-text-primary)',
+              fontFamily: 'var(--font-primary)',
+            }}
+          >
+            <CheckCircle2 size={16} color="var(--color-success)" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                Production ended for the day
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                Plan locked at {endedAt}. The kitchen has been signalled to wind down — final batches in progress will still complete.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={reopenProduction}
+              style={{
+                marginLeft: 'auto',
+                padding: '6px 12px',
+                fontSize: 11,
+                fontWeight: 700,
+                background: '#ffffff',
+                color: 'var(--color-text-secondary)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontFamily: 'var(--font-primary)',
+              }}
+            >
+              Reopen production
+            </button>
+          </div>
+        )}
 
         {/* Ledger table */}
         <div
@@ -462,12 +608,9 @@ export default function AmountsView({
               color: 'var(--color-text-muted)',
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
-              position: 'sticky',
-              top: 46,
-              zIndex: 10,
             }}
           >
-            <span>Recipe</span>
+            <span>Product</span>
             <span style={{ textAlign: 'right' }}>Forecast</span>
             <span style={{ textAlign: 'right' }}>Carry-over</span>
             <span style={{ textAlign: 'right' }}>Quinn</span>
@@ -475,7 +618,12 @@ export default function AmountsView({
           </div>
 
           {/* Category filter sub-row — sits under the column header so it
-              filters within the active mode tab without competing with it. */}
+              filters within the active mode tab without competing with it.
+              Intentionally NOT sticky: previously it had `position: sticky;
+              top: 90; zIndex: 9` which caused the first group header
+              (Bakery) to slip behind it on scroll, hiding the band. The
+              mode tabs at the top of `AmountsView` already give a sticky
+              filter affordance for long tables. */}
           {categoriesInMode.length > 0 && (
             <div
               style={{
@@ -486,9 +634,6 @@ export default function AmountsView({
                 padding: '12px 16px',
                 background: '#ffffff',
                 borderBottom: '1px solid var(--color-border-subtle)',
-                position: 'sticky',
-                top: 90,
-                zIndex: 9,
               }}
             >
               <span
@@ -593,35 +738,62 @@ export default function AmountsView({
               }}
             >
               {inMode.length === 0
-                ? `No ${MODE_TABS.find(t => t.id === modeTab)?.label.toLowerCase() ?? ''} recipes at this site.`
+                ? `No ${MODE_TABS.find(t => t.id === modeTab)?.label.toLowerCase() ?? ''} products at this site.`
                 : query.trim()
-                ? `No recipes match “${query.trim()}”.`
-                : 'No recipes match the current category filter.'}
+                ? `No products match “${query.trim()}”.`
+                : 'No products match the current category filter.'}
             </div>
           )}
 
-          {grouped.map((group, gi) => (
+          {grouped.map(group => (
             <div key={group.category}>
               <div
                 style={{
+                  // Subtle grey band with bold label and a thicker top
+                  // border so each category reads clearly as a section
+                  // break without dominating the table. Components get
+                  // a faint info-blue tint to stay distinguishable.
                   padding: '12px 16px',
-                  background: 'var(--color-bg-surface)',
+                  background: group.isComponentGroup
+                    ? 'var(--color-info-light)'
+                    : 'var(--color-bg-hover)',
+                  borderTop: '2px solid var(--color-border)',
                   borderBottom: '1px solid var(--color-border-subtle)',
-                  borderTop: gi === 0 ? 'none' : '1px solid var(--color-border-subtle)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 10,
                 }}
               >
-                <StatusPill tone="neutral" label={group.category} size="xs" />
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 800,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    color: group.isComponentGroup
+                      ? 'var(--color-info)'
+                      : 'var(--color-text-primary)',
+                  }}
+                >
+                  {group.category}
+                </span>
                 <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600 }}>
-                  {group.rows.length} SKU{group.rows.length === 1 ? '' : 's'} ·{' '}
-                  {group.rows.reduce((a, r) => a + r.effectivePlanned, 0)}{' '}
-                  units · {group.rows.reduce((a, r) => {
-                    const eff = effectiveBatchRules(r.recipe.batchRules, r.primaryBench?.batchRules);
-                    return a + proposeBatchSplit(r.effectivePlanned, eff).batches.length;
-                  }, 0)}{' '}
-                  batches
+                  {group.isComponentGroup ? (
+                    <>
+                      {group.rows.length} component{group.rows.length === 1 ? '' : 's'} ·{' '}
+                      {group.rows.reduce((a, r) => a + r.effectivePlanned, 0)} units · derived from products above
+                    </>
+                  ) : (
+                    <>
+                      {group.rows.length} SKU{group.rows.length === 1 ? '' : 's'} ·{' '}
+                      {group.rows.reduce((a, r) => a + r.effectivePlanned, 0)}{' '}
+                      units · {group.rows.reduce((a, r) => {
+                        const eff = effectiveBatchRules(r.recipe.batchRules, r.primaryBench?.batchRules);
+                        return a + proposeBatchSplit(r.effectivePlanned, eff).batches.length;
+                      }, 0)}{' '}
+                      batches
+                    </>
+                  )}
                 </span>
               </div>
               {group.rows.map(line => (
@@ -634,6 +806,7 @@ export default function AmountsView({
                   onBump={d => bump(line, d)}
                   onSet={v => setPlanned(line.item.id, v, date)}
                   onSetPerDrop={arr => setPerDropPlan(line.item.id, arr, date)}
+                  onSetPerRun={arr => setPerRunPlan(line.item.id, arr, date)}
                   onSetVariable={v => setVariablePlan(line.item.id, v, date)}
                   onResetToQuinn={() => resetToQuinn(line.item.id, date)}
                   onAbsorb={() => absorbAssemblyDemand(line)}
@@ -642,6 +815,13 @@ export default function AmountsView({
               ))}
             </div>
           ))}
+
+          {/* Bottom totals row — sums across the currently visible
+              *finished products only*. Components and prep batches are
+              excluded since their qty is derived from the products that
+              consume them (counting them would double-bill). Hides itself
+              when nothing in view qualifies (e.g. on the Components tab). */}
+          <ProductTotalsRow lines={filtered} />
         </div>
       </div>
     </div>
@@ -655,6 +835,14 @@ export default function AmountsView({
             setShortfallsOpen(false);
             openRowInTable(id);
           }}
+        />
+      )}
+      {confirmEndOpen && (
+        <EndProductionConfirmModal
+          key="end-production-modal"
+          date={date}
+          onCancel={() => setConfirmEndOpen(false)}
+          onConfirm={endProduction}
         />
       )}
     </AnimatePresence>
@@ -672,6 +860,7 @@ function AmountRow({
   onBump,
   onSet,
   onSetPerDrop,
+  onSetPerRun,
   onSetVariable,
   onResetToQuinn,
   onAbsorb,
@@ -684,20 +873,28 @@ function AmountRow({
   onBump: (delta: number) => void;
   onSet: (v: number) => void;
   onSetPerDrop: (perDrop: number[]) => void;
+  onSetPerRun: (perRun: number[]) => void;
   onSetVariable: (v: number) => void;
   onResetToQuinn: () => void;
   onAbsorb: () => void;
   /** When true, show a transient highlight glow (Quinn deep-link landing). */
   pulsing?: boolean;
 }) {
-  const { recipe, forecast, carryOver, quinnProposed, dispatchDemand, dispatchBySpoke, stockCap, primaryBench, benches, planned, runPlanned, variablePlanned, runLocked, lockedRunLabels, effectivePlanned, assemblyDemand } = line;
+  const { recipe, forecast, carryOver, quinnProposed, dispatchDemand, dispatchBySpoke, stockCap, primaryBench, benches, planned, runPlanned, variablePlanned, runLocked, lockedRunLabels, effectivePlanned, assemblyDemand, perRunPlan } = line;
   const counterUnits = forecast?.projectedUnits ?? 0;
   const hasDispatch = dispatchDemand > 0;
   const eff = effectiveBatchRules(recipe.batchRules, primaryBench?.batchRules);
-  const split = proposeBatchSplit(effectivePlanned, eff);
   const deltaFromQuinn = planned - quinnProposed;
   const modeStyle = MODE_STYLE[line.item.mode];
+  // Auto-derived component: today's assemblies are pulling units from this
+  // recipe, so we lock the stepper and roll the qty up from the parents.
   const isComponent = assemblyDemand.totalUnits > 0;
+  // Orphan prep: tagged in fixtures as a sub-recipe / mise but no parent
+  // assembly is calling on it today (e.g. day-end prep for tomorrow). Still
+  // editable — the manager sets the prep batch size — but we mark it so it
+  // surfaces under the Components tab and gets a "Prep batch" chip instead
+  // of a "Part of: …" link.
+  const isPrepOrphan = !!recipe.isPrep && !isComponent;
   const assemblyShort = assemblyDemand.totalUnits > planned;
   const underBatchMin = effectivePlanned > 0 && effectivePlanned < eff.min;
   const isAssembly = !!recipe.subRecipes && recipe.subRecipes.length > 0;
@@ -707,6 +904,25 @@ function AmountRow({
   // (run baseline). Once locked, the run number becomes read-only and a
   // separate variable add-on stepper appears below it.
   const isDualMode = line.item.mode === 'run' && (runLocked || variablePlanned > 0);
+
+  // Run-mode items whose primary bench has 2+ scheduled runs get a per-run
+  // breakdown column in the expanded panel — the manager decides how many
+  // units land in R1 vs R2 etc. Single-run items don't need the surface.
+  const benchRuns = (line.item.mode === 'run' && primaryBench?.runs) ? primaryBench.runs : [];
+  const hasMultiRun = benchRuns.length > 1 && Array.isArray(perRunPlan);
+  const lockedRunIds = new Set(lockedRunLabels);
+  function bumpRun(idx: number, delta: number) {
+    if (!perRunPlan) return;
+    const next = perRunPlan.slice();
+    next[idx] = Math.max(0, (next[idx] ?? 0) + delta);
+    onSetPerRun(next);
+  }
+  function setRun(idx: number, value: number) {
+    if (!perRunPlan) return;
+    const next = perRunPlan.slice();
+    next[idx] = Math.max(0, value);
+    onSetPerRun(next);
+  }
 
   // Segment (cadence) planning. The PlanStore still keeps a whole-day total,
   // but for increment items we surface a per-drop stepper so Managers plan in
@@ -869,7 +1085,55 @@ function AmountRow({
                   <Layers size={9} /> Assembly
                 </span>
               )}
-              {isComponent && (
+              {isComponent && (() => {
+                // Visual link back to the products this component feeds. Surfacing
+                // the parent product names (rather than a generic "Component"
+                // pill) helps a manager see at a glance what the row is *for* —
+                // e.g. "Egg mayo filling" reads as "Part of: Egg mayo sandwich"
+                // rather than a standalone recipe.
+                const parents = assemblyDemand.sources
+                  .map(s => getRecipe(s.parentRecipeId)?.name)
+                  .filter((n): n is string => !!n);
+                const summary =
+                  parents.length === 0
+                    ? null
+                    : parents.length <= 2
+                    ? parents.join(' · ')
+                    : `${parents.slice(0, 2).join(' · ')} · +${parents.length - 2} more`;
+                return summary ? (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: 'var(--color-text-secondary)',
+                      padding: '2px 7px',
+                      borderRadius: 4,
+                      background: 'var(--color-info-light)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      maxWidth: 320,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={`Part of: ${parents.join(', ')}`}
+                  >
+                    <CornerDownRight size={9} color="var(--color-info)" />
+                    <span
+                      style={{
+                        textTransform: 'none',
+                        letterSpacing: 0,
+                        fontWeight: 600,
+                        color: 'var(--color-text-secondary)',
+                      }}
+                    >
+                      Part of <span style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>{summary}</span>
+                    </span>
+                  </span>
+                ) : null;
+              })()}
+              {isPrepOrphan && (
                 <span
                   style={{
                     fontSize: 9,
@@ -877,14 +1141,24 @@ function AmountRow({
                     color: 'var(--color-text-secondary)',
                     padding: '2px 7px',
                     borderRadius: 4,
-                    background: 'var(--color-bg-hover)',
+                    background: 'var(--color-info-light)',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 4,
                   }}
-                  title={`${assemblyDemand.sources.length} assemblies pull from this recipe`}
+                  title="Sub-recipe / mise — set the prep batch size manually"
                 >
-                  <ArrowDown size={9} /> Component
+                  <CornerDownRight size={9} color="var(--color-info)" />
+                  <span
+                    style={{
+                      textTransform: 'none',
+                      letterSpacing: 0,
+                      fontWeight: 600,
+                      color: 'var(--color-text-secondary)',
+                    }}
+                  >
+                    Prep batch
+                  </span>
                 </span>
               )}
             </div>
@@ -956,7 +1230,10 @@ function AmountRow({
           )}
         </div>
 
-        {/* You plan stepper */}
+        {/* You plan column. Components don't get a stepper — their plan is
+            derived from the products that consume them, so we render a
+            read-only summary tile instead. Editing the parent products
+            implicitly updates the component total. */}
         <div
           style={{
             display: 'flex',
@@ -967,6 +1244,12 @@ function AmountRow({
           }}
           onClick={e => e.stopPropagation()}
         >
+          {isComponent ? (
+            <ComponentDerivedTile
+              total={effectivePlanned}
+              sources={assemblyDemand.sources}
+            />
+          ) : (<>
           <div
             style={{
               display: 'flex',
@@ -1124,42 +1407,9 @@ function AmountRow({
             </span>
           ) : isSegment ? (
             <span style={{ fontSize: 9, color: 'var(--color-text-muted)', marginTop: 4 }}>—</span>
-          ) : isComponent ? (
-            <span
-              style={{
-                fontSize: 9,
-                fontWeight: 700,
-                color: assemblyShort ? 'var(--color-error)' : 'var(--color-text-muted)',
-                fontVariantNumeric: 'tabular-nums',
-                marginTop: 4,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-              title="Demand from assemblies"
-            >
-              + {assemblyDemand.totalUnits} from assemblies
-              {assemblyShort && canEdit && (
-                <button
-                  type="button"
-                  onClick={onAbsorb}
-                  style={{
-                    padding: '4px 10px',
-                    fontSize: 9,
-                    fontWeight: 700,
-                    color: 'var(--color-error)',
-                    background: '#ffffff',
-                    border: '1px solid var(--color-error-border)',
-                    borderRadius: 5,
-                    cursor: 'pointer',
-                  }}
-                  title="Bump your plan to match assembly demand"
-                >
-                  Cover
-                </button>
-              )}
-            </span>
           ) : null}
+          </>
+          )}
         </div>
 
       </div>
@@ -1318,42 +1568,55 @@ function AmountRow({
           }}
           onClick={e => e.stopPropagation()}
         >
+          <div
+            style={{
+              padding: '18px 20px 20px 46px',
+              display: 'grid',
+              // Dynamic column count: dual-mode stepper (when run+variable),
+              // per-run breakdown (when 2+ scheduled runs), dispatch ledger
+              // (when hub→spoke), forecast signals, assembly cascade (when
+              // assembly/component), workflow. Each gets its own equal-width
+              // column so a row with several sections doesn't end up tall
+              // and lopsided.
+              gridTemplateColumns: `repeat(${
+                (isDualMode ? 1 : 0) +
+                (hasMultiRun ? 1 : 0) +
+                (hasDispatch ? 1 : 0) +
+                1 +
+                (isAssembly || isComponent ? 1 : 0) +
+                1
+              }, minmax(0, 1fr))`,
+              gap: 24,
+            }}
+          >
+          {/* Dual-mode plan column — locked-run baseline + variable top-up
+              steppers, sat alongside the rest of the columns rather than
+              taking a full row above them. */}
           {isDualMode && (
-            <div
-              style={{
-                padding: '16px 20px 14px 46px',
-                borderBottom: '1px dashed var(--color-border-subtle)',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 24,
-                flexWrap: 'wrap',
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 240 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {runLocked && <Lock size={12} color="var(--color-text-muted)" />}
-                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)' }}>
-                    Today's plan · {runLocked ? `${lockedRunLabels.join(', ') || 'Run'} locked` : 'Run scheduled'}
-                  </span>
-                </div>
-                <DualModeStepper
-                  runPlanned={runPlanned}
-                  variablePlanned={variablePlanned}
-                  quinnProposed={quinnProposed}
-                  runLocked={runLocked}
-                  lockedRunLabels={lockedRunLabels}
-                  canEdit={canEdit}
-                  assemblyShort={assemblyShort}
-                  assemblyDemandUnits={assemblyDemand.totalUnits}
-                  isComponent={isComponent}
-                  onSetRun={v => onSet(v)}
-                  onSetVariable={onSetVariable}
-                  onAbsorb={onAbsorb}
-                  onResetToQuinn={onResetToQuinn}
-                  isOverridden={line.isOverridden}
-                />
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                {runLocked && <Lock size={12} color="var(--color-text-muted)" />}
+                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)' }}>
+                  Today&rsquo;s plan · {runLocked ? `${lockedRunLabels.join(', ') || 'Run'} locked` : 'Run scheduled'}
+                </span>
               </div>
-              <div style={{ flex: 1, minWidth: 240, display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 18 }}>
+              <DualModeStepper
+                runPlanned={runPlanned}
+                variablePlanned={variablePlanned}
+                quinnProposed={quinnProposed}
+                runLocked={runLocked}
+                lockedRunLabels={lockedRunLabels}
+                canEdit={canEdit}
+                assemblyShort={assemblyShort}
+                assemblyDemandUnits={assemblyDemand.totalUnits}
+                isComponent={isComponent}
+                onSetRun={v => onSet(v)}
+                onSetVariable={onSetVariable}
+                onAbsorb={onAbsorb}
+                onResetToQuinn={onResetToQuinn}
+                isOverridden={line.isOverridden}
+              />
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
                   {runLocked
                     ? `${lockedRunLabels.join(' & ') || 'This run'} is in progress or done — the run baseline is read-only. Add variable top-ups above for the rest of the day as new demand comes in.`
@@ -1365,30 +1628,191 @@ function AmountRow({
               </div>
             </div>
           )}
-          <div
-            style={{
-              padding: '18px 20px 20px 46px',
-              display: 'grid',
-              gridTemplateColumns: isAssembly || isComponent ? 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)',
-              gap: 24,
-            }}
-          >
-          {/* Forecast reasoning */}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', marginBottom: 8 }}>
-              {hasDispatch ? 'Selling vs dispatching' : 'Forecast signals'}
-            </div>
 
-            {/* Selling-vs-dispatching ledger — only on hub rows that owe a
-                spoke. Sits above the forecast signals so the manager sees
-                why Quinn is asking for more than counter sales. */}
-            {hasDispatch && (
+          {/* Per-run plan column — splits the run baseline across each
+              scheduled run on the bench so the manager can decide e.g. 60
+              into R1 and 24 into R2. Locked runs (already in progress)
+              render as static counts; the rest stay editable as long as
+              the day is. Sums always equal `runPlanned`. */}
+          {hasMultiRun && perRunPlan && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: 'var(--color-text-muted)',
+                  }}
+                >
+                  Per-run plan · {benchRuns.length} runs
+                </span>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                  padding: '10px 12px',
+                  borderRadius: 6,
+                  background: '#ffffff',
+                  border: '1px solid var(--color-border-subtle)',
+                }}
+              >
+                {benchRuns.map((run, idx) => {
+                  const qty = perRunPlan[idx] ?? 0;
+                  const locked = lockedRunIds.has(run.label);
+                  const editable = canEdit && !locked;
+                  const endHHMM = minutesToHHMM(hhmmToMinutes(run.startTime) + run.durationMinutes);
+                  return (
+                    <div
+                      key={run.id}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(0, 1fr) auto',
+                        alignItems: 'center',
+                        gap: 10,
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: 'var(--color-text-primary)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          {locked && <Lock size={10} color="var(--color-text-muted)" />}
+                          {run.label}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            color: 'var(--color-text-muted)',
+                            fontVariantNumeric: 'tabular-nums',
+                          }}
+                        >
+                          {run.startTime}–{endHHMM}
+                          {locked && ' · locked'}
+                        </span>
+                      </div>
+                      {editable ? (
+                        <div
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            background: '#ffffff',
+                            border: '1px solid var(--color-border)',
+                            borderRadius: 6,
+                            padding: '2px 4px',
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => bumpRun(idx, -1)}
+                            disabled={qty === 0}
+                            style={stepBtn(qty === 0)}
+                          >
+                            <Minus size={12} />
+                          </button>
+                          <input
+                            type="number"
+                            value={qty}
+                            onChange={e => setRun(idx, Number(e.target.value) || 0)}
+                            style={{
+                              width: 36,
+                              textAlign: 'center',
+                              fontSize: 12,
+                              fontWeight: 700,
+                              fontVariantNumeric: 'tabular-nums',
+                              border: 'none',
+                              background: 'transparent',
+                              outline: 'none',
+                              color: 'var(--color-text-primary)',
+                              fontFamily: 'var(--font-primary)',
+                              padding: 0,
+                              appearance: 'textfield',
+                              MozAppearance: 'textfield',
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => bumpRun(idx, 1)}
+                            style={stepBtn(false)}
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            justifyContent: 'flex-end',
+                            minWidth: 32,
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: 'var(--color-text-secondary)',
+                            fontVariantNumeric: 'tabular-nums',
+                          }}
+                          title={locked ? `${run.label} already in progress — qty is locked` : undefined}
+                        >
+                          {qty}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+                <div
+                  style={{
+                    marginTop: 4,
+                    paddingTop: 8,
+                    borderTop: '1px dashed var(--color-border-subtle)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: 11,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>
+                    Sum
+                  </span>
+                  <span style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>
+                    {perRunPlan.reduce((a, b) => a + b, 0)} / {runPlanned} planned
+                  </span>
+                </div>
+              </div>
+              <span
+                style={{
+                  marginTop: 8,
+                  display: 'block',
+                  fontSize: 10,
+                  color: 'var(--color-text-muted)',
+                  lineHeight: 1.5,
+                }}
+              >
+                Splits the run baseline across each scheduled run. Editing here updates the day total automatically.
+              </span>
+            </div>
+          )}
+          {/* Selling-vs-dispatching ledger — only on hub rows that owe a
+              spoke. Its own column so the forecast signals next to it stay
+              short rather than getting pushed below it. */}
+          {hasDispatch && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', marginBottom: 8 }}>
+                Selling vs dispatching
+              </div>
               <div
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 4,
-                  marginBottom: 12,
                   padding: '10px 12px',
                   borderRadius: 6,
                   background: '#ffffff',
@@ -1427,8 +1851,14 @@ function AmountRow({
                   <span style={{ marginLeft: 'auto' }}>{quinnProposed}</span>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
+          {/* Forecast signals */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', marginBottom: 8 }}>
+              Forecast signals
+            </div>
             {forecast ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {forecast.signals.map((s, i) => (
@@ -1476,7 +1906,7 @@ function AmountRow({
           {(isComponent || isAssembly) && (
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', marginBottom: 8 }}>
-                {isComponent ? 'Drives from' : 'This recipe uses'}
+                {isComponent ? 'Part of these products' : 'Made from'}
               </div>
               {isComponent && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1532,38 +1962,6 @@ function AmountRow({
           {/* Ingredient stock cap (F3 + PAC045) — base recipes only. */}
           {stockCap && <StockCapPanel stockCap={stockCap} planned={effectivePlanned} />}
 
-          {/* Batch rule breakdown */}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', marginBottom: 8 }}>
-              Batch rules
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
-              <div>
-                <strong>Effective:</strong> {eff.min === Infinity ? 'none' : `${eff.min}–${eff.max === Infinity ? '∞' : eff.max} in ${eff.multipleOf}s`}
-              </div>
-              <div style={{ marginTop: 6, fontSize: 10, color: 'var(--color-text-muted)' }}>
-                {eff.explain}
-              </div>
-              {isComponent && effectivePlanned !== planned && (
-                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-                  Producing {effectivePlanned} (floor = assembly demand), not {planned}.
-                </div>
-              )}
-              {split.overshoot > 0 && (
-                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--color-warning)', fontWeight: 600 }}>
-                  <Split size={11} style={{ display: 'inline', verticalAlign: -2, marginRight: 5 }} />
-                  Planned total {split.total} — +{split.overshoot} over (rounded up to multiples).
-                </div>
-              )}
-              {split.undershoot > 0 && (
-                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--color-error)', fontWeight: 600 }}>
-                  <AlertTriangle size={11} style={{ display: 'inline', verticalAlign: -2, marginRight: 5 }} />
-                  Short by {split.undershoot} — min batch {eff.min} can&rsquo;t cover remainder.
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Bench/workflow walk */}
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', marginBottom: 8 }}>
@@ -1599,6 +1997,323 @@ function AmountRow({
 }
 
 // ─── Subcomponents ───────────────────────────────────────────────────────────
+
+/**
+ * Bottom-of-table totals strip. Aggregates only finished *products* — the
+ * recipes a customer can actually buy — and excludes components / prep
+ * batches whose quantity is already counted indirectly through the
+ * products that pull them. Mirrors the table header's grid template so
+ * each total lines up under its column.
+ */
+/**
+ * Demo menu prices — typical UK café tier so the value totals read
+ * realistically without us needing a per-recipe price field on the
+ * fixtures. Driven by recipe category. If a future model adds explicit
+ * `unitPrice` to ProductionRecipe we can switch to that and drop the
+ * map.
+ */
+const DEMO_PRICE_BY_CATEGORY: Record<ProductionRecipe['category'], number> = {
+  Bakery: 3.25,
+  Sandwich: 5.5,
+  Salad: 7.25,
+  Snack: 3.0,
+  Beverage: 3.75,
+};
+
+function priceFor(line: PlanLine): number {
+  return DEMO_PRICE_BY_CATEGORY[line.recipe.category] ?? 0;
+}
+
+const GBP = new Intl.NumberFormat('en-GB', {
+  style: 'currency',
+  currency: 'GBP',
+  maximumFractionDigits: 0,
+});
+
+function ProductTotalsRow({ lines }: { lines: PlanLine[] }) {
+  const products = lines.filter(l => l.assemblyDemand.totalUnits === 0 && !l.recipe.isPrep);
+  if (products.length === 0) return null;
+  const totalForecast = products.reduce((a, l) => a + (l.forecast?.projectedUnits ?? 0), 0);
+  const totalCarryOver = products.reduce((a, l) => a + (l.carryOver?.carriedUnits ?? 0), 0);
+  const totalQuinn = products.reduce((a, l) => a + l.quinnProposed, 0);
+  const totalPlanned = products.reduce((a, l) => a + l.effectivePlanned, 0);
+  // Sales / value totals — units × per-category price. Forecast value
+  // tracks projected revenue at standard menu prices; planned value
+  // tracks the revenue ceiling of what you're producing today.
+  const valueForecast = products.reduce(
+    (a, l) => a + priceFor(l) * (l.forecast?.projectedUnits ?? 0),
+    0,
+  );
+  const valueCarryOver = products.reduce(
+    (a, l) => a + priceFor(l) * (l.carryOver?.carriedUnits ?? 0),
+    0,
+  );
+  const valueQuinn = products.reduce((a, l) => a + priceFor(l) * l.quinnProposed, 0);
+  const valuePlanned = products.reduce((a, l) => a + priceFor(l) * l.effectivePlanned, 0);
+  const num = (n: number) => n.toLocaleString('en-GB');
+  const cellAlignRight: React.CSSProperties = {
+    textAlign: 'right',
+    fontVariantNumeric: 'tabular-nums',
+  };
+  return (
+    <>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(260px, 1.6fr) 100px 100px 110px 200px',
+          gap: 12,
+          alignItems: 'center',
+          padding: '14px 16px 14px 13px',
+          background: 'var(--color-bg-hover)',
+          borderTop: '2px solid var(--color-border)',
+          borderBottom: '1px solid var(--color-border-subtle)',
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: 'var(--color-text-primary)',
+            }}
+          >
+            Products total
+          </span>
+          <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
+            {products.length} product{products.length === 1 ? '' : 's'} · components excluded
+          </span>
+        </div>
+        <span
+          style={{ ...cellAlignRight, fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}
+          title="Forecast sales across all visible products"
+        >
+          {num(totalForecast)}
+        </span>
+        <span
+          style={{ ...cellAlignRight, fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)' }}
+        >
+          {totalCarryOver > 0 ? num(totalCarryOver) : '—'}
+        </span>
+        <span
+          style={{
+            ...cellAlignRight,
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--color-text-secondary)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            justifyContent: 'flex-end',
+          }}
+          title="Quinn's proposed total across all visible products"
+        >
+          <EdifyMark size={11} color="var(--color-text-muted)" />
+          {num(totalQuinn)}
+        </span>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifySelf: 'center',
+            gap: 2,
+          }}
+          title="Total quantity you're producing across all visible products"
+        >
+          <span
+            style={{
+              fontSize: 18,
+              fontWeight: 800,
+              fontVariantNumeric: 'tabular-nums',
+              color: 'var(--color-text-primary)',
+              lineHeight: 1.1,
+            }}
+          >
+            {num(totalPlanned)}
+          </span>
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 700,
+              color: 'var(--color-text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+            }}
+          >
+            Total qty
+          </span>
+        </div>
+      </div>
+
+      {/* Sales value — same column shape, but multiplies each metric by
+          the per-category retail price so the manager sees the revenue
+          implication of the day's plan alongside the unit counts. */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(260px, 1.6fr) 100px 100px 110px 200px',
+          gap: 12,
+          alignItems: 'center',
+          padding: '14px 16px 14px 13px',
+          background: 'var(--color-bg-hover)',
+          borderBottom: '1px solid var(--color-border-subtle)',
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: 'var(--color-text-primary)',
+            }}
+          >
+            Sales value
+          </span>
+          <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
+            Revenue at standard menu prices · GBP
+          </span>
+        </div>
+        <span
+          style={{ ...cellAlignRight, fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}
+          title="Forecast revenue across all visible products"
+        >
+          {GBP.format(valueForecast)}
+        </span>
+        <span
+          style={{ ...cellAlignRight, fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)' }}
+        >
+          {valueCarryOver > 0 ? GBP.format(valueCarryOver) : '—'}
+        </span>
+        <span
+          style={{
+            ...cellAlignRight,
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--color-text-secondary)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            justifyContent: 'flex-end',
+          }}
+          title="Revenue at Quinn's proposed plan"
+        >
+          <EdifyMark size={11} color="var(--color-text-muted)" />
+          {GBP.format(valueQuinn)}
+        </span>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifySelf: 'center',
+            gap: 2,
+          }}
+          title="Revenue ceiling of the quantity you're producing today"
+        >
+          <span
+            style={{
+              fontSize: 18,
+              fontWeight: 800,
+              fontVariantNumeric: 'tabular-nums',
+              color: 'var(--color-text-primary)',
+              lineHeight: 1.1,
+            }}
+          >
+            {GBP.format(valuePlanned)}
+          </span>
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 700,
+              color: 'var(--color-text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+            }}
+          >
+            Total value
+          </span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Read-only tile shown in the "You plan" column for component rows.
+ * Components are sub-recipes (sandwich fillings, sauces, etc.) whose
+ * production quantity is summed from the products that use them — so
+ * editing one product implicitly reshapes its components, and a component
+ * never has its own stepper.
+ *
+ * The tile shows the total in big tabular numbers, with the parent product
+ * names in a small muted line beneath. Two parents fit inline; anything
+ * beyond that compresses to "+N more" with the full list in the tooltip.
+ */
+function ComponentDerivedTile({
+  total,
+  sources,
+}: {
+  total: number;
+  sources: AssemblyDemand['sources'];
+}) {
+  const parents = sources
+    .map(s => getRecipe(s.parentRecipeId)?.name)
+    .filter((n): n is string => !!n);
+  const summary =
+    parents.length === 0
+      ? '—'
+      : parents.length <= 2
+      ? parents.join(' · ')
+      : `${parents.slice(0, 2).join(' · ')} · +${parents.length - 2}`;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 2,
+        padding: '6px 12px',
+        background: 'var(--color-bg-hover)',
+        border: '1px solid var(--color-border-subtle)',
+        borderRadius: 8,
+        minWidth: 96,
+      }}
+      title={`Summed from: ${parents.join(', ')}`}
+    >
+      <span
+        style={{
+          fontSize: 16,
+          fontWeight: 700,
+          fontVariantNumeric: 'tabular-nums',
+          color: 'var(--color-text-primary)',
+          lineHeight: 1.1,
+        }}
+      >
+        {total}
+      </span>
+      <span
+        style={{
+          fontSize: 9,
+          fontWeight: 600,
+          color: 'var(--color-text-muted)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
+          textAlign: 'center',
+          maxWidth: 160,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        from {summary}
+      </span>
+    </div>
+  );
+}
 
 function ModeTabBadge({ count, active }: { count: number; active: boolean }) {
   return (
@@ -1799,56 +2514,80 @@ function StockCapChip({ stockCap }: { stockCap: StockCap }) {
   );
 }
 
+/**
+ * Compact at-a-glance summary of how many units the bench can produce
+ * given the ingredient currently on hand, plus a forward-looking "may
+ * need to order" list. Managers see three things on the row:
+ *
+ *  - The cap (max units the binding ingredient can support today)
+ *  - Whether the plan is currently over that cap (and the fix)
+ *  - Which other ingredients run thin against tomorrow's likely demand,
+ *    so the same recipe doesn't get capped by a different bottleneck
+ *    when the next bake comes around.
+ *
+ * Detailed per-ingredient stock lives in the BenchIngredientsPanel
+ * drawer — opened by tapping a bench card on the Benches page.
+ */
 function StockCapPanel({ stockCap, planned }: { stockCap: StockCap; planned: number }) {
   const overCap = planned > stockCap.cap;
+  const binding = stockCap.bindingIngredients[0];
+  const headroom = Math.max(0, stockCap.cap - planned);
+
+  // Forward look: assume tomorrow + day-after run at roughly today's plan.
+  // Anything that can't cover ~2 future days of the same recipe is worth
+  // flagging on the order list. We exclude today's binding ingredient
+  // (already called out above as the cap) and ingredients with infinite
+  // headroom (dry stores etc. with no declared usage).
+  const forwardDays = 2;
+  const forwardDemand = planned * forwardDays;
+  const orderWatch = forwardDemand > 0
+    ? stockCap.ingredients
+        .filter(b =>
+          b.unitsAvailable !== Infinity &&
+          (!binding || b.ingredientId !== binding.ingredientId) &&
+          b.unitsAvailable < forwardDemand,
+        )
+        .slice(0, 4)
+    : [];
+
   return (
     <div>
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', marginBottom: 8 }}>
         Ingredient stock
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {stockCap.ingredients.map((b, i) => {
-          const isBinding = stockCap.bindingIngredients.some(x => x.ingredientId === b.ingredientId);
-          const needed = planned * b.perUnit;
-          const short = needed > b.onHand;
-          return (
-            <div
-              key={b.ingredientId}
-              style={{
-                display: 'flex',
-                alignItems: 'baseline',
-                gap: 8,
-                fontSize: 11,
-                color: 'var(--color-text-secondary)',
-                padding: '4px 6px',
-                borderRadius: 4,
-                background: isBinding ? 'var(--color-warning-bg)' : 'transparent',
-                border: isBinding ? '1px solid var(--color-warning-border)' : '1px solid transparent',
-              }}
-            >
-              <Package size={10} style={{ color: isBinding ? 'var(--color-warning)' : 'var(--color-text-muted)', flexShrink: 0 }} />
-              <span style={{ fontWeight: 600, color: 'var(--color-text-primary)', minWidth: 130 }}>
-                {b.ingredientName}
-                {i === 0 && <span style={{ marginLeft: 6, fontSize: 9, color: 'var(--color-warning)', fontWeight: 700 }}>BINDING</span>}
-              </span>
-              <span style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                {formatStockUnits(b.onHand, b.unit)} ÷ {formatStockUnits(b.perUnit, b.unit)}/ea
-              </span>
-              <span
-                style={{
-                  marginLeft: 'auto',
-                  fontWeight: 700,
-                  color: short ? 'var(--color-error)' : 'var(--color-text-primary)',
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-                title={short ? `Plan needs ${formatStockUnits(needed, b.unit)}; only ${formatStockUnits(b.onHand, b.unit)} on hand` : undefined}
-              >
-                {b.unitsAvailable === Infinity ? '∞' : `${b.unitsAvailable} units`}
-              </span>
-            </div>
-          );
-        })}
+      <div
+        style={{
+          padding: '10px 12px',
+          borderRadius: 6,
+          background: overCap ? 'var(--color-error-light)' : '#ffffff',
+          border: `1px solid ${overCap ? 'var(--color-error)' : 'var(--color-border-subtle)'}`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <span
+            style={{
+              fontSize: 18,
+              fontWeight: 800,
+              color: overCap ? 'var(--color-error)' : 'var(--color-text-primary)',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {stockCap.cap === Infinity ? '∞' : stockCap.cap}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+            unit cap{binding ? ` · ${binding.ingredientName}` : ''}
+          </span>
+        </div>
+        {!overCap && stockCap.cap !== Infinity && (
+          <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+            {headroom} unit{headroom === 1 ? '' : 's'} of headroom at the current plan
+          </span>
+        )}
       </div>
+
       {overCap && (
         <div
           style={{
@@ -1863,9 +2602,98 @@ function StockCapPanel({ stockCap, planned }: { stockCap: StockCap; planned: num
         >
           <AlertTriangle size={12} style={{ marginTop: 1, flexShrink: 0 }} />
           <span>
-            Plan {planned} exceeds stock cap {stockCap.cap}. Either drop the plan to {stockCap.cap}
-            {stockCap.bindingIngredients.length > 0 && ` or top up ${stockCap.bindingIngredients[0].ingredientName}`}.
+            Drop to {stockCap.cap}
+            {binding && ` or top up ${binding.ingredientName}`}.
           </span>
+        </div>
+      )}
+
+      {orderWatch.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 10,
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: 'var(--color-text-muted)',
+              marginBottom: 6,
+            }}
+          >
+            <Package size={11} color="var(--color-text-muted)" />
+            May need to order
+            <span
+              style={{
+                marginLeft: 'auto',
+                fontSize: 9,
+                fontWeight: 600,
+                textTransform: 'none',
+                color: 'var(--color-text-muted)',
+                letterSpacing: 0,
+              }}
+            >
+              vs. next {forwardDays} days
+            </span>
+          </div>
+          <ul
+            style={{
+              listStyle: 'none',
+              padding: 0,
+              margin: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+            }}
+          >
+            {orderWatch.map(b => {
+              const daysCover = planned > 0 ? b.unitsAvailable / planned : Infinity;
+              const tone =
+                daysCover < 1
+                  ? { fg: 'var(--color-error)', bg: 'var(--color-error-light)' }
+                  : { fg: 'var(--color-warning)', bg: 'var(--color-warning-bg)' };
+              return (
+                <li
+                  key={b.ingredientId}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '4px 8px',
+                    borderRadius: 4,
+                    background: tone.bg,
+                    fontSize: 11,
+                    color: 'var(--color-text-primary)',
+                  }}
+                >
+                  <span
+                    style={{
+                      flex: 1,
+                      fontWeight: 600,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {b.ingredientName}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: tone.fg,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    ~{daysCover < 0.5 ? '<½' : daysCover.toFixed(1)} day
+                    {daysCover === 1 ? '' : 's'}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
     </div>
@@ -2190,6 +3018,151 @@ function stepBtn(disabled: boolean): React.CSSProperties {
 // downstream assembly demand exceeding the current plan. For each shortfall
 // row we surface: the gap, every parent assembly creating the demand, and
 // a CTA to drop into the row's editor with a pulse highlight.
+/**
+ * End-of-day sign-off confirmation. Centred, low-chrome modal that
+ * spells out what "ending production" actually does so the manager
+ * doesn't trigger it by accident. Reopen is one click from the inline
+ * banner so this stays a soft commit, not a destructive action.
+ */
+function EndProductionConfirmModal({
+  date,
+  onCancel,
+  onConfirm,
+}: {
+  date: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (typeof window === 'undefined') return null;
+  return createPortal(
+    <>
+      <motion.div
+        key="end-production-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.15 }}
+        onClick={onCancel}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(12, 20, 44, 0.55)',
+          zIndex: 1300,
+        }}
+      />
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 1301,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16,
+          pointerEvents: 'none',
+        }}
+      >
+        <motion.div
+          key="end-production-card"
+          role="dialog"
+          aria-label="End production"
+          initial={{ y: 16, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 16, opacity: 0 }}
+          transition={{ type: 'spring', damping: 24, stiffness: 300 }}
+          style={{
+            width: 'min(440px, 100%)',
+            borderRadius: 'var(--radius-card)',
+            background: '#ffffff',
+            boxShadow: '0 24px 64px rgba(12,20,44,0.32)',
+            fontFamily: 'var(--font-primary)',
+            display: 'flex',
+            flexDirection: 'column',
+            pointerEvents: 'auto',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ padding: '20px 22px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                background: 'var(--color-info-light)',
+                color: 'var(--color-info)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Power size={18} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                End production for {date}?
+              </h2>
+              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--color-text-secondary)' }}>
+                Today's plan will be locked and the kitchen signalled to wind down. Batches in progress
+                still complete; nothing new will be started. You can reopen the day at any time from the
+                banner that appears.
+              </p>
+            </div>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: 8,
+              padding: '12px 16px',
+              background: 'var(--color-bg-hover)',
+              borderTop: '1px solid var(--color-border-subtle)',
+            }}
+          >
+            <button
+              type="button"
+              onClick={onCancel}
+              style={{
+                padding: '9px 14px',
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 600,
+                background: '#ffffff',
+                color: 'var(--color-text-secondary)',
+                border: '1px solid var(--color-border)',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-primary)',
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              style={{
+                padding: '9px 16px',
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 700,
+                background: 'var(--color-accent-active)',
+                color: 'var(--color-text-on-active)',
+                border: '1px solid var(--color-accent-active)',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontFamily: 'var(--font-primary)',
+              }}
+            >
+              <Power size={12} /> End production
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    </>,
+    document.body,
+  );
+}
+
 function ShortfallsModal({
   lines,
   onClose,
