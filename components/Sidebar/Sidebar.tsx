@@ -216,7 +216,6 @@ export default function Sidebar() {
             display: 'block',
             width: compact ? 28 : 32,
             height: 'auto',
-            opacity: 0.9,
             color: '#ffffff',
             filter: 'brightness(0) invert(1)',
           }}
