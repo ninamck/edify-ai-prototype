@@ -214,7 +214,7 @@ function CarryOverRow({
         gridTemplateColumns: 'minmax(200px, 1.4fr) auto 120px 180px auto',
         alignItems: 'center',
         gap: 14,
-        padding: '14px 16px',
+        padding: '14px 32px',
         borderRadius: 'var(--radius-card)',
         border: `1px solid ${status === 'confirmed' ? 'var(--color-success-border)' : 'var(--color-border-subtle)'}`,
         background: status === 'confirmed' ? 'var(--color-success-light)' : '#ffffff',

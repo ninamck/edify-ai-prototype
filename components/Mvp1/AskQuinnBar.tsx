@@ -1,6 +1,6 @@
 'use client';
 
-import { Sparkles } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 
 /**
  * Compact "Ask Quinn for a chart" pill. Lives inline next to whatever surface
@@ -40,7 +40,7 @@ export default function AskQuinnBar({
         flexShrink: 0,
       }}
     >
-      <Sparkles size={12} strokeWidth={2.2} />
+      <EdifyMark size={12} strokeWidth={2.2} color="currentColor" />
       <span>{label}</span>
     </button>
   );

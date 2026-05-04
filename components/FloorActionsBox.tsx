@@ -160,12 +160,10 @@ export default function FloorActionsBox({
           <Pencil size={11} color="var(--color-text-muted)" strokeWidth={2} />
         </button>
       </div>
-      {/* Squares spread evenly across the full card width so the row never feels
-          left-stranded when the card sits at full width. */}
       <div style={{
         display: 'flex',
         flexWrap: 'wrap',
-        justifyContent: 'space-between',
+        justifyContent: 'flex-start',
         rowGap: '12px',
         columnGap: '12px',
         alignItems: 'flex-start',

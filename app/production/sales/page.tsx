@@ -71,18 +71,20 @@ export default function LiveSalesPage() {
         ? 'var(--color-success)'
         : 'var(--color-error)';
 
-  // Per-row peak for inline mini-bars (uses row's own forecast peak so each
-  // recipe's intensity reads relatively rather than getting drowned by
-  // bestsellers).
-  const rowPeak = (row: typeof data.rows[number]) =>
-    Math.max(1, ...row.cells.map(c => Math.max(c.forecast, c.actual ?? 0)));
+  // Site-wide "available now" = planned production minus what's sold so far,
+  // clamped at zero (a row can't go negative — we just stop calling it
+  // available the moment sales catch up to plan).
+  const totalAvailNow = data.rows.reduce(
+    (a, r) => a + Math.max(0, r.line.quinnProposed - r.soldSoFar),
+    0,
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       {/* Header + KPI strip */}
       <div
         style={{
-          padding: '12px 16px',
+          padding: '12px 32px',
           borderBottom: '1px solid var(--color-border-subtle)',
           background: '#ffffff',
           display: 'flex',
@@ -128,6 +130,11 @@ export default function LiveSalesPage() {
             label="Day target"
             value={data.totalForecastDay.toLocaleString()}
             sub={`${Math.round((data.totalSoldSoFar / Math.max(1, data.totalForecastDay)) * 100)}% complete`}
+          />
+          <Kpi
+            label="Available now"
+            value={totalAvailNow.toLocaleString()}
+            sub="planned − sold so far"
           />
           <Kpi
             label="Recipes selling"
@@ -254,7 +261,7 @@ export default function LiveSalesPage() {
       </div>
 
       {/* Sales table */}
-      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 0 }}>
+      <div style={{ padding: '24px 32px 32px', display: 'flex', flexDirection: 'column', gap: 0 }}>
         <div
           style={{
             background: '#ffffff',
@@ -298,6 +305,11 @@ export default function LiveSalesPage() {
                   ))}
                   <th style={headCellStyle({ right: true, minWidth: 80 })}>
                     <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
+                      Avail now
+                    </span>
+                  </th>
+                  <th style={headCellStyle({ right: true, minWidth: 80 })}>
+                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
                       Sold
                     </span>
                   </th>
@@ -317,13 +329,13 @@ export default function LiveSalesPage() {
               <tbody>
                 {filteredRows.length === 0 && (
                   <tr>
-                    <td colSpan={data.hourTotals.length + 4} style={{ padding: '24px 16px', textAlign: 'center', fontSize: 12, color: 'var(--color-text-muted)' }}>
+                    <td colSpan={data.hourTotals.length + 5} style={{ padding: '24px 16px', textAlign: 'center', fontSize: 12, color: 'var(--color-text-muted)' }}>
                       No recipes match this filter.
                     </td>
                   </tr>
                 )}
                 {filteredRows.map(row => {
-                  const peak = rowPeak(row);
+                  const availNow = Math.max(0, row.line.quinnProposed - row.soldSoFar);
                   const variancePctRow =
                     row.forecastSoFar > 0
                       ? Math.round(((row.soldSoFar - row.forecastSoFar) / row.forecastSoFar) * 100)
@@ -373,8 +385,26 @@ export default function LiveSalesPage() {
                         </div>
                       </td>
                       {row.cells.map(cell => (
-                        <HourCell key={cell.hour} cell={cell} peak={peak} />
+                        <HourCell key={cell.hour} cell={cell} />
                       ))}
+                      <td style={bodyCellStyle({ right: true })}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                          <span
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 700,
+                              color: availNow === 0 ? 'var(--color-text-muted)' : 'var(--color-text-primary)',
+                              fontVariantNumeric: 'tabular-nums',
+                            }}
+                            title={`Planned ${row.line.quinnProposed} − sold ${row.soldSoFar}`}
+                          >
+                            {availNow}
+                          </span>
+                          <span style={{ fontSize: 9, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                            of {row.line.quinnProposed}
+                          </span>
+                        </div>
+                      </td>
                       <td style={bodyCellStyle({ right: true })}>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                           <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
@@ -436,6 +466,18 @@ export default function LiveSalesPage() {
                     );
                   })}
                   <td style={footCellStyle({ right: true })}>
+                    <span
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: totalAvailNow === 0 ? 'var(--color-text-muted)' : 'var(--color-text-primary)',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {totalAvailNow}
+                    </span>
+                  </td>
+                  <td style={footCellStyle({ right: true })}>
                     <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
                       {data.totalSoldSoFar}
                     </span>
@@ -474,9 +516,7 @@ export default function LiveSalesPage() {
 
 // ─── Subcomponents ──────────────────────────────────────────────────────────
 
-function HourCell({ cell, peak }: { cell: ReturnType<typeof buildHourlySalesByRecipe>['rows'][number]['cells'][number]; peak: number }) {
-  const value = cell.actual ?? cell.forecast;
-  const heightPct = Math.max(8, Math.round((value / peak) * 100));
+function HourCell({ cell }: { cell: ReturnType<typeof buildHourlySalesByRecipe>['rows'][number]['cells'][number] }) {
   const variance = cell.actual != null ? cell.actual - cell.forecast : 0;
   const tone =
     cell.actual == null
@@ -486,15 +526,6 @@ function HourCell({ cell, peak }: { cell: ReturnType<typeof buildHourlySalesByRe
         : variance > 0
           ? 'over'
           : 'under';
-
-  const barBg =
-    tone === 'forecast'
-      ? 'var(--color-border)'
-      : tone === 'on'
-        ? 'var(--color-text-secondary)'
-        : tone === 'over'
-          ? 'var(--color-success)'
-          : 'var(--color-error)';
 
   const numColor =
     cell.actual == null
@@ -514,34 +545,17 @@ function HourCell({ cell, peak }: { cell: ReturnType<typeof buildHourlySalesByRe
           : `${formatHour(cell.hour)}: ${cell.actual} sold (forecast ${cell.forecast}, ${variance >= 0 ? '+' : ''}${variance})`
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: 0 }}>
-        <div
-          style={{
-            width: '100%',
-            maxWidth: 24,
-            height: 18,
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'center',
-            background: 'var(--color-bg-surface)',
-            borderRadius: 3,
-            border: cell.isCurrent ? '1px solid var(--color-success)' : '1px solid transparent',
-            overflow: 'hidden',
-          }}
-        >
-          <div
-            style={{
-              width: '100%',
-              height: `${heightPct}%`,
-              background: barBg,
-              opacity: cell.actual == null ? 0.45 : 1,
-            }}
-          />
-        </div>
-        <span style={{ fontSize: 11, fontWeight: 700, color: numColor, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-          {cell.actual ?? cell.forecast}
-        </span>
-      </div>
+      <span
+        style={{
+          fontSize: 13,
+          fontWeight: 700,
+          color: numColor,
+          fontVariantNumeric: 'tabular-nums',
+          fontStyle: cell.actual == null ? 'italic' : 'normal',
+        }}
+      >
+        {cell.actual ?? cell.forecast}
+      </span>
     </td>
   );
 }

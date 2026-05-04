@@ -107,7 +107,7 @@ export default function Sidebar() {
             compact={compact}
             badge={isSpoke ? undefined : 4}
             active={is('/production')}
-            onClick={() => router.push(isSpoke ? '/production/spokes' : '/production/board')}
+            onClick={() => router.push('/production/amounts')}
           />
           <NavItem label="View production summary" icon={ClipboardList} compact={compact} active={is('/production-summary')} />
           {!isSpoke && (
@@ -217,6 +217,8 @@ export default function Sidebar() {
             width: compact ? 28 : 32,
             height: 'auto',
             opacity: 0.9,
+            color: '#ffffff',
+            filter: 'brightness(0) invert(1)',
           }}
         />
       </div>

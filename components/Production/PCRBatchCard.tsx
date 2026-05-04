@@ -6,9 +6,9 @@ import {
   ChevronDown,
   ChevronUp,
   CheckCircle2,
-  Lock,
   Tag,
   Trash2,
+  Check,
 } from 'lucide-react';
 import Link from 'next/link';
 import StatusPill from './StatusPill';
@@ -60,8 +60,13 @@ type Props = {
  *   ┌─────────────────────────────────────────────────────────────────┐
  *   │ Bag Egg & Avo · Planned 6 · RUN R1   Bakery oven · 07:00–07:25 ▼│
  *   │ Made by [Priya ▾]  Made [- 32 +]  Rejected [- 0 +]              │
- *   │ Quality [Pass | Fail]   Label [Pass | Fail]                     │
+ *   │ Quality ☐ Pass    Label ☐ Pass                                  │
  *   └─────────────────────────────────────────────────────────────────┘
+ *
+ * Each check is a single Pass tick box (28px square + 18px tick) so it
+ * sits comfortably under a tablet finger. To fail a batch the manager
+ * bumps Rejected to equal Made — the card then auto-routes through the
+ * waste flow (no separate Fail control needed).
  *
  * Auto-submits the moment all required fields are answered.
  */
@@ -108,6 +113,9 @@ export default function PCRBatchCard({
 
   // Auto-complete: when all required answers are provided AND the manager
   // is signing fresh (not already-done), fire the appropriate callback.
+  // With the single Pass-only check box, failure is signalled by the
+  // Rejected stepper: if every unit made was rejected, the whole batch
+  // failed and we route the draft through onFail (waste flow).
   useEffect(() => {
     if (lockedReadOnly) return;
     if (made <= 0) return;
@@ -115,17 +123,17 @@ export default function PCRBatchCard({
     if (qualityCheck == null) return;
     if (requiresLabel && labelCheck == null) return;
 
+    const isFailure = rejected >= made;
     const draft: PCRDraft = {
       batchId: batch.id,
       made,
       rejected,
       madeBy,
-      qualityCheck,
-      labelCheck: requiresLabel ? labelCheck : null,
+      qualityCheck: isFailure ? 'fail' : 'pass',
+      labelCheck: requiresLabel ? (isFailure ? 'fail' : 'pass') : null,
       signedBy: initialSigner,
       signedAt: new Date().toISOString(),
     };
-    const isFailure = qualityCheck === 'fail' || (requiresLabel && labelCheck === 'fail');
     if (isFailure) {
       onFail?.(draft);
     } else {
@@ -156,7 +164,7 @@ export default function PCRBatchCard({
           // meaningful alert.
           background: failed ? 'var(--color-error-light)' : '#ffffff',
           borderColor: failed ? 'var(--color-error-border)' : 'var(--color-border-subtle)',
-          padding: '10px 14px',
+          padding: '10px 30px',
           display: 'flex',
           alignItems: 'center',
           gap: 10,
@@ -211,7 +219,7 @@ export default function PCRBatchCard({
 
   // ── Expanded card (awaiting review or expanded signed/failed) ─────────────
   return (
-    <div style={{ ...cardShell(dense), padding: '14px 16px' }}>
+    <div style={{ ...cardShell(dense), padding: '14px 30px' }}>
       {/* Header */}
       <div
         style={{
@@ -323,22 +331,6 @@ export default function PCRBatchCard({
         )}
       </div>
 
-      {/* Footer hint when not yet complete */}
-      {!isDone && canSign && (
-        <div
-          style={{
-            marginTop: 10,
-            fontSize: 11,
-            color: 'var(--color-text-muted)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          <Lock size={11} />
-          Card auto-signs and moves to Signed today as soon as both checks pass.
-        </div>
-      )}
       {!canSign && (
         <div
           style={{
@@ -406,7 +398,7 @@ function Stepper({
       canDecrement={value > min}
       onDecrement={() => onChange(Math.max(min, value - 1))}
       onIncrement={() => onChange(value + 1)}
-      style={{ display: 'flex', height: 38 }}
+      style={{ display: 'flex', width: '100%', height: 38 }}
     >
       <input
         type="number"
@@ -416,6 +408,7 @@ function Stepper({
         style={{
           flex: 1,
           minWidth: 0,
+          width: '100%',
           textAlign: 'center',
           fontSize: 16,
           fontWeight: 700,
@@ -435,57 +428,43 @@ function Stepper({
   );
 }
 
+/**
+ * Single Pass check box — tablet-sized (28px box + 18px tick). Tick to
+ * record a pass. To fail a batch, the manager bumps the Rejected
+ * stepper up: when rejected ≥ made (all units lost) the parent treats
+ * the card as a failure and routes it through the waste flow.
+ */
 function CheckPill({
   value,
   onChange,
   disabled,
 }: {
   value: 'pass' | 'fail' | null;
-  onChange: (v: 'pass' | 'fail') => void;
+  onChange: (v: 'pass' | null) => void;
   disabled?: boolean;
 }) {
   return (
-    <div
-      style={{
-        display: 'inline-flex',
-        gap: 4,
-        background: value === null ? 'var(--color-bg-hover)' : 'transparent',
-        borderRadius: 100,
-        padding: 3,
-        border: '1px solid var(--color-border-subtle)',
-        height: 38,
-        alignItems: 'center',
-      }}
-    >
-      <CheckPillBtn
-        active={value === 'pass'}
-        tone="success"
-        onClick={() => !disabled && onChange('pass')}
-        label="Pass"
-        disabled={disabled}
-      />
-      <CheckPillBtn
-        active={value === 'fail'}
-        tone="error"
-        onClick={() => !disabled && onChange('fail')}
-        label="Fail"
-        disabled={disabled}
-      />
-    </div>
+    <CheckBox
+      checked={value === 'pass'}
+      tone="success"
+      label="Pass"
+      onClick={() => !disabled && onChange(value === 'pass' ? null : 'pass')}
+      disabled={disabled}
+    />
   );
 }
 
-function CheckPillBtn({
-  active,
+function CheckBox({
+  checked,
   tone,
-  onClick,
   label,
+  onClick,
   disabled,
 }: {
-  active: boolean;
+  checked: boolean;
   tone: 'success' | 'error';
-  onClick: () => void;
   label: string;
+  onClick: () => void;
   disabled?: boolean;
 }) {
   const color = tone === 'success' ? 'var(--color-success)' : 'var(--color-error)';
@@ -494,23 +473,48 @@ function CheckPillBtn({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={label}
+      title={label}
       style={{
-        flex: 1,
-        minWidth: 56,
-        padding: '6px 10px',
-        borderRadius: 100,
-        fontSize: 11,
-        fontWeight: 700,
-        fontFamily: 'var(--font-primary)',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        background: active ? color : 'transparent',
-        color: active ? '#ffffff' : color,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '4px 8px 4px 4px',
+        background: 'transparent',
         border: 'none',
-        opacity: disabled && !active ? 0.5 : 1,
-        transition: 'background 0.15s, color 0.15s',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.55 : 1,
+        fontFamily: 'var(--font-primary)',
       }}
     >
-      {label}
+      <span
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 6,
+          background: checked ? color : '#ffffff',
+          border: `2px solid ${checked ? color : 'var(--color-border)'}`,
+          color: '#ffffff',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+          transition: 'background 0.12s, border-color 0.12s',
+        }}
+      >
+        {checked && <Check size={18} strokeWidth={3.5} />}
+      </span>
+      <span
+        style={{
+          fontSize: 13,
+          fontWeight: 700,
+          color: checked ? color : 'var(--color-text-secondary)',
+        }}
+      >
+        {label}
+      </span>
     </button>
   );
 }

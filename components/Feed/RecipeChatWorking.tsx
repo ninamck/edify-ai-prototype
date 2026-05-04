@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Check, Loader2 } from 'lucide-react';
-import QuinnOrb from '@/components/Sidebar/QuinnOrb';
+import EdifyMarkThinking from '@/components/EdifyMark/EdifyMarkThinking';
 
 export const RECIPE_EDIFY_TASKS = [
   'Match ingredients to Bidfood & Urban Fresh catalogue',
@@ -43,7 +43,7 @@ export default function RecipeChatWorking({ workStep }: RecipeChatWorkingProps) 
         background: 'linear-gradient(180deg, #FEFCF9 0%, #fff 100%)',
       }}>
         <div style={{ flexShrink: 0 }}>
-          <QuinnOrb state="thinking" size={36} />
+          <EdifyMarkThinking size={36} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{

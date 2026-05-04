@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Truck, X, AlertTriangle, ChevronRight } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
+import QtyStepper from './QtyStepper';
 import {
   dayOfWeek,
   getRecipe,
@@ -12,6 +13,7 @@ import {
   type DispatchTransferLine,
   type ProductionRecipe,
   type SiteId,
+  type SkuId,
 } from './fixtures';
 
 /**
@@ -40,8 +42,13 @@ type Props = {
   /** Demo display name for "Sent by" attribution. */
   sentBy: string;
   onCancel: () => void;
-  /** Called with optional override note when the manager confirms. */
-  onConfirm: (note: string | undefined) => void;
+  /**
+   * Called when the manager confirms. The manifest may have been edited
+   * line-by-line inside the sheet (the manager can dial each spoke's
+   * units up or down with a stepper); the adjusted manifest is what
+   * actually gets dispatched.
+   */
+  onConfirm: (note: string | undefined, adjustedManifest: DispatchManifestEntry[]) => void;
 };
 
 /**
@@ -71,6 +78,21 @@ export default function DispatchConfirmSheet({
     return manifest.length === 1 ? new Set(manifest.map(m => m.spokeId)) : new Set();
   });
 
+  // Per-line unit overrides — keyed by spokeId → skuId → units. Initialised
+  // from the incoming manifest so the steppers start at exactly what the
+  // matrix proposed; the manager can dial each line up or down before
+  // confirming. The adjusted numbers are what gets dispatched.
+  const [overrides, setOverrides] = useState<Record<SiteId, Record<SkuId, number>>>(() => {
+    const init: Record<SiteId, Record<SkuId, number>> = {};
+    for (const entry of manifest) {
+      init[entry.spokeId] = {};
+      for (const line of entry.lines) {
+        init[entry.spokeId][line.skuId] = line.units;
+      }
+    }
+    return init;
+  });
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onCancel();
@@ -82,17 +104,36 @@ export default function DispatchConfirmSheet({
   const hubName = getSite(hubId)?.name ?? hubId;
   const isBulk = manifest.length > 1;
 
+  // Apply overrides to produce the manifest that will actually be dispatched.
+  // Lines dropped to 0 stay in the manifest so the spoke sees the full
+  // intended list (with a "0 sent" line) — keeping the audit trail honest.
+  const adjustedManifest: DispatchManifestEntry[] = useMemo(
+    () =>
+      manifest.map(entry => {
+        const lines = entry.lines.map(l => ({
+          ...l,
+          units: overrides[entry.spokeId]?.[l.skuId] ?? l.units,
+        }));
+        return {
+          ...entry,
+          lines,
+          totalUnits: lines.reduce((a, l) => a + l.units, 0),
+        };
+      }),
+    [manifest, overrides],
+  );
+
   const grandTotal = useMemo(
-    () => manifest.reduce((a, m) => a + m.totalUnits, 0),
-    [manifest],
+    () => adjustedManifest.reduce((a, m) => a + m.totalUnits, 0),
+    [adjustedManifest],
   );
   const totalLines = useMemo(
-    () => manifest.reduce((a, m) => a + m.lines.length, 0),
-    [manifest],
+    () => adjustedManifest.reduce((a, m) => a + m.lines.length, 0),
+    [adjustedManifest],
   );
   const quinnLineCount = useMemo(
-    () => manifest.reduce((a, m) => a + m.lines.filter(l => l.wasQuinnProposed).length, 0),
-    [manifest],
+    () => adjustedManifest.reduce((a, m) => a + m.lines.filter(l => l.wasQuinnProposed).length, 0),
+    [adjustedManifest],
   );
 
   function toggleSpoke(spokeId: SiteId) {
@@ -102,6 +143,13 @@ export default function DispatchConfirmSheet({
       else next.add(spokeId);
       return next;
     });
+  }
+
+  function setLineUnits(spokeId: SiteId, skuId: SkuId, units: number) {
+    setOverrides(prev => ({
+      ...prev,
+      [spokeId]: { ...(prev[spokeId] ?? {}), [skuId]: Math.max(0, units) },
+    }));
   }
 
   // Render through a portal so the modal escapes any clipping ancestor.
@@ -123,6 +171,21 @@ export default function DispatchConfirmSheet({
           zIndex: 1300,
         }}
       />
+      {/* Outer flex wrapper centres the modal; the inner motion.div animates
+          y without fighting a translate transform — same pattern as the
+          UrgentRemakeBanner / ad-hoc review modal. */}
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 1301,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16,
+          pointerEvents: 'none',
+        }}
+      >
       <motion.div
         key="dispatch-card"
         role="dialog"
@@ -132,20 +195,16 @@ export default function DispatchConfirmSheet({
         exit={{ y: 24, opacity: 0 }}
         transition={{ type: 'spring', damping: 24, stiffness: 300 }}
         style={{
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          width: 'min(640px, calc(100vw - 32px))',
-          maxHeight: 'calc(100vh - 48px)',
+          width: 'min(640px, 100%)',
+          maxHeight: 'calc(100vh - 32px)',
           overflow: 'hidden',
           borderRadius: 'var(--radius-card)',
           background: '#ffffff',
           boxShadow: '0 24px 64px rgba(12,20,44,0.28)',
-          zIndex: 1301,
           fontFamily: 'var(--font-primary)',
           display: 'flex',
           flexDirection: 'column',
+          pointerEvents: 'auto',
         }}
       >
         {/* Header */}
@@ -234,7 +293,7 @@ export default function DispatchConfirmSheet({
             gap: 10,
           }}
         >
-          {manifest.map(entry => {
+          {adjustedManifest.map(entry => {
             const isOpen = openSpokes.has(entry.spokeId);
             const spoke = getSite(entry.spokeId);
             const quinnCount = entry.lines.filter(l => l.wasQuinnProposed).length;
@@ -329,7 +388,11 @@ export default function DispatchConfirmSheet({
                     }}
                   >
                     {entry.lines.map(line => (
-                      <ManifestLineRow key={line.skuId} line={line} />
+                      <ManifestLineRow
+                        key={line.skuId}
+                        line={line}
+                        onChange={(units) => setLineUnits(entry.spokeId, line.skuId, units)}
+                      />
                     ))}
                   </div>
                 )}
@@ -426,7 +489,7 @@ export default function DispatchConfirmSheet({
             Cancel
           </button>
           <button
-            onClick={() => onConfirm(note.trim() || undefined)}
+            onClick={() => onConfirm(note.trim() || undefined, adjustedManifest)}
             disabled={grandTotal === 0}
             style={{
               padding: '10px 16px',
@@ -450,12 +513,19 @@ export default function DispatchConfirmSheet({
           </button>
         </div>
       </motion.div>
+      </div>
     </AnimatePresence>,
     document.body,
   );
 }
 
-function ManifestLineRow({ line }: { line: DispatchTransferLine }) {
+function ManifestLineRow({
+  line,
+  onChange,
+}: {
+  line: DispatchTransferLine;
+  onChange: (units: number) => void;
+}) {
   const recipe: ProductionRecipe | undefined = getRecipe(line.recipeId);
   return (
     <div
@@ -464,7 +534,7 @@ function ManifestLineRow({ line }: { line: DispatchTransferLine }) {
         gridTemplateColumns: '1fr auto',
         gap: 12,
         alignItems: 'center',
-        padding: '6px 14px',
+        padding: '8px 14px',
         borderBottom: '1px solid var(--color-border-subtle)',
       }}
     >
@@ -510,18 +580,32 @@ function ManifestLineRow({ line }: { line: DispatchTransferLine }) {
           </span>
         )}
       </div>
-      <span
-        style={{
-          fontSize: 13,
-          fontWeight: 700,
-          color: 'var(--color-text-primary)',
-          fontVariantNumeric: 'tabular-nums',
-          minWidth: 40,
-          textAlign: 'right',
-        }}
+      <QtyStepper
+        size="compact"
+        canDecrement={line.units > 0}
+        onDecrement={() => onChange(line.units - 1)}
+        onIncrement={() => onChange(line.units + 1)}
       >
-        {line.units}
-      </span>
+        <input
+          type="number"
+          value={line.units}
+          min={0}
+          onChange={e => onChange(parseInt(e.target.value || '0', 10) || 0)}
+          style={{
+            width: 36,
+            padding: 0,
+            textAlign: 'center',
+            fontSize: 12,
+            fontWeight: 700,
+            fontVariantNumeric: 'tabular-nums',
+            border: 'none',
+            background: 'transparent',
+            outline: 'none',
+            fontFamily: 'var(--font-primary)',
+            color: 'var(--color-text-primary)',
+          }}
+        />
+      </QtyStepper>
     </div>
   );
 }

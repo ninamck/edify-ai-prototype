@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
+import EdifyMarkThinking from '@/components/EdifyMark/EdifyMarkThinking';
 import { getDunkinInsight } from '@/components/Analytics/DunkinAnalyticsInsights';
 
 /**
@@ -178,7 +179,8 @@ export default function QuinnInsightButton({
             </div>
             <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', lineHeight: 1.55 }}>
               {isLoading ? (
-                <span style={{ fontStyle: 'italic', color: 'var(--color-text-muted)' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontStyle: 'italic', color: 'var(--color-text-muted)' }}>
+                  <EdifyMarkThinking size={20} color="var(--color-accent-deep)" />
                   Crunching the numbers…
                 </span>
               ) : (

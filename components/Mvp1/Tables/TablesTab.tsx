@@ -5,11 +5,11 @@ import {
   Plus,
   Trash2,
   Database,
-  Sparkles,
   ListChecks,
   Pencil,
   GripVertical,
 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import DataTable from './DataTable';
 import { DATA_SOURCES, type Column } from './dataSources';
 import { fullSourceQuery, runQuery, type Filter, type TableQuery } from './query';
@@ -232,7 +232,7 @@ export default function TablesTab({
           )}
           {onAskQuinn && (
             <button type="button" onClick={onAskQuinn} style={addButton}>
-              <Sparkles size={13} strokeWidth={2.4} />
+              <EdifyMark size={13} strokeWidth={2.4} color="currentColor" />
               <span>Ask Quinn</span>
             </button>
           )}
@@ -696,7 +696,7 @@ function EmptyState({
       >
         {onAskQuinn && (
           <ChoiceCard
-            icon={<Sparkles size={16} strokeWidth={2.2} color="var(--color-accent-active)" />}
+            icon={<EdifyMark size={16} strokeWidth={2.2} color="var(--color-accent-active)" />}
             title="Ask Quinn"
             description="Describe the table you want in your own words."
             onClick={onAskQuinn}

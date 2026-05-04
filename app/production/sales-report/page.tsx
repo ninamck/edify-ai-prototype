@@ -297,7 +297,7 @@ function Section({
     >
       <div
         style={{
-          padding: '12px 16px',
+          padding: '12px 32px',
           borderBottom: '1px solid var(--color-border-subtle)',
           display: 'flex',
           alignItems: 'center',
@@ -340,7 +340,7 @@ function KPICard({
         background: '#ffffff',
         border: '1px solid var(--color-border-subtle)',
         borderRadius: 'var(--radius-card)',
-        padding: '14px 16px',
+        padding: '14px 32px',
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
@@ -361,7 +361,7 @@ function KPICard({
 function DailyTrend({ days }: { days: DaySummary[] }) {
   const peak = Math.max(1, ...days.flatMap(d => [d.sold, d.forecast]));
   return (
-    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ padding: '24px 32px 32px', display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', gap: 18, fontSize: 11, color: 'var(--color-text-muted)' }}>
         <LegendDot color="var(--color-text-secondary)" label="Sold" />
         <LegendDot color="var(--color-border)" label="Forecast" />
@@ -629,7 +629,7 @@ function SuggestionPanel({ report }: { report: SalesReport }) {
     >
       <div
         style={{
-          padding: '12px 16px',
+          padding: '12px 32px',
           background: 'var(--color-info-light)',
           borderBottom: '1px solid var(--color-info)',
           display: 'flex',

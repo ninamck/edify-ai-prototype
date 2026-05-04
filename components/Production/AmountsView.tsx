@@ -273,7 +273,7 @@ export default function AmountsView({
     (isPastDay ? (
       <div
         style={{
-          padding: '10px 16px',
+          padding: '10px 32px',
           background: 'var(--color-bg-surface)',
           borderBottom: '1px solid var(--color-border-subtle)',
           fontSize: 11,
@@ -316,7 +316,7 @@ export default function AmountsView({
           alignItems: 'center',
           gap: 8,
           flexWrap: 'wrap',
-          padding: '10px 16px',
+          padding: '10px 32px',
           borderBottom: '1px solid var(--color-border-subtle)',
           background: '#ffffff',
         }}
@@ -436,7 +436,7 @@ export default function AmountsView({
       </div>
 
       {/* Body */}
-      <div style={{ padding: '12px 16px 32px', background: 'var(--color-bg-surface)' }}>
+      <div style={{ padding: '24px 32px 32px', background: 'var(--color-bg-surface)' }}>
         <StaffLockBanner reason="Managers finalise the amounts plan before the first run." />
 
         {/* Ledger table */}
@@ -452,7 +452,7 @@ export default function AmountsView({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'minmax(260px, 1.6fr) 100px 100px 110px 200px 180px 150px',
+              gridTemplateColumns: 'minmax(260px, 1.6fr) 100px 100px 110px 200px',
               padding: '14px 16px',
               gap: 12,
               background: 'var(--color-bg-hover)',
@@ -472,8 +472,6 @@ export default function AmountsView({
             <span style={{ textAlign: 'right' }}>Carry-over</span>
             <span style={{ textAlign: 'right' }}>Quinn</span>
             <span style={{ textAlign: 'center' }}>You plan</span>
-            <span>Batches</span>
-            <span>Lands on</span>
           </div>
 
           {/* Category filter sub-row — sits under the column header so it
@@ -762,7 +760,7 @@ function AmountRow({
         data-amount-row-id={line.item.id}
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(260px, 1.6fr) 100px 100px 110px 200px 180px 150px',
+          gridTemplateColumns: 'minmax(260px, 1.6fr) 100px 100px 110px 200px',
           padding: '8px 16px 8px 13px',
           gap: 12,
           alignItems: 'center',
@@ -1164,97 +1162,6 @@ function AmountRow({
           ) : null}
         </div>
 
-        {/* Batches */}
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-          {isSegment && cadence ? (
-            segmentEditable ? (
-              <CadenceTickStrip cadence={cadence} dropsCount={dropsCount} />
-            ) : (
-              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>—</span>
-            )
-          ) : split.batches.length === 0 ? (
-            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>—</span>
-          ) : split.batches.length > 6 ? (
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: 'var(--color-text-primary)',
-                background: 'var(--color-bg-hover)',
-                padding: '4px 8px',
-                borderRadius: 5,
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
-              {split.batches.length} × {eff.max}
-            </span>
-          ) : (
-            split.batches.map((b, i) => (
-              <span
-                key={i}
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  padding: '3px 7px',
-                  borderRadius: 4,
-                  background:
-                    b < eff.min || b > eff.max ? 'var(--color-error-light)' : 'var(--color-bg-hover)',
-                  color:
-                    b < eff.min || b > eff.max ? 'var(--color-error)' : 'var(--color-text-primary)',
-                  border:
-                    b < eff.min || b > eff.max
-                      ? '1px solid var(--color-error-border)'
-                      : '1px solid var(--color-border-subtle)',
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {b}
-              </span>
-            ))
-          )}
-          {underBatchMin && !isSegment && (
-            <span
-              style={{
-                fontSize: 9,
-                fontWeight: 700,
-                color: 'var(--color-error)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
-              title={`Minimum batch is ${eff.min}`}
-            >
-              <AlertTriangle size={9} /> under min
-            </span>
-          )}
-        </div>
-
-        {/* Lands on */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-          {primaryBench ? (
-            <>
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: 'var(--color-text-primary)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {primaryBench.name}
-              </span>
-              {benches.length > 1 && (
-                <span style={{ fontSize: 9, color: 'var(--color-text-muted)' }}>
-                  + {benches.length - 1} more stage{benches.length - 1 === 1 ? '' : 's'}
-                </span>
-              )}
-            </>
-          ) : (
-            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Unassigned</span>
-          )}
-        </div>
       </div>
 
       {/* Expanded detail — per-drop plan section appears first for segments */}

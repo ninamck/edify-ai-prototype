@@ -74,7 +74,7 @@ export default function SettingsHealthPage() {
       {/* Summary header */}
       <div
         style={{
-          padding: '14px 16px',
+          padding: '14px 32px',
           borderBottom: '1px solid var(--color-border-subtle)',
           background: '#ffffff',
           display: 'flex',
@@ -189,7 +189,7 @@ function HealthCard({
   return (
     <div
       style={{
-        padding: '14px 16px',
+        padding: '14px 32px',
         borderRadius: 'var(--radius-card)',
         border: '1px solid var(--color-border-subtle)',
         background: '#ffffff',

@@ -69,20 +69,27 @@ function DispatchPageInner() {
     setPendingRequests(reqs);
   }
 
-  function handleConfirm(note: string | undefined) {
+  function handleConfirm(note: string | undefined, adjustedManifest: DispatchManifestEntry[]) {
     if (!pendingRequests) return;
     const nowISO = new Date().toISOString();
-    const transfers: DispatchTransfer[] = pendingRequests.map(req => ({
-      id: `transfer-${hubId}-${req.spokeId}-${req.forDate}-${Date.now()}`,
-      hubId,
-      spokeId: req.spokeId,
-      forDate: req.forDate,
-      sentAtISO: nowISO,
-      sentBy,
-      lines: req.lines,
-      totalUnits: req.totalUnits,
-      note,
-    }));
+    // Match each pending request to the (possibly edited) manifest entry by
+    // spokeId so we keep the original request's `forDate` while sending the
+    // manager-adjusted line quantities.
+    const adjustedBySpoke = new Map(adjustedManifest.map(m => [m.spokeId, m]));
+    const transfers: DispatchTransfer[] = pendingRequests.map(req => {
+      const adjusted = adjustedBySpoke.get(req.spokeId);
+      return {
+        id: `transfer-${hubId}-${req.spokeId}-${req.forDate}-${Date.now()}`,
+        hubId,
+        spokeId: req.spokeId,
+        forDate: req.forDate,
+        sentAtISO: nowISO,
+        sentBy,
+        lines: adjusted?.lines ?? req.lines,
+        totalUnits: adjusted?.totalUnits ?? req.totalUnits,
+        note,
+      };
+    });
     recordBulkTransfer(transfers);
 
     // PAC142 — mark any prior unrolled rejects for these (hub, spoke)
@@ -126,7 +133,7 @@ function DispatchPageInner() {
       {/* Page header — hub picker + dispatch date caption */}
       <div
         style={{
-          padding: '12px 16px',
+          padding: '12px 32px',
           borderBottom: '1px solid var(--color-border-subtle)',
           background: '#ffffff',
           display: 'flex',

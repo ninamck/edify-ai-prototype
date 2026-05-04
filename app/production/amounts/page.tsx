@@ -103,7 +103,7 @@ function TodayPageInner() {
           every production sub-page); we just show the date context. */}
       <div
         style={{
-          padding: '8px 16px',
+          padding: '8px 32px',
           borderBottom: '1px solid var(--color-border-subtle)',
           background: '#ffffff',
           display: 'flex',

@@ -296,7 +296,7 @@ function Section({
     >
       <div
         style={{
-          padding: '12px 16px',
+          padding: '12px 32px',
           borderBottom: '1px solid var(--color-border-subtle)',
           display: 'flex',
           alignItems: 'center',
@@ -353,7 +353,7 @@ function KPICard({
         background: '#ffffff',
         border: '1px solid var(--color-border-subtle)',
         borderRadius: 'var(--radius-card)',
-        padding: '14px 16px',
+        padding: '14px 32px',
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
@@ -381,7 +381,7 @@ function EmployeeRow({ rank, emp }: { rank: number; emp: EmployeeSummary }) {
   return (
     <div
       style={{
-        padding: '12px 16px',
+        padding: '12px 32px',
         borderBottom: '1px solid var(--color-border-subtle)',
         display: 'grid',
         gridTemplateColumns: '36px 1fr 80px 80px 110px 100px',

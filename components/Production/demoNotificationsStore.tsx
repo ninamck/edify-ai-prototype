@@ -7,8 +7,8 @@
  * incoming spoke-rejects strip, and the incoming ad-hoc requests strip.
  *
  * State is in-memory (no persistence) — flipping reflects immediately,
- * a page reload resets to "everything visible" so the next demo run
- * starts with the full picture.
+ * a page reload resets back to all-off so the next demo run starts with
+ * a clean Today screen and the presenter opts in surface-by-surface.
  */
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
@@ -23,9 +23,9 @@ type DemoNotificationsValue = DemoNotificationFlags & {
 };
 
 const DEFAULT_FLAGS: DemoNotificationFlags = {
-  urgentRemake: true,
-  rejects: true,
-  adhoc: true,
+  urgentRemake: false,
+  rejects: false,
+  adhoc: false,
 };
 
 const DemoNotificationsContext = createContext<DemoNotificationsValue | null>(null);

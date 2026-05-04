@@ -19,6 +19,7 @@ import {
   Pin,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
+import EdifyMarkThinking from '@/components/EdifyMark/EdifyMarkThinking';
 import { motion, AnimatePresence } from 'framer-motion';
 import QuinnOrb from '@/components/Sidebar/QuinnOrb';
 import type { BriefingRole } from '@/components/briefing';
@@ -40,7 +41,10 @@ function QuinnAvatar({
   size?: number;
   mode?: 'sparkle' | 'thinking' | 'ready';
 }) {
-  if (mode === 'thinking' || mode === 'ready') {
+  if (mode === 'thinking') {
+    return <EdifyMarkThinking size={size} />;
+  }
+  if (mode === 'ready') {
     return (
       <div style={{
         width: size,
@@ -902,12 +906,16 @@ function QuinnMessageBody({ text }: { text: string }) {
   );
 }
 
-function ChatBubble({ msg, children }: { msg: ChatMsg; children?: ReactNode }) {
+function ChatBubble({ msg, children, showSignature = false }: { msg: ChatMsg; children?: ReactNode; showSignature?: boolean }) {
   const isUser = msg.role === 'user';
+  // Only the most recent Quinn response gets the signature, and never the
+  // thinking placeholder (which already shows the animated mark inline).
+  const showQuinnSignature = !isUser && msg.msgType !== 'analytics-thinking' && showSignature;
   return (
     <div style={{
       display: 'flex',
-      justifyContent: isUser ? 'flex-end' : 'flex-start',
+      flexDirection: 'column',
+      alignItems: isUser ? 'flex-end' : 'flex-start',
       marginBottom: '12px',
     }}>
       <div style={{
@@ -930,6 +938,28 @@ function ChatBubble({ msg, children }: { msg: ChatMsg; children?: ReactNode }) {
         {isUser ? msg.text : <QuinnMessageBody text={msg.text} />}
         {children}
       </div>
+      {showQuinnSignature && (
+        <motion.div
+          initial={{ opacity: 0, y: -2 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.2, ease: 'easeOut' }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            marginTop: '6px',
+            paddingLeft: '4px',
+            fontSize: '11px',
+            fontWeight: 600,
+            letterSpacing: '0.04em',
+            color: 'var(--color-text-muted)',
+            fontFamily: 'var(--font-primary)',
+          }}
+        >
+          <EdifyMark size={12} color="var(--color-accent-deep)" strokeWidth={2.2} />
+          Quinn
+        </motion.div>
+      )}
     </div>
   );
 }
@@ -1330,7 +1360,7 @@ function QuinnThinkingContent() {
   useEffect(() => {
     const t = setInterval(() => {
       setPhraseIdx(i => (i + 1) % THINKING_PHRASES.length);
-    }, 900);
+    }, 2400);
     return () => clearInterval(t);
   }, []);
 
@@ -2126,7 +2156,7 @@ export default function Feed({
           },
         ]);
         setAnalyticsStep(2);
-      }, 1600);
+      }, 11000);
       return () => clearTimeout(t);
     }
     if (analyticsStep === 2) {
@@ -2812,14 +2842,26 @@ export default function Feed({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.2 }}
                   >
-                    {messages.map((m) => (
+                    {(() => {
+                      // Index of the most recent Quinn response that isn't the
+                      // thinking placeholder — only that bubble gets the
+                      // signature footer.
+                      let lastQuinnSignatureId: string | null = null;
+                      for (let i = messages.length - 1; i >= 0; i--) {
+                        const cand = messages[i];
+                        if (cand.role === 'quinn' && cand.msgType !== 'analytics-thinking') {
+                          lastQuinnSignatureId = cand.id;
+                          break;
+                        }
+                      }
+                      return messages.map((m) => (
                       <motion.div
                         key={m.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.28, ease: [0.25, 0.1, 0.25, 1] }}
                       >
-                      <ChatBubble key={m.id} msg={m}>
+                      <ChatBubble key={m.id} msg={m} showSignature={m.id === lastQuinnSignatureId}>
                         {m.msgType === 'analytics-thinking' && (
                           <QuinnThinkingContent />
                         )}
@@ -2978,7 +3020,8 @@ export default function Feed({
                         )}
                       </ChatBubble>
                       </motion.div>
-                    ))}
+                    ));
+                    })()}
 
                     {recipeFlow === 10 && (
                       <ActionButton label="Looks good, save it" onClick={confirmRecipe} />

@@ -1,13 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageSquarePlus,
   Check,
   X,
   Clock,
-  ChevronDown,
-  ChevronRight,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import QtyStepper from './QtyStepper';
@@ -25,16 +25,14 @@ import { useAdhocRequests } from './adhocStore';
 import { useRole } from './RoleContext';
 
 /**
- * IncomingAdhocRequestsStrip — sits at the top of /production/dispatch.
+ * IncomingAdhocRequestsStrip — compact trigger that opens a review modal.
  *
- * Hub manager sees every incoming ad-hoc request from their spokes. Each
- * pending request expands into a per-line approval row where they can:
- *  - Adjust the qty (default = what the spoke asked for)
- *  - Add a per-line note (e.g. "out of butter, can do 2 tomorrow")
- *  - Send the decision → flips status to approved / partial / rejected
- *
- * Already-decided requests stay on the strip in compact form so the spoke
- * relationship is transparent ("Hub responded 3h ago — approved 6/8").
+ * The hub manager sees a single pill at the top of the Today screen
+ * summarising how many ad-hoc requests need attention. Tapping it opens
+ * a centered modal listing every request from this hub's spokes; from
+ * there each one expands into a per-line approval form (adjust qty, add
+ * a hub note, approve / reject / send custom). Decisions flow back into
+ * the dispatch matrix as before.
  *
  * Strip auto-hides if there are zero requests for the hub.
  */
@@ -48,6 +46,7 @@ export default function IncomingAdhocRequestsStrip({ hubId }: { hubId: SiteId })
   const { forHub, respond } = useAdhocRequests();
   const { user } = useRole();
   const respondedBy = user?.name ?? 'Hub manager';
+  const [open, setOpen] = useState(false);
 
   const requests = useMemo(
     () => [...forHub(hubId)].sort((a, b) => (a.submittedAtISO < b.submittedAtISO ? 1 : -1)),
@@ -58,68 +57,223 @@ export default function IncomingAdhocRequestsStrip({ hubId }: { hubId: SiteId })
 
   const pending = requests.filter(r => r.status === 'pending');
   const totalPendingUnits = pending.reduce((a, r) => a + r.totalRequestedUnits, 0);
+  const resolved = requests.length - pending.length;
   const needsAction = pending.length > 0;
 
   return (
-    <div
-      style={{
-        margin: '12px 16px 0',
-        background: '#ffffff',
-        border: '1px solid var(--color-border-subtle)',
-        borderRadius: 'var(--radius-card)',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Header */}
+    <>
+      {/* Compact trigger — sits in the page flow where the strip used to.
+          Same horizontal gutter as the production tables (32px). */}
       <div
         style={{
-          padding: '10px 14px',
-          background: needsAction ? 'var(--color-warning-bg)' : 'var(--color-bg-surface)',
-          borderBottom: '1px solid var(--color-border-subtle)',
+          margin: '12px 32px 0',
           display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          flexWrap: 'wrap',
+          justifyContent: 'flex-start',
         }}
       >
-        <MessageSquarePlus
-          size={14}
-          color={needsAction ? 'var(--color-warning)' : 'var(--color-text-muted)'}
-        />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            Ad-hoc requests · {pending.length} pending
-            {pending.length > 0 && (
-              <span style={{ fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-                {' · '}{totalPendingUnits} unit{totalPendingUnits === 1 ? '' : 's'} requested
-              </span>
-            )}
-            {requests.length > pending.length && (
-              <span style={{ fontWeight: 600, color: 'var(--color-text-muted)' }}>
-                {' · '}{requests.length - pending.length} resolved
-              </span>
-            )}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '10px 16px',
+            borderRadius: 8,
+            background: needsAction ? 'var(--color-warning-bg)' : '#ffffff',
+            border: `1px solid ${needsAction ? 'var(--color-warning-border)' : 'var(--color-border-subtle)'}`,
+            cursor: 'pointer',
+            fontFamily: 'var(--font-primary)',
+            color: 'var(--color-text-primary)',
+          }}
+        >
+          <MessageSquarePlus
+            size={14}
+            color={needsAction ? 'var(--color-warning)' : 'var(--color-text-muted)'}
+          />
+          <span style={{ fontSize: 12, fontWeight: 700 }}>
+            Ad-hoc requests
+          </span>
+          {needsAction && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '2px 8px',
+                borderRadius: 999,
+                background: 'var(--color-warning)',
+                color: '#ffffff',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {pending.length} pending
+            </span>
+          )}
+          <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
             {needsAction
-              ? 'Spokes have asked for top-ups. Approve, adjust qty or reject — each decision flows into the matrix below.'
-              : 'All requests responded to. Approved qty is rolling into the dispatch matrix below.'}
-          </div>
-        </div>
+              ? `${totalPendingUnits} unit${totalPendingUnits === 1 ? '' : 's'} requested`
+              : `${resolved} resolved`}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--color-accent-active)', fontWeight: 700, marginLeft: 4 }}>
+            Review →
+          </span>
+        </button>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {requests.map(r => (
-          <RequestRow
-            key={r.id}
-            request={r}
-            onRespond={(decisions, notes) =>
-              respond(r.id, decisions, { respondedBy, notes })
-            }
-          />
-        ))}
+      <AnimatePresence>
+        {open && (
+          <ReviewModal onClose={() => setOpen(false)} pendingCount={pending.length} totalRequests={requests.length}>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {requests.map(r => (
+                <RequestRow
+                  key={r.id}
+                  request={r}
+                  onRespond={(decisions, notes) =>
+                    respond(r.id, decisions, { respondedBy, notes })
+                  }
+                />
+              ))}
+            </div>
+          </ReviewModal>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Modal shell — backdrop + centered card. Mirrors the SpokeAdhocRequestCard
+// pattern so the popup has the same look + dismissal affordances across the
+// hub and spoke surfaces.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ReviewModal({
+  onClose,
+  pendingCount,
+  totalRequests,
+  children,
+}: {
+  onClose: () => void;
+  pendingCount: number;
+  totalRequests: number;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  if (typeof window === 'undefined') return null;
+
+  return createPortal(
+    <>
+      <motion.div
+        key="adhoc-review-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.15 }}
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(12, 20, 44, 0.55)',
+          zIndex: 1300,
+        }}
+      />
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 1301,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16,
+          pointerEvents: 'none',
+        }}
+      >
+        <motion.div
+          key="adhoc-review-card"
+          role="dialog"
+          aria-label="Review ad-hoc requests"
+          initial={{ y: 16, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 16, opacity: 0 }}
+          transition={{ type: 'spring', damping: 24, stiffness: 300 }}
+          style={{
+            width: 'min(960px, 100%)',
+            maxHeight: 'calc(100vh - 32px)',
+            overflow: 'hidden',
+            borderRadius: 'var(--radius-card)',
+            background: '#ffffff',
+            boxShadow: '0 24px 64px rgba(12,20,44,0.32)',
+            fontFamily: 'var(--font-primary)',
+            display: 'flex',
+            flexDirection: 'column',
+            pointerEvents: 'auto',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '14px 20px',
+              borderBottom: '1px solid var(--color-border-subtle)',
+              flexShrink: 0,
+            }}
+          >
+            <MessageSquarePlus
+              size={16}
+              color={pendingCount > 0 ? 'var(--color-warning)' : 'var(--color-text-muted)'}
+            />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>
+                Ad-hoc requests · {pendingCount} pending
+                {totalRequests > pendingCount && (
+                  <span style={{ fontWeight: 500, color: 'var(--color-text-muted)' }}>
+                    {' · '}{totalRequests - pendingCount} resolved
+                  </span>
+                )}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                Approve, adjust qty or reject. Decisions flow into the dispatch matrix.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 6,
+                border: '1px solid var(--color-border)',
+                background: '#ffffff',
+                color: 'var(--color-text-secondary)',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {children}
+          </div>
+        </motion.div>
       </div>
-    </div>
+    </>,
+    document.body,
   );
 }
 
@@ -135,7 +289,6 @@ function RequestRow({
   onRespond: (decisions: Record<string, DraftLineDecision>, notes?: string) => void;
 }) {
   const isPending = request.status === 'pending';
-  const [expanded, setExpanded] = useState(isPending);
   const [decisions, setDecisions] = useState<Record<string, DraftLineDecision>>(() => {
     // Pre-fill with what the spoke asked for so the default action is "approve as-is".
     const init: Record<string, DraftLineDecision> = {};
@@ -195,24 +348,18 @@ function RequestRow({
 
   return (
     <div style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-      {/* Compact header */}
-      <button
-        type="button"
-        onClick={() => setExpanded(e => !e)}
+      {/* Static header — no longer collapsible since each request lives
+          inside the modal already and the manager wants the form open. */}
+      <div
         style={{
-          width: '100%',
-          padding: '10px 14px',
+          padding: '12px 20px',
           background: isPending ? '#ffffff' : 'var(--color-bg-surface)',
-          border: 'none',
-          cursor: 'pointer',
-          textAlign: 'left',
           display: 'flex',
           alignItems: 'center',
           gap: 10,
           flexWrap: 'wrap',
         }}
       >
-        {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <StatusChip status={request.status} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)' }}>
@@ -239,20 +386,19 @@ function RequestRow({
           <Clock size={10} />
           {formatRel(request.submittedAtISO)}
         </span>
-      </button>
+      </div>
 
-      {/* Expanded — review form (pending) or read-only summary (responded) */}
-      {expanded && (
-        <div
-          style={{
-            padding: '10px 14px 14px 32px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 10,
-            background: isPending ? 'var(--color-bg-surface)' : '#ffffff',
-            borderTop: '1px solid var(--color-border-subtle)',
-          }}
-        >
+      {/* Review form (pending) or read-only summary (responded). Sits flush
+          to the modal width — no extra inset since the chevron is gone. */}
+      <div
+        style={{
+          padding: '0 20px 18px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+          background: isPending ? 'var(--color-bg-surface)' : '#ffffff',
+        }}
+      >
           {request.notes && (
             <div
               style={{
@@ -346,7 +492,6 @@ function RequestRow({
             </div>
           )}
         </div>
-      )}
     </div>
   );
 }
@@ -378,21 +523,40 @@ function LineDecisionRow({
     tone === 'bad'  ? 'var(--color-error)'   :
     tone === 'warn' ? 'var(--color-warning)' :
     'var(--color-text-muted)';
+  // Two layouts to keep the per-line approval form readable across viewports:
+  //   - Pending → 3-column grid: recipe meta · qty stepper · hub note.
+  //     Note input has a generous min-width so the recipe and stepper don't
+  //     get squashed into nothing. Falls back to single-column on narrow
+  //     screens via the `auto` track + flex inside.
+  //   - Responded → 2-column grid: recipe meta · final approved qty/status.
   return (
     <div
       style={{
-        padding: '8px 12px',
+        padding: '10px 14px',
         borderBottom: '1px solid var(--color-border-subtle)',
-        display: 'flex',
+        display: 'grid',
+        gridTemplateColumns: isPending
+          ? 'minmax(180px, 1.4fr) auto minmax(220px, 2fr)'
+          : 'minmax(180px, 1fr) auto',
         alignItems: 'center',
-        gap: 10,
-        flexWrap: 'wrap',
+        gap: 14,
       }}
     >
-      <div style={{ flex: 1, minWidth: 200 }}>
-        <div style={{ fontSize: 12, fontWeight: 600 }}>{recipe?.name ?? line.recipeId}</div>
-        <div style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
-          Requested: <strong style={{ color: 'var(--color-text-secondary)' }}>{line.requestedUnits}</strong>
+      <div style={{ minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: 'var(--color-text-primary)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {recipe?.name ?? line.recipeId}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+          Requested <strong style={{ color: 'var(--color-text-secondary)' }}>{line.requestedUnits}</strong>
           {recipe && ` · ${recipe.category}`}
         </div>
       </div>
@@ -400,7 +564,6 @@ function LineDecisionRow({
         <>
           <QtyStepper
             size="compact"
-            chromeless
             canDecrement={decision.approvedUnits > 0}
             canIncrement={decision.approvedUnits < line.requestedUnits}
             onDecrement={() => onAdjust(-1)}
@@ -413,15 +576,17 @@ function LineDecisionRow({
               max={line.requestedUnits}
               onChange={e => onSet(parseInt(e.target.value || '0', 10) || 0)}
               style={{
-                width: 50,
-                padding: '4px 6px',
+                width: 36,
+                padding: 0,
                 textAlign: 'center',
                 fontSize: 12,
                 fontWeight: 700,
                 fontVariantNumeric: 'tabular-nums',
-                border: '1px solid var(--color-border)',
-                borderRadius: 6,
+                border: 'none',
+                background: 'transparent',
+                outline: 'none',
                 fontFamily: 'var(--font-primary)',
+                color: 'var(--color-text-primary)',
               }}
             />
           </QtyStepper>
@@ -429,24 +594,24 @@ function LineDecisionRow({
             type="text"
             value={decision.hubNote ?? ''}
             onChange={e => onSetNote(e.target.value)}
-            placeholder="Optional note (e.g. ‘out of butter’)"
+            placeholder="Optional note (e.g. 'out of butter')"
             style={{
-              flex: 1,
-              minWidth: 180,
-              padding: '6px 8px',
+              padding: '7px 10px',
               borderRadius: 6,
               border: '1px solid var(--color-border)',
               fontFamily: 'var(--font-primary)',
-              fontSize: 11,
+              fontSize: 12,
+              minWidth: 0,
+              width: '100%',
             }}
           />
         </>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
           <span style={{ fontSize: 13, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>
             {got} approved
           </span>
-          <span style={{ fontSize: 10, color, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <span style={{ fontSize: 10, color, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             {line.lineStatus}
           </span>
           {line.hubNote && (

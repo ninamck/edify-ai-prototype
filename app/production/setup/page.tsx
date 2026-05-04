@@ -88,7 +88,7 @@ export default function QuinnSetupPage() {
       {/* Header */}
       <div
         style={{
-          padding: '12px 16px',
+          padding: '12px 32px',
           display: 'flex',
           alignItems: 'center',
           gap: 10,
@@ -180,7 +180,7 @@ export default function QuinnSetupPage() {
               style={{
                 marginLeft: 52,
                 marginTop: 4,
-                padding: '14px 16px',
+                padding: '14px 32px',
                 borderRadius: 'var(--radius-card)',
                 border: '1px solid var(--color-success-border)',
                 background: 'var(--color-success-light)',
@@ -483,7 +483,7 @@ function SummaryCard({ summary, onSave }: { summary: string; onSave: () => void 
   return (
     <div
       style={{
-        padding: '14px 16px',
+        padding: '14px 32px',
         borderRadius: 'var(--radius-card)',
         border: '1px solid var(--color-info)',
         background: 'var(--color-info-light)',

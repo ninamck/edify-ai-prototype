@@ -304,7 +304,7 @@ export default function SpokeSubmissionsPage() {
       {!isSpoke && (
       <div
         style={{
-          padding: '12px 16px',
+          padding: '12px 32px',
           display: 'flex',
           alignItems: 'center',
           gap: 12,
@@ -569,7 +569,7 @@ export default function SpokeSubmissionsPage() {
           {autoFinalised && (
             <div
               style={{
-                padding: '14px 16px',
+                padding: '14px 32px',
                 borderRadius: 'var(--radius-card)',
                 border: '1px solid var(--color-warning-border)',
                 background: 'var(--color-warning-light)',
@@ -606,7 +606,7 @@ export default function SpokeSubmissionsPage() {
           {isUnlocked && unlockRecord && (
             <div
               style={{
-                padding: '14px 16px',
+                padding: '14px 32px',
                 borderRadius: 'var(--radius-card)',
                 border: '1px solid var(--color-success-border)',
                 background: 'var(--color-success-light)',
@@ -733,7 +733,7 @@ export default function SpokeSubmissionsPage() {
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'minmax(220px, 1.6fr) 90px 90px 90px 180px 80px',
-                padding: '12px 16px',
+                padding: '12px 32px',
                 gap: 12,
                 background: 'var(--color-bg-hover)',
                 borderBottom: '1px solid var(--color-border-subtle)',
@@ -838,7 +838,7 @@ function DayStrip({
       style={{
         display: 'flex',
         gap: 8,
-        padding: '12px 16px',
+        padding: '12px 32px',
         background: '#ffffff',
         borderBottom: '1px solid var(--color-border-subtle)',
         overflowX: 'auto',
