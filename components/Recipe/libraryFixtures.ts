@@ -152,6 +152,14 @@ export type Recipe = {
   workflowId?: string;
   /** Orphan prep flag (e.g. end-of-day mise that no current assembly explicitly pulls). */
   isPrep?: boolean;
+  /** Include this recipe when counting physical inventory at stock take.
+   *  Defaults to true — opt out for items where on-hand counts don't
+   *  make sense (made-to-order coffees, custom assemblies, etc.). */
+  countInStockTake?: boolean;
+  /** Exclude this recipe from cost-of-goods calculations. Useful for
+   *  comp / staff items, complimentary tasters, or recipes whose cost
+   *  is rolled up via a parent assembly. Defaults to false. */
+  excludeFromCogs?: boolean;
   /** Rich form fields edited via the full-page recipe editor. All optional so
    *  existing fixtures don't need to fill them in. */
   formExtras?: RecipeFormExtras;
@@ -584,34 +592,78 @@ function deriveKind(r: typeof PRET_RECIPES[number]): RecipeKind {
   return 'standalone';
 }
 
-export const PRET_LIBRARY_RECIPES: Recipe[] = PRET_RECIPES.map((r) => ({
-  id: r.id,
-  name: r.name,
-  category: r.category as RecipeCategory,
-  ingredientCost: 0,
-  priceDineIn: 0,
-  priceTakeaway: 0,
-  priceDelivery: 0,
-  marginPct: 0,
-  status: 'Active' as RecipeStatus,
-  flag: null,
-  menuItems: [],
-  ingredients: [],
-  modifierGroups: [],
-  production: {
-    visibility: null,
-    shelfLifeMinutes: r.shelfLifeMinutes,
-    prepTimeSeconds: null,
-  },
-  kind: deriveKind(r),
-  subRecipes: r.subRecipes?.map((s) => ({
-    recipeId: s.recipeId,
-    quantityPerUnit: s.quantityPerUnit,
-    unit: s.unit,
-  })),
-  workflowId: r.workflowId,
-  isPrep: r.isPrep,
-}));
+/**
+ * Demo pricing for the Pret library entries on the Recipes page. Real
+ * Pret menus price dine-in and takeaway the same and tack a small
+ * surcharge onto delivery (delivery-platform commission). Components
+ * (granary loaves, egg mayo fillings, etc.) aren't sold directly so
+ * they keep £0 and the drawer hides the Price & margin section as
+ * before. Margin uses a 30% food cost rule of thumb so the rendered
+ * "margin %" reads sensibly without per-recipe ingredient costing.
+ */
+const PRET_DEMO_PRICE_BY_CATEGORY: Record<string, { dineIn: number; takeaway: number; delivery: number }> = {
+  Sandwich: { dineIn: 4.50, takeaway: 4.50, delivery: 5.50 },
+  Salad:    { dineIn: 6.00, takeaway: 6.00, delivery: 7.00 },
+  Bakery:   { dineIn: 2.50, takeaway: 2.50, delivery: 3.00 },
+  Snack:    { dineIn: 3.50, takeaway: 3.50, delivery: 4.00 },
+  Beverage: { dineIn: 3.00, takeaway: 3.00, delivery: 3.50 },
+};
+
+function pricingFor(r: typeof PRET_RECIPES[number], kind: RecipeKind): {
+  ingredientCost: number;
+  priceDineIn: number;
+  priceTakeaway: number;
+  priceDelivery: number;
+  marginPct: number;
+} {
+  // Components and prep items aren't sellable on their own — keep
+  // them at £0 so the drawer's `noPrice` gate hides the section.
+  if (kind === 'component' || r.isPrep) {
+    return { ingredientCost: 0, priceDineIn: 0, priceTakeaway: 0, priceDelivery: 0, marginPct: 0 };
+  }
+  const tier = PRET_DEMO_PRICE_BY_CATEGORY[r.category];
+  if (!tier) {
+    return { ingredientCost: 0, priceDineIn: 0, priceTakeaway: 0, priceDelivery: 0, marginPct: 0 };
+  }
+  const ingredientCost = Math.round(tier.dineIn * 0.30 * 100) / 100;
+  const marginPct = Math.round(((tier.dineIn - ingredientCost) / tier.dineIn) * 100);
+  return {
+    ingredientCost,
+    priceDineIn: tier.dineIn,
+    priceTakeaway: tier.takeaway,
+    priceDelivery: tier.delivery,
+    marginPct,
+  };
+}
+
+export const PRET_LIBRARY_RECIPES: Recipe[] = PRET_RECIPES.map((r) => {
+  const kind = deriveKind(r);
+  const pricing = pricingFor(r, kind);
+  return {
+    id: r.id,
+    name: r.name,
+    category: r.category as RecipeCategory,
+    ...pricing,
+    status: 'Active' as RecipeStatus,
+    flag: null,
+    menuItems: [],
+    ingredients: [],
+    modifierGroups: [],
+    production: {
+      visibility: null,
+      shelfLifeMinutes: r.shelfLifeMinutes,
+      prepTimeSeconds: null,
+    },
+    kind,
+    subRecipes: r.subRecipes?.map((s) => ({
+      recipeId: s.recipeId,
+      quantityPerUnit: s.quantityPerUnit,
+      unit: s.unit,
+    })),
+    workflowId: r.workflowId,
+    isPrep: r.isPrep,
+  };
+});
 
 export const ALL_LIBRARY_RECIPES: Recipe[] = [
   ...FITZROY_RECIPES.map((r): Recipe => ({ ...r, kind: 'standalone' })),

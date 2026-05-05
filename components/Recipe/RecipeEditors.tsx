@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
-  Plus, Check, Trash2, ArrowUp, ArrowDown,
+  Plus, Check, Trash2, ArrowUp, ArrowDown, ChevronDown, X,
 } from 'lucide-react';
 import {
   type Recipe,
@@ -418,59 +419,265 @@ export const editHintStyle: React.CSSProperties = {
   lineHeight: 1.3,
 };
 
-/** Multi-select picker for stage equipment requirements. Renders a row of
- *  small chips for each piece of equipment in `EQUIPMENT_ORDER`; clicking
- *  toggles inclusion. Most stages won't require any equipment so the
- *  empty state collapses cleanly. */
+/** Multi-select picker for stage equipment requirements. Renders as a
+ *  dropdown trigger that displays the selected items as inline pills,
+ *  with the full equipment list opening in a panel below the trigger
+ *  on demand. Keeps the editor compact when most stages need 0–2
+ *  pieces of equipment instead of the previous all-options-on-screen
+ *  list which dominated vertical space. */
 function EquipmentMultiPicker({
   value, onChange,
 }: {
   value: Equipment[];
   onChange: (next: Equipment[]) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  // Viewport-anchored coords for the panel. Recomputed on open and on
+  // scroll/resize so the floating panel tracks the trigger even when
+  // the underlying form scrolls. Portaled to document.body so no
+  // ancestor's `overflow: hidden` / `overflow: auto` can clip it.
+  const [panelRect, setPanelRect] = useState<{
+    left: number;
+    width: number;
+    direction: 'down' | 'up';
+    /** When direction === 'down' this is the top edge; when 'up'
+     *  this is the bottom edge (relative to the viewport). */
+    edge: number;
+    maxHeight: number;
+  } | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  // Recalculate whenever the panel is open. ~280px covers the panel's
+  // ideal height (240) + the 4px gap + a touch of breathing room. We
+  // prefer 'down' when there's room because that's the more natural
+  // dropdown affordance; otherwise we flip 'up' so the picker is
+  // always fully visible. Re-runs on scroll / resize via the
+  // listeners further down.
+  useEffect(() => {
+    if (!open) return;
+    function recompute() {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const GAP = 4;
+      const VIEWPORT_PAD = 8;
+      const spaceBelow = window.innerHeight - rect.bottom - GAP - VIEWPORT_PAD;
+      const spaceAbove = rect.top - GAP - VIEWPORT_PAD;
+      const idealHeight = 240;
+      // Prefer down unless there's clearly more room above.
+      const direction: 'down' | 'up' =
+        spaceBelow >= idealHeight || spaceBelow >= spaceAbove ? 'down' : 'up';
+      const maxHeight = Math.max(120, Math.min(idealHeight, direction === 'down' ? spaceBelow : spaceAbove));
+      setPanelRect({
+        left: rect.left,
+        width: rect.width,
+        direction,
+        edge: direction === 'down' ? rect.bottom + GAP : window.innerHeight - rect.top + GAP,
+        maxHeight,
+      });
+    }
+    recompute();
+    window.addEventListener('scroll', recompute, true);
+    window.addEventListener('resize', recompute);
+    return () => {
+      window.removeEventListener('scroll', recompute, true);
+      window.removeEventListener('resize', recompute);
+    };
+  }, [open]);
+
+  // Close on outside click / Escape so the dropdown behaves like the
+  // rest of the editor's pickers. Outside-click checks both the
+  // wrapper and the portaled panel so clicks inside the panel don't
+  // dismiss it (the panel lives outside the wrapper in the DOM).
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (!(e.target instanceof Node)) return;
+      const node = wrapperRef.current;
+      const panelNode = panelRef.current;
+      if (node?.contains(e.target)) return;
+      if (panelNode?.contains(e.target)) return;
+      setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
   function toggle(eq: Equipment) {
     if (value.includes(eq)) onChange(value.filter((e) => e !== eq));
     else onChange([...value, eq]);
   }
+  function remove(eq: Equipment) {
+    onChange(value.filter((e) => e !== eq));
+  }
+
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: 4,
-        padding: '4px 6px',
-        border: '1px solid var(--color-border-subtle)',
-        borderRadius: '8px',
-        background: '#fff',
-        minHeight: 32,
-        alignItems: 'center',
-      }}
-    >
-      {EQUIPMENT_ORDER.map((eq) => {
-        const on = value.includes(eq);
-        return (
-          <button
-            key={eq}
-            type="button"
-            onClick={() => toggle(eq)}
-            title={EQUIPMENT_LABELS[eq]}
+    <div ref={wrapperRef} style={{ position: 'relative' }}>
+      {/* Trigger — selected pills + chevron. Click anywhere on the
+          row (outside the per-pill × button) to open the panel. */}
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        style={{
+          width: '100%',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: 4,
+          // Matches the sibling number-input on the workflow editor:
+          // 8px vertical / 11px horizontal padding → ~38px tall when
+          // the row is empty, so the two controls baseline-align.
+          padding: '6px 32px 6px 11px',
+          border: '1px solid var(--color-border-subtle)',
+          borderRadius: '8px',
+          background: '#fff',
+          minHeight: 38,
+          textAlign: 'left',
+          fontFamily: 'var(--font-primary)',
+          fontSize: 13,
+          cursor: 'pointer',
+          color: 'var(--color-text-primary)',
+          position: 'relative',
+        }}
+      >
+        {value.length === 0 ? (
+          <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+            Select equipment…
+          </span>
+        ) : (
+          value.map((eq) => (
+            <span
+              key={eq}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '3px 4px 3px 8px',
+                borderRadius: 100,
+                fontSize: 10.5,
+                fontWeight: 600,
+                background: 'var(--color-accent-active)',
+                color: '#fff',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {EQUIPMENT_LABELS[eq]}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  remove(eq);
+                }}
+                aria-label={`Remove ${EQUIPMENT_LABELS[eq]}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 14,
+                  height: 14,
+                  borderRadius: '50%',
+                  border: 'none',
+                  background: 'rgba(255,255,255,0.18)',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  padding: 0,
+                }}
+              >
+                <X size={9} strokeWidth={2.5} />
+              </button>
+            </span>
+          ))
+        )}
+        <ChevronDown
+          size={14}
+          color="var(--color-text-muted)"
+          style={{
+            position: 'absolute',
+            right: 8,
+            top: '50%',
+            transform: `translateY(-50%) rotate(${open ? 180 : 0}deg)`,
+            transition: 'transform 0.15s',
+            pointerEvents: 'none',
+          }}
+        />
+      </button>
+
+      {/* Panel — portaled to document.body so ancestor `overflow:
+          hidden` / scroll containers can't clip it. Position is
+          viewport-anchored to the trigger and recomputed on scroll
+          and resize. Flips above the trigger when there isn't
+          enough room below. */}
+      {open && panelRect && typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={panelRef}
+            role="listbox"
+            aria-multiselectable
             style={{
-              padding: '3px 8px',
-              borderRadius: 100,
-              fontSize: 10.5,
-              fontWeight: 600,
-              cursor: 'pointer',
+              position: 'fixed',
+              left: panelRect.left,
+              width: panelRect.width,
+              ...(panelRect.direction === 'down'
+                ? { top: panelRect.edge }
+                : { bottom: panelRect.edge }),
+              zIndex: 1000,
+              padding: 8,
+              background: '#fff',
+              border: '1px solid var(--color-border)',
+              borderRadius: 8,
+              boxShadow:
+                panelRect.direction === 'down'
+                  ? '0 8px 24px rgba(12,20,44,0.12)'
+                  : '0 -8px 24px rgba(12,20,44,0.12)',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 4,
+              maxHeight: panelRect.maxHeight,
+              overflowY: 'auto',
               fontFamily: 'var(--font-primary)',
-              border: '1px solid ' + (on ? 'transparent' : 'var(--color-border-subtle)'),
-              background: on ? 'var(--color-accent-active)' : 'transparent',
-              color: on ? '#fff' : 'var(--color-text-secondary)',
-              whiteSpace: 'nowrap',
             }}
           >
-            {EQUIPMENT_LABELS[eq]}
-          </button>
-        );
-      })}
+            {EQUIPMENT_ORDER.map((eq) => {
+              const on = value.includes(eq);
+              return (
+                <button
+                  key={eq}
+                  type="button"
+                  role="option"
+                  aria-selected={on}
+                  onClick={() => toggle(eq)}
+                  title={EQUIPMENT_LABELS[eq]}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: 100,
+                    fontSize: 10.5,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-primary)',
+                    border: '1px solid ' + (on ? 'transparent' : 'var(--color-border-subtle)'),
+                    background: on ? 'var(--color-accent-active)' : 'transparent',
+                    color: on ? '#fff' : 'var(--color-text-secondary)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {EQUIPMENT_LABELS[eq]}
+                </button>
+              );
+            })}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -548,6 +755,41 @@ export function BasicsEditor({
           />
           Day-end prep (orphan component, surfaced under Components &amp; prep)
         </label>
+      </div>
+
+      {/* Inventory & costing flags — pill toggles. Both default to the
+          common case (counted, included) so the chip reads "active"
+          when ticked. Lives directly under Type so a recipe creator
+          decides shape + accounting treatment in one block before
+          moving to status / cost. */}
+      <div>
+        <label style={editLabelStyle}>Inventory &amp; costing</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {[
+            {
+              key: 'countInStockTake' as const,
+              label: 'Count in stock take',
+              on: draft.countInStockTake ?? true,
+              hint: 'Include this recipe when counting physical inventory.',
+            },
+            {
+              key: 'excludeFromCogs' as const,
+              label: 'Exclude from COGs',
+              on: draft.excludeFromCogs ?? false,
+              hint: 'Skip this recipe in cost-of-goods calculations (e.g. comps, parent-rolled items).',
+            },
+          ].map(({ key, label, on, hint }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onChange({ [key]: !on } as Partial<Recipe>)}
+              title={hint}
+              style={{ ...editChipBase, ...(on ? editChipActive : {}) }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div>

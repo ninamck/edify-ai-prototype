@@ -8,6 +8,7 @@ import {
   Check,
   X,
   Clock,
+  ArrowRight,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import QtyStepper from './QtyStepper';
@@ -60,65 +61,91 @@ export default function IncomingAdhocRequestsStrip({ hubId }: { hubId: SiteId })
   const resolved = requests.length - pending.length;
   const needsAction = pending.length > 0;
 
+  // Banner shell mirrors UrgentRemakeBanner so the two hub-side
+  // notification strips read as siblings: same outer gutter
+  // (`12px 16px 0`), same 2px-bordered card pulled to the page edges,
+  // same full-width header button. Tone steps down from red →
+  // amber-tinted (warning) since ad-hoc requests are time-sensitive
+  // but not safety-critical like a cold-chain remake.
   return (
     <>
-      {/* Compact trigger — sits in the page flow where the strip used to.
-          Same horizontal gutter as the production tables (32px). */}
       <div
         style={{
-          margin: '12px 32px 0',
-          display: 'flex',
-          justifyContent: 'flex-start',
+          margin: '12px 16px 0',
+          background: '#ffffff',
+          border: `2px solid ${needsAction ? 'var(--color-warning)' : 'var(--color-border)'}`,
+          borderRadius: 'var(--radius-card)',
+          overflow: 'hidden',
+          boxShadow: needsAction
+            ? '0 0 0 1px rgba(241, 180, 52, 0.05)'
+            : '0 1px 0 rgba(0,0,0,0.02)',
         }}
       >
         <button
           type="button"
           onClick={() => setOpen(true)}
           style={{
-            display: 'inline-flex',
+            width: '100%',
+            padding: '12px 16px',
+            display: 'flex',
             alignItems: 'center',
             gap: 10,
-            padding: '10px 16px',
-            borderRadius: 8,
             background: needsAction ? 'var(--color-warning-bg)' : '#ffffff',
-            border: `1px solid ${needsAction ? 'var(--color-warning-border)' : 'var(--color-border-subtle)'}`,
+            border: 'none',
             cursor: 'pointer',
+            textAlign: 'left',
             fontFamily: 'var(--font-primary)',
             color: 'var(--color-text-primary)',
           }}
         >
           <MessageSquarePlus
-            size={14}
+            size={18}
             color={needsAction ? 'var(--color-warning)' : 'var(--color-text-muted)'}
           />
-          <span style={{ fontSize: 12, fontWeight: 700 }}>
-            Ad-hoc requests
-          </span>
-          {needsAction && (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                padding: '2px 8px',
-                borderRadius: 999,
-                background: 'var(--color-warning)',
-                color: '#ffffff',
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-              }}
-            >
-              {pending.length} pending
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {needsAction && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '2px 8px',
+                    borderRadius: 999,
+                    background: 'var(--color-warning)',
+                    color: '#ffffff',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {pending.length} pending
+                </span>
+              )}
+              <span style={{ fontSize: 13, fontWeight: 700 }}>
+                {needsAction
+                  ? `${pending.length} ad-hoc request${pending.length === 1 ? '' : 's'} awaiting your decision`
+                  : `${resolved} ad-hoc request${resolved === 1 ? '' : 's'} resolved`}
+              </span>
+            </div>
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+              {needsAction
+                ? `${totalPendingUnits} unit${totalPendingUnits === 1 ? '' : 's'} requested across ${pending.length} spoke order${pending.length === 1 ? '' : 's'} — approve, adjust qty or reject.`
+                : 'No outstanding spoke requests.'}
             </span>
-          )}
-          <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
-            {needsAction
-              ? `${totalPendingUnits} unit${totalPendingUnits === 1 ? '' : 's'} requested`
-              : `${resolved} resolved`}
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--color-accent-active)', fontWeight: 700, marginLeft: 4 }}>
-            Review →
+          </div>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 12,
+              fontWeight: 700,
+              color: 'var(--color-accent-active)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Review <ArrowRight size={13} />
           </span>
         </button>
       </div>

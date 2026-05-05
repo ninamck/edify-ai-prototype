@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  WORK_TYPE_COLORS,
   WORK_TYPE_LABELS,
   WORK_TYPE_ORDER,
   type WorkType,
@@ -24,7 +23,6 @@ export default function WorkTypeChip({
   workType: WorkType;
   size?: 'xs' | 'sm';
 }) {
-  const tone = WORK_TYPE_COLORS[workType];
   const label = WORK_TYPE_LABELS[workType];
   const isXs = size === 'xs';
   return (
@@ -35,8 +33,8 @@ export default function WorkTypeChip({
         alignItems: 'center',
         padding: isXs ? '2px 7px' : '3px 9px',
         borderRadius: 100,
-        background: tone.bg,
-        color: tone.color,
+        background: 'var(--color-bg-hover)',
+        color: 'var(--color-text-secondary)',
         fontSize: isXs ? 10 : 11,
         fontWeight: 700,
         letterSpacing: '0.02em',

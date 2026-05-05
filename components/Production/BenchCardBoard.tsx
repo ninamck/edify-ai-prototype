@@ -41,21 +41,24 @@ type Props = {
 
 // ─── Stubbed "assigned to" per bench — placeholder until users/roles are wired in ──
 const ASSIGNEE_BY_BENCH: Record<string, string> = {
-  'bench-central-proof':    'Farah K.',
-  'bench-central-oven':     'Farah K.',
-  'bench-central-oven-b':   'Tom R.',
-  'bench-central-pack':     'Milan V.',
-  'bench-central-prep':     'Amira O.',
-  'bench-central-assemble': 'Wojtek P.',
-  'bench-central-salad':    'Bea L.',
-  'bench-central-bev':      'Sofia G.',
-  'bench-central-pot':      'Diana S.',
-  'bench-central-hot':      'Marco B.',
-  'bench-north-oven':       'Reza A.',
-  'bench-north-prep':       'Priya S.',
-  'bench-airport-oven':     'Lisa T.',
-  'bench-airport-prep':     'Jon F.',
-  'bench-airport-assemble': 'Nadia B.',
+  // hub-central — 7-bench Pret-style layout
+  'bench-bakery':              'Farah K.',
+  'bench-prep':                'Amira O.',
+  'bench-sandwich-build':      'Wojtek P.',
+  'bench-salad-build':         'Bea L.',
+  'bench-hot-shelf':           'Marco B.',
+  'bench-variable':            'Sofia G.',
+  'bench-cold-chain':          'Milan V.',
+  // site-standalone-north
+  'bench-north-bakery':        'Reza A.',
+  'bench-north-prep':          'Priya S.',
+  'bench-north-build':         'Olu F.',
+  'bench-north-hot-shelf':     'Theo C.',
+  // site-hybrid-airport
+  'bench-airport-hot-shelf':   'Lisa T.',
+  'bench-airport-build':       'Nadia B.',
+  'bench-airport-prep':        'Jon F.',
+  'bench-airport-cold-chain':  'Hana M.',
 };
 
 // Roster shown in the assign-to picker. Combines everyone seeded above
@@ -73,16 +76,24 @@ const STAFF_ROSTER: string[] = (() => {
 
 // ─── Stubbed cleaning & duties times per bench (minutes) ─────────────────────
 const CLEANING_MINS_BY_BENCH: Record<string, number> = {
-  'bench-central-oven':     30,
-  'bench-central-oven-b':   30,
-  'bench-central-proof':    10,
-  'bench-central-pack':     15,
-  'bench-central-prep':     20,
-  'bench-central-assemble': 20,
-  'bench-central-salad':    15,
-  'bench-central-bev':      10,
-  'bench-central-pot':      15,
-  'bench-central-hot':      25,
+  // hub-central
+  'bench-bakery':              30,
+  'bench-prep':                20,
+  'bench-sandwich-build':      15,
+  'bench-salad-build':         15,
+  'bench-hot-shelf':           25,
+  'bench-variable':            10,
+  'bench-cold-chain':          15,
+  // site-standalone-north
+  'bench-north-bakery':        20,
+  'bench-north-prep':          15,
+  'bench-north-build':         10,
+  'bench-north-hot-shelf':     15,
+  // site-hybrid-airport
+  'bench-airport-hot-shelf':   20,
+  'bench-airport-build':       10,
+  'bench-airport-prep':        15,
+  'bench-airport-cold-chain':  10,
 };
 
 const DEFAULT_CLEANING_MINS = 15;
@@ -1141,8 +1152,10 @@ function RecipeRow({
           {/* Work-type chips on the bench-card recipe entries — same
               vocabulary as the recipe library and Today rows so a manager
               can scan a bench and see the activity mix at a glance. Cap
-              at 2 to keep entries compact within the card width. */}
-          <WorkTypeChips workTypes={recipeWorkTypes(line.recipe)} max={2} />
+              at 4 so ingredient-prep chips (slice / sanitise / wash) are
+              visible alongside the workflow stage chip(s); excess folds
+              into a "+N" indicator with a hover title listing the rest. */}
+          <WorkTypeChips workTypes={recipeWorkTypes(line.recipe)} max={4} />
           {dispatchUnits > 0 && (
             <span
               style={{

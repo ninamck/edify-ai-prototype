@@ -150,6 +150,7 @@ export default function ProductionPlanPage() {
           siteId={site.id}
           date={selectedDate}
           canEdit={canEdit}
+          surface="plan"
           topBanner={
             isPastDay ? (
               <div

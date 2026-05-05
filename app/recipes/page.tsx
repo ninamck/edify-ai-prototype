@@ -24,7 +24,6 @@ import {
   buildUsedInIndex, formatCost,
 } from '@/components/Recipe/libraryFixtures';
 import {
-  type ProductionWorkflow,
   type WorkflowId,
   type WorkType,
   workTypesFromWorkflows,
@@ -32,13 +31,11 @@ import {
   getRecipe,
 } from '@/components/Production/fixtures';
 import { WorkTypeChips } from '@/components/Production/WorkTypeChip';
-import { useRecipes, useWorkflows, setRecipes as storeSetRecipes } from '@/components/Recipe/recipeStore';
+import { useRecipes, setRecipes as storeSetRecipes } from '@/components/Recipe/recipeStore';
 import {
   KindPill,
-  WorkflowDiagram,
   MODIFIER_GROUPS,
   formatShelfLife,
-  kindToModeLabel,
 } from '@/components/Recipe/RecipeEditors';
 
 type BulkAction = 'attach-group' | 'detach-group' | 'update-category' | 'recompute' | 'archive' | null;
@@ -54,7 +51,6 @@ const CATEGORY_ORDER: CategoryFilter[] = [
 export default function RecipesLibraryPage() {
   const router = useRouter();
   const recipes = useRecipes();
-  const workflows = useWorkflows();
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('All');
   const [needsAttentionOnly, setNeedsAttentionOnly] = useState(false);
   const [componentsOnly, setComponentsOnly] = useState(false);
@@ -414,7 +410,6 @@ export default function RecipesLibraryPage() {
           <RecipeDrawer
             recipe={openRecipe}
             recipes={recipes}
-            workflows={workflows}
             usedInIds={usedInIndex.get(openRecipe.id) ?? []}
             onClose={() => setOpenId(null)}
             onSelectRecipe={(id) => setOpenId(id)}
@@ -638,11 +633,10 @@ function StatusPill({ status }: { status: Recipe['status'] }) {
 // Detail drawer
 
 function RecipeDrawer({
-  recipe, recipes, workflows, usedInIds, onClose, onSelectRecipe, onEdit,
+  recipe, recipes, usedInIds, onClose, onSelectRecipe, onEdit,
 }: {
   recipe: Recipe;
   recipes: Recipe[];
-  workflows: Record<WorkflowId, ProductionWorkflow>;
   usedInIds: string[];
   onClose: () => void;
   onSelectRecipe: (id: string) => void;
@@ -908,26 +902,6 @@ function RecipeDrawer({
             </Section>
           )}
 
-          <Section label="Workflow">
-            <WorkflowDiagram
-              recipe={view}
-              recipesById={recipesById}
-              workflows={workflows}
-            />
-            <div style={{ fontSize: '11.5px', color: 'var(--color-text-muted)', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '10px 18px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 18px' }}>
-                <KV k="Mode" v={kindToModeLabel(view)} />
-                <KV k="Shelf life"
-                    v={view.production.shelfLifeMinutes != null ? formatShelfLife(view.production.shelfLifeMinutes) : '—'} />
-                {view.production.visibility && (
-                  <KV k="Visibility" v={view.production.visibility} />
-                )}
-                {view.production.prepTimeSeconds != null && (
-                  <KV k="Prep time" v={`${view.production.prepTimeSeconds} s`} />
-                )}
-              </div>
-            </div>
-          </Section>
         </div>
 
         <div style={{ borderTop: '1px solid var(--color-border-subtle)', padding: '12px 18px', display: 'flex', gap: '8px' }}>
@@ -970,16 +944,6 @@ function PriceRow({ label, price, cost }: { label: string; price: number; cost: 
     </div>
   );
 }
-
-function KV({ k, v }: { k: string; v: string | number }) {
-  return (
-    <div>
-      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '2px' }}>{k}</div>
-      <div style={{ fontSize: '13px', color: 'var(--color-text-primary)', fontWeight: 600 }}>{v}</div>
-    </div>
-  );
-}
-
 
 function DrawerButton({
   icon: Icon, label, onClick,

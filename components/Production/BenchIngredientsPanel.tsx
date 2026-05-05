@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Layers, Box, ChevronDown, ChevronRight, Download } from 'lucide-react';
-import { usePlan, FILLING_TRAY_GRAMS } from './PlanStore';
+import { X, Layers, Box, ChevronDown, ChevronRight, Download, Waves } from 'lucide-react';
+import { usePlan, FILLING_TRAY_GRAMS, type PlanLine } from './PlanStore';
 import { getBench, getRecipe, type SiteId } from './fixtures';
+import { hhmmToMinutes, minutesToHHMM } from './time';
 import { downloadBenchSummaryPdf } from '@/lib/pdf/productionPdfs';
 
 type Props = {
@@ -25,6 +26,31 @@ type ComponentDemand = {
   trayCount?: number;
   /** Which recipes on this bench drive this demand. */
   drivers: Array<{ parentName: string; parentQty: number; perUnit: number; perUnitLabel: string }>;
+};
+
+/**
+ * Pre-computed cadence breakdown for one increment recipe — every drop time,
+ * batch size, totals — so the timeline strip can render a row without
+ * re-walking the cadence on each paint.
+ */
+type DropsRow = {
+  line: PlanLine;
+  intervalMinutes: number;
+  startMins: number;
+  endMins: number;
+  dropsCount: number;
+  dropTimes: number[];
+  batchSize: number;
+  totalUnits: number;
+};
+
+type DropsTimelineData = {
+  rows: DropsRow[];
+  /** Shared X-axis bounds, in minutes-since-midnight. Snapped to the hour. */
+  axisStart: number;
+  axisEnd: number;
+  totalDrops: number;
+  totalUnits: number;
 };
 
 /**
@@ -112,7 +138,46 @@ export default function BenchIngredientsPanel({ siteId, date, benchId, onClose }
       .slice()
       .sort((a, b) => b.effectivePlanned - a.effectivePlanned);
 
-    return { bench, recipeRows, componentRollup };
+    // Drops timeline — only meaningful for benches running increment recipes.
+    // We treat any line whose item has a cadence as a drops row regardless of
+    // bench primaryMode so a "mixed" bench still surfaces its drops view.
+    const incrementLines = benchLines.filter(l => l.item.mode === 'increment' && l.item.cadence);
+    const drops: DropsTimelineData | null = (() => {
+      if (incrementLines.length === 0) return null;
+      const rows: DropsRow[] = incrementLines.map(line => {
+        const c = line.item.cadence!;
+        const startMins = hhmmToMinutes(c.startTime);
+        const endMins = hhmmToMinutes(c.endTime);
+        const dropsCount = Math.max(1, Math.floor((endMins - startMins) / c.intervalMinutes) + 1);
+        const dropTimes: number[] = [];
+        for (let i = 0; i < dropsCount; i++) dropTimes.push(startMins + i * c.intervalMinutes);
+        const batchSize = line.item.batchSize ?? 1;
+        return {
+          line,
+          intervalMinutes: c.intervalMinutes,
+          startMins,
+          endMins,
+          dropsCount,
+          dropTimes,
+          batchSize,
+          totalUnits: dropsCount * batchSize,
+        };
+      });
+      rows.sort((a, b) => a.startMins - b.startMins || a.intervalMinutes - b.intervalMinutes);
+
+      // Shared axis: clamp to the union of cadence windows, padded to the
+      // nearest hour and bounded to a sensible 05:00–19:00 demo envelope so
+      // the strip never gets ridiculously wide.
+      const minStart = Math.min(...rows.map(r => r.startMins));
+      const maxEnd   = Math.max(...rows.map(r => r.endMins));
+      const axisStart = Math.max(5 * 60,  Math.floor(minStart / 60) * 60);
+      const axisEnd   = Math.min(19 * 60, Math.ceil(maxEnd   / 60) * 60);
+      const totalDrops = rows.reduce((sum, r) => sum + r.dropsCount, 0);
+      const totalUnits = rows.reduce((sum, r) => sum + r.totalUnits, 0);
+      return { rows, axisStart, axisEnd, totalDrops, totalUnits };
+    })();
+
+    return { bench, recipeRows, componentRollup, drops };
   }, [lines, benchId]);
 
   if (typeof document === 'undefined') return null;
@@ -261,6 +326,13 @@ export default function BenchIngredientsPanel({ siteId, date, benchId, onClose }
                 gap: 22,
               }}
             >
+              {/* Drops timeline — only renders when this bench has at least
+                  one increment recipe. Lays every cadence on a shared axis so
+                  the manager can see how the bench breaks the day into drops. */}
+              {data.drops && (
+                <DropsTimelineSection drops={data.drops} />
+              )}
+
               {/* Component rollup */}
               <section>
                 <SectionHeader
@@ -482,6 +554,229 @@ export default function BenchIngredientsPanel({ siteId, date, benchId, onClose }
       )}
     </AnimatePresence>,
     document.body,
+  );
+}
+
+/**
+ * Drops timeline — bench-level cadence visualisation.
+ *
+ * One row per increment recipe, all sharing a single time axis snapped to the
+ * hour. Drops are rendered as small ticks on the strip; the start and end of
+ * each row's cadence window is shaded so the eye reads the live shoulder
+ * (e.g. soups only kick in at 11:00) without having to read times.
+ *
+ * Sized in pixels rather than %-based so dense rows (toasties every 30min)
+ * stay readable when the drawer is narrow.
+ */
+function DropsTimelineSection({ drops }: { drops: DropsTimelineData }) {
+  const { rows, axisStart, axisEnd, totalDrops, totalUnits } = drops;
+  const PX_PER_MIN = 1.4;
+  const stripWidth = (axisEnd - axisStart) * PX_PER_MIN;
+  const hours: number[] = [];
+  for (let h = axisStart; h <= axisEnd; h += 60) hours.push(h);
+
+  return (
+    <section>
+      <SectionHeader
+        icon={<Waves size={12} />}
+        title="Drops timeline"
+        caption={
+          `${rows.length} recipe${rows.length === 1 ? '' : 's'} · ` +
+          `${totalDrops} drops · ${totalUnits} units across ` +
+          `${minutesToHHMM(axisStart)}–${minutesToHHMM(axisEnd)}`
+        }
+      />
+      <div
+        style={{
+          marginTop: 10,
+          border: '1px solid var(--color-border-subtle)',
+          borderRadius: 8,
+          background: '#ffffff',
+          overflowX: 'auto',
+        }}
+      >
+        <div style={{ minWidth: 200 + stripWidth + 16, paddingBottom: 4 }}>
+          {/* Hour ruler */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-end',
+              padding: '8px 8px 4px 200px',
+              borderBottom: '1px solid var(--color-border-subtle)',
+              position: 'relative',
+              height: 26,
+            }}
+          >
+            <div style={{ position: 'relative', width: stripWidth, height: '100%' }}>
+              {hours.map(h => (
+                <span
+                  key={h}
+                  style={{
+                    position: 'absolute',
+                    left: (h - axisStart) * PX_PER_MIN,
+                    transform: 'translateX(-50%)',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: 'var(--color-text-muted)',
+                    fontVariantNumeric: 'tabular-nums',
+                    letterSpacing: '0.02em',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {minutesToHHMM(h)}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Per-recipe rows */}
+          {rows.map((row, idx) => (
+            <DropsTimelineRow
+              key={row.line.item.id}
+              row={row}
+              axisStart={axisStart}
+              axisEnd={axisEnd}
+              pxPerMin={PX_PER_MIN}
+              stripWidth={stripWidth}
+              hours={hours}
+              isLast={idx === rows.length - 1}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function DropsTimelineRow({
+  row,
+  axisStart,
+  axisEnd,
+  pxPerMin,
+  stripWidth,
+  hours,
+  isLast,
+}: {
+  row: DropsRow;
+  axisStart: number;
+  axisEnd: number;
+  pxPerMin: number;
+  stripWidth: number;
+  hours: number[];
+  isLast: boolean;
+}) {
+  // Within the shared axis, this row is "active" between its cadence start
+  // and end. We shade that range so the off-window time reads as background
+  // rather than as a candidate slot.
+  const activeLeft  = (Math.max(axisStart, row.startMins) - axisStart) * pxPerMin;
+  const activeRight = (Math.min(axisEnd,   row.endMins)   - axisStart) * pxPerMin;
+  const activeWidth = Math.max(2, activeRight - activeLeft);
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        padding: '10px 8px 10px 10px',
+        borderBottom: isLast ? 'none' : '1px solid var(--color-border-subtle)',
+        gap: 8,
+      }}
+    >
+      {/* Recipe name + cadence summary (fixed left column) */}
+      <div
+        style={{
+          width: 184,
+          flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+          minWidth: 0,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--color-text-primary)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          title={row.line.recipe.name}
+        >
+          {row.line.recipe.name}
+        </span>
+        <span
+          style={{
+            fontSize: 10,
+            color: 'var(--color-text-muted)',
+            fontVariantNumeric: 'tabular-nums',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          every {row.intervalMinutes}min · {row.dropsCount}×{row.batchSize} = {row.totalUnits}
+        </span>
+      </div>
+
+      {/* Strip with hour gridlines, active band, and drop ticks */}
+      <div
+        style={{
+          position: 'relative',
+          width: stripWidth,
+          height: 26,
+          flexShrink: 0,
+        }}
+      >
+        {/* Hour gridlines */}
+        {hours.map(h => (
+          <span
+            key={h}
+            style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left: (h - axisStart) * pxPerMin,
+              width: 1,
+              background: 'var(--color-border-subtle)',
+            }}
+          />
+        ))}
+        {/* Active cadence band — subtle fill so the row reads as "live here" */}
+        <span
+          style={{
+            position: 'absolute',
+            top: 9,
+            height: 8,
+            left: activeLeft,
+            width: activeWidth,
+            background: 'var(--color-bg-hover)',
+            borderRadius: 4,
+          }}
+        />
+        {/* Drop ticks */}
+        {row.dropTimes.map((t, i) => {
+          const x = (t - axisStart) * pxPerMin;
+          return (
+            <span
+              key={i}
+              title={`${minutesToHHMM(t)} · ${row.batchSize} units`}
+              style={{
+                position: 'absolute',
+                top: 7,
+                left: x - 5,
+                width: 10,
+                height: 12,
+                borderRadius: 3,
+                background: 'var(--color-accent-active)',
+                boxShadow: '0 1px 2px rgba(12,20,44,0.18)',
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

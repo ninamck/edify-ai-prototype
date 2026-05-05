@@ -682,6 +682,46 @@ function EditRecipeForm({
                 <CheckRow label="Day-end prep" checked={draftIsPrep} onChange={setDraftIsPrep} />
               </div>
             </div>
+
+            <div style={{ marginTop: '16px' }}>
+              <FieldLabel>Inventory &amp; costing</FieldLabel>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {[
+                  {
+                    key: 'countInStockTake' as const,
+                    label: 'Count in stock take',
+                    on: draft.countInStockTake,
+                    hint: 'Include this recipe when counting physical inventory at stock take.',
+                  },
+                  {
+                    key: 'excludeFromCogs' as const,
+                    label: 'Exclude from COGs',
+                    on: draft.excludeFromCogs,
+                    hint: 'Skip this recipe in cost-of-goods calculations (e.g. comps, parent-rolled items).',
+                  },
+                ].map(({ key, label, on, hint }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => patch(key, !on)}
+                    title={hint}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '100px',
+                      border: on ? '1px solid transparent' : '1px solid var(--color-border-subtle)',
+                      background: on ? 'var(--color-accent-active)' : '#fff',
+                      color: on ? '#fff' : 'var(--color-text-secondary)',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-primary)',
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </Card>
 
           {/* Recipe components — unified ingredients + sub-recipes (build order) */}
@@ -922,7 +962,7 @@ function EditRecipeForm({
           {/* Advanced */}
           <CollapsibleCard
             label="Advanced"
-            hint="Status, stock-take, shelf life, bakery/hot production, carry-over, PCR, used-for"
+            hint="Status, shelf life, bakery/hot production, carry-over, PCR, used-for"
             open={draft.showAdvanced}
             onToggle={() => patch('showAdvanced', !draft.showAdvanced)}
           >
@@ -944,8 +984,6 @@ function EditRecipeForm({
 
               <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
                 <CheckRow label="Sub-recipe" checked={draft.isSubRecipe} onChange={(v) => patch('isSubRecipe', v)} />
-                <CheckRow label="Count in stock-take" checked={draft.countInStockTake} onChange={(v) => patch('countInStockTake', v)} />
-                <CheckRow label="Exclude from COGS" checked={draft.excludeFromCogs} onChange={(v) => patch('excludeFromCogs', v)} />
               </div>
 
               <div>

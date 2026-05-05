@@ -12,6 +12,13 @@
 
 import { useProductionSite } from './ProductionSiteContext';
 import { useSiteSettingsStore } from '@/components/Settings/siteSettingsStore';
+import {
+  TOP_NAV_PILL_ACTIVE,
+  TOP_NAV_PILL_COMPACT,
+  TOP_NAV_PILL_GAP,
+  TOP_NAV_PILL_IDLE_OUTLINED,
+  TOP_NAV_SECTION_LABEL,
+} from './topNavStyles';
 
 export default function ProductionSiteSelector() {
   const { siteId, setSiteId, options, canPickSite } = useProductionSite();
@@ -21,27 +28,17 @@ export default function ProductionSiteSelector() {
   return (
     <div
       style={{
-        padding: '10px 16px',
+        padding: '8px 24px',
         borderBottom: '1px solid var(--color-border-subtle)',
         background: '#ffffff',
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
+        gap: 12,
         flexWrap: 'wrap',
       }}
     >
-      <span
-        style={{
-          fontSize: 11,
-          fontWeight: 700,
-          color: 'var(--color-text-muted)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.05em',
-        }}
-      >
-        Site
-      </span>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      <span style={TOP_NAV_SECTION_LABEL}>Site</span>
+      <div style={{ display: 'flex', gap: TOP_NAV_PILL_GAP, flexWrap: 'wrap' }}>
         {options.map(opt => {
           const active = opt.id === siteId;
           // If the manager has renamed the site in /settings, prefer the
@@ -54,19 +51,21 @@ export default function ProductionSiteSelector() {
               type="button"
               onClick={() => setSiteId(opt.id)}
               style={{
-                padding: '7px 12px',
-                borderRadius: 8,
-                fontSize: 11,
-                fontWeight: 600,
-                fontFamily: 'var(--font-primary)',
-                background: active ? 'var(--color-accent-active)' : '#ffffff',
-                color: active ? 'var(--color-text-on-active)' : 'var(--color-text-secondary)',
-                border: `1px solid ${active ? 'var(--color-accent-active)' : 'var(--color-border)'}`,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
+                ...TOP_NAV_PILL_COMPACT,
+                ...(active ? TOP_NAV_PILL_ACTIVE : TOP_NAV_PILL_IDLE_OUTLINED),
               }}
             >
-              {label} · {opt.tag}
+              <span>{label}</span>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  opacity: active ? 0.85 : 0.7,
+                }}
+              >
+                · {opt.tag}
+              </span>
             </button>
           );
         })}

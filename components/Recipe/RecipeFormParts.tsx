@@ -439,10 +439,31 @@ export function ComponentTable({
     if (rows.some((r) => r.kind === 'recipe' && r.recipeId === recipeId)) return;
     onChange([...rows, newRecipeComponent(recipeId)]);
   }
+  function addMasterIngredient(ing: Ingredient) {
+    onChange([
+      ...rows,
+      {
+        id: newId(),
+        kind: 'item',
+        ingredientId: ing.id,
+        name: ing.name,
+        supplier: '',
+        qty: '',
+        uom: ing.canonicalUnit,
+        unitCostP: 0,
+      },
+    ]);
+  }
 
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [masterPickerOpen, setMasterPickerOpen] = useState(false);
   const candidates = Array.from(recipesById.values())
     .filter((r) => r.id !== selfId && !rows.some((row) => row.kind === 'recipe' && row.recipeId === r.id))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  // Master-ingredient candidates: hide ingredients already linked on this
+  // recipe so authors don't double-add the same master row by mistake.
+  const masterCandidates = PRET_INGREDIENTS
+    .filter((ing) => !rows.some((row) => row.kind === 'item' && (row as ItemComponent).ingredientId === ing.id))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
@@ -487,16 +508,30 @@ export function ComponentTable({
           <Plus size={13} strokeWidth={2.2} /> Add ingredient
         </button>
         <button
-          onClick={() => setPickerOpen((v) => !v)}
+          onClick={() => { setPickerOpen((v) => !v); setMasterPickerOpen(false); }}
           style={addButtonStyle}
         >
           <Plus size={13} strokeWidth={2.2} /> Add sub-recipe
+        </button>
+        <button
+          onClick={() => { setMasterPickerOpen((v) => !v); setPickerOpen(false); }}
+          style={addButtonStyle}
+          title="Pull in an ingredient from the master ingredient list — links the row so prep-work and cost stay in sync."
+        >
+          <Plus size={13} strokeWidth={2.2} /> Add master ingredient
         </button>
         {pickerOpen && (
           <ComponentRecipePicker
             candidates={candidates}
             onPick={(id) => { addRecipe(id); setPickerOpen(false); }}
             onClose={() => setPickerOpen(false)}
+          />
+        )}
+        {masterPickerOpen && (
+          <MasterIngredientPicker
+            candidates={masterCandidates}
+            onPick={(ing) => { addMasterIngredient(ing); setMasterPickerOpen(false); }}
+            onClose={() => setMasterPickerOpen(false)}
           />
         )}
       </div>
@@ -1166,6 +1201,92 @@ function ComponentRecipePicker({
               {r.name}
             </span>
             <span style={{ fontSize: '11.5px', color: 'var(--color-text-muted)' }}>{r.category}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MasterIngredientPicker({
+  candidates, onPick, onClose,
+}: {
+  candidates: Ingredient[];
+  onPick: (ing: Ingredient) => void;
+  onClose: () => void;
+}) {
+  const [q, setQ] = useState('');
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.closest('[data-master-picker]')) onClose();
+    };
+    const t = setTimeout(() => document.addEventListener('mousedown', h), 0);
+    return () => { clearTimeout(t); document.removeEventListener('mousedown', h); };
+  }, [onClose]);
+  const filtered = candidates
+    .filter((i) => i.name.toLowerCase().includes(q.toLowerCase()) || i.category.includes(q.toLowerCase()))
+    .slice(0, 80);
+  return (
+    <div
+      data-master-picker
+      style={{
+        position: 'absolute',
+        top: 'calc(100% + 6px)',
+        left: 0,
+        zIndex: 50,
+        width: '380px',
+        maxHeight: '360px',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        background: '#fff',
+        border: '1px solid var(--color-border-subtle)',
+        borderRadius: '12px',
+        boxShadow: '0 12px 32px rgba(3,15,58,0.16)',
+        fontFamily: 'var(--font-primary)',
+      }}
+    >
+      <div style={{ padding: '10px', borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <input
+          autoFocus
+          placeholder="Search master ingredients…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          style={inputStyle}
+        />
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {filtered.length === 0 && (
+          <div style={{ padding: '14px', fontSize: '12.5px', color: 'var(--color-text-muted)' }}>
+            {candidates.length === 0
+              ? 'All master ingredients are already linked.'
+              : 'No matches.'}
+          </div>
+        )}
+        {filtered.map((ing) => (
+          <button
+            key={ing.id}
+            onClick={() => onPick(ing)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              width: '100%', padding: '8px 12px',
+              border: 'none', background: 'transparent',
+              textAlign: 'left', cursor: 'pointer',
+              fontFamily: 'var(--font-primary)',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            <span style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+              {ing.name}
+            </span>
+            <span style={{ fontSize: '11.5px', color: 'var(--color-text-muted)', textTransform: 'capitalize' }}>
+              {ing.category}
+            </span>
+            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+              {ing.canonicalUnit}
+            </span>
           </button>
         ))}
       </div>

@@ -24,9 +24,9 @@ import {
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { getStepperButtonStyle } from './QtyStepper';
-import { SelectionTagChip } from './RangeTierChips';
 import { StaffLockBanner } from './RoleContext';
-import { usePlan, usePlanStore, FILLING_TRAY_GRAMS, type PlanLine, type FocusReason, type AssemblyDemand } from './PlanStore';
+import { usePlan, usePlanStore, FILLING_TRAY_GRAMS, DEMO_NOW_HHMM, type PlanLine, type FocusReason, type AssemblyDemand } from './PlanStore';
+import { daySummary } from './salesReport';
 import PlanFocusPanel from './PlanFocusPanel';
 import {
   effectiveBatchRules,
@@ -86,6 +86,15 @@ export type AmountsViewProps = {
    * plan — locked for review" when viewing yesterday from the Plan page).
    */
   topBanner?: React.ReactNode;
+  /**
+   * Which production surface is hosting the view. Today (the live floor
+   * surface) shows the live Sold column, the live-sales tile, and the
+   * End production / Reopen lifecycle control. Plan (the
+   * tomorrow / week drafting surface) hides all three since none of
+   * them are meaningful when you're planning future days. Defaults to
+   * `'today'` so existing callers keep their behaviour.
+   */
+  surface?: 'today' | 'plan';
 };
 
 export default function AmountsView({
@@ -93,10 +102,29 @@ export default function AmountsView({
   date,
   canEdit,
   topBanner,
+  surface = 'today',
   focusedItemId = null,
   focusReason = null,
   onClearFocus,
 }: AmountsViewProps) {
+  // Surface-driven feature flags. Plan is the drafting surface — no
+  // live sales lens, no day-end lifecycle button — and surfaces the
+  // per-run breakdown inline as its own row column so a manager
+  // drafting tomorrow can split runs without expanding. Today is the
+  // live floor surface and keeps the Sold column / End production
+  // CTA / Adjust stepper.
+  const showLiveSales = surface !== 'plan';
+  const showEndProduction = surface !== 'plan';
+  const showRunsColumn = surface === 'plan';
+  const showAdjustColumn = surface !== 'plan';
+  // Grid template is shared by the header, every data row, and the
+  // totals rows. We compute it once so toggling columns by surface
+  // doesn't require five edits to keep alignment. Plan trades the
+  // 90px Sold + 170px Adjust columns for one wider Runs column where
+  // multi-run rows render their per-run splitter inline.
+  const gridTemplate = showLiveSales
+    ? 'minmax(200px, 1fr) 90px 90px 90px 90px 170px'
+    : 'minmax(200px, 1fr) 90px 90px 90px minmax(280px, 1.6fr)';
   const { setPlanned, setPerDropPlan, setPerRunPlan, setVariablePlan, resetToQuinn, resetAll, overrideCount } = usePlanStore();
   const [modeTab, setModeTab] = useState<ModeTabId>('all');
   const [categoryFilter, setCategoryFilter] = useState<'All' | ProductionRecipe['category']>('All');
@@ -110,6 +138,33 @@ export default function AmountsView({
   // Past days are showing history — disable all editing affordances even
   // for managers. Future days stay editable so plans can be drafted ahead.
   const editable = canEdit && date >= DEMO_TODAY;
+
+  // Live-sales pulse — only meaningful for today (live till) and past
+  // days (full-day actuals). Future days have nothing to report yet.
+  // Revenue is derived from `priceFor` so it tracks the same demo
+  // pricing as the totals row at the bottom of the table. The
+  // `byItemId` map powers the per-row Sold column without a second
+  // pass through the synthesiser.
+  const isToday = date === DEMO_TODAY;
+  const liveSales = useMemo(() => {
+    if (!showLiveSales) return null;
+    if (date > DEMO_TODAY) return null;
+    const summary = daySummary(siteId, date);
+    let revenue = 0;
+    const byItemId = new Map<string, number>();
+    for (const r of summary.rows) {
+      revenue += priceFor(r.line as PlanLine) * r.sold;
+      byItemId.set(r.line.item.id, r.sold);
+    }
+    return {
+      sold: summary.sold,
+      forecast: summary.forecast,
+      variance: summary.variance,
+      variancePct: summary.variancePct,
+      revenue,
+      byItemId,
+    };
+  }, [siteId, date, showLiveSales]);
 
   // Counts per tab so the strip can show "(N)" affordances even when the tab
   // isn't active. Computed off the unfiltered set. A Run-mode item that's
@@ -267,6 +322,17 @@ export default function AmountsView({
   const endedKey = `${siteId}-${date}`;
   const endedAt = endedRecord[endedKey];
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
+  // Portal target for the End production / Reopen control. The shared
+  // production layout renders an empty `<div id="production-nav-actions" />`
+  // on the right of its sub-tab nav; we look it up after mount and
+  // teleport the control there so it sits with the rest of the nav
+  // chrome rather than floating in the per-page action row. Falls back
+  // to inline rendering if the slot can't be found (e.g. AmountsView
+  // is mounted outside the production layout in a future surface).
+  const [navActionsSlot, setNavActionsSlot] = useState<Element | null>(null);
+  useEffect(() => {
+    setNavActionsSlot(document.getElementById('production-nav-actions'));
+  }, []);
   function endProduction() {
     const stamp = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     setEndedRecord(prev => ({ ...prev, [endedKey]: stamp }));
@@ -402,6 +468,7 @@ export default function AmountsView({
           })}
         </div>
         <div style={{ flex: 1 }} />
+        {liveSales && <LiveSalesTile liveSales={liveSales} isToday={isToday} nowHHMM={DEMO_NOW_HHMM} />}
         {totals.shortfalls > 0 && (
           <button
             type="button"
@@ -449,18 +516,34 @@ export default function AmountsView({
             <RotateCcw size={12} /> Reset {dateOverrideCount} to Quinn
           </button>
         )}
-        {/* End / reopen production. Once ended, the button flips to a
-            muted "Production ended" state with an inline reopen affordance
-            for demo undo. Editable-only — past days never expose this. */}
-        {editable && (endedAt ? (
+        {/* End / Reopen production lives in the production nav, not
+            here — see the portal block below. Kept out of this row so
+            the per-day actions stay focused on filtering / overrides
+            instead of mixing day-level lifecycle controls into them. */}
+      </div>
+
+      {/* End / Reopen production — rendered into the shared production
+          nav (top of the page) via a portal so it sits with the
+          sub-tabs and reads as a day-level lifecycle control rather
+          than a per-page button. Once ended, the control flips to a
+          muted "Production ended" badge with an inline Reopen
+          affordance for demo undo. Editable-only — past days never
+          expose this. The portal target is the right-aligned
+          `#production-nav-actions` slot rendered by the production
+          layout; if it can't be found (AmountsView mounted outside
+          that layout) we fall back to inline at the original spot. */}
+      {editable && showEndProduction && (() => {
+        const control = endedAt ? (
           <div
+            key="end-production-ended"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: 8,
-              padding: '8px 12px',
-              borderRadius: 8,
-              fontSize: 11,
+              minHeight: 44,
+              padding: '8px 14px',
+              borderRadius: 10,
+              fontSize: 12,
               fontWeight: 700,
               background: '#ffffff',
               color: 'var(--color-text-secondary)',
@@ -469,7 +552,7 @@ export default function AmountsView({
             }}
             title={`Production ended at ${endedAt}`}
           >
-            <CheckCircle2 size={13} color="var(--color-success)" />
+            <CheckCircle2 size={14} color="var(--color-success)" />
             <span style={{ color: 'var(--color-text-primary)' }}>
               Production ended · {endedAt}
             </span>
@@ -478,8 +561,8 @@ export default function AmountsView({
               onClick={reopenProduction}
               style={{
                 marginLeft: 4,
-                padding: '4px 8px',
-                fontSize: 10,
+                padding: '5px 10px',
+                fontSize: 11,
                 fontWeight: 700,
                 background: 'var(--color-bg-hover)',
                 color: 'var(--color-text-secondary)',
@@ -494,15 +577,17 @@ export default function AmountsView({
           </div>
         ) : (
           <button
+            key="end-production-cta"
             type="button"
             onClick={() => setConfirmEndOpen(true)}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: 6,
-              padding: '10px 16px',
-              borderRadius: 8,
-              fontSize: 11,
+              minHeight: 44,
+              padding: '10px 18px',
+              borderRadius: 10,
+              fontSize: 13,
               fontWeight: 700,
               fontFamily: 'var(--font-primary)',
               background: 'var(--color-accent-active)',
@@ -510,13 +595,15 @@ export default function AmountsView({
               border: '1px solid var(--color-accent-active)',
               cursor: 'pointer',
               boxShadow: '0 1px 2px rgba(12,20,44,0.08)',
+              whiteSpace: 'nowrap',
             }}
             title="Lock today's plan and signal the kitchen to wind down"
           >
-            <Power size={12} /> End production
+            <Power size={13} /> End production
           </button>
-        ))}
-      </div>
+        );
+        return navActionsSlot ? createPortal(control, navActionsSlot) : control;
+      })()}
 
       {/* Body — modest 16px top so the table card has a small breathing
           gap beneath the mode-tab strip without the previous 24px+caption
@@ -587,7 +674,7 @@ export default function AmountsView({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'minmax(240px, 1.6fr) 90px 90px 100px 90px 170px',
+              gridTemplateColumns: gridTemplate,
               padding: '14px 16px',
               gap: 12,
               background: 'var(--color-bg-hover)',
@@ -602,9 +689,20 @@ export default function AmountsView({
             <span>Product</span>
             <span style={{ textAlign: 'right' }}>Forecast</span>
             <span style={{ textAlign: 'right' }}>Carry-over</span>
-            <span style={{ textAlign: 'right' }}>Quinn</span>
+            {showLiveSales && (
+              <span
+                style={{ textAlign: 'right' }}
+                title={isToday ? 'Sold so far today (live till)' : "Day's sold total"}
+              >
+                {isToday ? 'Sold' : 'Sold (day)'}
+              </span>
+            )}
             <span style={{ textAlign: 'center' }}>Plan</span>
-            <span style={{ textAlign: 'center' }}>Adjust</span>
+            {showAdjustColumn ? (
+              <span style={{ textAlign: 'center' }}>Adjust</span>
+            ) : (
+              <span style={{ textAlign: 'left', paddingLeft: 12 }}>Per-run plan</span>
+            )}
           </div>
 
           {/* Category filter sub-row — sits under the column header so it
@@ -800,6 +898,12 @@ export default function AmountsView({
                   onSetVariable={v => setVariablePlan(line.item.id, v, date)}
                   onResetToQuinn={() => resetToQuinn(line.item.id, date)}
                   pulsing={pulsingItemId === line.item.id}
+                  soldSoFar={liveSales?.byItemId.get(line.item.id) ?? null}
+                  isToday={isToday}
+                  gridTemplate={gridTemplate}
+                  showLiveSales={showLiveSales}
+                  showRunsColumn={showRunsColumn}
+                  showAdjustColumn={showAdjustColumn}
                 />
               ))}
             </div>
@@ -810,7 +914,12 @@ export default function AmountsView({
               excluded since their qty is derived from the products that
               consume them (counting them would double-bill). Hides itself
               when nothing in view qualifies (e.g. on the Components tab). */}
-          <ProductTotalsRow lines={filtered} />
+          <ProductTotalsRow
+            lines={filtered}
+            liveSales={liveSales}
+            gridTemplate={gridTemplate}
+            showLiveSales={showLiveSales}
+          />
         </div>
       </div>
     </div>
@@ -853,6 +962,12 @@ function AmountRow({
   onSetVariable,
   onResetToQuinn,
   pulsing = false,
+  soldSoFar,
+  isToday,
+  gridTemplate,
+  showLiveSales,
+  showRunsColumn,
+  showAdjustColumn,
 }: {
   line: PlanLine;
   expanded: boolean;
@@ -866,6 +981,28 @@ function AmountRow({
   onResetToQuinn: () => void;
   /** When true, show a transient highlight glow (Quinn deep-link landing). */
   pulsing?: boolean;
+  /** Live sold count for this row's SKU. `null` means "no data yet"
+   *  (future date) and renders as an em-dash. */
+  soldSoFar: number | null;
+  /** True when the host is rendering for today's date — the cell uses
+   *  this to decide between the live "Sold so far" and the historical
+   *  "Sold (day)" framing. */
+  isToday: boolean;
+  /** Shared grid template — kept in sync with the table header / totals
+   *  rows so columns line up regardless of which surface is hosting. */
+  gridTemplate: string;
+  /** When false the Sold column is omitted from this row entirely. */
+  showLiveSales: boolean;
+  /** When true the row carries a dedicated Runs column where multi-
+   *  run rows render their per-run splitter inline. Single-run rows
+   *  keep the column slot empty so the grid stays aligned. Plan
+   *  surface only — Today shows runs in the expanded panel instead. */
+  showRunsColumn: boolean;
+  /** When false the Adjust column is omitted from this row entirely.
+   *  Plan surface drops it so the runs column has horizontal space;
+   *  on Plan, variable / drops items can still be edited via the
+   *  expanded panel. */
+  showAdjustColumn: boolean;
 }) {
   const { recipe, forecast, carryOver, quinnProposed, dispatchDemand, dispatchBySpoke, stockCap, primaryBench, benches, planned, runPlanned, variablePlanned, runLocked, lockedRunLabels, effectivePlanned, assemblyDemand, perRunPlan } = line;
   const counterUnits = forecast?.projectedUnits ?? 0;
@@ -963,7 +1100,7 @@ function AmountRow({
         data-amount-row-id={line.item.id}
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(240px, 1.6fr) 90px 90px 100px 90px 170px',
+          gridTemplateColumns: gridTemplate,
           padding: '14px 16px 14px 13px',
           gap: 12,
           alignItems: 'center',
@@ -1052,9 +1189,6 @@ function AmountRow({
               </span>
             </div>
             <div style={{ display: 'flex', gap: 5, marginTop: 5, flexWrap: 'wrap', alignItems: 'center' }}>
-              {recipe.selectionTags.slice(0, 2).map(t => (
-                <SelectionTagChip key={t} tag={t} size="xs" />
-              ))}
               {/* Work-type tags — derived from the recipe's workflow (and
                   any sub-recipe workflows) plus an implicit Weigh up if
                   it consumes ingredients. Same canonical vocabulary as
@@ -1160,10 +1294,9 @@ function AmountRow({
         </div>
 
         {/* Forecast — own counter sales, with a dispatch chip when this
-            hub also owes units to spokes for the planned date. The
-            number sits at the same visual weight as Carry-over and
-            Quinn so the row reads as three peer signals feeding the
-            Plan number on the right. */}
+            hub also owes units to spokes for the planned date. Sits at
+            the same visual weight as Carry-over so the row reads as the
+            two peer signals feeding the Plan number on the right. */}
         <div
           style={{
             textAlign: 'right',
@@ -1220,31 +1353,67 @@ function AmountRow({
           )}
         </div>
 
-        {/* Quinn */}
+        {/* Sold — live till for today, full-day actuals for past dates,
+            em-dash for future dates. The number tints by how it's
+            tracking against forecast (sold-so-far vs forecast-so-far)
+            so a manager skimming the column reads green = on or
+            ahead, amber = behind, neutral = within demo noise.
+            Hidden entirely on the Plan surface (drafting tomorrow has
+            no live truth to track against). */}
+        {showLiveSales && (
         <div
           style={{
             textAlign: 'right',
             fontSize: 16,
-            fontWeight: 700,
             fontVariantNumeric: 'tabular-nums',
+            lineHeight: 1.15,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'flex-end',
-            gap: 4,
-            lineHeight: 1.15,
+            gap: 2,
           }}
         >
-          <span
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
-            title={segmentEditable ? `${perDropQuinn} per drop · ${quinnProposed}/day` : undefined}
-          >
-            <EdifyMark size={13} color="var(--color-text-muted)" />
-            {segmentEditable ? perDropQuinn : quinnProposed}
-          </span>
-          {stockCap && stockCap.cap < quinnProposed && (
-            <StockCapChip stockCap={stockCap} />
+          {soldSoFar == null ? (
+            <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+          ) : (
+            (() => {
+              // Forecast-so-far isn't on the line directly; the live
+              // tile already exposes the day variance, so per-row we
+              // compare against the simpler `forecast.projectedUnits`
+              // (the day total). For today this slightly understates
+              // tracking before close — by design, since a manager
+              // glancing at "20 sold of 70 forecast" intuitively
+              // understands the day isn't done yet.
+              const forecastDay = counterUnits;
+              const delta = soldSoFar - forecastDay;
+              const tone =
+                Math.abs(delta) <= 2 || forecastDay === 0
+                  ? 'neutral'
+                  : delta >= 0
+                    ? 'positive'
+                    : 'warning';
+              const color =
+                tone === 'positive'
+                  ? 'var(--color-success)'
+                  : tone === 'warning'
+                    ? 'var(--color-text-secondary)'
+                    : 'var(--color-text-primary)';
+              return (
+                <span
+                  title={
+                    isToday
+                      ? `${soldSoFar} sold so far · ${forecastDay} forecast for the day`
+                      : `${soldSoFar} sold · ${forecastDay} forecast`
+                  }
+                  style={{ fontWeight: 700, color }}
+                >
+                  {soldSoFar}
+                </span>
+              );
+            })()
           )}
         </div>
+        )}
 
         {/* Plan column — read-only commitment for the day. The stepper
             previously lived here; it's now in the next column ("Adjust")
@@ -1374,7 +1543,10 @@ function AmountRow({
               • drops/increment → adjust per-drop (× drops = day total)
             Run-mode items are intentionally read-only here; their
             schedule was set ahead of time. The expanded row still
-            offers per-run + variable top-up controls when needed. */}
+            offers per-run + variable top-up controls when needed.
+            Hidden entirely on Plan surface — that column slot is
+            reused as the per-run plan strip below. */}
+        {showAdjustColumn && (
         <div
           style={{
             display: 'flex',
@@ -1400,11 +1572,12 @@ function AmountRow({
               Auto
             </span>
           ) : line.item.mode === 'run' ? (
-            // Run-mode items: the run baseline is set in advance, but the
-            // variable phase is open all day. Surface a compact VAR stepper
-            // inline so managers can layer in top-ups as new demand walks
-            // in — no need to expand the row. Baseline + total stay visible
-            // underneath as a read-only caption.
+            // Run-mode items on Today: the run baseline is set in
+            // advance, but the variable phase is open all day. Surface
+            // a compact VAR stepper inline so managers can layer in
+            // top-ups as new demand walks in — no need to expand the
+            // row. Baseline + total stay visible underneath as a read-
+            // only caption.
             <div
               style={{
                 display: 'flex',
@@ -1623,6 +1796,161 @@ function AmountRow({
             </span>
           )}
         </div>
+        )}
+
+        {/* Per-run plan column — Plan surface only. Sits where Adjust
+            does on Today, with the same horizontal bounds. Multi-run
+            rows render the splitter inline (label chip + −/+ stepper
+            per run, plus a Sum pill). Single-run rows leave the cell
+            empty so the grid stays aligned across rows. */}
+        {showRunsColumn && (
+          hasMultiRun && perRunPlan ? (
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                minWidth: 0,
+                overflowX: 'auto',
+              }}
+            >
+              {benchRuns.map((run, idx) => {
+                const qty = perRunPlan[idx] ?? 0;
+                const locked = lockedRunIds.has(run.label);
+                const editableRun = canEdit && !locked;
+                return (
+                  <div
+                    key={run.id}
+                    title={
+                      locked
+                        ? `${run.label} · locked (already in progress)`
+                        : `${run.label} · editable`
+                    }
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '4px 8px',
+                      borderRadius: 6,
+                      background: '#ffffff',
+                      border: '1px solid var(--color-border-subtle)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: 'var(--color-text-primary)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {locked && <Lock size={10} color="var(--color-text-muted)" />}
+                      {run.label}
+                    </span>
+                    {editableRun ? (
+                      // No nested border — the chip already supplies
+                      // the visual frame, so the inner stepper just
+                      // groups the controls with a tighter background.
+                      <div
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 2,
+                          background: 'transparent',
+                          padding: 0,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => bumpRun(idx, -1)}
+                          disabled={qty === 0}
+                          style={stepBtn(qty === 0)}
+                        >
+                          <Minus size={12} />
+                        </button>
+                        <input
+                          type="number"
+                          value={qty}
+                          onChange={e => setRun(idx, Number(e.target.value) || 0)}
+                          style={{
+                            width: 32,
+                            textAlign: 'center',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            fontVariantNumeric: 'tabular-nums',
+                            border: 'none',
+                            background: 'transparent',
+                            outline: 'none',
+                            color: 'var(--color-text-primary)',
+                            fontFamily: 'var(--font-primary)',
+                            padding: 0,
+                            appearance: 'textfield',
+                            MozAppearance: 'textfield',
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => bumpRun(idx, 1)}
+                          style={stepBtn(false)}
+                        >
+                          <Plus size={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          justifyContent: 'flex-end',
+                          minWidth: 24,
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: 'var(--color-text-secondary)',
+                          fontVariantNumeric: 'tabular-nums',
+                        }}
+                        title={locked ? `${run.label} already in progress — qty is locked` : undefined}
+                      >
+                        {qty}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+              <span
+                style={{
+                  fontSize: 11,
+                  fontVariantNumeric: 'tabular-nums',
+                  color: 'var(--color-text-muted)',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  marginLeft: 'auto',
+                  paddingLeft: 8,
+                  flexShrink: 0,
+                }}
+                title="Sum of per-run quantities vs the row's run baseline. Edits keep them in sync."
+              >
+                Σ {perRunPlan.reduce((a, b) => a + b, 0)}/{runPlanned}
+              </span>
+            </div>
+          ) : (
+            <span
+              style={{
+                fontSize: 10,
+                color: 'var(--color-text-muted)',
+                fontWeight: 600,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+              }}
+              title="Single-run row — no per-run split needed."
+            >
+              —
+            </span>
+          )
+        )}
 
       </div>
 
@@ -1787,8 +2115,10 @@ function AmountRow({
               // Dynamic column count: per-run breakdown (when 2+ scheduled runs),
               // dispatch ledger (when hub→spoke), assembly cascade (when
               // assembly/component), stock cap (when capped), workflow.
+              // Per-run column is omitted on the Plan surface because the
+              // inline splitter in the row already covers it.
               gridTemplateColumns: `repeat(${
-                (hasMultiRun ? 1 : 0) +
+                (hasMultiRun && !showRunsColumn ? 1 : 0) +
                 (hasDispatch ? 1 : 0) +
                 (isAssembly || isComponent ? 1 : 0) +
                 (stockCap ? 1 : 0) +
@@ -1801,8 +2131,9 @@ function AmountRow({
               scheduled run on the bench so the manager can decide e.g. 60
               into R1 and 24 into R2. Locked runs (already in progress)
               render as static counts; the rest stay editable as long as
-              the day is. Sums always equal `runPlanned`. */}
-          {hasMultiRun && perRunPlan && (
+              the day is. Sums always equal `runPlanned`. Hidden on the
+              Plan surface — covered by the inline column in the row. */}
+          {hasMultiRun && perRunPlan && !showRunsColumn && (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                 <span
@@ -2148,12 +2479,171 @@ const GBP = new Intl.NumberFormat('en-GB', {
   maximumFractionDigits: 0,
 });
 
-function ProductTotalsRow({ lines }: { lines: PlanLine[] }) {
+/**
+ * Compact "Live sales today" tile that sits inline on the mode-tabs row
+ * at the top of the AmountsView. Shows revenue first (the headline
+ * number a Pret manager actually quotes), units sold as a secondary
+ * line, and a small variance vs forecast chip when the day is live or
+ * already done. The tile only renders when a parent has supplied
+ * `liveSales`, so past/today/future logic stays out of this component.
+ */
+function LiveSalesTile({
+  liveSales,
+  isToday,
+  nowHHMM,
+}: {
+  liveSales: {
+    sold: number;
+    forecast: number;
+    variance: number;
+    variancePct: number;
+    revenue: number;
+  };
+  isToday: boolean;
+  nowHHMM: string;
+}) {
+  const { sold, variance, variancePct, revenue } = liveSales;
+  // Variance tone: at-or-above forecast reads green, behind reads amber.
+  // Tiny absolute deltas (≤2 units) stay neutral so demo noise doesn't
+  // colour the chip on what's effectively on-target.
+  const varianceTone =
+    Math.abs(variance) <= 2 ? 'neutral' : variance >= 0 ? 'positive' : 'warning';
+  const varianceColor =
+    varianceTone === 'positive'
+      ? 'var(--color-success)'
+      : varianceTone === 'warning'
+        ? 'var(--color-warning)'
+        : 'var(--color-text-muted)';
+  const varianceBg =
+    varianceTone === 'positive'
+      ? 'var(--color-success-light)'
+      : varianceTone === 'warning'
+        ? 'var(--color-warning-light)'
+        : 'var(--color-bg-hover)';
+
+  const headline = isToday ? 'Sales so far today' : "Day's total sales";
+  const subline = isToday
+    ? `Live till — ${nowHHMM}`
+    : 'Full-day actuals';
+
+  return (
+    <div
+      title={`${sold} units sold · ${variance >= 0 ? '+' : ''}${variance} vs forecast (${
+        variancePct >= 0 ? '+' : ''
+      }${variancePct.toFixed(0)}%)`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '6px 12px 6px 14px',
+        borderRadius: 10,
+        background: '#ffffff',
+        border: '1px solid var(--color-border-subtle)',
+        fontFamily: 'var(--font-primary)',
+      }}
+    >
+      {/* Live indicator dot — only pulses when the till is live. A static
+          green dot would suggest "all good" rather than "live data". */}
+      <span
+        aria-hidden
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: '50%',
+          background: isToday ? 'var(--color-success)' : 'var(--color-text-muted)',
+          boxShadow: isToday ? '0 0 0 3px rgba(46, 160, 67, 0.18)' : 'none',
+          flexShrink: 0,
+        }}
+      />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 700,
+            color: 'var(--color-text-muted)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+          }}
+        >
+          {headline}
+        </span>
+        <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8 }}>
+          <span
+            style={{
+              fontSize: 18,
+              fontWeight: 800,
+              fontVariantNumeric: 'tabular-nums',
+              color: 'var(--color-text-primary)',
+              lineHeight: 1,
+            }}
+          >
+            {GBP.format(revenue)}
+          </span>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              fontVariantNumeric: 'tabular-nums',
+              color: 'var(--color-text-muted)',
+              lineHeight: 1,
+            }}
+          >
+            {sold} sold · {subline}
+          </span>
+        </div>
+      </div>
+      {/* Variance chip — kept tight so the tile stays a single visual
+          unit on the strip. Hidden when the day has no forecast (e.g.
+          if a fixture row is missing) so we don't flash 0%. */}
+      {liveSales.forecast > 0 && (
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            fontVariantNumeric: 'tabular-nums',
+            color: varianceColor,
+            background: varianceBg,
+            padding: '4px 8px',
+            borderRadius: 6,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {variance >= 0 ? '+' : ''}
+          {variance} {variancePct >= 0 ? '↑' : '↓'}
+          <span style={{ opacity: 0.8, marginLeft: 4 }}>
+            {variancePct >= 0 ? '+' : ''}
+            {variancePct.toFixed(0)}%
+          </span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function ProductTotalsRow({
+  lines,
+  liveSales,
+  gridTemplate,
+  showLiveSales,
+}: {
+  lines: PlanLine[];
+  /** When non-null, the Sold column shows live actuals (units + revenue)
+   *  rolled up across the visible products. `byItemId` lets us re-roll
+   *  totals against the *currently filtered* product set rather than the
+   *  whole site so totals stay consistent with the rows above. */
+  liveSales: {
+    revenue: number;
+    byItemId: Map<string, number>;
+  } | null;
+  /** Shared grid template — must match the row above so columns align. */
+  gridTemplate: string;
+  /** When false the Sold totals cells are omitted (Plan surface). */
+  showLiveSales: boolean;
+}) {
   const products = lines.filter(l => l.assemblyDemand.totalUnits === 0 && !l.recipe.isPrep);
   if (products.length === 0) return null;
   const totalForecast = products.reduce((a, l) => a + (l.forecast?.projectedUnits ?? 0), 0);
   const totalCarryOver = products.reduce((a, l) => a + (l.carryOver?.carriedUnits ?? 0), 0);
-  const totalQuinn = products.reduce((a, l) => a + l.quinnProposed, 0);
   const totalPlanned = products.reduce((a, l) => a + l.effectivePlanned, 0);
   // Sales / value totals — units × per-category price. Forecast value
   // tracks projected revenue at standard menu prices; planned value
@@ -2166,8 +2656,22 @@ function ProductTotalsRow({ lines }: { lines: PlanLine[] }) {
     (a, l) => a + priceFor(l) * (l.carryOver?.carriedUnits ?? 0),
     0,
   );
-  const valueQuinn = products.reduce((a, l) => a + priceFor(l) * l.quinnProposed, 0);
   const valuePlanned = products.reduce((a, l) => a + priceFor(l) * l.effectivePlanned, 0);
+  // Sold totals — restricted to the products currently in view so the
+  // bottom-of-table aggregates stay aligned with the rows the manager
+  // can actually see. `null` when the date is in the future and there
+  // is no live data yet.
+  const soldRollup = liveSales
+    ? products.reduce(
+        (acc, l) => {
+          const sold = liveSales.byItemId.get(l.item.id) ?? 0;
+          acc.units += sold;
+          acc.value += priceFor(l) * sold;
+          return acc;
+        },
+        { units: 0, value: 0 },
+      )
+    : null;
   const num = (n: number) => n.toLocaleString('en-GB');
   const cellAlignRight: React.CSSProperties = {
     textAlign: 'right',
@@ -2178,7 +2682,7 @@ function ProductTotalsRow({ lines }: { lines: PlanLine[] }) {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(240px, 1.6fr) 90px 90px 100px 90px 170px',
+          gridTemplateColumns: gridTemplate,
           gap: 12,
           alignItems: 'center',
           padding: '14px 16px 14px 13px',
@@ -2214,22 +2718,26 @@ function ProductTotalsRow({ lines }: { lines: PlanLine[] }) {
         >
           {totalCarryOver > 0 ? num(totalCarryOver) : '—'}
         </span>
+        {showLiveSales && (
         <span
           style={{
             ...cellAlignRight,
-            fontSize: 12,
-            fontWeight: 600,
-            color: 'var(--color-text-secondary)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 4,
-            justifyContent: 'flex-end',
+            fontSize: 13,
+            fontWeight: 700,
+            color:
+              soldRollup && totalForecast > 0 && soldRollup.units >= totalForecast
+                ? 'var(--color-success)'
+                : 'var(--color-text-primary)',
           }}
-          title="Quinn's proposed total across all visible products"
+          title={
+            soldRollup
+              ? `${soldRollup.units} sold across visible products vs ${totalForecast} forecast`
+              : 'No live sales for this date'
+          }
         >
-          <EdifyMark size={11} color="var(--color-text-muted)" />
-          {num(totalQuinn)}
+          {soldRollup ? num(soldRollup.units) : '—'}
         </span>
+        )}
         <div
           style={{
             display: 'flex',
@@ -2274,7 +2782,7 @@ function ProductTotalsRow({ lines }: { lines: PlanLine[] }) {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(240px, 1.6fr) 90px 90px 100px 90px 170px',
+          gridTemplateColumns: gridTemplate,
           gap: 12,
           alignItems: 'center',
           padding: '14px 16px 14px 13px',
@@ -2309,22 +2817,26 @@ function ProductTotalsRow({ lines }: { lines: PlanLine[] }) {
         >
           {valueCarryOver > 0 ? GBP.format(valueCarryOver) : '—'}
         </span>
+        {showLiveSales && (
         <span
           style={{
             ...cellAlignRight,
-            fontSize: 12,
-            fontWeight: 600,
-            color: 'var(--color-text-secondary)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 4,
-            justifyContent: 'flex-end',
+            fontSize: 13,
+            fontWeight: 700,
+            color:
+              soldRollup && soldRollup.value >= valueForecast && valueForecast > 0
+                ? 'var(--color-success)'
+                : 'var(--color-text-primary)',
           }}
-          title="Revenue at Quinn's proposed plan"
+          title={
+            soldRollup
+              ? `${GBP.format(soldRollup.value)} sold across visible products vs ${GBP.format(valueForecast)} forecast`
+              : 'No live sales for this date'
+          }
         >
-          <EdifyMark size={11} color="var(--color-text-muted)" />
-          {GBP.format(valueQuinn)}
+          {soldRollup ? GBP.format(soldRollup.value) : '—'}
         </span>
+        )}
         <div
           style={{
             display: 'flex',
@@ -2385,55 +2897,19 @@ function ComponentDerivedTile({
   const parents = sources
     .map(s => getRecipe(s.parentRecipeId)?.name)
     .filter((n): n is string => !!n);
-  const summary =
-    parents.length === 0
-      ? '—'
-      : parents.length <= 2
-      ? parents.join(' · ')
-      : `${parents.slice(0, 2).join(' · ')} · +${parents.length - 2}`;
   return (
-    <div
+    <span
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 2,
-        padding: '6px 12px',
-        background: 'var(--color-bg-hover)',
-        border: '1px solid var(--color-border-subtle)',
-        borderRadius: 8,
-        minWidth: 96,
+        fontSize: 14,
+        fontWeight: 700,
+        fontVariantNumeric: 'tabular-nums',
+        color: 'var(--color-text-primary)',
+        lineHeight: 1.1,
       }}
       title={`Summed from: ${parents.join(', ')}`}
     >
-      <span
-        style={{
-          fontSize: 16,
-          fontWeight: 700,
-          fontVariantNumeric: 'tabular-nums',
-          color: 'var(--color-text-primary)',
-          lineHeight: 1.1,
-        }}
-      >
-        {total}
-      </span>
-      <span
-        style={{
-          fontSize: 9,
-          fontWeight: 600,
-          color: 'var(--color-text-muted)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.04em',
-          textAlign: 'center',
-          maxWidth: 160,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        from {summary}
-      </span>
-    </div>
+      {total}
+    </span>
   );
 }
 

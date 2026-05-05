@@ -8,6 +8,13 @@ import QuinnProductionPanel from '@/components/Production/QuinnProductionPanel';
 import { RoleSwitcher } from '@/components/Production/RoleContext';
 import HubOperatorProviders from '@/components/Operator/HubOperatorProviders';
 import ProductionSiteSelector from '@/components/Production/ProductionSiteSelector';
+import {
+  TOP_NAV_BAR_PADDING,
+  TOP_NAV_PILL_ACTIVE,
+  TOP_NAV_PILL_BASE,
+  TOP_NAV_PILL_GAP,
+  TOP_NAV_PILL_IDLE_TRANSPARENT,
+} from '@/components/Production/topNavStyles';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import DemoControls from '@/components/DemoControls/DemoControls';
 import SpokeAdhocRequestCard from '@/components/Production/SpokeAdhocRequestCard';
@@ -181,7 +188,9 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
         </header>
 
         {/* Sub-tabs — pinned to the top of the viewport so it stays visible
-            as the rest of the page scrolls. */}
+            as the rest of the page scrolls. Sized for tablet via the
+            shared TOP_NAV_* constants so this row and the site picker
+            below it stack as a single header band. */}
         <nav
           style={{
             position: 'sticky',
@@ -189,8 +198,9 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
             zIndex: 150,
             flexShrink: 0,
             display: 'flex',
-            gap: 4,
-            padding: '6px 12px',
+            alignItems: 'center',
+            gap: TOP_NAV_PILL_GAP,
+            padding: TOP_NAV_BAR_PADDING,
             borderBottom: '1px solid var(--color-border-subtle)',
             background: '#ffffff',
             overflowX: 'auto',
@@ -203,16 +213,8 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
                 key={tab.id}
                 onClick={() => router.push(tab.href)}
                 style={{
-                  padding: '6px 12px',
-                  borderRadius: 8,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  fontFamily: 'var(--font-primary)',
-                  background: active ? 'var(--color-accent-active)' : 'transparent',
-                  color: active ? 'var(--color-text-on-active)' : 'var(--color-text-secondary)',
-                  border: '1px solid transparent',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
+                  ...TOP_NAV_PILL_BASE,
+                  ...(active ? TOP_NAV_PILL_ACTIVE : TOP_NAV_PILL_IDLE_TRANSPARENT),
                 }}
               >
                 {tab.label}
@@ -232,6 +234,25 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
                 recordedBy="Spoke manager"
               />
             </div>
+          )}
+
+          {/* Right-aligned slot for sub-page-owned actions to portal into.
+              AmountsView fills it with the End production / Reopen
+              control on Today + Plan; other pages can opt in by
+              targeting `#production-nav-actions` via createPortal.
+              Lives behind the spoke block above so spoke-only pages
+              stay focused, and stays empty (collapses) when no page
+              is mounting an action. */}
+          {!(isSpoke && pathname.startsWith('/production/spokes')) && (
+            <div
+              id="production-nav-actions"
+              style={{
+                marginLeft: 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            />
           )}
         </nav>
 
