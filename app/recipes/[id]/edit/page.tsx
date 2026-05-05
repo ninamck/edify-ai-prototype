@@ -695,6 +695,33 @@ function EditRecipeForm({
               recipesById={recipesById}
               selfId={original.id}
               onChange={setComponents}
+              onPromoteToStage={(workType, leadOffset, label) => {
+                // Promote an implicit ingredient prep tag into an explicit
+                // workflow stage on this recipe. The stage uses a sensible
+                // default capability ('prep' covers most ingredient prep
+                // work — author can refine in the Workflow editor below).
+                setDraftWorkflow((wf) => {
+                  if (!wf) return wf;
+                  const newId = `stage-${Date.now().toString(36)}`;
+                  const prevId = wf.stages[wf.stages.length - 1]?.id;
+                  return {
+                    ...wf,
+                    stages: [
+                      ...wf.stages,
+                      {
+                        id: newId,
+                        label,
+                        capability: 'prep',
+                        workType,
+                        leadOffset,
+                        durationMinutes: 10,
+                      },
+                    ],
+                    edges: prevId ? [...wf.edges, { from: prevId, to: newId }] : wf.edges,
+                  };
+                });
+                setShowWorkflowSections(true);
+              }}
             />
           </Card>
 

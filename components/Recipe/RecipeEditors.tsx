@@ -15,7 +15,16 @@ import {
   type WorkflowStage,
   type BenchCapability,
   type WorkflowId,
+  type WorkType,
+  type Equipment,
+  WORK_TYPE_ORDER,
+  WORK_TYPE_LABELS,
+  EQUIPMENT_ORDER,
+  EQUIPMENT_LABELS,
+  workTypeFromCapability,
+  stageWorkType,
 } from '@/components/Production/fixtures';
+import WorkTypeChip from '@/components/Production/WorkTypeChip';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Shared option lists used by editors and pickers.
@@ -114,6 +123,8 @@ type FlowRow = {
     capability: string;
     leadOffset: LaneOffset;
     durationMinutes: number;
+    workType: WorkType;
+    requiresEquipment?: Equipment[];
   }[];
 };
 
@@ -138,6 +149,8 @@ function buildFlowRows(
         capability: s.capability,
         leadOffset: s.leadOffset,
         durationMinutes: s.durationMinutes,
+        workType: stageWorkType(s),
+        requiresEquipment: s.requiresEquipment,
       })),
     });
   }
@@ -154,6 +167,8 @@ function buildFlowRows(
           capability: s.capability,
           leadOffset: s.leadOffset,
           durationMinutes: s.durationMinutes,
+          workType: stageWorkType(s),
+          requiresEquipment: s.requiresEquipment,
         })),
       });
     }
@@ -291,17 +306,47 @@ function StageChip({
     <span
       style={{
         display: 'inline-flex', flexDirection: 'column',
-        padding: '4px 9px',
+        padding: '5px 9px 6px',
         borderRadius: '6px',
         background: accent ? 'rgba(3,28,89,0.08)' : 'var(--color-bg-hover)',
         border: '1px solid ' + (accent ? 'rgba(3,28,89,0.18)' : 'var(--color-border-subtle)'),
         fontSize: '11.5px',
         lineHeight: 1.25,
         minWidth: 0,
+        gap: 3,
       }}
     >
       <span style={{ fontWeight: 700, color: accent ? 'var(--color-accent-active)' : 'var(--color-text-primary)' }}>
         {stage.label}
+      </span>
+      <span
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          flexWrap: 'wrap',
+        }}
+      >
+        <WorkTypeChip workType={stage.workType} size="xs" />
+        {stage.requiresEquipment?.map((eq) => (
+          <span
+            key={eq}
+            title={`${EQUIPMENT_LABELS[eq]} — equipment required`}
+            style={{
+              display: 'inline-flex', alignItems: 'center',
+              padding: '2px 7px',
+              borderRadius: 100,
+              background: '#fff',
+              border: '1px solid var(--color-border)',
+              color: 'var(--color-text-secondary)',
+              fontSize: 10,
+              fontWeight: 600,
+              fontFamily: 'var(--font-primary)',
+              whiteSpace: 'nowrap',
+              lineHeight: 1.1,
+            }}
+          >
+            {EQUIPMENT_LABELS[eq]}
+          </span>
+        ))}
       </span>
       <span style={{ fontSize: '10.5px', color: 'var(--color-text-muted)', fontWeight: 500 }}>
         {stage.capability} · {formatStageDuration(stage.durationMinutes)}
@@ -364,6 +409,71 @@ export const editIconBtnStyle: React.CSSProperties = {
   cursor: 'pointer',
   flexShrink: 0,
 };
+
+export const editHintStyle: React.CSSProperties = {
+  marginTop: '4px',
+  fontSize: '10.5px',
+  color: 'var(--color-text-muted)',
+  fontFamily: 'var(--font-primary)',
+  lineHeight: 1.3,
+};
+
+/** Multi-select picker for stage equipment requirements. Renders a row of
+ *  small chips for each piece of equipment in `EQUIPMENT_ORDER`; clicking
+ *  toggles inclusion. Most stages won't require any equipment so the
+ *  empty state collapses cleanly. */
+function EquipmentMultiPicker({
+  value, onChange,
+}: {
+  value: Equipment[];
+  onChange: (next: Equipment[]) => void;
+}) {
+  function toggle(eq: Equipment) {
+    if (value.includes(eq)) onChange(value.filter((e) => e !== eq));
+    else onChange([...value, eq]);
+  }
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 4,
+        padding: '4px 6px',
+        border: '1px solid var(--color-border-subtle)',
+        borderRadius: '8px',
+        background: '#fff',
+        minHeight: 32,
+        alignItems: 'center',
+      }}
+    >
+      {EQUIPMENT_ORDER.map((eq) => {
+        const on = value.includes(eq);
+        return (
+          <button
+            key={eq}
+            type="button"
+            onClick={() => toggle(eq)}
+            title={EQUIPMENT_LABELS[eq]}
+            style={{
+              padding: '3px 8px',
+              borderRadius: 100,
+              fontSize: 10.5,
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'var(--font-primary)',
+              border: '1px solid ' + (on ? 'transparent' : 'var(--color-border-subtle)'),
+              background: on ? 'var(--color-accent-active)' : 'transparent',
+              color: on ? '#fff' : 'var(--color-text-secondary)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {EQUIPMENT_LABELS[eq]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Editor components.
@@ -1002,12 +1112,42 @@ export function WorkflowEditor({
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '10px', alignItems: 'flex-end' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.1fr 1fr', gap: '10px', alignItems: 'flex-end' }}>
+            <div>
+              <label style={editLabelStyle}>Work type</label>
+              <select
+                value={stageWorkType(stage)}
+                onChange={(e) => updateStage(i, { workType: e.target.value as WorkType })}
+                style={{ ...editInputStyle, padding: '7px 10px' }}
+              >
+                {WORK_TYPE_ORDER.map((w) => (
+                  <option key={w} value={w}>{WORK_TYPE_LABELS[w]}</option>
+                ))}
+              </select>
+              {stage.workType == null && (
+                <div style={editHintStyle}>
+                  Default from {stage.capability} capability
+                </div>
+              )}
+            </div>
             <div>
               <label style={editLabelStyle}>Bench (capability)</label>
               <select
                 value={stage.capability}
-                onChange={(e) => updateStage(i, { capability: e.target.value as BenchCapability })}
+                onChange={(e) => {
+                  const nextCap = e.target.value as BenchCapability;
+                  // If workType is currently the implicit default for the
+                  // PREVIOUS capability, snap it to the new capability's
+                  // default. If the user explicitly chose a workType
+                  // (different from the previous capability default), keep
+                  // their choice.
+                  const wasImplicit = stage.workType == null
+                    || stage.workType === workTypeFromCapability(stage.capability);
+                  updateStage(i, {
+                    capability: nextCap,
+                    workType: wasImplicit ? undefined : stage.workType,
+                  });
+                }}
                 style={{ ...editInputStyle, padding: '7px 10px' }}
               >
                 {ALL_CAPABILITIES.map((c) => (
@@ -1031,6 +1171,16 @@ export function WorkflowEditor({
                   );
                 })}
               </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '10px', alignItems: 'flex-end' }}>
+            <div>
+              <label style={editLabelStyle}>Equipment required</label>
+              <EquipmentMultiPicker
+                value={stage.requiresEquipment ?? []}
+                onChange={(next) => updateStage(i, { requiresEquipment: next.length > 0 ? next : undefined })}
+              />
             </div>
             <div>
               <label style={editLabelStyle}>Duration (min)</label>

@@ -19,19 +19,41 @@ const MOBILE_BREAKPOINT = '(max-width: 640px)';
 
 type SubTab = { id: string; label: string; href: string };
 
-const HUB_SUB_TABS: SubTab[] = [
-  { id: 'amounts',    label: 'Today',             href: '/production/amounts' },
-  { id: 'board',      label: 'Benches',           href: '/production/board' },
-  { id: 'sales',      label: 'Sales (live)',      href: '/production/sales' },
-  { id: 'pcr',        label: 'PCR queue',         href: '/production/pcr' },
-  { id: 'plan',       label: 'Plan',              href: '/production/plan' },
-  { id: 'carry-over', label: 'Carry-over',        href: '/production/carry-over' },
-  { id: 'productivity', label: 'Productivity',    href: '/production/productivity' },
-  { id: 'sales-report',   label: 'Sales vs forecast', href: '/production/sales-report' },
-  { id: 'site-settings',  label: 'Settings',          href: '/production/settings' },
-  { id: 'settings-health', label: 'Settings health',  href: '/production/settings-health' },
-  { id: 'setup',          label: 'Setup (Quinn)',     href: '/production/setup' },
+// Hub Production splits into two sidebar destinations to match how a
+// manager actually works:
+//   • Run production  → live floor view (today's bake, what's selling,
+//                       what's queued for PCR sign-off)
+//   • Plan production → tomorrow & future (week plan, carry-over to
+//                       inform tomorrow, performance and setup)
+// The sub-tabs surface depends on which sidebar item brought you here.
+// `productionGroupForPath` below decides which set is active.
+const HUB_RUN_TABS: SubTab[] = [
+  { id: 'amounts',    label: 'Today',         href: '/production/amounts' },
+  { id: 'run-sheet',  label: 'Run sheet',     href: '/production/run-sheet' },
+  { id: 'board',      label: 'Benches',       href: '/production/board' },
+  { id: 'sales',      label: 'Sales (live)',  href: '/production/sales' },
+  { id: 'pcr',        label: 'PCR queue',     href: '/production/pcr' },
 ];
+
+const HUB_PLAN_TABS: SubTab[] = [
+  { id: 'plan',            label: 'Plan',              href: '/production/plan' },
+  { id: 'carry-over',      label: 'Carry-over',        href: '/production/carry-over' },
+  { id: 'productivity',    label: 'Productivity',      href: '/production/productivity' },
+  { id: 'sales-report',    label: 'Sales vs forecast', href: '/production/sales-report' },
+  { id: 'site-settings',   label: 'Settings',          href: '/production/settings' },
+  { id: 'settings-health', label: 'Settings health',   href: '/production/settings-health' },
+  { id: 'setup',           label: 'Setup (Quinn)',     href: '/production/setup' },
+];
+
+/** Same prefix list the Sidebar uses to highlight Run vs Plan. Kept in
+ *  sync by hand — both files are short. */
+const RUN_PRODUCTION_PREFIXES = HUB_RUN_TABS.map(t => t.href);
+
+function productionGroupForPath(pathname: string): 'run' | 'plan' {
+  return RUN_PRODUCTION_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))
+    ? 'run'
+    : 'plan';
+}
 
 // Spokes don't bake — they receive. So the production view bar trims down
 // to surfaces a spoke manager actually owns: see what's coming today,
@@ -54,9 +76,17 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
   const pathname = usePathname();
   const { isSpoke } = useActiveSite();
 
-  // Persona drives which production tabs are visible. Spokes get a
-  // curated subset; hubs get everything.
-  const subTabs = isSpoke ? SPOKE_SUB_TABS : HUB_SUB_TABS;
+  // Persona + active sidebar group drive which sub-tabs render here.
+  // Spokes get their flat curated list. Hubs see either the Run set
+  // (today/floor) or the Plan set (tomorrow/future) based on which
+  // sidebar item is open — keeps the tab strip focused on one mode at
+  // a time instead of mixing planning surfaces with live floor ones.
+  const hubGroup = productionGroupForPath(pathname);
+  const subTabs = isSpoke
+    ? SPOKE_SUB_TABS
+    : hubGroup === 'run'
+      ? HUB_RUN_TABS
+      : HUB_PLAN_TABS;
 
   return (
     <HubOperatorProviders>
@@ -119,7 +149,11 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
                 letterSpacing: '0.01em',
               }}
             >
-              Production
+              {isSpoke
+                ? 'Production'
+                : hubGroup === 'run'
+                  ? 'Run production'
+                  : 'Plan production'}
             </span>
           </div>
 
@@ -207,7 +241,8 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
             on hub-kitchen-only views (Benches, PCR queue) where the
             selector would just be noise. */}
         {!pathname.startsWith('/production/board') &&
-          !pathname.startsWith('/production/pcr') && <ProductionSiteSelector />}
+          !pathname.startsWith('/production/pcr') &&
+          !pathname.startsWith('/production/run-sheet') && <ProductionSiteSelector />}
 
         {/* Page body — flows in normal document scroll so the page itself
             scrolls rather than an inner container. */}

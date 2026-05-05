@@ -8,6 +8,7 @@ import { useSyncExternalStore } from 'react';
 import { ALL_LIBRARY_RECIPES, type Recipe } from '@/components/Recipe/libraryFixtures';
 import {
   PRET_WORKFLOWS,
+  setWorkflowResolver,
   type ProductionWorkflow,
   type WorkflowId,
 } from '@/components/Production/fixtures';
@@ -37,6 +38,13 @@ let state: State = {
   recipes: ALL_LIBRARY_RECIPES,
   workflows: cloneAllWorkflows(PRET_WORKFLOWS),
 };
+
+// Make production-side `recipeWorkTypes` / `workTypesFromWorkflows` read
+// from this store so chips on /production/* reflect in-memory workflow
+// edits made in the recipe editor. The closure reads `state.workflows`
+// fresh each call (state is reassigned on update, not mutated), so the
+// resolver is always up to date without further wiring.
+setWorkflowResolver((id) => state.workflows[id]);
 
 const listeners = new Set<() => void>();
 

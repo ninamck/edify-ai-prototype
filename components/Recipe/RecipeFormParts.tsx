@@ -18,6 +18,16 @@ import type {
   RecipeComponent,
   Recipe,
 } from '@/components/Recipe/libraryFixtures';
+import {
+  type WorkType,
+  type PrepWorkEntry,
+  type Ingredient,
+  WORK_TYPE_ORDER,
+  WORK_TYPE_LABELS,
+  WORK_TYPE_COLORS,
+  PRET_INGREDIENTS,
+  componentPrepWork,
+} from '@/components/Production/fixtures';
 
 // ── Types & constants ────────────────────────────────────────────────────────
 
@@ -369,14 +379,42 @@ export function CheckRow({
 
 const COMPONENT_COLS = ['28px', '2fr', '1.4fr', '70px', '70px', '80px', '76px'];
 
+/**
+ * Find the master ingredient for an `ItemComponent` row.
+ *
+ * Phase 1 strategy: prefer an explicit `ingredientId` link, fall back to
+ * a case-insensitive name match against `PRET_INGREDIENTS`. The name
+ * match is intentionally lenient so the demo's free-text "Tomato" /
+ * "Roast chicken" rows pick up master defaults without authors having
+ * to back-fill every link first. Future phases will tighten this with
+ * a proper ingredient picker.
+ */
+export function findMasterIngredient(row: ItemComponent): Ingredient | undefined {
+  if (row.ingredientId) {
+    const byId = PRET_INGREDIENTS.find((i) => i.id === row.ingredientId);
+    if (byId) return byId;
+  }
+  if (!row.name.trim()) return undefined;
+  const needle = row.name.trim().toLowerCase();
+  return PRET_INGREDIENTS.find((i) => i.name.toLowerCase() === needle);
+}
+
 export function ComponentTable({
-  rows, recipesById, selfId, onChange,
+  rows, recipesById, selfId, onChange, onPromoteToStage,
 }: {
   rows: ComponentRow[];
   recipesById: Map<string, Recipe>;
   /** Recipe id of the currently-edited recipe (excluded from the picker). */
   selfId?: string;
   onChange: (next: ComponentRow[]) => void;
+  /**
+   * Called when the author "promotes" an implicit prep tag to an explicit
+   * stage on this recipe's workflow. The host is expected to push a new
+   * stage onto the workflow's stage list. When omitted the promote
+   * action is hidden — useful on the manual-intake page where there is
+   * no workflow yet.
+   */
+  onPromoteToStage?: (workType: WorkType, leadOffset: -2 | -1 | 0, label: string) => void;
 }) {
   function update(id: string, patch: Partial<ComponentRow>) {
     onChange(
@@ -437,6 +475,7 @@ export function ComponentTable({
           onMoveUp={() => move(row.id, -1)}
           onMoveDown={() => move(row.id, 1)}
           onEnter={() => { if (i === rows.length - 1) addItem(); }}
+          onPromoteToStage={onPromoteToStage}
         />
       ))}
 
@@ -468,6 +507,7 @@ export function ComponentTable({
 function ComponentRowEdit({
   row, index, total, recipesById,
   onPatch, onRemove, onMoveUp, onMoveDown, onEnter,
+  onPromoteToStage,
 }: {
   row: ComponentRow;
   index: number;
@@ -478,6 +518,7 @@ function ComponentRowEdit({
   onMoveUp: () => void;
   onMoveDown: () => void;
   onEnter: () => void;
+  onPromoteToStage?: (workType: WorkType, leadOffset: -2 | -1 | 0, label: string) => void;
 }) {
   const isRecipe = row.kind === 'recipe';
   const subRec = isRecipe ? recipesById.get(row.recipeId) : null;
@@ -485,8 +526,12 @@ function ComponentRowEdit({
   const cost = isRecipe
     ? qtyNum * (subRec?.ingredientCost ?? 0)
     : (qtyNum * (row as ItemComponent).unitCostP) / 100;
+  const itemRow = !isRecipe ? (row as ItemComponent) : null;
+  const masterIngredient = itemRow ? findMasterIngredient(itemRow) : undefined;
+  const showPrepStrip = !isRecipe && itemRow != null;
 
   return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
     <div style={tableRowStyle(COMPONENT_COLS)}>
       <span
         style={{
@@ -572,6 +617,481 @@ function ComponentRowEdit({
           <X size={12} />
         </button>
       </span>
+    </div>
+    {showPrepStrip && itemRow && (
+      <IngredientPrepStrip
+        row={itemRow}
+        master={masterIngredient}
+        onPatch={(patch) => onPatch(patch as Partial<ComponentRow>)}
+        onPromoteToStage={onPromoteToStage}
+      />
+    )}
+    </div>
+  );
+}
+
+// ── Ingredient prep-work strip ───────────────────────────────────────────────
+//
+// Renders below an ingredient row in the component table. Shows the
+// effective set of `WorkType` chips (master defaults + per-recipe override
+// resolved via `componentPrepWork`) plus an "Add tag" button. Each chip
+// can be edited via a popover: change leadOffset, remove, or promote to
+// an explicit workflow stage.
+//
+// The "promote" affordance is the user-decided escape hatch from the
+// implicit aggregation: by default ingredient prep work is implicit and
+// gets aggregated across recipes on the Run sheet; promoting moves the
+// tag onto this recipe's workflow as a real stage so it can be sequenced
+// and routed independently.
+
+function IngredientPrepStrip({
+  row, master, onPatch, onPromoteToStage,
+}: {
+  row: ItemComponent;
+  master: Ingredient | undefined;
+  onPatch: (patch: Partial<ItemComponent>) => void;
+  onPromoteToStage?: (workType: WorkType, leadOffset: -2 | -1 | 0, label: string) => void;
+}) {
+  const [openIdx, setOpenIdx] = useState<number | 'add' | null>(null);
+  // Effective prep — override wins, otherwise master defaults. We render
+  // them in a single strip; the source (override vs inherited) drives
+  // chip styling so authors can see what's authored vs inherited at a
+  // glance.
+  const override = row.prepWorkOverride;
+  const inherited = override == null;
+  const effective: PrepWorkEntry[] = componentPrepWork(override, master);
+  const usedTypes = new Set(effective.map((e) => e.workType));
+
+  function startOverrideFromInherited(): PrepWorkEntry[] {
+    // First edit on an inherited row materialises the override as a copy
+    // of the master defaults so the user's tweak doesn't touch other
+    // recipes that still inherit.
+    return inherited ? effective.map((e) => ({ ...e })) : effective.map((e) => ({ ...e }));
+  }
+
+  function addEntry(workType: WorkType, leadOffset: -2 | -1 | 0) {
+    const next = [...startOverrideFromInherited(), { workType, leadOffset: leadOffset === 0 ? undefined : leadOffset }];
+    onPatch({ prepWorkOverride: next });
+    setOpenIdx(null);
+  }
+  function patchEntry(i: number, patch: Partial<PrepWorkEntry>) {
+    const next = startOverrideFromInherited().map((e, idx) => (idx === i ? { ...e, ...patch } : e));
+    // Treat leadOffset === 0 as undefined to keep stored data tidy.
+    if (patch.leadOffset === 0) {
+      next[i] = { ...next[i], leadOffset: undefined };
+    }
+    onPatch({ prepWorkOverride: next });
+  }
+  function removeEntry(i: number) {
+    const next = startOverrideFromInherited().filter((_, idx) => idx !== i);
+    onPatch({ prepWorkOverride: next });
+    setOpenIdx(null);
+  }
+  function resetToInherited() {
+    onPatch({ prepWorkOverride: undefined });
+    setOpenIdx(null);
+  }
+
+  // Hide the strip entirely on rows with no name yet — no signal value.
+  if (!row.name.trim() && effective.length === 0) return null;
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 6,
+        padding: '4px 12px 8px 36px', // align under name column
+        fontFamily: 'var(--font-primary)',
+      }}
+    >
+      <span
+        style={{
+          fontSize: 9,
+          fontWeight: 700,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          color: 'var(--color-text-muted)',
+        }}
+        title={
+          inherited && master
+            ? `Inherited from master ingredient "${master.name}". Edits here become a per-recipe override.`
+            : 'Per-recipe prep work for this ingredient.'
+        }
+      >
+        Prep
+      </span>
+      {effective.map((entry, i) => (
+        <PrepChipWithPopover
+          key={`${entry.workType}-${i}`}
+          entry={entry}
+          inherited={inherited}
+          ingredientName={row.name || master?.name || ''}
+          isOpen={openIdx === i}
+          onOpen={() => setOpenIdx(i)}
+          onClose={() => setOpenIdx((curr) => (curr === i ? null : curr))}
+          onPatch={(p) => patchEntry(i, p)}
+          onRemove={() => removeEntry(i)}
+          onPromoteToStage={onPromoteToStage}
+        />
+      ))}
+      <PrepAddButton
+        isOpen={openIdx === 'add'}
+        usedTypes={usedTypes}
+        onOpen={() => setOpenIdx('add')}
+        onClose={() => setOpenIdx((curr) => (curr === 'add' ? null : curr))}
+        onAdd={addEntry}
+      />
+      {!inherited && master && (
+        <button
+          onClick={resetToInherited}
+          style={{
+            border: 'none',
+            background: 'transparent',
+            color: 'var(--color-text-muted)',
+            cursor: 'pointer',
+            fontSize: 10.5,
+            fontWeight: 600,
+            padding: '2px 4px',
+            fontFamily: 'var(--font-primary)',
+          }}
+          title={`Reset to "${master.name}" master defaults`}
+        >
+          Reset to default
+        </button>
+      )}
+      {effective.length === 0 && (
+        <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+          No prep tagged
+        </span>
+      )}
+    </div>
+  );
+}
+
+function PrepChipWithPopover({
+  entry, inherited, ingredientName,
+  isOpen, onOpen, onClose,
+  onPatch, onRemove, onPromoteToStage,
+}: {
+  entry: PrepWorkEntry;
+  inherited: boolean;
+  ingredientName: string;
+  isOpen: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  onPatch: (patch: Partial<PrepWorkEntry>) => void;
+  onRemove: () => void;
+  onPromoteToStage?: (workType: WorkType, leadOffset: -2 | -1 | 0, label: string) => void;
+}) {
+  const tone = WORK_TYPE_COLORS[entry.workType];
+  const lo = entry.leadOffset ?? 0;
+  const loLabel = lo === 0 ? '' : ` · ${lo === -1 ? 'D-1' : 'D-2'}`;
+
+  // Close popover on outside click.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.closest('[data-prep-popover]')) onClose();
+    };
+    const tid = setTimeout(() => document.addEventListener('mousedown', onDown), 0);
+    return () => { clearTimeout(tid); document.removeEventListener('mousedown', onDown); };
+  }, [isOpen, onClose]);
+
+  return (
+    <span data-prep-popover style={{ position: 'relative', display: 'inline-flex' }}>
+      <button
+        type="button"
+        onClick={onOpen}
+        title={inherited ? `${WORK_TYPE_LABELS[entry.workType]} (inherited)` : WORK_TYPE_LABELS[entry.workType]}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 5,
+          padding: '3px 9px',
+          borderRadius: 100,
+          background: tone.bg,
+          color: tone.color,
+          fontSize: 10.5,
+          fontWeight: 700,
+          letterSpacing: '0.02em',
+          fontFamily: 'var(--font-primary)',
+          whiteSpace: 'nowrap',
+          lineHeight: 1.1,
+          // Inherited chips render with a dashed outline so authors can
+          // tell at a glance which tags are masters vs per-recipe edits.
+          border: '1px ' + (inherited ? 'dashed' : 'solid') + ' ' + tone.color + (inherited ? '66' : '00'),
+          cursor: 'pointer',
+        }}
+      >
+        {WORK_TYPE_LABELS[entry.workType]}
+        {loLabel && (
+          <span style={{ fontSize: 9, opacity: 0.85 }}>{loLabel}</span>
+        )}
+      </button>
+      {isOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            left: 0,
+            zIndex: 60,
+            minWidth: 200,
+            padding: 10,
+            background: '#fff',
+            border: '1px solid var(--color-border-subtle)',
+            borderRadius: 10,
+            boxShadow: '0 12px 32px rgba(3,15,58,0.16)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            fontFamily: 'var(--font-primary)',
+          }}
+        >
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            When
+          </div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {([0, -1, -2] as const).map((opt) => {
+              const on = lo === opt;
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => onPatch({ leadOffset: opt })}
+                  style={{
+                    flex: 1,
+                    padding: '5px 7px',
+                    borderRadius: 6,
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    border: '1px solid ' + (on ? 'transparent' : 'var(--color-border-subtle)'),
+                    background: on ? 'var(--color-accent-active)' : '#fff',
+                    color: on ? '#fff' : 'var(--color-text-secondary)',
+                  }}
+                >
+                  {opt === 0 ? 'Same day' : opt === -1 ? 'Day before' : '2 days before'}
+                </button>
+              );
+            })}
+          </div>
+          {onPromoteToStage && (
+            <button
+              type="button"
+              onClick={() => {
+                onPromoteToStage(
+                  entry.workType,
+                  (entry.leadOffset ?? 0) as -2 | -1 | 0,
+                  `${WORK_TYPE_LABELS[entry.workType]} ${ingredientName}`.trim(),
+                );
+                onRemove();
+              }}
+              style={{
+                padding: '6px 10px',
+                borderRadius: 7,
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer',
+                border: '1px solid var(--color-border-subtle)',
+                background: '#fff',
+                color: 'var(--color-text-primary)',
+                fontFamily: 'var(--font-primary)',
+                textAlign: 'left',
+              }}
+              title="Move this prep into the workflow as a dedicated stage on this recipe (skips the implicit Run-sheet aggregation)"
+            >
+              Promote to stage →
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onRemove}
+            style={{
+              padding: '6px 10px',
+              borderRadius: 7,
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: 'pointer',
+              border: '1px solid var(--color-border-subtle)',
+              background: '#fff',
+              color: 'var(--color-error)',
+              fontFamily: 'var(--font-primary)',
+              textAlign: 'left',
+            }}
+          >
+            Remove tag
+          </button>
+        </div>
+      )}
+    </span>
+  );
+}
+
+function PrepAddButton({
+  isOpen, usedTypes, onOpen, onClose, onAdd,
+}: {
+  isOpen: boolean;
+  usedTypes: Set<WorkType>;
+  onOpen: () => void;
+  onClose: () => void;
+  onAdd: (workType: WorkType, leadOffset: -2 | -1 | 0) => void;
+}) {
+  return (
+    <span data-prep-add style={{ position: 'relative', display: 'inline-flex' }}>
+      <button
+        type="button"
+        onClick={onOpen}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 3,
+          padding: '3px 8px',
+          borderRadius: 100,
+          background: 'transparent',
+          color: 'var(--color-text-muted)',
+          fontSize: 10.5,
+          fontWeight: 700,
+          fontFamily: 'var(--font-primary)',
+          border: '1px dashed var(--color-border)',
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+        title="Add an ingredient prep tag (Sanitise / Slice / Weigh-up etc.)"
+      >
+        <Plus size={11} strokeWidth={2.4} /> Tag
+      </button>
+      {isOpen && (
+        <PrepAddPopover usedTypes={usedTypes} onClose={onClose} onAdd={onAdd} />
+      )}
+    </span>
+  );
+}
+
+/**
+ * The popover body — split out so it remounts every time the parent
+ * toggles `isOpen`. That gives us "fresh state on each open" without
+ * needing a useEffect-driven reset (which trips the lint rule against
+ * synchronous setState inside effects).
+ */
+function PrepAddPopover({
+  usedTypes, onClose, onAdd,
+}: {
+  usedTypes: Set<WorkType>;
+  onClose: () => void;
+  onAdd: (workType: WorkType, leadOffset: -2 | -1 | 0) => void;
+}) {
+  const [picked, setPicked] = useState<WorkType | null>(null);
+  const [lo, setLo] = useState<-2 | -1 | 0>(0);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.closest('[data-prep-add]')) onClose();
+    };
+    const tid = setTimeout(() => document.addEventListener('mousedown', onDown), 0);
+    return () => { clearTimeout(tid); document.removeEventListener('mousedown', onDown); };
+  }, [onClose]);
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: 'calc(100% + 6px)',
+        left: 0,
+        zIndex: 60,
+        minWidth: 240,
+        padding: 10,
+        background: '#fff',
+        border: '1px solid var(--color-border-subtle)',
+        borderRadius: 10,
+        boxShadow: '0 12px 32px rgba(3,15,58,0.16)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        fontFamily: 'var(--font-primary)',
+      }}
+    >
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        Tag
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {WORK_TYPE_ORDER.map((wt) => {
+          const used = usedTypes.has(wt);
+          const on = picked === wt;
+          return (
+            <button
+              key={wt}
+              type="button"
+              disabled={used}
+              onClick={() => setPicked(wt)}
+              style={{
+                padding: '3px 8px',
+                borderRadius: 100,
+                fontSize: 10.5,
+                fontWeight: 700,
+                cursor: used ? 'not-allowed' : 'pointer',
+                opacity: used ? 0.4 : 1,
+                border: '1px solid ' + (on ? 'transparent' : 'var(--color-border-subtle)'),
+                background: on ? 'var(--color-accent-active)' : '#fff',
+                color: on ? '#fff' : 'var(--color-text-secondary)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {WORK_TYPE_LABELS[wt]}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        When
+      </div>
+      <div style={{ display: 'flex', gap: 4 }}>
+        {([0, -1, -2] as const).map((opt) => {
+          const on = lo === opt;
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => setLo(opt)}
+              style={{
+                flex: 1,
+                padding: '5px 7px',
+                borderRadius: 6,
+                fontSize: 10.5,
+                fontWeight: 700,
+                cursor: 'pointer',
+                border: '1px solid ' + (on ? 'transparent' : 'var(--color-border-subtle)'),
+                background: on ? 'var(--color-accent-active)' : '#fff',
+                color: on ? '#fff' : 'var(--color-text-secondary)',
+              }}
+            >
+              {opt === 0 ? 'Same day' : opt === -1 ? 'Day before' : '2 days before'}
+            </button>
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        disabled={!picked}
+        onClick={() => picked && onAdd(picked, lo)}
+        style={{
+          padding: '7px 10px',
+          borderRadius: 8,
+          fontSize: 11.5,
+          fontWeight: 700,
+          cursor: picked ? 'pointer' : 'not-allowed',
+          opacity: picked ? 1 : 0.5,
+          background: 'var(--color-accent-active)',
+          color: '#fff',
+          border: '1px solid transparent',
+          fontFamily: 'var(--font-primary)',
+        }}
+      >
+        Add tag
+      </button>
     </div>
   );
 }

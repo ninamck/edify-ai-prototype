@@ -5,17 +5,20 @@ import { ArrowRightLeft, Check, ChevronRight, Clock, Download, Moon, Repeat, Shu
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import {
   benchesAt,
+  benchWorkTypes,
   effectiveBatchRules,
   getWorkflow,
   isNightShiftHHMM,
   PRET_NIGHT_SHIFT_POLICY,
   proposeBatchSplit,
+  recipeWorkTypes,
   type Bench,
   type ProductionItemId,
   type ProductionMode,
   type RunSchedule,
   type Site,
 } from './fixtures';
+import { WorkTypeChips } from './WorkTypeChip';
 import { computeRelatedItems, usePlan, type PlanLine } from './PlanStore';
 import { downloadBenchPdf } from '@/lib/pdf/productionPdfs';
 
@@ -511,16 +514,27 @@ function BenchCard({
             {card.bench.primaryMode && <ModeBadge mode={card.bench.primaryMode} />}
             {nextRunInfo && <NextRunChip info={nextRunInfo} />}
           </div>
-          <div
-            style={{
-              fontSize: 10,
-              color: 'var(--color-text-muted)',
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-            }}
-          >
-            {card.bench.capabilities.join(' · ')}
-            {!card.bench.online && <span style={{ color: 'var(--color-error)', marginLeft: 8 }}>OFFLINE</span>}
+          {/* Bench-level work-type chips — replaces the raw `capabilities`
+              list with the canonical activity vocabulary. Defaults derive
+              from `capabilities` via `benchWorkTypes` so this works even
+              for benches that haven't been re-authored yet. The full
+              capability list still reads underneath for context until we
+              fully retire that field. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <WorkTypeChips workTypes={benchWorkTypes(card.bench)} size="xs" />
+            {!card.bench.online && (
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: 'var(--color-error)',
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                OFFLINE
+              </span>
+            )}
           </div>
         </div>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -1119,11 +1133,16 @@ function RecipeRow({
         >
           {line.recipe.name}
         </span>
-        <span style={{ display: 'flex', gap: 6, fontSize: 10, color: 'var(--color-text-muted)', flexWrap: 'wrap' }}>
+        <span style={{ display: 'flex', gap: 6, fontSize: 10, color: 'var(--color-text-muted)', flexWrap: 'wrap', alignItems: 'center' }}>
           {isAssembly && <Tag label="Assembly" tone="info" />}
           {line.assemblyDemand.sources.length > 0 && <Tag label="Component" tone="warn" />}
           {line.isOverridden && <Tag label="Manager edit" tone="accent" />}
           {shortfall && <Tag label="Short" tone="error" />}
+          {/* Work-type chips on the bench-card recipe entries — same
+              vocabulary as the recipe library and Today rows so a manager
+              can scan a bench and see the activity mix at a glance. Cap
+              at 2 to keep entries compact within the card width. */}
+          <WorkTypeChips workTypes={recipeWorkTypes(line.recipe)} max={2} />
           {dispatchUnits > 0 && (
             <span
               style={{

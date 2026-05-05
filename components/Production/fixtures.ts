@@ -46,6 +46,234 @@ export type BenchCapability =
   | 'front-of-house'
   | 'assemble';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Work types & equipment
+//
+// `WorkType` is the canonical activity taxonomy shared across recipes,
+// workflow stages, and benches. It answers "what kind of work is this?"
+// and is generic enough to apply to any hub / café / dark kitchen
+// (intentionally not Pret-specific). The Run sheet pivots on this.
+//
+// `Equipment` is an optional refinement — a physical machine/space that a
+// stage may require beyond just its work type. e.g. a "Cook" stage might
+// further require an `oven` or a `proofer`. Routing a stage to a bench
+// becomes:
+//   bench.workTypes.includes(stage.workType) &&
+//   (stage.requiresEquipment ?? []).every(e => bench.equipment?.includes(e))
+//
+// Existing `BenchCapability` overlaps with both but conflates activity
+// (assemble/pack/prep) and equipment (oven/proofing/cold-prep). We're
+// keeping it for now to avoid a bigger refactor — see the migration map
+// in `workTypeFromCapability` / `equipmentFromCapability` below.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Canonical work types — initial set of 16. Grouped (in order) by when in
+// the day the work tends to happen:
+//   pre-shift:   weigh-up, thaw, mise
+//   cold prep:   wash, sanitise, slice
+//   mix/shape:   mix, proof
+//   hot work:    bake, grill
+//   set/cool:    chill
+//   build:       assemble, portion
+//   finish:      label, pack
+//   clean:       wash-down
+// The list is intentionally flat at the type level — the grouping above is
+// just for human ordering. Add to this list as new operational shapes
+// emerge; the chip rendering, Run sheet pivot, and ingredient prep popover
+// all read from this enum so new entries flow through automatically.
+export type WorkType =
+  | 'weigh-up'
+  | 'thaw'
+  | 'mise'
+  | 'wash'
+  | 'sanitise'
+  | 'slice'
+  | 'mix'
+  | 'proof'
+  | 'bake'
+  | 'grill'
+  | 'chill'
+  | 'assemble'
+  | 'portion'
+  | 'label'
+  | 'pack'
+  | 'wash-down';
+
+// Canonical equipment — initial set of 19. Used by `Bench.equipment` and
+// `WorkflowStage.requiresEquipment`. Authoring a stage with
+// `requiresEquipment: ['mandoline']` lets the Run sheet land its
+// aggregated slice work on a bench whose `equipment` list includes the
+// mandoline.
+export type Equipment =
+  | 'oven'
+  | 'combi-oven'
+  | 'proofer'
+  | 'mixer-planetary'
+  | 'mixer-spiral'
+  | 'slicer'
+  | 'mandoline'
+  | 'blender'
+  | 'food-processor'
+  | 'hob'
+  | 'griddle'
+  | 'panini-press'
+  | 'microwave'
+  | 'blast-chiller'
+  | 'walk-in-chiller'
+  | 'freezer'
+  | 'sanitise-sink'
+  | 'prep-table'
+  | 'counter';
+
+/** Display order for work types — earliest in the day first. Drives the
+ *  Run sheet section order and the order chips render in. */
+export const WORK_TYPE_ORDER: WorkType[] = [
+  'weigh-up', 'thaw', 'mise',
+  'wash', 'sanitise', 'slice',
+  'mix', 'proof',
+  'bake', 'grill',
+  'chill',
+  'assemble', 'portion',
+  'label', 'pack',
+  'wash-down',
+];
+
+export const WORK_TYPE_LABELS: Record<WorkType, string> = {
+  'weigh-up':  'Weigh up',
+  'thaw':      'Thaw',
+  'mise':      'Mise',
+  'wash':      'Wash',
+  'sanitise':  'Sanitise',
+  'slice':     'Slice',
+  'mix':       'Mix',
+  'proof':     'Proof',
+  'bake':      'Bake',
+  'grill':     'Grill',
+  'chill':     'Chill',
+  'assemble':  'Assemble',
+  'portion':   'Portion',
+  'label':     'Label',
+  'pack':      'Pack',
+  'wash-down': 'Wash-down',
+};
+
+/** Tonal colors per work type. Subtle backgrounds + a matching foreground
+ *  text color. Cold-leaning work uses cool tones, hot-leaning work uses
+ *  warm tones, finishing/clean work uses neutrals. */
+export const WORK_TYPE_COLORS: Record<WorkType, { bg: string; color: string }> = {
+  // Pre-shift — warm yellows/ambers, the "before service" tone.
+  'weigh-up':  { bg: 'rgba(241,180,52,0.16)', color: 'var(--color-warning)' },
+  'thaw':      { bg: 'rgba(3,105,161,0.10)',  color: 'var(--color-info)' },
+  'mise':      { bg: 'rgba(3,28,89,0.07)',    color: 'var(--color-accent-active)' },
+  // Cold prep — cool blues/teals.
+  'wash':      { bg: 'rgba(3,105,161,0.10)',  color: 'var(--color-info)' },
+  'sanitise':  { bg: 'rgba(74,108,181,0.14)', color: 'var(--color-accent-mid)' },
+  'slice':     { bg: 'rgba(74,108,181,0.14)', color: 'var(--color-accent-mid)' },
+  // Mix / shape — accent navy.
+  'mix':       { bg: 'rgba(3,28,89,0.07)',    color: 'var(--color-accent-active)' },
+  'proof':     { bg: 'rgba(241,180,52,0.16)', color: 'var(--color-warning)' },
+  // Hot work — reds.
+  'bake':      { bg: 'rgba(220,38,38,0.10)',  color: 'var(--color-error)' },
+  'grill':     { bg: 'rgba(220,38,38,0.10)',  color: 'var(--color-error)' },
+  // Set / cool — light blue.
+  'chill':     { bg: 'rgba(3,105,161,0.10)',  color: 'var(--color-info)' },
+  // Build — info blue.
+  'assemble':  { bg: 'rgba(3,105,161,0.12)',  color: 'var(--color-info)' },
+  'portion':   { bg: 'rgba(21,128,61,0.10)',  color: 'var(--color-success)' },
+  // Finish — green/neutral.
+  'label':     { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' },
+  'pack':      { bg: 'rgba(21,128,61,0.10)',  color: 'var(--color-success)' },
+  // Clean — neutral grey.
+  'wash-down': { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' },
+};
+
+/** Default work-type for an existing `BenchCapability`. Used to derive
+ *  `WorkflowStage.workType` and `Bench.workTypes` when not set explicitly,
+ *  so we can ship the new vocabulary without touching every fixture.
+ *  Note: capabilities are coarser than work types — `oven` covers both
+ *  bake and grill in our model; we default to `bake` and let stages
+ *  override with `workType: 'grill'` where it matters. */
+export function workTypeFromCapability(cap: BenchCapability): WorkType {
+  switch (cap) {
+    case 'oven':           return 'bake';
+    case 'proofing':       return 'proof';
+    case 'cold-prep':      return 'mise';
+    case 'prep':           return 'mise';
+    case 'assemble':       return 'assemble';
+    case 'pack':           return 'pack';
+    case 'front-of-house': return 'pack';
+  }
+}
+
+/** Default equipment hint for an existing `BenchCapability`. */
+export function equipmentFromCapability(cap: BenchCapability): Equipment | undefined {
+  switch (cap) {
+    case 'oven':           return 'oven';
+    case 'proofing':       return 'proofer';
+    case 'cold-prep':      return 'walk-in-chiller';
+    case 'front-of-house': return 'counter';
+    default:               return undefined;
+  }
+}
+
+/** Display labels for equipment — used in editors + chips. */
+export const EQUIPMENT_LABELS: Record<Equipment, string> = {
+  'oven':            'Oven',
+  'combi-oven':      'Combi oven',
+  'proofer':         'Proofer',
+  'mixer-planetary': 'Planetary mixer',
+  'mixer-spiral':    'Spiral mixer',
+  'slicer':          'Slicer',
+  'mandoline':       'Mandoline',
+  'blender':         'Blender',
+  'food-processor':  'Food processor',
+  'hob':             'Hob',
+  'griddle':         'Griddle',
+  'panini-press':    'Panini press',
+  'microwave':       'Microwave',
+  'blast-chiller':   'Blast chiller',
+  'walk-in-chiller': 'Walk-in chiller',
+  'freezer':         'Freezer',
+  'sanitise-sink':   'Sanitise sink',
+  'prep-table':      'Prep table',
+  'counter':         'Counter',
+};
+
+/** Canonical ordering for equipment chips — same flow as work types
+ *  (cold/cool first, hot middle, then chill/cool, then space). */
+export const EQUIPMENT_ORDER: Equipment[] = [
+  'oven', 'combi-oven', 'proofer',
+  'mixer-planetary', 'mixer-spiral',
+  'slicer', 'mandoline', 'blender', 'food-processor',
+  'hob', 'griddle', 'panini-press', 'microwave',
+  'blast-chiller', 'walk-in-chiller', 'freezer',
+  'sanitise-sink',
+  'prep-table', 'counter',
+];
+
+/** Resolve the effective work types for a bench — explicit `workTypes` if
+ *  authored, else derived from `capabilities`. Always deduped. */
+export function benchWorkTypes(b: Pick<Bench, 'workTypes' | 'capabilities'>): WorkType[] {
+  if (b.workTypes && b.workTypes.length > 0) return Array.from(new Set(b.workTypes));
+  return Array.from(new Set(b.capabilities.map(workTypeFromCapability)));
+}
+
+/** Resolve the effective equipment for a bench — explicit `equipment` if
+ *  authored, else derived from `capabilities`. */
+export function benchEquipment(b: Pick<Bench, 'equipment' | 'capabilities'>): Equipment[] {
+  if (b.equipment && b.equipment.length > 0) return Array.from(new Set(b.equipment));
+  const derived = b.capabilities
+    .map(equipmentFromCapability)
+    .filter((e): e is Equipment => !!e);
+  return Array.from(new Set(derived));
+}
+
+/** Resolve the effective work type for a workflow stage — explicit if
+ *  authored, else derived from `capability`. */
+export function stageWorkType(s: Pick<WorkflowStage, 'workType' | 'capability'>): WorkType {
+  return s.workType ?? workTypeFromCapability(s.capability);
+}
+
 export type SelectionTag =
   | 'breakfast'
   | 'morning'
@@ -269,7 +497,26 @@ export type Bench = {
   id: BenchId;
   siteId: SiteId;
   name: string;
+  /**
+   * Legacy capability list — mixes activity (`prep`, `assemble`, `pack`)
+   * with equipment (`oven`, `proofing`, `cold-prep`). Still used by
+   * existing routing logic; will gradually shrink to pure equipment as
+   * `workTypes` + `equipment` take over.
+   */
   capabilities: BenchCapability[];
+  /**
+   * Activity buckets this bench supports — the canonical taxonomy. If
+   * not set, derives from `capabilities` via `benchWorkTypes`. Set
+   * explicitly to broaden a bench beyond its capability defaults
+   * (e.g. an assembly bench that also handles slice work).
+   */
+  workTypes?: WorkType[];
+  /**
+   * Specific equipment present at this bench. If not set, derives from
+   * `capabilities` via `benchEquipment`. Used together with `workTypes`
+   * to route stages with `requiresEquipment` set.
+   */
+  equipment?: Equipment[];
   /** Bench-level batch rules (hardware limits). Recipe rules win if set. */
   batchRules?: BatchRules;
   /** Whether bench is currently online (false = out of service). */
@@ -655,6 +902,21 @@ export type WorkflowStage = {
   id: StageId;
   label: string;
   capability: BenchCapability;
+  /**
+   * Activity bucket for the Run sheet and stage-level tag chips. Optional
+   * — if omitted we derive it from `capability` via
+   * `workTypeFromCapability`. Set explicitly when the default is wrong
+   * (e.g. coffee `brew` runs on `cold-prep` capability but is really
+   * `cook` work).
+   */
+  workType?: WorkType;
+  /**
+   * Specific equipment this stage needs *beyond* its work type. Most
+   * stages won't set this — it's the escape hatch for stages whose work
+   * type alone doesn't pin down a bench (e.g. a "Cook" stage that needs
+   * a `proofer` specifically).
+   */
+  requiresEquipment?: Equipment[];
   /** -2 = D-2, -1 = D-1, 0 = D0 (same day as consumption). V1 max = -2. */
   leadOffset: -2 | -1 | 0;
   /** Estimated duration for planning a batch of default size (minutes). */
@@ -676,10 +938,16 @@ export const PRET_WORKFLOWS: Record<WorkflowId, ProductionWorkflow> = {
   'wf-croissant': {
     id: 'wf-croissant',
     stages: [
-      { id: 'ferment', label: 'Overnight ferment', capability: 'proofing', leadOffset: -1, durationMinutes: 8 * 60 },
-      { id: 'bake', label: 'Bake', capability: 'oven', leadOffset: 0, durationMinutes: 18 },
-      { id: 'cool', label: 'Cool', capability: 'cold-prep', leadOffset: 0, durationMinutes: 12 },
-      { id: 'pack', label: 'Pack', capability: 'pack', leadOffset: 0, durationMinutes: 10 },
+      // Proofing capability defaults to `proof` work type; explicit
+      // `proofer` equipment so the Run sheet routes to the proofing
+      // bench rather than any cold bench.
+      { id: 'ferment', label: 'Overnight ferment', capability: 'proofing', workType: 'proof', requiresEquipment: ['proofer'], leadOffset: -1, durationMinutes: 8 * 60 },
+      { id: 'bake', label: 'Bake', capability: 'oven', workType: 'bake', requiresEquipment: ['oven'], leadOffset: 0, durationMinutes: 18 },
+      // Cool runs on a cold-prep bench but the *work* is `chill` — it's
+      // a passive cool-down, not active mise. Explicit `chill` keeps it
+      // out of the Mise bucket on the Run sheet.
+      { id: 'cool', label: 'Cool', capability: 'cold-prep', workType: 'chill', requiresEquipment: ['walk-in-chiller'], leadOffset: 0, durationMinutes: 12 },
+      { id: 'pack', label: 'Pack', capability: 'pack', workType: 'pack', leadOffset: 0, durationMinutes: 10 },
     ],
     edges: [
       { from: 'ferment', to: 'bake' },
@@ -690,29 +958,37 @@ export const PRET_WORKFLOWS: Record<WorkflowId, ProductionWorkflow> = {
   'wf-cookie': {
     id: 'wf-cookie',
     stages: [
-      { id: 'bake', label: 'Bake', capability: 'oven', leadOffset: 0, durationMinutes: 12 },
+      { id: 'bake', label: 'Bake', capability: 'oven', workType: 'bake', requiresEquipment: ['oven'], leadOffset: 0, durationMinutes: 12 },
     ],
     edges: [],
   },
   'wf-brewed-coffee': {
     id: 'wf-brewed-coffee',
     stages: [
-      { id: 'brew', label: 'Brew', capability: 'cold-prep', leadOffset: 0, durationMinutes: 6 },
+      // `brew` runs on a cold-prep bench (no oven needed) but is hot
+      // mixing — combining hot water with grounds. Closest fit in the
+      // current canonical work-type set is `mix`. If brewing becomes a
+      // common enough operational shape to deserve its own bucket on
+      // the Run sheet, add a `boil` / `brew` work type to WorkType.
+      { id: 'brew', label: 'Brew', capability: 'cold-prep', workType: 'mix', leadOffset: 0, durationMinutes: 6 },
     ],
     edges: [],
   },
   'wf-ciabatta': {
     id: 'wf-ciabatta',
     stages: [
-      { id: 'ferment', label: 'Overnight ferment', capability: 'proofing', leadOffset: -1, durationMinutes: 10 * 60 },
-      { id: 'bake', label: 'Bake', capability: 'oven', leadOffset: 0, durationMinutes: 25 },
+      { id: 'ferment', label: 'Overnight ferment', capability: 'proofing', workType: 'proof', requiresEquipment: ['proofer'], leadOffset: -1, durationMinutes: 10 * 60 },
+      { id: 'bake', label: 'Bake', capability: 'oven', workType: 'bake', requiresEquipment: ['oven'], leadOffset: 0, durationMinutes: 25 },
     ],
     edges: [{ from: 'ferment', to: 'bake' }],
   },
   'wf-filling': {
     id: 'wf-filling',
     stages: [
-      { id: 'prep', label: 'Prep filling', capability: 'cold-prep', leadOffset: 0, durationMinutes: 30 },
+      // Filling prep is hands-on cold work — `mix` (combining ingredients
+      // into a uniform spread) rather than the generic `mise` default
+      // from the cold-prep capability.
+      { id: 'prep', label: 'Prep filling', capability: 'cold-prep', workType: 'mix', leadOffset: 0, durationMinutes: 30 },
     ],
     edges: [],
   },
@@ -720,14 +996,16 @@ export const PRET_WORKFLOWS: Record<WorkflowId, ProductionWorkflow> = {
     // demonstrates D-2 depth: ciabatta ferment is a dependency two days out for some hubs
     id: 'wf-sandwich',
     stages: [
-      { id: 'assemble', label: 'Assemble', capability: 'assemble', leadOffset: 0, durationMinutes: 4 },
+      { id: 'assemble', label: 'Assemble', capability: 'assemble', workType: 'assemble', leadOffset: 0, durationMinutes: 4 },
     ],
     edges: [],
   },
   'wf-salad': {
     id: 'wf-salad',
     stages: [
-      { id: 'prep', label: 'Plate to order', capability: 'prep', leadOffset: 0, durationMinutes: 3 },
+      // Plating a salad is assembly work, not generic prep. Explicit
+      // `assemble` keeps it in the Build bucket on the Run sheet.
+      { id: 'prep', label: 'Plate to order', capability: 'prep', workType: 'assemble', leadOffset: 0, durationMinutes: 3 },
     ],
     edges: [],
   },
@@ -3179,6 +3457,157 @@ export function getWorkflow(id: WorkflowId): ProductionWorkflow | undefined {
   return PRET_WORKFLOWS[id];
 }
 
+/**
+ * Optional resolver for per-workflow-id stage lookup. The default
+ * implementation reads from the static `PRET_WORKFLOWS` fixture; callers
+ * (notably the recipe editor) can pass a store-aware resolver so chips
+ * reflect in-memory edits made via `recipeStore.updateWorkflow`.
+ */
+export type WorkflowResolver = (id: WorkflowId) => ProductionWorkflow | undefined;
+
+/** Static fallback — reads PRET_WORKFLOWS directly. */
+const staticWorkflowResolver: WorkflowResolver = (id) => PRET_WORKFLOWS[id];
+
+let activeWorkflowResolver: WorkflowResolver = staticWorkflowResolver;
+
+/**
+ * Override the default workflow resolver used by `recipeWorkTypes` /
+ * `workTypesFromWorkflows`. The recipe editor's `recipeStore` calls
+ * this on module load with a closure over its mutable state, so
+ * production-side chip rendering automatically reflects in-memory
+ * workflow edits without every caller having to plumb a resolver.
+ *
+ * Pass `null` to reset to the static `PRET_WORKFLOWS` resolver. Last
+ * writer wins; the prototype only ever has one writer (recipeStore).
+ */
+export function setWorkflowResolver(resolver: WorkflowResolver | null): void {
+  activeWorkflowResolver = resolver ?? staticWorkflowResolver;
+}
+
+/** Default resolver — defers to whichever resolver is currently active. */
+export const defaultWorkflowResolver: WorkflowResolver = (id) => activeWorkflowResolver(id);
+
+/**
+ * Lower-level primitive for both ProductionRecipe and library Recipe.
+ * Walks the supplied workflow ids + any per-recipe ingredient prep work
+ * and returns a deduped, ordered set of work types.
+ */
+export function workTypesFromWorkflows(input: {
+  workflowIds: WorkflowId[];
+  /**
+   * Effective prep work for every ingredient consumed by this recipe
+   * (and its sub-recipes), already resolved by `componentPrepWork`. Pass
+   * an empty list when the recipe has no ingredients. The implicit
+   * `weigh-up` rule (every recipe with ingredients needs a pre-shift
+   * weigh) is applied here so callers don't need to remember it.
+   */
+  ingredientPrep?: PrepWorkEntry[];
+  /** @deprecated use `ingredientPrep` — retained for callers that
+   *  haven't been migrated yet. When `true`, contributes a single
+   *  `weigh-up` chip and nothing else. */
+  hasIngredients?: boolean;
+  /** Override for testing / store-aware contexts. */
+  workflowResolver?: WorkflowResolver;
+}): WorkType[] {
+  const resolver = input.workflowResolver ?? defaultWorkflowResolver;
+  const set = new Set<WorkType>();
+  for (const wfId of input.workflowIds) {
+    const wf = resolver(wfId);
+    if (!wf) continue;
+    for (const stage of wf.stages) set.add(stageWorkType(stage));
+  }
+  const prep = input.ingredientPrep ?? [];
+  if (prep.length > 0) {
+    set.add('weigh-up');
+    for (const entry of prep) set.add(entry.workType);
+  } else if (input.hasIngredients) {
+    set.add('weigh-up');
+  }
+  return WORK_TYPE_ORDER.filter(w => set.has(w));
+}
+
+/**
+ * The unique set of work types a recipe touches across the full chain
+ * of work that produces it. Walks:
+ *   1. The recipe's own workflow stages
+ *   2. All sub-recipes' workflow stages (one level — sub-recipes are
+ *      already flattened in `subRecipes`, no need to recurse further
+ *      for the prototype's depth)
+ *   3. Every consumed ingredient's effective prep work — master
+ *      `Ingredient.defaultPrepWork` unless the per-recipe
+ *      `IngredientUsage.prepWorkOverride` is set.
+ *   4. An implicit `weigh-up` if the recipe (or any of its sub-recipes)
+ *      has any ingredients — every recipe with ingredients needs a
+ *      pre-shift weigh
+ *
+ * Returned in `WORK_TYPE_ORDER` so chip rendering is deterministic.
+ *
+ * Pass `workflowResolver` from a context that has the latest workflow
+ * edits (e.g. the recipe editor) so chips refresh as stages change.
+ */
+export function recipeWorkTypes(
+  recipe: ProductionRecipe,
+  opts?: { workflowResolver?: WorkflowResolver },
+): WorkType[] {
+  const subRecipeIds = (recipe.subRecipes ?? []).map(s => s.recipeId);
+  const resolver = opts?.workflowResolver ?? defaultWorkflowResolver;
+  const subWorkflows = subRecipeIds
+    .map(id => PRET_RECIPES.find(r => r.id === id)?.workflowId)
+    .filter((w): w is WorkflowId => !!w);
+  const recipeIds = [recipe.id, ...subRecipeIds];
+  const usages = PRET_INGREDIENT_USAGE.filter(u => recipeIds.includes(u.recipeId));
+  const ingredientPrep: PrepWorkEntry[] = usages.flatMap((u) =>
+    componentPrepWork(u.prepWorkOverride, getIngredient(u.ingredientId)),
+  );
+  return workTypesFromWorkflows({
+    workflowIds: [recipe.workflowId, ...subWorkflows],
+    ingredientPrep: usages.length > 0 ? ingredientPrep : [],
+    hasIngredients: usages.length > 0,
+    workflowResolver: resolver,
+  });
+}
+
+/**
+ * Walk the same ingredient-prep set used by `recipeWorkTypes`, but
+ * return the per-ingredient breakdown so callers (e.g. the Run sheet
+ * aggregator) can group by `(ingredientId, workType, leadOffset)`
+ * across multiple recipes.
+ */
+export type RecipeIngredientPrep = {
+  ingredientId: IngredientId;
+  ingredient: Ingredient | undefined;
+  /** The recipe id contributing this prep entry — needed by the Run
+   *  sheet so it can show "for: Club +5, BLT +7" on each aggregated row. */
+  sourceRecipeId: RecipeId;
+  /** Per-unit consumption from `IngredientUsage` — multiplied by the
+   *  recipe's planned quantity for the day to get the aggregated total. */
+  quantityPerUnit: number;
+  unit: 'g' | 'ml' | 'unit';
+  prep: PrepWorkEntry;
+};
+
+export function recipeIngredientPrep(recipe: ProductionRecipe): RecipeIngredientPrep[] {
+  const subRecipeIds = (recipe.subRecipes ?? []).map(s => s.recipeId);
+  const recipeIds = [recipe.id, ...subRecipeIds];
+  const out: RecipeIngredientPrep[] = [];
+  for (const usage of PRET_INGREDIENT_USAGE) {
+    if (!recipeIds.includes(usage.recipeId)) continue;
+    const ingredient = getIngredient(usage.ingredientId);
+    const effective = componentPrepWork(usage.prepWorkOverride, ingredient);
+    for (const entry of effective) {
+      out.push({
+        ingredientId: usage.ingredientId,
+        ingredient,
+        sourceRecipeId: usage.recipeId,
+        quantityPerUnit: usage.quantityPerUnit,
+        unit: usage.unit,
+        prep: entry,
+      });
+    }
+  }
+  return out;
+}
+
 export function getUser(id: UserId): User | undefined {
   return PRET_USERS.find(u => u.id === id);
 }
@@ -3397,12 +3826,35 @@ export type IngredientCategory =
   | 'pantry'
   | 'packaging';
 
+/**
+ * A single piece of authored prep work — either at the ingredient master
+ * level (`Ingredient.defaultPrepWork`) or per-recipe override
+ * (`ItemComponent.prepWorkOverride`). Each entry binds a `WorkType` to an
+ * optional `leadOffset` so authors can mark "weigh up the day before" /
+ * "thaw two days before" at the ingredient level — not just the stage
+ * level. Default leadOffset is `0` (same day as consumption) when
+ * omitted.
+ */
+export type PrepWorkEntry = {
+  workType: WorkType;
+  /** Days before consumption this prep happens. -2/-1/0; default 0. */
+  leadOffset?: -2 | -1 | 0;
+};
+
 export type Ingredient = {
   id: IngredientId;
   name: string;
   /** Canonical unit for stock-on-hand and per-unit consumption. */
   canonicalUnit: 'g' | 'ml' | 'unit';
   category: IngredientCategory;
+  /**
+   * Master-level prep work this ingredient typically requires before it
+   * can be consumed by a recipe. e.g. `tomato → [sanitise, slice]`.
+   * Inherited by every recipe that uses this ingredient unless the
+   * per-recipe component row sets `prepWorkOverride`. Empty/undefined
+   * means "no implicit prep — already shelf-stable / ready-to-use".
+   */
+  defaultPrepWork?: PrepWorkEntry[];
 };
 
 export const PRET_INGREDIENTS: Ingredient[] = [
@@ -3411,9 +3863,32 @@ export const PRET_INGREDIENTS: Ingredient[] = [
   { id: 'ing-egg',         name: 'Free-range eggs',     canonicalUnit: 'unit', category: 'protein' },
   { id: 'ing-mayo',        name: 'Mayonnaise',          canonicalUnit: 'g',    category: 'pantry'  },
   { id: 'ing-tuna',        name: 'Tuna (skipjack)',     canonicalUnit: 'g',    category: 'protein' },
-  { id: 'ing-chicken',     name: 'Roast chicken',       canonicalUnit: 'g',    category: 'protein' },
+  // Roast chicken: master defaults the weigh-up to the day before so
+  // mises bake the schedule into "do this tonight, not tomorrow morning".
+  // Every recipe that uses chicken inherits this unless it overrides.
+  {
+    id: 'ing-chicken',
+    name: 'Roast chicken',
+    canonicalUnit: 'g',
+    category: 'protein',
+    defaultPrepWork: [{ workType: 'weigh-up', leadOffset: -1 }],
+  },
   { id: 'ing-chocolate',   name: 'Dark chocolate batons', canonicalUnit: 'g',  category: 'pantry'  },
   { id: 'ing-cocoa-powder', name: 'Cocoa powder',       canonicalUnit: 'g',    category: 'pantry'  },
+  // Tomato — the canonical "ingredient prep" demo. Master defaults to
+  // sanitise + slice so every sandwich/salad that uses tomato gets the
+  // two prep chips automatically. The Run sheet aggregates the sliced
+  // tomatoes across all recipes onto a single "Slice tomatoes" row.
+  {
+    id: 'ing-tomato',
+    name: 'Vine tomatoes',
+    canonicalUnit: 'unit',
+    category: 'produce',
+    defaultPrepWork: [
+      { workType: 'sanitise' },
+      { workType: 'slice' },
+    ],
+  },
 ];
 
 export type IngredientUsage = {
@@ -3423,7 +3898,36 @@ export type IngredientUsage = {
   quantityPerUnit: number;
   /** Unit (must match the ingredient's canonicalUnit). */
   unit: 'g' | 'ml' | 'unit';
+  /**
+   * Per-recipe prep-work override. When set, REPLACES the master
+   * `Ingredient.defaultPrepWork` for this specific recipe — useful when
+   * one recipe needs the ingredient prepared differently (e.g. tomato
+   * sliced for a sandwich vs diced for a salad). When undefined the
+   * ingredient inherits its master defaults.
+   */
+  prepWorkOverride?: PrepWorkEntry[];
 };
+
+/**
+ * Resolve the effective prep work for an ingredient on a given recipe —
+ * the per-recipe override wins if non-empty, otherwise the ingredient's
+ * master defaults. Returns an empty array if neither is set (treated as
+ * "no implicit prep needed"). Used by `recipeWorkTypes` to walk
+ * ingredient prep into a recipe's chips and by the Run sheet to drive
+ * cross-recipe aggregation.
+ *
+ * Note: `getIngredient` itself is defined further down with the other
+ * lookup helpers; we reference it from `recipeWorkTypes` /
+ * `recipeIngredientPrep` below by name (function declaration is hoisted
+ * within the module).
+ */
+export function componentPrepWork(
+  override: PrepWorkEntry[] | undefined,
+  ingredient: Ingredient | undefined,
+): PrepWorkEntry[] {
+  if (override && override.length > 0) return override;
+  return ingredient?.defaultPrepWork ?? [];
+}
 
 /**
  * Per-recipe ingredient consumption. Defined for base (non-assembly) recipes
@@ -3457,6 +3961,29 @@ export const PRET_INGREDIENT_USAGE: IngredientUsage[] = [
   { recipeId: 'prec-chicken-mayo-filling', ingredientId: 'ing-mayo',    quantityPerUnit: 600, unit: 'g' },
   // Roasts.
   { recipeId: 'prec-roast-chicken',      ingredientId: 'ing-chicken', quantityPerUnit: 1800, unit: 'g' }, // per tray
+
+  // ─── Tomato (ingredient-prep demo) ─────────────────────────────────────
+  // Three sandwiches inherit the master tomato prep (sanitise + slice).
+  // The Run sheet aggregates these onto a single "Slice tomatoes" row
+  // with the source recipes called out — replacing the three separate
+  // entries you'd otherwise see by recipe.
+  { recipeId: 'prec-club-sandwich',     ingredientId: 'ing-tomato', quantityPerUnit: 1, unit: 'unit' }, // 1 tomato/sandwich (~5 slices)
+  { recipeId: 'prec-tuna-sandwich',     ingredientId: 'ing-tomato', quantityPerUnit: 1, unit: 'unit' },
+  { recipeId: 'prec-egg-mayo-sandwich', ingredientId: 'ing-tomato', quantityPerUnit: 1, unit: 'unit' },
+  // One salad overrides the master prep — supplier delivers pre-sanitised
+  // vine tomatoes already destined for this recipe, so we only wash + slice
+  // (no full sanitise step). Demonstrates the per-recipe override beating
+  // the master defaults.
+  {
+    recipeId: 'prec-chicken-caesar',
+    ingredientId: 'ing-tomato',
+    quantityPerUnit: 2,
+    unit: 'unit',
+    prepWorkOverride: [
+      { workType: 'wash' },
+      { workType: 'slice' },
+    ],
+  },
 ];
 
 export type IngredientStock = {

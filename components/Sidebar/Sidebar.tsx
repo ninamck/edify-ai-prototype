@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import {
   Home,
   CalendarClock,
+  ChefHat,
   ClipboardList,
   Send,
   ShoppingCart,
@@ -48,6 +49,28 @@ export default function Sidebar() {
    */
   const [compact, setCompact] = useState(true);
   const is = (href: string) => pathname === href || pathname.startsWith(href + '/');
+
+  // The hub Production area splits into two sidebar items so the mental
+  // model matches what a manager is actually doing:
+  //   • Run production  → "what's happening on the floor right now"
+  //                       (Today, Run sheet, Benches, Sales live, PCR)
+  //   • Plan production → "what I'm setting up for tomorrow / future"
+  //                       (Plan, Carry-over, Productivity, Sales vs
+  //                        forecast, Settings, Settings health, Setup)
+  // Both items share /production routes; we tell them apart by which
+  // sub-page is open. A page that doesn't fall in either bucket (just
+  // bare /production) defaults to Run since that's the active-day view.
+  const RUN_PRODUCTION_PREFIXES = [
+    '/production/amounts',
+    '/production/run-sheet',
+    '/production/board',
+    '/production/sales',
+    '/production/pcr',
+  ];
+  const isRunProductionPath = (p: string) =>
+    RUN_PRODUCTION_PREFIXES.some(prefix => p === prefix || p.startsWith(prefix + '/'));
+  const isProductionPath = (p: string) => p === '/production' || p.startsWith('/production/');
+  const isPlanProductionPath = (p: string) => isProductionPath(p) && !isRunProductionPath(p);
 
   // Persona-aware nav. The HUB sees the full operator set; the SPOKE sees
   // a curated subset that matches what a satellite site actually does:
@@ -97,26 +120,50 @@ export default function Sidebar() {
             /production/spokes). Dispatch is hub-only — spokes receive,
             they don't send. */}
         <NavGroup title={isSpoke ? 'Plan & order' : 'Make, plan & dispatch'} showDivider={true} compact={compact}>
-          {/* Demo: hardcoded badge mirrors the Quinn floating-button counter
-              so the sidebar shows there's something needing attention inside
-              Production. Spoke persona doesn't need the badge — the spoke's
-              attention items live on cards inside their order page. */}
-          <NavItem
-            label="Plan production"
-            icon={CalendarClock}
-            compact={compact}
-            badge={isSpoke ? undefined : 4}
-            active={is('/production')}
-            onClick={() => router.push('/production/amounts')}
-          />
-          {!isSpoke && (
+          {isSpoke ? (
+            // Spoke keeps a single Plan production entry — they don't
+            // run production (they receive + sell), so the floor/plan
+            // split a hub gets doesn't apply here.
             <NavItem
-              label="Dispatch to stores"
-              icon={Send}
+              label="Plan production"
+              icon={CalendarClock}
               compact={compact}
-              active={is('/dispatch')}
-              onClick={() => router.push('/dispatch')}
+              active={isProductionPath(pathname)}
+              onClick={() => router.push('/production/amounts')}
             />
+          ) : (
+            <>
+              {/* Run production — today, on the floor. Carries the
+                  attention badge because most "needs you now" items
+                  (urgent remakes, rejects, ad-hoc requests, shortfalls)
+                  surface on the Today / Sales / PCR pages inside this
+                  bucket. */}
+              <NavItem
+                label="Run production"
+                icon={ChefHat}
+                compact={compact}
+                badge={4}
+                active={isRunProductionPath(pathname)}
+                onClick={() => router.push('/production/amounts')}
+              />
+              {/* Plan production — tomorrow + future. Lands on the Plan
+                  page (week view) which is the natural starting point
+                  when you're in planning mode. */}
+              <NavItem
+                label="Plan production"
+                icon={CalendarClock}
+                compact={compact}
+                active={isPlanProductionPath(pathname)}
+                onClick={() => router.push('/production/plan')}
+              />
+              <NavItem
+                label="Dispatch to stores"
+                icon={Send}
+                compact={compact}
+                active={is('/dispatch')}
+                onClick={() => router.push('/dispatch')}
+              />
+            </>
           )}
         </NavGroup>
 

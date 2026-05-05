@@ -15,7 +15,6 @@ import {
   Power,
   RotateCcw,
   AlertTriangle,
-  Info,
   Combine,
   Search,
   X,
@@ -34,12 +33,13 @@ import {
   proposeBatchSplit,
   DEMO_TODAY,
   getRecipe,
+  recipeWorkTypes,
   type SiteId,
   type ProductionRecipe,
   type ProductionMode,
-  type DemandSignal,
   type StockCap,
 } from './fixtures';
+import { WorkTypeChips } from './WorkTypeChip';
 import { hhmmToMinutes, minutesToHHMM } from './time';
 
 const CATEGORY_ORDER: ProductionRecipe['category'][] = [
@@ -65,16 +65,6 @@ const MODE_TABS: Array<{ id: ModeTabId; label: string; hint: string }> = [
   { id: 'increment', label: 'Drops', hint: 'Made fresh in drops throughout the day (coffees, smoothies)' },
   { id: 'components', label: 'Components', hint: 'Sub-recipe prep that feeds finished products (sandwich fillings, sauces). Quantities are summed from the products that use them.' },
 ];
-
-const SIGNAL_LABELS: Record<DemandSignal, string> = {
-  'sales-history': 'Sales history',
-  weather: 'Weather',
-  'stock-on-hand': 'Stock on hand',
-  'online-orders': 'Online orders',
-  'waste-history': 'Waste history',
-  event: 'Event',
-  promo: 'Promo',
-};
 
 export type AmountsViewProps = {
   siteId: SiteId;
@@ -293,8 +283,8 @@ export default function AmountsView({
   function bump(line: PlanLine, delta: number) {
     const step = line.recipe.batchRules?.multipleOf ?? 1;
     // For Run-mode items the stepper edits the *run baseline* (variable
-    // top-ups live separately and only adjust from the expanded panel), so
-    // we bump runPlanned. For everything else they're equal.
+    // top-ups are separate in plan state); we bump runPlanned. For
+    // everything else they're equal.
     const current = line.runPlanned;
     const next = Math.max(0, current + delta * step);
     setPlanned(line.item.id, next, date);
@@ -307,11 +297,6 @@ export default function AmountsView({
       else next.add(id);
       return next;
     });
-  }
-
-  function absorbAssemblyDemand(line: PlanLine) {
-    if (line.assemblyDemand.totalUnits <= line.planned) return;
-    setPlanned(line.item.id, line.assemblyDemand.totalUnits, date);
   }
 
   const dateOverrideCount = overrideCount(date);
@@ -594,11 +579,15 @@ export default function AmountsView({
             overflow: 'hidden',
           }}
         >
-          {/* Table header */}
+          {/* Table header. Plan is the read-only commitment for the day;
+              Adjust is the live tweak surface — it only carries a stepper
+              for variable or drops items where on-the-fly changes are
+              expected. Run-mode items don't get a stepper here (they're
+              scheduled in advance). */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'minmax(260px, 1.6fr) 100px 100px 110px 200px',
+              gridTemplateColumns: 'minmax(240px, 1.6fr) 90px 90px 100px 90px 170px',
               padding: '14px 16px',
               gap: 12,
               background: 'var(--color-bg-hover)',
@@ -614,7 +603,8 @@ export default function AmountsView({
             <span style={{ textAlign: 'right' }}>Forecast</span>
             <span style={{ textAlign: 'right' }}>Carry-over</span>
             <span style={{ textAlign: 'right' }}>Quinn</span>
-            <span style={{ textAlign: 'center' }}>You plan</span>
+            <span style={{ textAlign: 'center' }}>Plan</span>
+            <span style={{ textAlign: 'center' }}>Adjust</span>
           </div>
 
           {/* Category filter sub-row — sits under the column header so it
@@ -809,7 +799,6 @@ export default function AmountsView({
                   onSetPerRun={arr => setPerRunPlan(line.item.id, arr, date)}
                   onSetVariable={v => setVariablePlan(line.item.id, v, date)}
                   onResetToQuinn={() => resetToQuinn(line.item.id, date)}
-                  onAbsorb={() => absorbAssemblyDemand(line)}
                   pulsing={pulsingItemId === line.item.id}
                 />
               ))}
@@ -863,7 +852,6 @@ function AmountRow({
   onSetPerRun,
   onSetVariable,
   onResetToQuinn,
-  onAbsorb,
   pulsing = false,
 }: {
   line: PlanLine;
@@ -876,7 +864,6 @@ function AmountRow({
   onSetPerRun: (perRun: number[]) => void;
   onSetVariable: (v: number) => void;
   onResetToQuinn: () => void;
-  onAbsorb: () => void;
   /** When true, show a transient highlight glow (Quinn deep-link landing). */
   pulsing?: boolean;
 }) {
@@ -976,8 +963,8 @@ function AmountRow({
         data-amount-row-id={line.item.id}
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(260px, 1.6fr) 100px 100px 110px 200px',
-          padding: '8px 16px 8px 13px',
+          gridTemplateColumns: 'minmax(240px, 1.6fr) 90px 90px 100px 90px 170px',
+          padding: '14px 16px 14px 13px',
           gap: 12,
           alignItems: 'center',
           borderBottom: '1px solid var(--color-border-subtle)',
@@ -1068,6 +1055,13 @@ function AmountRow({
               {recipe.selectionTags.slice(0, 2).map(t => (
                 <SelectionTagChip key={t} tag={t} size="xs" />
               ))}
+              {/* Work-type tags — derived from the recipe's workflow (and
+                  any sub-recipe workflows) plus an implicit Weigh up if
+                  it consumes ingredients. Same canonical vocabulary as
+                  the recipe library, the bench cards, and (soon) the Run
+                  sheet. Cap at 3 so the row label doesn't get too dense;
+                  a "+N" overflow chip surfaces the rest. */}
+              <WorkTypeChips workTypes={recipeWorkTypes(recipe)} max={3} />
               {isAssembly && (
                 <span
                   style={{
@@ -1165,37 +1159,58 @@ function AmountRow({
           </div>
         </div>
 
-        {/* Forecast — own counter sales, with a small dispatch chip when this
-            hub also owes units to spokes for the planned date. */}
-        <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+        {/* Forecast — own counter sales, with a dispatch chip when this
+            hub also owes units to spokes for the planned date. The
+            number sits at the same visual weight as Carry-over and
+            Quinn so the row reads as three peer signals feeding the
+            Plan number on the right. */}
+        <div
+          style={{
+            textAlign: 'right',
+            fontSize: 16,
+            fontWeight: 700,
+            fontVariantNumeric: 'tabular-nums',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            gap: 4,
+            lineHeight: 1.15,
+          }}
+        >
           {forecast ? counterUnits : <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>—</span>}
           {forecast?.status === 'draft' && (
-            <div style={{ fontSize: 9, color: 'var(--color-warning)', fontWeight: 600 }}>draft</div>
+            <span style={{ fontSize: 10, color: 'var(--color-warning)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>draft</span>
           )}
           {hasDispatch && (
-            <div
+            <span
               style={{
-                marginTop: 2,
-                fontSize: 9,
+                fontSize: 11,
                 fontWeight: 700,
                 color: 'var(--color-text-secondary)',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 3,
-                padding: '1px 5px',
-                borderRadius: 3,
+                gap: 4,
+                padding: '3px 8px',
+                borderRadius: 6,
                 background: 'var(--color-bg-hover)',
                 border: '1px solid var(--color-border-subtle)',
               }}
               title={`+${dispatchDemand} units to dispatch to ${dispatchBySpoke?.length ?? 0} spoke${(dispatchBySpoke?.length ?? 0) === 1 ? '' : 's'}`}
             >
-              <Truck size={9} />+{dispatchDemand}
-            </div>
+              <Truck size={11} />+{dispatchDemand}
+            </span>
           )}
         </div>
 
         {/* Carry-over */}
-        <div style={{ textAlign: 'right', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+        <div
+          style={{
+            textAlign: 'right',
+            fontSize: 16,
+            fontVariantNumeric: 'tabular-nums',
+            lineHeight: 1.15,
+          }}
+        >
           {carryOver && carryOver.carriedUnits > 0 ? (
             <span style={{ fontWeight: 700, color: 'var(--color-text-secondary)' }}>
               −{carryOver.carriedUnits}
@@ -1209,206 +1224,403 @@ function AmountRow({
         <div
           style={{
             textAlign: 'right',
-            fontSize: 13,
+            fontSize: 16,
             fontWeight: 700,
             fontVariantNumeric: 'tabular-nums',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'flex-end',
-            gap: 2,
+            gap: 4,
+            lineHeight: 1.15,
           }}
         >
-          <div
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          <span
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
             title={segmentEditable ? `${perDropQuinn} per drop · ${quinnProposed}/day` : undefined}
           >
-            <EdifyMark size={11} color="var(--color-text-muted)" />
+            <EdifyMark size={13} color="var(--color-text-muted)" />
             {segmentEditable ? perDropQuinn : quinnProposed}
-          </div>
+          </span>
           {stockCap && stockCap.cap < quinnProposed && (
             <StockCapChip stockCap={stockCap} />
           )}
         </div>
 
-        {/* You plan column. Components don't get a stepper — their plan is
-            derived from the products that consume them, so we render a
-            read-only summary tile instead. Editing the parent products
-            implicitly updates the component total. */}
+        {/* Plan column — read-only commitment for the day. The stepper
+            previously lived here; it's now in the next column ("Adjust")
+            so the manager sees the day's number at a glance and only
+            reaches for the stepper when something needs to change.
+            Components stay derived (no number to commit independently). */}
         <div
           style={{
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: 2,
             justifySelf: 'center',
+            gap: 2,
+            minWidth: 0,
           }}
-          onClick={e => e.stopPropagation()}
         >
           {isComponent ? (
             <ComponentDerivedTile
               total={effectivePlanned}
               sources={assemblyDemand.sources}
             />
-          ) : (<>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              background: runLocked ? 'var(--color-bg-hover)' : '#ffffff',
-              border: `1px solid ${assemblyShort ? 'var(--color-error-border)' : 'var(--color-border)'}`,
-              borderRadius: 8,
-              padding: '4px 6px',
-            }}
-            title={runLocked ? `${lockedRunLabels.join(', ') || 'Run'} locked — open the row to add variable top-ups` : undefined}
-          >
-            {runLocked && (
-              <Lock size={12} color="var(--color-text-muted)" style={{ marginLeft: 2, marginRight: -2 }} />
-            )}
-            <button
-              type="button"
-              onClick={() => (segmentEditable ? bumpPerDrop(-1) : onBump(-1))}
-              disabled={
-                !canEdit ||
-                runLocked ||
-                (isSegment && !segmentEditable) ||
-                dropsVary ||
-                (segmentEditable ? perDropPlanned === 0 : runPlanned === 0)
-              }
-              style={stepBtn(
-                !canEdit ||
-                  runLocked ||
-                  (isSegment && !segmentEditable) ||
-                  dropsVary ||
-                  (segmentEditable ? perDropPlanned === 0 : runPlanned === 0),
-              )}
-              title={runLocked ? 'Run is locked — adjust variable top-ups inside the expanded row' : dropsVary ? 'Drops vary — adjust them in the expanded panel' : undefined}
-            >
-              <Minus size={14} />
-            </button>
-            {dropsVary ? (
-              <span
-                onClick={onToggle}
+          ) : (
+            <>
+              <div
                 style={{
-                  width: 44,
-                  textAlign: 'center',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  fontStyle: 'italic',
-                  color: 'var(--color-text-muted)',
-                  cursor: 'pointer',
-                  fontFamily: 'var(--font-primary)',
-                }}
-                title="Per-drop quantities vary — open to adjust"
-              >
-                varies
-              </span>
-            ) : (
-              <input
-                type="number"
-                value={segmentEditable ? perDropPlanned : runPlanned}
-                disabled={!canEdit || runLocked || (isSegment && !segmentEditable)}
-                onChange={e => {
-                  const v = Number(e.target.value) || 0;
-                  if (segmentEditable) setUniformPerDrop(v);
-                  else onSet(v);
-                }}
-                style={{
-                  width: 44,
-                  textAlign: 'center',
-                  fontSize: 14,
-                  fontWeight: 700,
-                  fontVariantNumeric: 'tabular-nums',
-                  border: 'none',
-                  background: 'transparent',
-                  outline: 'none',
-                  color: 'var(--color-text-primary)',
-                  fontFamily: 'var(--font-primary)',
-                  padding: 0,
-                  margin: 0,
-                  boxSizing: 'border-box',
-                  appearance: 'textfield',
-                  MozAppearance: 'textfield',
-                }}
-              />
-            )}
-            <button
-              type="button"
-              onClick={() => (segmentEditable ? bumpPerDrop(1) : onBump(1))}
-              disabled={!canEdit || runLocked || (isSegment && !segmentEditable) || dropsVary}
-              style={stepBtn(!canEdit || runLocked || (isSegment && !segmentEditable) || dropsVary)}
-              title={runLocked ? 'Run is locked — adjust variable top-ups inside the expanded row' : dropsVary ? 'Drops vary — adjust them in the expanded panel' : undefined}
-            >
-              <Plus size={14} />
-            </button>
-            {deltaFromQuinn !== 0 && canEdit && !runLocked && (
-              <button
-                type="button"
-                aria-label="Reset to Quinn"
-                onClick={onResetToQuinn}
-                style={{
-                  width: 32,
-                  height: 32,
-                  border: '1px solid transparent',
-                  background: 'transparent',
-                  color: 'var(--color-text-muted)',
-                  cursor: 'pointer',
-                  borderRadius: 6,
                   display: 'inline-flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
+                  gap: 4,
+                  fontSize: 18,
+                  fontWeight: 800,
+                  fontVariantNumeric: 'tabular-nums',
+                  color: assemblyShort ? 'var(--color-error)' : 'var(--color-text-primary)',
+                  fontFamily: 'var(--font-primary)',
+                  lineHeight: 1.1,
                 }}
-                title="Reset to Quinn's proposal"
+                title={
+                  isDualMode
+                    ? `Run ${runPlanned} + Variable ${variablePlanned} = ${planned} today`
+                    : segmentEditable
+                      ? dropsVary
+                        ? `${dropsCount} drops · ${planned}/day (varies)`
+                        : `${perDropPlanned} per drop × ${dropsCount} drops = ${planned}/day`
+                      : `${planned} planned today`
+                }
               >
-                <RotateCcw size={12} />
-              </button>
-            )}
-          </div>
-          {isDualMode ? (
-            <button
-              type="button"
-              onClick={onToggle}
+                {runLocked && (
+                  <Lock
+                    size={11}
+                    color="var(--color-text-muted)"
+                    aria-label="Run locked"
+                  />
+                )}
+                {effectivePlanned}
+              </div>
+              {/* Mode-aware caption — keeps the dual-mode and drops
+                  context that the old stepper carried, but in a
+                  read-only form. */}
+              {isDualMode && variablePlanned > 0 ? (
+                <button
+                  type="button"
+                  onClick={onToggle}
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color: 'var(--color-text-muted)',
+                    fontVariantNumeric: 'tabular-nums',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                    fontFamily: 'var(--font-primary)',
+                  }}
+                  title={`Run ${runPlanned} + Variable ${variablePlanned} = ${planned} today · open to adjust variable`}
+                >
+                  {runPlanned} run · +{variablePlanned} var
+                </button>
+              ) : segmentEditable && !dropsVary ? (
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 600,
+                    color: 'var(--color-text-muted)',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                  title={`${perDropPlanned} per drop × ${dropsCount} drops`}
+                >
+                  × {dropsCount} drops
+                </span>
+              ) : segmentEditable && dropsVary ? (
+                <button
+                  type="button"
+                  onClick={onToggle}
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color: 'var(--color-text-muted)',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                    fontFamily: 'var(--font-primary)',
+                  }}
+                  title="Per-drop quantities vary — open to review"
+                >
+                  {dropsCount} drops · varies
+                </button>
+              ) : (
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color: 'var(--color-text-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  units
+                </span>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Adjust column — live tweak surface. Only items where
+            "make on the fly" makes sense get a stepper here:
+              • variable-mode → adjust the planned amount directly
+              • drops/increment → adjust per-drop (× drops = day total)
+            Run-mode items are intentionally read-only here; their
+            schedule was set ahead of time. The expanded row still
+            offers per-run + variable top-up controls when needed. */}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifySelf: 'center',
+            gap: 2,
+            minWidth: 0,
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          {isComponent ? (
+            <span
               style={{
                 fontSize: 9,
                 fontWeight: 700,
                 color: 'var(--color-text-muted)',
-                fontVariantNumeric: 'tabular-nums',
-                marginTop: 4,
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                padding: 0,
-                fontFamily: 'var(--font-primary)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
               }}
-              title={`Run ${runPlanned} + Variable ${variablePlanned} = ${planned} today · open to adjust variable`}
+              title="Components flex with the products that use them — edit the parent product to change this number."
             >
-              {variablePlanned > 0
-                ? `+${variablePlanned} var · = ${planned} today`
-                : 'add variable in expanded'}
-            </button>
-          ) : segmentEditable ? (
+              Auto
+            </span>
+          ) : line.item.mode === 'run' ? (
+            // Run-mode items: the run baseline is set in advance, but the
+            // variable phase is open all day. Surface a compact VAR stepper
+            // inline so managers can layer in top-ups as new demand walks
+            // in — no need to expand the row. Baseline + total stay visible
+            // underneath as a read-only caption.
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'stretch',
+                gap: 2,
+                width: '100%',
+                maxWidth: 156,
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  background: '#ffffff',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 7,
+                  padding: '3px 6px',
+                  height: 30,
+                }}
+                title="Variable top-ups for the rest of the day. Add as new demand comes in."
+              >
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color: 'var(--color-text-muted)',
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    minWidth: 18,
+                  }}
+                >
+                  Var
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onSetVariable(Math.max(0, variablePlanned - 1))}
+                  disabled={!canEdit || variablePlanned === 0}
+                  style={miniStepBtn(!canEdit || variablePlanned === 0)}
+                >
+                  <Minus size={11} />
+                </button>
+                <input
+                  type="number"
+                  value={variablePlanned}
+                  disabled={!canEdit}
+                  onChange={e => onSetVariable(Math.max(0, Number(e.target.value) || 0))}
+                  style={{
+                    flex: 1,
+                    textAlign: 'center',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    fontVariantNumeric: 'tabular-nums',
+                    border: 'none',
+                    background: 'transparent',
+                    outline: 'none',
+                    color: variablePlanned > 0 ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+                    fontFamily: 'var(--font-primary)',
+                    padding: 0,
+                    margin: 0,
+                    width: 28,
+                    appearance: 'textfield',
+                    MozAppearance: 'textfield',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => onSetVariable(Math.max(0, variablePlanned + 1))}
+                  disabled={!canEdit}
+                  style={miniStepBtn(!canEdit)}
+                >
+                  <Plus size={11} />
+                </button>
+              </div>
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: 'var(--color-text-muted)',
+                  textAlign: 'center',
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+                title={`Run is set in advance · ${runPlanned} baseline${variablePlanned > 0 ? ` + ${variablePlanned} variable = ${runPlanned + variablePlanned} today` : ''}. Open the row for per-run breakdown.`}
+              >
+                {variablePlanned > 0
+                  ? `Sched ${runPlanned} · = ${runPlanned + variablePlanned}`
+                  : `Scheduled · ${runPlanned}`}
+              </span>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                background: '#ffffff',
+                border: `1px solid ${assemblyShort ? 'var(--color-error-border)' : 'var(--color-border)'}`,
+                borderRadius: 8,
+                padding: '4px 6px',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => (segmentEditable ? bumpPerDrop(-1) : onBump(-1))}
+                disabled={
+                  !canEdit ||
+                  (isSegment && !segmentEditable) ||
+                  dropsVary ||
+                  (segmentEditable ? perDropPlanned === 0 : runPlanned === 0)
+                }
+                style={stepBtn(
+                  !canEdit ||
+                    (isSegment && !segmentEditable) ||
+                    dropsVary ||
+                    (segmentEditable ? perDropPlanned === 0 : runPlanned === 0),
+                )}
+                title={dropsVary ? 'Drops vary — adjust them in the expanded panel' : undefined}
+              >
+                <Minus size={14} />
+              </button>
+              {dropsVary ? (
+                <span
+                  onClick={onToggle}
+                  style={{
+                    width: 40,
+                    textAlign: 'center',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    fontStyle: 'italic',
+                    color: 'var(--color-text-muted)',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-primary)',
+                  }}
+                  title="Per-drop quantities vary — open to adjust"
+                >
+                  varies
+                </span>
+              ) : (
+                <input
+                  type="number"
+                  value={segmentEditable ? perDropPlanned : runPlanned}
+                  disabled={!canEdit || (isSegment && !segmentEditable)}
+                  onChange={e => {
+                    const v = Number(e.target.value) || 0;
+                    if (segmentEditable) setUniformPerDrop(v);
+                    else onSet(v);
+                  }}
+                  style={{
+                    width: 40,
+                    textAlign: 'center',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    fontVariantNumeric: 'tabular-nums',
+                    border: 'none',
+                    background: 'transparent',
+                    outline: 'none',
+                    color: 'var(--color-text-primary)',
+                    fontFamily: 'var(--font-primary)',
+                    padding: 0,
+                    margin: 0,
+                    boxSizing: 'border-box',
+                    appearance: 'textfield',
+                    MozAppearance: 'textfield',
+                  }}
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => (segmentEditable ? bumpPerDrop(1) : onBump(1))}
+                disabled={!canEdit || (isSegment && !segmentEditable) || dropsVary}
+                style={stepBtn(!canEdit || (isSegment && !segmentEditable) || dropsVary)}
+                title={dropsVary ? 'Drops vary — adjust them in the expanded panel' : undefined}
+              >
+                <Plus size={14} />
+              </button>
+              {deltaFromQuinn !== 0 && canEdit && (
+                <button
+                  type="button"
+                  aria-label="Reset to Quinn"
+                  onClick={onResetToQuinn}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    border: '1px solid transparent',
+                    background: 'transparent',
+                    color: 'var(--color-text-muted)',
+                    cursor: 'pointer',
+                    borderRadius: 6,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  title="Reset to Quinn's proposal"
+                >
+                  <RotateCcw size={12} />
+                </button>
+              )}
+            </div>
+          )}
+          {/* Per-drop caption beneath the stepper for drops items —
+              keeps the "× N drops" math visible while editing. */}
+          {segmentEditable && !dropsVary && (
             <span
               style={{
                 fontSize: 9,
                 fontWeight: 600,
                 color: 'var(--color-text-muted)',
                 fontVariantNumeric: 'tabular-nums',
-                marginTop: 4,
               }}
-              title={
-                dropsVary
-                  ? `Drops vary — sum across ${dropsCount} drops`
-                  : `${perDropPlanned} per drop × ${dropsCount} drops`
-              }
+              title={`${perDropPlanned} per drop × ${dropsCount} drops`}
             >
-              {dropsVary
-                ? `${dropsCount} drops · ${planned}/day`
-                : `× ${dropsCount} drops = ${perDropPlanned * dropsCount}/day`}
+              per drop · = {perDropPlanned * dropsCount}
             </span>
-          ) : isSegment ? (
-            <span style={{ fontSize: 9, color: 'var(--color-text-muted)', marginTop: 4 }}>—</span>
-          ) : null}
-          </>
           )}
         </div>
 
@@ -1572,63 +1784,19 @@ function AmountRow({
             style={{
               padding: '18px 20px 20px 46px',
               display: 'grid',
-              // Dynamic column count: dual-mode stepper (when run+variable),
-              // per-run breakdown (when 2+ scheduled runs), dispatch ledger
-              // (when hub→spoke), forecast signals, assembly cascade (when
-              // assembly/component), workflow. Each gets its own equal-width
-              // column so a row with several sections doesn't end up tall
-              // and lopsided.
+              // Dynamic column count: per-run breakdown (when 2+ scheduled runs),
+              // dispatch ledger (when hub→spoke), assembly cascade (when
+              // assembly/component), stock cap (when capped), workflow.
               gridTemplateColumns: `repeat(${
-                (isDualMode ? 1 : 0) +
                 (hasMultiRun ? 1 : 0) +
                 (hasDispatch ? 1 : 0) +
-                1 +
                 (isAssembly || isComponent ? 1 : 0) +
+                (stockCap ? 1 : 0) +
                 1
               }, minmax(0, 1fr))`,
               gap: 24,
             }}
           >
-          {/* Dual-mode plan column — locked-run baseline + variable top-up
-              steppers, sat alongside the rest of the columns rather than
-              taking a full row above them. */}
-          {isDualMode && (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                {runLocked && <Lock size={12} color="var(--color-text-muted)" />}
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)' }}>
-                  Today&rsquo;s plan · {runLocked ? `${lockedRunLabels.join(', ') || 'Run'} locked` : 'Run scheduled'}
-                </span>
-              </div>
-              <DualModeStepper
-                runPlanned={runPlanned}
-                variablePlanned={variablePlanned}
-                quinnProposed={quinnProposed}
-                runLocked={runLocked}
-                lockedRunLabels={lockedRunLabels}
-                canEdit={canEdit}
-                assemblyShort={assemblyShort}
-                assemblyDemandUnits={assemblyDemand.totalUnits}
-                isComponent={isComponent}
-                onSetRun={v => onSet(v)}
-                onSetVariable={onSetVariable}
-                onAbsorb={onAbsorb}
-                onResetToQuinn={onResetToQuinn}
-                isOverridden={line.isOverridden}
-              />
-              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
-                  {runLocked
-                    ? `${lockedRunLabels.join(' & ') || 'This run'} is in progress or done — the run baseline is read-only. Add variable top-ups above for the rest of the day as new demand comes in.`
-                    : 'Run baseline is still editable. Once the run starts it locks; variable top-ups stay open all day.'}
-                </span>
-                <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                  Quinn forecast: {quinnProposed} · current plan: {planned}
-                </span>
-              </div>
-            </div>
-          )}
-
           {/* Per-run plan column — splits the run baseline across each
               scheduled run on the bench so the manager can decide e.g. 60
               into R1 and 24 into R2. Locked runs (already in progress)
@@ -1800,9 +1968,7 @@ function AmountRow({
               </span>
             </div>
           )}
-          {/* Selling-vs-dispatching ledger — only on hub rows that owe a
-              spoke. Its own column so the forecast signals next to it stay
-              short rather than getting pushed below it. */}
+          {/* Selling-vs-dispatching ledger — only on hub rows that owe a spoke. */}
           {hasDispatch && (
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', marginBottom: 8 }}>
@@ -1853,54 +2019,6 @@ function AmountRow({
               </div>
             </div>
           )}
-
-          {/* Forecast signals */}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', marginBottom: 8 }}>
-              Forecast signals
-            </div>
-            {forecast ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {forecast.signals.map((s, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                    <span
-                      style={{
-                        minWidth: 48,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: 'var(--color-text-secondary)',
-                        background: 'var(--color-bg-hover)',
-                        padding: '2px 7px',
-                        borderRadius: 4,
-                        textAlign: 'center',
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
-                    >
-                      {Math.round(s.weight * 100)}%
-                    </span>
-                    <div>
-                      <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{SIGNAL_LABELS[s.signal]}</span>
-                      {s.note && (
-                        <span style={{ color: 'var(--color-text-muted)' }}> · {s.note}</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {forecast.byPhase && (
-                  <div style={{ marginTop: 8, display: 'flex', gap: 8, fontSize: 11 }}>
-                    <PhaseChip label="AM" value={forecast.byPhase.morning} />
-                    <PhaseChip label="MID" value={forecast.byPhase.midday} />
-                    <PhaseChip label="PM" value={forecast.byPhase.afternoon} />
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                <Info size={12} style={{ display: 'inline', verticalAlign: -2, marginRight: 5 }} />
-                No direct forecast. Demand comes from assemblies.
-              </div>
-            )}
-          </div>
 
           {/* Assembly cascade (component) / Sub-recipes (assembly) */}
           {(isComponent || isAssembly) && (
@@ -2060,7 +2178,7 @@ function ProductTotalsRow({ lines }: { lines: PlanLine[] }) {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(260px, 1.6fr) 100px 100px 110px 200px',
+          gridTemplateColumns: 'minmax(240px, 1.6fr) 90px 90px 100px 90px 170px',
           gap: 12,
           alignItems: 'center',
           padding: '14px 16px 14px 13px',
@@ -2145,6 +2263,9 @@ function ProductTotalsRow({ lines }: { lines: PlanLine[] }) {
             Total qty
           </span>
         </div>
+        {/* Adjust column has no aggregate — leave empty to keep the
+            grid alignment with the data rows above. */}
+        <span aria-hidden />
       </div>
 
       {/* Sales value — same column shape, but multiplies each metric by
@@ -2153,7 +2274,7 @@ function ProductTotalsRow({ lines }: { lines: PlanLine[] }) {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(260px, 1.6fr) 100px 100px 110px 200px',
+          gridTemplateColumns: 'minmax(240px, 1.6fr) 90px 90px 100px 90px 170px',
           gap: 12,
           alignItems: 'center',
           padding: '14px 16px 14px 13px',
@@ -2237,6 +2358,7 @@ function ProductTotalsRow({ lines }: { lines: PlanLine[] }) {
             Total value
           </span>
         </div>
+        <span aria-hidden />
       </div>
     </>
   );
@@ -2407,25 +2529,6 @@ function CadenceTickStrip({
         {dropsCount} drops · every {cadence.intervalMinutes}min
       </span>
     </div>
-  );
-}
-
-function PhaseChip({ label, value }: { label: string; value: number }) {
-  return (
-    <span
-      style={{
-        padding: '4px 10px',
-        borderRadius: 5,
-        background: '#ffffff',
-        border: '1px solid var(--color-border-subtle)',
-        fontSize: 10,
-        fontWeight: 700,
-        color: 'var(--color-text-secondary)',
-        fontVariantNumeric: 'tabular-nums',
-      }}
-    >
-      {label} {value}
-    </span>
   );
 }
 
@@ -2710,301 +2813,12 @@ function formatStockUnits(qty: number, unit: string): string {
   return `${qty}`;
 }
 
-// ─── Dual-mode stepper (Run baseline + Variable add-ons) ────────────────────
-//
-// Shown for Run-mode items that have entered their variable phase: the
-// scheduled run is locked (or the manager has already added top-ups) and
-// the rest of the day is open for ad-hoc additions. Two stacked rows:
-//
-//   [🔒 R1  96 ]   ← Run baseline. Read-only when locked, editable otherwise.
-//   [+ Var − 5 +]  ← Variable add-on. Always editable while the day is live.
-//   = 101 today
-//
-function DualModeStepper({
-  runPlanned,
-  variablePlanned,
-  quinnProposed,
-  runLocked,
-  lockedRunLabels,
-  canEdit,
-  assemblyShort,
-  assemblyDemandUnits,
-  isComponent,
-  onSetRun,
-  onSetVariable,
-  onAbsorb,
-  onResetToQuinn,
-  isOverridden,
-}: {
-  runPlanned: number;
-  variablePlanned: number;
-  quinnProposed: number;
-  runLocked: boolean;
-  lockedRunLabels: string[];
-  canEdit: boolean;
-  assemblyShort: boolean;
-  assemblyDemandUnits: number;
-  isComponent: boolean;
-  onSetRun: (v: number) => void;
-  onSetVariable: (v: number) => void;
-  onAbsorb: () => void;
-  onResetToQuinn: () => void;
-  isOverridden: boolean;
-}) {
-  const total = runPlanned + variablePlanned;
-  const runLabel = lockedRunLabels.length > 0 ? lockedRunLabels.join('+') : 'Run';
-  const bumpVar = (delta: number) => onSetVariable(Math.max(0, variablePlanned + delta));
-  const bumpRun = (delta: number) => onSetRun(Math.max(0, runPlanned + delta));
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 4, width: '100%', maxWidth: 200 }}>
-      {/* Run baseline row */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          background: runLocked ? 'var(--color-bg-hover)' : '#ffffff',
-          border: `1px solid ${assemblyShort ? 'var(--color-error-border)' : 'var(--color-border-subtle)'}`,
-          borderRadius: 7,
-          padding: '3px 6px',
-          height: 30,
-        }}
-        title={runLocked ? `${runLabel} locked — already in progress or done` : `${runLabel} baseline — editable until the run starts`}
-      >
-        {runLocked ? (
-          <Lock size={11} color="var(--color-text-muted)" style={{ flexShrink: 0 }} />
-        ) : (
-          <span style={{ width: 11, flexShrink: 0 }} />
-        )}
-        <span
-          style={{
-            fontSize: 9,
-            fontWeight: 700,
-            color: 'var(--color-text-muted)',
-            letterSpacing: '0.04em',
-            textTransform: 'uppercase',
-            minWidth: 18,
-            textAlign: 'left',
-          }}
-        >
-          {runLabel}
-        </span>
-        {runLocked ? (
-          <span
-            style={{
-              flex: 1,
-              textAlign: 'center',
-              fontSize: 13,
-              fontWeight: 700,
-              fontVariantNumeric: 'tabular-nums',
-              color: 'var(--color-text-primary)',
-              fontFamily: 'var(--font-primary)',
-            }}
-          >
-            {runPlanned}
-          </span>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => bumpRun(-1)}
-              disabled={!canEdit || runPlanned === 0}
-              style={miniStepBtn(!canEdit || runPlanned === 0)}
-            >
-              <Minus size={11} />
-            </button>
-            <input
-              type="number"
-              value={runPlanned}
-              disabled={!canEdit}
-              onChange={e => onSetRun(Number(e.target.value) || 0)}
-              style={{
-                flex: 1,
-                textAlign: 'center',
-                fontSize: 13,
-                fontWeight: 700,
-                fontVariantNumeric: 'tabular-nums',
-                border: 'none',
-                background: 'transparent',
-                outline: 'none',
-                color: 'var(--color-text-primary)',
-                fontFamily: 'var(--font-primary)',
-                padding: 0,
-                margin: 0,
-                width: 28,
-                appearance: 'textfield',
-                MozAppearance: 'textfield',
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => bumpRun(1)}
-              disabled={!canEdit}
-              style={miniStepBtn(!canEdit)}
-            >
-              <Plus size={11} />
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* Variable add-on row */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          background: '#ffffff',
-          border: '1px solid var(--color-border)',
-          borderRadius: 7,
-          padding: '3px 6px',
-          height: 30,
-        }}
-        title="Variable top-ups for the rest of the day. Add as new demand comes in."
-      >
-        <span style={{ width: 11, flexShrink: 0 }} />
-        <span
-          style={{
-            fontSize: 9,
-            fontWeight: 700,
-            color: 'var(--color-text-muted)',
-            letterSpacing: '0.04em',
-            textTransform: 'uppercase',
-            minWidth: 18,
-          }}
-        >
-          Var
-        </span>
-        <button
-          type="button"
-          onClick={() => bumpVar(-1)}
-          disabled={!canEdit || variablePlanned === 0}
-          style={miniStepBtn(!canEdit || variablePlanned === 0)}
-        >
-          <Minus size={11} />
-        </button>
-        <input
-          type="number"
-          value={variablePlanned}
-          disabled={!canEdit}
-          onChange={e => onSetVariable(Number(e.target.value) || 0)}
-          style={{
-            flex: 1,
-            textAlign: 'center',
-            fontSize: 13,
-            fontWeight: 700,
-            fontVariantNumeric: 'tabular-nums',
-            border: 'none',
-            background: 'transparent',
-            outline: 'none',
-            color: variablePlanned > 0 ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-            fontFamily: 'var(--font-primary)',
-            padding: 0,
-            margin: 0,
-            width: 28,
-            appearance: 'textfield',
-            MozAppearance: 'textfield',
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => bumpVar(1)}
-          disabled={!canEdit}
-          style={miniStepBtn(!canEdit)}
-        >
-          <Plus size={11} />
-        </button>
-      </div>
-
-      {/* Helper / total row */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 6,
-          paddingLeft: 4,
-          paddingRight: 4,
-          marginTop: 2,
-        }}
-      >
-        <span
-          style={{
-            fontSize: 9,
-            fontWeight: 700,
-            color: 'var(--color-text-muted)',
-            fontVariantNumeric: 'tabular-nums',
-          }}
-          title={`Run ${runPlanned} + Var ${variablePlanned} · Quinn forecast ${quinnProposed}`}
-        >
-          = {total} today
-        </span>
-        {isComponent && assemblyShort ? (
-          <span
-            style={{
-              fontSize: 9,
-              fontWeight: 700,
-              color: 'var(--color-error)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-            }}
-            title={`Assemblies need ${assemblyDemandUnits} — currently short`}
-          >
-            need {assemblyDemandUnits}
-            {canEdit && (
-              <button
-                type="button"
-                onClick={onAbsorb}
-                style={{
-                  padding: '2px 6px',
-                  fontSize: 8,
-                  fontWeight: 700,
-                  color: 'var(--color-error)',
-                  background: '#ffffff',
-                  border: '1px solid var(--color-error-border)',
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                }}
-              >
-                Cover
-              </button>
-            )}
-          </span>
-        ) : isOverridden && canEdit ? (
-          <button
-            type="button"
-            aria-label="Reset to Quinn"
-            onClick={onResetToQuinn}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              color: 'var(--color-text-muted)',
-              cursor: 'pointer',
-              padding: 0,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 3,
-              fontSize: 9,
-              fontWeight: 600,
-            }}
-            title="Reset to Quinn's proposal"
-          >
-            <RotateCcw size={9} /> reset
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 // Both step button helpers delegate to the shared QtyStepper sizing so
 // every stepper across the production app — rejects, adhoc, spoke order,
 // PCR, and these embedded planner controls — match pixel-for-pixel.
 //
 //   - stepBtn      → emphasized (32×32, icon 14)  — main planner / per-drop
-//   - miniStepBtn  → compact    (22×22, icon 11)  — embedded run/var rows
+//   - miniStepBtn  → compact    (22×22, icon 11)  — embedded planner controls
 function miniStepBtn(disabled: boolean): React.CSSProperties {
   return getStepperButtonStyle('compact', disabled);
 }

@@ -50,6 +50,21 @@ export type ItemComponent = {
   qty: number | '';
   uom: string;
   unitCostP: number;
+  /**
+   * Optional link to the master ingredient (`PRET_INGREDIENTS`). When set,
+   * the component inherits the ingredient's `defaultPrepWork` unless
+   * `prepWorkOverride` below is non-empty. When unset, only `prepWorkOverride`
+   * contributes prep-work chips for this row.
+   */
+  ingredientId?: string;
+  /**
+   * Per-recipe prep-work override. When non-empty, REPLACES the master
+   * ingredient's `defaultPrepWork` for this row (e.g. "for THIS recipe
+   * we want the tomato diced not sliced"). Each entry may carry an
+   * optional `leadOffset` so the work is scheduled the day before
+   * (`-1`) or two days before (`-2`) consumption.
+   */
+  prepWorkOverride?: import('@/components/Production/fixtures').PrepWorkEntry[];
 };
 
 export type RecipeComponent = {

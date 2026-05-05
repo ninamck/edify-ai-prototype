@@ -26,7 +26,12 @@ import {
 import {
   type ProductionWorkflow,
   type WorkflowId,
+  type WorkType,
+  workTypesFromWorkflows,
+  recipeWorkTypes,
+  getRecipe,
 } from '@/components/Production/fixtures';
+import { WorkTypeChips } from '@/components/Production/WorkTypeChip';
 import { useRecipes, useWorkflows, setRecipes as storeSetRecipes } from '@/components/Recipe/recipeStore';
 import {
   KindPill,
@@ -564,9 +569,25 @@ function Dash() {
 }
 
 function TypeCell({ recipe, usedInCount }: { recipe: Recipe; usedInCount: number }) {
+  // Mirror production's `recipeWorkTypes` walk so library + production
+  // chips stay in lock-step. For Pret-derived library entries we go
+  // through the production helper so we get sub-recipe stages + every
+  // ingredient's effective prep work. For library-only entries (Fitzroy
+  // standalones) fall back to the lower-level primitive that just walks
+  // this recipe's own workflow.
+  const prodRecipe = getRecipe(recipe.id);
+  const workTypes: WorkType[] = prodRecipe
+    ? recipeWorkTypes(prodRecipe)
+    : workTypesFromWorkflows({
+        workflowIds: recipe.workflowId ? [recipe.workflowId as WorkflowId] : [],
+        hasIngredients: (recipe.ingredients?.length ?? 0) > 0,
+      });
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
-      <KindPill kind={recipe.kind} isPrep={recipe.isPrep} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+        <KindPill kind={recipe.kind} isPrep={recipe.isPrep} />
+      </div>
+      {workTypes.length > 0 && <WorkTypeChips workTypes={workTypes} max={3} />}
       {recipe.kind === 'component' && usedInCount > 0 && (
         <span style={{ fontSize: '10.5px', color: 'var(--color-text-muted)', fontWeight: 500, lineHeight: 1.3 }}>
           Make first · used by {usedInCount}
