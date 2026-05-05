@@ -53,7 +53,7 @@ export default function NotificationPanel({
             margin: 0,
           }}
         >
-          Assisted Ordering
+          Suggested Ordering
         </h1>
         <p
           style={{

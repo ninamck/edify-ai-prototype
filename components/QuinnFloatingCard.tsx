@@ -113,7 +113,7 @@ export default function QuinnFloatingCard() {
 
             {/* Feed — no internal header since we provide our own */}
             <Feed
-              briefingRole="ravi"
+              briefingRole="ed"
               noHeader={true}
             />
           </motion.div>

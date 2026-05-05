@@ -104,8 +104,6 @@ function LabourMiniCurve({ subtitle }: { subtitle: string }) {
 }
 
 function LiveSnapshot({ role }: { role: BriefingRole }) {
-  if (role === 'chairman') return null;
-
   const pnlPct = role === 'cheryl' ? 72 : 78;
   const pnlLabel = role === 'cheryl' ? 'Gross margin confidence' : 'Live P&L confidence';
   const pnlCaption = role === 'cheryl'
@@ -143,7 +141,7 @@ function LiveSnapshot({ role }: { role: BriefingRole }) {
           <InvoiceMatchBar />
         </>
       )}
-      {(role === 'ravi' || role === 'gm') && (
+      {(role === 'ed' || role === 'gm') && (
         <>
           <div style={{ borderTop: '1px solid var(--color-border-subtle)' }} />
           <LabourMiniCurve subtitle={labourSubtitle} />
@@ -367,7 +365,7 @@ function InsightGroup({
 
 // ── Role content ──────────────────────────────────────────────────────────────
 
-const RAVI_INSIGHTS: InsightGroup[] = [
+const ED_INSIGHTS: InsightGroup[] = [
   {
     category: 'act-today',
     items: [
@@ -592,8 +590,7 @@ function InsightFeed({ groups, role }: { groups: InsightGroup[]; role: BriefingR
 }
 
 function BriefingContent({ role }: { role: BriefingRole }) {
-  if (role === 'chairman') return <InsightFeed groups={CHAIRMAN_INSIGHTS} role={role} />;
-  if (role === 'ravi') return <InsightFeed groups={RAVI_INSIGHTS} role={role} />;
+  if (role === 'ed') return <InsightFeed groups={ED_INSIGHTS} role={role} />;
   if (role === 'cheryl') return <InsightFeed groups={CHERYL_INSIGHTS} role={role} />;
   if (role === 'gm') return <InsightFeed groups={GM_INSIGHTS} role={role} />;
   return null;

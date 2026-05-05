@@ -26,7 +26,7 @@ const MOBILE_SHELL_BREAKPOINT = '(max-width: 430px)';
 export default function HomeShell() {
   const router = useRouter();
   const [shellView, setShellView] = useState<ShellViewMode>('command-centre');
-  const [briefingRole, setBriefingRole] = useState<BriefingRole>('ravi');
+  const [briefingRole, setBriefingRole] = useState<BriefingRole>('ed');
   const [mobileInsightsOpen, setMobileInsightsOpen] = useState(false);
   const [chatActive, setChatActive] = useState(false);
   const [pinnedCharts, setPinnedCharts] = useState<AnalyticsChartId[]>([]);

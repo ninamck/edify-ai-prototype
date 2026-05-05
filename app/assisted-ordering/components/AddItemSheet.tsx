@@ -315,7 +315,7 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
                       </p>
                       {isNew ? (
                         <span style={{ fontSize: '11px', fontWeight: 700, color: '#92400E', fontFamily: 'var(--font-primary)', letterSpacing: '0.04em' }}>
-                          NEW SUPPLIER
+                          NOT ON THIS ORDER
                         </span>
                       ) : (
                         <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-accent-active)', fontFamily: 'var(--font-primary)' }}>
@@ -328,7 +328,7 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
                     </p>
                     {isNew && (
                       <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#92400E', fontFamily: 'var(--font-primary)' }}>
-                        A new order will be set up for this supplier
+                        This will add a new supplier to your order
                       </p>
                     )}
                   </div>
@@ -376,7 +376,7 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
             {isNewSupplier && (
               <>
                 <span>·</span>
-                <span style={{ color: '#92400E', fontWeight: 600 }}>New supplier order</span>
+                <span style={{ color: '#92400E', fontWeight: 600 }}>New supplier on order</span>
               </>
             )}
           </div>

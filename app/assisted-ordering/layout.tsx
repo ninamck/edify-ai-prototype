@@ -59,7 +59,7 @@ export default function AssistedOrderingLayout({ children }: { children: React.R
                 letterSpacing: '0.01em',
               }}
             >
-              Assisted Ordering
+              Suggested Ordering
             </span>
           </div>
 

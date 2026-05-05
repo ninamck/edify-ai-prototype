@@ -3,7 +3,7 @@ import type { ChecklistTemplate, ChecklistInstance } from './types';
 export const MOCK_SITES = ['Fitzroy Espresso', 'South Yarra', 'Richmond', 'Carlton'];
 
 export const MOCK_USERS = [
-  { id: 'u1', name: 'Ravi Mehta' },
+  { id: 'u1', name: 'Ed Mehta' },
   { id: 'u2', name: 'Cheryl Wong' },
   { id: 'u3', name: 'Jordan Beck' },
   { id: 'u4', name: 'Sam Torres' },
@@ -310,7 +310,7 @@ export const MOCK_INSTANCES: ChecklistInstance[] = [
     ],
     completedAt: '7:12am',
     completedDate: '2026-04-04',
-    completedBy: 'Ravi Mehta',
+    completedBy: 'Ed Mehta',
   },
 ];
 
@@ -334,7 +334,7 @@ export const MOCK_HISTORY: ChecklistInstance[] = [
     ],
     completedAt: '7:04am',
     completedDate: '2026-04-03',
-    completedBy: 'Ravi Mehta',
+    completedBy: 'Ed Mehta',
   },
   {
     id: 'hist-2',
@@ -417,7 +417,7 @@ export const MOCK_HISTORY: ChecklistInstance[] = [
     ],
     completedAt: '6:58am',
     completedDate: '2026-04-02',
-    completedBy: 'Ravi Mehta',
+    completedBy: 'Ed Mehta',
   },
   {
     id: 'hist-6',
