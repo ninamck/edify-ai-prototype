@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Clock } from 'lucide-react';
 import {
   benchesAt,
   benchWorkTypes,
@@ -23,6 +23,90 @@ import {
   type SiteId,
   type WorkType,
 } from './fixtures';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Time-of-day windows + per-unit pace per work type
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The Run sheet's job is to choreograph a kitchen day, so each section and
+// row needs a sense of "when". We derive both from light-touch defaults
+// rather than from scheduled stage times because the prototype's plan
+// data isn't yet rich enough to drive real timestamps. These can be
+// pushed into fixtures later if recipes start carrying authored start
+// times.
+//
+// `WORK_TYPE_WINDOWS` is keyed by `(workType, leadOffset)` because the
+// same work behaves very differently across days — e.g. `weigh-up` on
+// today is a 05:30 task; `weigh-up` for tomorrow happens on the
+// previous evening's close-down shift.
+//
+// `WORK_TYPE_PACE` is minutes-per-canonical-unit (g / ml / unit). It's
+// deliberately conservative — better to slightly over-budget on the
+// run sheet than under-promise.
+
+type DayWindow = { from: string; to: string; label: string };
+
+const TODAY_WINDOWS: Record<WorkType, DayWindow> = {
+  'weigh-up':  { from: '05:30', to: '06:30', label: 'Open shift'    },
+  'thaw':      { from: '00:00', to: '06:00', label: 'Overnight'     },
+  'mise':      { from: '05:30', to: '07:00', label: 'Open shift'    },
+  'wash':      { from: '06:00', to: '07:30', label: 'Open shift'    },
+  'sanitise':  { from: '06:00', to: '07:30', label: 'Open shift'    },
+  'slice':     { from: '06:30', to: '08:00', label: 'Open shift'    },
+  'mix':       { from: '06:00', to: '07:30', label: 'Open shift'    },
+  'proof':     { from: '20:00', to: '06:00', label: 'Overnight'     },
+  'bake':      { from: '05:30', to: '11:00', label: 'Bake-through'  },
+  'grill':     { from: '06:00', to: '11:00', label: 'Hot prep'      },
+  'chill':     { from: '07:00', to: '09:00', label: 'After bake'    },
+  'assemble':  { from: '07:00', to: '10:30', label: 'Build window'  },
+  'portion':   { from: '07:00', to: '10:30', label: 'Build window'  },
+  'label':     { from: '08:00', to: '11:00', label: 'Build window'  },
+  'pack':      { from: '08:00', to: '11:00', label: 'Build window'  },
+  'wash-down': { from: '20:00', to: '22:00', label: 'Close-down'    },
+};
+
+/** Window when prep-ahead work for tomorrow happens — typically the
+ *  previous evening / close-down shift. */
+const PREV_EVENING_WINDOW: DayWindow = {
+  from: '20:00', to: '23:00', label: 'Tonight (close-down)',
+};
+
+function windowFor(workType: WorkType, leadOffset: -2 | -1 | 0): DayWindow {
+  if (leadOffset === 0) return TODAY_WINDOWS[workType];
+  // For prep-ahead work (-1 / -2) we prefer "tonight" framing — these
+  // tasks happen on the previous shift's close-down regardless of
+  // their natural daytime window.
+  return PREV_EVENING_WINDOW;
+}
+
+/** Minutes per canonical unit (g / ml / unit). */
+const WORK_TYPE_PACE: Partial<Record<WorkType, number>> = {
+  'weigh-up': 0.02,   // ~2 min per 100g
+  'thaw':     0.005,  // passive, but accounts for mises checking trays
+  'mise':     0.05,
+  'wash':     0.005,  // ~30s per 100g of leaves
+  'sanitise': 0.4,    // per produce unit
+  'slice':    0.4,    // per produce unit
+  'mix':      0.04,
+};
+
+/** Minimum minutes shown on a row — a "blip" task still costs a chunk
+ *  of human time (set up / clean down). */
+const MIN_ROW_MINUTES = 3;
+
+function ingredientRowMinutes(workType: WorkType, totalQty: number): number {
+  const pace = WORK_TYPE_PACE[workType];
+  if (pace == null) return MIN_ROW_MINUTES;
+  return Math.max(MIN_ROW_MINUTES, Math.round(pace * totalQty));
+}
+
+function formatDuration(mins: number): string {
+  if (mins < 1) return '<1 min';
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
 import { usePlan, type PlanLine } from './PlanStore';
 import WorkTypeChip from './WorkTypeChip';
 
@@ -134,6 +218,9 @@ type IngredientRow = {
   /** Total quantity across all sources, in the ingredient's canonical unit. */
   totalQty: number;
   unit: 'g' | 'ml' | 'unit';
+  /** Estimated hands-on time for the aggregated quantity, derived from
+   *  `WORK_TYPE_PACE`. Computed lazily after totalQty is known. */
+  estimatedMinutes: number;
   /** Per-recipe contributions — how much of this prep comes from each
    *  recipe's planned units. Sorted by contribution descending. */
   sources: Array<{
@@ -159,6 +246,9 @@ type StageRow = {
   primaryBenchName: string | undefined;
   itemId: string;              // for deep-linking back to /production/amounts
   requiresEquipment: Equipment[];
+  /** Authored stage duration (minutes per batch). Falls back to the
+   *  per-work-type `MIN_ROW_MINUTES` if the stage doesn't carry one. */
+  estimatedMinutes: number;
 };
 
 type RunSheetRow = IngredientRow | StageRow;
@@ -171,6 +261,9 @@ type SectionData = {
   equipmentNeeded: Set<Equipment>;
   totalRows: () => number;
   totalUnits: () => number;
+  /** Sum of all rows' `estimatedMinutes` — drives the "team time ~Xh"
+   *  badge in the section header so the kitchen can plan staffing. */
+  totalMinutes: () => number;
 };
 
 type Sections = {
@@ -198,6 +291,10 @@ function buildSections(
         totalUnits: () => (
           s!.ingredientRows.reduce((a, r) => a + r.totalQty, 0)
           + s!.stageRows.reduce((a, r) => a + r.effectivePlanned, 0)
+        ),
+        totalMinutes: () => (
+          s!.ingredientRows.reduce((a, r) => a + r.estimatedMinutes, 0)
+          + s!.stageRows.reduce((a, r) => a + r.estimatedMinutes, 0)
         ),
       };
       byWorkType.set(wt, s);
@@ -252,6 +349,7 @@ function buildSections(
             primaryBenchName: line.primaryBench?.name,
             itemId: line.item.id,
             requiresEquipment: reqEq,
+            estimatedMinutes: Math.max(MIN_ROW_MINUTES, stage.durationMinutes ?? 0),
           });
         }
       }
@@ -285,6 +383,7 @@ function buildSections(
             leadOffset: lo,
             totalQty: 0,
             unit: entry.unit,
+            estimatedMinutes: 0,
             sources: [],
           };
           bucketsForWt.set(bucketKey, bucket);
@@ -312,9 +411,11 @@ function buildSections(
   // Sort sources within each ingredient bucket; sort stage rows within
   // each section by category then name; sort ingredient rows by total
   // qty desc so the biggest mise-en-place tasks lead the section.
+  // Also finalise the per-row time estimate now that totals are known.
   for (const section of byWorkType.values()) {
     for (const row of section.ingredientRows) {
       row.sources.sort((a, b) => b.contributedQty - a.contributedQty);
+      row.estimatedMinutes = ingredientRowMinutes(row.workType, row.totalQty);
     }
     section.ingredientRows.sort((a, b) => b.totalQty - a.totalQty);
     section.stageRows.sort((a, b) => {
@@ -363,6 +464,10 @@ function DayShapeHeader({
   presentWorkTypes: WorkType[];
   date: string;
 }) {
+  const totalMinutes = presentWorkTypes.reduce(
+    (a, wt) => a + (sections.byWorkType.get(wt)?.totalMinutes() ?? 0),
+    0,
+  );
   return (
     <header
       style={{
@@ -393,6 +498,28 @@ function DayShapeHeader({
           {sections.totalAggregatedTasks.toLocaleString('en-GB')} mise tasks ·{' '}
           {sections.totalRecipeStageRows.toLocaleString('en-GB')} recipe stages
         </span>
+        {totalMinutes > 0 && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              fontSize: 11,
+              fontWeight: 700,
+              color: 'var(--color-text-secondary)',
+              fontFamily: 'var(--font-primary)',
+              fontVariantNumeric: 'tabular-nums',
+              padding: '4px 10px',
+              borderRadius: 100,
+              background: 'var(--color-bg-hover)',
+              whiteSpace: 'nowrap',
+            }}
+            title="Total estimated hands-on time across every section today"
+          >
+            <Clock size={12} color="var(--color-text-muted)" />
+            ~{formatDuration(totalMinutes)} hands-on
+          </span>
+        )}
         {sections.hasCrossDayWork && (
           <span
             style={{
@@ -467,6 +594,15 @@ function StageCard({
     ...section.stageRows,
   ];
   const equipmentList = Array.from(section.equipmentNeeded);
+  const totalMinutes = section.totalMinutes();
+  // If every row in this section is prep-ahead (-1/-2) the work happens
+  // on the previous evening's close-down rather than today's morning
+  // window. We pick the lead-offset of the *first* row (rows are
+  // homogenous within a section in practice — sections shift together).
+  const dominantLeadOffset = allRows[0]
+    ? (allRows[0].kind === 'ingredient' ? allRows[0].leadOffset : allRows[0].leadOffset)
+    : 0;
+  const timeWindow = windowFor(workType, dominantLeadOffset);
   return (
     <section
       id={`stage-${workType}`}
@@ -515,6 +651,52 @@ function StageCard({
             <>{stageCount} recipe stage{stageCount === 1 ? '' : 's'}</>
           )}
         </span>
+
+        {/* Time-of-day window for this section — derived from
+            `windowFor(workType, leadOffset)`. Pulls double duty as a
+            scheduling cue ("do between 06:30 and 08:00") and as a
+            phase label ("Open shift", "Close-down"). */}
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '4px 10px',
+            borderRadius: 100,
+            background: '#fff',
+            border: '1px solid var(--color-border-subtle)',
+            fontSize: 11,
+            fontFamily: 'var(--font-primary)',
+            color: 'var(--color-text-secondary)',
+            whiteSpace: 'nowrap',
+          }}
+          title={`Suggested time window for ${WORK_TYPE_LABELS[workType].toLowerCase()} work — based on Pret kitchen norms`}
+        >
+          <Clock size={12} color="var(--color-text-muted)" />
+          <span style={{ fontWeight: 700, color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+            {timeWindow.from}–{timeWindow.to}
+          </span>
+          <span style={{ color: 'var(--color-text-muted)' }}>·</span>
+          <span style={{ fontWeight: 600 }}>{timeWindow.label}</span>
+        </span>
+
+        {/* Section team-time roll-up — sum of every row's
+            estimated minutes. Helps a chef budget staff. */}
+        {totalMinutes > 0 && (
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: 'var(--color-text-secondary)',
+              fontFamily: 'var(--font-primary)',
+              fontVariantNumeric: 'tabular-nums',
+              whiteSpace: 'nowrap',
+            }}
+            title="Sum of every row's estimated hands-on time in this section"
+          >
+            ~{formatDuration(totalMinutes)} hands-on
+          </span>
+        )}
 
         {equipmentList.length > 0 && (
           <span
@@ -654,6 +836,7 @@ function IngredientRowView({ row, isLast }: { row: IngredientRow; isLast: boolea
           >
             Mise · across {sourceCount} recipe{sourceCount === 1 ? '' : 's'}
           </span>
+          <DurationPill minutes={row.estimatedMinutes} />
           {forLabel && (
             <span
               style={{
@@ -738,6 +921,37 @@ function formatQty(q: number, unit: 'g' | 'ml' | 'unit'): string {
   return `${Math.round(q).toLocaleString('en-GB')}${unit}`;
 }
 
+/** Tiny clock-icon pill used on every Run sheet row to surface the
+ *  estimated hands-on minutes. Inline so it sits naturally beside the
+ *  category / mise label without wrapping awkwardly. */
+function DurationPill({ minutes }: { minutes: number }) {
+  if (minutes <= 0) return null;
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '2px 7px',
+        borderRadius: 100,
+        background: 'var(--color-bg-hover)',
+        color: 'var(--color-text-secondary)',
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: '0.02em',
+        fontFamily: 'var(--font-primary)',
+        fontVariantNumeric: 'tabular-nums',
+        whiteSpace: 'nowrap',
+        lineHeight: 1.1,
+      }}
+      title="Estimated hands-on time at the suggested kitchen pace"
+    >
+      <Clock size={10} />
+      ~{formatDuration(minutes)}
+    </span>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Per-recipe stage row (kept from the original Run sheet, with a
 // "for tomorrow" suffix when leadOffset != 0)
@@ -796,6 +1010,7 @@ function StageRowView({ row, isLast }: { row: StageRow; isLast: boolean }) {
           >
             {row.category} · Recipe stage
           </span>
+          <DurationPill minutes={row.estimatedMinutes} />
           {forLabel && (
             <span
               style={{

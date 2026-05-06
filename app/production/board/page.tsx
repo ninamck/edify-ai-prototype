@@ -30,7 +30,7 @@ const MODE_TABS: Array<{ id: ModeTabId; label: string }> = [
   { id: 'all',       label: 'All' },
   { id: 'run',       label: 'Run' },
   { id: 'variable',  label: 'Variable' },
-  { id: 'increment', label: 'Drops' },
+  { id: 'increment', label: 'Increment' },
 ];
 
 export default function ProductionBoardPage() {

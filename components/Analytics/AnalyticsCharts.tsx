@@ -54,7 +54,17 @@ type LegacyAnalyticsChartId =
   | 'waste-trend-stacked'
   | 'prod-avail-scatter'
   | 'waste-category-treemap'
-  | 'labour-day-radial';
+  | 'labour-day-radial'
+  // ── Pilot-persona dashboard defaults (all "yesterday"-flavoured) ────────
+  | 'net-sales-yesterday'
+  | 'top-sellers-yesterday'
+  | 'hourly-sales-labour'
+  | 'discounts-voids-refunds'
+  | 'waste-top5-yesterday'
+  | 'deliveries-by-supplier'
+  | 'delivery-issues'
+  | 'gross-margin-products'
+  | 'ingredient-price-changes';
 
 /**
  * Union of every chart id the app knows about. Legacy ids continue to drive
@@ -1121,6 +1131,605 @@ export function LabourDayRadialChart() {
   );
 }
 
+// ── Pilot-persona dashboard charts ────────────────────────────────────────────
+// Fresh mock data shaped specifically for each "yesterday" question the user
+// asked to pin onto the Pilot dashboard. Kept self-contained at the bottom of
+// the file so it's easy to evolve without touching the legacy datasets above.
+
+const NET_SALES_YESTERDAY = {
+  yesterday: 18420,
+  priorDay: 17260,
+  weekToDate: 92380,
+  // Last 7 days incl. yesterday — used for the sparkline.
+  last7: [16240, 16980, 17110, 18020, 17260, 16910, 18420],
+};
+
+const TOP_SELLERS_YESTERDAY = [
+  { item: 'Flat white',        units: 312, revenue: 1248 },
+  { item: 'Almond croissant',  units: 184, revenue: 736 },
+  { item: 'Bacon roll',        units: 168, revenue: 924 },
+  { item: 'Oat latte',         units: 142, revenue: 568 },
+  { item: 'Avocado smash',     units: 96,  revenue: 768 },
+];
+
+const HOURLY_SALES_LABOUR = [
+  { hour: '6am',  sales: 240,  labour: 56 },
+  { hour: '7am',  sales: 980,  labour: 84 },
+  { hour: '8am',  sales: 2120, labour: 112 },
+  { hour: '9am',  sales: 1640, labour: 112 },
+  { hour: '10am', sales: 980,  labour: 84 },
+  { hour: '11am', sales: 1180, labour: 84 },
+  { hour: '12pm', sales: 1820, labour: 112 },
+  { hour: '1pm',  sales: 1520, labour: 112 },
+  { hour: '2pm',  sales: 880,  labour: 84 },
+  { hour: '3pm',  sales: 720,  labour: 56 },
+  { hour: '4pm',  sales: 540,  labour: 56 },
+  { hour: '5pm',  sales: 360,  labour: 56 },
+  { hour: '6pm',  sales: 220,  labour: 28 },
+];
+
+const DISCOUNTS_VOIDS_REFUNDS = [
+  { kind: 'Discounts', value: 312, count: 48, colour: ACCENT },
+  { kind: 'Voids',     value: 184, count: 21, colour: ACCENT_MID },
+  { kind: 'Refunds',   value: 96,  count: 7,  colour: WARN },
+];
+
+const WASTE_TOP5_YESTERDAY = [
+  { item: 'Blueberry muffin',      waste: 38, units: 12 },
+  { item: 'Almond croissant',      waste: 28, units: 9 },
+  { item: 'Ham & cheese baguette', waste: 22, units: 5 },
+  { item: 'Oat flat white',        waste: 18, units: 9 },
+  { item: 'Caramel slice',         waste: 14, units: 6 },
+];
+
+const DELIVERIES_BY_SUPPLIER = [
+  { supplier: 'Bidfood',         yesterday: 1280, wtd: 4860 },
+  { supplier: 'Bunn Coffee',     yesterday: 720,  wtd: 2940 },
+  { supplier: 'Brakes',          yesterday: 540,  wtd: 2210 },
+  { supplier: 'Müller Dairy',    yesterday: 410,  wtd: 1820 },
+  { supplier: 'Local Bakehouse', yesterday: 280,  wtd: 1180 },
+];
+
+const DELIVERY_ISSUES = [
+  {
+    supplier: 'Bidfood',
+    item: 'Cucumbers (5kg)',
+    type: 'Credit note',
+    severity: 'high' as const,
+    detail: 'Damaged on arrival · £42 credit raised',
+  },
+  {
+    supplier: 'Brakes',
+    item: 'Whole-leaf rocket',
+    type: 'Short delivery',
+    severity: 'medium' as const,
+    detail: '3 of 6 cases delivered · awaiting top-up',
+  },
+  {
+    supplier: 'Bunn Coffee',
+    item: 'Decaf espresso 1kg',
+    type: 'Order edit',
+    severity: 'low' as const,
+    detail: 'Qty changed 12 → 8 by supplier',
+  },
+  {
+    supplier: 'Müller Dairy',
+    item: 'Oat milk 1L',
+    type: 'Substitution',
+    severity: 'low' as const,
+    detail: 'Brand swap · same price',
+  },
+];
+
+const GROSS_MARGIN_PRODUCTS = [
+  { item: 'Filter coffee',     gmPct: 88, revenue: 612 },
+  { item: 'Espresso',          gmPct: 84, revenue: 480 },
+  { item: 'Flat white',        gmPct: 78, revenue: 1248 },
+  { item: 'Iced tea',          gmPct: 76, revenue: 280 },
+  { item: 'Almond croissant',  gmPct: 64, revenue: 736 },
+];
+
+const INGREDIENT_PRICE_CHANGES = [
+  { ingredient: 'Butter (unsalted)',     deltaPct: 18.4 },
+  { ingredient: 'Cocoa powder',          deltaPct: 12.1 },
+  { ingredient: 'Whole milk',            deltaPct: 6.8 },
+  { ingredient: 'Avocado',               deltaPct: -4.2 },
+  { ingredient: 'Olive oil (extra virgin)', deltaPct: -7.6 },
+];
+
+export function NetSalesYesterdayChart() {
+  const { yesterday, priorDay, last7 } = NET_SALES_YESTERDAY;
+  const deltaPct = ((yesterday - priorDay) / priorDay) * 100;
+  const improved = deltaPct >= 0;
+  const deltaColour = improved ? OK : WARN;
+  const sparkMin = Math.min(...last7);
+  const sparkMax = Math.max(...last7);
+  const sparkRange = sparkMax - sparkMin || 1;
+  const sparkW = 260;
+  const sparkH = 60;
+  const points = last7
+    .map((v, i) => {
+      const x = (i / (last7.length - 1)) * sparkW;
+      const y = sparkH - ((v - sparkMin) / sparkRange) * sparkH;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '12px 4px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+        <div
+          style={{
+            fontSize: 44,
+            fontWeight: 700,
+            color: 'var(--color-text-primary)',
+            lineHeight: 1,
+            fontFamily: 'var(--font-primary)',
+          }}
+        >
+          £{yesterday.toLocaleString()}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: deltaColour }}>
+            {improved ? '▲' : '▼'} {Math.abs(deltaPct).toFixed(1)}% vs prior day
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-muted)' }}>
+            Net sales · yesterday
+          </span>
+        </div>
+      </div>
+      <svg
+        viewBox={`0 0 ${sparkW} ${sparkH}`}
+        width="100%"
+        height={sparkH}
+        preserveAspectRatio="none"
+        style={{ overflow: 'visible' }}
+      >
+        <defs>
+          <linearGradient id="netSalesSparkGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={improved ? OK : WARN} stopOpacity={0.22} />
+            <stop offset="100%" stopColor={improved ? OK : WARN} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <polygon
+          points={`0,${sparkH} ${points} ${sparkW},${sparkH}`}
+          fill="url(#netSalesSparkGrad)"
+        />
+        <polyline
+          points={points}
+          fill="none"
+          stroke={improved ? OK : WARN}
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+        {last7.map((v, i) => {
+          if (i !== last7.length - 1) return null;
+          const x = (i / (last7.length - 1)) * sparkW;
+          const y = sparkH - ((v - sparkMin) / sparkRange) * sparkH;
+          return (
+            <circle key={i} cx={x} cy={y} r={4} fill={improved ? OK : WARN} stroke="#fff" strokeWidth={2} />
+          );
+        })}
+      </svg>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          fontSize: 11,
+          color: 'var(--color-text-muted)',
+          marginTop: -8,
+        }}
+      >
+        <span>7 days ago</span>
+        <span>Yesterday</span>
+      </div>
+    </div>
+  );
+}
+
+export function TopSellersYesterdayChart() {
+  const max = Math.max(...TOP_SELLERS_YESTERDAY.map((r) => r.units));
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <BarChart
+        data={TOP_SELLERS_YESTERDAY}
+        layout="vertical"
+        margin={{ top: 4, right: 32, bottom: 0, left: 16 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border-subtle)" />
+        <XAxis
+          type="number"
+          tick={TICK_STYLE}
+          axisLine={false}
+          tickLine={false}
+          domain={[0, max * 1.1]}
+        />
+        <YAxis
+          type="category"
+          dataKey="item"
+          tick={TICK_STYLE}
+          axisLine={false}
+          tickLine={false}
+          width={130}
+        />
+        <Tooltip
+          formatter={(v, _name, entry) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const payload = (entry as any)?.payload;
+            const revenue = payload?.revenue ?? 0;
+            return [`${Number(v)} units · £${revenue}`, 'Sold yesterday'];
+          }}
+          contentStyle={TOOLTIP_STYLE}
+        />
+        <Bar dataKey="units" radius={[0, 3, 3, 0]}>
+          {TOP_SELLERS_YESTERDAY.map((_, i) => (
+            <Cell key={i} fill={i === 0 ? ACCENT : i < 3 ? ACCENT_MID : 'var(--color-border-subtle)'} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function HourlySalesLabourChart() {
+  const labourMax = Math.max(...HOURLY_SALES_LABOUR.map((r) => r.labour));
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <ComposedChart data={HOURLY_SALES_LABOUR} margin={{ top: 8, right: 16, bottom: 0, left: -8 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border-subtle)" />
+        <XAxis
+          dataKey="hour"
+          tick={{ ...TICK_STYLE, fontSize: 10 }}
+          axisLine={false}
+          tickLine={false}
+          interval={0}
+        />
+        <YAxis
+          yAxisId="left"
+          tickFormatter={(v: number) => `£${(v / 1000).toFixed(1)}k`}
+          tick={TICK_STYLE}
+          axisLine={false}
+          tickLine={false}
+        />
+        <YAxis
+          yAxisId="right"
+          orientation="right"
+          tickFormatter={(v: number) => `£${v}`}
+          tick={TICK_STYLE}
+          axisLine={false}
+          tickLine={false}
+          domain={[0, Math.ceil(labourMax * 1.2)]}
+        />
+        <Tooltip
+          formatter={(v, name) =>
+            name === 'sales'
+              ? [`£${Number(v).toLocaleString()}`, 'Sales']
+              : [`£${Number(v).toLocaleString()}`, 'Labour cost']
+          }
+          contentStyle={TOOLTIP_STYLE}
+        />
+        <Legend
+          iconType="circle"
+          wrapperStyle={{ fontSize: 12, fontFamily: 'var(--font-primary)' }}
+          formatter={(value) => (value === 'sales' ? 'Sales (£)' : 'Labour cost (£)')}
+        />
+        <Bar yAxisId="left" dataKey="sales" name="sales" fill={ACCENT} radius={[3, 3, 0, 0]} />
+        <Line
+          yAxisId="right"
+          type="monotone"
+          dataKey="labour"
+          name="labour"
+          stroke={WARN}
+          strokeWidth={2.4}
+          dot={{ r: 3, fill: WARN, strokeWidth: 0 }}
+        />
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function DiscountsVoidsRefundsChart() {
+  const total = DISCOUNTS_VOIDS_REFUNDS.reduce((s, r) => s + r.value, 0);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '8px 4px 4px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+        <span
+          style={{
+            fontSize: 30,
+            fontWeight: 700,
+            color: 'var(--color-text-primary)',
+            lineHeight: 1,
+          }}
+        >
+          £{total.toLocaleString()}
+        </span>
+        <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)' }}>
+          total · yesterday
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {DISCOUNTS_VOIDS_REFUNDS.map((row) => {
+          const pct = (row.value / total) * 100;
+          return (
+            <div key={row.kind} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: 'var(--color-text-secondary)',
+                  }}
+                >
+                  {row.kind}{' '}
+                  <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>
+                    · {row.count} txns
+                  </span>
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                  £{row.value}{' '}
+                  <span style={{ color: 'var(--color-text-muted)', fontWeight: 500, fontSize: 11 }}>
+                    ({pct.toFixed(0)}%)
+                  </span>
+                </span>
+              </div>
+              <div
+                style={{
+                  height: 8,
+                  borderRadius: 999,
+                  background: 'var(--color-border-subtle)',
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  style={{
+                    width: `${pct}%`,
+                    height: '100%',
+                    background: row.colour,
+                    borderRadius: 999,
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function WasteTop5YesterdayChart() {
+  const max = Math.max(...WASTE_TOP5_YESTERDAY.map((r) => r.waste));
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <BarChart
+        data={WASTE_TOP5_YESTERDAY}
+        layout="vertical"
+        margin={{ top: 4, right: 32, bottom: 0, left: 16 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border-subtle)" />
+        <XAxis
+          type="number"
+          tickFormatter={(v: number) => `£${v}`}
+          tick={TICK_STYLE}
+          axisLine={false}
+          tickLine={false}
+          domain={[0, max * 1.1]}
+        />
+        <YAxis
+          type="category"
+          dataKey="item"
+          tick={TICK_STYLE}
+          axisLine={false}
+          tickLine={false}
+          width={150}
+        />
+        <Tooltip
+          formatter={(v, _name, entry) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const payload = (entry as any)?.payload;
+            const units = payload?.units ?? 0;
+            return [`£${Number(v)} · ${units} units`, 'Wasted yesterday'];
+          }}
+          contentStyle={TOOLTIP_STYLE}
+        />
+        <Bar dataKey="waste" radius={[0, 3, 3, 0]}>
+          {WASTE_TOP5_YESTERDAY.map((_, i) => (
+            <Cell key={i} fill={i < 2 ? WARN : i < 4 ? ACCENT_MID : ACCENT} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function DeliveriesBySupplierChart() {
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <BarChart
+        data={DELIVERIES_BY_SUPPLIER}
+        margin={{ top: 4, right: 8, bottom: 0, left: -8 }}
+        barCategoryGap="22%"
+      >
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border-subtle)" />
+        <XAxis dataKey="supplier" tick={{ ...TICK_STYLE, fontSize: 11 }} axisLine={false} tickLine={false} />
+        <YAxis
+          tickFormatter={(v: number) => `£${v / 1000}k`}
+          tick={TICK_STYLE}
+          axisLine={false}
+          tickLine={false}
+        />
+        <Tooltip
+          formatter={(v, name) => [
+            `£${Number(v).toLocaleString()}`,
+            name === 'yesterday' ? 'Yesterday' : 'Week to date',
+          ]}
+          contentStyle={TOOLTIP_STYLE}
+        />
+        <Legend
+          iconType="circle"
+          wrapperStyle={{ fontSize: 12, fontFamily: 'var(--font-primary)' }}
+          formatter={(value) => (value === 'yesterday' ? 'Yesterday' : 'Week to date')}
+        />
+        <Bar dataKey="wtd" name="wtd" fill="var(--color-border-subtle)" radius={[3, 3, 0, 0]} />
+        <Bar dataKey="yesterday" name="yesterday" fill={ACCENT} radius={[3, 3, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function DeliveryIssuesChart() {
+  const severityColour: Record<'high' | 'medium' | 'low', string> = {
+    high: WARN,
+    medium: '#B45309',
+    low: 'var(--color-text-muted)',
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 4px' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr 1.6fr',
+          gap: 8,
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+          color: 'var(--color-text-muted)',
+          padding: '0 8px 4px',
+        }}
+      >
+        <span>Supplier</span>
+        <span>Issue</span>
+        <span>Detail</span>
+      </div>
+      {DELIVERY_ISSUES.map((row) => (
+        <div
+          key={`${row.supplier}-${row.item}`}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr 1.6fr',
+            gap: 8,
+            padding: '8px 8px',
+            borderRadius: 8,
+            background: 'var(--color-bg-hover)',
+            fontSize: 12,
+            alignItems: 'center',
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
+              {row.supplier}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{row.item}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 999,
+                background: severityColour[row.severity],
+                flex: '0 0 auto',
+              }}
+            />
+            <span style={{ fontWeight: 600, color: 'var(--color-text-secondary)' }}>{row.type}</span>
+          </div>
+          <span style={{ color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>{row.detail}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function GrossMarginProductsChart() {
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <BarChart
+        data={GROSS_MARGIN_PRODUCTS}
+        layout="vertical"
+        margin={{ top: 4, right: 32, bottom: 0, left: 16 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border-subtle)" />
+        <XAxis
+          type="number"
+          domain={[0, 100]}
+          tickFormatter={(v: number) => `${v}%`}
+          tick={TICK_STYLE}
+          axisLine={false}
+          tickLine={false}
+        />
+        <YAxis
+          type="category"
+          dataKey="item"
+          tick={TICK_STYLE}
+          axisLine={false}
+          tickLine={false}
+          width={140}
+        />
+        <Tooltip
+          formatter={(v, _name, entry) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const payload = (entry as any)?.payload;
+            const revenue = payload?.revenue ?? 0;
+            return [`${Number(v)}% GM · £${revenue} sold`, 'Yesterday'];
+          }}
+          contentStyle={TOOLTIP_STYLE}
+        />
+        <Bar dataKey="gmPct" radius={[0, 3, 3, 0]}>
+          {GROSS_MARGIN_PRODUCTS.map((row, i) => (
+            <Cell key={i} fill={row.gmPct >= 80 ? OK : row.gmPct >= 70 ? ACCENT : ACCENT_MID} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function IngredientPriceChangesChart() {
+  const sorted = [...INGREDIENT_PRICE_CHANGES].sort((a, b) => b.deltaPct - a.deltaPct);
+  const absMax = Math.max(...sorted.map((r) => Math.abs(r.deltaPct)));
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <BarChart
+        data={sorted}
+        layout="vertical"
+        margin={{ top: 4, right: 32, bottom: 0, left: 16 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border-subtle)" />
+        <XAxis
+          type="number"
+          domain={[-absMax * 1.1, absMax * 1.1]}
+          tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v}%`}
+          tick={TICK_STYLE}
+          axisLine={false}
+          tickLine={false}
+        />
+        <YAxis
+          type="category"
+          dataKey="ingredient"
+          tick={TICK_STYLE}
+          axisLine={false}
+          tickLine={false}
+          width={170}
+        />
+        <Tooltip
+          formatter={(v) => {
+            const n = Number(v);
+            return [`${n > 0 ? '+' : ''}${n.toFixed(1)}% vs prior month`, 'Price change'];
+          }}
+          contentStyle={TOOLTIP_STYLE}
+        />
+        <ReferenceLine x={0} stroke="var(--color-text-muted)" />
+        <Bar dataKey="deltaPct" radius={[0, 3, 3, 0]}>
+          {sorted.map((row, i) => (
+            <Cell key={i} fill={row.deltaPct > 0 ? WARN : OK} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
 // ── Render helper ─────────────────────────────────────────────────────────────
 
 export function renderAnalyticsChart(chartId: AnalyticsChartId) {
@@ -1148,6 +1757,15 @@ export function renderAnalyticsChart(chartId: AnalyticsChartId) {
     case 'prod-avail-scatter':     return <ProdAvailScatterChart />;
     case 'waste-category-treemap': return <WasteCategoryTreemapChart />;
     case 'labour-day-radial':      return <LabourDayRadialChart />;
+    case 'net-sales-yesterday':    return <NetSalesYesterdayChart />;
+    case 'top-sellers-yesterday':  return <TopSellersYesterdayChart />;
+    case 'hourly-sales-labour':    return <HourlySalesLabourChart />;
+    case 'discounts-voids-refunds':return <DiscountsVoidsRefundsChart />;
+    case 'waste-top5-yesterday':   return <WasteTop5YesterdayChart />;
+    case 'deliveries-by-supplier': return <DeliveriesBySupplierChart />;
+    case 'delivery-issues':        return <DeliveryIssuesChart />;
+    case 'gross-margin-products':  return <GrossMarginProductsChart />;
+    case 'ingredient-price-changes': return <IngredientPriceChangesChart />;
   }
 }
 
@@ -1257,6 +1875,52 @@ export const ANALYTICS_CONFIG: Record<AnalyticsChartId, {
     label: 'Labour cost % by day of week',
     chartLabel: 'Here\'s labour as a % of revenue, by day of the week:',
     reasoning: '**Sunday is by far the worst at 31.2%** — revenue is low but staffing hasn\'t been cut to match. Saturday is the leanest at 24.6% (high sales, standard crew). Weekdays sit in a tight 26–28% band. Biggest opportunity: cut one back-of-house shift on Sunday — would bring the day in line with Friday\'s 28% and save ~£180/week at the estate level.',
+  },
+  // ── Pilot dashboard "yesterday" charts ──────────────────────────────────────
+  'net-sales-yesterday': {
+    label: 'Net sales · yesterday',
+    chartLabel: 'Here\'s net sales for yesterday with the 7-day trend:',
+    reasoning: 'Yesterday\'s net sales came in at **£18,420**, up **6.7%** on the prior day (£17,260) and the strongest day of the past week. The trend is gently positive: 5 of the last 7 days have come in above the 7-day mean. Week-to-date net sales are running at £92,380.',
+  },
+  'top-sellers-yesterday': {
+    label: 'Top selling items · yesterday',
+    chartLabel: 'Here are the top 5 selling items by units sold yesterday:',
+    reasoning: '**Flat white led the day at 312 units (£1,248)** — about 24% of all hot drink volume. Almond croissant and bacon roll round out the top three. Avocado smash is the standout £-per-unit item: 96 units sold but £768 in revenue (£8 ATV). Use this list to anchor the next production plan and to spot-check stock cover for tomorrow morning.',
+  },
+  'hourly-sales-labour': {
+    label: 'Sales by hour · vs labour',
+    chartLabel: 'Here are sales by hour yesterday with labour cost overlaid:',
+    reasoning: 'The **8–9am peak (£2,120)** carried the day, with a secondary lunch peak at noon (£1,820). Labour cost tracked sales reasonably well except in the **3–5pm window**, where £56–£28/hr labour kept running while sales fell from £720 to £360 — that\'s the leanest opportunity to pull a shift. Morning ramp from 7–8am could absorb a little more labour without hurting revenue per hour.',
+  },
+  'discounts-voids-refunds': {
+    label: 'Discounts, voids & refunds · yesterday',
+    chartLabel: 'Here\'s yesterday\'s reduction value broken down by discounts, voids, and refunds:',
+    reasoning: 'Total reductions came to **£592** (about 3.2% of net sales). **Discounts dominate at £312 across 48 transactions** — mostly the standing 10% staff discount and three loyalty redemptions. Voids (£184 / 21 txns) are running slightly above your normal baseline — worth a quick look at the till audit. Refunds (£96 / 7) are within tolerance.',
+  },
+  'waste-top5-yesterday': {
+    label: 'Top 5 wasted items · yesterday',
+    chartLabel: 'Here are the 5 items driving the most waste £ yesterday:',
+    reasoning: '**Blueberry muffin (£38, 12 units)** topped the list again — same pattern we saw last Monday. The top 3 items together account for £88 of the £120 wasted yesterday (73%). Tightening the muffin and almond-croissant production trigger by 6 units each would have cut yesterday\'s waste by roughly half without hurting availability.',
+  },
+  'deliveries-by-supplier': {
+    label: 'Deliveries by supplier · yesterday + WTD',
+    chartLabel: 'Here are yesterday\'s deliveries by supplier alongside the week-to-date totals:',
+    reasoning: 'Yesterday\'s deliveries totalled **£3,230** across 5 suppliers. **Bidfood was the largest drop at £1,280**, on plan with the standard Tuesday produce/dairy run. Week-to-date is **£13,010**, pacing ~£300 ahead of the equivalent point last week. Bunn Coffee\'s WTD is up sharply (+22%) on the back of the espresso machine refit at Riverside.',
+  },
+  'delivery-issues': {
+    label: 'Delivery issues · open',
+    chartLabel: 'Here are the delivery exceptions raised on yesterday\'s drops:',
+    reasoning: 'Four exceptions are open across yesterday\'s deliveries. The one to action today is the **Bidfood credit note (£42, damaged cucumbers)** — confirm the credit has landed before week-end. The Brakes short-delivery on rocket needs a top-up call this morning so lunch service isn\'t affected. The Bunn order edit and Müller substitution are informational only.',
+  },
+  'gross-margin-products': {
+    label: 'Highest gross margin products · yesterday',
+    chartLabel: 'Here are yesterday\'s top products by gross margin %:',
+    reasoning: 'The hot-drink core is doing the heavy lifting on margin: **filter coffee at 88%, espresso at 84%, flat white at 78%**. Together they delivered ~£2,340 of yesterday\'s revenue at a combined 82% GM. Almond croissant is the lowest-GM item in the top 5 at 64% — still healthy, but worth keeping an eye on as butter prices climb.',
+  },
+  'ingredient-price-changes': {
+    label: 'Top ingredient price changes',
+    chartLabel: 'Here are the 5 ingredients with the biggest cost movement vs the prior month:',
+    reasoning: '**Butter is up 18.4%** — the single biggest input-cost move this period and it touches every pastry recipe. Cocoa powder is up 12.1% (mostly hot chocolate and brownies). Two ingredients have moved in your favour: avocado is down 4.2% and extra-virgin olive oil is down 7.6%. Net effect on the menu mix is roughly **+0.4 points of food-cost %** unless one of the big two gets repriced.',
   },
   // ── Dunkin (CSV-backed; only used by the Dunkin persona) ────────────────────
   ...DUNKIN_ANALYTICS_CONFIG,

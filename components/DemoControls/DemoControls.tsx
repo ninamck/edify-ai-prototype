@@ -43,7 +43,8 @@ export default function DemoControls({ variant = 'floating' }: Props) {
       pathname.startsWith('/mvp-1') ||
       pathname.startsWith('/production') ||
       pathname.startsWith('/recipes') ||
-      pathname.startsWith('/settings')
+      pathname.startsWith('/settings') ||
+      pathname.startsWith('/suppliers')
     ) {
       return null;
     }

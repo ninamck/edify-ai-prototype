@@ -476,7 +476,8 @@ function RecipePreviewCard({ recipe }: { recipe: typeof FITZROY_SHEET_INTAKE.rec
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: '4px',
                     padding: '2px 8px', borderRadius: '100px',
-                    background: 'var(--color-success-light)', color: 'var(--color-success)',
+                    background: '#ffffff', color: 'var(--color-success)',
+                    border: '1.5px solid var(--color-success)',
                     fontSize: '11px', fontWeight: 600,
                   }}
                 >
@@ -488,7 +489,8 @@ function RecipePreviewCard({ recipe }: { recipe: typeof FITZROY_SHEET_INTAKE.rec
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: '4px',
                     padding: '2px 8px', borderRadius: '100px',
-                    background: 'var(--color-warning-light)', color: 'var(--color-warning)',
+                    background: '#ffffff', color: 'var(--color-warning)',
+                    border: '1.5px solid var(--color-warning)',
                     fontSize: '11px', fontWeight: 600,
                   }}
                   title={ing.note}

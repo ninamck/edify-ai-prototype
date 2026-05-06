@@ -1,11 +1,14 @@
 export type BadgeVariant = 'default' | 'success' | 'warning' | 'error' | 'info';
 
-const VARIANT_STYLES: Record<BadgeVariant, { bg: string; color: string; dot: string }> = {
-  default: { bg: '#F0EFED', color: 'var(--color-text-secondary)', dot: '#A8A29E' },
-  success: { bg: '#DCFCE7', color: '#15803D', dot: '#22C55E' },
-  warning: { bg: 'var(--color-warning-light)', color: 'var(--color-warning)', dot: '#F59E0B' },
-  error:   { bg: '#FEE2E2', color: '#B91C1C', dot: '#EF4444' },
-  info:    { bg: '#DBEAFE', color: '#1D4ED8', dot: '#3B82F6' },
+// Outline pills — see `.cursor/rules/status-pills.mdc`. White background,
+// coloured text, 1.5px coloured border. The dot is the same colour as the
+// border so the indicator reads cleanly at a glance.
+const VARIANT_STYLES: Record<BadgeVariant, { color: string; border: string; dot: string }> = {
+  default: { color: 'var(--color-text-secondary)', border: 'var(--color-border)',     dot: '#A8A29E' },
+  success: { color: 'var(--color-success)',         border: 'var(--color-success)',    dot: 'var(--color-success)' },
+  warning: { color: 'var(--color-warning)',         border: 'var(--color-warning)',    dot: 'var(--color-warning)' },
+  error:   { color: 'var(--color-error)',           border: 'var(--color-error)',      dot: 'var(--color-error)' },
+  info:    { color: 'var(--color-info)',            border: 'var(--color-info)',       dot: 'var(--color-info)' },
 };
 
 const STATUS_VARIANT_MAP: Record<string, BadgeVariant> = {
@@ -40,8 +43,9 @@ export default function StatusBadge({ status, variant }: StatusBadgeProps) {
         fontSize: '12px',
         fontWeight: 600,
         fontFamily: 'var(--font-primary)',
-        background: s.bg,
+        background: '#ffffff',
         color: s.color,
+        border: `1.5px solid ${s.border}`,
         whiteSpace: 'nowrap',
         lineHeight: 1,
       }}

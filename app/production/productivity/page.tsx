@@ -593,14 +593,15 @@ function BatchRow({ row }: { row: BatchProductivity }) {
           <span
             style={{
               marginLeft: 6,
-              padding: '1px 6px',
-              borderRadius: 4,
+              padding: '2px 8px',
+              borderRadius: 999,
               fontSize: 10,
               fontWeight: 700,
-              background: 'var(--color-error-light)',
+              background: '#ffffff',
               color: 'var(--color-error)',
+              border: '1.5px solid var(--color-error)',
               textTransform: 'uppercase',
-              letterSpacing: '0.04em',
+              letterSpacing: '0.05em',
             }}
           >
             failed{row.batch.failureReason ? ` · ${row.batch.failureReason}` : ''}

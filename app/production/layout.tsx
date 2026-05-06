@@ -43,6 +43,13 @@ const HUB_RUN_TABS: SubTab[] = [
 ];
 
 const HUB_PLAN_TABS: SubTab[] = [
+  // Plan is polymorphic: when the hub is selected in the site picker it
+  // shows the hub plan (PlanStrip + AmountsView). When a spoke is
+  // selected it shows the spoke-order workflow (day strip, recipe lines,
+  // submit, hub Unlock) — the same surface the spoke persona uses on
+  // their own /production/spokes "Order" tab. The dedicated "Spoke
+  // plans" sub-tab was removed; the layout-level site picker is the
+  // only spoke selector.
   { id: 'plan',            label: 'Plan',              href: '/production/plan' },
   { id: 'carry-over',      label: 'Carry-over',        href: '/production/carry-over' },
   { id: 'productivity',    label: 'Productivity',      href: '/production/productivity' },

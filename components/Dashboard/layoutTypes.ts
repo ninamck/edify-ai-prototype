@@ -40,6 +40,13 @@ const HALF_WIDTH_CHART_IDS: Set<AnalyticsChartId> = new Set([
   'labour-hours',
   'waste-category-treemap',
   'oos-pareto',
+  // Pilot dashboard half-width defaults
+  'net-sales-yesterday',
+  'top-sellers-yesterday',
+  'discounts-voids-refunds',
+  'waste-top5-yesterday',
+  'gross-margin-products',
+  'ingredient-price-changes',
 ]);
 
 /**
@@ -50,6 +57,8 @@ const HALF_ONLY_CHART_IDS: Set<AnalyticsChartId> = new Set([
   'eatin',
   'waste-kpi',
   'labour-day-radial',
+  // KPI tile is too sparse at full width.
+  'net-sales-yesterday',
 ]);
 
 export function isHalfOnlyChart(chartId: AnalyticsChartId): boolean {
@@ -74,6 +83,25 @@ export const MANAGER_DEFAULT_LAYOUT: DashboardLayoutEntry[] = [
   { id: 'checklist-compliance', visible: true, width: 'full' },
   { id: 'waste', visible: true, width: 'half' },
   { id: 'deliveries', visible: true, width: 'half' },
+];
+
+/**
+ * Default layout for the Pilot persona. The user picked these 9 questions
+ * during the dashboard personalisation flow, so they auto-pin when the Pilot
+ * role is selected. Half/full widths follow the per-chart defaults — small
+ * KPIs and top-N bar charts go half-width, anything time-series or list-
+ * shaped goes full width.
+ */
+export const PILOT_DEFAULT_LAYOUT: DashboardLayoutEntry[] = [
+  { id: pinnedId('net-sales-yesterday'),     visible: true, width: 'half' },
+  { id: pinnedId('top-sellers-yesterday'),   visible: true, width: 'half' },
+  { id: pinnedId('hourly-sales-labour'),     visible: true, width: 'full' },
+  { id: pinnedId('discounts-voids-refunds'), visible: true, width: 'half' },
+  { id: pinnedId('waste-top5-yesterday'),    visible: true, width: 'half' },
+  { id: pinnedId('deliveries-by-supplier'),  visible: true, width: 'full' },
+  { id: pinnedId('delivery-issues'),         visible: true, width: 'full' },
+  { id: pinnedId('gross-margin-products'),   visible: true, width: 'half' },
+  { id: pinnedId('ingredient-price-changes'),visible: true, width: 'half' },
 ];
 
 export const ESTATE_DEFAULT_LAYOUT: DashboardLayoutEntry[] = [

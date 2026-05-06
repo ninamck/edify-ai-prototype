@@ -112,10 +112,24 @@ export default function Mvp1Shell() {
     router.replace('/mvp-1');
   }, [searchParams, tabs, addTablesTab, setActiveId, router]);
 
+  // When the pilot persona becomes active, force the user back onto the
+  // Dashboard tab. Tabs are hidden in this persona, so leaving them on
+  // (e.g.) "Sales Deep Dive" would strand them with no way to navigate.
+  useEffect(() => {
+    if (briefingRole !== 'pilot') return;
+    if (activeId !== 'dashboard') setActiveId('dashboard');
+  }, [briefingRole, activeId, setActiveId]);
+
   if (isMobileShell) {
     return <MobileShell />;
   }
 
+  // The pilot persona is a "clean slate" view: tabs are hidden so the user
+  // stays on the dashboard, and the dashboard layout starts empty so the
+  // graphs can be personalised from scratch. Pinning new insights still
+  // works — they land in the pilot-specific layout. Other personas are
+  // unchanged.
+  const isPilot = briefingRole === 'pilot';
   const currentLayout = layoutByRole[briefingRole] ?? [];
 
   function updateCurrentLayout(next: DashboardLayoutEntry[]) {
@@ -332,14 +346,18 @@ export default function Mvp1Shell() {
               }}
             />
 
-            <Mvp1Tabs
-              tabs={tabs}
-              activeId={activeId}
-              onSelect={setActiveId}
-              onAddTablesTab={addTablesTab}
-              onRemove={removeTab}
-              onRename={renameTab}
-            />
+            {/* Tabs are hidden for the pilot persona — that view is a clean
+                dashboard-only canvas. Other personas keep the full tab set. */}
+            {!isPilot && (
+              <Mvp1Tabs
+                tabs={tabs}
+                activeId={activeId}
+                onSelect={setActiveId}
+                onAddTablesTab={addTablesTab}
+                onRemove={removeTab}
+                onRename={renameTab}
+              />
+            )}
           </div>
 
           {activeTab.kind === 'dashboard' ? (

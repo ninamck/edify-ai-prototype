@@ -159,15 +159,16 @@ function FocusBanner({ recipeName, onClear }: { recipeName: string; onClear: () 
           display: 'inline-flex',
           alignItems: 'center',
           gap: 6,
-          padding: '4px 8px',
+          padding: '3px 9px',
           borderRadius: 999,
-          background: 'var(--color-info-light)',
+          background: '#ffffff',
           color: 'var(--color-info)',
+          border: '1.5px solid var(--color-info)',
           fontWeight: 600,
           fontSize: 11,
         }}
       >
-        <span aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-accent-active)' }} />
+        <span aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-info)' }} />
         {recipeName}
       </span>
       <span style={{ color: 'var(--color-text-muted)' }}>

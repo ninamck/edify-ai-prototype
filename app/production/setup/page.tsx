@@ -385,11 +385,12 @@ function SingleSelect({
                   right: 6,
                   fontSize: 9,
                   fontWeight: 700,
-                  padding: '2px 5px',
-                  borderRadius: 4,
-                  background: 'var(--color-info-light)',
+                  padding: '2px 7px',
+                  borderRadius: 999,
+                  background: '#ffffff',
                   color: 'var(--color-info)',
-                  letterSpacing: '0.04em',
+                  border: '1.5px solid var(--color-info)',
+                  letterSpacing: '0.05em',
                   textTransform: 'uppercase',
                 }}
               >
@@ -464,11 +465,12 @@ function NumericInput({
           style={{
             fontSize: 9,
             fontWeight: 700,
-            padding: '2px 5px',
-            borderRadius: 4,
-            background: 'var(--color-info-light)',
+            padding: '2px 7px',
+            borderRadius: 999,
+            background: '#ffffff',
             color: 'var(--color-info)',
-            letterSpacing: '0.04em',
+            border: '1.5px solid var(--color-info)',
+            letterSpacing: '0.05em',
             textTransform: 'uppercase',
           }}
         >

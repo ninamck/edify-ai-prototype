@@ -20,8 +20,11 @@ import {
   type ComponentRow,
   type ItemComponent,
   type RecipeComponent,
+  type RecipeIngredient,
   buildUsedInIndex,
 } from '@/components/Recipe/libraryFixtures';
+import { IngredientsV2Section } from '@/components/Recipe/IngredientsV2Section';
+import { menuItemsUsingRecipe, useMenuItems } from '@/components/MenuItems/store';
 import {
   type ProductionWorkflow,
 } from '@/components/Production/fixtures';
@@ -49,7 +52,6 @@ import {
   YIELD_UOMS,
   SHELF_LIFE_UNITS,
   type ShelfLifeUnit,
-  BAKERY_HOT_PRODUCTION,
   PRODUCTION_VIS,
   SITES,
   newId,
@@ -94,6 +96,11 @@ type FormDraft = {
   instructions: string;
   allergens: string[];
   photoName: string | null;
+  /**
+   * Typed, master/product-aware ingredient list (post-rethink). The new
+   * "Ingredients" card writes here. Saved to `Recipe.ingredientsV2`.
+   */
+  ingredientsV2: RecipeIngredient[];
   components: ComponentRow[];
   variables: VariableRow[];
   packaging: PackagingRow[];
@@ -253,6 +260,10 @@ function recipeToDraft(r: Recipe): FormDraft {
     instructions: fx.instructions ?? '',
     allergens: fx.allergens ?? [],
     photoName: fx.photoName ?? null,
+    ingredientsV2: r.ingredientsV2?.map((row) => ({
+      ...row,
+      siteOverrides: row.siteOverrides ? { ...row.siteOverrides } : undefined,
+    })) ?? [],
     components: buildInitialComponents(r),
     variables: fx.variableIngredients?.map((row) => ({ ...row })) ?? [],
     packaging: fx.packaging?.map((row) => ({ ...row })) ?? [],
@@ -317,6 +328,7 @@ function draftToRecipe(
     marginPct: channelMargin,
     status: (draft.status as Recipe['status']) || base.status,
     ingredients,
+    ingredientsV2: draft.ingredientsV2.length > 0 ? draft.ingredientsV2 : undefined,
     subRecipes,
     production: {
       visibility: productionVisibility,
@@ -415,6 +427,8 @@ function EditRecipeForm({
 
   const recipesById = useMemo(() => new Map(allRecipes.map((r) => [r.id, r])), [allRecipes]);
   const usedInIds = useMemo(() => buildUsedInIndex(allRecipes).get(original.id) ?? [], [allRecipes, original.id]);
+  const menuItems = useMenuItems();
+  const usedByMenuItems = useMemo(() => menuItemsUsingRecipe(original.id), [menuItems, original.id]);
 
   const [draft, setDraft] = useState<FormDraft>(() => recipeToDraft(original));
   const [draftKind, setDraftKind] = useState<Recipe['kind']>(original.kind);
@@ -724,11 +738,24 @@ function EditRecipeForm({
             </div>
           </Card>
 
-          {/* Recipe components — unified ingredients + sub-recipes (build order) */}
+          {/* Ingredients (post-rethink) — typed, master/product-aware rows */}
           <Card>
             <SectionHeader
-              title="Recipe components"
-              hint="One ordered list. Add raw ingredients or pull in another recipe as a sub-recipe; build order is top → bottom. Sub-recipes auto-promote this to an Assembly."
+              title="Ingredients"
+              hint="Search across master products and supplier SKUs in one place. Pick whichever you recognise — Edify resolves the rest. Use the Site qty button to set per-site quantities (e.g. 16g at Site A, 18g at Site B)."
+            />
+            <IngredientsV2Section
+              rows={draft.ingredientsV2}
+              sites={draft.sites.length > 0 ? draft.sites : SITES}
+              onChange={(next) => patch('ingredientsV2', next)}
+            />
+          </Card>
+
+          {/* Recipe components — legacy unified list (sub-recipes + free-text rows) */}
+          <Card>
+            <SectionHeader
+              title="Build steps & sub-recipes"
+              hint="Pull in another recipe as a sub-recipe (build order is top → bottom). Free-text ingredient rows here are kept for back-compat — new ingredients should use the Ingredients section above."
             />
             <ComponentTable
               rows={draft.components}
@@ -765,10 +792,12 @@ function EditRecipeForm({
             />
           </Card>
 
-          {/* Variable */}
+          {/* Variable (legacy — superseded by catalogue-level Modifier Groups) */}
           <CollapsibleCard
-            label="Variable ingredients"
-            hint={draft.variables.length ? `${draft.variables.length} row${draft.variables.length === 1 ? '' : 's'}` : 'e.g. alt milks, size variations — usually better as a shared modifier group'}
+            label="Variable ingredients (legacy)"
+            hint={draft.variables.length
+              ? `${draft.variables.length} row${draft.variables.length === 1 ? '' : 's'} · superseded by Modifier Groups (Manage modifier groups → attach on Menu Item)`
+              : 'Superseded by Modifier Groups. Attach a shared group to a menu item instead — add the alt milk in one place and every coffee picks it up.'}
             open={draft.showVariable}
             onToggle={() => patch('showVariable', !draft.showVariable)}
           >
@@ -1010,11 +1039,6 @@ function EditRecipeForm({
                 />
               </div>
 
-              <div>
-                <FieldLabel>Bakery / hot production</FieldLabel>
-                <PillSingle options={BAKERY_HOT_PRODUCTION} selected={draft.bakeryHot} onChange={(v) => patch('bakeryHot', v)} />
-              </div>
-
               <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
                 <CheckRow label="Allow carry-over" checked={draft.allowCarryOver} onChange={(v) => patch('allowCarryOver', v)} />
                 <CheckRow label="Enable preparation PCR" checked={draft.enablePcr} onChange={(v) => patch('enablePcr', v)} />
@@ -1056,6 +1080,66 @@ function EditRecipeForm({
             srpIncDelivery={srpInc(draft.srpDeliveryEx, draft.vatPct)}
           />
 
+          {/* Used by menu items — read from the catalogue-level MenuItems
+              store. Replaces the legacy `Recipe.menuItems` display field. */}
+          <div
+            style={{
+              background: '#fff', border: '1px solid var(--color-border-subtle)',
+              borderRadius: '12px', padding: '16px',
+            }}
+          >
+            <div
+              style={{
+                fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em',
+                textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: '8px',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              Used by menu items
+              <span style={{ marginLeft: 'auto', fontWeight: 700, color: 'var(--color-text-secondary)' }}>
+                {usedByMenuItems.length}
+              </span>
+            </div>
+            {usedByMenuItems.length === 0 ? (
+              <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                Not yet attached to any menu item. Open Manage menu items to attach this recipe to a POS-visible item.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {usedByMenuItems.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => router.push(`/menu-items/${m.id}/edit`)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                      padding: '7px 11px', borderRadius: 8,
+                      border: '1px solid var(--color-border-subtle)',
+                      background: '#fff', cursor: 'pointer', fontFamily: 'var(--font-primary)',
+                      color: 'var(--color-text-primary)',
+                    }}
+                  >
+                    <span style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
+                      <span style={{ fontSize: '12.5px', fontWeight: 600 }}>{m.name}</span>
+                      {m.modifierGroupIds.length > 0 && (
+                        <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>
+                          + {m.modifierGroupIds.length} modifier group{m.modifierGroupIds.length === 1 ? '' : 's'}
+                        </span>
+                      )}
+                    </span>
+                    <span style={{
+                      padding: '2px 7px', borderRadius: 100,
+                      background: m.posLinked ? 'rgba(3,28,89,0.08)' : 'var(--color-bg-hover)',
+                      color: m.posLinked ? 'var(--color-accent-active)' : 'var(--color-text-muted)',
+                      fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+                    }}>
+                      {m.posLinked ? 'POS' : 'Draft'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {usedInIds.length > 0 && (
             <div
               style={{
@@ -1069,7 +1153,7 @@ function EditRecipeForm({
                   textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: '12px',
                 }}
               >
-                Used in
+                Used in (sub-recipe)
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {usedInIds.map((parentId) => {

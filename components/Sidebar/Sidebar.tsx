@@ -14,14 +14,13 @@ import {
   Clock,
   FileX,
   ShieldCheck,
-  LayoutDashboard,
-  TrendingUp,
   Layers,
   Star,
   MapPin,
   User,
   Settings,
-  Table2,
+  ListChecks,
+  SlidersHorizontal,
   PanelLeftOpen,
   PanelLeftClose,
 } from 'lucide-react';
@@ -185,29 +184,20 @@ export default function Sidebar() {
         </NavGroup>
 
         {/* Group 3 — Performance (Manager+)
-            Spoke sees only their own dashboard. Analytics, Compare sites
-            and the table builder are cross-site / estate views the spoke
-            doesn't have access to. */}
+            Trimmed to Compare sites only. Dashboard, Analytics, and the
+            table builder remain wired up in the app but are hidden from
+            the sidebar to keep the demo focused on the cross-site
+            comparison view. */}
         <NavGroup title="Performance" compact={compact}>
-          <NavItem label="View dashboard" icon={LayoutDashboard} compact={compact} active={is('/dashboard')} />
-          {!isSpoke && (
-            <>
-              <NavItem label="View analytics" icon={TrendingUp} compact={compact} active={is('/analytics')} />
-              <NavItem label="Compare sites" icon={Layers} compact={compact} active={is('/compare')} />
-              <NavItem
-                label="Build a table"
-                icon={Table2}
-                compact={compact}
-                onClick={() => router.push('/mvp-1?build=table')}
-              />
-            </>
-          )}
+          <NavItem label="Compare sites" icon={Layers} compact={compact} active={is('/compare')} />
         </NavGroup>
 
         {/* SETUP — full set for both personas (per the demo brief). */}
         <NavGroup title="SETUP" compact={compact}>
           <NavItem label="Manage recipes" icon={Star} compact={compact} active={is('/recipes')} onClick={() => router.push('/recipes')} />
-          <NavItem label="Manage suppliers" icon={MapPin} compact={compact} active={is('/suppliers')} />
+          <NavItem label="Manage menu items" icon={ListChecks} compact={compact} active={is('/menu-items')} onClick={() => router.push('/menu-items')} />
+          <NavItem label="Manage modifier groups" icon={SlidersHorizontal} compact={compact} active={is('/modifier-groups')} onClick={() => router.push('/modifier-groups')} />
+          <NavItem label="Manage suppliers" icon={MapPin} compact={compact} active={is('/suppliers')} onClick={() => router.push('/suppliers')} />
           <NavItem label="Manage users" icon={User} compact={compact} active={is('/users')} />
           <NavItem label="Manage checklists" icon={ClipboardList} compact={compact} active={is('/checklists')} onClick={() => router.push('/checklists')} />
           <NavItem label="Configure settings" icon={Settings} compact={compact} active={is('/settings')} onClick={() => router.push('/settings')} />

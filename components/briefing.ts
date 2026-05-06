@@ -1,6 +1,6 @@
 import type { CommandCentreVariant } from '@/components/Feed/CommandCentre';
 
-export type BriefingRole = 'ed' | 'cheryl' | 'gm' | 'playtomic' | 'dunkin';
+export type BriefingRole = 'ed' | 'cheryl' | 'gm' | 'playtomic' | 'dunkin' | 'pilot';
 
 export type BriefingPhase = 'morning' | 'midday' | 'afternoon' | 'evening';
 
@@ -18,6 +18,7 @@ export const BRIEFING_ROLES: { id: BriefingRole; label: string; short: string }[
   { id: 'gm', label: 'Employee', short: 'Employee' },
   { id: 'playtomic', label: 'Playtomic (padel demo)', short: 'Playtomic' },
   { id: 'dunkin', label: 'Dunkin (QSR demo)', short: 'Dunkin' },
+  { id: 'pilot', label: 'Pilot (clean slate)', short: 'Pilot' },
 ];
 
 /** One-line greeting for the top bar (matches timeline persona copy). */
@@ -33,6 +34,8 @@ export function morningGreetingLine(role: BriefingRole): string {
       return 'Good morning — Playtomic';
     case 'dunkin':
       return "Good morning — Dunkin'";
+    case 'pilot':
+      return 'Good morning — Pilot';
     default:
       return 'Good morning.';
   }
@@ -53,6 +56,8 @@ export function timeAwareGreeting(role: BriefingRole): string {
       return `Good ${tod} — Playtomic`;
     case 'dunkin':
       return `Good ${tod} — Dunkin'`;
+    case 'pilot':
+      return `Good ${tod} — Pilot`;
     default:
       return `Good ${tod}.`;
   }
@@ -69,6 +74,8 @@ export function commandCentreVariant(role: BriefingRole): CommandCentreVariant {
     case 'playtomic':
       return 'chain';
     case 'dunkin':
+      return 'chain';
+    case 'pilot':
       return 'chain';
     default:
       return 'chain';

@@ -16,6 +16,76 @@ export type RecipeSubRecipe = {
   unit: string;
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// New ingredient model (post-rethink)
+//
+// `RecipeIngredient` is the typed, master/product-aware ingredient row that
+// replaces the legacy free-text `ingredients[]` array. It lives on a recipe
+// as `Recipe.ingredientsV2` while we migrate; the resolver and the new
+// editor picker read from this. The drawer and other read-only views still
+// fall back to the legacy `ingredients` array for fixtures that haven't
+// been migrated yet.
+//
+// `ref` is the discriminated union from the unified ingredient catalogue:
+//   - { kind: 'master', masterProductId } — recipe binds to a Master
+//   - { kind: 'product', productId }      — recipe binds to a specific
+//                                           supplier SKU OR a made/CPU
+//                                           product
+//
+// `siteOverrides` is the per-site quantity override map. Resolved by the
+// `applyModifiers` resolver: a row's effective qty for site X is
+// `siteOverrides[X] ?? baseQty`. Solves "Site A uses 16g of coffee, Site B
+// uses 18g" without forking the recipe.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type IngredientRefShape =
+  | { kind: 'master'; masterProductId: string }
+  | { kind: 'product'; productId: string };
+
+export type RecipeIngredientQty = { value: number; unit: string };
+
+export type RecipeIngredient = {
+  id: string;
+  ref: IngredientRefShape;
+  /** Default quantity for this ingredient. Used at every site unless
+   *  overridden in `siteOverrides`. */
+  baseQty: RecipeIngredientQty;
+  /** Per-site overrides keyed by site id (or site label in the
+   *  prototype, where there's no real site model yet). */
+  siteOverrides?: Record<string, RecipeIngredientQty>;
+  /** Free-form tags used by `scale` modifier effects to target a
+   *  subset of ingredients (e.g. ["dose"] so a "Large" modifier can
+   *  scale only the espresso dose, not the cup). Optional. */
+  tags?: string[];
+  /** Optional human note kept on the row (e.g. "use cold pressed"). */
+  note?: string;
+};
+
+export function makeRecipeIngredient(
+  ref: IngredientRefShape,
+  baseQty: RecipeIngredientQty,
+  extras?: Partial<Omit<RecipeIngredient, 'id' | 'ref' | 'baseQty'>>,
+): RecipeIngredient {
+  return {
+    id: `ri-${Math.random().toString(36).slice(2, 8)}`,
+    ref,
+    baseQty,
+    ...extras,
+  };
+}
+
+/** Helper: best-effort master id resolution for an ingredient ref.
+ *  Lazy-imports the Suppliers store at call time to avoid circular
+ *  imports. Returns undefined if the ref is a Product without a
+ *  `masterProductId` link. */
+export function resolveMasterProductId(ref: IngredientRefShape): string | undefined {
+  if (ref.kind === 'master') return ref.masterProductId;
+  // Lazy require to avoid pulling the Suppliers store into modules that
+  // only need the type. The store is loaded by the time any caller runs.
+  const { findProduct } = require('@/components/Suppliers/store') as typeof import('@/components/Suppliers/store');
+  return findProduct(ref.productId)?.masterProductId;
+}
+
 /**
  * Rich row used by the new full-page editor (manual-intake-style). When set on
  * a recipe these take precedence over `ingredients` / `packaging` for editing.
@@ -136,9 +206,38 @@ export type Recipe = {
   marginPct: number;             // dine-in margin
   status: RecipeStatus;
   flag: RecipeFlag;
+  /**
+   * @deprecated Display-only legacy field. Real menu-item linkage now
+   * lives in `components/MenuItems/store.ts`. Drawers should derive
+   * "Used by menu items" from `menuItemsUsingRecipe(recipeId)`.
+   */
   menuItems: { name: string; posLinked: boolean }[];
+  /**
+   * @deprecated Free-text ingredient list kept for back-compat with
+   * the read-only drawer view + un-migrated fixtures. New writes go
+   * to `ingredientsV2`. Resolver and editor read from `ingredientsV2`
+   * when present.
+   */
   ingredients: { name: string; qty: string; supplier: string }[];
+  /**
+   * Typed, master/product-aware ingredient rows (post-rethink). When
+   * present, this is the source of truth for the resolver, costing,
+   * and the new editor picker.
+   */
+  ingredientsV2?: RecipeIngredient[];
+  /**
+   * @deprecated Modifier groups live as catalogue-level entities in
+   * `components/Modifiers/store.ts` and are attached to menu items,
+   * not recipes. This array is kept for the drawer's tag display
+   * until fixtures and screens are migrated.
+   */
   modifierGroups: string[];
+  /**
+   * Hook for the franchise / template workstream. When set, this
+   * recipe was inherited from a parent template and local edits
+   * become overrides. Unused in the recipe rebuild — placeholder.
+   */
+  templateId?: string;
   production: {
     visibility: 'Bar' | 'Kitchen' | 'Both' | null;
     shelfLifeMinutes: number | null;
@@ -665,8 +764,87 @@ export const PRET_LIBRARY_RECIPES: Recipe[] = PRET_RECIPES.map((r) => {
   };
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Demo seed for `ingredientsV2` — the typed, master/product-aware ingredient
+// rows. Only a handful of demo recipes are migrated below so the new editor
+// + the menu-item resolver have something concrete to render. The remaining
+// recipes still rely on legacy `ingredients[]` strings until they're edited
+// (the picker creates new ingredientsV2 rows on save).
+//
+// Site overrides on the espresso dose demonstrate problem 6 from the
+// recipes rethink: Site A uses 16g, Site B uses 18g, no recipe fork.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const FITZROY_INGREDIENTSV2_BY_RECIPE: Record<string, RecipeIngredient[]> = {
+  'rec-flat-white': [
+    {
+      id: 'ri-flat-espresso',
+      ref: { kind: 'master', masterProductId: 'mp-espresso-blend' },
+      baseQty: { value: 18, unit: 'g' },
+      siteOverrides: {
+        'Brixton Outpost': { value: 16, unit: 'g' },
+      },
+      tags: ['dose'],
+    },
+    {
+      id: 'ri-flat-milk',
+      ref: { kind: 'master', masterProductId: 'mp-whole-milk-1l' },
+      baseQty: { value: 180, unit: 'ml' },
+    },
+  ],
+  'rec-latte': [
+    {
+      id: 'ri-latte-espresso',
+      ref: { kind: 'master', masterProductId: 'mp-espresso-blend' },
+      baseQty: { value: 18, unit: 'g' },
+      siteOverrides: {
+        'Brixton Outpost': { value: 16, unit: 'g' },
+      },
+      tags: ['dose'],
+    },
+    {
+      id: 'ri-latte-milk',
+      ref: { kind: 'master', masterProductId: 'mp-whole-milk-1l' },
+      baseQty: { value: 200, unit: 'ml' },
+    },
+  ],
+  'rec-cappuccino': [
+    {
+      id: 'ri-capp-espresso',
+      ref: { kind: 'master', masterProductId: 'mp-espresso-blend' },
+      baseQty: { value: 18, unit: 'g' },
+      tags: ['dose'],
+    },
+    {
+      id: 'ri-capp-milk',
+      ref: { kind: 'master', masterProductId: 'mp-whole-milk-1l' },
+      baseQty: { value: 150, unit: 'ml' },
+    },
+  ],
+  'rec-smirnoff': [
+    {
+      id: 'ri-smirnoff-spirit',
+      ref: { kind: 'master', masterProductId: 'mp-smirnoff-vodka' },
+      baseQty: { value: 25, unit: 'ml' },
+    },
+  ],
+  'rec-tanqueray': [
+    {
+      id: 'ri-tanqueray-spirit',
+      ref: { kind: 'master', masterProductId: 'mp-tanqueray-gin' },
+      baseQty: { value: 25, unit: 'ml' },
+    },
+  ],
+};
+
+function withIngredientsV2(r: Recipe): Recipe {
+  const v2 = FITZROY_INGREDIENTSV2_BY_RECIPE[r.id];
+  if (!v2) return r;
+  return { ...r, ingredientsV2: v2 };
+}
+
 export const ALL_LIBRARY_RECIPES: Recipe[] = [
-  ...FITZROY_RECIPES.map((r): Recipe => ({ ...r, kind: 'standalone' })),
+  ...FITZROY_RECIPES.map((r): Recipe => withIngredientsV2({ ...r, kind: 'standalone' })),
   ...PRET_LIBRARY_RECIPES,
 ];
 

@@ -26,6 +26,7 @@ import {
   getSite,
   isHubLinked,
   spokeOrderForDate,
+  submissionsForHub,
   dayOfWeek,
   dayOffset,
   DEMO_TODAY,
@@ -35,9 +36,12 @@ import {
   type SpokeSubmission,
   type ProductionRecipe,
 } from '@/components/Production/fixtures';
-import { Link2 } from 'lucide-react';
+import { useDispatchTransfers } from '@/components/Production/dispatchStore';
+import SpokeUnlockControl from '@/components/Production/SpokeUnlockControl';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import { useSiteSettings } from '@/components/Settings/siteSettingsStore';
+import { useProductionSite } from '@/components/Production/ProductionSiteContext';
+import { productionSiteLabel } from '@/components/Production/productionSiteOptions';
 
 // When the demo's active persona is a SPOKE, this page locks onto the
 // matching fixture site and presents the persona names in the header
@@ -45,9 +49,6 @@ import { useSiteSettings } from '@/components/Settings/siteSettingsStore';
 // page should too — even though the underlying fixtures are still
 // keyed by `site-spoke-south` / `hub-central`).
 const SPOKE_PERSONA_SITE_ID: SiteId = 'site-spoke-south';
-const SPOKE_PERSONA_HUB_ID: SiteId = 'hub-central';
-const SPOKE_PERSONA_SITE_NAME = "Fitzroy King's Cross";
-const SPOKE_PERSONA_HUB_NAME = 'Fitzroy Espresso';
 
 type DisplayStatus = SpokeSubmission['status'] | 'derived';
 
@@ -77,28 +78,32 @@ export default function SpokeSubmissionsPage() {
   // + hybrids. The page is now a generic "site → hub" order editor, not just
   // for SPOKE-typed sites.
   const spokes = useMemo(() => PRET_SITES.filter(isHubLinked), []);
-  // Spoke persona: lock to the persona's fixture site so the page opens
-  // already viewing the spoke the manager is "logged in" as.
-  const initialSpokeId: SiteId = isSpoke
+  // Spoke selection is driven by the layout-level ProductionSiteSelector —
+  // the spoke picker that used to live in this page body has been removed
+  // so there's a single source of truth for "which site am I viewing".
+  //  - Spoke persona: locked to their own fixture site (site-spoke-south)
+  //  - Hub persona: whatever is selected in the top site picker. If the
+  //    hub itself is selected (e.g. hub-central), this surface falls back
+  //    to the first hub-linked site since you can't place a spoke order
+  //    against the hub itself.
+  const { siteId: pickerSiteId } = useProductionSite();
+  const fallbackSpokeId: SiteId = spokes[0]?.id ?? 'site-spoke-south';
+  const spokeId: SiteId = isSpoke
     ? SPOKE_PERSONA_SITE_ID
-    : (spokes[0]?.id ?? 'site-spoke-south');
-  const [spokeId, setSpokeIdState] = useState<SiteId>(initialSpokeId);
-  // When the persona toggles, snap the page to the right fixture site.
-  useEffect(() => {
-    if (isSpoke) setSpokeIdState(SPOKE_PERSONA_SITE_ID);
-  }, [isSpoke]);
-  // Spokes never see the picker, so this is hub-only.
-  const setSpokeId = setSpokeIdState;
+    : isHubLinked(getSite(pickerSiteId))
+      ? pickerSiteId
+      : fallbackSpokeId;
   const spoke = getSite(spokeId);
   const hubId = spoke?.hubId ?? 'hub-central';
   const hub = getSite(hubId);
 
-  // Display names — when SPOKE persona is active, swap in the persona
-  // names so the surface matches the top-bar / sidebar branding.
-  const spokeDisplayName =
-    isSpoke && spokeId === SPOKE_PERSONA_SITE_ID ? SPOKE_PERSONA_SITE_NAME : (spoke?.name ?? 'Spoke');
-  const hubDisplayName =
-    isSpoke && hubId === SPOKE_PERSONA_HUB_ID ? SPOKE_PERSONA_HUB_NAME : (hub?.name ?? 'Hub');
+  // Display names — always use the persona-mapped Fitzroy labels
+  // (the same ones the layout-level site picker shows) so the page
+  // header, captions, and prompts read consistently across every
+  // spoke. Falls back to the raw fixture name only for sites we
+  // haven't mapped (which shouldn't happen for any picker option).
+  const spokeDisplayName = productionSiteLabel(spokeId) || spoke?.name || 'Spoke';
+  const hubDisplayName = productionSiteLabel(hubId) || hub?.name || 'Hub';
   // Cutoff policy + cutoff time both flow through SiteSettingsStore so a
   // change made on /settings (or the production Settings sub-tab) shows
   // up here without a refresh. We resolve against the *hub*'s settings
@@ -202,6 +207,26 @@ export default function SpokeSubmissionsPage() {
   const locked = baseLocked && !isUnlocked;
   const autoFinalised = status === 'auto-finalised' && !isUnlocked;
 
+  // Hub-side unlock affordance — only relevant when the active persona is
+  // the hub manager. The control needs the underlying SpokeSubmission
+  // (not the SpokeOrderSummary used elsewhere on this page) so it can
+  // seed the additive baseline. We also need to know whether a dispatch
+  // transfer has already been sent — once dispatched, unlock is moot.
+  const { transferFor } = useDispatchTransfers();
+  const hubSubmission: SpokeSubmission | undefined = useMemo(
+    () => submissionsForHub(hubId, date).find(s => s.fromSiteId === spokeId),
+    [hubId, spokeId, date],
+  );
+  const hubHasTransfer = !!transferFor(hubId, spokeId, date);
+  // The unlock affordance keys off the submission's *real* cutoff clock
+  // rather than the page's synthetic `nowISO` — the demo's seeded
+  // cutoffs sit in the wall-clock past, and the dispatch-matrix version
+  // of this control did the same, so the button is visible immediately
+  // for any submission in a locked state.
+  const hubCutoffPassed = hubSubmission
+    ? new Date(hubSubmission.cutoffDateTime).getTime() < Date.now()
+    : false;
+
   function setLineUnits(sku: SkuId, units: number) {
     // Additive-only floor: when the hub has unlocked this order past
     // cutoff, the spoke can only ADD on top of the locked baseline (per
@@ -297,84 +322,41 @@ export default function SpokeSubmissionsPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Header — spoke selector + ordering-from caption.
-          Hidden entirely for the spoke persona: they only ever view
-          their own site and the top-bar already shows who they are,
-          so this row is pure noise on the spoke side. */}
+      {/* Ordering-from caption.
+          The spoke picker that used to live here was a duplicate of the
+          layout-level site selector, so it's been removed. We keep a
+          short "ordering from {hub}" line so hub managers planning a
+          spoke can confirm at a glance which hub the order routes to.
+          Hidden for the spoke persona — their top-bar already names
+          their site and hub, so this row would be pure noise. */}
       {!isSpoke && (
-      <div
-        style={{
-          padding: '12px 32px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          borderBottom: '1px solid var(--color-border-subtle)',
-          background: '#ffffff',
-          flexWrap: 'wrap',
-        }}
-      >
-        <span
+        <div
           style={{
-            fontSize: 10,
-            fontWeight: 700,
+            padding: '10px 32px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            borderBottom: '1px solid var(--color-border-subtle)',
+            background: '#ffffff',
+            fontSize: 11,
             color: 'var(--color-text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
+            flexWrap: 'wrap',
           }}
         >
-          Site
-        </span>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {spokes.map(s => {
-            const active = s.id === spokeId;
-            const isLinkedStandalone = s.type === 'STANDALONE' && s.linkType === 'linked';
-            return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setSpokeId(s.id)}
-                title={
-                  isLinkedStandalone
-                    ? `${s.name} — linked standalone (dark kitchen)`
-                    : s.type === 'HYBRID'
-                      ? `${s.name} — hybrid site`
-                      : s.name
-                }
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  padding: '8px 12px',
-                  borderRadius: 8,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  fontFamily: 'var(--font-primary)',
-                  background: active ? 'var(--color-accent-active)' : '#ffffff',
-                  color: active ? 'var(--color-text-on-active)' : 'var(--color-text-secondary)',
-                  border: `1px solid ${active ? 'var(--color-accent-active)' : 'var(--color-border)'}`,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {isLinkedStandalone && (
-                  <Link2
-                    size={11}
-                    color={active ? 'var(--color-text-on-active)' : 'var(--color-text-muted)'}
-                  />
-                )}
-                {s.name}
-              </button>
-            );
-          })}
+          <span style={{ fontWeight: 700, color: 'var(--color-text-secondary)' }}>
+            {spokeDisplayName}
+          </span>
+          <span>
+            {spoke?.type === 'STANDALONE' && spoke?.linkType === 'linked' ? (
+              <>· linked standalone — ordering from </>
+            ) : spoke?.type === 'HYBRID' ? (
+              <>· hybrid site — ordering from </>
+            ) : (
+              <>· ordering from </>
+            )}
+            <strong style={{ color: 'var(--color-text-secondary)' }}>{hubDisplayName}</strong>
+          </span>
         </div>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-muted)' }}>
-          {spoke?.type === 'STANDALONE' && spoke?.linkType === 'linked' ? (
-            <>Linked standalone — ordering from <strong style={{ color: 'var(--color-text-secondary)' }}>{hubDisplayName}</strong></>
-          ) : (
-            <>Ordering from <strong style={{ color: 'var(--color-text-secondary)' }}>{hubDisplayName}</strong></>
-          )}
-        </span>
-      </div>
       )}
 
       {/* Day strip — one tile per day, status badge + total order units */}
@@ -454,6 +436,26 @@ export default function SpokeSubmissionsPage() {
               past={past}
               locked={autoFinalised || status === 'submitted' || status === 'acknowledged'}
             />
+
+            {/* Hub-side unlock affordance — lets the hub manager reopen
+                this spoke's order past cutoff (with a reason) so the
+                spoke can add to the locked baseline. Sits right next to
+                the cutoff marker so it reads "the cutoff has passed →
+                here's how I unlock it". The control self-hides for spoke
+                personas, and SpokeUnlockControl itself returns null when
+                the unlock isn't currently meaningful (still pre-cutoff,
+                already dispatched, etc.). */}
+            {!isSpoke && hubSubmission && (
+              <SpokeUnlockControl
+                hubId={hubId}
+                spokeId={spokeId}
+                forDate={date}
+                submission={hubSubmission}
+                cutoffPassed={hubCutoffPassed}
+                hasTransfer={hubHasTransfer}
+                unlockedBy={recordedBy}
+              />
+            )}
 
             {/* Action area — varies by status. Submit/demo controls when
                 editable, soft confirmations otherwise. The unlocked branch
@@ -1108,7 +1110,7 @@ function SpokeOrderRow({
             </div>
             <div style={{ display: 'flex', gap: 6, marginTop: 3, alignItems: 'center', fontSize: 9, color: 'var(--color-text-muted)' }}>
               {row.hasSeeded ? (
-                <StatusPill tone="info" label="You started" size="xs" />
+                <StatusPill tone="info" label="You changed" size="xs" />
               ) : (
                 <StatusPill tone="neutral" label="Quinn default" size="xs" />
               )}

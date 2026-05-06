@@ -4,13 +4,15 @@ import type { BatchStatus } from './fixtures';
 
 type Tone = 'neutral' | 'info' | 'warning' | 'success' | 'error' | 'brand';
 
-const TONE_STYLES: Record<Tone, { bg: string; color: string; border: string }> = {
-  neutral: { bg: 'var(--color-bg-hover)',      color: 'var(--color-text-secondary)', border: 'var(--color-border-subtle)' },
-  info:    { bg: 'var(--color-info-light)',    color: 'var(--color-info)',           border: 'var(--color-info-light)' },
-  warning: { bg: 'var(--color-warning-light)', color: 'var(--color-warning)',        border: 'var(--color-warning-border)' },
-  success: { bg: 'var(--color-success-light)', color: 'var(--color-success)',        border: 'var(--color-success-border)' },
-  error:   { bg: 'var(--color-error-light)',   color: 'var(--color-error)',          border: 'var(--color-error-border)' },
-  brand:   { bg: 'var(--color-badge-active-bg)', color: 'var(--color-accent-active)', border: 'var(--color-accent-mid)' },
+// Outline pills — see `.cursor/rules/status-pills.mdc`. White background,
+// coloured text, 1.5px coloured border. NEVER solid semantic fills.
+const TONE_STYLES: Record<Tone, { color: string; border: string }> = {
+  neutral: { color: 'var(--color-text-secondary)', border: 'var(--color-border)' },
+  info:    { color: 'var(--color-info)',            border: 'var(--color-info)' },
+  warning: { color: 'var(--color-warning)',         border: 'var(--color-warning)' },
+  success: { color: 'var(--color-success)',         border: 'var(--color-success)' },
+  error:   { color: 'var(--color-error)',           border: 'var(--color-error)' },
+  brand:   { color: 'var(--color-accent-active)',  border: 'var(--color-accent-active)' },
 };
 
 const STATUS_TONE: Record<BatchStatus, Tone> = {
@@ -46,9 +48,9 @@ export function StatusPill({
 }) {
   const tone = overrideTone ?? (status ? STATUS_TONE[status] : 'neutral');
   const text = label ?? (status ? STATUS_LABEL[status] : '');
-  const { bg, color, border } = TONE_STYLES[tone];
+  const { color, border } = TONE_STYLES[tone];
   const padY = size === 'xs' ? 2 : 3;
-  const padX = size === 'xs' ? 6 : 8;
+  const padX = size === 'xs' ? 7 : 9;
   const fontSize = size === 'xs' ? 10 : 11;
   return (
     <span
@@ -56,13 +58,13 @@ export function StatusPill({
         display: 'inline-flex',
         alignItems: 'center',
         padding: `${padY}px ${padX}px`,
-        borderRadius: 'var(--radius-badge)',
-        background: bg,
+        borderRadius: 999,
+        background: '#ffffff',
         color,
-        border: `1px solid ${border}`,
+        border: `1.5px solid ${border}`,
         fontSize,
-        fontWeight: 600,
-        letterSpacing: '0.02em',
+        fontWeight: 700,
+        letterSpacing: '0.04em',
         whiteSpace: 'nowrap',
         lineHeight: 1,
       }}

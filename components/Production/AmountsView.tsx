@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowRight,
+  ArrowDown,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -475,21 +476,21 @@ export default function AmountsView({
             onClick={() => setShortfallsOpen(true)}
             title="See which components are short and which assemblies need them"
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '8px 12px',
-              borderRadius: 8,
-              fontSize: 11,
-              fontWeight: 700,
-              background: 'var(--color-error-light)',
-              color: 'var(--color-error)',
-              border: '1px solid var(--color-error-border)',
-              cursor: 'pointer',
-              fontFamily: 'var(--font-primary)',
-            }}
-          >
-            <AlertTriangle size={12} /> {totals.shortfalls} component shortfall
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 12px',
+            borderRadius: 999,
+            fontSize: 11,
+            fontWeight: 700,
+            background: '#ffffff',
+            color: 'var(--color-error)',
+            border: '1.5px solid var(--color-error)',
+            cursor: 'pointer',
+            fontFamily: 'var(--font-primary)',
+          }}
+        >
+          <AlertTriangle size={12} /> {totals.shortfalls} component shortfall
             {totals.shortfalls === 1 ? '' : 's'}
             <ChevronRight size={11} style={{ marginLeft: 2, opacity: 0.7 }} />
           </button>
@@ -1233,10 +1234,11 @@ function AmountRow({
                     style={{
                       fontSize: 9,
                       fontWeight: 700,
-                      color: 'var(--color-text-secondary)',
+                      color: 'var(--color-info)',
                       padding: '2px 7px',
-                      borderRadius: 4,
-                      background: 'var(--color-info-light)',
+                      borderRadius: 999,
+                      background: '#ffffff',
+                      border: '1.5px solid var(--color-info)',
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 4,
@@ -1266,10 +1268,11 @@ function AmountRow({
                   style={{
                     fontSize: 9,
                     fontWeight: 700,
-                    color: 'var(--color-text-secondary)',
+                    color: 'var(--color-info)',
                     padding: '2px 7px',
-                    borderRadius: 4,
-                    background: 'var(--color-info-light)',
+                    borderRadius: 999,
+                    background: '#ffffff',
+                    border: '1.5px solid var(--color-info)',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 4,

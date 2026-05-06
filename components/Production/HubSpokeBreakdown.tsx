@@ -33,9 +33,6 @@ import {
 import { useDispatchTransfers, formatSentClock } from './dispatchStore';
 import { useSpokeRejects } from './rejectsStore';
 import { useAdhocRequests } from './adhocStore';
-import { useHubUnlocks } from './hubUnlockStore';
-import { useRole } from './RoleContext';
-import SpokeUnlockControl from './SpokeUnlockControl';
 
 /**
  * Manifest line built by the matrix for a single spoke — the unit of work
@@ -126,8 +123,6 @@ export default function HubSpokeBreakdown({
 }: Props) {
   const submissions = useMemo(() => submissionsForHub(hubId, forDate), [hubId, forDate]);
   const { transferFor, undoTransfer } = useDispatchTransfers();
-  const { user } = useRole();
-  const unlockedBy = user?.name ?? 'Hub manager';
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState<Set<SkuId>>(new Set());
 
@@ -489,20 +484,6 @@ export default function HubSpokeBreakdown({
                         onUndo={() => undoTransfer(hubId, sub.fromSiteId, forDate)}
                       />
                     )}
-                  </div>
-                  {/* Unlock affordance — appears when cutoff has passed and the
-                      hub manager wants to reopen the spoke order for additions.
-                      Hidden otherwise so the row stays calm. */}
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <SpokeUnlockControl
-                      hubId={hubId}
-                      spokeId={sub.fromSiteId}
-                      forDate={forDate}
-                      submission={sub}
-                      cutoffPassed={new Date(sub.cutoffDateTime).getTime() < Date.now()}
-                      hasTransfer={!!transfer}
-                      unlockedBy={unlockedBy}
-                    />
                   </div>
                 </div>
               );
@@ -936,10 +917,10 @@ function DispatchRecipeRow({
                     fontSize: 9,
                     fontWeight: 700,
                     color: 'var(--color-info)',
-                    background: 'var(--color-info-light)',
-                    border: '1px solid var(--color-info)',
-                    padding: '0 4px',
-                    borderRadius: 3,
+                    background: '#ffffff',
+                    border: '1.5px solid var(--color-info)',
+                    padding: '0 5px',
+                    borderRadius: 999,
                     fontVariantNumeric: 'tabular-nums',
                   }}
                   title="Approved ad-hoc top-up from spoke request"
@@ -1122,15 +1103,15 @@ function SpokeSendControl({
             display: 'inline-flex',
             alignItems: 'center',
             gap: 3,
-            padding: '3px 8px',
-            borderRadius: 4,
+            padding: '3px 9px',
+            borderRadius: 999,
             fontSize: 10,
             fontWeight: 700,
             textTransform: 'uppercase',
-            letterSpacing: '0.04em',
-            background: 'var(--color-success-light)',
+            letterSpacing: '0.05em',
+            background: '#ffffff',
             color: 'var(--color-success)',
-            border: '1px solid var(--color-success-border)',
+            border: '1.5px solid var(--color-success)',
           }}
         >
           <Check size={10} />

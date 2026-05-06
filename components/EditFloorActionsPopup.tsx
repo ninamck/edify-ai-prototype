@@ -136,6 +136,7 @@ export const DEFAULT_FLOOR_ACTIONS_BY_ROLE: Record<BriefingRole, FloorAction[]> 
   ],
   playtomic: DEFAULT_FLOOR_ACTIONS,
   dunkin: DEFAULT_FLOOR_ACTIONS,
+  pilot: DEFAULT_FLOOR_ACTIONS,
 };
 
 /* ── Icon picker mini-popup ── */

@@ -1,24 +1,20 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRightLeft, Check, ChevronRight, Clock, Download, Moon, Repeat, Shuffle, Truck, User, UserMinus, Waves } from 'lucide-react';
-import EdifyMark from '@/components/EdifyMark/EdifyMark';
+import { ArrowRightLeft, Check, ChevronRight, Clock, Download, Moon, Repeat, Shuffle, User, UserMinus, Waves } from 'lucide-react';
 import {
   benchesAt,
-  benchWorkTypes,
   effectiveBatchRules,
   getWorkflow,
   isNightShiftHHMM,
   PRET_NIGHT_SHIFT_POLICY,
   proposeBatchSplit,
-  recipeWorkTypes,
   type Bench,
   type ProductionItemId,
   type ProductionMode,
   type RunSchedule,
   type Site,
 } from './fixtures';
-import { WorkTypeChips } from './WorkTypeChip';
 import { computeRelatedItems, usePlan, type PlanLine } from './PlanStore';
 import { downloadBenchPdf } from '@/lib/pdf/productionPdfs';
 
@@ -369,7 +365,7 @@ export default function BenchCardBoard({
   }, [cards, modeFilter]);
 
   return (
-    <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ padding: '40px 36px', display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Masonry-style bench card layout via CSS multi-column.
           We use columns (not Grid) so a short card doesn't waste vertical
           space waiting for the tallest card in its row to end — the next
@@ -377,8 +373,8 @@ export default function BenchCardBoard({
           avoid` keeps each card whole rather than splitting across columns. */}
       <div
         style={{
-          columnWidth: 480,
-          columnGap: 28,
+          columnWidth: 520,
+          columnGap: 44,
         }}
       >
         {visibleCards.map(card => (
@@ -387,7 +383,7 @@ export default function BenchCardBoard({
             style={{
               breakInside: 'avoid',
               pageBreakInside: 'avoid',
-              marginBottom: 28,
+              marginBottom: 44,
               display: 'block',
             }}
           >
@@ -481,7 +477,7 @@ function BenchCard({
     <section
       style={{
         background: '#ffffff',
-        border: '2px solid var(--color-border)',
+        border: '1.5px solid var(--color-accent-active)',
         borderRadius: 'var(--radius-card)',
         padding: 0,
         opacity: cardOpacity,
@@ -511,28 +507,27 @@ function BenchCard({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '12px 14px',
+          padding: '20px 22px',
           borderBottom: '1px solid var(--color-border-subtle)',
-          gap: 12,
+          gap: 16,
           cursor: onBenchClick ? 'pointer' : 'default',
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+          <h3
+            style={{
+              fontSize: 20,
+              fontWeight: 700,
+              margin: 0,
+              color: 'var(--color-text-primary)',
+              letterSpacing: '-0.005em',
+            }}
+          >
+            {card.bench.name}
+          </h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--color-text-primary)' }}>
-              {card.bench.name}
-            </h3>
             {card.bench.primaryMode && <ModeBadge mode={card.bench.primaryMode} />}
             {nextRunInfo && <NextRunChip info={nextRunInfo} />}
-          </div>
-          {/* Bench-level work-type chips — replaces the raw `capabilities`
-              list with the canonical activity vocabulary. Defaults derive
-              from `capabilities` via `benchWorkTypes` so this works even
-              for benches that haven't been re-authored yet. The full
-              capability list still reads underneath for context until we
-              fully retire that field. */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <WorkTypeChips workTypes={benchWorkTypes(card.bench)} size="xs" />
             {!card.bench.online && (
               <span
                 style={{
@@ -548,7 +543,7 @@ function BenchCard({
             )}
           </div>
         </div>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           <AssigneeChip
             assignee={card.assignee}
             onAssign={onAssign ? name => onAssign(card.bench.id, name) : undefined}
@@ -564,12 +559,12 @@ function BenchCard({
               aria-label={`Download ${card.bench.name} bench plan PDF`}
               title="Download bench plan PDF"
               style={{
-                width: 28,
-                height: 28,
+                width: 32,
+                height: 32,
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderRadius: 6,
+                borderRadius: 8,
                 background: '#ffffff',
                 border: '1px solid var(--color-border-subtle)',
                 color: 'var(--color-text-secondary)',
@@ -577,7 +572,7 @@ function BenchCard({
                 flexShrink: 0,
               }}
             >
-              <Download size={14} />
+              <Download size={15} />
             </button>
           )}
         </div>
@@ -617,12 +612,12 @@ function BenchCard({
       {card.hasWork && (
         <div
           style={{
-            padding: '10px 14px',
+            padding: '16px 22px',
             borderTop: '1px solid var(--color-border-subtle)',
             background: 'var(--color-bg-hover)',
             display: 'flex',
             flexDirection: 'column',
-            gap: 4,
+            gap: 6,
             fontSize: 12,
             color: 'var(--color-text-secondary)',
             fontVariantNumeric: 'tabular-nums',
@@ -636,10 +631,11 @@ function BenchCard({
               display: 'flex',
               justifyContent: 'space-between',
               borderTop: '1px solid var(--color-border-subtle)',
-              paddingTop: 6,
-              marginTop: 2,
+              paddingTop: 10,
+              marginTop: 4,
               fontWeight: 700,
               color: 'var(--color-text-primary)',
+              fontSize: 13,
             }}
           >
             <span>Total time</span>
@@ -651,11 +647,11 @@ function BenchCard({
       {/* Stopwatch row */}
       <footer
         style={{
-          padding: '10px 14px',
+          padding: '14px 22px',
           borderTop: '1px solid var(--color-border-subtle)',
           display: 'grid',
           gridTemplateColumns: '1fr 1fr 1fr',
-          gap: 12,
+          gap: 14,
           fontSize: 11,
           color: 'var(--color-text-muted)',
         }}
@@ -668,7 +664,7 @@ function BenchCard({
       {nowHHMM && card.windowStartMins > 0 && nowAfterStart(nowHHMM, card.windowStartMins) && (
         <div
           style={{
-            padding: '4px 14px',
+            padding: '8px 22px',
             fontSize: 10,
             color: 'var(--color-text-muted)',
             borderTop: '1px dashed var(--color-border-subtle)',
@@ -832,13 +828,13 @@ function ColumnHeader() {
       style={{
         display: 'grid',
         gridTemplateColumns: '1fr auto auto auto auto',
-        gap: 12,
-        padding: '6px 14px',
+        gap: 14,
+        padding: '10px 22px',
         fontSize: 10,
         fontWeight: 600,
         color: 'var(--color-text-muted)',
         textTransform: 'uppercase',
-        letterSpacing: '0.04em',
+        letterSpacing: '0.05em',
         borderBottom: '1px solid var(--color-border-subtle)',
       }}
     >
@@ -880,16 +876,16 @@ function RunBucketSection({
   const isNight = isNightBucket(bucket);
 
   const statePillColor =
-    state === 'active'   ? { bg: 'var(--color-success-light, rgba(34,197,94,0.15))', fg: 'var(--color-success, #15803d)' } :
-    state === 'upcoming' ? { bg: 'var(--color-bg-hover)',                              fg: 'var(--color-text-secondary)' } :
-                           { bg: 'var(--color-bg-hover)',                              fg: 'var(--color-text-muted)' };
+    state === 'active'   ? { fg: 'var(--color-success)',         border: 'var(--color-success)' } :
+    state === 'upcoming' ? { fg: 'var(--color-text-secondary)', border: 'var(--color-border)' } :
+                           { fg: 'var(--color-text-muted)',     border: 'var(--color-border-subtle)' };
 
-  // PAC070 — night-shift runs get a darker header tint and a moon icon to
-  // visually separate overnight prep from the day's bake/build runs. The
-  // policy caption sits underneath so the GM can see why the order looks
-  // different from a normal R1.
-  const headerBg = isNight ? 'var(--color-bg-surface)' : 'var(--color-bg-hover)';
-  const labelBorder = isNight ? 'var(--color-text-muted)' : 'var(--color-border-subtle)';
+  // Run header gets a subtle grey wash so the bench card visually breaks
+  // into runs (R1, R2, N1) without needing extra dividers. Night-shift runs
+  // are flagged by the moon icon + caption inside the header rather than
+  // a darker tint.
+  const headerBg = 'var(--color-bg-hover)';
+  const labelBorder = 'var(--color-border-subtle)';
 
   return (
     <div
@@ -903,8 +899,8 @@ function RunBucketSection({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 10,
-          padding: '6px 14px',
+          gap: 12,
+          padding: '12px 22px',
           background: headerBg,
         }}
       >
@@ -952,14 +948,15 @@ function RunBucketSection({
         {state && (
           <span
             style={{
-              fontSize: 9,
+              fontSize: 9.5,
               fontWeight: 700,
               textTransform: 'uppercase',
               letterSpacing: '0.06em',
-              padding: '2px 6px',
+              padding: '3px 8px',
               borderRadius: 999,
-              background: statePillColor.bg,
+              background: '#ffffff',
               color: statePillColor.fg,
+              border: `1.5px solid ${statePillColor.border}`,
               whiteSpace: 'nowrap',
             }}
           >
@@ -967,8 +964,6 @@ function RunBucketSection({
           </span>
         )}
       </div>
-
-      {isNight && <NightShiftPolicyCaption rows={bucket.rows} />}
 
       <ColumnHeader />
 
@@ -987,75 +982,24 @@ function RunBucketSection({
   );
 }
 
-/**
- * Quinn-attributed caption explaining the night-shift ordering rule that's
- * been applied to a bucket. Surfaces the policy so a new GM doesn't have to
- * remember the rule — and so the team can see when an item slid up the
- * order because of an overnight-prep tag.
- */
-function NightShiftPolicyCaption({ rows }: { rows: RowData[] }) {
-  const firstOrderInBucket = rows
-    .map(r => r.line.item.skuId)
-    .filter(sku => PRET_NIGHT_SHIFT_POLICY.firstOrder.includes(sku));
-  const firstOrderNames = firstOrderInBucket
-    .map(sku => rows.find(r => r.line.item.skuId === sku)?.line.recipe.name)
-    .filter(Boolean) as string[];
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 6,
-        padding: '6px 14px',
-        background: 'var(--color-bg-surface)',
-        borderBottom: '1px dashed var(--color-border-subtle)',
-        fontSize: 10,
-        color: 'var(--color-text-secondary)',
-        lineHeight: 1.5,
-      }}
-    >
-      <EdifyMark size={11} color="var(--color-text-muted)" style={{ flexShrink: 0, marginTop: 1 }} />
-      <span>
-        <strong style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>
-          Quinn applied night-shift policy
-        </strong>
-        {firstOrderNames.length > 0 ? (
-          <>
-            {' · '}long-prep first ({firstOrderNames.join(', ')})
-            {', then '}
-            {PRET_NIGHT_SHIFT_POLICY.categoryOrder.slice(0, 3).join(' → ')}
-          </>
-        ) : (
-          <>
-            {' · '}categories sequenced{' '}
-            {PRET_NIGHT_SHIFT_POLICY.categoryOrder.slice(0, 3).join(' → ')}, shelf-life
-            ascending within
-          </>
-        )}
-      </span>
-    </div>
-  );
-}
-
 function ModeBadge({ mode }: { mode: ProductionMode }) {
   const treatment = MODE_TREATMENT[mode];
   const Icon = treatment.icon;
-  const styles = { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' };
   return (
     <span
       style={{
         display: 'inline-flex',
         alignItems: 'center',
         gap: 4,
-        padding: '2px 7px',
+        padding: '3px 9px',
         borderRadius: 999,
-        background: styles.bg,
-        color: styles.color,
+        background: '#ffffff',
+        color: 'var(--color-text-secondary)',
+        border: '1px solid var(--color-border-subtle)',
         fontSize: 10,
         fontWeight: 700,
         textTransform: 'uppercase',
-        letterSpacing: '0.04em',
+        letterSpacing: '0.05em',
         whiteSpace: 'nowrap',
       }}
     >
@@ -1089,11 +1033,7 @@ function RecipeRow({
     highlight === 'dim'        ? { bg: '#ffffff',                accent: 'var(--color-text-muted)',     opacity: 0.35 } :
                                  { bg: '#ffffff',                accent: 'var(--color-text-muted)',     opacity: 1 };
 
-  const isAssembly = !!line.recipe.subRecipes && line.recipe.subRecipes.length > 0;
-  const assemblyDemand = line.assemblyDemand.totalUnits;
-  const shortfall = assemblyDemand > line.planned;
   const dispatchUnits = line.dispatchDemand;
-  const spokeCount = line.dispatchBySpoke?.length ?? 0;
 
   // Outer is now a `div role="button"` rather than a real <button>, so it can
   // contain interactive children (the "move to bench" picker). Behaviour
@@ -1112,10 +1052,10 @@ function RecipeRow({
       style={{
         display: 'grid',
         gridTemplateColumns: '1fr auto auto auto auto',
-        gap: 12,
+        gap: 14,
         alignItems: 'center',
-        padding: '8px 14px',
-        fontSize: 12,
+        padding: '14px 22px',
+        fontSize: 13,
         fontFamily: 'var(--font-primary)',
         color: 'var(--color-text-primary)',
         background: tone.bg,
@@ -1140,42 +1080,10 @@ function RecipeRow({
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             color: 'var(--color-text-primary)',
+            fontSize: 13.5,
           }}
         >
           {line.recipe.name}
-        </span>
-        <span style={{ display: 'flex', gap: 6, fontSize: 10, color: 'var(--color-text-muted)', flexWrap: 'wrap', alignItems: 'center' }}>
-          {isAssembly && <Tag label="Assembly" tone="info" />}
-          {line.assemblyDemand.sources.length > 0 && <Tag label="Component" tone="warn" />}
-          {line.isOverridden && <Tag label="Manager edit" tone="accent" />}
-          {shortfall && <Tag label="Short" tone="error" />}
-          {/* Work-type chips on the bench-card recipe entries — same
-              vocabulary as the recipe library and Today rows so a manager
-              can scan a bench and see the activity mix at a glance. Cap
-              at 4 so ingredient-prep chips (slice / sanitise / wash) are
-              visible alongside the workflow stage chip(s); excess folds
-              into a "+N" indicator with a hover title listing the rest. */}
-          <WorkTypeChips workTypes={recipeWorkTypes(line.recipe)} max={4} />
-          {dispatchUnits > 0 && (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 3,
-                padding: '1px 6px',
-                borderRadius: 4,
-                background: 'var(--color-bg-hover)',
-                color: 'var(--color-text-secondary)',
-                fontWeight: 700,
-                letterSpacing: '0.02em',
-                textTransform: 'uppercase',
-                fontVariantNumeric: 'tabular-nums',
-              }}
-              title={`${dispatchUnits} of ${totalQty} ship to ${spokeCount} spoke${spokeCount === 1 ? '' : 's'} — pack separately`}
-            >
-              <Truck size={9} />→ {dispatchUnits} {spokeCount === 1 ? 'spoke' : 'spokes'}
-            </span>
-          )}
         </span>
       </span>
       <span
@@ -1414,14 +1322,14 @@ function AssigneeChip({
         display: 'inline-flex',
         alignItems: 'center',
         gap: 6,
-        padding: '4px 8px',
+        padding: '5px 10px',
         borderRadius: 999,
-        background: isUnassigned ? 'var(--color-bg-hover)' : 'var(--color-info-light)',
+        background: '#ffffff',
         color: isUnassigned ? 'var(--color-text-secondary)' : 'var(--color-info)',
-        fontSize: 11,
+        fontSize: 11.5,
         fontWeight: 600,
         whiteSpace: 'nowrap',
-        border: `1px solid ${isUnassigned ? 'var(--color-border-subtle)' : 'var(--color-info-light)'}`,
+        border: `1.5px solid ${isUnassigned ? 'var(--color-border)' : 'var(--color-info)'}`,
       }}
     >
       <User size={12} />
@@ -1598,27 +1506,6 @@ function StopwatchCell({
         {value}
       </span>
     </div>
-  );
-}
-
-function Tag({ label, tone }: { label: string; tone: 'info' | 'warn' | 'accent' | 'error' }) {
-  const styles =
-    tone === 'error'  ? { bg: 'var(--color-error-light)', color: 'var(--color-error)' } :
-                        { bg: 'var(--color-bg-hover)',    color: 'var(--color-text-secondary)' };
-  return (
-    <span
-      style={{
-        padding: '1px 6px',
-        borderRadius: 4,
-        background: styles.bg,
-        color: styles.color,
-        fontWeight: 600,
-        letterSpacing: '0.02em',
-        textTransform: 'uppercase',
-      }}
-    >
-      {label}
-    </span>
   );
 }
 
@@ -1884,24 +1771,25 @@ function NextRunChip({ info }: { info: NextRunInfo }) {
     state === 'upcoming' ? `Next: ${bucket.run.label} · ${minsToHHMM(bucket.startMins)}` :
                            `Runs complete · ${bucket.run.label} done`;
   const styles =
-    state === 'active'   ? { bg: 'var(--color-success-light, rgba(34,197,94,0.14))', fg: 'var(--color-success, #15803d)' } :
-    state === 'upcoming' ? { bg: 'var(--color-bg-hover)',                             fg: 'var(--color-text-secondary)' } :
-                           { bg: 'var(--color-bg-hover)',                             fg: 'var(--color-text-muted)' };
+    state === 'active'   ? { fg: 'var(--color-success)',         border: 'var(--color-success)' } :
+    state === 'upcoming' ? { fg: 'var(--color-text-secondary)', border: 'var(--color-border)' } :
+                           { fg: 'var(--color-text-muted)',     border: 'var(--color-border-subtle)' };
   return (
     <span
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 4,
-        padding: '2px 8px',
+        gap: 5,
+        padding: '3px 9px',
         borderRadius: 999,
-        background: styles.bg,
+        background: '#ffffff',
         color: styles.fg,
-        fontSize: 10,
+        fontSize: 10.5,
         fontWeight: 700,
-        letterSpacing: '0.03em',
+        letterSpacing: '0.02em',
         whiteSpace: 'nowrap',
         fontVariantNumeric: 'tabular-nums',
+        border: `1.5px solid ${styles.border}`,
       }}
     >
       <Clock size={10} />

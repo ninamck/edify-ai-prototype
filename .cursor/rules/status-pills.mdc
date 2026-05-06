@@ -1,0 +1,103 @@
+---
+description: Status pill / status-badge styling convention (outline-only, never solid fill)
+alwaysApply: true
+---
+
+# Status pills
+
+Status pills (success / warning / error / info indicators that sit inline with text — "In progress", "Done", "Locked", "Short", etc.) MUST use the **outline** style:
+white background, coloured text, 1.5px coloured border.
+
+NEVER use solid-fill semantic backgrounds for pills (`var(--color-success-light)`,
+`var(--color-warning-light)`, `var(--color-error-light)`, `var(--color-info-light)`).
+Filled tints are reserved for full **banners**, **cards**, and **callout** rows
+where the whole block is the message — not for inline pill-shaped status indicators.
+
+## Canonical pill style
+
+```tsx
+<span
+  style={{
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+    padding: '3px 9px',
+    borderRadius: 999,
+    background: '#ffffff',
+    color: 'var(--color-success)',           // or warning / error / info / text-secondary
+    border: '1.5px solid var(--color-success)', // matches the colour above
+    fontSize: 10,
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    whiteSpace: 'nowrap',
+  }}
+>
+  In progress
+</span>
+```
+
+## Tone → border / text colour map
+
+| Tone | text + border | Use for |
+|---|---|---|
+| `success` | `var(--color-success)` | done · ok · approved · in-progress |
+| `warning` | `var(--color-warning)` | caution · pending · running long |
+| `error`   | `var(--color-error)`   | failed · short · expired · variance |
+| `info`    | `var(--color-info)`    | informational · linked · routed |
+| `neutral` | `var(--color-text-secondary)` + border `var(--color-border)` | inactive / default state |
+
+## Prefer the shared primitive
+
+When adding a new pill, reach for the shared component first:
+
+```tsx
+import { StatusPill } from '@/components/ui/StatusPill';
+
+<StatusPill tone="success">In progress</StatusPill>
+```
+
+Only roll a one-off span when the pill has bespoke layout requirements
+(custom icon, embedded controls, etc.) — and even then, copy the canonical
+style above, not a filled variant.
+
+## Examples
+
+```tsx
+// ❌ BAD — solid fill semantic background
+<span style={{
+  background: 'var(--color-success-light)',
+  color: 'var(--color-success)',
+  borderRadius: 999,
+  padding: '2px 8px',
+  fontSize: 10,
+  fontWeight: 700,
+  textTransform: 'uppercase',
+}}>In progress</span>
+
+// ✅ GOOD — outline only
+<span style={{
+  background: '#ffffff',
+  color: 'var(--color-success)',
+  border: '1.5px solid var(--color-success)',
+  borderRadius: 999,
+  padding: '3px 9px',
+  fontSize: 10,
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+}}>In progress</span>
+```
+
+## When you can keep a tinted background
+
+Tinted `--color-*-light` backgrounds remain correct for:
+
+- Full-width banners (`UrgentRemakeBanner`, `SpokeUrgentRemakeCard`)
+- Callout cards / alert boxes spanning a row or column
+- Table-row highlights for an exception state
+- Icon containers (square/rounded tiles where the colour communicates the
+  whole tile's meaning, not a status value next to text)
+
+If in doubt: is this a *pill next to text*? → outline.
+Is this a *block that frames its own message*? → tinted background is fine.

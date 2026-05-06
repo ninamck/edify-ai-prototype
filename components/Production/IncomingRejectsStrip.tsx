@@ -161,11 +161,11 @@ function RejectRow({
                 fontWeight: 700,
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
-                padding: '2px 7px',
-                borderRadius: 4,
-                background: 'var(--color-success-light)',
+                padding: '2px 8px',
+                borderRadius: 999,
+                background: '#ffffff',
                 color: 'var(--color-success)',
-                border: '1px solid var(--color-success-border)',
+                border: '1.5px solid var(--color-success)',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 3,
@@ -180,11 +180,11 @@ function RejectRow({
                 fontWeight: 700,
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
-                padding: '2px 7px',
-                borderRadius: 4,
-                background: 'var(--color-error-light)',
+                padding: '2px 8px',
+                borderRadius: 999,
+                background: '#ffffff',
                 color: 'var(--color-error)',
-                border: '1px solid var(--color-error-border)',
+                border: '1.5px solid var(--color-error)',
               }}
             >
               Needs acknowledging
@@ -197,10 +197,11 @@ function RejectRow({
                 fontWeight: 700,
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
-                padding: '2px 7px',
-                borderRadius: 4,
-                background: 'var(--color-info-light)',
+                padding: '2px 8px',
+                borderRadius: 999,
+                background: '#ffffff',
                 color: 'var(--color-info)',
+                border: '1.5px solid var(--color-info)',
               }}
             >
               Rolled into next drop

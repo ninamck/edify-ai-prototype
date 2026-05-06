@@ -9,10 +9,17 @@ import { useRole } from '@/components/Production/RoleContext';
 import {
   PRET_SITES,
   getSite,
+  isHubLinked,
   DEMO_TODAY,
   dayOfWeek,
 } from '@/components/Production/fixtures';
 import { useProductionSite } from '@/components/Production/ProductionSiteContext';
+// Polymorphic Plan view — when a hub-linked site (spoke / hybrid /
+// linked-standalone) is selected in the layout site picker, the Plan
+// tab swaps over to the spoke-order workflow that used to live behind
+// the dedicated "Spoke plans" tab. Same component the spoke persona's
+// Order tab uses, so order-flow logic lives in one place.
+import SpokeSubmissionsPage from '../spokes/page';
 
 type PlanView = 'overview' | 'detailed';
 
@@ -41,6 +48,13 @@ export default function ProductionPlanPage() {
   const [selectedDate, setSelectedDate] = useState(DEMO_TODAY);
   const [view, setView] = useState<PlanView>('detailed');
   const site = getSite(siteId) ?? PRET_SITES[0];
+
+  // When the layout site picker is pointed at a spoke (or hybrid /
+  // linked-standalone), Plan swaps over to the spoke-order workflow.
+  // Hub sites continue to render the hub plan content below.
+  if (isHubLinked(site)) {
+    return <SpokeSubmissionsPage />;
+  }
 
   const isPastDay = selectedDate < DEMO_TODAY;
   const dow = dayOfWeek(selectedDate);
@@ -128,9 +142,16 @@ export default function ProductionPlanPage() {
         }}
       >
         <span style={{ fontWeight: 700, color: 'var(--color-text-secondary)' }}>
-          {isToday ? 'Planning today' : `Planning ${dow} ${selectedDate}`}
+          {view === 'overview'
+            ? `5-day window centred on ${isToday ? 'today' : `${dow} ${selectedDate}`}`
+            : isToday
+            ? 'Planning today'
+            : `Planning ${dow} ${selectedDate}`}
         </span>
-        {!isToday && (
+        {view === 'overview' && (
+          <span>· anchor with the day strip; drag totals come from every prototyped recipe</span>
+        )}
+        {view !== 'overview' && !isToday && (
           <span>
             ·{' '}
             {isPastDay
@@ -143,7 +164,7 @@ export default function ProductionPlanPage() {
       {/* Body */}
       {view === 'overview' ? (
         <div style={{ padding: 0 }}>
-          <PlanStrip site={site} />
+          <PlanStrip site={site} anchorDate={selectedDate} />
         </div>
       ) : (
         <AmountsView

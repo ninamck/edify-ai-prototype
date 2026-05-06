@@ -15,7 +15,6 @@ import {
   Send,
   PackageSearch,
   Clock,
-  TrendingUp,
   Layers,
   Star,
   MapPin,
@@ -244,10 +243,10 @@ export default function MobileHamburgerDrawer({
               <DrawerNavItem icon={FileX} label="Manage credit notes" onClick={() => go('/credit-notes')} />
             </div>
 
-            {/* Performance */}
+            {/* Performance — trimmed to Compare sites only to match the
+                desktop sidebar. */}
             <SectionDivider label="Performance" />
             <div style={{ padding: '0 8px' }}>
-              <DrawerNavItem icon={TrendingUp} label="View analytics" onClick={() => go('/')} />
               <DrawerNavItem icon={Layers} label="Compare sites" onClick={() => go('/')} />
             </div>
 

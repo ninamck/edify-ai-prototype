@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ESTATE_DEFAULT_LAYOUT,
   MANAGER_DEFAULT_LAYOUT,
+  PILOT_DEFAULT_LAYOUT,
   defaultWidthForChart,
   pinnedId,
   type DashboardLayoutEntry,
@@ -21,6 +22,10 @@ const DEFAULT_LAYOUT_BY_ROLE: LayoutByRole = {
   cheryl: ESTATE_DEFAULT_LAYOUT,
   playtomic: [],
   dunkin: [],
+  // Pilot persona seeds with the 9 "yesterday"-flavoured charts the user
+  // chose during the dashboard personalisation flow. Mergeable with stored
+  // state so subsequent additions of new defaults aren't lost.
+  pilot: PILOT_DEFAULT_LAYOUT,
 };
 
 function mergeWithDefaults(
@@ -45,6 +50,7 @@ function loadStored(): LayoutByRole | null {
       cheryl: mergeWithDefaults(parsed.cheryl, ESTATE_DEFAULT_LAYOUT),
       playtomic: parsed.playtomic ?? [],
       dunkin: parsed.dunkin ?? [],
+      pilot: mergeWithDefaults(parsed.pilot ?? [], PILOT_DEFAULT_LAYOUT),
     };
   } catch {
     return null;
