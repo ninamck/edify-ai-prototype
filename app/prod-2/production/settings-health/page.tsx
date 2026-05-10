@@ -14,15 +14,15 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
-import StatusPill from '@/components/Production/StatusPill';
-import { useRole, StaffLockBanner } from '@/components/Production/RoleContext';
+import StatusPill from '@/components/Production2/StatusPill';
+import { useRole, StaffLockBanner } from '@/components/Production2/RoleContext';
 import {
   PRET_SETTINGS_HEALTH,
   getSite,
   type SettingsHealthItem,
   type SettingsHealthStatus,
   type SiteId,
-} from '@/components/Production/fixtures';
+} from '@/components/Production2/fixtures';
 
 const STATUS_META: Record<SettingsHealthStatus, { label: string; tone: 'warning' | 'info' | 'error'; icon: React.ReactNode }> = {
   stale: { label: 'Stale', tone: 'warning', icon: <Clock size={14} /> },

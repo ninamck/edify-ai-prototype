@@ -1,9 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LayoutGrid, ListChecks } from 'lucide-react';
-import PlanStrip from '@/components/Production/PlanStrip';
-import AmountsView from '@/components/Production/AmountsView';
+import RecipeFirstGrid from '@/components/Production/RecipeFirstGrid';
 import DaySelectorStrip from '@/components/Production/DaySelectorStrip';
 import { useRole } from '@/components/Production/RoleContext';
 import {
@@ -19,14 +17,13 @@ import { useProductionSite } from '@/components/Production/ProductionSiteContext
 // tab swaps over to the spoke-order workflow that used to live behind
 // the dedicated "Spoke plans" tab. Same component the spoke persona's
 // Order tab uses, so order-flow logic lives in one place.
+//
+// HYBRID is the interesting case: from the recipe-first plan view, a
+// HYBRID site sees its full recipe set with `Make` / `Receive` tags per
+// row (per the assumption A2 in the strip-back plan). It does NOT swap
+// to the spoke flow. So the polymorphic fallback only fires for SPOKE
+// + linked STANDALONE.
 import SpokeSubmissionsPage from '../spokes/page';
-
-type PlanView = 'overview' | 'detailed';
-
-const VIEW_TABS: Array<{ id: PlanView; label: string; icon: React.ReactNode; hint: string }> = [
-  { id: 'detailed', label: 'Detailed', icon: <ListChecks size={13} />, hint: 'Full Amounts editor for the selected day' },
-  { id: 'overview', label: 'Overview', icon: <LayoutGrid size={13} />, hint: '5-day outlook, recipe trace, hub dispatch' },
-];
 
 /**
  * 14-day window for the day strip: yesterday on the far left, today as the
@@ -36,23 +33,25 @@ const VIEW_TABS: Array<{ id: PlanView; label: string; icon: React.ReactNode; hin
 const DAY_STRIP_RANGE = [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 /**
- * Multi-day production planner. Combines the legacy 5-day outlook
- * (`PlanStrip`) with the same row-level editor used on the Today tab
- * (`AmountsView`) so managers can plan tomorrow / later in the week
- * without leaving the Plan view.
+ * Multi-day production planner — recipe-first.
+ *
+ * Replaces the previous "Detailed / Overview" toggle (PlanStrip + AmountsView).
+ * The recipe-first grid does both jobs in one surface — one row per recipe,
+ * site-type-gated columns, focus panel for the dense detail.
  */
 export default function ProductionPlanPage() {
-  const { can } = useRole();
-  const canEdit = can('plan.editQuantity');
+  // RoleContext is still consulted by the grid's downstream pieces; we don't
+  // need to gate the body itself on `canEdit` because the grid is read-only
+  // in this iteration (overrides happen via the focus panel). See the plan's
+  // open question 2 for the VP-math editing decision.
+  useRole();
   const { siteId } = useProductionSite();
   const [selectedDate, setSelectedDate] = useState(DEMO_TODAY);
-  const [view, setView] = useState<PlanView>('detailed');
   const site = getSite(siteId) ?? PRET_SITES[0];
 
-  // When the layout site picker is pointed at a spoke (or hybrid /
-  // linked-standalone), Plan swaps over to the spoke-order workflow.
-  // Hub sites continue to render the hub plan content below.
-  if (isHubLinked(site)) {
+  // SPOKE + linked STANDALONE swap to the spoke-order workflow. HYBRID stays
+  // on the recipe-first grid because each row already self-tags Make/Receive.
+  if (isHubLinked(site) && site.type !== 'HYBRID') {
     return <SpokeSubmissionsPage />;
   }
 
@@ -62,64 +61,6 @@ export default function ProductionPlanPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {/* Header: view toggle (site picker lives in the layout) */}
-      <div
-        style={{
-          padding: '8px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          borderBottom: '1px solid var(--color-border-subtle)',
-          background: '#ffffff',
-          flexWrap: 'wrap',
-          justifyContent: 'flex-end',
-        }}
-      >
-        <div
-          role="tablist"
-          aria-label="Plan view"
-          style={{
-            display: 'flex',
-            background: 'var(--color-bg-hover)',
-            borderRadius: 100,
-            padding: 3,
-            width: 'fit-content',
-          }}
-        >
-          {VIEW_TABS.map(t => {
-            const active = t.id === view;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setView(t.id)}
-                title={t.hint}
-                style={{
-                  padding: '7px 14px',
-                  borderRadius: 100,
-                  border: 'none',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  fontFamily: 'var(--font-primary)',
-                  cursor: 'pointer',
-                  background: active ? 'var(--color-accent-active)' : 'transparent',
-                  color: active ? '#ffffff' : 'var(--color-text-secondary)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  transition: 'background 0.15s, color 0.15s',
-                }}
-              >
-                {t.icon}
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Day strip — D-1..D+12 (today sits in second slot) */}
       <DaySelectorStrip
         siteId={site.id}
@@ -142,57 +83,19 @@ export default function ProductionPlanPage() {
         }}
       >
         <span style={{ fontWeight: 700, color: 'var(--color-text-secondary)' }}>
-          {view === 'overview'
-            ? `5-day window centred on ${isToday ? 'today' : `${dow} ${selectedDate}`}`
-            : isToday
-            ? 'Planning today'
-            : `Planning ${dow} ${selectedDate}`}
+          {isToday ? 'Planning today' : `Planning ${dow} ${selectedDate}`}
         </span>
-        {view === 'overview' && (
-          <span>· anchor with the day strip; drag totals come from every prototyped recipe</span>
-        )}
-        {view !== 'overview' && !isToday && (
+        {!isToday && (
           <span>
             ·{' '}
             {isPastDay
               ? 'historical view — runs are locked'
-              : 'drafting ahead — edits flow into Benches and Sales'}
+              : 'drafting ahead — edits flow through the focus panel'}
           </span>
         )}
       </div>
 
-      {/* Body */}
-      {view === 'overview' ? (
-        <div style={{ padding: 0 }}>
-          <PlanStrip site={site} anchorDate={selectedDate} />
-        </div>
-      ) : (
-        <AmountsView
-          siteId={site.id}
-          date={selectedDate}
-          canEdit={canEdit}
-          surface="plan"
-          topBanner={
-            isPastDay ? (
-              <div
-                style={{
-                  padding: '10px 16px',
-                  background: 'var(--color-bg-surface)',
-                  borderBottom: '1px solid var(--color-border-subtle)',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: 'var(--color-text-secondary)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
-              >
-                Showing past plan — locked for review
-              </div>
-            ) : null
-          }
-        />
-      )}
+      <RecipeFirstGrid siteId={site.id} date={selectedDate} surface="plan" />
     </div>
   );
 }

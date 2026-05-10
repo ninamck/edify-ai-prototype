@@ -27,6 +27,8 @@ import {
   isHubLinked,
   spokeOrderForDate,
   submissionsForHub,
+  productionItemsAt,
+  primaryBenchForItem,
   dayOfWeek,
   dayOffset,
   DEMO_TODAY,
@@ -56,15 +58,83 @@ type DisplayStatus = SpokeSubmission['status'] | 'derived';
  * Per-day, per-spoke editor state. Keyed by `${spokeId}|${date}` so the
  * page can hold a few days in flight at once and switch between them
  * without losing edits.
+ *
+ * `lines` stores a per-slot array of units for every SKU (one entry per
+ * P-slot in the hub's bake schedule). The total the spoke is committing
+ * to is `sum(lines[skuId])` — splitting it lets the spoke express which
+ * batch they want each chunk in (e.g. 12 croissants on P1, 6 on P2 for
+ * the midday top-up), which mirrors the standalone Plan view exactly.
  */
 type DayState = {
-  lines: Record<SkuId, number>;
+  lines: Record<SkuId, number[]>;
   status: DisplayStatus;
 };
 
 // 7-day window: yesterday + today + next 5 days. Spokes can plan a few
 // days ahead and revise before each day's cutoff.
 const DAY_RANGE = [-1, 0, 1, 2, 3, 4, 5];
+
+// Cap the per-slot column count at 3 — the standalone Plan view uses
+// the same cap, and the hub's bake schedule almost always lands at three
+// runs (early / mid / late). Anything wider gets folded into the last
+// column so the row stays readable.
+const MAX_P_COLUMNS = 3;
+
+/**
+ * Sum a single SKU's per-slot units. Defensive against undefined entries
+ * so it works during hydration.
+ */
+function sumSlots(arr: number[] | undefined): number {
+  if (!arr) return 0;
+  let n = 0;
+  for (const v of arr) n += Math.max(0, v || 0);
+  return n;
+}
+
+/**
+ * Split a single quantity across `slotCount` slots using the forecast's
+ * morning/midday/afternoon weights when available. Falls back to an even
+ * split. The result always sums back to `total` (rounding error parked
+ * on the last slot) so the spoke's per-slot totals reconcile with the
+ * single-number ledger we hydrate from.
+ */
+function splitAcrossSlots(
+  total: number,
+  byPhase: { morning: number; midday: number; afternoon: number } | undefined,
+  slotCount: number,
+): number[] {
+  if (slotCount <= 0) return [];
+  if (slotCount === 1) return [Math.max(0, Math.round(total))];
+
+  const weights: number[] =
+    byPhase && (byPhase.morning + byPhase.midday + byPhase.afternoon) > 0
+      ? phaseWeights(byPhase, slotCount)
+      : Array.from({ length: slotCount }, () => 1 / slotCount);
+
+  const out: number[] = [];
+  let placed = 0;
+  for (let i = 0; i < slotCount - 1; i++) {
+    const v = Math.max(0, Math.round(total * weights[i]));
+    out.push(v);
+    placed += v;
+  }
+  out.push(Math.max(0, Math.round(total - placed)));
+  return out;
+}
+
+/** Map AM/MID/PM phase weights onto 1–3 evenly-distributed slots. */
+function phaseWeights(
+  byPhase: { morning: number; midday: number; afternoon: number },
+  slotCount: number,
+): number[] {
+  const sum = byPhase.morning + byPhase.midday + byPhase.afternoon || 1;
+  const m = byPhase.morning / sum;
+  const mid = byPhase.midday / sum;
+  const pm = byPhase.afternoon / sum;
+  if (slotCount === 2) return [m + mid * 0.5, pm + mid * 0.5];
+  // 3 slots → 1:1 mapping with the three phases.
+  return [m, mid, pm];
+}
 
 export default function SpokeSubmissionsPage() {
   const { can, user } = useRole();
@@ -141,15 +211,42 @@ export default function SpokeSubmissionsPage() {
     const overridden = `${cutoffDay}T${h ?? '15'}:${m ?? '00'}:00Z`;
     return { ...base, cutoffDateTime: overridden };
   }, [spokeId, hubId, date, effectiveCutoffTime]);
+  // Per-slot column count — derived from the hub's run-mode benches so
+  // the spoke ordering view matches whatever bake schedule the hub is
+  // actually running. (Both the bakery and prep benches at hub-central
+  // run three slots — N1/R1/R2 — which is why the standalone Plan view
+  // also lands on three columns.)
+  const pColumnCount = useMemo(() => {
+    const items = productionItemsAt(hubId);
+    let max = 1;
+    for (const item of items) {
+      if (item.mode !== 'run') continue;
+      const bench = primaryBenchForItem(item);
+      const runs = bench?.runs?.length ?? 0;
+      if (runs > max) max = runs;
+    }
+    return Math.min(MAX_P_COLUMNS, max);
+  }, [hubId]);
+
   const key = dayKey(spokeId, date);
   useEffect(() => {
     setDayStates(prev => {
       if (prev[key]) return prev;
-      const lines: Record<SkuId, number> = {};
-      for (const ln of order.lines) lines[ln.skuId] = ln.confirmed;
+      const lines: Record<SkuId, number[]> = {};
+      for (const ln of order.lines) {
+        // Hydrate each line's per-slot vector from the spoke's
+        // confirmed total. We split using the forecast's AM/MID/PM
+        // weights so the seeded breakdown reads as Quinn's "best
+        // guess at when you'll need each batch".
+        lines[ln.skuId] = splitAcrossSlots(
+          ln.confirmed,
+          ln.forecast?.byPhase,
+          pColumnCount,
+        );
+      }
       return { ...prev, [key]: { lines, status: order.status } };
     });
-  }, [key, order]);
+  }, [key, order, pColumnCount]);
 
   const dayState = dayStates[key];
 
@@ -171,11 +268,17 @@ export default function SpokeSubmissionsPage() {
       // Snap any untouched derived lines back to their Quinn proposal so
       // the auto-locked total is exactly what the hub will plan against.
       for (const ln of order.lines) {
-        if (lines[ln.skuId] === undefined) lines[ln.skuId] = ln.quinnProposed;
+        if (lines[ln.skuId] === undefined) {
+          lines[ln.skuId] = splitAcrossSlots(
+            ln.quinnProposed,
+            ln.forecast?.byPhase,
+            pColumnCount,
+          );
+        }
       }
       return { ...prev, [key]: { lines, status: 'auto-finalised' } };
     });
-  }, [past, cutoffPolicy, dayState, key, order.lines]);
+  }, [past, cutoffPolicy, dayState, key, order.lines, pColumnCount]);
 
   // Submitted → acknowledged after a beat (mirrors the original demo).
   useEffect(() => {
@@ -227,38 +330,81 @@ export default function SpokeSubmissionsPage() {
     ? new Date(hubSubmission.cutoffDateTime).getTime() < Date.now()
     : false;
 
-  function setLineUnits(sku: SkuId, units: number) {
-    // Additive-only floor: when the hub has unlocked this order past
-    // cutoff, the spoke can only ADD on top of the locked baseline (per
-    // the PAC-unlock semantic in PRODUCTION_BRIEF). Reducing committed
-    // units would silently shrink the hub's plan, which the brief
-    // explicitly disallows.
+  /**
+   * Set a single P-slot's units for a SKU. Other slots are preserved.
+   * Honours the unlock-only-additions floor by computing the current
+   * total against the unlocked baseline and refusing to dip below it.
+   */
+  function setSlotUnits(sku: SkuId, slotIdx: number, units: number) {
     const floor = unlockBaseline?.[sku] ?? 0;
     setDayStates(prev => {
       const cur = prev[key] ?? { lines: {}, status: order.status };
+      const existing = cur.lines[sku] ?? Array.from({ length: pColumnCount }, () => 0);
+      // Pad/trim to current pColumnCount so editing while the schedule
+      // shape changes underneath us doesn't leave orphan slots.
+      const next = Array.from({ length: pColumnCount }, (_, i) =>
+        i === slotIdx ? Math.max(0, units) : Math.max(0, existing[i] ?? 0),
+      );
+      // Enforce additive-only floor against the SKU total. If the new
+      // total dips below the locked baseline, snap the edited slot back
+      // up so we never silently shrink the hub's commitment.
+      const total = sumSlots(next);
+      if (total < floor) {
+        const diff = floor - total;
+        next[slotIdx] = Math.max(0, next[slotIdx] + diff);
+      }
       return {
         ...prev,
         [key]: {
           ...cur,
-          lines: { ...cur.lines, [sku]: Math.max(floor, units) },
-          // Touching anything promotes a derived state to a real draft.
+          lines: { ...cur.lines, [sku]: next },
           status: cur.status === 'derived' ? 'draft' : cur.status,
         },
       };
     });
   }
 
-  function adjust(sku: SkuId, delta: number) {
+  function bumpSlot(sku: SkuId, slotIdx: number, delta: number) {
     if (!dayState) return;
-    const recipe = order.lines.find(l => l.skuId === sku)?.recipe;
-    const step = recipe?.batchRules?.multipleOf ?? 1;
-    setLineUnits(sku, (dayState.lines[sku] ?? 0) + delta * step);
+    // Steppers move in single-unit increments — spokes order in real
+    // units they expect to sell, not in the hub's bench batch sizes.
+    // The hub-side bench batching is enforced when the order flows
+    // into a bake run, not at the order surface.
+    const current = dayState.lines[sku]?.[slotIdx] ?? 0;
+    setSlotUnits(sku, slotIdx, current + delta);
+  }
+
+  /**
+   * Reset a single SKU's per-slot vector to Quinn's proposal split
+   * across slots — used by the row-level "Reset to Quinn" affordance.
+   */
+  function resetLineToQuinn(sku: SkuId) {
+    const ln = order.lines.find(l => l.skuId === sku);
+    if (!ln) return;
+    const split = splitAcrossSlots(ln.quinnProposed, ln.forecast?.byPhase, pColumnCount);
+    setDayStates(prev => {
+      const cur = prev[key] ?? { lines: {}, status: order.status };
+      return {
+        ...prev,
+        [key]: {
+          ...cur,
+          lines: { ...cur.lines, [sku]: split },
+          status: cur.status === 'derived' ? 'draft' : cur.status,
+        },
+      };
+    });
   }
 
   function resetToQuinn() {
     setDayStates(prev => {
-      const lines: Record<SkuId, number> = {};
-      for (const ln of order.lines) lines[ln.skuId] = ln.quinnProposed;
+      const lines: Record<SkuId, number[]> = {};
+      for (const ln of order.lines) {
+        lines[ln.skuId] = splitAcrossSlots(
+          ln.quinnProposed,
+          ln.forecast?.byPhase,
+          pColumnCount,
+        );
+      }
       return { ...prev, [key]: { lines, status: 'draft' } };
     });
   }
@@ -315,7 +461,7 @@ export default function SpokeSubmissionsPage() {
 
   const totalQuinn = useMemo(() => order.lines.reduce((a, l) => a + l.quinnProposed, 0), [order.lines]);
   const totalConfirmed = useMemo(
-    () => Object.values(dayState?.lines ?? {}).reduce((a, b) => a + b, 0),
+    () => Object.values(dayState?.lines ?? {}).reduce((a, slots) => a + sumSlots(slots), 0),
     [dayState],
   );
   const delta = totalConfirmed - totalQuinn;
@@ -721,7 +867,13 @@ export default function SpokeSubmissionsPage() {
             )}
           </div>
 
-          {/* Ledger table */}
+          {/* Ledger table — column structure mirrors the standalone Plan
+              production view so the spoke is editing in the same shape as
+              they would if they were planning their own bake: Carry-over
+              up front, then a stepper per P-slot (P1/P2/P3) showing
+              Quinn's per-slot forecast underneath the input. There's no
+              On-demand column on this surface (the standalone view's VP
+              column doesn't apply — spokes don't make hot prod). */}
           <div
             style={{
               background: '#ffffff',
@@ -732,9 +884,7 @@ export default function SpokeSubmissionsPage() {
           >
             {/* Column header */}
             <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'minmax(220px, 1.6fr) 90px 90px 90px 180px 80px',
+              style={spokeOrderGridStyle(pColumnCount, {
                 padding: '12px 32px',
                 gap: 12,
                 background: 'var(--color-bg-hover)',
@@ -747,14 +897,16 @@ export default function SpokeSubmissionsPage() {
                 position: 'sticky',
                 top: 0,
                 zIndex: 4,
-              }}
+              })}
             >
               <span>Recipe</span>
-              <span style={{ textAlign: 'right' }}>Forecast</span>
-              <span style={{ textAlign: 'right' }}>Carry-over</span>
-              <span style={{ textAlign: 'right' }}>Quinn</span>
-              <span style={{ textAlign: 'center' }}>You order</span>
-              <span style={{ textAlign: 'right' }}>Total</span>
+              <span style={{ textAlign: 'center' }}>Carry-over</span>
+              {Array.from({ length: pColumnCount }, (_, i) => (
+                <span key={`p-head-${i}`} style={{ textAlign: 'center' }}>
+                  P{i + 1}
+                </span>
+              ))}
+              <span style={{ textAlign: 'center' }}>Total</span>
             </div>
 
             {grouped.length === 0 && (
@@ -765,7 +917,7 @@ export default function SpokeSubmissionsPage() {
 
             {grouped.map(group => {
               const groupTotal = group.rows.reduce(
-                (a, r) => a + (dayState?.lines[r.skuId] ?? r.confirmed),
+                (a, r) => a + sumSlots(dayState?.lines[r.skuId]),
                 0,
               );
               return (
@@ -786,21 +938,33 @@ export default function SpokeSubmissionsPage() {
                       {group.rows.length} SKU{group.rows.length === 1 ? '' : 's'} · {groupTotal} units ordered
                     </span>
                   </div>
-                  {group.rows.map(row => (
-                    <SpokeOrderRow
-                      key={row.skuId}
-                      row={row}
-                      units={dayState?.lines[row.skuId] ?? row.confirmed}
-                      isExpanded={expanded.has(row.skuId)}
-                      onToggle={() => toggleExpand(row.skuId)}
-                      onSet={v => setLineUnits(row.skuId, v)}
-                      onBump={d => adjust(row.skuId, d)}
-                      onResetLine={() => setLineUnits(row.skuId, row.quinnProposed)}
-                      locked={locked}
-                      canAdjust={canAdjust}
-                      floor={unlockBaseline?.[row.skuId] ?? 0}
-                    />
-                  ))}
+                  {group.rows.map(row => {
+                    const slots =
+                      dayState?.lines[row.skuId] ??
+                      splitAcrossSlots(row.confirmed, row.forecast?.byPhase, pColumnCount);
+                    const slotForecasts = splitAcrossSlots(
+                      row.quinnProposed,
+                      row.forecast?.byPhase,
+                      pColumnCount,
+                    );
+                    return (
+                      <SpokeOrderRow
+                        key={row.skuId}
+                        row={row}
+                        slots={slots}
+                        slotForecasts={slotForecasts}
+                        pColumnCount={pColumnCount}
+                        isExpanded={expanded.has(row.skuId)}
+                        onToggle={() => toggleExpand(row.skuId)}
+                        onSetSlot={(slotIdx, v) => setSlotUnits(row.skuId, slotIdx, v)}
+                        onBumpSlot={(slotIdx, d) => bumpSlot(row.skuId, slotIdx, d)}
+                        onResetLine={() => resetLineToQuinn(row.skuId)}
+                        locked={locked}
+                        canAdjust={canAdjust}
+                        floor={unlockBaseline?.[row.skuId] ?? 0}
+                      />
+                    );
+                  })}
                 </div>
               );
             })}
@@ -900,8 +1064,13 @@ function DayCard({
   const past = cutoff.getTime() < now.getTime();
 
   const status: DisplayStatus = dayState?.status ?? order.status;
+  // dayState.lines is `Record<SkuId, number[]>` (one entry per P-slot),
+  // so we sum across slots first, then across SKUs. Previously this used
+  // `(a, b) => a + b` with `b` being an array, which JavaScript happily
+  // string-concatenates — producing the giant comma list the day tile
+  // briefly showed in place of a unit count.
   const total = dayState
-    ? Object.values(dayState.lines).reduce((a, b) => a + b, 0)
+    ? Object.values(dayState.lines).reduce((a, slots) => a + sumSlots(slots), 0)
     : order.lines.reduce((a, l) => a + l.confirmed, 0);
 
   // What the user sees on the badge — promote derived-and-overdue to
@@ -1032,43 +1201,48 @@ function displayStatusTreatment(status: DisplayStatus): {
 
 function SpokeOrderRow({
   row,
-  units,
+  slots,
+  slotForecasts,
+  pColumnCount,
   isExpanded,
   onToggle,
-  onSet,
-  onBump,
+  onSetSlot,
+  onBumpSlot,
   onResetLine,
   locked,
   canAdjust,
   floor = 0,
 }: {
   row: ReturnType<typeof spokeOrderForDate>['lines'][number];
-  units: number;
+  /** Per-P-slot units the spoke is currently committing to. */
+  slots: number[];
+  /** Quinn's per-slot forecast — shown as a hint under each stepper. */
+  slotForecasts: number[];
+  pColumnCount: number;
   isExpanded: boolean;
   onToggle: () => void;
-  onSet: (v: number) => void;
-  onBump: (d: number) => void;
+  onSetSlot: (slotIdx: number, v: number) => void;
+  onBumpSlot: (slotIdx: number, d: number) => void;
   onResetLine: () => void;
   locked: boolean;
   canAdjust: boolean;
   /**
-   * Lower bound for the stepper. Used by the PAC-unlock flow to enforce
-   * "spoke can only ADD on top of the locked baseline" — when set > 0,
-   * the minus button refuses to dip below `floor`.
+   * Lower bound for the SKU total. Used by the PAC-unlock flow to
+   * enforce "spoke can only ADD on top of the locked baseline" — when
+   * set > 0, decrementing slots refuses to push the sum below `floor`.
    */
   floor?: number;
 }) {
-  const { recipe, forecast, carryOver, quinnProposed } = row;
+  const { recipe, carryOver, quinnProposed } = row;
   const carriedUnits = carryOver?.carriedUnits ?? 0;
-  const lineDelta = units - quinnProposed;
+  const total = sumSlots(slots);
+  const lineDelta = total - quinnProposed;
   const editable = !locked && canAdjust;
 
   return (
     <>
       <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(220px, 1.6fr) 90px 90px 90px 180px 80px',
+        style={spokeOrderGridStyle(pColumnCount, {
           padding: '8px 16px 8px 13px',
           gap: 12,
           alignItems: 'center',
@@ -1077,7 +1251,7 @@ function SpokeOrderRow({
           background: '#ffffff',
           cursor: 'pointer',
           fontSize: 11,
-        }}
+        })}
         onClick={onToggle}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
@@ -1114,18 +1288,13 @@ function SpokeOrderRow({
               ) : (
                 <StatusPill tone="neutral" label="Quinn default" size="xs" />
               )}
-              {recipe.batchRules?.multipleOf && recipe.batchRules.multipleOf > 1 && (
-                <span>steps of {recipe.batchRules.multipleOf}</span>
-              )}
             </div>
           </div>
         </div>
 
-        <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-          {forecast ? forecast.projectedUnits : <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>—</span>}
-        </div>
-
-        <div style={{ textAlign: 'right', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+        {/* Carry-over — same display semantic as the standalone Plan view
+            (fixed value with a leading minus when there's stock to net). */}
+        <div style={{ textAlign: 'center', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
           {carriedUnits > 0 ? (
             <span style={{ fontWeight: 700, color: 'var(--color-text-secondary)' }}>−{carriedUnits}</span>
           ) : (
@@ -1133,55 +1302,75 @@ function SpokeOrderRow({
           )}
         </div>
 
-        <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <EdifyMark size={11} color="var(--color-text-muted)" />
-            {quinnProposed}
-          </span>
-        </div>
+        {/* Per-slot steppers — one per P-column. The forecast pill under
+            each stepper is the standalone Plan view's "fc N" hint, which
+            keeps Quinn's expectation visible while the spoke edits. */}
+        {Array.from({ length: pColumnCount }, (_, i) => {
+          const v = slots[i] ?? 0;
+          const fc = slotForecasts[i] ?? 0;
+          // The minus button is disabled at the floor when honouring an
+          // unlock baseline. The floor is on the SKU total, so we
+          // disable when the total is at the floor and this slot is
+          // contributing — any decrement would dip the total below it.
+          const atFloor = floor > 0 && total <= floor && v > 0;
+          return (
+            <div
+              key={`slot-${i}`}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <QtyStepper
+                size="default"
+                disabled={!editable}
+                canDecrement={editable && v > 0 && !atFloor}
+                onDecrement={() => onBumpSlot(i, -1)}
+                onIncrement={() => onBumpSlot(i, 1)}
+                decrementLabel={
+                  atFloor
+                    ? `Hub locked ${floor} units already — additions only while unlocked`
+                    : 'Decrease'
+                }
+              >
+                <input
+                  type="number"
+                  value={v}
+                  disabled={!editable}
+                  onChange={e => onSetSlot(i, Number(e.target.value) || 0)}
+                  style={{
+                    width: 40,
+                    textAlign: 'center',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    fontVariantNumeric: 'tabular-nums',
+                    border: 'none',
+                    background: 'transparent',
+                    outline: 'none',
+                    color: 'var(--color-text-primary)',
+                    fontFamily: 'var(--font-primary)',
+                    appearance: 'textfield',
+                    MozAppearance: 'textfield',
+                  }}
+                />
+              </QtyStepper>
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: 'var(--color-text-muted)',
+                  fontVariantNumeric: 'tabular-nums',
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }}
+                title={`Quinn forecast for P${i + 1}: ${fc} units`}
+              >
+                fc {fc}
+              </span>
+            </div>
+          );
+        })}
 
-        {/* Stepper */}
-        <div
-          style={{ display: 'flex', justifyContent: 'center' }}
-          onClick={e => e.stopPropagation()}
-        >
-          <QtyStepper
-            size="default"
-            disabled={!editable}
-            canDecrement={editable && units > floor}
-            onDecrement={() => onBump(-1)}
-            onIncrement={() => onBump(1)}
-            decrementLabel={
-              floor > 0 && units <= floor
-                ? `Hub locked ${floor} units already — additions only while unlocked`
-                : 'Decrease'
-            }
-          >
-            <input
-              type="number"
-              value={units}
-              disabled={!editable}
-              onChange={e => onSet(Number(e.target.value) || 0)}
-              style={{
-                width: 44,
-                textAlign: 'center',
-                fontSize: 14,
-                fontWeight: 700,
-                fontVariantNumeric: 'tabular-nums',
-                border: 'none',
-                background: 'transparent',
-                outline: 'none',
-                color: 'var(--color-text-primary)',
-                fontFamily: 'var(--font-primary)',
-                appearance: 'textfield',
-                MozAppearance: 'textfield',
-              }}
-            />
-          </QtyStepper>
-        </div>
-
-        <div style={{ textAlign: 'right', fontSize: 14, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
-          {units}
+        <div style={{ textAlign: 'center', fontSize: 14, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+          {total}
           {lineDelta !== 0 && (
             <div style={{ fontSize: 9, fontWeight: 700, color: lineDelta > 0 ? 'var(--color-warning)' : 'var(--color-info)' }}>
               {lineDelta > 0 ? `+${lineDelta}` : lineDelta} vs Quinn
@@ -1244,7 +1433,7 @@ function SpokeOrderRow({
               {lineDelta !== 0 && (
                 <div style={{ marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}>
                   <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>You order</span>
-                  <span style={{ marginLeft: 'auto', fontWeight: 800, color: 'var(--color-text-primary)' }}>{units}</span>
+                  <span style={{ marginLeft: 'auto', fontWeight: 800, color: 'var(--color-text-primary)' }}>{total}</span>
                   <button
                     type="button"
                     onClick={onResetLine}
@@ -1404,6 +1593,24 @@ function LedgerLine({ label, value }: { label: string; value: number }) {
 function formatCutoff(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * Shared grid template for the spoke order header + rows. Mirrors the
+ * column shape of the standalone Plan view: a wide recipe column, a
+ * Carry-over column, one stepper column per P-slot, and a Total. No
+ * On-demand column on this surface — spokes don't bake hot prod.
+ */
+function spokeOrderGridStyle(
+  pColumnCount: number,
+  base: React.CSSProperties,
+): React.CSSProperties {
+  const slotCols = Array.from({ length: pColumnCount }, () => '110px').join(' ');
+  return {
+    display: 'grid',
+    gridTemplateColumns: `minmax(220px, 1.6fr) 90px ${slotCols} 80px`,
+    ...base,
+  };
 }
 
 function demoBtn(variant: 'solid' | 'dashed' = 'solid'): React.CSSProperties {

@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import type { BriefingRole } from '@/components/briefing';
 
 export type ActingUserId = 'u-manager' | 'u-sam' | 'u-jordan' | 'u-reese';
-export type DemoVersion = 'original' | 'mvp1';
+export type DemoVersion = 'original' | 'mvp1' | 'prod2';
 
 let actingUserId: ActingUserId = 'u-manager';
 let briefingRole: BriefingRole = 'ed';

@@ -7,10 +7,7 @@ import HubSpokeBreakdown, {
 import DispatchConfirmSheet, {
   type DispatchManifestEntry,
 } from '@/components/Production/DispatchConfirmSheet';
-import {
-  DispatchTransferStoreProvider,
-  useDispatchTransfers,
-} from '@/components/Production/dispatchStore';
+import { useDispatchTransfers } from '@/components/Production/dispatchStore';
 import { useSpokeRejects } from '@/components/Production/rejectsStore';
 import { useHubUnlocks } from '@/components/Production/hubUnlockStore';
 import {
@@ -41,11 +38,11 @@ import { useRole } from '@/components/Production/RoleContext';
  * render the sent state immediately.
  */
 export default function DispatchTodayPage() {
-  return (
-    <DispatchTransferStoreProvider>
-      <DispatchTodayPageInner />
-    </DispatchTransferStoreProvider>
-  );
+  // The dispatch transfer store now lives in HubOperatorProviders so the
+  // production module (Today / Run sheet) and the dispatch flow share
+  // a single source of truth. Once a hub manager hits Send here, the
+  // unlock affordance on the production grid hides automatically.
+  return <DispatchTodayPageInner />;
 }
 
 function DispatchTodayPageInner() {

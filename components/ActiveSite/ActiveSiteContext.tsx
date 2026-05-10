@@ -23,7 +23,7 @@ import {
  * changes during a demo session.
  */
 
-export type ActiveSiteType = 'HUB' | 'SPOKE';
+export type ActiveSiteType = 'HUB' | 'SPOKE' | 'HYBRID' | 'STANDALONE';
 
 export type ActiveSite = {
   id: string;
@@ -48,6 +48,26 @@ export const ACTIVE_SITES: ActiveSite[] = [
     type: 'SPOKE',
     caption: 'Commuter spoke · Receives from Fitzroy Espresso',
   },
+  {
+    id: 'fitzroy-heathrow',
+    name: 'Fitzroy Heathrow',
+    type: 'HYBRID',
+    // Hybrid = makes some items here on the bench, receives the rest
+    // from the hub. Heathrow T5 is the canonical hybrid in the fixture
+    // graph (see `site-hybrid-airport`).
+    caption: 'Hybrid airport site · Makes + receives',
+  },
+  {
+    id: 'fitzroy-islington',
+    name: 'Fitzroy Islington',
+    type: 'STANDALONE',
+    // Standalone = self-producing. Bakes on its own benches, no hub
+    // dependency. The persona uses the Plan tab as their daily landing
+    // surface (steppers + forecast + carry-over) — no Today screen
+    // because the manager actively shapes the day rather than
+    // monitoring an automated bake.
+    caption: 'Standalone site · Self-producing',
+  },
 ];
 
 const DEFAULT_ACTIVE_SITE_ID = 'fitzroy-espresso';
@@ -60,6 +80,8 @@ type ActiveSiteContextValue = {
   /** Convenience flags so consumers don't have to compare strings. */
   isHub: boolean;
   isSpoke: boolean;
+  isHybrid: boolean;
+  isStandalone: boolean;
 };
 
 const ActiveSiteContext = createContext<ActiveSiteContextValue | null>(null);
@@ -100,6 +122,8 @@ export function ActiveSiteProvider({ children }: { children: React.ReactNode }) 
       setActiveSiteId,
       isHub: activeSite.type === 'HUB',
       isSpoke: activeSite.type === 'SPOKE',
+      isHybrid: activeSite.type === 'HYBRID',
+      isStandalone: activeSite.type === 'STANDALONE',
     };
   }, [activeSiteId, setActiveSiteId]);
 
@@ -119,6 +143,8 @@ export function useActiveSite(): ActiveSiteContextValue {
       setActiveSiteId: () => {},
       isHub: fallback.type === 'HUB',
       isSpoke: fallback.type === 'SPOKE',
+      isHybrid: fallback.type === 'HYBRID',
+      isStandalone: fallback.type === 'STANDALONE',
     };
   }
   return ctx;

@@ -3,11 +3,11 @@
 import { useMemo, useState } from 'react';
 import { Check, ArrowRight, RotateCcw } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
-import StatusPill from '@/components/Production/StatusPill';
+import StatusPill from '@/components/Production2/StatusPill';
 import {
   PRET_QUINN_SETUP_INTERVIEW,
   type InterviewStep,
-} from '@/components/Production/fixtures';
+} from '@/components/Production2/fixtures';
 
 type Answer = { stepId: string; value: string | number | string[] };
 

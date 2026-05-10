@@ -2,10 +2,9 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import AmountsView from '@/components/Production/AmountsView';
-import { useRole } from '@/components/Production/RoleContext';
+import RecipeFirstGrid from '@/components/Production/RecipeFirstGrid';
+import DaySelectorStrip from '@/components/Production/DaySelectorStrip';
 import { PRET_SITES, DEMO_TODAY, getSite } from '@/components/Production/fixtures';
-import type { FocusReason } from '@/components/Production/PlanStore';
 import IncomingRejectsStrip from '@/components/Production/IncomingRejectsStrip';
 import IncomingAdhocRequestsStrip from '@/components/Production/IncomingAdhocRequestsStrip';
 import UrgentRemakeBanner from '@/components/Production/UrgentRemakeBanner';
@@ -13,31 +12,32 @@ import SpokeTodayPanel from '@/components/Production/SpokeTodayPanel';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import { useDemoNotifications } from '@/components/Production/demoNotificationsStore';
 import { useProductionSite } from '@/components/Production/ProductionSiteContext';
-
-// The active "persona" SPOKE in the demo maps to this fixture spoke.
-// Keeping the mapping in one place so the spoke surfaces all read from
-// the same data row.
-const SPOKE_PERSONA_SITE_ID = 'site-spoke-south';
-const SPOKE_PERSONA_HUB_ID = 'hub-central';
-
-const VALID_REASONS: FocusReason[] = ['stockcap', 'assembly-short', 'override', 'draft-forecast'];
+import { useRole } from '@/components/Production/RoleContext';
 
 /**
- * Today (formerly "Amounts") — the always-on production-day editor.
+ * 14-day day-strip range (yesterday on the far left, today second).
+ * Mirrors the Plan view's strip so the hub manager can scan a couple
+ * weeks ahead from the Today screen — collapsing the old Plan/Run
+ * split without losing forward visibility.
+ */
+const DAY_STRIP_RANGE = [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+/**
+ * Today (formerly "Amounts") — the live-floor production-day view.
  *
- * The body lives in `<AmountsView />` because the Plan page reuses the same
- * editor for any selected day. This page just owns the site selector and
- * pins the date to `DEMO_TODAY`.
+ * The body is now the recipe-first grid (same component the Plan page uses)
+ * locked to `DEMO_TODAY`. Hub-side incoming-from-spokes strips
+ * (urgent remakes, rejects, ad-hoc requests) sit above the grid because the
+ * Today screen is where the hub manager triages everything that's landed on
+ * their plate today; Dispatch stays focused on outbound transfers.
  *
  * Deep-link contract (consumed by Quinn nudges via `usePlanNudges`):
  *   ?site={SiteId}&focus={ProductionItemId}&reason={FocusReason}
  *
- * On arrival we:
- *   1. Switch the site selector to `?site` (so the row actually exists)
- *   2. Hand `focus` + `reason` to `<AmountsView>` which clears filters,
- *      expands + scrolls + pulses the row, and surfaces a contextual banner
- *   3. Strip `focus` and `reason` from the URL so subsequent navigations
- *      / re-renders don't keep re-pulsing the same row
+ * On arrival we still switch the site selector to `?site` so the grid
+ * renders against the right site. The `focus`/`reason` params are
+ * stripped on consumption — the recipe-first grid surfaces a row's detail
+ * via tap into the focus panel rather than auto-pulsing.
  */
 export default function TodayPage() {
   return (
@@ -48,8 +48,7 @@ export default function TodayPage() {
 }
 
 function TodayPageInner() {
-  const { can, user } = useRole();
-  const canEdit = can('plan.editQuantity');
+  useRole();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isSpoke } = useActiveSite();
@@ -57,36 +56,37 @@ function TodayPageInner() {
   const { siteId, setSiteId } = useProductionSite();
   const site = getSite(siteId);
   const isHub = site?.type === 'HUB';
+
+  // Day strip selection — drives both the grid date and the hub triage
+  // strips. Defaults to today; selecting a future day reuses the same
+  // RecipeFirstGrid (read-only summary) so the hub manager can scan
+  // ahead without leaving Today.
+  const [selectedDate, setSelectedDate] = useState(DEMO_TODAY);
   // "Hub-fed" = a site that doesn't bake for itself: regular SPOKEs,
   // HYBRIDs, and STANDALONEs that have been linked to a hub kitchen
   // (PAC139 dark-kitchen pattern). When the hub manager picks one of
   // these from the site selector on Today, they don't want the bake
   // editor (there's nothing to edit) — they want the spoke's incoming
   // delivery view, same shape as the spoke persona's own Today.
+  //
+  // HYBRID is excluded here because the recipe-first grid handles HYBRID
+  // natively via per-row Make/Receive tags.
   const isHubFedSite =
     !!site?.hubId &&
     (site.type === 'SPOKE' ||
-      site.type === 'HYBRID' ||
       (site.type === 'STANDALONE' && site.linkType === 'linked'));
-  const recordedBy = user?.name ?? 'Hub manager';
-  const [focus, setFocus] = useState<{ itemId: string; reason: FocusReason } | null>(null);
 
-  // On every search-param change, lift focus / site into local state and
-  // immediately strip the consumable bits from the URL so a back-button
-  // bounce or a re-render doesn't replay the deep-link.
+  // Lift the deep-link site param into local state and strip the consumed
+  // `focus` / `reason` from the URL so a back-button bounce doesn't replay.
   useEffect(() => {
     const siteParam = searchParams.get('site');
     const focusParam = searchParams.get('focus');
-    const reasonParam = searchParams.get('reason') as FocusReason | null;
+    const reasonParam = searchParams.get('reason');
 
     if (siteParam && PRET_SITES.some(s => s.id === siteParam)) {
       setSiteId(siteParam);
     }
-    if (focusParam && reasonParam && VALID_REASONS.includes(reasonParam)) {
-      setFocus({ itemId: focusParam, reason: reasonParam });
-    }
 
-    // Strip ?focus & ?reason once consumed; keep ?site so the selection sticks.
     if (focusParam || reasonParam || siteParam) {
       const next = new URLSearchParams();
       if (siteParam) next.set('site', siteParam);
@@ -96,39 +96,44 @@ function TodayPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  // Spoke persona gets a lighter, read-only "what's coming today" view
-  // — no site picker, no plan editor, no hub-side incoming-request
-  // strips. Spokes don't bake; they just need to know what's arriving
-  // and whether it's landed.
+  // Spoke persona — read-only "what's coming today" panel.
   if (isSpoke) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <SpokeTodayPanel spokeId={SPOKE_PERSONA_SITE_ID} hubId={SPOKE_PERSONA_HUB_ID} />
+        <SpokeTodayPanel spokeId="site-spoke-south" hubId="hub-central" />
       </div>
     );
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* Day strip — same shape as the Plan view. Lets the hub manager
+          page through D-1..D+12 without leaving Today; today sits in
+          the second slot for "look back one, look ahead two weeks". */}
+      <DaySelectorStrip
+        siteId={siteId}
+        selectedDate={selectedDate}
+        onSelect={setSelectedDate}
+        range={DAY_STRIP_RANGE}
+      />
+
       {/* Incoming-from-spokes surfaces — only relevant when the hub manager
-          is viewing one of their own hubs. The Today screen is the single
-          place where the hub manager triages everything that's landed on
-          their plate today; Dispatch stays focused on outbound transfers. */}
-      {isHub && (
+          is viewing one of their own hubs AND on the live day. Future
+          days have no rejects / ad-hoc requests yet. */}
+      {isHub && selectedDate === DEMO_TODAY && (
         <>
           {demoFlags.urgentRemake && (
-            <UrgentRemakeBanner hubId={siteId} recordedBy={recordedBy} />
+            <UrgentRemakeBanner hubId={siteId} recordedBy="Hub manager" />
           )}
           {demoFlags.rejects && <IncomingRejectsStrip hubId={siteId} />}
           {demoFlags.adhoc && <IncomingAdhocRequestsStrip hubId={siteId} />}
         </>
       )}
 
-      {/* When the hub manager picks a hub-fed site from the selector on
-          Today (e.g. Fitzroy King's Cross), swap the bake editor for the
-          same hub→spoke summary panel — but flipped to the hub's
-          perspective. Same data, re-skinned as "what we're sending
-          today" rather than the spoke's "what's arriving". */}
+      {/* When the hub manager picks a hub-fed (non-HYBRID) site from the
+          selector on Today, swap the bake editor for the same hub→spoke
+          summary panel — but flipped to the hub's perspective. Same data,
+          re-skinned as "what we're sending today". */}
       {isHubFedSite ? (
         <SpokeTodayPanel
           spokeId={siteId}
@@ -136,14 +141,7 @@ function TodayPageInner() {
           perspective="hub"
         />
       ) : (
-        <AmountsView
-          siteId={siteId}
-          date={DEMO_TODAY}
-          canEdit={canEdit}
-          focusedItemId={focus?.itemId ?? null}
-          focusReason={focus?.reason ?? null}
-          onClearFocus={() => setFocus(null)}
-        />
+        <RecipeFirstGrid siteId={siteId} date={selectedDate} surface="today" />
       )}
     </div>
   );

@@ -37,6 +37,59 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
+/**
+ * Single source of truth for site-type styling in the switcher.
+ * Mirrors the palette used in the production `SiteTypeBanner` so the
+ * persona pill and the in-page banner read as the same visual system:
+ *   HUB    → info (blue)        — accent-active is reserved for "active"
+ *   SPOKE  → secondary (neutral)
+ *   HYBRID → warning (amber)
+ */
+function siteTypeTheme(type: ActiveSite['type']) {
+  switch (type) {
+    case 'HUB':
+      return {
+        avatarBg: 'var(--color-accent-active)',
+        chipBg: 'var(--color-accent-light, var(--color-bg-hover))',
+        chipFg: 'var(--color-accent-active)',
+      };
+    case 'HYBRID':
+      return {
+        avatarBg: 'var(--color-warning)',
+        chipBg: 'var(--color-warning-light)',
+        chipFg: 'var(--color-warning)',
+      };
+    case 'STANDALONE':
+      return {
+        avatarBg: 'var(--color-success)',
+        chipBg: 'var(--color-success-light)',
+        chipFg: 'var(--color-success)',
+      };
+    case 'SPOKE':
+    default:
+      return {
+        avatarBg: 'var(--color-info)',
+        chipBg: 'var(--color-info-light)',
+        chipFg: 'var(--color-info)',
+      };
+  }
+}
+
+/** One-line "what kind of site this is" caption used under the name. */
+function siteTypeCaption(type: ActiveSite['type']): string {
+  switch (type) {
+    case 'HUB':
+      return 'Hub kitchen';
+    case 'HYBRID':
+      return 'Hybrid site';
+    case 'STANDALONE':
+      return 'Standalone site';
+    case 'SPOKE':
+    default:
+      return 'Spoke site';
+  }
+}
+
 export default function SiteSwitcher({ siteName, compact = false }: SiteSwitcherProps) {
   const { sites, activeSite, activeSiteId, setActiveSiteId } = useActiveSite();
   const [open, setOpen] = useState(false);
@@ -114,10 +167,7 @@ export default function SiteSwitcher({ siteName, compact = false }: SiteSwitcher
             width: compact ? '36px' : '32px',
             height: compact ? '36px' : '32px',
             borderRadius: 'var(--radius-avatar)',
-            background:
-              activeSite.type === 'SPOKE'
-                ? 'var(--color-info)'
-                : 'var(--color-accent-active)',
+            background: siteTypeTheme(activeSite.type).avatarBg,
             color: '#ffffff',
             fontSize: compact ? '12px' : '12px',
             fontWeight: 700,
@@ -153,7 +203,7 @@ export default function SiteSwitcher({ siteName, compact = false }: SiteSwitcher
                   marginTop: '1px',
                 }}
               >
-                {activeSite.type === 'HUB' ? 'Hub kitchen' : 'Spoke site'} · Switch
+                {siteTypeCaption(activeSite.type)} · Switch
               </span>
             </span>
 
@@ -270,10 +320,7 @@ function SiteRow({
           width: 32,
           height: 32,
           borderRadius: 'var(--radius-avatar)',
-          background:
-            site.type === 'SPOKE'
-              ? 'var(--color-info)'
-              : 'var(--color-accent-active)',
+          background: siteTypeTheme(site.type).avatarBg,
           color: '#ffffff',
           fontSize: 12,
           fontWeight: 700,
@@ -303,14 +350,8 @@ function SiteRow({
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: '0.04em',
-              background:
-                site.type === 'SPOKE'
-                  ? 'var(--color-info-light)'
-                  : 'var(--color-accent-light, var(--color-bg-hover))',
-              color:
-                site.type === 'SPOKE'
-                  ? 'var(--color-info)'
-                  : 'var(--color-accent-active)',
+              background: siteTypeTheme(site.type).chipBg,
+              color: siteTypeTheme(site.type).chipFg,
             }}
           >
             {site.type}

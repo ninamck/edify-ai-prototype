@@ -7,7 +7,8 @@ import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { getQuinnNudges, getSpokeSubmissionNudges, type QuinnNudge, type QuinnNudgeTone } from './quinnNudges';
-import { usePlanNudges } from './PlanStore';
+import { usePlanNudges, useLowStockNudges } from './PlanStore';
+import { daySummary } from './salesReport';
 import { useRejectNudges } from './rejectsStore';
 import { useHubAdhocNudges, useSpokeAdhocNudges } from './adhocStore';
 import { useHubRemakeNudges, useSpokeRemakeNudges } from './remakeStore';
@@ -30,6 +31,19 @@ export default function QuinnProductionPanel() {
   const { isSpoke } = useActiveSite();
 
   const planNudges = usePlanNudges('hub-central', DEMO_TODAY);
+  // PAC147 — produced-stock low-runway. The till data lives in
+  // `salesReport`/`salesActuals`, so we build the itemId → sold map here
+  // and pass it into the hook (PlanStore can't import salesReport without
+  // creating a cycle). `daySummary` is fixture-driven; no hook needed.
+  const soldByItemId = useMemo(() => {
+    const map = new Map<string, number>();
+    const summary = daySummary('hub-central', DEMO_TODAY);
+    for (const r of summary.rows) {
+      map.set(r.line.item.id, r.sold);
+    }
+    return map;
+  }, []);
+  const lowStockNudges = useLowStockNudges('hub-central', DEMO_TODAY, soldByItemId);
   const rejectNudges = useRejectNudges('hub-central');
   const hubAdhocNudges = useHubAdhocNudges('hub-central');
   // Spoke nudges scoped to the demo's primary spoke; in real life the
@@ -46,6 +60,17 @@ export default function QuinnProductionPanel() {
   const nudges = useMemo<QuinnNudge[]>(() => {
     // Lift plan nudges to the shared shape (surface = 'plan' so existing filter keeps working).
     const planAsGeneric: QuinnNudge[] = planNudges.map(n => ({
+      id: n.id,
+      tone: n.tone,
+      title: n.title,
+      body: n.body,
+      cta: n.cta,
+      surface: 'plan',
+    }));
+    // Low-stock (PAC147) nudges share the amounts deep-link surface, but
+    // we tag them with `surface: 'plan'` so the panel auto-pins them when
+    // the manager is already on /production/amounts.
+    const lowStockAsGeneric: QuinnNudge[] = lowStockNudges.map(n => ({
       id: n.id,
       tone: n.tone,
       title: n.title,
@@ -132,13 +157,17 @@ export default function QuinnProductionPanel() {
       // Active-window nudges (unlock) sit right behind critical incidents
       // so the spoke can't miss the hub's open offer.
       ...spokeUnlockAsGeneric,
+      // Low-stock sits with the other live-floor signals, ahead of the
+      // forward-looking plan nudges — sold-out is happening *now*, the
+      // overrides / draft-forecast checks are about tomorrow's first run.
+      ...lowStockAsGeneric,
       ...hubAdhocAsGeneric,
       ...spokeAdhocAsGeneric,
       ...rejectsAsGeneric,
       ...planAsGeneric,
       ...staticNudges,
     ].filter(n => !dismissed.has(n.id));
-  }, [isSpoke, planNudges, rejectNudges, hubAdhocNudges, spokeAdhocNudges, hubRemakeNudges, spokeRemakeNudges, spokeUnlockNudges, staticNudges, spokeStaticNudges, dismissed]);
+  }, [isSpoke, planNudges, lowStockNudges, rejectNudges, hubAdhocNudges, spokeAdhocNudges, hubRemakeNudges, spokeRemakeNudges, spokeUnlockNudges, staticNudges, spokeStaticNudges, dismissed]);
   const visible = nudges.length;
 
   // Keep the panel relevant to the current surface first
@@ -564,8 +593,6 @@ function inferSurface(pathname: string | null): QuinnNudge['surface'] | null {
   if (pathname.includes('/production/pcr')) return 'pcr';
   if (pathname.includes('/production/carry-over')) return 'carry-over';
   if (pathname.includes('/production/spokes')) return 'spokes';
-  if (pathname.includes('/production/settings-health')) return 'settings';
-  if (pathname.includes('/production/setup')) return 'setup';
   if (pathname.includes('/production/productivity')) return 'productivity';
   if (pathname.includes('/production/sales-report')) return 'sales-report';
   if (pathname.includes('/production/plan')) return 'plan';

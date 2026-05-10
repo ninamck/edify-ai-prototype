@@ -11,9 +11,14 @@ import {
   Combine,
   Info,
   Check,
+  Activity,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
-import type { PlanLine, FocusReason } from './PlanStore';
+import { lowStockSnapshots, lowStockThreshold, DEMO_NOW_HHMM, type LowStockSnapshot, type PlanLine, type FocusReason } from './PlanStore';
+
+/** Lookup the panel passes through to every reason-specific helper.
+ *  Only populated when `reason === 'lowstock'`; everything else ignores it. */
+type LowStockMap = Map<string, LowStockSnapshot> | null;
 
 /**
  * PlanFocusPanel — the action-oriented landing surface for a Quinn deep-link
@@ -49,6 +54,14 @@ type Props = {
   onOpenRow: (itemId: string) => void;
   /** Dismiss the panel completely. Also clears focus state on the host. */
   onClose: () => void;
+  /** Optional sold-so-far map (itemId → units) — required when
+   *  `reason === 'lowstock'`, ignored otherwise. The host owns the
+   *  data source so the panel doesn't need to pull `salesReport` /
+   *  `daySummary` itself. */
+  soldByItemId?: Map<string, number>;
+  /** Date the panel is reasoning about. Used to gate `lowstock` to today
+   *  (mirrors the nudge gate). Defaults to "today" semantics. */
+  date?: string;
 };
 
 export default function PlanFocusPanel({
@@ -58,6 +71,8 @@ export default function PlanFocusPanel({
   onSetPlanned,
   onOpenRow,
   onClose,
+  soldByItemId,
+  date,
 }: Props) {
   // Esc to dismiss — same affordance as DispatchConfirmSheet.
   useEffect(() => {
@@ -68,14 +83,29 @@ export default function PlanFocusPanel({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // For `lowstock` we need a per-row "running low" snapshot keyed by
+  // itemId so the cards can render live numbers, isResolved can clear,
+  // and the headline copy can branch on sold-out vs warning. Built once
+  // here so every helper sees the same view.
+  const lowStockMap = useMemo(() => {
+    if (reason !== 'lowstock' || !soldByItemId || !date) return null;
+    const snaps = lowStockSnapshots(lines, date, soldByItemId, DEMO_NOW_HHMM);
+    const map = new Map<string, ReturnType<typeof lowStockSnapshots>[number]>();
+    for (const s of snaps) map.set(s.itemId, s);
+    return map;
+  }, [reason, lines, date, soldByItemId]);
+
   // Compute the set of "affected" lines for the current reason. The focused
   // line is always included (and pinned first) even if the issue has been
   // resolved since landing — so the panel never goes blank under the user.
-  const affected = useMemo(() => buildAffected(lines, focusedItemId, reason), [lines, focusedItemId, reason]);
+  const affected = useMemo(
+    () => buildAffected(lines, focusedItemId, reason, lowStockMap),
+    [lines, focusedItemId, reason, lowStockMap],
+  );
   const focusedLine = affected.find(l => l.item.id === focusedItemId) ?? affected[0];
 
   const palette = palettes[reason];
-  const headline = headlineFor(reason, affected, focusedLine);
+  const headline = headlineFor(reason, affected, focusedLine, lowStockMap);
 
   if (typeof window === 'undefined') return null;
 
@@ -223,8 +253,9 @@ export default function PlanFocusPanel({
               key={line.item.id}
               line={line}
               reason={reason}
+              lowStockMap={lowStockMap}
               isFocused={line.item.id === focusedItemId}
-              onApply={() => applyPrimaryAction(line, reason, onSetPlanned)}
+              onApply={() => applyPrimaryAction(line, reason, onSetPlanned, lowStockMap)}
               onOpenRow={() => onOpenRow(line.item.id)}
             />
           ))}
@@ -246,7 +277,7 @@ export default function PlanFocusPanel({
               type="button"
               onClick={() => {
                 for (const l of affected) {
-                  applyPrimaryAction(l, reason, onSetPlanned);
+                  applyPrimaryAction(l, reason, onSetPlanned, lowStockMap);
                 }
               }}
               style={{
@@ -305,19 +336,21 @@ export default function PlanFocusPanel({
 function ActionCard({
   line,
   reason,
+  lowStockMap,
   isFocused,
   onApply,
   onOpenRow,
 }: {
   line: PlanLine;
   reason: FocusReason;
+  lowStockMap: LowStockMap;
   isFocused: boolean;
   onApply: () => void;
   onOpenRow: () => void;
 }) {
-  const cta = primaryActionLabel(line, reason);
-  const detail = cardDetail(line, reason);
-  const resolved = isResolved(line, reason);
+  const cta = primaryActionLabel(line, reason, lowStockMap);
+  const detail = cardDetail(line, reason, lowStockMap);
+  const resolved = isResolved(line, reason, lowStockMap);
 
   return (
     <div
@@ -498,9 +531,10 @@ const palettes: Record<FocusReason, { bg: string; border: string; icon: string }
   'assembly-short':{ bg: 'var(--color-error-light)',   border: 'var(--color-error-border)',   icon: 'var(--color-error)' },
   override:        { bg: 'var(--color-warning-light)', border: 'var(--color-warning-border)', icon: 'var(--color-warning)' },
   'draft-forecast':{ bg: 'var(--color-info-light)',    border: 'var(--color-info-light)',     icon: 'var(--color-info)' },
+  lowstock:        { bg: 'var(--color-error-light)',   border: 'var(--color-error-border)',   icon: 'var(--color-error)' },
 };
 
-function buildAffected(lines: PlanLine[], focusedItemId: string, reason: FocusReason): PlanLine[] {
+function buildAffected(lines: PlanLine[], focusedItemId: string, reason: FocusReason, lowStockMap: LowStockMap): PlanLine[] {
   let pool: PlanLine[];
   switch (reason) {
     case 'stockcap':
@@ -520,6 +554,11 @@ function buildAffected(lines: PlanLine[], focusedItemId: string, reason: FocusRe
     case 'draft-forecast':
       pool = lines.filter(l => l.forecast?.status === 'draft');
       break;
+    case 'lowstock':
+      pool = lowStockMap
+        ? lines.filter(l => lowStockMap.has(l.item.id))
+        : [];
+      break;
   }
   // Always pin the focused line first — even if it's been resolved since
   // landing, so the manager keeps their bearings.
@@ -528,7 +567,7 @@ function buildAffected(lines: PlanLine[], focusedItemId: string, reason: FocusRe
   return focused && !pool.includes(focused) ? [focused, ...rest] : focused ? [focused, ...rest] : pool;
 }
 
-function headlineFor(reason: FocusReason, affected: PlanLine[], focused: PlanLine | undefined): { title: string; body: string } {
+function headlineFor(reason: FocusReason, affected: PlanLine[], focused: PlanLine | undefined, lowStockMap: LowStockMap): { title: string; body: string } {
   if (!focused) return { title: 'Quinn flagged a plan issue', body: 'Nothing to action right now.' };
   switch (reason) {
     case 'stockcap': {
@@ -573,10 +612,35 @@ function headlineFor(reason: FocusReason, affected: PlanLine[], focused: PlanLin
         body: 'Confirm each forecast before R1 so the plan locks for the floor. Open the row to inspect Quinn\'s signals first.',
       };
     }
+    case 'lowstock': {
+      const focusedSnap = lowStockMap?.get(focused.item.id);
+      const single = affected.length === 1;
+      const soldOuts = lowStockMap
+        ? Array.from(lowStockMap.values()).filter(s => s.soldOut).length
+        : 0;
+      if (focusedSnap?.soldOut) {
+        return {
+          title: single
+            ? `${focused.recipe.name} sold out — ${Math.abs(focusedSnap.remaining)} over plan`
+            : `${soldOuts} sold out · ${affected.length - soldOuts} more low`,
+          body: single
+            ? `Floor's been busier than today's plan covered. Bump the variable add-on by a small batch to keep selling, or close the SKU on the till.`
+            : 'Triage the sold-out rows first — extra units there have somewhere to go. The runway-low rows can take a smaller top-up.',
+        };
+      }
+      return {
+        title: single
+          ? `${focused.recipe.name} running low — ${focusedSnap?.remaining ?? 0} left of ${focused.effectivePlanned}`
+          : `${affected.length} recipes running low on the floor`,
+        body: single
+          ? `${focusedSnap?.sold ?? 0} sold against ${focused.effectivePlanned} planned. ${focusedSnap?.remaining ?? 0} unit${focusedSnap?.remaining === 1 ? '' : 's'} of runway. Top up the variable add-on before the next push, or open the row to set a precise number.`
+          : 'Each row is within the threshold of selling out before close. Top them up one by one, or open a row for the full picture.',
+      };
+    }
   }
 }
 
-function cardDetail(line: PlanLine, reason: FocusReason): {
+function cardDetail(line: PlanLine, reason: FocusReason, lowStockMap: LowStockMap): {
   cells: Array<{ label: string; value: string; tone?: 'error' | 'success' }>;
   note?: string;
   icon?: React.ReactNode;
@@ -634,19 +698,59 @@ function cardDetail(line: PlanLine, reason: FocusReason): {
         icon: <Info size={12} color="var(--color-info)" style={{ marginTop: 2, flexShrink: 0 }} />,
       };
     }
+    case 'lowstock': {
+      const snap = lowStockMap?.get(line.item.id);
+      const buffer = lowStockThreshold(line.effectivePlanned);
+      const remaining = snap?.remaining ?? 0;
+      const suggestedTopUp = remaining <= 0
+        ? Math.abs(remaining) + buffer
+        : Math.max(buffer - remaining + buffer, buffer);
+      return {
+        cells: [
+          { label: 'Sold', value: String(snap?.sold ?? 0) },
+          { label: 'Plan', value: String(line.effectivePlanned) },
+          {
+            label: snap?.soldOut ? 'Over by' : 'Left',
+            value: snap?.soldOut ? `+${Math.abs(remaining)}` : String(remaining),
+            tone: snap?.soldOut || remaining <= buffer ? 'error' : undefined,
+          },
+        ],
+        note: snap?.soldOut
+          ? `Quinn suggests bumping the variable add-on by ${suggestedTopUp} to cover the next push.`
+          : `Threshold is ${buffer}. Quinn suggests a +${suggestedTopUp} top-up.`,
+        icon: <Activity size={12} color="var(--color-error)" style={{ marginTop: 2, flexShrink: 0 }} />,
+      };
+    }
   }
 }
 
-function primaryActionLabel(line: PlanLine, reason: FocusReason): string {
+function primaryActionLabel(line: PlanLine, reason: FocusReason, lowStockMap: LowStockMap): string {
   switch (reason) {
     case 'stockcap': return `Apply cap (${line.stockCap?.cap ?? 0})`;
     case 'assembly-short': return `Cover (${line.assemblyDemand.totalUnits})`;
     case 'override': return `Reset to Quinn (${line.quinnProposed})`;
     case 'draft-forecast': return `Open row to confirm`;
+    case 'lowstock': {
+      const top = suggestedLowStockTopUp(line, lowStockMap);
+      return `Top up +${top}`;
+    }
   }
 }
 
-function applyPrimaryAction(line: PlanLine, reason: FocusReason, onSetPlanned: (id: string, n: number) => void) {
+function suggestedLowStockTopUp(line: PlanLine, lowStockMap: LowStockMap): number {
+  const snap = lowStockMap?.get(line.item.id);
+  const buffer = lowStockThreshold(line.effectivePlanned);
+  const remaining = snap?.remaining ?? 0;
+  if (remaining <= 0) return Math.abs(remaining) + buffer;
+  return Math.max(buffer - remaining + buffer, buffer);
+}
+
+function applyPrimaryAction(
+  line: PlanLine,
+  reason: FocusReason,
+  onSetPlanned: (id: string, n: number) => void,
+  lowStockMap: LowStockMap,
+) {
   switch (reason) {
     case 'stockcap':
       if (line.stockCap) onSetPlanned(line.item.id, line.stockCap.cap);
@@ -664,10 +768,15 @@ function applyPrimaryAction(line: PlanLine, reason: FocusReason, onSetPlanned: (
       // workflow; primary "Apply" is a no-op and the card relies on
       // "Open row" to take the manager there.
       return;
+    case 'lowstock': {
+      const top = suggestedLowStockTopUp(line, lowStockMap);
+      onSetPlanned(line.item.id, line.effectivePlanned + top);
+      return;
+    }
   }
 }
 
-function isResolved(line: PlanLine, reason: FocusReason): boolean {
+function isResolved(line: PlanLine, reason: FocusReason, lowStockMap: LowStockMap): boolean {
   switch (reason) {
     case 'stockcap': return !line.stockCap || line.effectivePlanned <= line.stockCap.cap;
     case 'assembly-short': return line.assemblyDemand.totalUnits <= line.planned;
@@ -676,6 +785,9 @@ function isResolved(line: PlanLine, reason: FocusReason): boolean {
       return Math.abs(line.planned - line.quinnProposed) / base < 0.25;
     }
     case 'draft-forecast': return line.forecast?.status !== 'draft';
+    case 'lowstock': {
+      return !lowStockMap?.has(line.item.id);
+    }
   }
 }
 

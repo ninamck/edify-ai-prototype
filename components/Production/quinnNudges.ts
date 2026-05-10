@@ -1,7 +1,6 @@
 import {
   PRET_PLAN,
   PRET_CARRY_OVER,
-  PRET_SETTINGS_HEALTH,
   PRET_SPOKE_SUBMISSION,
   dayOffset,
   getProductionItem,
@@ -78,30 +77,8 @@ export function getQuinnNudges(): QuinnNudge[] {
   //    `getSpokeSubmissionNudges` below. The hub's Quinn doesn't surface
   //    them because the hub doesn't draft the spoke's order.
 
-  // 5) Settings health — surface the most impactful stale/suspect items
-  const healthIssues = PRET_SETTINGS_HEALTH.filter(i => i.status === 'stale' || i.status === 'suspect');
-  if (healthIssues.length > 0) {
-    const top = healthIssues[0];
-    nudges.push({
-      id: 'nudge-settings-health',
-      surface: 'settings',
-      tone: top.status === 'suspect' ? 'error' : 'warning',
-      title: top.title,
-      body: top.impactSummary ? `${top.body} · ${top.impactSummary}` : top.body,
-      cta: { label: 'Open settings health', href: '/production/settings-health' },
-    });
-
-    if (healthIssues.length > 1) {
-      nudges.push({
-        id: 'nudge-settings-more',
-        surface: 'settings',
-        tone: 'info',
-        title: `${healthIssues.length - 1} more setting${healthIssues.length - 1 === 1 ? '' : 's'} to review`,
-        body: 'Tidy these when you get a minute — Quinn can draft the change if you ask.',
-        cta: { label: 'See all', href: '/production/settings-health' },
-      });
-    }
-  }
+  // 5) Settings health — stripped from Original. The drift-detection /
+  //    "ask Quinn to fix it" surface lives only in /prod-2/* now.
 
   // 6) Productivity (PAC169 / PAC172) — celebrate top performer + flag slow benches.
   // Anchored to yesterday so the demo always has data to work with on a fresh load.

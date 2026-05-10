@@ -39,7 +39,14 @@ export default function Sidebar() {
   const pendingApprovals = approvals.filter(a => a.status === 'pending').length;
   const invoiceReviewCount = needsReviewCount();
   const demoVersion = useDemoVersion();
-  const homeHref = demoVersion === 'mvp1' ? '/mvp-1' : '/';
+  const homeHref =
+    demoVersion === 'mvp1' ? '/mvp-1' : demoVersion === 'prod2' ? '/prod-2' : '/';
+  // When the user has flipped the demo to Prod 2.0, the production +
+  // dispatch nav items route into the /prod-2/* duplicate of those
+  // routes. Original / MVP 1 keep the live `/production/*` + `/dispatch`
+  // routes. Fixtures are shared across both versions; only the UI is
+  // duplicated.
+  const versionPrefix = demoVersion === 'prod2' ? '/prod-2' : '';
   /**
    * Sidebar starts collapsed (icon-only rail, 68px). The toggle pinned
    * to the bottom of the rail expands it to the labelled view (240px).
@@ -59,17 +66,27 @@ export default function Sidebar() {
   // Both items share /production routes; we tell them apart by which
   // sub-page is open. A page that doesn't fall in either bucket (just
   // bare /production) defaults to Run since that's the active-day view.
+  // Run/Plan path detection covers both the Original tree (/production/*)
+  // and the Prod 2.0 duplicate (/prod-2/production/*) so the active-state
+  // pill highlights correctly regardless of which demo version is on.
+  const RUN_PRODUCTION_SUFFIXES = ['/amounts', '/run-sheet', '/board', '/sales', '/pcr'];
   const RUN_PRODUCTION_PREFIXES = [
-    '/production/amounts',
-    '/production/run-sheet',
-    '/production/board',
-    '/production/sales',
-    '/production/pcr',
+    ...RUN_PRODUCTION_SUFFIXES.map(s => `/production${s}`),
+    ...RUN_PRODUCTION_SUFFIXES.map(s => `/prod-2/production${s}`),
   ];
   const isRunProductionPath = (p: string) =>
     RUN_PRODUCTION_PREFIXES.some(prefix => p === prefix || p.startsWith(prefix + '/'));
-  const isProductionPath = (p: string) => p === '/production' || p.startsWith('/production/');
+  const isProductionPath = (p: string) =>
+    p === '/production' ||
+    p.startsWith('/production/') ||
+    p === '/prod-2/production' ||
+    p.startsWith('/prod-2/production/');
   const isPlanProductionPath = (p: string) => isProductionPath(p) && !isRunProductionPath(p);
+  const isDispatchPath = (p: string) =>
+    p === '/dispatch' ||
+    p.startsWith('/dispatch/') ||
+    p === '/prod-2/dispatch' ||
+    p.startsWith('/prod-2/dispatch/');
 
   // Persona-aware nav. The HUB sees the full operator set; the SPOKE sees
   // a curated subset that matches what a satellite site actually does:
@@ -78,7 +95,7 @@ export default function Sidebar() {
   // don't dispatch (the hub does), don't match invoices or own credit
   // notes (estate-level), and don't see analytics / compare-sites
   // (estate-level performance views).
-  const { isSpoke } = useActiveSite();
+  const { isSpoke, isHub } = useActiveSite();
 
   return (
     <aside
@@ -118,7 +135,17 @@ export default function Sidebar() {
             Spoke sees only "Plan production" (their own order form on
             /production/spokes). Dispatch is hub-only — spokes receive,
             they don't send. */}
-        <NavGroup title={isSpoke ? 'Plan & order' : 'Make, plan & dispatch'} showDivider={true} compact={compact}>
+        <NavGroup
+          title={
+            isSpoke
+              ? 'Plan & order'
+              : isHub
+                ? 'Make, plan & dispatch'
+                : 'Make & plan'
+          }
+          showDivider={true}
+          compact={compact}
+        >
           {isSpoke ? (
             // Spoke keeps a single Plan production entry — they don't
             // run production (they receive + sell), so the floor/plan
@@ -128,7 +155,7 @@ export default function Sidebar() {
               icon={CalendarClock}
               compact={compact}
               active={isProductionPath(pathname)}
-              onClick={() => router.push('/production/amounts')}
+              onClick={() => router.push(`${versionPrefix}/production/amounts`)}
             />
           ) : (
             <>
@@ -143,25 +170,38 @@ export default function Sidebar() {
                 compact={compact}
                 badge={4}
                 active={isRunProductionPath(pathname)}
-                onClick={() => router.push('/production/amounts')}
+                onClick={() => router.push(`${versionPrefix}/production/amounts`)}
               />
-              {/* Plan production — tomorrow + future. Lands on the Plan
-                  page (week view) which is the natural starting point
-                  when you're in planning mode. */}
-              <NavItem
-                label="Plan production"
-                icon={CalendarClock}
-                compact={compact}
-                active={isPlanProductionPath(pathname)}
-                onClick={() => router.push('/production/plan')}
-              />
-              <NavItem
-                label="Dispatch to stores"
-                icon={Send}
-                compact={compact}
-                active={is('/dispatch')}
-                onClick={() => router.push('/dispatch')}
-              />
+              {/* Plan production — tomorrow + future. Hidden on the HUB
+                  persona: the Plan group was collapsed back into Today
+                  (with a day strip) since hub managers monitor an
+                  automated bake rather than authoring it. Standalone
+                  and Hybrid personas keep this entry — it's their
+                  primary surface (steppers + forecast + carry-over). */}
+              {!isHub && (
+                <NavItem
+                  label="Plan production"
+                  icon={CalendarClock}
+                  compact={compact}
+                  active={isPlanProductionPath(pathname)}
+                  onClick={() => router.push(`${versionPrefix}/production/plan`)}
+                />
+              )}
+              {/* Dispatch to stores — HUB only. Standalone / Hybrid /
+                  Spoke don't dispatch (Standalone is single-shop and
+                  bakes for itself; Hybrid bakes some + receives the
+                  rest from its hub; Spoke is purely a receiver). The
+                  group title also collapses to "Make & plan" for those
+                  personas since "dispatch" is no longer in scope. */}
+              {isHub && (
+                <NavItem
+                  label="Dispatch to stores"
+                  icon={Send}
+                  compact={compact}
+                  active={isDispatchPath(pathname)}
+                  onClick={() => router.push(`${versionPrefix}/dispatch`)}
+                />
+              )}
             </>
           )}
         </NavGroup>

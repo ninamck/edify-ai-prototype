@@ -6,7 +6,10 @@ import { SpokeRejectStoreProvider } from '@/components/Production/rejectsStore';
 import { AdhocRequestStoreProvider } from '@/components/Production/adhocStore';
 import { RemakeRequestStoreProvider } from '@/components/Production/remakeStore';
 import { HubUnlockStoreProvider } from '@/components/Production/hubUnlockStore';
+import { HubOverrideStoreProvider } from '@/components/Production/hubOverrideStore';
+import { DispatchTransferStoreProvider } from '@/components/Production/dispatchStore';
 import { DemoNotificationsProvider } from '@/components/Production/demoNotificationsStore';
+import { HybridOrderStoreProvider } from '@/components/Production/hybridOrderStore';
 import { ProductionSiteProvider } from '@/components/Production/ProductionSiteContext';
 
 /**
@@ -29,9 +32,15 @@ export default function HubOperatorProviders({ children }: { children: React.Rea
           <AdhocRequestStoreProvider>
             <RemakeRequestStoreProvider>
               <HubUnlockStoreProvider>
-                <DemoNotificationsProvider>
-                  <ProductionSiteProvider>{children}</ProductionSiteProvider>
-                </DemoNotificationsProvider>
+                <HubOverrideStoreProvider>
+                  <DispatchTransferStoreProvider>
+                    <DemoNotificationsProvider>
+                      <HybridOrderStoreProvider>
+                        <ProductionSiteProvider>{children}</ProductionSiteProvider>
+                      </HybridOrderStoreProvider>
+                    </DemoNotificationsProvider>
+                  </DispatchTransferStoreProvider>
+                </HubOverrideStoreProvider>
               </HubUnlockStoreProvider>
             </RemakeRequestStoreProvider>
           </AdhocRequestStoreProvider>

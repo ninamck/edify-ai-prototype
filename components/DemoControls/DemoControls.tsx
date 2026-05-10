@@ -22,6 +22,7 @@ const USER_ORDER: ActingUserId[] = ['u-manager', 'u-sam', 'u-jordan', 'u-reese']
 const VERSION_OPTIONS: { id: DemoVersion; label: string; route: string }[] = [
   { id: 'original', label: 'Original', route: '/' },
   { id: 'mvp1', label: 'MVP 1', route: '/mvp-1' },
+  { id: 'prod2', label: 'Prod 2.0', route: '/prod-2' },
 ];
 
 type Variant = 'floating' | 'inline';
@@ -41,6 +42,7 @@ export default function DemoControls({ variant = 'floating' }: Props) {
     if (
       isHome ||
       pathname.startsWith('/mvp-1') ||
+      pathname.startsWith('/prod-2') ||
       pathname.startsWith('/production') ||
       pathname.startsWith('/recipes') ||
       pathname.startsWith('/settings') ||

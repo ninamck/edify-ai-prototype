@@ -33,35 +33,58 @@ type SubTab = { id: string; label: string; href: string };
 //   • Plan production → tomorrow & future (week plan, carry-over to
 //                       inform tomorrow, performance and setup)
 // The sub-tabs surface depends on which sidebar item brought you here.
-// `productionGroupForPath` below decides which set is active.
-const HUB_RUN_TABS: SubTab[] = [
-  { id: 'amounts',    label: 'Today',         href: '/production/amounts' },
-  { id: 'run-sheet',  label: 'Run sheet',     href: '/production/run-sheet' },
-  { id: 'board',      label: 'Benches',       href: '/production/board' },
-  { id: 'sales',      label: 'Sales (live)',  href: '/production/sales' },
-  { id: 'pcr',        label: 'PCR queue',     href: '/production/pcr' },
+// HUB persona — single unified tab row. The Plan/Run split was removed
+// after Ed feedback: a hub manager is monitoring an automated bake
+// driven by spoke demand, not authoring it, so a separate "Plan" menu
+// group was just noise. Instead we merge the old run tabs (live floor:
+// Today, Run sheet, Benches, PCR queue) with the old plan tabs'
+// management surfaces (Carry-over, Productivity, Settings) into one
+// strip. Plan itself is dropped — Today carries the day strip so the
+// manager can scan ahead without it. Sales (live) and Sales vs forecast
+// were also dropped: a hub kitchen produces against spoke orders, not
+// against retail sell-through, so live tills aren't the signal here.
+const HUB_TABS: SubTab[] = [
+  { id: 'amounts',         label: 'Today',             href: '/production/amounts' },
+  { id: 'run-sheet',       label: 'Run sheet',         href: '/production/run-sheet' },
+  { id: 'board',           label: 'Benches',           href: '/production/board' },
+  { id: 'pcr',             label: 'PCR queue',         href: '/production/pcr' },
+  { id: 'carry-over',      label: 'Carry-over',        href: '/production/carry-over' },
+  { id: 'productivity',    label: 'Productivity',      href: '/production/productivity' },
+  { id: 'site-settings',   label: 'Settings',          href: '/production/settings' },
 ];
 
-const HUB_PLAN_TABS: SubTab[] = [
-  // Plan is polymorphic: when the hub is selected in the site picker it
-  // shows the hub plan (PlanStrip + AmountsView). When a spoke is
-  // selected it shows the spoke-order workflow (day strip, recipe lines,
-  // submit, hub Unlock) — the same surface the spoke persona uses on
-  // their own /production/spokes "Order" tab. The dedicated "Spoke
-  // plans" sub-tab was removed; the layout-level site picker is the
-  // only spoke selector.
+// STANDALONE + HYBRID split into a Run group and a Plan group, mirroring
+// the Run / Plan switch the manager mentally makes during the day. The
+// strips are deliberately different so each surface only carries the
+// affordances that make sense in that mental mode:
+//   • Run = "I'm running today"   → live-floor + live sales
+//   • Plan = "I'm shaping ahead"  → planning, retro, settings
+const SELF_PRODUCING_RUN_TABS: SubTab[] = [
+  { id: 'amounts',         label: 'Today',             href: '/production/amounts' },
+  { id: 'run-sheet',       label: 'Run sheet',         href: '/production/run-sheet' },
+  { id: 'board',           label: 'Benches',           href: '/production/board' },
+  { id: 'pcr',             label: 'PCR queue',         href: '/production/pcr' },
+  { id: 'sales',           label: 'Live sales',        href: '/production/sales' },
+];
+
+const SELF_PRODUCING_PLAN_TABS: SubTab[] = [
   { id: 'plan',            label: 'Plan',              href: '/production/plan' },
   { id: 'carry-over',      label: 'Carry-over',        href: '/production/carry-over' },
   { id: 'productivity',    label: 'Productivity',      href: '/production/productivity' },
   { id: 'sales-report',    label: 'Sales vs forecast', href: '/production/sales-report' },
   { id: 'site-settings',   label: 'Settings',          href: '/production/settings' },
-  { id: 'settings-health', label: 'Settings health',   href: '/production/settings-health' },
-  { id: 'setup',           label: 'Setup (Quinn)',     href: '/production/setup' },
 ];
 
-/** Same prefix list the Sidebar uses to highlight Run vs Plan. Kept in
- *  sync by hand — both files are short. */
-const RUN_PRODUCTION_PREFIXES = HUB_RUN_TABS.map(t => t.href);
+/** Run-group prefixes — drives the Run/Plan tab-strip swap for
+ *  self-producing personas, and lets the site selector hide on the run
+ *  / today views (where mid-shift site swaps lose context). */
+const RUN_PRODUCTION_PREFIXES = [
+  '/production/amounts',
+  '/production/run-sheet',
+  '/production/board',
+  '/production/pcr',
+  '/production/sales',
+];
 
 function productionGroupForPath(pathname: string): 'run' | 'plan' {
   return RUN_PRODUCTION_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))
@@ -81,26 +104,40 @@ const SPOKE_SUB_TABS: SubTab[] = [
   { id: 'spokes',       label: 'Order',             href: '/production/spokes' },
   { id: 'sales-report',    label: 'Sales vs forecast', href: '/production/sales-report' },
   { id: 'site-settings',   label: 'Settings',          href: '/production/settings' },
-  { id: 'settings-health', label: 'Settings health',   href: '/production/settings-health' },
 ];
 
 export default function ProductionLayout({ children }: { children: React.ReactNode }) {
   const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
   const router = useRouter();
   const pathname = usePathname();
-  const { isSpoke } = useActiveSite();
+  const { isSpoke, isHub, isHybrid, isStandalone } = useActiveSite();
 
-  // Persona + active sidebar group drive which sub-tabs render here.
-  // Spokes get their flat curated list. Hubs see either the Run set
-  // (today/floor) or the Plan set (tomorrow/future) based on which
-  // sidebar item is open — keeps the tab strip focused on one mode at
-  // a time instead of mixing planning surfaces with live floor ones.
-  const hubGroup = productionGroupForPath(pathname);
+  // Persona drives the tab set:
+  //   • Hub                 — single unified strip (no Run/Plan split)
+  //   • Standalone / Hybrid — Run/Plan split: each context shows only
+  //                           the affordances that fit that mental mode
+  //                           (live floor on Run, planning + retro on Plan).
+  //   • Spoke               — receive + sell + order (curated)
+  const isSelfProducing = isHybrid || isStandalone;
+  const productionGroup = productionGroupForPath(pathname);
   const subTabs = isSpoke
     ? SPOKE_SUB_TABS
-    : hubGroup === 'run'
-      ? HUB_RUN_TABS
-      : HUB_PLAN_TABS;
+    : isSelfProducing
+      ? productionGroup === 'run'
+        ? SELF_PRODUCING_RUN_TABS
+        : SELF_PRODUCING_PLAN_TABS
+      : HUB_TABS;
+
+  // Header copy — what kind of view the manager is on. Self-producing
+  // personas swap label with the strip so the chrome reflects the
+  // mental mode they're in.
+  const headerLabel = isSpoke
+    ? 'Production'
+    : isHub
+      ? 'Run production'
+      : isSelfProducing && productionGroup === 'run'
+        ? 'Run production'
+        : 'Plan production';
 
   return (
     <HubOperatorProviders>
@@ -163,11 +200,7 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
                 letterSpacing: '0.01em',
               }}
             >
-              {isSpoke
-                ? 'Production'
-                : hubGroup === 'run'
-                  ? 'Run production'
-                  : 'Plan production'}
+              {headerLabel}
             </span>
           </div>
 
@@ -266,11 +299,15 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
         {/* Shared site selector — single source of truth for which site
             every production sub-page operates on. Hidden for the spoke
             persona since they're locked to their own site, and hidden
-            on hub-kitchen-only views (Benches, PCR queue) where the
-            selector would just be noise. */}
+            on hub-kitchen-only views (Benches, PCR queue, Run sheet)
+            where the selector would just be noise. Also hidden across
+            the entire Run group (Today / Run sheet / Sales / Spokes /
+            Productivity) — once a manager has picked a site they're
+            running, swapping mid-shift loses live-floor context. The
+            site stays anchored via the SiteSwitcher in the top bar. */}
         {!pathname.startsWith('/production/board') &&
           !pathname.startsWith('/production/pcr') &&
-          !pathname.startsWith('/production/run-sheet') && <ProductionSiteSelector />}
+          productionGroupForPath(pathname) !== 'run' && <ProductionSiteSelector />}
 
         {/* Page body — flows in normal document scroll so the page itself
             scrolls rather than an inner container. */}

@@ -407,7 +407,6 @@ export const PRET_SITES: Site[] = [
       'site-spoke-south',
       'site-spoke-east',
       'site-spoke-west',
-      'site-standalone-north',
     ],
   },
   {
@@ -417,13 +416,11 @@ export const PRET_SITES: Site[] = [
     name: 'Islington North',
     type: 'STANDALONE',
     openingHours: { open: '06:00', close: '22:00' },
-    // PAC139 — dark-kitchen pattern. Site keeps its own counter + minimal
-    // prep kit but the bakery range is produced by the hub and dispatched
-    // overnight. Sales factor is higher than a typical spoke because this
-    // is its own front-of-house, not a satellite.
-    hubId: 'hub-central',
-    linkType: 'linked',
-    salesFactor: 0.55,
+    // Self-producing standalone — bakes everything on its own benches.
+    // Used by the "Fitzroy Islington" persona in the SiteSwitcher: the
+    // manager actively shapes the day's plan via stepper edits in the
+    // Plan tab, no hub dependency.
+    linkType: 'self',
   },
   {
     id: 'site-spoke-south',
@@ -670,7 +667,12 @@ export const PRET_BENCHES: Bench[] = [
     online: true,
     primaryMode: 'run',
     runs: [
-      { id: 'r1', label: 'R1', startTime: '05:00', durationMinutes: 180 },
+      // P1 — pre-open bake: croissants, pain au choc, breads ready for 07:00 doors
+      { id: 'r1', label: 'R1', startTime: '05:00', durationMinutes: 120 },
+      // P2 — mid-morning top-up: cakes, muffins, brownies for the 11:00 retail push
+      { id: 'r2', label: 'R2', startTime: '09:30', durationMinutes: 90 },
+      // P3 — afternoon bake: cookies + warm bakes for the 15:00 coffee tail
+      { id: 'r3', label: 'R3', startTime: '13:30', durationMinutes: 90 },
     ],
   },
   {
@@ -683,7 +685,12 @@ export const PRET_BENCHES: Bench[] = [
     online: true,
     primaryMode: 'run',
     runs: [
+      // P1 — early prep: fillings + roast trays before lunch assembly
       { id: 'r1', label: 'R1', startTime: '06:00', durationMinutes: 120 },
+      // P2 — mid-morning top-up before peak lunch window
+      { id: 'r2', label: 'R2', startTime: '10:00', durationMinutes: 75 },
+      // P3 — afternoon refresh: top-up fillings for late-lunch + tomorrow mise
+      { id: 'r3', label: 'R3', startTime: '14:00', durationMinutes: 90 },
     ],
   },
   {
@@ -1358,27 +1365,79 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
   { id: 'pi-central-eod-roast-prep',   siteId: 'hub-central', recipeId: 'prec-eod-roast-prep',   skuId: 'sku-eod-roast-prep',   mode: 'run', batchSize: 4, preferredBenchId: 'bench-cold-chain' },
 
   // ─── site-standalone-north (Islington North) — 4 benches ─────────────────
-  // Bakery oven
-  { id: 'pi-north-croissant',     siteId: 'site-standalone-north', recipeId: 'prec-croissant',          skuId: 'sku-croissant',          mode: 'run', batchSize: 8, preferredBenchId: 'bench-north-bakery', targetMinutes: 16 },
-  { id: 'pi-north-pain',          siteId: 'site-standalone-north', recipeId: 'prec-pain-au-chocolat',   skuId: 'sku-pain-au-choc',       mode: 'run', batchSize: 8, preferredBenchId: 'bench-north-bakery', targetMinutes: 18 },
-  { id: 'pi-north-granary',       siteId: 'site-standalone-north', recipeId: 'prec-granary',            skuId: 'sku-granary',            mode: 'run', batchSize: 8, preferredBenchId: 'bench-north-bakery', targetMinutes: 18 },
-  { id: 'pi-north-oat-cookie',    siteId: 'site-standalone-north', recipeId: 'prec-oat-raisin-cookie',  skuId: 'sku-oat-raisin-cookie',  mode: 'run', batchSize: 6, preferredBenchId: 'bench-north-bakery', targetMinutes: 14 },
-  // Prep bench
-  { id: 'pi-north-egg-filling',   siteId: 'site-standalone-north', recipeId: 'prec-egg-mayo-filling',   skuId: 'sku-egg-mayo-filling',   mode: 'run', batchSize: 1, preferredBenchId: 'bench-north-prep', targetMinutes: 12 },
-  { id: 'pi-north-tuna-filling',  siteId: 'site-standalone-north', recipeId: 'prec-tuna-mayo-filling',  skuId: 'sku-tuna-mayo-filling',  mode: 'run', batchSize: 1, preferredBenchId: 'bench-north-prep', targetMinutes: 10 },
-  { id: 'pi-north-hummus',        siteId: 'site-standalone-north', recipeId: 'prec-hummus',             skuId: 'sku-hummus',             mode: 'run', batchSize: 1, preferredBenchId: 'bench-north-prep', targetMinutes: 12 },
+  // Bakery oven — viennoiserie + breads + cakes for retail counter
+  { id: 'pi-north-croissant',          siteId: 'site-standalone-north', recipeId: 'prec-croissant',           skuId: 'sku-croissant',           mode: 'run', batchSize: 8, preferredBenchId: 'bench-north-bakery', targetMinutes: 16 },
+  { id: 'pi-north-pain',               siteId: 'site-standalone-north', recipeId: 'prec-pain-au-chocolat',    skuId: 'sku-pain-au-choc',        mode: 'run', batchSize: 8, preferredBenchId: 'bench-north-bakery', targetMinutes: 18 },
+  { id: 'pi-north-almond-croissant',   siteId: 'site-standalone-north', recipeId: 'prec-almond-croissant',    skuId: 'sku-almond-croissant',    mode: 'run', batchSize: 6, preferredBenchId: 'bench-north-bakery', targetMinutes: 18 },
+  { id: 'pi-north-cinnamon-swirl',     siteId: 'site-standalone-north', recipeId: 'prec-cinnamon-swirl',      skuId: 'sku-cinnamon-swirl',      mode: 'run', batchSize: 6, preferredBenchId: 'bench-north-bakery', targetMinutes: 16 },
+  { id: 'pi-north-granary',            siteId: 'site-standalone-north', recipeId: 'prec-granary',             skuId: 'sku-granary',             mode: 'run', batchSize: 8, preferredBenchId: 'bench-north-bakery', targetMinutes: 18 },
+  { id: 'pi-north-baguette',           siteId: 'site-standalone-north', recipeId: 'prec-baguette',            skuId: 'sku-baguette',            mode: 'run', batchSize: 6, preferredBenchId: 'bench-north-bakery', targetMinutes: 20 },
+  { id: 'pi-north-focaccia',           siteId: 'site-standalone-north', recipeId: 'prec-focaccia',            skuId: 'sku-focaccia',            mode: 'run', batchSize: 4, preferredBenchId: 'bench-north-bakery', targetMinutes: 22 },
+  { id: 'pi-north-blueberry-muffin',   siteId: 'site-standalone-north', recipeId: 'prec-blueberry-muffin',    skuId: 'sku-blueberry-muffin',    mode: 'run', batchSize: 6, preferredBenchId: 'bench-north-bakery', targetMinutes: 14 },
+  { id: 'pi-north-banana-bread',       siteId: 'site-standalone-north', recipeId: 'prec-banana-bread',        skuId: 'sku-banana-bread',        mode: 'run', batchSize: 8, preferredBenchId: 'bench-north-bakery', targetMinutes: 14 },
+  { id: 'pi-north-brownie',            siteId: 'site-standalone-north', recipeId: 'prec-brownie',             skuId: 'sku-brownie',             mode: 'run', batchSize: 8, preferredBenchId: 'bench-north-bakery', targetMinutes: 16 },
+  { id: 'pi-north-oat-cookie',         siteId: 'site-standalone-north', recipeId: 'prec-oat-raisin-cookie',   skuId: 'sku-oat-raisin-cookie',   mode: 'run', batchSize: 6, preferredBenchId: 'bench-north-bakery', targetMinutes: 14 },
+  { id: 'pi-north-salted-cookie',      siteId: 'site-standalone-north', recipeId: 'prec-salted-caramel-cookie',skuId: 'sku-salted-caramel-cookie',mode: 'run', batchSize: 6, preferredBenchId: 'bench-north-bakery', targetMinutes: 14 },
+  // Prep bench — fillings + roast trays that drive sandwich assembly
+  { id: 'pi-north-egg-filling',        siteId: 'site-standalone-north', recipeId: 'prec-egg-mayo-filling',    skuId: 'sku-egg-mayo-filling',    mode: 'run', batchSize: 1, preferredBenchId: 'bench-north-prep', targetMinutes: 12 },
+  { id: 'pi-north-tuna-filling',       siteId: 'site-standalone-north', recipeId: 'prec-tuna-mayo-filling',   skuId: 'sku-tuna-mayo-filling',   mode: 'run', batchSize: 1, preferredBenchId: 'bench-north-prep', targetMinutes: 10 },
+  { id: 'pi-north-chicken-filling',    siteId: 'site-standalone-north', recipeId: 'prec-chicken-mayo-filling',skuId: 'sku-chicken-mayo-filling',mode: 'run', batchSize: 1, preferredBenchId: 'bench-north-prep', targetMinutes: 12 },
+  { id: 'pi-north-hummus',             siteId: 'site-standalone-north', recipeId: 'prec-hummus',              skuId: 'sku-hummus',              mode: 'run', batchSize: 1, preferredBenchId: 'bench-north-prep', targetMinutes: 12 },
+  { id: 'pi-north-grilled-chicken',    siteId: 'site-standalone-north', recipeId: 'prec-grilled-chicken',     skuId: 'sku-grilled-chicken',     mode: 'run', batchSize: 1, preferredBenchId: 'bench-north-prep', targetMinutes: 14 },
+  { id: 'pi-north-crispy-bacon',       siteId: 'site-standalone-north', recipeId: 'prec-crispy-bacon',        skuId: 'sku-crispy-bacon',        mode: 'run', batchSize: 1, preferredBenchId: 'bench-north-prep', targetMinutes: 8 },
   // Sandwich & salad build (variable — small store builds to demand)
-  { id: 'pi-north-club',          siteId: 'site-standalone-north', recipeId: 'prec-club-sandwich',      skuId: 'sku-club-sandwich',      mode: 'variable', batchSize: 6, preferredBenchId: 'bench-north-build' },
-  { id: 'pi-north-egg-mayo-sw',   siteId: 'site-standalone-north', recipeId: 'prec-egg-mayo-sandwich',  skuId: 'sku-egg-mayo-sandwich',  mode: 'variable', batchSize: 6, preferredBenchId: 'bench-north-build' },
-  { id: 'pi-north-chicken-avo',   siteId: 'site-standalone-north', recipeId: 'prec-chicken-avo-sandwich',skuId:'sku-chicken-avo-sandwich',mode: 'variable', batchSize: 6, preferredBenchId: 'bench-north-build' },
-  { id: 'pi-north-salad',         siteId: 'site-standalone-north', recipeId: 'prec-salad-bowl',         skuId: 'sku-salad-bowl',         mode: 'variable', batchSize: 1, preferredBenchId: 'bench-north-build' },
-  { id: 'pi-north-fruit-pot',     siteId: 'site-standalone-north', recipeId: 'prec-fruit-pot',          skuId: 'sku-fruit-pot',          mode: 'variable', batchSize: 1, preferredBenchId: 'bench-north-build' },
-  // Hot shelf (increment) — toasties + soup of the day
+  { id: 'pi-north-club',               siteId: 'site-standalone-north', recipeId: 'prec-club-sandwich',       skuId: 'sku-club-sandwich',       mode: 'variable', batchSize: 6, preferredBenchId: 'bench-north-build' },
+  { id: 'pi-north-egg-mayo-sw',        siteId: 'site-standalone-north', recipeId: 'prec-egg-mayo-sandwich',   skuId: 'sku-egg-mayo-sandwich',   mode: 'variable', batchSize: 6, preferredBenchId: 'bench-north-build' },
+  { id: 'pi-north-tuna-sw',            siteId: 'site-standalone-north', recipeId: 'prec-tuna-sandwich',       skuId: 'sku-tuna-sandwich',       mode: 'variable', batchSize: 6, preferredBenchId: 'bench-north-build' },
+  { id: 'pi-north-ham-cheese-bag',     siteId: 'site-standalone-north', recipeId: 'prec-ham-cheese-baguette', skuId: 'sku-ham-cheese-baguette', mode: 'variable', batchSize: 4, preferredBenchId: 'bench-north-build' },
+  { id: 'pi-north-chicken-avo',        siteId: 'site-standalone-north', recipeId: 'prec-chicken-avo-sandwich',skuId: 'sku-chicken-avo-sandwich',mode: 'variable', batchSize: 6, preferredBenchId: 'bench-north-build' },
+  { id: 'pi-north-hummus-wrap',        siteId: 'site-standalone-north', recipeId: 'prec-hummus-wrap',         skuId: 'sku-hummus-wrap',         mode: 'variable', batchSize: 4, preferredBenchId: 'bench-north-build' },
+  { id: 'pi-north-turkey-brie',        siteId: 'site-standalone-north', recipeId: 'prec-turkey-brie-baguette',skuId: 'sku-turkey-brie-baguette',mode: 'variable', batchSize: 4, preferredBenchId: 'bench-north-build' },
+  { id: 'pi-north-italian',            siteId: 'site-standalone-north', recipeId: 'prec-italian-prosciutto',  skuId: 'sku-italian-prosciutto',  mode: 'variable', batchSize: 4, preferredBenchId: 'bench-north-build' },
+  { id: 'pi-north-crayfish',           siteId: 'site-standalone-north', recipeId: 'prec-crayfish-rocket',     skuId: 'sku-crayfish-rocket',     mode: 'variable', batchSize: 4, preferredBenchId: 'bench-north-build' },
+  { id: 'pi-north-cheddar-pickle',     siteId: 'site-standalone-north', recipeId: 'prec-cheddar-pickle-sandwich', skuId: 'sku-cheddar-pickle-sandwich', mode: 'variable', batchSize: 4, preferredBenchId: 'bench-north-build' },
+  { id: 'pi-north-salad',              siteId: 'site-standalone-north', recipeId: 'prec-salad-bowl',          skuId: 'sku-salad-bowl',          mode: 'variable', batchSize: 1, preferredBenchId: 'bench-north-build' },
+  { id: 'pi-north-chicken-caesar',     siteId: 'site-standalone-north', recipeId: 'prec-chicken-caesar',      skuId: 'sku-chicken-caesar',      mode: 'variable', batchSize: 1, preferredBenchId: 'bench-north-build' },
+  { id: 'pi-north-grain-bowl',         siteId: 'site-standalone-north', recipeId: 'prec-med-grain-bowl',      skuId: 'sku-med-grain-bowl',      mode: 'variable', batchSize: 1, preferredBenchId: 'bench-north-build' },
+  { id: 'pi-north-falafel',            siteId: 'site-standalone-north', recipeId: 'prec-falafel-bowl',        skuId: 'sku-falafel-bowl',        mode: 'variable', batchSize: 1, preferredBenchId: 'bench-north-build' },
+  { id: 'pi-north-fruit-pot',          siteId: 'site-standalone-north', recipeId: 'prec-fruit-pot',           skuId: 'sku-fruit-pot',           mode: 'variable', batchSize: 1, preferredBenchId: 'bench-north-build' },
+  { id: 'pi-north-yogurt-pot',         siteId: 'site-standalone-north', recipeId: 'prec-yogurt-pot',          skuId: 'sku-yogurt-pot',          mode: 'variable', batchSize: 1, preferredBenchId: 'bench-north-build' },
+  { id: 'pi-north-granola-pot',        siteId: 'site-standalone-north', recipeId: 'prec-granola-pot',         skuId: 'sku-granola-pot',         mode: 'variable', batchSize: 1, preferredBenchId: 'bench-north-build' },
+  { id: 'pi-north-bircher-pot',        siteId: 'site-standalone-north', recipeId: 'prec-bircher-pot',         skuId: 'sku-bircher-pot',         mode: 'variable', batchSize: 1, preferredBenchId: 'bench-north-build' },
+  // Hot shelf (increment) — drinks, hot food, refresh items
   {
     id: 'pi-north-coffee',
     siteId: 'site-standalone-north', recipeId: 'prec-brewed-coffee', skuId: 'sku-brewed-coffee',
     mode: 'increment', batchSize: 1,
     cadence: { intervalMinutes: 45, startTime: '06:30', endTime: '19:00', quinnProposed: true },
+    preferredBenchId: 'bench-north-hot-shelf',
+  },
+  {
+    id: 'pi-north-iced-coffee',
+    siteId: 'site-standalone-north', recipeId: 'prec-iced-coffee', skuId: 'sku-iced-coffee',
+    mode: 'increment', batchSize: 1,
+    cadence: { intervalMinutes: 90, startTime: '10:00', endTime: '17:00', quinnProposed: true },
+    preferredBenchId: 'bench-north-hot-shelf',
+  },
+  {
+    id: 'pi-north-hot-croissant',
+    siteId: 'site-standalone-north', recipeId: 'prec-hot-croissant', skuId: 'sku-hot-croissant',
+    mode: 'increment', batchSize: 4,
+    cadence: { intervalMinutes: 30, startTime: '07:00', endTime: '11:00', quinnProposed: true },
+    preferredBenchId: 'bench-north-hot-shelf',
+  },
+  {
+    id: 'pi-north-porridge',
+    siteId: 'site-standalone-north', recipeId: 'prec-porridge', skuId: 'sku-porridge',
+    mode: 'increment', batchSize: 2,
+    cadence: { intervalMinutes: 60, startTime: '07:00', endTime: '10:30', quinnProposed: true },
+    preferredBenchId: 'bench-north-hot-shelf',
+  },
+  {
+    id: 'pi-north-mango-smoothie',
+    siteId: 'site-standalone-north', recipeId: 'prec-mango-smoothie', skuId: 'sku-mango-smoothie',
+    mode: 'increment', batchSize: 1,
+    cadence: { intervalMinutes: 60, startTime: '08:00', endTime: '17:00', quinnProposed: true },
     preferredBenchId: 'bench-north-hot-shelf',
   },
   {
@@ -1834,6 +1893,59 @@ export const PRET_FORECAST: DemandForecastEntry[] = [
   { siteId: 'hub-central', skuId: 'sku-eod-chicken-prep', date: DEMO_TODAY, projectedUnits: 3, byPhase: { morning: 0, midday: 0, afternoon: 3 }, signals: [{ signal: 'sales-history', weight: 1, note: 'Mise for tomorrow — 3 trays' }], status: 'confirmed' },
   { siteId: 'hub-central', skuId: 'sku-eod-dough-prep',   date: DEMO_TODAY, projectedUnits: 4, byPhase: { morning: 0, midday: 0, afternoon: 4 }, signals: [{ signal: 'sales-history', weight: 1, note: 'Tomorrow\'s dough to cold-proof overnight' }], status: 'confirmed' },
   { siteId: 'hub-central', skuId: 'sku-eod-roast-prep',   date: DEMO_TODAY, projectedUnits: 2, byPhase: { morning: 0, midday: 0, afternoon: 2 }, signals: [{ signal: 'sales-history', weight: 1, note: 'Overnight roast / stock reduction' }], status: 'confirmed' },
+
+  // ─── site-standalone-north (Islington North) — Thursday ──────────────────
+  // Single-shop scale: ~30–40% of hub-central volumes since this serves
+  // walk-in retail only, no spoke dispatch. Bias morning toward bakery,
+  // midday toward sandwiches, afternoon toward bakes + cookies.
+  // Bakery (run)
+  { siteId: 'site-standalone-north', skuId: 'sku-croissant',           date: DEMO_TODAY, projectedUnits: 28, byPhase: { morning: 18, midday: 7,  afternoon: 3  }, signals: [{ signal: 'sales-history', weight: 0.7, note: 'Steady seller for Islington commuters' }, { signal: 'weather', weight: 0.3 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-pain-au-choc',        date: DEMO_TODAY, projectedUnits: 22, byPhase: { morning: 14, midday: 6,  afternoon: 2  }, signals: [{ signal: 'sales-history', weight: 0.8 }, { signal: 'weather', weight: 0.2 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-almond-croissant',    date: DEMO_TODAY, projectedUnits: 14, byPhase: { morning: 10, midday: 3,  afternoon: 1  }, signals: [{ signal: 'sales-history', weight: 1, note: 'Premium morning hero' }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-cinnamon-swirl',      date: DEMO_TODAY, projectedUnits: 12, byPhase: { morning: 9,  midday: 2,  afternoon: 1  }, signals: [{ signal: 'sales-history', weight: 0.8 }, { signal: 'weather', weight: 0.2 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-granary',             date: DEMO_TODAY, projectedUnits: 24, byPhase: { morning: 6,  midday: 14, afternoon: 4  }, signals: [{ signal: 'sales-history', weight: 0.9, note: 'Drives sandwich assembly' }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-baguette',            date: DEMO_TODAY, projectedUnits: 18, byPhase: { morning: 6,  midday: 10, afternoon: 2  }, signals: [{ signal: 'sales-history', weight: 0.9, note: 'Drives baguette range' }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-focaccia',            date: DEMO_TODAY, projectedUnits: 8,  byPhase: { morning: 1,  midday: 5,  afternoon: 2  }, signals: [{ signal: 'sales-history', weight: 0.8 }], status: 'draft' },
+  { siteId: 'site-standalone-north', skuId: 'sku-blueberry-muffin',    date: DEMO_TODAY, projectedUnits: 18, byPhase: { morning: 8,  midday: 6,  afternoon: 4  }, signals: [{ signal: 'sales-history', weight: 0.7 }, { signal: 'weather', weight: 0.3 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-banana-bread',        date: DEMO_TODAY, projectedUnits: 16, byPhase: { morning: 4,  midday: 6,  afternoon: 6  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-brownie',             date: DEMO_TODAY, projectedUnits: 20, byPhase: { morning: 1,  midday: 8,  afternoon: 11 }, signals: [{ signal: 'sales-history', weight: 0.8, note: 'Afternoon hero with coffee' }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-oat-raisin-cookie',   date: DEMO_TODAY, projectedUnits: 22, byPhase: { morning: 3,  midday: 10, afternoon: 9  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-salted-caramel-cookie',date: DEMO_TODAY, projectedUnits: 18, byPhase: { morning: 2,  midday: 8,  afternoon: 8  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  // Prep fillings + roasts (run)
+  { siteId: 'site-standalone-north', skuId: 'sku-egg-mayo-filling',    date: DEMO_TODAY, projectedUnits: 4, byPhase: { morning: 3, midday: 1, afternoon: 0 }, signals: [{ signal: 'sales-history', weight: 1, note: 'Trays of 4kg, drives egg-mayo SW' }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-tuna-mayo-filling',   date: DEMO_TODAY, projectedUnits: 3, byPhase: { morning: 2, midday: 1, afternoon: 0 }, signals: [{ signal: 'sales-history', weight: 1, note: 'Drives tuna SW' }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-chicken-mayo-filling',date: DEMO_TODAY, projectedUnits: 4, byPhase: { morning: 3, midday: 1, afternoon: 0 }, signals: [{ signal: 'sales-history', weight: 1, note: 'Drives club + chicken-avo' }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-hummus',              date: DEMO_TODAY, projectedUnits: 2, byPhase: { morning: 1, midday: 1, afternoon: 0 }, signals: [{ signal: 'sales-history', weight: 1, note: 'Drives hummus wrap + bowls' }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-grilled-chicken',     date: DEMO_TODAY, projectedUnits: 3, byPhase: { morning: 2, midday: 1, afternoon: 0 }, signals: [{ signal: 'sales-history', weight: 1, note: 'Trays — drives chicken caesar + chicken-avo' }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-crispy-bacon',        date: DEMO_TODAY, projectedUnits: 2, byPhase: { morning: 2, midday: 0, afternoon: 0 }, signals: [{ signal: 'sales-history', weight: 1, note: 'Breakfast push' }], status: 'confirmed' },
+  // Sandwich + salad assembly (variable)
+  { siteId: 'site-standalone-north', skuId: 'sku-club-sandwich',       date: DEMO_TODAY, projectedUnits: 42, byPhase: { morning: 4,  midday: 30, afternoon: 8  }, signals: [{ signal: 'sales-history', weight: 0.8 }, { signal: 'event', weight: 0.2, note: 'Local office lunch' }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-egg-mayo-sandwich',   date: DEMO_TODAY, projectedUnits: 32, byPhase: { morning: 8,  midday: 20, afternoon: 4  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-tuna-sandwich',       date: DEMO_TODAY, projectedUnits: 22, byPhase: { morning: 4,  midday: 14, afternoon: 4  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-ham-cheese-baguette', date: DEMO_TODAY, projectedUnits: 24, byPhase: { morning: 4,  midday: 16, afternoon: 4  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-chicken-avo-sandwich',date: DEMO_TODAY, projectedUnits: 28, byPhase: { morning: 4,  midday: 20, afternoon: 4  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-hummus-wrap',         date: DEMO_TODAY, projectedUnits: 18, byPhase: { morning: 2,  midday: 12, afternoon: 4  }, signals: [{ signal: 'sales-history', weight: 0.7 }, { signal: 'event', weight: 0.3, note: 'Vegan-friendly' }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-turkey-brie-baguette',date: DEMO_TODAY, projectedUnits: 14, byPhase: { morning: 2,  midday: 10, afternoon: 2  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-italian-prosciutto',  date: DEMO_TODAY, projectedUnits: 12, byPhase: { morning: 2,  midday: 8,  afternoon: 2  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-crayfish-rocket',     date: DEMO_TODAY, projectedUnits: 10, byPhase: { morning: 1,  midday: 7,  afternoon: 2  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-cheddar-pickle-sandwich', date: DEMO_TODAY, projectedUnits: 16, byPhase: { morning: 3, midday: 10, afternoon: 3 }, signals: [{ signal: 'sales-history', weight: 1, note: 'Posh cheddar — afternoon staple' }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-salad-bowl',          date: DEMO_TODAY, projectedUnits: 14, byPhase: { morning: 1,  midday: 10, afternoon: 3  }, signals: [{ signal: 'sales-history', weight: 0.7 }, { signal: 'weather', weight: 0.3 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-chicken-caesar',      date: DEMO_TODAY, projectedUnits: 12, byPhase: { morning: 1,  midday: 8,  afternoon: 3  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-med-grain-bowl',      date: DEMO_TODAY, projectedUnits: 10, byPhase: { morning: 1,  midday: 7,  afternoon: 2  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-falafel-bowl',        date: DEMO_TODAY, projectedUnits: 8,  byPhase: { morning: 0,  midday: 6,  afternoon: 2  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  // Breakfast pots + snacks (variable)
+  { siteId: 'site-standalone-north', skuId: 'sku-fruit-pot',           date: DEMO_TODAY, projectedUnits: 18, byPhase: { morning: 8,  midday: 7,  afternoon: 3  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-yogurt-pot',          date: DEMO_TODAY, projectedUnits: 14, byPhase: { morning: 11, midday: 2,  afternoon: 1  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-granola-pot',         date: DEMO_TODAY, projectedUnits: 12, byPhase: { morning: 9,  midday: 2,  afternoon: 1  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-bircher-pot',         date: DEMO_TODAY, projectedUnits: 10, byPhase: { morning: 8,  midday: 2,  afternoon: 0  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  // Hot shelf (increment) — drinks, hot food, refresh
+  { siteId: 'site-standalone-north', skuId: 'sku-brewed-coffee',       date: DEMO_TODAY, projectedUnits: 14, byPhase: { morning: 8,  midday: 4,  afternoon: 2  }, signals: [{ signal: 'sales-history', weight: 0.8 }, { signal: 'weather', weight: 0.2 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-iced-coffee',         date: DEMO_TODAY, projectedUnits: 7,  byPhase: { morning: 0,  midday: 4,  afternoon: 3  }, signals: [{ signal: 'sales-history', weight: 0.6 }, { signal: 'weather', weight: 0.4 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-hot-croissant',       date: DEMO_TODAY, projectedUnits: 24, byPhase: { morning: 22, midday: 2,  afternoon: 0  }, signals: [{ signal: 'sales-history', weight: 1, note: 'Heat-and-go for commute' }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-porridge',            date: DEMO_TODAY, projectedUnits: 8,  byPhase: { morning: 8,  midday: 0,  afternoon: 0  }, signals: [{ signal: 'sales-history', weight: 1, note: 'Cold morning' }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-mango-smoothie',      date: DEMO_TODAY, projectedUnits: 9,  byPhase: { morning: 3,  midday: 4,  afternoon: 2  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-ham-cheese-toastie',  date: DEMO_TODAY, projectedUnits: 14, byPhase: { morning: 0,  midday: 10, afternoon: 4  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-chicken-soup',        date: DEMO_TODAY, projectedUnits: 4,  byPhase: { morning: 0,  midday: 3,  afternoon: 1  }, signals: [{ signal: 'sales-history', weight: 1, note: '2L batches' }], status: 'confirmed' },
 ];
 
 export type PlannedInstance = {
@@ -2521,6 +2633,57 @@ export const PRET_CARRY_OVER: CarryOverEntry[] = [
     status: 'draft',
     reason: '4 baguettes left over from yesterday. Net order: −4.',
   },
+  // ─── site-standalone-north (Islington North) — carry-over from yesterday ──
+  {
+    id: 'co-north-croissant',
+    siteId: 'site-standalone-north',
+    skuId: 'sku-croissant',
+    recipeId: 'prec-croissant',
+    carriedUnits: 3,
+    planAdjustment: -3,
+    status: 'draft',
+    reason: '3 croissants unsold yesterday, within 8h shelf. Net plan: 28 → 25.',
+  },
+  {
+    id: 'co-north-banana-bread',
+    siteId: 'site-standalone-north',
+    skuId: 'sku-banana-bread',
+    recipeId: 'prec-banana-bread',
+    carriedUnits: 4,
+    planAdjustment: -4,
+    status: 'draft',
+    reason: '4 slices within 24h shelf. Net plan: 16 → 12.',
+  },
+  {
+    id: 'co-north-brownie',
+    siteId: 'site-standalone-north',
+    skuId: 'sku-brownie',
+    recipeId: 'prec-brownie',
+    carriedUnits: 5,
+    planAdjustment: -5,
+    status: 'confirmed',
+    reason: '5 brownies — 48h shelf, ample time. Net plan: 20 → 15.',
+  },
+  {
+    id: 'co-north-oat-cookie',
+    siteId: 'site-standalone-north',
+    skuId: 'sku-oat-raisin-cookie',
+    recipeId: 'prec-oat-raisin-cookie',
+    carriedUnits: 4,
+    planAdjustment: -4,
+    status: 'draft',
+    reason: '4 cookies within 24h shelf. Net plan: 22 → 18.',
+  },
+  {
+    id: 'co-north-yogurt-pot',
+    siteId: 'site-standalone-north',
+    skuId: 'sku-yogurt-pot',
+    recipeId: 'prec-yogurt-pot',
+    carriedUnits: 2,
+    planAdjustment: -2,
+    status: 'draft',
+    reason: '2 yogurt pots within 24h shelf. Net plan: 14 → 12.',
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2647,38 +2810,41 @@ export const PRET_SPOKE_SUBMISSIONS: SpokeSubmission[] = [
     ],
   },
   {
+    // Friday — South locked in last night before cutoff. Numbers
+    // confirmed across all categories so the hub plan reads as fully
+    // committed (matches East / West / Islington for the day).
     id: 'spoke-sub-south-friday',
     fromSiteId: 'site-spoke-south',
     toHubId: 'hub-central',
     forDate: dayOffset(1),
     cutoffDateTime: `${DEMO_TODAY}T15:00:00Z`,
-    status: 'draft',
+    status: 'submitted',
     lines: [
       // Bakery
-      { skuId: 'sku-croissant',           recipeId: 'prec-croissant',           quinnProposedUnits: 30, confirmedUnits: null },
-      { skuId: 'sku-pain-au-choc',        recipeId: 'prec-pain-au-chocolat',    quinnProposedUnits: 20, confirmedUnits: null },
-      { skuId: 'sku-almond-croissant',    recipeId: 'prec-almond-croissant',    quinnProposedUnits: 12, confirmedUnits: null },
-      { skuId: 'sku-cinnamon-swirl',      recipeId: 'prec-cinnamon-swirl',      quinnProposedUnits: 8,  confirmedUnits: null },
-      { skuId: 'sku-blueberry-muffin',    recipeId: 'prec-blueberry-muffin',    quinnProposedUnits: 12, confirmedUnits: null },
-      { skuId: 'sku-banana-bread',        recipeId: 'prec-banana-bread',        quinnProposedUnits: 8,  confirmedUnits: null },
-      { skuId: 'sku-brownie',             recipeId: 'prec-brownie',             quinnProposedUnits: 8,  confirmedUnits: null },
-      { skuId: 'sku-baguette',            recipeId: 'prec-baguette',            quinnProposedUnits: 12, confirmedUnits: null },
-      { skuId: 'sku-granary',             recipeId: 'prec-granary',             quinnProposedUnits: 8,  confirmedUnits: null },
+      { skuId: 'sku-croissant',           recipeId: 'prec-croissant',           quinnProposedUnits: 30, confirmedUnits: 30 },
+      { skuId: 'sku-pain-au-choc',        recipeId: 'prec-pain-au-chocolat',    quinnProposedUnits: 20, confirmedUnits: 20 },
+      { skuId: 'sku-almond-croissant',    recipeId: 'prec-almond-croissant',    quinnProposedUnits: 12, confirmedUnits: 12 },
+      { skuId: 'sku-cinnamon-swirl',      recipeId: 'prec-cinnamon-swirl',      quinnProposedUnits: 8,  confirmedUnits: 8  },
+      { skuId: 'sku-blueberry-muffin',    recipeId: 'prec-blueberry-muffin',    quinnProposedUnits: 12, confirmedUnits: 12 },
+      { skuId: 'sku-banana-bread',        recipeId: 'prec-banana-bread',        quinnProposedUnits: 8,  confirmedUnits: 8  },
+      { skuId: 'sku-brownie',             recipeId: 'prec-brownie',             quinnProposedUnits: 8,  confirmedUnits: 8  },
+      { skuId: 'sku-baguette',            recipeId: 'prec-baguette',            quinnProposedUnits: 12, confirmedUnits: 12 },
+      { skuId: 'sku-granary',             recipeId: 'prec-granary',             quinnProposedUnits: 8,  confirmedUnits: 8  },
       // Sandwich
-      { skuId: 'sku-club-sandwich',       recipeId: 'prec-club-sandwich',       quinnProposedUnits: 18, confirmedUnits: null },
-      { skuId: 'sku-egg-mayo-sandwich',   recipeId: 'prec-egg-mayo-sandwich',   quinnProposedUnits: 18, confirmedUnits: null },
-      { skuId: 'sku-tuna-sandwich',       recipeId: 'prec-tuna-sandwich',       quinnProposedUnits: 14, confirmedUnits: null },
-      { skuId: 'sku-ham-cheese-baguette', recipeId: 'prec-ham-cheese-baguette', quinnProposedUnits: 12, confirmedUnits: null },
-      { skuId: 'sku-turkey-brie-baguette',recipeId: 'prec-turkey-brie-baguette',quinnProposedUnits: 10, confirmedUnits: null },
-      { skuId: 'sku-hummus-wrap',         recipeId: 'prec-hummus-wrap',         quinnProposedUnits: 12, confirmedUnits: null },
+      { skuId: 'sku-club-sandwich',       recipeId: 'prec-club-sandwich',       quinnProposedUnits: 18, confirmedUnits: 18 },
+      { skuId: 'sku-egg-mayo-sandwich',   recipeId: 'prec-egg-mayo-sandwich',   quinnProposedUnits: 18, confirmedUnits: 18 },
+      { skuId: 'sku-tuna-sandwich',       recipeId: 'prec-tuna-sandwich',       quinnProposedUnits: 14, confirmedUnits: 14 },
+      { skuId: 'sku-ham-cheese-baguette', recipeId: 'prec-ham-cheese-baguette', quinnProposedUnits: 12, confirmedUnits: 12 },
+      { skuId: 'sku-turkey-brie-baguette',recipeId: 'prec-turkey-brie-baguette',quinnProposedUnits: 10, confirmedUnits: 10 },
+      { skuId: 'sku-hummus-wrap',         recipeId: 'prec-hummus-wrap',         quinnProposedUnits: 12, confirmedUnits: 12 },
       // Salad
-      { skuId: 'sku-chicken-caesar',      recipeId: 'prec-chicken-caesar',      quinnProposedUnits: 12, confirmedUnits: null },
-      { skuId: 'sku-med-grain-bowl',      recipeId: 'prec-med-grain-bowl',      quinnProposedUnits: 10, confirmedUnits: null },
-      { skuId: 'sku-falafel-bowl',        recipeId: 'prec-falafel-bowl',        quinnProposedUnits: 8,  confirmedUnits: null },
+      { skuId: 'sku-chicken-caesar',      recipeId: 'prec-chicken-caesar',      quinnProposedUnits: 12, confirmedUnits: 12 },
+      { skuId: 'sku-med-grain-bowl',      recipeId: 'prec-med-grain-bowl',      quinnProposedUnits: 10, confirmedUnits: 10 },
+      { skuId: 'sku-falafel-bowl',        recipeId: 'prec-falafel-bowl',        quinnProposedUnits: 8,  confirmedUnits: 8  },
       // Snack
-      { skuId: 'sku-fruit-pot',           recipeId: 'prec-fruit-pot',           quinnProposedUnits: 12, confirmedUnits: null },
-      { skuId: 'sku-yogurt-pot',          recipeId: 'prec-yogurt-pot',          quinnProposedUnits: 10, confirmedUnits: null },
-      { skuId: 'sku-granola-pot',         recipeId: 'prec-granola-pot',         quinnProposedUnits: 8,  confirmedUnits: null },
+      { skuId: 'sku-fruit-pot',           recipeId: 'prec-fruit-pot',           quinnProposedUnits: 12, confirmedUnits: 12 },
+      { skuId: 'sku-yogurt-pot',          recipeId: 'prec-yogurt-pot',          quinnProposedUnits: 10, confirmedUnits: 10 },
+      { skuId: 'sku-granola-pot',         recipeId: 'prec-granola-pot',         quinnProposedUnits: 8,  confirmedUnits: 8  },
     ],
   },
   {
@@ -2761,6 +2927,35 @@ export function submissionFor(spokeId: SiteId, hubId: SiteId, forDate: string): 
   return PRET_SPOKE_SUBMISSIONS.find(
     s => s.fromSiteId === spokeId && s.toHubId === hubId && s.forDate === forDate,
   );
+}
+
+/**
+ * The implied cutoff datetime (ISO) for a spoke submission destined for
+ * `hubId` on `forDate` — the moment past which the spoke can no longer
+ * edit normally and the hub has to either bake without their numbers or
+ * unlock the order. Cascades estate → format → site overrides for the
+ * hub's `cutoffTimeForSpokeSubmissions`, then anchors that HH:MM on the
+ * day BEFORE `forDate` (a Friday delivery has to be locked Thursday by
+ * the hub's cutoff time).
+ *
+ * Also returned for spokes that haven't drafted at all yet — the hub
+ * UI uses this to show a live countdown in the spoke header even when
+ * there's no submission record on file.
+ */
+export function submissionCutoffFor(hubId: SiteId, forDate: string): string {
+  const hub = getSite(hubId);
+  const format = hub ? PRET_FORMATS.find(f => f.id === hub.formatId) : undefined;
+  const cutoffHHMM =
+    format?.overrides?.cutoffTimeForSpokeSubmissions ??
+    PRET_ESTATE.defaults.cutoffTimeForSpokeSubmissions;
+  const [h, m] = cutoffHHMM.split(':').map(Number);
+
+  // Treat `forDate` as a UTC date so the maths is timezone-stable.
+  // Cutoff lands on the day before the delivery date.
+  const date = new Date(`${forDate}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  date.setUTCHours(h ?? 15, m ?? 0, 0, 0);
+  return date.toISOString();
 }
 
 /**
@@ -4635,6 +4830,11 @@ export function amountsForSiteOnDate(siteId: SiteId, date: string): AmountsLine[
   if (site?.type === 'HUB') {
     const subs = submissionsForHub(siteId, date);
     for (const sub of subs) {
+      // A spoke that's still in `draft` hasn't placed an order yet — the
+      // hub must NOT bake against those numbers (they're Quinn's working
+      // suggestion sitting on the spoke side). Skip until the spoke
+      // submits, acknowledges, or auto-finalises.
+      if (sub.status === 'draft') continue;
       const spoke = getSite(sub.fromSiteId);
       const spokeName = spoke?.name ?? sub.fromSiteId;
       for (const ln of sub.lines) {

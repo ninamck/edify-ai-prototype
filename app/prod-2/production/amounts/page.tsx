@@ -1,0 +1,150 @@
+'use client';
+
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import AmountsView from '@/components/Production2/AmountsView';
+import { useRole } from '@/components/Production2/RoleContext';
+import { PRET_SITES, DEMO_TODAY, getSite } from '@/components/Production2/fixtures';
+import type { FocusReason } from '@/components/Production2/PlanStore';
+import IncomingRejectsStrip from '@/components/Production2/IncomingRejectsStrip';
+import IncomingAdhocRequestsStrip from '@/components/Production2/IncomingAdhocRequestsStrip';
+import UrgentRemakeBanner from '@/components/Production2/UrgentRemakeBanner';
+import SpokeTodayPanel from '@/components/Production2/SpokeTodayPanel';
+import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+import { useDemoNotifications } from '@/components/Production2/demoNotificationsStore';
+import { useProductionSite } from '@/components/Production2/ProductionSiteContext';
+
+// The active "persona" SPOKE in the demo maps to this fixture spoke.
+// Keeping the mapping in one place so the spoke surfaces all read from
+// the same data row.
+const SPOKE_PERSONA_SITE_ID = 'site-spoke-south';
+const SPOKE_PERSONA_HUB_ID = 'hub-central';
+
+const VALID_REASONS: FocusReason[] = ['stockcap', 'assembly-short', 'override', 'draft-forecast', 'lowstock'];
+
+/**
+ * Today (formerly "Amounts") — the always-on production-day editor.
+ *
+ * The body lives in `<AmountsView />` because the Plan page reuses the same
+ * editor for any selected day. This page just owns the site selector and
+ * pins the date to `DEMO_TODAY`.
+ *
+ * Deep-link contract (consumed by Quinn nudges via `usePlanNudges`):
+ *   ?site={SiteId}&focus={ProductionItemId}&reason={FocusReason}
+ *
+ * On arrival we:
+ *   1. Switch the site selector to `?site` (so the row actually exists)
+ *   2. Hand `focus` + `reason` to `<AmountsView>` which clears filters,
+ *      expands + scrolls + pulses the row, and surfaces a contextual banner
+ *   3. Strip `focus` and `reason` from the URL so subsequent navigations
+ *      / re-renders don't keep re-pulsing the same row
+ */
+export default function TodayPage() {
+  return (
+    <Suspense fallback={null}>
+      <TodayPageInner />
+    </Suspense>
+  );
+}
+
+function TodayPageInner() {
+  const { can, user } = useRole();
+  const canEdit = can('plan.editQuantity');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { isSpoke } = useActiveSite();
+  const demoFlags = useDemoNotifications();
+  const { siteId, setSiteId } = useProductionSite();
+  const site = getSite(siteId);
+  const isHub = site?.type === 'HUB';
+  // "Hub-fed" = a site that doesn't bake for itself: regular SPOKEs,
+  // HYBRIDs, and STANDALONEs that have been linked to a hub kitchen
+  // (PAC139 dark-kitchen pattern). When the hub manager picks one of
+  // these from the site selector on Today, they don't want the bake
+  // editor (there's nothing to edit) — they want the spoke's incoming
+  // delivery view, same shape as the spoke persona's own Today.
+  const isHubFedSite =
+    !!site?.hubId &&
+    (site.type === 'SPOKE' ||
+      site.type === 'HYBRID' ||
+      (site.type === 'STANDALONE' && site.linkType === 'linked'));
+  const recordedBy = user?.name ?? 'Hub manager';
+  const [focus, setFocus] = useState<{ itemId: string; reason: FocusReason } | null>(null);
+
+  // On every search-param change, lift focus / site into local state and
+  // immediately strip the consumable bits from the URL so a back-button
+  // bounce or a re-render doesn't replay the deep-link.
+  useEffect(() => {
+    const siteParam = searchParams.get('site');
+    const focusParam = searchParams.get('focus');
+    const reasonParam = searchParams.get('reason') as FocusReason | null;
+
+    if (siteParam && PRET_SITES.some(s => s.id === siteParam)) {
+      setSiteId(siteParam);
+    }
+    if (focusParam && reasonParam && VALID_REASONS.includes(reasonParam)) {
+      setFocus({ itemId: focusParam, reason: reasonParam });
+    }
+
+    // Strip ?focus & ?reason once consumed; keep ?site so the selection sticks.
+    if (focusParam || reasonParam || siteParam) {
+      const next = new URLSearchParams();
+      if (siteParam) next.set('site', siteParam);
+      const qs = next.toString();
+      router.replace(qs ? `/production/amounts?${qs}` : '/production/amounts', { scroll: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // Spoke persona gets a lighter, read-only "what's coming today" view
+  // — no site picker, no plan editor, no hub-side incoming-request
+  // strips. Spokes don't bake; they just need to know what's arriving
+  // and whether it's landed.
+  if (isSpoke) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <SpokeTodayPanel spokeId={SPOKE_PERSONA_SITE_ID} hubId={SPOKE_PERSONA_HUB_ID} />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* Incoming-from-spokes surfaces — only relevant when the hub manager
+          is viewing one of their own hubs. The Today screen is the single
+          place where the hub manager triages everything that's landed on
+          their plate today; Dispatch stays focused on outbound transfers. */}
+      {isHub && (
+        <>
+          {demoFlags.urgentRemake && (
+            <UrgentRemakeBanner hubId={siteId} recordedBy={recordedBy} />
+          )}
+          {demoFlags.rejects && <IncomingRejectsStrip hubId={siteId} />}
+          {demoFlags.adhoc && <IncomingAdhocRequestsStrip hubId={siteId} />}
+        </>
+      )}
+
+      {/* When the hub manager picks a hub-fed site from the selector on
+          Today (e.g. Fitzroy King's Cross), swap the bake editor for the
+          same hub→spoke summary panel — but flipped to the hub's
+          perspective. Same data, re-skinned as "what we're sending
+          today" rather than the spoke's "what's arriving". */}
+      {isHubFedSite ? (
+        <SpokeTodayPanel
+          spokeId={siteId}
+          hubId={site!.hubId!}
+          perspective="hub"
+        />
+      ) : (
+        <AmountsView
+          siteId={siteId}
+          date={DEMO_TODAY}
+          canEdit={canEdit}
+          focusedItemId={focus?.itemId ?? null}
+          focusReason={focus?.reason ?? null}
+          onClearFocus={() => setFocus(null)}
+        />
+      )}
+    </div>
+  );
+}

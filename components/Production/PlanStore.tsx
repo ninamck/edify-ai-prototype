@@ -877,7 +877,31 @@ export type PlanNudge = {
  * (so the user can read at a glance why they're here, what to do, and how
  * to dismiss).
  */
-export type FocusReason = 'stockcap' | 'assembly-short' | 'override' | 'draft-forecast';
+export type FocusReason = 'stockcap' | 'assembly-short' | 'override' | 'draft-forecast' | 'lowstock';
+
+/**
+ * PAC147 — produced-stock thresholds. Two knobs the demo can tune:
+ *  - `LOW_STOCK_THRESHOLD_FLOOR` is the absolute "X units left" line.
+ *  - `LOW_STOCK_THRESHOLD_PCT`   is the proportional "Y% of plan" line.
+ * The effective threshold for a row is `min(floor, ceil(plan × pct))` so
+ * small bakes (e.g. plan 12) get a tighter trigger (≈2) and large bakes
+ * (plan 200) cap at the floor (5). Anything below `LOW_STOCK_MIN_PLAN`
+ * is ignored — the signal is too noisy under it (one stray sale flips the
+ * needle).
+ */
+export const LOW_STOCK_THRESHOLD_FLOOR = 5;
+export const LOW_STOCK_THRESHOLD_PCT = 0.15;
+export const LOW_STOCK_MIN_PLAN = 10;
+/** Phase gate. Below this clock-time the demo isn't far enough into the
+ *  day for the sold-vs-plan signal to be honest. */
+export const LOW_STOCK_NOT_BEFORE_HHMM = '11:00';
+
+/** Compute the threshold for one row. Exported so the focus panel can
+ *  render the same number that fired the nudge. */
+export function lowStockThreshold(effectivePlanned: number): number {
+  const pctTrigger = Math.ceil(effectivePlanned * LOW_STOCK_THRESHOLD_PCT);
+  return Math.max(1, Math.min(LOW_STOCK_THRESHOLD_FLOOR, pctTrigger));
+}
 
 /** Build a deep-link href into Amounts that pre-focuses a row. */
 function amountsFocusHref(siteId: SiteId, itemId: string | null, reason: FocusReason): string {
@@ -978,4 +1002,143 @@ export function usePlanNudges(siteId: SiteId, date: string): PlanNudge[] {
 
     return nudges;
   }, [lines, siteId]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAC147 — produced-stock low-runway nudges
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One row's snapshot of how the day is tracking against plan. Built lazily by
+ * the panel + the nudges hook so we don't need to widen `PlanLine` itself.
+ * `sold` is the live till count from `salesActuals`; `remaining` is the
+ * gap to `effectivePlanned` (negative when the floor has overshot).
+ */
+export type LowStockSnapshot = {
+  itemId: ProductionItemId;
+  recipeName: string;
+  effectivePlanned: number;
+  sold: number;
+  remaining: number;
+  /** The threshold this row is being compared against. */
+  threshold: number;
+  /** True when the floor is already past the plan — sold ≥ planned. */
+  soldOut: boolean;
+};
+
+/**
+ * Build the list of rows that are running low (or already out) on a given
+ * site/date. Pure function so the focus panel can re-derive the same set the
+ * nudge fired on, plus surface live numbers as the manager bumps the plan.
+ *
+ * Gating rules (intentional — keeps the signal honest):
+ *  - Only fires for `today` (past dates are history, future dates have no
+ *    actuals to compare against).
+ *  - Only fires once the demo clock is at or past `LOW_STOCK_NOT_BEFORE_HHMM`
+ *    (11:00 by default). Quiet mornings would flag every row otherwise.
+ *  - `increment` (hot prod) recipes are excluded — they're naturally fluid;
+ *    the floor tops them up in 30-min drops.
+ *  - Components and prep batches are excluded — their qty is summed from the
+ *    products that consume them, no separate "running low" signal makes sense.
+ *  - Skips rows below `LOW_STOCK_MIN_PLAN` units to avoid noisy flags on a
+ *    plan of "make 2".
+ */
+export function lowStockSnapshots(
+  lines: PlanLine[],
+  date: string,
+  /** Pre-computed sold-so-far map (itemId → units). Caller owns the lookup
+   *  to avoid pulling salesReport into PlanStore (would create a cycle).
+   *  Keyed by `ProductionItem.id` so we can identify the line straight
+   *  away — the AmountsView's `liveSales.byItemId` map is already this
+   *  shape, so the panel can hand it through unchanged. */
+  soldByItemId: Map<string, number>,
+  nowHHMM: string,
+): LowStockSnapshot[] {
+  if (date !== DEMO_TODAY) return [];
+  if (hhmmToMinutes(nowHHMM) < hhmmToMinutes(LOW_STOCK_NOT_BEFORE_HHMM)) return [];
+
+  const out: LowStockSnapshot[] = [];
+  for (const l of lines) {
+    if (l.item.mode === 'increment') continue;
+    if (l.assemblyDemand.totalUnits > 0 || l.recipe.isPrep) continue;
+    const planned = l.effectivePlanned;
+    if (planned < LOW_STOCK_MIN_PLAN) continue;
+    const sold = soldByItemId.get(l.item.id) ?? 0;
+    const remaining = planned - sold;
+    const threshold = lowStockThreshold(planned);
+    if (remaining > threshold) continue;
+    out.push({
+      itemId: l.item.id,
+      recipeName: l.recipe.name,
+      effectivePlanned: planned,
+      sold,
+      remaining,
+      threshold,
+      soldOut: remaining <= 0,
+    });
+  }
+  out.sort((a, b) => {
+    if (a.soldOut !== b.soldOut) return a.soldOut ? -1 : 1;
+    return a.remaining - b.remaining;
+  });
+  return out;
+}
+
+/**
+ * Hook variant of `lowStockSnapshots` for the QuinnProductionPanel —
+ * subscribes to the live plan state via `usePlan` so the nudge clears the
+ * moment the manager bumps a row out of the danger zone.
+ *
+ * `soldByItemId` is injected because the till data lives in `salesActuals`
+ * (and `salesReport`) — pulling either of those into PlanStore would create
+ * an import cycle. The panel composes them.
+ */
+export function useLowStockNudges(
+  siteId: SiteId,
+  date: string,
+  soldByItemId: Map<string, number>,
+  nowHHMM: string = DEMO_NOW_HHMM,
+): PlanNudge[] {
+  const lines = usePlan(siteId, date);
+
+  return useMemo(() => {
+    const snaps = lowStockSnapshots(lines, date, soldByItemId, nowHHMM);
+    if (snaps.length === 0) return [];
+
+    const first = snaps[0];
+    const soldOuts = snaps.filter(s => s.soldOut);
+
+    const single = snaps.length === 1;
+    const tone: PlanNudge['tone'] = soldOuts.length > 0 ? 'error' : 'warning';
+    const title = single
+      ? first.soldOut
+        ? `${first.recipeName} sold out — ${Math.abs(first.remaining)} over plan`
+        : `${first.recipeName} running low — ${first.remaining} left of ${first.effectivePlanned}`
+      : soldOuts.length > 0
+        ? `${soldOuts.length} recipe${soldOuts.length === 1 ? '' : 's'} sold out · ${snaps.length - soldOuts.length} more low`
+        : `${snaps.length} recipes running low on the floor`;
+    const body = single
+      ? first.soldOut
+        ? `Floor's been busier than today's plan covered. Bump the variable add-on by a small batch to keep selling, or close the SKU on the till.`
+        : `${first.sold} sold against ${first.effectivePlanned} planned. ${first.remaining} unit${first.remaining === 1 ? '' : 's'} of runway — top up the variable add-on before the next push.`
+      : snaps
+          .slice(0, 3)
+          .map(s =>
+            s.soldOut
+              ? `${s.recipeName}: out (+${Math.abs(s.remaining)} sold)`
+              : `${s.recipeName}: ${s.remaining} left of ${s.effectivePlanned}`,
+          )
+          .join(' · ');
+
+    return [
+      {
+        id: `plan-lowstock-${first.itemId}`,
+        tone,
+        surface: 'amounts',
+        title,
+        body,
+        cta: { label: 'Open Amounts', href: amountsFocusHref(siteId, first.itemId, 'lowstock') },
+      },
+    ];
+  }, [lines, date, soldByItemId, nowHHMM, siteId]);
 }

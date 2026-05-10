@@ -12,7 +12,6 @@ import {
   Link2,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
-import Link from 'next/link';
 import StatusPill from './StatusPill';
 import {
   dayOffset,
@@ -370,25 +369,6 @@ export default function HubSpokeBreakdown({
                 Send all{sendableCount > 0 ? ` · ${sendableCount}` : ''}
               </button>
             )}
-            <Link
-              href="/production/spokes"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '8px 12px',
-                borderRadius: 8,
-                fontSize: 11,
-                fontWeight: 600,
-                fontFamily: 'var(--font-primary)',
-                background: '#ffffff',
-                color: 'var(--color-text-secondary)',
-                border: '1px solid var(--color-border)',
-                textDecoration: 'none',
-              }}
-            >
-              Open spoke flow <ChevronRight size={12} />
-            </Link>
           </div>
 
           {/* Per-spoke control row */}

@@ -32,6 +32,8 @@ import {
 const STORAGE_KEY = 'edify.production.siteId';
 const HUB_DEFAULT: SiteId = 'hub-central';
 const SPOKE_LOCKED: SiteId = 'site-spoke-south';
+const HYBRID_LOCKED: SiteId = 'site-hybrid-airport';
+const STANDALONE_LOCKED: SiteId = 'site-standalone-north';
 
 type ProductionSiteContextValue = {
   siteId: SiteId;
@@ -44,7 +46,7 @@ type ProductionSiteContextValue = {
 const Context = createContext<ProductionSiteContextValue | null>(null);
 
 export function ProductionSiteProvider({ children }: { children: React.ReactNode }) {
-  const { isSpoke } = useActiveSite();
+  const { isSpoke, isHybrid, isStandalone } = useActiveSite();
   const [siteId, setSiteIdState] = useState<SiteId>(HUB_DEFAULT);
 
   // Hydrate from localStorage on mount (client only — keep SSR default
@@ -60,16 +62,28 @@ export function ProductionSiteProvider({ children }: { children: React.ReactNode
     }
   }, []);
 
-  // Snap to the persona's home site whenever the persona flips. Spokes
-  // are locked; hub persona returns to default if it was previously
-  // viewing the spoke's site, otherwise keeps whatever was last picked.
+  // Snap to the persona's home site whenever the persona flips. Spoke,
+  // Hybrid and Standalone personas are all locked to their own site —
+  // each represents a single-site operator. Hub persona returns to
+  // default if it was previously viewing a locked persona's site,
+  // otherwise keeps whatever was last picked.
   useEffect(() => {
     if (isSpoke) {
       setSiteIdState(SPOKE_LOCKED);
+    } else if (isHybrid) {
+      setSiteIdState(HYBRID_LOCKED);
+    } else if (isStandalone) {
+      setSiteIdState(STANDALONE_LOCKED);
     } else {
-      setSiteIdState(prev => (prev === SPOKE_LOCKED ? HUB_DEFAULT : prev));
+      setSiteIdState(prev =>
+        prev === SPOKE_LOCKED ||
+        prev === HYBRID_LOCKED ||
+        prev === STANDALONE_LOCKED
+          ? HUB_DEFAULT
+          : prev,
+      );
     }
-  }, [isSpoke]);
+  }, [isSpoke, isHybrid, isStandalone]);
 
   const setSiteId = useCallback((id: SiteId) => {
     if (!PRODUCTION_SITE_OPTIONS.some(o => o.id === id)) return;
@@ -86,9 +100,9 @@ export function ProductionSiteProvider({ children }: { children: React.ReactNode
       siteId,
       setSiteId,
       options: PRODUCTION_SITE_OPTIONS,
-      canPickSite: !isSpoke,
+      canPickSite: !isSpoke && !isHybrid && !isStandalone,
     }),
-    [siteId, setSiteId, isSpoke],
+    [siteId, setSiteId, isSpoke, isHybrid, isStandalone],
   );
 
   return <Context.Provider value={value}>{children}</Context.Provider>;
