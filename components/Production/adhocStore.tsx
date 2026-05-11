@@ -272,7 +272,7 @@ export function useHubAdhocNudges(hubId: SiteId): AdhocNudge[] {
           pending.length === 1 && firstRecipe
             ? `${first.lines.length} line${first.lines.length === 1 ? '' : 's'} (incl. ${firstLine.requestedUnits}× ${firstRecipe.name}) for ${first.forDate}. Review on dispatch — approve, adjust or reject.`
             : `${totalUnits} unit${totalUnits === 1 ? '' : 's'} across ${pending.length} request${pending.length === 1 ? '' : 's'}. Open dispatch to triage.`,
-        cta: { label: 'Open dispatch', href: '/production/dispatch' },
+        cta: { label: 'Confirm', href: '/production/dispatch' },
       },
     ];
   }, [forHub, hubId]);

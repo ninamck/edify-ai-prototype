@@ -16,6 +16,13 @@ import { useSpokeUnlockNudges } from './hubUnlockStore';
 import { DEMO_TODAY } from './fixtures';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import { useDemoNotifications, type DemoNotificationKey } from './demoNotificationsStore';
+import {
+  dismissQuinnNudge,
+  setQuinnOpen,
+  toggleQuinnOpen,
+  useQuinnDismissed,
+  useQuinnOpen,
+} from './quinnPanelStore';
 
 const TONE_STYLE: Record<QuinnNudgeTone, { bg: string; color: string; border: string; icon: React.ReactNode }> = {
   info:    { bg: 'var(--color-info-light)',    color: 'var(--color-info)',    border: 'var(--color-info-light)',    icon: <Info size={14} /> },
@@ -24,11 +31,25 @@ const TONE_STYLE: Record<QuinnNudgeTone, { bg: string; color: string; border: st
   success: { bg: 'var(--color-success-light)', color: 'var(--color-success)', border: 'var(--color-success-border)', icon: <CheckCircle2 size={14} /> },
 };
 
-export default function QuinnProductionPanel() {
-  const [open, setOpen] = useState(false);
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
-  const pathname = usePathname();
+type QuinnProductionPanelProps = {
+  /**
+   * Skip rendering the floating bottom-right trigger. Use this when the
+   * page header mounts a `<QuinnTrigger />` of its own — otherwise the
+   * two would both render and the user would see duplicate badges.
+   */
+  hideTrigger?: boolean;
+};
+
+/**
+ * Composes every Quinn nudge source the production surface knows about
+ * into a single, dismissal-aware list. Used by both the panel (renders
+ * the cards) and the header trigger (shows the badge count) so the two
+ * stay in lock-step when the manager dismisses an item from inside the
+ * panel.
+ */
+function useQuinnNudges(): QuinnNudge[] {
   const { isSpoke } = useActiveSite();
+  const dismissed = useQuinnDismissed();
 
   const planNudges = usePlanNudges('hub-central', DEMO_TODAY);
   // PAC147 — produced-stock low-runway. The till data lives in
@@ -57,7 +78,8 @@ export default function QuinnProductionPanel() {
   const spokeUnlockNudges = useSpokeUnlockNudges('site-spoke-south');
   const staticNudges = useMemo(() => getQuinnNudges(), []);
   const spokeStaticNudges = useMemo(() => getSpokeSubmissionNudges(), []);
-  const nudges = useMemo<QuinnNudge[]>(() => {
+
+  return useMemo<QuinnNudge[]>(() => {
     // Lift plan nudges to the shared shape (surface = 'plan' so existing filter keeps working).
     const planAsGeneric: QuinnNudge[] = planNudges.map(n => ({
       id: n.id,
@@ -168,6 +190,13 @@ export default function QuinnProductionPanel() {
       ...staticNudges,
     ].filter(n => !dismissed.has(n.id));
   }, [isSpoke, planNudges, lowStockNudges, rejectNudges, hubAdhocNudges, spokeAdhocNudges, hubRemakeNudges, spokeRemakeNudges, spokeUnlockNudges, staticNudges, spokeStaticNudges, dismissed]);
+}
+
+export default function QuinnProductionPanel({ hideTrigger = false }: QuinnProductionPanelProps = {}) {
+  const open = useQuinnOpen();
+  const pathname = usePathname();
+  const { isSpoke } = useActiveSite();
+  const nudges = useQuinnNudges();
   const visible = nudges.length;
 
   // Keep the panel relevant to the current surface first
@@ -183,54 +212,57 @@ export default function QuinnProductionPanel() {
 
   return (
     <>
-      {/* Floating trigger */}
-      <button
-        type="button"
-        aria-label="Open Quinn"
-        onClick={() => setOpen(o => !o)}
-        style={{
-          position: 'fixed',
-          right: 18,
-          bottom: 18,
-          zIndex: 500,
-          width: 52,
-          height: 52,
-          borderRadius: '50%',
-          background: 'var(--color-accent-active)',
-          color: '#ffffff',
-          border: 'none',
-          cursor: 'pointer',
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-        }}
-      >
-        <EdifyMark size={22} />
-        {visible > 0 && (
-          <span
-            style={{
-              position: 'absolute',
-              top: -4,
-              right: -4,
-              minWidth: 20,
-              height: 20,
-              padding: '0 6px',
-              borderRadius: 10,
-              background: 'var(--color-error)',
-              color: '#ffffff',
-              fontSize: 11,
-              fontWeight: 700,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontFamily: 'var(--font-primary)',
-            }}
-          >
-            {visible}
-          </span>
-        )}
-      </button>
+      {/* Floating trigger — suppressed when the route's header mounts a
+          `<QuinnTrigger />` of its own, so the two don't both render. */}
+      {!hideTrigger && (
+        <button
+          type="button"
+          aria-label="Open Quinn"
+          onClick={toggleQuinnOpen}
+          style={{
+            position: 'fixed',
+            right: 18,
+            bottom: 18,
+            zIndex: 500,
+            width: 52,
+            height: 52,
+            borderRadius: '50%',
+            background: 'var(--color-accent-active)',
+            color: '#ffffff',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+          }}
+        >
+          <EdifyMark size={22} />
+          {visible > 0 && (
+            <span
+              style={{
+                position: 'absolute',
+                top: -4,
+                right: -4,
+                minWidth: 20,
+                height: 20,
+                padding: '0 6px',
+                borderRadius: 10,
+                background: 'var(--color-error)',
+                color: '#ffffff',
+                fontSize: 11,
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontFamily: 'var(--font-primary)',
+              }}
+            >
+              {visible}
+            </span>
+          )}
+        </button>
+      )}
 
       <AnimatePresence>
         {open && (
@@ -241,7 +273,7 @@ export default function QuinnProductionPanel() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              onClick={() => setOpen(false)}
+              onClick={() => setQuinnOpen(false)}
               style={{
                 position: 'fixed',
                 inset: 0,
@@ -301,7 +333,7 @@ export default function QuinnProductionPanel() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={() => setQuinnOpen(false)}
                   aria-label="Close"
                   style={{
                     width: 30,
@@ -341,8 +373,8 @@ export default function QuinnProductionPanel() {
                   <NudgeCard
                     key={nudge.id}
                     nudge={nudge}
-                    onDismiss={() => setDismissed(prev => new Set(prev).add(nudge.id))}
-                    onFollow={() => setOpen(false)}
+                    onDismiss={() => dismissQuinnNudge(nudge.id)}
+                    onFollow={() => setQuinnOpen(false)}
                   />
                 ))}
               </div>
@@ -351,6 +383,105 @@ export default function QuinnProductionPanel() {
         )}
       </AnimatePresence>
     </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QuinnTrigger — header-mounted variant of the open-panel button.
+// Pair this with `<QuinnProductionPanel hideTrigger />` so the page header
+// owns the entry point (the floating bottom-right button is suppressed).
+// Visual language matches the surrounding header chrome (DemoControls,
+// SiteSwitcher) — a small pill with the Edify mark, a short label and
+// the same red badge the floating trigger uses.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function QuinnTrigger() {
+  const open = useQuinnOpen();
+  const visible = useQuinnNudges().length;
+  return (
+    <button
+      type="button"
+      aria-label="Open Quinn"
+      aria-expanded={open}
+      onClick={toggleQuinnOpen}
+      style={{
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        height: 44,
+        padding: '0 16px 0 10px',
+        borderRadius: 100,
+        // Solid navy fill — matches the Edify brand accent and stands
+        // out as the primary action against the otherwise pale header
+        // chrome. Active state deepens the fill for a clear pressed look.
+        background: open ? 'var(--color-accent-deep)' : 'var(--color-accent-active)',
+        border: '1px solid var(--color-accent-deep)',
+        cursor: 'pointer',
+        fontFamily: 'var(--font-primary)',
+        fontSize: 12,
+        fontWeight: 600,
+        color: '#ffffff',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: '50%',
+          // White roundel inside the navy pill so the brand mark stays
+          // legible against the dark fill.
+          background: '#ffffff',
+          color: 'var(--color-accent-active)',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <EdifyMark size={14} />
+      </span>
+      <span
+        style={{
+          color: 'rgba(255,255,255,0.72)',
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+        }}
+      >
+        Quinn
+      </span>
+      {visible > 0 && (
+        <span
+          aria-hidden
+          style={{
+            position: 'absolute',
+            top: -6,
+            right: -6,
+            minWidth: 22,
+            height: 22,
+            padding: '0 6px',
+            borderRadius: 11,
+            background: 'var(--color-error)',
+            color: '#ffffff',
+            fontSize: 12,
+            fontWeight: 700,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontFamily: 'var(--font-primary)',
+            // Thin white ring lifts the badge off the navy fill so it
+            // doesn't visually merge with the pill border at small sizes.
+            boxShadow: '0 0 0 1.5px #ffffff',
+          }}
+        >
+          {visible}
+        </span>
+      )}
+    </button>
   );
 }
 

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
-import DemoControls from "@/components/DemoControls/DemoControls";
 import { ActiveSiteProvider } from "@/components/ActiveSite/ActiveSiteContext";
 import { SiteSettingsStoreProvider } from "@/components/Settings/siteSettingsStore";
 
@@ -27,7 +26,6 @@ export default function RootLayout({
         <ActiveSiteProvider>
           <SiteSettingsStoreProvider>
             {children}
-            <DemoControls />
           </SiteSettingsStoreProvider>
         </ActiveSiteProvider>
       </body>

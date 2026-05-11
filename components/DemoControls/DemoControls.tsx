@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { FlaskConical, ChevronDown } from 'lucide-react';
 import { USERS, getRoleRules } from '@/components/Approvals/approvalsStore';
@@ -29,9 +29,17 @@ type Variant = 'floating' | 'inline';
 
 type Props = {
   variant?: Variant;
+  /**
+   * Optional content rendered at the bottom of the panel, above the
+   * "demo-only" footer note. Used by routes that want to slot in their
+   * own demo affordances (e.g. the production / dispatch RoleSwitcher)
+   * without cluttering the page header. Wrap content in
+   * `DemoControlsSection` to inherit the section heading style.
+   */
+  extraSection?: ReactNode;
 };
 
-export default function DemoControls({ variant = 'floating' }: Props) {
+export default function DemoControls({ variant = 'floating', extraSection }: Props) {
   const pathname = usePathname() ?? '';
 
   // The floating mount yields control to whichever inline mount lives in
@@ -52,10 +60,14 @@ export default function DemoControls({ variant = 'floating' }: Props) {
     }
   }
 
-  return variant === 'inline' ? <InlineDemoControls /> : <FloatingDemoControls />;
+  return variant === 'inline' ? (
+    <InlineDemoControls extraSection={extraSection} />
+  ) : (
+    <FloatingDemoControls extraSection={extraSection} />
+  );
 }
 
-function FloatingDemoControls() {
+function FloatingDemoControls({ extraSection }: { extraSection?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const actingUserId = useActingUser();
   const actingUser = USERS.find((u) => u.id === actingUserId);
@@ -73,7 +85,7 @@ function FloatingDemoControls() {
       {open ? (
         <div style={panelContainerStyle}>
           <PanelHeader onClose={() => setOpen(false)} />
-          <PanelBody />
+          <PanelBody extraSection={extraSection} />
         </div>
       ) : (
         <TriggerButton
@@ -86,7 +98,7 @@ function FloatingDemoControls() {
   );
 }
 
-function InlineDemoControls() {
+function InlineDemoControls({ extraSection }: { extraSection?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const actingUserId = useActingUser();
@@ -135,7 +147,7 @@ function InlineDemoControls() {
           }}
         >
           <PanelHeader onClose={() => setOpen(false)} />
-          <PanelBody />
+          <PanelBody extraSection={extraSection} />
         </div>
       )}
     </div>
@@ -193,7 +205,7 @@ function PanelHeader({ onClose }: { onClose: () => void }) {
   );
 }
 
-function PanelBody() {
+function PanelBody({ extraSection }: { extraSection?: ReactNode }) {
   const router = useRouter();
   const actingUserId = useActingUser();
   const briefingRole = useDemoBriefingRole();
@@ -309,6 +321,8 @@ function PanelBody() {
         </div>
       </div>
 
+      {extraSection}
+
       <div
         style={{
           fontSize: 10,
@@ -319,6 +333,28 @@ function PanelBody() {
       >
         Demo-only controls — not part of the product.
       </div>
+    </div>
+  );
+}
+
+/**
+ * Wrapper for content slotted into `DemoControls`'s `extraSection` prop.
+ * Renders a section heading in the same style as the built-in
+ * Version / Acting as / Briefing persona sections so route-owned
+ * affordances (like the production RoleSwitcher) sit visually inside
+ * the panel rather than floating in the page header.
+ */
+export function DemoControlsSection({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <div style={sectionLabelStyle}>{label}</div>
+      {children}
     </div>
   );
 }

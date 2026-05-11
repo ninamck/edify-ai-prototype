@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Filter, Inbox, Clock, AlertCircle } from 'lucide-react';
+import { ChevronDown, ChevronRight, Filter, Inbox, Clock, AlertCircle, Package } from 'lucide-react';
 import {
   PRET_SITES,
   getSite,
@@ -116,22 +116,32 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   //     focus drawer instead — keeps the planning grid uncluttered)
   //   • view-mode tabs and the spoke filter are hidden — planning shows
   //     all P-slots at once because the manager is editing them in place
-  //   • VP and Hot Prod fold into a single "On-demand" column; the cell
-  //     contents switch based on item.mode (variable vs increment)
+  //   • VP column drops off on plan — VP rows are planned per-slot in
+  //     the P-columns directly (same grid run-mode items use), so a
+  //     separate daily VP cell on plan would just duplicate the row
+  //     total. VP stays visible on today, where the floor can top up
+  //     variable production through the day in real units.
+  //   • Hot Prod stays visible on both surfaces — its per-drop strip
+  //     is the only place hot-prod items get planned/adjusted, on plan
+  //     and today alike.
   const showCarryOver = isPlanSurface ? true : baseShowCarryOver;
   const showSpokeCols = isPlanSurface ? false : isHub;
-  const showHotProd = isPlanSurface ? false : baseShowHotProd;
-  const showVP = isPlanSurface ? false : baseShowVP;
-  // VP cell is editable on today for self-producing sites — the floor
-  // adjusts variable production through the day, so the stepper sits in
-  // the live grid rather than only on Plan.
+  const showHotProd = baseShowHotProd;
+  const showVP = !isPlanSurface && baseShowVP;
+  // VP cell is editable on today for self-producing sites (the floor
+  // adjusts variable production through the day). Plan hides the
+  // column entirely, so this flag only matters on today.
   const editableVP = !isPlanSurface && (isStandalone || isHybrid);
-  // Live sales column — only for self-producing sites (the only ones
+  // "Avail now" column — only for self-producing sites (the only ones
   // with a retail floor) and only on the today/run surface (Plan is
-  // forward-looking). Past/today only; future days have no actuals.
-  const showLiveSales = !isPlanSurface && (isStandalone || isHybrid);
-  // Plan-only column that replaces the VP + Hot Prod pair.
-  const showOnDemand = isPlanSurface;
+  // forward-looking). Shows planned − sold so far (clamped at zero), so
+  // a manager glancing at the grid sees how many units of each recipe
+  // are still on the floor without doing the math themselves.
+  const showAvailNow = !isPlanSurface && (isStandalone || isHybrid);
+  // On-demand column retired — VP and Hot Prod cover that intent
+  // directly on the plan surface now. Variable items: VP stepper.
+  // Increment (hot prod) items: per-drop strip behind the Hot Prod
+  // column button. No more duplicate "On-demand" cell.
   // expandAllPSlots is calculated below — its full definition depends on
   // `viewMode` / `spokeFilter` (HUB-only behaviour), which are declared
   // a few lines down with the other filter state. Placeholder declared
@@ -454,18 +464,19 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   // only personas with VP / Hot Prod variety). Auto-hides for HUB.
   const showModeFilter = !isPlanSurface && (isStandalone || isHybrid);
 
-  // Live sales lookup — keyed by skuId so we can join against grid rows.
-  // Builds once per (siteId, date) and only when the column is visible
-  // (skipped on Plan / HUB / SPOKE).
-  const liveSalesBySku = useMemo(() => {
+  // Sold-so-far lookup — keyed by skuId so we can join against grid
+  // rows. Drives the "Avail now" cell (planned − sold). Builds once
+  // per (siteId, date) and only when the column is visible (skipped on
+  // Plan / HUB / SPOKE).
+  const soldSoFarBySku = useMemo(() => {
     const map = new Map<SkuId, number>();
-    if (!showLiveSales) return map;
+    if (!showAvailNow) return map;
     const summary = daySummary(siteId, date);
     for (const r of summary.rows) {
       map.set(r.line.item.skuId, r.sold);
     }
     return map;
-  }, [showLiveSales, siteId, date]);
+  }, [showAvailNow, siteId, date]);
 
   // Hub view drops the trailing `Total` column by default — for a hub
   // everything in the row already adds up to the per-spoke breakdown,
@@ -492,9 +503,8 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
     (showProductionTotal ? 1 : 0) +
     (showVPInView ? 1 : 0) +
     (showHotProdInView ? 1 : 0) +
-    (showOnDemand ? 1 : 0) +
     (showSpokeCols ? visibleSpokes.length : 0) +
-    (showLiveSales ? 1 : 0) +
+    (showAvailNow ? 1 : 0) +
     (showRowTotal ? 1 : 0);
 
   return (
@@ -514,7 +524,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
         />
       )}
 
-      <div style={{ padding: '12px 16px 32px' }}>
+      <div style={{ padding: '16px 30px 32px' }}>
         {/* Toolbar:
               • HUB Today: All / P1..Pn slot tabs + spoke filter + Edit.
               • Self-producing Today: production-type tabs (All / Run /
@@ -636,9 +646,11 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
                     <th style={headStyle({ minWidth: editableVP ? 100 : 60 })}>VP</th>
                   )}
                   {showHotProdInView && <th style={headStyle({ minWidth: 80 })}>Hot Prod</th>}
-                  {showOnDemand && <th style={headStyle({ minWidth: 110 })}>On-demand</th>}
-                  {showLiveSales && (
-                    <th style={headStyle({ minWidth: 80 })}>
+                  {showAvailNow && (
+                    <th
+                      style={headStyle({ minWidth: 90 })}
+                      title="Planned production minus units sold so far today. What's still on the floor."
+                    >
                       <span
                         style={{
                           display: 'inline-flex',
@@ -647,8 +659,8 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
                           justifyContent: 'center',
                         }}
                       >
-                        <Activity size={11} />
-                        Live sales
+                        <Package size={11} />
+                        Avail now
                       </span>
                     </th>
                   )}
@@ -735,10 +747,9 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
                     showProductionTotal={showProductionTotal}
                     showVP={showVPInView}
                     showHotProd={showHotProdInView}
-                    showOnDemand={showOnDemand}
                     showSpokeCols={showSpokeCols}
-                    showLiveSales={showLiveSales}
-                    liveSalesBySku={liveSalesBySku}
+                    showAvailNow={showAvailNow}
+                    soldSoFarBySku={soldSoFarBySku}
                     editableVP={editableVP}
                     spokes={visibleSpokes}
                     perSpokeBySku={perSpokeBySku}
@@ -793,7 +804,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
             <>
               Every P-slot shown inline.
               {editableVP && ' VP is editable — adjust variable production through the day.'}
-              {showLiveSales && ' Live sales tracks units sold so far against the planned total.'}
+              {showAvailNow && ' Avail now is what\u2019s still on the floor — planned minus sold so far.'}
               {modeFilter !== 'all' && (
                 <>
                   {' '}Filtered to{' '}
@@ -867,10 +878,9 @@ function CategoryGroup({
   showProductionTotal,
   showVP,
   showHotProd,
-  showOnDemand,
   showSpokeCols,
-  showLiveSales,
-  liveSalesBySku,
+  showAvailNow,
+  soldSoFarBySku,
   editableVP,
   spokes,
   perSpokeBySku,
@@ -903,10 +913,9 @@ function CategoryGroup({
   showProductionTotal: boolean;
   showVP: boolean;
   showHotProd: boolean;
-  showOnDemand: boolean;
   showSpokeCols: boolean;
-  showLiveSales: boolean;
-  liveSalesBySku: Map<SkuId, number>;
+  showAvailNow: boolean;
+  soldSoFarBySku: Map<SkuId, number>;
   editableVP: boolean;
   spokes: Site[];
   perSpokeBySku: Map<string, number>;
@@ -996,10 +1005,9 @@ function CategoryGroup({
             showProductionTotal={showProductionTotal}
             showVP={showVP}
             showHotProd={showHotProd}
-            showOnDemand={showOnDemand}
             showSpokeCols={showSpokeCols}
-            showLiveSales={showLiveSales}
-            liveSalesBySku={liveSalesBySku}
+            showAvailNow={showAvailNow}
+            soldSoFarBySku={soldSoFarBySku}
             editableVP={editableVP}
             spokes={spokes}
             perSpokeBySku={perSpokeBySku}
@@ -1038,10 +1046,9 @@ function RecipeRow({
   showProductionTotal,
   showVP,
   showHotProd,
-  showOnDemand,
   showSpokeCols,
-  showLiveSales,
-  liveSalesBySku,
+  showAvailNow,
+  soldSoFarBySku,
   editableVP,
   spokes,
   perSpokeBySku,
@@ -1073,10 +1080,9 @@ function RecipeRow({
   showProductionTotal: boolean;
   showVP: boolean;
   showHotProd: boolean;
-  showOnDemand: boolean;
   showSpokeCols: boolean;
-  showLiveSales: boolean;
-  liveSalesBySku: Map<SkuId, number>;
+  showAvailNow: boolean;
+  soldSoFarBySku: Map<SkuId, number>;
   editableVP: boolean;
   spokes: Site[];
   perSpokeBySku: Map<string, number>;
@@ -1150,6 +1156,21 @@ function RecipeRow({
     ? buildPerSlotForecast(line, pColumnCount)
     : [];
   const dayForecast = line?.forecast?.projectedUnits ?? 0;
+
+  // Default per-slot split for a variable row before the manager has
+  // edited any P-cell. Even split of `line.planned` across the grid's
+  // P-column budget with the remainder pushed onto the last cell so
+  // the visible numbers still sum to `planned` exactly. Empty if
+  // there are no P-columns (the VP column alone covers planning).
+  const variableDefaultPerSlot = useMemo<number[]>(() => {
+    if (!line || line.item.mode !== 'variable' || pColumnCount <= 0) return [];
+    const total = line.planned;
+    const base = Math.floor(total / pColumnCount);
+    const rem = total - base * pColumnCount;
+    const arr = Array<number>(pColumnCount).fill(base);
+    if (rem > 0 && arr.length > 0) arr[arr.length - 1] = base + rem;
+    return arr;
+  }, [line, pColumnCount]);
 
   // Total = whatever the plan resolved to. For run items `planned` already
   // includes the variable additions; for variable / increment items it's
@@ -1295,23 +1316,44 @@ function RecipeRow({
           }
           if (editableRuns) {
             const isRunRow = !!line && line.item.mode === 'run';
-            return (
-              <td key={`p${i + 1}`} style={bodyStyle({ focused })}>
-                {isRunRow ? (
+            // VP rows piggyback on the run-mode P-slot grid so the
+            // manager can plan "N units in slot 1, M units in slot 2…"
+            // for a variable recipe sitting alongside run items. We
+            // distribute `planned` evenly across the column budget for
+            // the initial display; the first edit promotes that into a
+            // persisted perRunOverrides array (same store, same key).
+            const isVariableRow = !!line && line.item.mode === 'variable';
+            if (isRunRow || isVariableRow) {
+              const stored = perRun;
+              const hasStored = stored.length > 0;
+              const displaySlots = hasStored
+                ? stored
+                : isVariableRow && pColumnCount > 0 && line
+                  ? variableDefaultPerSlot
+                  : [];
+              return (
+                <td key={`p${i + 1}`} style={bodyStyle({ focused })}>
                   <PlanStepperCell
-                    value={perRun[i] ?? 0}
+                    value={displaySlots[i] ?? 0}
                     forecast={isPlanSurface ? slotForecasts[i] : undefined}
                     step={step}
                     onChange={next => {
                       if (!line) return;
-                      const padded = Array.from({ length: pColumnCount }, (_, j) => perRun[j] ?? 0);
+                      const seed = hasStored ? stored : displaySlots;
+                      const padded = Array.from(
+                        { length: pColumnCount },
+                        (_, j) => seed[j] ?? 0,
+                      );
                       padded[i] = Math.max(0, Math.round(next));
                       planStore.setPerRunPlan(line.item.id, padded, date);
                     }}
                   />
-                ) : (
-                  <span style={{ color: 'var(--color-text-muted)' }}>—</span>
-                )}
+                </td>
+              );
+            }
+            return (
+              <td key={`p${i + 1}`} style={bodyStyle({ focused })}>
+                <span style={{ color: 'var(--color-text-muted)' }}>—</span>
               </td>
             );
           }
@@ -1326,10 +1368,12 @@ function RecipeRow({
           );
         })}
 
-        {/* VP — read-only on HUB; editable inline on self-producing
-            sites' Today so the floor can adjust variable production
-            through the day. Plan still uses the On-demand column for
-            authoring intent. */}
+        {/* VP — today-only column for self-producing sites. The floor
+            adjusts variable production through the day, so this cell
+            is an inline stepper (variable rows step the whole-day
+            planned qty; run rows step the variable add-on on top of
+            the run baseline). Plan hides the column upstream because
+            variable rows already have per-slot steppers in P1..Pn. */}
         {showVP && (
           <td style={bodyStyle({ focused })}>
             {isReceive ? (
@@ -1394,33 +1438,8 @@ function RecipeRow({
           </td>
         )}
 
-        {/* On-demand (plan surface) — folds VP + Hot Prod into one
-            stepper-driven column. Run-mode rows show "—" because their
-            on-demand top-ups are handled on the live floor (today
-            surface), not at planning time. */}
-        {showOnDemand && (
-          <td style={bodyStyle({ focused })}>
-            {isReceive || !line ? (
-              <span style={{ color: 'var(--color-text-muted)' }}>—</span>
-            ) : line.item.mode === 'variable' ? (
-              <PlanStepperCell
-                value={line.planned}
-                forecast={dayForecast}
-                step={step}
-                onChange={next => planStore.setPlanned(line.item.id, next, date)}
-              />
-            ) : line.item.mode === 'increment' ? (
-              <PlanStepperCell
-                value={line.planned}
-                forecast={dayForecast}
-                step={step}
-                onChange={next => planStore.setPlanned(line.item.id, next, date)}
-              />
-            ) : (
-              <span style={{ color: 'var(--color-text-muted)' }}>—</span>
-            )}
-          </td>
-        )}
+        {/* On-demand column retired — variable items live in VP,
+            increment items in the Hot Prod per-drop strip. */}
 
         {/* Per-spoke columns (HUB). Edit mode flips the cell from a
             read-only number to a stepper the hub manager can override
@@ -1476,35 +1495,60 @@ function RecipeRow({
             );
           })}
 
-        {/* Live sales — units sold so far today (or full-day for past
-            dates). Self-producing sites only. Compares against the
-            row's planned total to surface over/undershoot at a glance. */}
-        {showLiveSales && (
+        {/* Avail now — what's still on the floor: planned − sold so far,
+            clamped at zero. Self-producing sites only (a hub or pure
+            spoke has no retail floor). For HYBRID receive rows we
+            don't have a planned figure at this site, so we show "—".
+            Sold count is shown as a faded sub-line so the manager can
+            still see velocity at a glance without flipping screens. */}
+        {showAvailNow && (
           <td style={bodyStyle({ focused })}>
             {isReceive || !line ? (
               <span style={{ color: 'var(--color-text-muted)' }}>—</span>
             ) : (
               (() => {
-                const sold = liveSalesBySku.get(row.skuId) ?? 0;
-                if (sold === 0) {
-                  return <span style={{ color: 'var(--color-text-muted)' }}>0</span>;
-                }
+                const sold = soldSoFarBySku.get(row.skuId) ?? 0;
                 const planned = typeof totalDisplay === 'number' ? totalDisplay : 0;
-                const overshoot = planned > 0 && sold > planned;
+                const availNow = Math.max(0, planned - sold);
+                const soldOut = planned > 0 && availNow === 0;
                 return (
                   <span
                     style={{
-                      ...numStyle(),
-                      color: overshoot ? 'var(--color-error)' : 'var(--color-text-primary)',
-                      fontWeight: 700,
+                      display: 'inline-flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-end',
+                      lineHeight: 1.15,
                     }}
                     title={
                       planned > 0
-                        ? `${sold} sold of ${planned} planned`
+                        ? `${availNow} available · ${sold} sold of ${planned} planned`
                         : `${sold} sold today`
                     }
                   >
-                    {sold}
+                    <span
+                      style={{
+                        ...numStyle(),
+                        color: soldOut
+                          ? 'var(--color-error)'
+                          : availNow === 0
+                            ? 'var(--color-text-muted)'
+                            : 'var(--color-text-primary)',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {availNow}
+                    </span>
+                    {planned > 0 && (
+                      <span
+                        style={{
+                          fontSize: 9,
+                          color: 'var(--color-text-muted)',
+                          fontVariantNumeric: 'tabular-nums',
+                        }}
+                      >
+                        of {planned}
+                      </span>
+                    )}
                   </span>
                 );
               })()

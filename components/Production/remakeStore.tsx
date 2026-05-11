@@ -258,7 +258,7 @@ export function useHubRemakeNudges(hubId: SiteId): RemakeNudge[] {
           pending.length === 1
             ? `${reasonHeadline(first.reason)} on the ${first.sourceTransferDate} drop. Affects ${lineNames.join(', ')}${moreLines > 0 ? ` + ${moreLines} more` : ''}. Open dispatch to accept a delivery slot or decline.`
             : `${pending.reduce((a, r) => a + r.totalUnits, 0)} units across ${pending.length} incident${pending.length === 1 ? '' : 's'}. These block the spoke from trading — triage immediately.`,
-        cta: { label: 'Open dispatch', href: '/production/dispatch' },
+        cta: { label: 'Confirm', href: '/production/dispatch' },
       },
     ];
   }, [forHub, hubId]);

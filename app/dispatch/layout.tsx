@@ -6,10 +6,10 @@ import Sidebar from '@/components/Sidebar/Sidebar';
 import SiteSwitcher from '@/components/Sidebar/SiteSwitcher';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import HubOperatorProviders from '@/components/Operator/HubOperatorProviders';
-import QuinnProductionPanel from '@/components/Production/QuinnProductionPanel';
+import QuinnProductionPanel, { QuinnTrigger } from '@/components/Production/QuinnProductionPanel';
 import { RoleSwitcher } from '@/components/Production/RoleContext';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
-import DemoControls from '@/components/DemoControls/DemoControls';
+import DemoControls, { DemoControlsSection } from '@/components/DemoControls/DemoControls';
 
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
 
@@ -106,25 +106,18 @@ export default function DispatchLayout({ children }: { children: React.ReactNode
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
-              <RoleSwitcher />
-              <DemoControls variant="inline" />
-              <button
-                onClick={() => router.push('/')}
-                style={{
-                  padding: '7px 14px',
-                  borderRadius: 8,
-                  background: '#fff',
-                  border: '1px solid var(--color-border)',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  fontFamily: 'var(--font-primary)',
-                  color: 'var(--color-text-secondary)',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                ← Home
-              </button>
+              <DemoControls
+                variant="inline"
+                extraSection={
+                  <DemoControlsSection label="Production role">
+                    <RoleSwitcher />
+                  </DemoControlsSection>
+                }
+              />
+              {/* Quinn lives in the header now; the floating bottom-right
+                  trigger is suppressed below via `hideTrigger`. The Home
+                  button was removed — sidebar handles cross-app nav. */}
+              <QuinnTrigger />
             </div>
           </header>
 
@@ -184,7 +177,7 @@ export default function DispatchLayout({ children }: { children: React.ReactNode
           </div>
         </div>
 
-        <QuinnProductionPanel />
+        <QuinnProductionPanel hideTrigger />
       </div>
     </HubOperatorProviders>
   );

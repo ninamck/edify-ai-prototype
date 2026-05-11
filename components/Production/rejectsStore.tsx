@@ -196,7 +196,7 @@ export function useRejectNudges(hubId: SiteId): RejectNudge[] {
           unack.length === 1 && firstRecipe
             ? `${first.totalRejectedUnits}× ${firstRecipe.name} from yesterday's drop. Acknowledge on dispatch and the qty rolls into tomorrow's drop automatically.`
             : `${totalUnits} unit${totalUnits === 1 ? '' : 's'} across ${unack.length} record${unack.length === 1 ? '' : 's'}. Open dispatch to acknowledge + log to hub waste.`,
-        cta: { label: 'Open dispatch', href: '/production/dispatch' },
+        cta: { label: 'Confirm', href: '/production/dispatch' },
       },
     ];
   }, [forHub, hubId]);

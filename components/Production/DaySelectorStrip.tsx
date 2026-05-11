@@ -41,7 +41,7 @@ export default function DaySelectorStrip({
         display: 'flex',
         gap: 8,
         alignItems: 'stretch',
-        padding: '12px 16px',
+        padding: '12px 30px',
         background: '#ffffff',
         borderBottom: '1px solid var(--color-border-subtle)',
         overflowX: 'auto',

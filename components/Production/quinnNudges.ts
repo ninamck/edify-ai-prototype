@@ -1,10 +1,7 @@
 import {
-  PRET_PLAN,
   PRET_CARRY_OVER,
   PRET_SPOKE_SUBMISSION,
   dayOffset,
-  getProductionItem,
-  getRecipe,
 } from './fixtures';
 import { siteProductivity, formatDelta } from './productivity';
 import { siteSalesReport, formatSignedPct } from './salesReport';
@@ -25,40 +22,8 @@ export type QuinnNudge = {
 export function getQuinnNudges(): QuinnNudge[] {
   const nudges: QuinnNudge[] = [];
 
-  // 1) PCR queue — any batches sitting in 'complete'
-  const needsReview = PRET_PLAN.batches.filter(b => b.status === 'complete');
-  if (needsReview.length > 0) {
-    nudges.push({
-      id: 'nudge-pcr-queue',
-      surface: 'pcr',
-      tone: 'warning',
-      title: `${needsReview.length} batch${needsReview.length === 1 ? '' : 'es'} awaiting PCR`,
-      body:
-        needsReview.length === 1
-          ? 'One finished batch is waiting on quality + label sign-off.'
-          : 'Manager sign-off needed before these move to the floor.',
-      cta: { label: 'Open PCR queue', href: '/production/pcr' },
-    });
-  }
-
-  // 2) Failed batches — push to waste log
-  const failed = PRET_PLAN.batches.filter(b => b.status === 'failed');
-  if (failed.length > 0) {
-    nudges.push({
-      id: 'nudge-failed-batches',
-      surface: 'pcr',
-      tone: 'error',
-      title: `${failed.length} failed batch${failed.length === 1 ? '' : 'es'} — log waste`,
-      body: failed
-        .map(b => {
-          const item = getProductionItem(b.productionItemId);
-          const recipe = item ? getRecipe(item.recipeId) : undefined;
-          return recipe?.name ?? item?.id ?? 'Unknown';
-        })
-        .join(', '),
-      cta: { label: 'Review failed', href: '/production/pcr' },
-    });
-  }
+  // 1) PCR queue + 2) Failed batches — nudges removed per request; the
+  //    surfaces still exist but Quinn no longer pings about them.
 
   // 3) Carry-over proposals pending
   const carryPending = PRET_CARRY_OVER.length;

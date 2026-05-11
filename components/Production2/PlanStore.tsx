@@ -988,17 +988,8 @@ export function usePlanNudges(siteId: SiteId, date: string): PlanNudge[] {
       });
     }
 
-    const draftForecasts = lines.filter(l => l.forecast?.status === 'draft');
-    if (draftForecasts.length > 0) {
-      nudges.push({
-        id: 'plan-draft-forecasts',
-        tone: 'info',
-        surface: 'amounts',
-        title: `${draftForecasts.length} forecast${draftForecasts.length === 1 ? '' : 's'} still in draft`,
-        body: 'I flagged these for a quick Manager confirmation before the first run.',
-        cta: { label: 'Confirm forecasts', href: amountsFocusHref(siteId, draftForecasts[0].item.id, 'draft-forecast') },
-      });
-    }
+    // Draft-forecast nudge removed per request — the Amounts table still
+    // shows the draft badge inline, but Quinn no longer pings the panel.
 
     return nudges;
   }, [lines, siteId]);

@@ -13,6 +13,7 @@ import {
 import Link from 'next/link';
 import StatusPill from './StatusPill';
 import QtyStepper from './QtyStepper';
+import StyledSelect from '@/components/ui/StyledSelect';
 import { useRole } from './RoleContext';
 import { wasteLogUrlForBatch } from './wasteRouting';
 import { defaultOperatorForSite, operatorsForSite } from './pcrFixtures';
@@ -282,18 +283,17 @@ export default function PCRBatchCard({
         style={{
           display: 'grid',
           gridTemplateColumns: requiresLabel
-            ? 'minmax(180px, 1.4fr) 130px 130px minmax(150px, 1fr) minmax(150px, 1fr)'
-            : 'minmax(180px, 1.4fr) 130px 130px minmax(180px, 1fr)',
+            ? '240px 130px 130px minmax(150px, 1fr) minmax(150px, 1fr)'
+            : '240px 130px 130px minmax(180px, 1fr)',
           gap: 14,
           alignItems: 'flex-end',
         }}
       >
         <FormField label="Made by">
-          <select
+          <StyledSelect
             value={madeBy}
             onChange={e => setMadeBy(e.target.value)}
             disabled={lockedReadOnly}
-            style={selectStyle(lockedReadOnly)}
           >
             {operators.map(name => (
               <option key={name} value={name}>
@@ -301,7 +301,7 @@ export default function PCRBatchCard({
               </option>
             ))}
             {!operators.includes(madeBy) && <option value={madeBy}>{madeBy}</option>}
-          </select>
+          </StyledSelect>
         </FormField>
 
         <FormField label="Made">
@@ -589,21 +589,6 @@ function cardShell(dense: boolean): React.CSSProperties {
     background: '#ffffff',
     fontFamily: 'var(--font-primary)',
     boxShadow: dense ? 'none' : '0 1px 2px rgba(12,20,44,0.04)',
-  };
-}
-
-function selectStyle(disabled: boolean): React.CSSProperties {
-  return {
-    height: 38,
-    padding: '0 10px',
-    borderRadius: 8,
-    border: '1px solid var(--color-border)',
-    background: disabled ? 'var(--color-bg-hover)' : '#ffffff',
-    color: 'var(--color-text-primary)',
-    fontFamily: 'var(--font-primary)',
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: disabled ? 'not-allowed' : 'pointer',
   };
 }
 

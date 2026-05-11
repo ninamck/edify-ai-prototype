@@ -14,7 +14,7 @@ import type { CSSProperties } from 'react';
 
 /** Outer container padding for either bar. Matches between rows so the
  *  two strips visually stack as a single header. */
-export const TOP_NAV_BAR_PADDING = '10px 24px';
+export const TOP_NAV_BAR_PADDING = '10px 24px 10px 30px';
 
 /** Horizontal gap between pills. */
 export const TOP_NAV_PILL_GAP = 8;

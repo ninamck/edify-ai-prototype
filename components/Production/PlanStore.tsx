@@ -484,6 +484,19 @@ export function resolvePlan(
           perRunPlan[perRunPlan.length - 1] = base + rem;
         }
       }
+    } else if (line.item.mode === 'variable') {
+      // Variable items can ALSO be planned per P-slot — the manager
+      // wants to express "make N1 in slot 1, N2 in slot 2, …" alongside
+      // run-mode recipes that share the same slot grid. The data model
+      // piggybacks on `perRunOverrides` (same key shape), so once the
+      // manager edits a P-cell on a VP row the array shows up here.
+      // No default array — the grid distributes `planned` evenly across
+      // its column budget for display, which keeps resolvePlan from
+      // having to know the grid's column count.
+      const stored = perRunOverrides[k];
+      if (stored && stored.length > 0) {
+        perRunPlan = stored;
+      }
     }
 
     let perDropPlan: number[] | undefined;
@@ -988,17 +1001,8 @@ export function usePlanNudges(siteId: SiteId, date: string): PlanNudge[] {
       });
     }
 
-    const draftForecasts = lines.filter(l => l.forecast?.status === 'draft');
-    if (draftForecasts.length > 0) {
-      nudges.push({
-        id: 'plan-draft-forecasts',
-        tone: 'info',
-        surface: 'amounts',
-        title: `${draftForecasts.length} forecast${draftForecasts.length === 1 ? '' : 's'} still in draft`,
-        body: 'I flagged these for a quick Manager confirmation before the first run.',
-        cta: { label: 'Confirm forecasts', href: amountsFocusHref(siteId, draftForecasts[0].item.id, 'draft-forecast') },
-      });
-    }
+    // Draft-forecast nudge removed per request — the Amounts table still
+    // shows the draft badge inline, but Quinn no longer pings the panel.
 
     return nudges;
   }, [lines, siteId]);

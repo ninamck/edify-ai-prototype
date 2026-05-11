@@ -4,10 +4,11 @@ import Sidebar from '@/components/Sidebar/Sidebar';
 import SiteSwitcher from '@/components/Sidebar/SiteSwitcher';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useRouter, usePathname } from 'next/navigation';
-import QuinnProductionPanel from '@/components/Production/QuinnProductionPanel';
+import QuinnProductionPanel, { QuinnTrigger } from '@/components/Production/QuinnProductionPanel';
 import { RoleSwitcher } from '@/components/Production/RoleContext';
 import HubOperatorProviders from '@/components/Operator/HubOperatorProviders';
 import ProductionSiteSelector from '@/components/Production/ProductionSiteSelector';
+import { DemoControlsSection } from '@/components/DemoControls/DemoControls';
 import {
   TOP_NAV_BAR_PADDING,
   TOP_NAV_PILL_ACTIVE,
@@ -205,25 +206,18 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
-            <RoleSwitcher />
-            <DemoControls variant="inline" />
-            <button
-              onClick={() => router.push('/')}
-              style={{
-                padding: '7px 14px',
-                borderRadius: 8,
-                background: '#fff',
-                border: '1px solid var(--color-border)',
-                fontSize: 12,
-                fontWeight: 600,
-                fontFamily: 'var(--font-primary)',
-                color: 'var(--color-text-secondary)',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              ← Home
-            </button>
+            <DemoControls
+              variant="inline"
+              extraSection={
+                <DemoControlsSection label="Production role">
+                  <RoleSwitcher />
+                </DemoControlsSection>
+              }
+            />
+            {/* Quinn lives in the header now; the floating bottom-right
+                trigger is suppressed below via `hideTrigger`. The Home
+                button was removed — sidebar handles cross-app nav. */}
+            <QuinnTrigger />
           </div>
         </header>
 
@@ -324,7 +318,7 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
         </div>
       </div>
 
-      <QuinnProductionPanel />
+      <QuinnProductionPanel hideTrigger />
     </div>
     </HubOperatorProviders>
   );
