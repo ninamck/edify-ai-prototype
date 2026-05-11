@@ -1233,7 +1233,7 @@ function SpokeOrderRow({
    */
   floor?: number;
 }) {
-  const { recipe, carryOver, quinnProposed } = row;
+  const { recipe, carryOver, quinnProposed, forecast } = row;
   const carriedUnits = carryOver?.carriedUnits ?? 0;
   const total = sumSlots(slots);
   const lineDelta = total - quinnProposed;
