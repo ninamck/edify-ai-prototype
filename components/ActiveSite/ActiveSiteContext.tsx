@@ -23,7 +23,7 @@ import {
  * changes during a demo session.
  */
 
-export type ActiveSiteType = 'HUB' | 'SPOKE' | 'HYBRID' | 'STANDALONE';
+export type ActiveSiteType = 'HUB' | 'SPOKE' | 'HYBRID' | 'STANDALONE' | 'ALL';
 
 export type ActiveSite = {
   id: string;
@@ -36,6 +36,16 @@ export type ActiveSite = {
 const STORAGE_KEY = 'edify.activeSiteId';
 
 export const ACTIVE_SITES: ActiveSite[] = [
+  {
+    id: 'all-sites',
+    name: 'All sites',
+    type: 'ALL',
+    // Meta-persona: aggregates every site for the cross-estate views
+    // (currently only the Monitor stock → Estate grid). Other surfaces
+    // treat this as STANDALONE so the rest of the app keeps working
+    // without per-route gating — see `isStandalone` below.
+    caption: 'Estate roll-up · All sites',
+  },
   {
     id: 'fitzroy-espresso',
     name: 'Fitzroy Espresso',
@@ -81,7 +91,14 @@ type ActiveSiteContextValue = {
   isHub: boolean;
   isSpoke: boolean;
   isHybrid: boolean;
+  // NOTE: `isStandalone` is intentionally `true` for the ALL meta-site
+  // too. The user-facing intent is "treat All sites like a standalone
+  // for every page except the surfaces that genuinely roll up across
+  // sites" — so most consumers can keep their existing standalone
+  // branch and not have to grow an `isAllSites` arm. Surfaces that
+  // *do* care about the cross-site case check `isAllSites` explicitly.
   isStandalone: boolean;
+  isAllSites: boolean;
 };
 
 const ActiveSiteContext = createContext<ActiveSiteContextValue | null>(null);
@@ -123,7 +140,9 @@ export function ActiveSiteProvider({ children }: { children: React.ReactNode }) 
       isHub: activeSite.type === 'HUB',
       isSpoke: activeSite.type === 'SPOKE',
       isHybrid: activeSite.type === 'HYBRID',
-      isStandalone: activeSite.type === 'STANDALONE',
+      isStandalone:
+        activeSite.type === 'STANDALONE' || activeSite.type === 'ALL',
+      isAllSites: activeSite.type === 'ALL',
     };
   }, [activeSiteId, setActiveSiteId]);
 
@@ -144,7 +163,9 @@ export function useActiveSite(): ActiveSiteContextValue {
       isHub: fallback.type === 'HUB',
       isSpoke: fallback.type === 'SPOKE',
       isHybrid: fallback.type === 'HYBRID',
-      isStandalone: fallback.type === 'STANDALONE',
+      isStandalone:
+        fallback.type === 'STANDALONE' || fallback.type === 'ALL',
+      isAllSites: fallback.type === 'ALL',
     };
   }
   return ctx;

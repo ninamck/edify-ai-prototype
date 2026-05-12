@@ -47,6 +47,14 @@ function getInitials(name: string): string {
  */
 function siteTypeTheme(type: ActiveSite['type']) {
   switch (type) {
+    case 'ALL':
+      // Meta-persona — dark accent so it reads as the "global mode"
+      // option, visually distinct from the individual-site rows below.
+      return {
+        avatarBg: 'var(--color-accent-deep)',
+        chipBg: 'var(--color-bg-hover)',
+        chipFg: 'var(--color-accent-deep)',
+      };
     case 'HUB':
       return {
         avatarBg: 'var(--color-accent-active)',
@@ -78,6 +86,8 @@ function siteTypeTheme(type: ActiveSite['type']) {
 /** One-line "what kind of site this is" caption used under the name. */
 function siteTypeCaption(type: ActiveSite['type']): string {
   switch (type) {
+    case 'ALL':
+      return 'All sites';
     case 'HUB':
       return 'Hub kitchen';
     case 'HYBRID':

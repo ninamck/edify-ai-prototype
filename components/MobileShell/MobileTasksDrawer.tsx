@@ -28,7 +28,7 @@ function commonTasks(): MobileTaskItem[] {
   return [
     { id: 'review-orders', icon: ShoppingCart, label: 'Review orders', badge: 3, route: '/assisted-ordering' },
     { id: 'transfer-stock', icon: ArrowLeftRight, label: 'Transfer stock', route: '/' },
-    { id: 'count-stock', icon: PackageSearch, label: 'Count stock', route: '/' },
+    { id: 'count-stock', icon: PackageSearch, label: 'Stocktake', route: '/stock' },
     { id: 'match-invoices', icon: FileCheck, label: 'Match invoices', badge: needsReviewCount() || undefined, route: '/invoices' },
     { id: 'credit-notes', icon: FileX, label: 'Manage credit notes', route: '/credit-notes' },
   ];

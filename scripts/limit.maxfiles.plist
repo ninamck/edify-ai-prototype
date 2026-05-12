@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Raises the system-wide maxfiles soft/hard limits at boot.
+
+  macOS default is `maxfiles 256 unlimited`, which is enough for typical
+  apps but not for dev servers that use file watchers (Watchpack,
+  chokidar, fs.watch). With a 256-FD soft cap, `next dev` quickly hits
+  `EMFILE: too many open files` and stops detecting source edits.
+
+  Soft 65536 / hard 200000 is the value Apple's own ServiceManagement
+  docs use as a sane upper bound for desktop workstations.
+
+  Install: see scripts/raise-maxfiles.sh in this folder.
+-->
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>limit.maxfiles</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>launchctl</string>
+      <string>limit</string>
+      <string>maxfiles</string>
+      <string>65536</string>
+      <string>200000</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>ServiceIPC</key>
+    <false/>
+  </dict>
+</plist>

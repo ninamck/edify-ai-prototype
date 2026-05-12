@@ -9,10 +9,10 @@ import {
   ClipboardList,
   Send,
   ShoppingCart,
-  PackageSearch,
   FileCheck,
   Clock,
   FileX,
+  Gauge,
   ShieldCheck,
   Layers,
   Star,
@@ -210,7 +210,12 @@ export default function Sidebar() {
             sit at the estate level. */}
         <NavGroup title="Stock & ordering" compact={compact}>
           <NavItem label="Review suggested orders" icon={ShoppingCart} compact={compact} badge={3} active={is('/assisted-ordering')} onClick={() => router.push('/assisted-ordering')} />
-          <NavItem label="Count stock" icon={PackageSearch} compact={compact} active={is('/stock-count')} />
+          {/* "Manage stock" covers the four sub-views of /stock:
+              Needs attention, All items, Stocktake (the count flow), and
+              Stocktake history. Previously split across two sidebar items
+              ("Monitor stock" + "Count stock") — folded into one so the
+              operator doesn't route-hop between monitoring and counting. */}
+          <NavItem label="Manage stock" icon={Gauge} compact={compact} active={is('/stock')} onClick={() => router.push('/stock')} />
           {!isSpoke && (
             <NavItem label="Match invoices" icon={FileCheck} compact={compact} badge={invoiceReviewCount || undefined} active={is('/invoices')} onClick={() => router.push('/invoices')} />
           )}

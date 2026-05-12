@@ -3,28 +3,16 @@
 import { useState } from 'react';
 import type { ConfidenceScore, ConfidenceFactors } from '../types';
 
+// Outlined-only chip palette — matches the stock chip treatment so the
+// app reads as a single design system. Background stays transparent;
+// the colour token does double-duty for text + border.
 const CONFIG: Record<
   ConfidenceScore,
-  { label: string; bg: string; text: string; border: string }
+  { label: string; tone: string }
 > = {
-  high: {
-    label: 'HIGH',
-    bg: 'rgba(21, 128, 61, 0.10)',
-    text: '#15803D',
-    border: 'rgba(21, 128, 61, 0.25)',
-  },
-  medium: {
-    label: 'MED',
-    bg: 'rgba(234, 88, 12, 0.10)',
-    text: 'var(--color-warning)',
-    border: 'rgba(234, 88, 12, 0.25)',
-  },
-  low: {
-    label: 'LOW',
-    bg: 'rgba(185, 28, 28, 0.10)',
-    text: '#B91C1C',
-    border: 'rgba(185, 28, 28, 0.25)',
-  },
+  high:   { label: 'HIGH', tone: '#15803D' },
+  medium: { label: 'MED',  tone: 'var(--color-warning)' },
+  low:    { label: 'LOW',  tone: '#B91C1C' },
 };
 
 function factorLabel(key: string, value: string): { text: string; ok: boolean } {
@@ -74,9 +62,9 @@ export default function ConfidenceBadge({ score, factors }: Props) {
           alignItems: 'center',
           padding: '2px 7px',
           borderRadius: 'var(--radius-badge)',
-          background: cfg.bg,
-          color: cfg.text,
-          border: `1px solid ${cfg.border}`,
+          background: 'transparent',
+          color: cfg.tone,
+          border: `1px solid ${cfg.tone}`,
           fontSize: '12px',
           fontWeight: 700,
           letterSpacing: '0.04em',
