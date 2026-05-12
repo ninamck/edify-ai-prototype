@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import HealthStrip from '@/components/Stock/HealthStrip';
@@ -76,7 +76,13 @@ function applyOverrides(
   });
 }
 
-export default function StockPage() {
+// Inner component holds the actual page body. It reads from
+// `useSearchParams`, which Next.js requires to sit inside a Suspense
+// boundary during prerendering — otherwise `next build` bails on
+// `/stock` with a prerender error. The default export below wraps
+// this in <Suspense>, matching the pattern used by app/orders/page.tsx
+// and the other deep-linked routes in this repo.
+function StockPageInner() {
   const { isAllSites, activeSiteId, setActiveSiteId } = useActiveSite();
   const searchParams = useSearchParams();
 
@@ -473,5 +479,17 @@ export default function StockPage() {
         onItemEdit={handleItemEdit}
       />
     </>
+  );
+}
+
+// Default export is a thin Suspense wrapper so the inner component
+// can safely use `useSearchParams` during the static prerender step
+// of `next build`. Fallback is `null` because the inner page hydrates
+// almost instantly and any placeholder would flash on first load.
+export default function StockPage() {
+  return (
+    <Suspense fallback={null}>
+      <StockPageInner />
+    </Suspense>
   );
 }
