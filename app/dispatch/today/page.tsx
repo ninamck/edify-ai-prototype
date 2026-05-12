@@ -14,9 +14,12 @@ import {
   PRET_SITES,
   dayOffset,
   dayOfWeek,
+  getRecipe,
   type DispatchTransfer,
+  type RecipeId,
   type SiteId,
 } from '@/components/Production/fixtures';
+import type { ShortfallReallocationResult } from '@/components/Production/ShortfallReallocationModal';
 import { useRole } from '@/components/Production/RoleContext';
 
 /**
@@ -57,6 +60,26 @@ function DispatchTodayPageInner() {
   const { hasRecord: hubHasUnlockRecord, markClosed: markUnlockClosed } = useHubUnlocks();
   const { user } = useRole();
   const sentBy = user?.name ?? 'Hub manager';
+
+  // Shortfall reallocations applied via the matrix banner — keyed by
+  // recipeId. The matrix reads this to know which rows are already
+  // resolved (banner flips to green) and the request builder stamps the
+  // chosen cuts + reasons onto the outgoing transfer lines.
+  const [shortfallApplied, setShortfallApplied] = useState<
+    Record<RecipeId, ShortfallReallocationResult>
+  >({});
+
+  // Reset shortfall state when the hub changes — supply stubs are
+  // hub-scoped, so the resolutions a manager built for hub-central
+  // don't apply (and shouldn't carry) to a different hub.
+  function changeHub(next: SiteId) {
+    setHubId(next);
+    setShortfallApplied({});
+  }
+
+  function applyShortfall(result: ShortfallReallocationResult) {
+    setShortfallApplied(prev => ({ ...prev, [result.recipeId]: result }));
+  }
 
   function openSingle(req: SpokeDispatchRequest) {
     setPendingRequests([req]);
@@ -125,6 +148,45 @@ function DispatchTodayPageInner() {
     }));
   }, [pendingRequests]);
 
+  // Across the pending manifest, find every recipe that had cuts
+  // applied (auto-reallocated at Send or manager-edited via the matrix
+  // modal). Names + auto-count drive a non-blocking info banner at the
+  // top of the confirm sheet so the manager has a one-line summary
+  // before scanning the per-line reason chips.
+  const reallocatedRecipes = useMemo(() => {
+    if (!pendingRequests) return [];
+    const seen = new Set<RecipeId>();
+    const names: string[] = [];
+    for (const req of pendingRequests) {
+      for (const line of req.lines) {
+        if (line.shortfallReason === undefined) continue;
+        if (seen.has(line.recipeId)) continue;
+        seen.add(line.recipeId);
+        names.push(getRecipe(line.recipeId)?.name ?? line.recipeId);
+      }
+    }
+    return names;
+  }, [pendingRequests]);
+
+  // Auto vs manual split — anything not present in `shortfallApplied`
+  // was filled in automatically by the matrix's effective-allocations
+  // pass on Send. Pure derivation from page state; the sheet just
+  // reads the numbers.
+  const autoReallocatedCount = useMemo(() => {
+    if (!pendingRequests) return 0;
+    const seen = new Set<RecipeId>();
+    let n = 0;
+    for (const req of pendingRequests) {
+      for (const line of req.lines) {
+        if (line.shortfallReason === undefined) continue;
+        if (seen.has(line.recipeId)) continue;
+        seen.add(line.recipeId);
+        if (!shortfallApplied[line.recipeId]) n += 1;
+      }
+    }
+    return n;
+  }, [pendingRequests, shortfallApplied]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       {/* Page header — hub picker + dispatch date caption */}
@@ -159,7 +221,7 @@ function DispatchTodayPageInner() {
             return (
               <button
                 key={s.id}
-                onClick={() => setHubId(s.id)}
+                onClick={() => changeHub(s.id)}
                 style={{
                   padding: '10px 14px',
                   borderRadius: 8,
@@ -194,6 +256,8 @@ function DispatchTodayPageInner() {
         forDate={forDate}
         onSendSpoke={openSingle}
         onSendAll={openBulk}
+        shortfallApplied={shortfallApplied}
+        onApplyShortfall={applyShortfall}
       />
 
       {pendingRequests && pendingRequests.length > 0 && (
@@ -202,6 +266,8 @@ function DispatchTodayPageInner() {
           forDate={forDate}
           manifest={manifest}
           sentBy={sentBy}
+          reallocatedRecipes={reallocatedRecipes}
+          autoReallocatedCount={autoReallocatedCount}
           onCancel={() => setPendingRequests(null)}
           onConfirm={handleConfirm}
         />

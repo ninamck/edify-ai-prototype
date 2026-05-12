@@ -41,6 +41,8 @@ export type QuinnScope =
   | { kind: 'supplier'; supplierId: string }
   | { kind: 'bulk-products'; selectedIds: string[] };
 
+export type QuinnSuggestion = { label: string; seed: string };
+
 type Turn =
   | { from: 'quinn'; text: string; helper?: string }
   | { from: 'user'; text: string };
@@ -49,10 +51,16 @@ export default function QuinnSheet({
   open,
   scope,
   onClose,
+  suggestions,
 }: {
   open: boolean;
   scope: QuinnScope | null;
   onClose: () => void;
+  /** Starter prompts shown above the conversation when the sheet opens
+   *  fresh in the global scope. Tapping a chip re-seeds the global flow
+   *  with the suggestion's sentence — same path as typing it and pressing
+   *  Enter in the input box below. */
+  suggestions?: QuinnSuggestion[];
 }) {
   const products = useProducts();
   const suppliers = useSuppliers();
@@ -216,6 +224,45 @@ export default function QuinnSheet({
           {history.map((t, i) => (
             <TurnBubble key={i} turn={t} />
           ))}
+
+          {/* Starter prompt chips — shown only when the sheet was opened
+              fresh from the page-level "Ask Quinn" button (global scope,
+              no seed) and the user hasn't picked anything yet. They give
+              the user the same one-tap shortcuts the old hero card did,
+              now without consuming list real-estate. */}
+          {suggestions && suggestions.length > 0
+            && history.length === 0
+            && !success
+            && scope?.kind === 'global'
+            && !scope.seed && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 4 }}>
+                <div style={{
+                  fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+                  textTransform: 'uppercase', color: 'var(--color-text-muted)',
+                  marginBottom: 2,
+                }}>
+                  Quick prompts
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {suggestions.map((s, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        setHistory((h) => [...h, { from: 'user', text: s.label }]);
+                        setInput('');
+                        setSuccess(null);
+                        setStep(startGlobalFlow(ctx, s.seed));
+                      }}
+                      style={suggestionChipStyle}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
           {step?.kind === 'quinn' && (
             <>
@@ -496,6 +543,18 @@ const undoBtnStyle: React.CSSProperties = {
   fontSize: 12, fontWeight: 700,
   cursor: 'pointer',
   fontFamily: 'var(--font-primary)',
+};
+
+const suggestionChipStyle: React.CSSProperties = {
+  padding: '6px 12px',
+  borderRadius: 100,
+  border: '1px solid var(--color-border-subtle)',
+  background: '#fff',
+  color: 'var(--color-text-secondary)',
+  fontSize: 12, fontWeight: 600,
+  cursor: 'pointer',
+  fontFamily: 'var(--font-primary)',
+  transition: 'background 120ms ease',
 };
 
 // Silence "unused" warning when the file is bundled but the named import is

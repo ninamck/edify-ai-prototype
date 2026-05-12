@@ -92,3 +92,21 @@ export function updateWorkflow(wf: ProductionWorkflow): void {
 }
 
 export { cloneWorkflow };
+
+/** Recipes that have a given modifier group attached. Used by the
+ *  modifier-groups list + editor to surface "Used by recipes". */
+export function recipesUsingGroup(groupId: string): Recipe[] {
+  return state.recipes.filter((r) => (r.modifierGroupIds ?? []).includes(groupId));
+}
+
+/** Non-React snapshot getter — used by the unified ingredient catalogue
+ *  to include component / sub-recipes in search results. */
+export function snapshotRecipes(): Recipe[] {
+  return state.recipes;
+}
+
+/** Non-React lookup. Mirrors `findMasterProduct` / `findProduct` in the
+ *  Suppliers store. Used by `resolveIngredientRef` for subrecipe refs. */
+export function findRecipe(id: string): Recipe | undefined {
+  return state.recipes.find((r) => r.id === id);
+}

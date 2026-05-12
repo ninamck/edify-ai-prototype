@@ -31,6 +31,14 @@ type Props = {
   onClearFocus?: () => void;
   /** When set to a specific mode, only benches whose primaryMode matches are shown. */
   modeFilter?: ProductionMode | 'all';
+  /**
+   * When set to a specific run label (e.g. 'R1', 'R2', 'N1'), the board
+   * scopes to that run only: benches without a matching scheduled run are
+   * hidden, secondary mode groups (no run buckets) are hidden, and the
+   * remaining cards render just the matching run bucket(s). 'all' is the
+   * default and shows every run on every bench, as before.
+   */
+  runFilter?: string;
   /** Open the bench detail panel for the clicked bench. */
   onBenchClick?: (benchId: string) => void;
 };
@@ -178,6 +186,7 @@ export default function BenchCardBoard({
   onFocusChange,
   onClearFocus,
   modeFilter = 'all',
+  runFilter = 'all',
   onBenchClick,
 }: Props) {
   const lines = usePlan(site.id, date);
@@ -359,10 +368,23 @@ export default function BenchCardBoard({
   );
 
   // Filter cards by selected mode tab — keep benches whose primary mode matches.
+  // Then narrow further by run label if a specific run (R1/R2/N1/...) is
+  // selected: a bench is only shown if its `runs` schedule includes that
+  // label. We deliberately match against the bench schedule, NOT against
+  // populated run buckets — empty buckets get dropped at the data layer
+  // (`bucketRowsIntoRuns`) so a brand-new bench with R1/R2/R3 on the rota
+  // but no recipes assigned yet would otherwise disappear here. Filtering
+  // on `bench.runs` keeps those benches visible and lets the card render
+  // a "no recipes scheduled for R1 today" placeholder.
   const visibleCards = useMemo(() => {
-    if (modeFilter === 'all') return cards;
-    return cards.filter(c => c.bench.primaryMode === modeFilter);
-  }, [cards, modeFilter]);
+    const byMode = modeFilter === 'all'
+      ? cards
+      : cards.filter(c => c.bench.primaryMode === modeFilter);
+    if (runFilter === 'all') return byMode;
+    return byMode.filter(c =>
+      c.bench.runs?.some(r => r.label === runFilter),
+    );
+  }, [cards, modeFilter, runFilter]);
 
   return (
     <div style={{ padding: '40px 36px', display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -398,6 +420,7 @@ export default function BenchCardBoard({
               onAssign={setAssignment}
               siteBenches={siteBenches}
               onMoveLine={moveLineToBench}
+              runFilter={runFilter}
             />
           </div>
         ))}
@@ -436,6 +459,7 @@ function BenchCard({
   onAssign,
   siteBenches,
   onMoveLine,
+  runFilter = 'all',
 }: {
   card: CardData;
   nowHHMM?: string;
@@ -449,7 +473,20 @@ function BenchCard({
   siteBenches: Bench[];
   /** Move a planned recipe row from this bench to another bench. */
   onMoveLine?: (itemId: ProductionItemId, benchId: string) => void;
+  /** Run-label filter from the board toolbar. 'all' renders every run. */
+  runFilter?: string;
 }) {
+  // While a run filter is active, drop any mode group that doesn't have a
+  // matching scheduled run bucket — secondary off-mode work (variable /
+  // increment tails) has no run schedule and shouldn't appear under e.g.
+  // "R1". The primary run group is kept; ModeGroupSection itself narrows
+  // its buckets to the selected run.
+  const visibleModeGroups = useMemo(() => {
+    if (runFilter === 'all') return card.modeGroups;
+    return card.modeGroups.filter(g =>
+      g.runBuckets?.some(b => b.run.label === runFilter)
+    );
+  }, [card.modeGroups, runFilter]);
   const allRows = useMemo(() => card.modeGroups.flatMap(g => g.rows), [card.modeGroups]);
 
   // If a focus is active and no row on this card is related, dim the whole card.
@@ -579,10 +616,16 @@ function BenchCard({
       </header>
 
       {/* Mode groups (runs). Primary first; secondary modes rendered under an
-          "After service" divider. */}
-      {card.hasWork ? (
+          "After service" divider. When a run filter is active and the bench
+          is scheduled for that run but has no recipes assigned to it today,
+          show a focused empty state instead of an awkward blank card body. */}
+      {runFilter !== 'all' && visibleModeGroups.length === 0 ? (
+        <div style={{ padding: '18px 14px', fontSize: 12, color: 'var(--color-text-muted)' }}>
+          No recipes scheduled for {runFilter} on this bench today.
+        </div>
+      ) : card.hasWork ? (
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {card.modeGroups.map((group, idx, arr) => {
+          {visibleModeGroups.map((group, idx, arr) => {
             const prev = idx > 0 ? arr[idx - 1] : null;
             const firstSecondary = !group.isPrimary && (!prev || prev.isPrimary);
             return (
@@ -597,6 +640,7 @@ function BenchCard({
                   currentBenchId={card.bench.id}
                   siteBenches={siteBenches}
                   onMoveLine={onMoveLine}
+                  runFilter={runFilter}
                 />
               </div>
             );
@@ -717,6 +761,7 @@ function ModeGroupSection({
   currentBenchId,
   siteBenches,
   onMoveLine,
+  runFilter = 'all',
 }: {
   group: ModeGroup;
   isFirst: boolean;
@@ -726,11 +771,21 @@ function ModeGroupSection({
   currentBenchId: string;
   siteBenches: Bench[];
   onMoveLine?: (itemId: ProductionItemId, benchId: string) => void;
+  /** Active run label from the toolbar, or 'all' to show every bucket. */
+  runFilter?: string;
 }) {
   const treatment = MODE_TREATMENT[group.mode];
   // Secondary (off-mode) groups are rendered muted so they read as
   // "incidental, post-service" work rather than a peer to the main run.
   const sectionOpacity = group.isPrimary ? 1 : 0.7;
+  // Narrow the group's scheduled runs to just the selected run when a
+  // run filter is active. Done here (rather than at the data layer) so
+  // bench-level totals & windows keep representing the full day even
+  // while the rendered content is scoped to a single run.
+  const visibleRunBuckets = useMemo(() => {
+    if (!group.runBuckets || runFilter === 'all') return group.runBuckets;
+    return group.runBuckets.filter(b => b.run.label === runFilter);
+  }, [group.runBuckets, runFilter]);
 
   return (
     <div
@@ -740,56 +795,17 @@ function ModeGroupSection({
         opacity: sectionOpacity,
       }}
     >
-      {/* Section header: mode badge + label + window */}
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 10,
-          padding: '8px 14px',
-          background: treatment.headerBg,
-          borderBottom: `1px ${treatment.dashedBorder ? 'dashed' : 'solid'} var(--color-border-subtle)`,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <ModeBadge mode={group.mode} />
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 700,
-              color: 'var(--color-text-primary)',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {group.label}
-          </span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-            <Clock size={11} />
-            {group.throughoutDay
-              ? `${minsToHHMM(group.windowStartMins)} → ${minsToHHMM(group.windowEndMins)} · throughout day`
-              : `${minsToHHMM(group.windowStartMins)}–${minsToHHMM(group.windowEndMins)}`}
-          </span>
-        </div>
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: 'var(--color-text-secondary)',
-            fontVariantNumeric: 'tabular-nums',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {formatHMS(group.productionMins)} · {group.rows.length} recipe{group.rows.length === 1 ? '' : 's'}
-        </span>
-      </header>
+      {/* Mode-group section header (RUN · Scheduled runs · 05:00–18:23 · 12
+          recipes, VARIABLE · Snack build · …, etc.) intentionally omitted.
+          The header restated the bench card's own framing and made the
+          card top read like there were two competing summaries. Run buckets
+          (R1/R2) and individual recipe rows below carry the per-section
+          context we actually need. */}
 
       {/* When the group has scheduled runs (R1/R2), render each run as its
           own labelled subsection. Otherwise fall back to a single flat list. */}
-      {group.runBuckets && group.runBuckets.length > 0 ? (
-        group.runBuckets.map((bucket, idx) => (
+      {visibleRunBuckets && visibleRunBuckets.length > 0 ? (
+        visibleRunBuckets.map((bucket, idx) => (
           <RunBucketSection
             key={bucket.run.id}
             bucket={bucket}

@@ -32,6 +32,8 @@ import {
   type ProductSource,
   type ProductCategory,
 } from '@/components/Suppliers/fixtures';
+import { findRecipe, useRecipes } from '@/components/Recipe/recipeStore';
+import type { Recipe } from '@/components/Recipe/libraryFixtures';
 
 /**
  * A single result row in the unified ingredient picker. Discriminated
@@ -40,7 +42,11 @@ import {
  */
 export type IngredientRef =
   | { kind: 'master'; masterProductId: string }
-  | { kind: 'product'; productId: string };
+  | { kind: 'product'; productId: string }
+  // Sub-recipe / component recipe used as an ingredient. Pickable
+  // from the same unified search box — no separate "is this an
+  // ingredient or a sub-recipe?" decision up-front.
+  | { kind: 'subrecipe'; recipeId: string };
 
 export type IngredientCatalogueRow = {
   ref: IngredientRef;
@@ -49,7 +55,7 @@ export type IngredientCatalogueRow = {
   /** Optional secondary line (e.g. unit / category). */
   sublabel?: string;
   /** Which kind of source this row represents. */
-  kind: 'master' | 'supplier' | 'made';
+  kind: 'master' | 'supplier' | 'made' | 'subrecipe';
   /** For supplier / made rows, the human-readable source (supplier name or
    *  "Made in CPU" etc.). */
   sourceLabel?: string;
@@ -91,14 +97,16 @@ function sourceLabelForProduct(p: Product): string {
 
 /**
  * Pure function — usable from non-React callers (e.g. POS intake
- * matching). Pass in the latest snapshots from the Suppliers store.
+ * matching). Pass in the latest snapshots from the Suppliers store
+ * and the Recipe store (component / sub-recipes).
  */
 export function searchIngredientCatalogue(
   query: string,
-  snapshots: { masterProducts: MasterProduct[]; products: Product[] },
-  opts?: { limit?: number },
+  snapshots: { masterProducts: MasterProduct[]; products: Product[]; recipes?: Recipe[] },
+  opts?: { limit?: number; excludeRecipeIds?: string[] },
 ): IngredientCatalogueRow[] {
   const limit = opts?.limit ?? 30;
+  const exclude = new Set(opts?.excludeRecipeIds ?? []);
   const rows: Array<IngredientCatalogueRow & { _score: number }> = [];
 
   for (const mp of snapshots.masterProducts) {
@@ -134,6 +142,29 @@ export function searchIngredientCatalogue(
     });
   }
 
+  // Sub-recipes / component recipes — anything tagged `kind: 'component'`
+  // (or flagged as a sub-recipe via the editor's advanced section).
+  // Slightly down-weighted vs raw products so a direct master/SKU match
+  // still wins ties, but a clear name match (e.g. "Lemon Tahini") still
+  // surfaces high.
+  for (const r of snapshots.recipes ?? []) {
+    if (r.kind !== 'component') continue;
+    if (exclude.has(r.id)) continue;
+    const score = scoreMatch(r.name, query);
+    if (score < 0) continue;
+    rows.push({
+      _score: score - 10,
+      ref: { kind: 'subrecipe', recipeId: r.id },
+      label: r.name,
+      sublabel: r.formExtras?.yieldUom
+        ? `yields ${r.formExtras.yieldQty ?? 1} ${r.formExtras.yieldUom}`
+        : 'sub-recipe',
+      kind: 'subrecipe',
+      sourceLabel: 'Sub-recipe',
+      hasMaster: false,
+    });
+  }
+
   rows.sort((a, b) => b._score - a._score || a.label.localeCompare(b.label));
   return rows.slice(0, limit).map(({ _score, ...rest }) => rest);
 }
@@ -148,13 +179,18 @@ export function searchIngredientCatalogue(
  * the picker re-runs the query on every keystroke).
  */
 export function useIngredientCatalogue(): {
-  search: (query: string, opts?: { limit?: number }) => IngredientCatalogueRow[];
+  search: (
+    query: string,
+    opts?: { limit?: number; excludeRecipeIds?: string[] },
+  ) => IngredientCatalogueRow[];
   resolveRef: (ref: IngredientRef) => ResolvedIngredient | undefined;
 } {
   const masterProducts = useMasterProducts();
   const products = useProducts();
+  const recipes = useRecipes();
   return {
-    search: (q, opts) => searchIngredientCatalogue(q, { masterProducts, products }, opts),
+    search: (q, opts) =>
+      searchIngredientCatalogue(q, { masterProducts, products, recipes }, opts),
     resolveRef: (ref) => resolveIngredientRef(ref),
   };
 }
@@ -173,6 +209,8 @@ export type ResolvedIngredient = {
   product?: Product;
   /** Picked Master, if any. */
   master?: MasterProduct;
+  /** Picked sub-recipe / component recipe, if any. */
+  subRecipe?: Recipe;
   /** Source kind of the underlying Product, when known. */
   productSource?: ProductSource;
   /** Best-effort canonical unit string (e.g. "ml", "g"). */
@@ -189,6 +227,15 @@ export function resolveIngredientRef(ref: IngredientRef | undefined): ResolvedIn
       masterProductId: m.id,
       master: m,
       unit: m.unit,
+    };
+  }
+  if (ref.kind === 'subrecipe') {
+    const r = findRecipe(ref.recipeId);
+    if (!r) return undefined;
+    return {
+      name: r.name,
+      subRecipe: r,
+      unit: r.formExtras?.yieldUom ?? 'each',
     };
   }
   const p = findProduct(ref.productId);

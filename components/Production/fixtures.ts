@@ -714,6 +714,50 @@ export const PRET_BENCHES: Bench[] = [
     online: true,
     primaryMode: 'increment',
   },
+  // Second sandwich-build bench at North — added when the existing
+  // variable-mode `bench-north-build` couldn't absorb both the morning
+  // pre-pack and the lunchtime top-up. Run-mode with three scheduled
+  // runs lets the cards split work into pre-open / lunch / late-tail.
+  {
+    id: 'bench-north-sandwich-build',
+    siteId: 'site-standalone-north',
+    name: 'Sandwich & wrap build (run)',
+    capabilities: ['assemble', 'pack'],
+    workTypes: ['assemble', 'pack', 'label'],
+    equipment: ['prep-table'],
+    online: true,
+    primaryMode: 'run',
+    runs: [
+      // R1 — morning bulk-build for the 07:00 doors + lunch fridge stock
+      { id: 'r1', label: 'R1', startTime: '06:30', durationMinutes: 120 },
+      // R2 — lunchtime top-up after the first wave of sales reads
+      { id: 'r2', label: 'R2', startTime: '10:30', durationMinutes: 75 },
+      // R3 — afternoon refresh for late-lunch + tomorrow's pre-pack
+      { id: 'r3', label: 'R3', startTime: '14:30', durationMinutes: 60 },
+    ],
+  },
+  // Pastry / dessert build bench — covers cake assembly, dessert pots,
+  // brownie/cookie portioning. Three runs match the day's sweet sales
+  // rhythm (open, lunch, coffee tail) so the run filter on the bench
+  // board produces meaningful R1/R2/R3 buckets.
+  {
+    id: 'bench-north-pastry',
+    siteId: 'site-standalone-north',
+    name: 'Pastry & dessert build',
+    capabilities: ['assemble', 'cold-prep'],
+    workTypes: ['assemble', 'pack', 'portion', 'label'],
+    equipment: ['prep-table', 'walk-in-chiller'],
+    online: true,
+    primaryMode: 'run',
+    runs: [
+      // R1 — pre-open: croissant fills, brownie portioning, dessert pots
+      { id: 'r1', label: 'R1', startTime: '06:00', durationMinutes: 120 },
+      // R2 — mid-morning sweet top-up before the lunch coffee crowd
+      { id: 'r2', label: 'R2', startTime: '10:00', durationMinutes: 60 },
+      // R3 — afternoon coffee tail: cookies + warm bakes for the 15:00 push
+      { id: 'r3', label: 'R3', startTime: '14:00', durationMinutes: 60 },
+    ],
+  },
 
   // ─── site-spoke-south (receives from hub — minimal kit) ───────────────────
   {
@@ -1492,6 +1536,14 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
   { id: 'pi-airport-chicken-avo',  siteId: 'site-hybrid-airport', recipeId: 'prec-chicken-avo-sandwich',  skuId: 'sku-chicken-avo-sandwich',  mode: 'run', batchSize: 8,  preferredBenchId: 'bench-airport-build', targetMinutes: 7 },
   { id: 'pi-airport-salad',        siteId: 'site-hybrid-airport', recipeId: 'prec-salad-bowl',            skuId: 'sku-salad-bowl',            mode: 'run', batchSize: 6,  preferredBenchId: 'bench-airport-build', targetMinutes: 5 },
   { id: 'pi-airport-yogurt-pot',   siteId: 'site-hybrid-airport', recipeId: 'prec-yogurt-pot',            skuId: 'sku-yogurt-pot',            mode: 'run', batchSize: 6,  preferredBenchId: 'bench-airport-build', targetMinutes: 4 },
+  // Salad + snack pots (variable — built to demand through the day so
+  // the floor can dial up VP as commuter footfall flexes). Same shape
+  // as the standalone-north build bench: small batches, no fixed run
+  // schedule, the VP cell on the daily grid is the steering wheel.
+  { id: 'pi-airport-chicken-caesar', siteId: 'site-hybrid-airport', recipeId: 'prec-chicken-caesar', skuId: 'sku-chicken-caesar', mode: 'variable', batchSize: 1, preferredBenchId: 'bench-airport-build' },
+  { id: 'pi-airport-grain-bowl',     siteId: 'site-hybrid-airport', recipeId: 'prec-med-grain-bowl', skuId: 'sku-med-grain-bowl', mode: 'variable', batchSize: 1, preferredBenchId: 'bench-airport-build' },
+  { id: 'pi-airport-fruit-pot',      siteId: 'site-hybrid-airport', recipeId: 'prec-fruit-pot',      skuId: 'sku-fruit-pot',      mode: 'variable', batchSize: 1, preferredBenchId: 'bench-airport-build' },
+  { id: 'pi-airport-granola-pot',    siteId: 'site-hybrid-airport', recipeId: 'prec-granola-pot',    skuId: 'sku-granola-pot',    mode: 'variable', batchSize: 1, preferredBenchId: 'bench-airport-build' },
   // Prep bench (run) — small set, the rest comes from cold chain
   { id: 'pi-airport-egg-filling',  siteId: 'site-hybrid-airport', recipeId: 'prec-egg-mayo-filling',  skuId: 'sku-egg-mayo-filling',  mode: 'run', batchSize: 1, preferredBenchId: 'bench-airport-prep', targetMinutes: 12 },
   { id: 'pi-airport-grilled-chx',  siteId: 'site-hybrid-airport', recipeId: 'prec-grilled-chicken',   skuId: 'sku-grilled-chicken',   mode: 'run', batchSize: 6, preferredBenchId: 'bench-airport-prep', targetMinutes: 14 },
@@ -1810,6 +1862,33 @@ export const PRET_FORECAST: DemandForecastEntry[] = [
     siteId: 'site-hybrid-airport', skuId: 'sku-croissant', date: DEMO_TODAY, projectedUnits: 60,
     byPhase: { morning: 48, midday: 8, afternoon: 4 },
     signals: [{ signal: 'sales-history', weight: 0.5 }, { signal: 'event', weight: 0.5, note: 'Outbound travel peak' }],
+    status: 'confirmed',
+  },
+  // VP recipes built on the airport's own build bench. Skew midday +
+  // afternoon — commuter peak is hot-shelf; salad + pot demand
+  // crescendos into the lunch window.
+  {
+    siteId: 'site-hybrid-airport', skuId: 'sku-chicken-caesar', date: DEMO_TODAY, projectedUnits: 18,
+    byPhase: { morning: 1, midday: 12, afternoon: 5 },
+    signals: [{ signal: 'sales-history', weight: 0.8 }, { signal: 'weather', weight: 0.2 }],
+    status: 'confirmed',
+  },
+  {
+    siteId: 'site-hybrid-airport', skuId: 'sku-med-grain-bowl', date: DEMO_TODAY, projectedUnits: 14,
+    byPhase: { morning: 1, midday: 10, afternoon: 3 },
+    signals: [{ signal: 'sales-history', weight: 0.9 }],
+    status: 'confirmed',
+  },
+  {
+    siteId: 'site-hybrid-airport', skuId: 'sku-fruit-pot', date: DEMO_TODAY, projectedUnits: 20,
+    byPhase: { morning: 8, midday: 8, afternoon: 4 },
+    signals: [{ signal: 'sales-history', weight: 0.7 }, { signal: 'event', weight: 0.3, note: 'Healthy grab-and-go skew' }],
+    status: 'confirmed',
+  },
+  {
+    siteId: 'site-hybrid-airport', skuId: 'sku-granola-pot', date: DEMO_TODAY, projectedUnits: 16,
+    byPhase: { morning: 12, midday: 3, afternoon: 1 },
+    signals: [{ signal: 'sales-history', weight: 1, note: 'Breakfast pot' }],
     status: 'confirmed',
   },
 
@@ -3207,7 +3286,133 @@ export type DispatchTransferLine = {
    * which lines went out on best-guess vs explicit confirmation.
    */
   wasQuinnProposed: boolean;
+  /**
+   * What this spoke asked for, BEFORE any shortfall reallocation applied
+   * by the hub manager. Only set on lines that were cut from the original
+   * request — `units` will be lower than this. Lets the spoke see the
+   * delta on their inbound dispatch ("you asked 12, sent 8 — reason: …")
+   * and keeps the hub-side audit honest.
+   */
+  originalRequested?: number;
+  /**
+   * Why the cut was applied. Set together with `originalRequested` and
+   * surfaced both in the hub manifest and on the spoke's inbound view.
+   * Free-text manager note (when reason === 'manager-discretion') is
+   * carried in `shortfallNote`.
+   */
+  shortfallReason?: ShortfallReason;
+  /** Free-text reason captured when `shortfallReason === 'manager-discretion'`. */
+  shortfallNote?: string;
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dispatch shortfall reallocation
+//
+// When the hub produces less than was promised across its spokes for a
+// recipe, the manager has to decide who gets cut and by how much. The
+// `ShortfallReason` union is the small, fixed taxonomy of labels the
+// spoke sees on their inbound dispatch — keeping it bounded makes the
+// experience scannable and gives us defensible reporting later.
+// `SHORTFALL_REASON_LABELS` is the spoke-visible copy.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ShortfallReason =
+  /** Spoke's forecasted demand for this SKU today is lower than others. */
+  | 'lower-forecast'
+  /** Last-7-day sell-through / waste data flagged this spoke's line. */
+  | 'lower-sell-through'
+  /** Partial cut now — a later production run (R2/R3) will top them up. */
+  | 'top-up-later-run'
+  /** Generic fairness reason: hub balancing across the network. */
+  | 'hub-balancing'
+  /** Manual override — manager picked the cut, optional free-text note. */
+  | 'manager-discretion';
+
+export const SHORTFALL_REASON_LABELS: Record<ShortfallReason, string> = {
+  'lower-forecast':      'Lower forecast demand today',
+  'lower-sell-through':  'Lower recent sell-through',
+  'top-up-later-run':    'Top-up planned on later run',
+  'hub-balancing':       'Hub balancing across network',
+  'manager-discretion':  'Hub manager discretion',
+};
+
+/**
+ * Per-hub × per-SKU × per-date "we're short on this today" stub. In a real
+ * system this would come from the production run's actual-produced number
+ * vs the cumulative committed dispatch. For the prototype we hard-code a
+ * couple of cases so the dispatch matrix has a known shortfall to surface
+ * the banner against (otherwise the feature is invisible to demo). Keyed
+ * by `${hubId}|${forDate}|${skuId}` → produced units available for dispatch.
+ *
+ * If a key is absent, supply is treated as "enough" — no banner fires.
+ */
+const HUB_AVAILABLE_SUPPLY_STUB: Record<string, number> = (() => {
+  const map: Record<string, number> = {};
+  // hub-central — tomorrow's drop is 10 short on baguettes and 5 short
+  // on tuna sandwich. Picked specifically because multiple spokes in the
+  // submission fixtures order both, so the reallocation flow has real
+  // numbers to redistribute across 3+ spokes:
+  //   sku-baguette  → South 12 + East 18 + North 8 = 38 promised; 28 supply → 10 short
+  //   sku-tuna-sand → South 14 + East 18 + North 12 = 44 promised; 39 supply → 5 short
+  const tomorrow = dayOffset(1);
+  map[`hub-central|${tomorrow}|sku-baguette`] = 28;
+  map[`hub-central|${tomorrow}|sku-tuna-sandwich`] = 39;
+  return map;
+})();
+
+/**
+ * What the hub has available to ship for a given SKU on a given dispatch
+ * day. Returns `undefined` when there's no stubbed shortfall — callers
+ * should treat that as "supply is not the limiting factor". A specific
+ * number means we're capped at that amount; everything beyond gets
+ * reallocated across spokes.
+ */
+export function hubAvailableSupply(
+  hubId: SiteId,
+  skuId: SkuId,
+  forDate: string,
+): number | undefined {
+  return HUB_AVAILABLE_SUPPLY_STUB[`${hubId}|${forDate}|${skuId}`];
+}
+
+/**
+ * Stubbed last-7-day sell-through rate per (spoke, SKU). 0..1 where 1.0
+ * means everything sold and 0.5 means half was wasted. The demand-led
+ * allocator weights spokes by this score so spokes with poorer recent
+ * performance absorb more of the cut. Values are deliberately spread so
+ * the suggestion is visibly non-uniform; a real implementation would
+ * read this from the sales-actuals/waste pipeline.
+ *
+ * Default for an unmapped (spoke, SKU) is 0.85 — a reasonable mid-range
+ * sell-through. The allocator never reads a value <0.1 so we don't end
+ * up zeroing a spoke entirely on a single bad-week reading.
+ */
+const SPOKE_SELL_THROUGH_STUB: Record<string, number> = {
+  // sku-baguette — tomorrow's dispatch is 10 short vs ~34 promised.
+  // East has been crushing it (0.95), West a touch softer (0.82),
+  // South wasting more than the others (0.62). Demand-led suggestion
+  // → cut deepest on South, lightest on East.
+  'site-spoke-east|sku-baguette':  0.95,
+  'site-spoke-west|sku-baguette':  0.82,
+  'site-spoke-south|sku-baguette': 0.62,
+  // sku-tuna-sandwich — 5 short. Same shape, different numbers.
+  'site-spoke-east|sku-tuna-sandwich':  0.90,
+  'site-spoke-west|sku-tuna-sandwich':  0.85,
+  'site-spoke-south|sku-tuna-sandwich': 0.70,
+};
+
+const DEFAULT_SELL_THROUGH = 0.85;
+
+/**
+ * Recent sell-through for a (spoke, SKU). Defaults to `DEFAULT_SELL_THROUGH`
+ * when we don't have stubbed data, with a floor of 0.1 so the demand-led
+ * allocator can never end up with a divide-by-zero or a runaway weight.
+ */
+export function spokeSellThrough(spokeId: SiteId, skuId: SkuId): number {
+  const v = SPOKE_SELL_THROUGH_STUB[`${spokeId}|${skuId}`];
+  if (v === undefined) return DEFAULT_SELL_THROUGH;
+  return Math.max(0.1, Math.min(1, v));
+}
 
 export type DispatchTransfer = {
   id: string;

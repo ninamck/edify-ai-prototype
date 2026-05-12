@@ -295,6 +295,12 @@ export const SEED_MASTER_PRODUCTS: MasterProduct[] = [
   { id: 'mp-bag-brownie', name: 'Bag Brownie', category: 'Packaging', unit: 'pack of 250', slug: 'bag-brownie' },
   { id: 'mp-bag-garbage-110', name: 'Bag Garbage Black 110x120cm', category: 'Cleaning', unit: 'pack of 50', slug: 'bag-garbage-110' },
   { id: 'mp-paper-carrier-large', name: 'Paper Carrier Bag — Large', category: 'Packaging', unit: 'pack of 250', slug: 'paper-carrier-large' },
+  // Takeaway cup sizes — used by the Coffee size modifier group's
+  // "Large" option to demonstrate Replace-on-packaging (the cup
+  // physically swaps when the customer picks a large coffee).
+  { id: 'mp-cup-takeaway-8oz',  name: 'Takeaway Cup 8oz',  category: 'Packaging', unit: 'pack of 1000', slug: 'cup-takeaway-8oz' },
+  { id: 'mp-cup-takeaway-12oz', name: 'Takeaway Cup 12oz', category: 'Packaging', unit: 'pack of 1000', slug: 'cup-takeaway-12oz' },
+  { id: 'mp-cup-lid',           name: 'Takeaway Cup Lid',  category: 'Packaging', unit: 'pack of 1000', slug: 'cup-lid' },
   { id: 'mp-whole-milk-1l', name: 'Whole Milk 1L', category: 'Dairy', unit: '1L carton', slug: 'whole-milk-1l' },
   { id: 'mp-skim-milk-1l', name: 'Skim Milk 1L', category: 'Dairy', unit: '1L carton', slug: 'skim-milk-1l' },
   { id: 'mp-oat-milk-1l', name: 'Oat Milk 1L', category: 'Dairy', unit: '1L carton', slug: 'oat-milk-1l' },

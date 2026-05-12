@@ -16,6 +16,7 @@ import {
   type SkuId,
   type ProductionRecipe,
   type ProductionItemId,
+  type ProductionMode,
   type SpokeSubmission,
 } from './fixtures';
 import { productionSiteLabel } from './productionSiteOptions';
@@ -262,6 +263,13 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
     itemId: ProductionItemId | null;
     /** 'make' = produced at this site; 'receive' = comes in from hub. */
     hybridSource: 'make' | 'receive' | null;
+    /**
+     * Production mode of the underlying ProductionItem. For make rows this
+     * mirrors `line.item.mode`; for HYBRID receive rows it's sourced from
+     * the hub's item so the production-type filter (Run / VP / Hot Prod)
+     * can include receive recipes in the right bucket too.
+     */
+    itemMode: ProductionMode | null;
   };
 
   const rows: Row[] = useMemo(() => {
@@ -283,6 +291,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
         skuId: line.recipe.skuId,
         itemId: line.item.id,
         hybridSource: isHybrid ? 'make' : null,
+        itemMode: line.item.mode,
       });
     }
 
@@ -300,6 +309,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
           skuId: hi.skuId,
           itemId: null,
           hybridSource: 'receive',
+          itemMode: hi.mode,
         });
       }
     }
@@ -332,10 +342,14 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
       modeFilter === 'all'
         ? rows
         : rows.filter(r => {
-            // Receive rows have no line.item.mode; keep them only on
-            // 'all' so the filter feels honest.
-            if (!r.line) return false;
-            return r.line.item.mode === modeFilter;
+            // HYBRID receive rows have no local PlanLine, but their
+            // underlying ProductionItem (which lives at the hub) still
+            // has a mode. Filter on `itemMode` so VP / Hot Prod / Run
+            // filters include receive recipes whose hub-side item
+            // matches — e.g. a HYBRID filtering to VP should still see
+            // the VP sandwiches it gets from `hub-central`.
+            if (!r.itemMode) return false;
+            return r.itemMode === modeFilter;
           });
     const map = new Map<ProductionRecipe['category'], Row[]>();
     for (const r of filteredRows) {
@@ -506,6 +520,43 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
     (showSpokeCols ? visibleSpokes.length : 0) +
     (showAvailNow ? 1 : 0) +
     (showRowTotal ? 1 : 0);
+
+  // Hub "Total to make" footer — aggregates each visible column across
+  // every row so the manager can see at a glance what the hub owes
+  // (per P-slot, per spoke, and overall) without summing by eye. Only
+  // built for HUB sites; the per-row total / per-spoke split has no
+  // analogue on standalone or hybrid surfaces.
+  const hubTotals = useMemo(() => {
+    if (!isHub) return null;
+    let carryOver = 0;
+    let production = 0;
+    let grand = 0;
+    const pSlots = new Array<number>(pColumnCount).fill(0);
+    const spokeTotals = new Map<SiteId, number>();
+    for (const sp of visibleSpokes) spokeTotals.set(sp.id, 0);
+    for (const group of grouped) {
+      for (const r of group.rows) {
+        const co = carryOverFor(siteId, r.skuId);
+        carryOver += co?.carriedUnits ?? 0;
+        const line = r.line;
+        if (line) {
+          grand += line.planned;
+          if (line.item.mode === 'run') {
+            production += line.runPlanned;
+            const pr = line.perRunPlan ?? [];
+            for (let i = 0; i < pColumnCount; i++) {
+              pSlots[i] += pr[i] ?? 0;
+            }
+          }
+        }
+        for (const sp of visibleSpokes) {
+          const v = perSpokeBySku.get(`${sp.id}|${r.skuId}`) ?? 0;
+          spokeTotals.set(sp.id, (spokeTotals.get(sp.id) ?? 0) + v);
+        }
+      }
+    }
+    return { carryOver, production, pSlots, grand, spokeTotals };
+  }, [isHub, grouped, pColumnCount, siteId, visibleSpokes, perSpokeBySku]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -781,6 +832,47 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
                   />
                 ))}
               </tbody>
+
+              {isHub && hubTotals && grouped.length > 0 && (
+                <tfoot>
+                  <tr>
+                    <td style={footStyle({ left: true, sticky: true })}>
+                      Total to make
+                    </td>
+                    {showCarryOver && (
+                      <td style={footStyle()}>
+                        <span style={numStyle()}>{hubTotals.carryOver}</span>
+                      </td>
+                    )}
+                    {showProductionTotal && (
+                      <td style={footStyle()}>
+                        <span style={numStyle()}>{hubTotals.production}</span>
+                      </td>
+                    )}
+                    {pColIndices.map(i => (
+                      <td key={`tot-p${i + 1}`} style={footStyle()}>
+                        <span style={numStyle()}>{hubTotals.pSlots[i] ?? 0}</span>
+                      </td>
+                    ))}
+                    {showVPInView && <td style={footStyle()}>—</td>}
+                    {showHotProdInView && <td style={footStyle()}>—</td>}
+                    {showAvailNow && <td style={footStyle()}>—</td>}
+                    {showSpokeCols &&
+                      visibleSpokes.map(sp => (
+                        <td key={`tot-${sp.id}`} style={footStyle()}>
+                          <span style={numStyle()}>
+                            {hubTotals.spokeTotals.get(sp.id) ?? 0}
+                          </span>
+                        </td>
+                      ))}
+                    {showRowTotal && (
+                      <td style={footStyle({ totalCol: true })}>
+                        <span style={numStyle()}>{hubTotals.grand}</span>
+                      </td>
+                    )}
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </div>
@@ -1381,14 +1473,23 @@ function RecipeRow({
             ) : editableVP && line && line.item.mode === 'variable' ? (
               <PlanStepperCell
                 value={line.planned}
-                forecast={undefined}
+                // Forecast under the VP stepper — placeholder for now;
+                // proper "VP forecast" logic (forecast minus what's
+                // already covered by run plan / carry-over) lands in a
+                // later slice. Using the day projection keeps the
+                // signal honest at a glance.
+                forecast={dayForecast > 0 ? dayForecast : undefined}
                 step={step}
                 onChange={next => planStore.setPlanned(line.item.id, next, date)}
               />
             ) : editableVP && line && line.item.mode === 'run' ? (
               <PlanStepperCell
                 value={line.variablePlanned}
-                forecast={undefined}
+                // Same placeholder treatment as the variable-mode cell —
+                // wire the day forecast through so the floor sees a
+                // reference number under the VP top-up. Real logic
+                // (forecast − run plan − carry-over) to follow.
+                forecast={dayForecast > 0 ? dayForecast : undefined}
                 step={step}
                 onChange={next => planStore.setVariablePlan(line.item.id, next, date)}
               />
@@ -2218,10 +2319,32 @@ function HotProdDrops({
   const slots = perDropPlan.map((qty, i) => {
     const startMins = parseHHMM(cadence.startTime) + i * cadence.intervalMinutes;
     const endMins = startMins + cadence.intervalMinutes;
+    const forecast = forecastPerDrop[i] ?? 0;
+    // Coverage caption — how long this drop's planned quantity will
+    // hold the floor at the forecast rate. Forecast rate (units/min)
+    // = `forecast / intervalMinutes`, so coverage duration =
+    // `qty / rate = qty * interval / forecast`. We start the clock
+    // at the END of the drop window (product is ready when the bake
+    // finishes — the drop window itself is bake time, not selling
+    // time). Returns null when there's nothing to project against
+    // (no qty, or no demand) — caption is suppressed in that case
+    // so we don't pretend a 0/0 ratio is meaningful.
+    const coverageEndMins =
+      qty > 0 && forecast > 0
+        ? endMins + Math.round((qty * cadence.intervalMinutes) / forecast)
+        : null;
     return {
       label: `${formatHHMM(startMins)}–${formatHHMM(endMins)}`,
+      // Range starts at the drop's end (product ready) and runs to
+      // the projected sell-out. Lets the eye scan a column and see
+      // immediately whether the bake covers just its own drop, runs
+      // past into later slots (over-bake), or falls short (shortage).
+      coverageLabel:
+        coverageEndMins !== null
+          ? `${formatHHMM(endMins)}–${formatHHMM(coverageEndMins)}`
+          : null,
       qty,
-      forecast: forecastPerDrop[i] ?? 0,
+      forecast,
     };
   });
 
@@ -2319,6 +2442,28 @@ function HotProdDrops({
                   </span>
                 )}
               </>
+            )}
+            {/* Coverage caption — how long this drop's planned qty
+                holds the floor at the forecast sell-through rate. A
+                range that matches the drop-window label format above
+                so the comparison is visually direct: if the two
+                ranges line up the bake is balanced; if the coverage
+                band extends past or stops short of the drop end,
+                it's an over- or under-bake signal at a glance. */}
+            {s.coverageLabel && (
+              <span
+                title="Estimated time this drop's product lasts at the forecast sell-through rate"
+                style={{
+                  fontSize: 9,
+                  fontWeight: 600,
+                  color: 'var(--color-text-muted)',
+                  fontVariantNumeric: 'tabular-nums',
+                  letterSpacing: '0.02em',
+                  textAlign: 'center',
+                }}
+              >
+                covers {s.coverageLabel}
+              </span>
             )}
           </div>
         ))}
@@ -2464,6 +2609,39 @@ function numStyle(): React.CSSProperties {
     fontVariantNumeric: 'tabular-nums',
     fontWeight: 700,
     color: 'var(--color-text-primary)',
+  };
+}
+
+// Footer cell — the "Total to make" summary row at the bottom of the
+// hub grid. Visually distinct from body cells (heavier top border, soft
+// background, bolder label) so the totals read as a summary band rather
+// than another data row.
+function footStyle({
+  left,
+  sticky,
+  totalCol,
+}: {
+  left?: boolean;
+  sticky?: boolean;
+  totalCol?: boolean;
+} = {}): React.CSSProperties {
+  return {
+    padding: '12px 8px',
+    background: 'var(--color-bg-surface)',
+    borderTop: '2px solid var(--color-border)',
+    textAlign: left ? 'left' : 'center',
+    position: sticky ? 'sticky' : undefined,
+    left: sticky ? 0 : undefined,
+    zIndex: sticky ? 1 : undefined,
+    boxShadow: sticky ? '1px 0 0 var(--color-border-subtle)' : undefined,
+    fontSize: left ? 11 : 13,
+    fontWeight: left ? 700 : 600,
+    color: left ? 'var(--color-text-muted)' : 'var(--color-text-primary)',
+    textTransform: left ? 'uppercase' : undefined,
+    letterSpacing: left ? '0.05em' : undefined,
+    fontFamily: 'var(--font-primary)',
+    whiteSpace: 'nowrap',
+    borderLeft: totalCol ? '1px solid var(--color-border-subtle)' : undefined,
   };
 }
 

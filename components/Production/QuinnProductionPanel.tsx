@@ -443,17 +443,6 @@ export function QuinnTrigger() {
       >
         <EdifyMark size={14} />
       </span>
-      <span
-        style={{
-          color: 'rgba(255,255,255,0.72)',
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: '0.04em',
-          textTransform: 'uppercase',
-        }}
-      >
-        Quinn
-      </span>
       {visible > 0 && (
         <span
           aria-hidden

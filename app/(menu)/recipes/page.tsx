@@ -32,9 +32,10 @@ import {
 } from '@/components/Production/fixtures';
 import { WorkTypeChips } from '@/components/Production/WorkTypeChip';
 import { useRecipes, setRecipes as storeSetRecipes } from '@/components/Recipe/recipeStore';
+import { useModifierGroups } from '@/components/Modifiers/store';
+import type { ModifierGroup } from '@/components/Modifiers/types';
 import {
   KindPill,
-  MODIFIER_GROUPS,
   formatShelfLife,
 } from '@/components/Recipe/RecipeEditors';
 
@@ -426,7 +427,12 @@ export default function RecipesLibraryPage() {
             onCancel={() => setBulkAction(null)}
             onConfirm={(group) => {
               applyBulkMutation(
-                (r) => r.modifierGroups.includes(group.name) ? r : { ...r, modifierGroups: [...r.modifierGroups, group.name] },
+                (r) => {
+                  const current = r.modifierGroupIds ?? [];
+                  return current.includes(group.id)
+                    ? r
+                    : { ...r, modifierGroupIds: [...current, group.id] };
+                },
                 `Attached "${group.name}" to ${selectedIds.size} recipe${selectedIds.size === 1 ? '' : 's'}`,
               );
             }}
@@ -645,6 +651,7 @@ function RecipeDrawer({
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+  const allGroups = useModifierGroups();
 
   if (!mounted) return null;
 
@@ -728,33 +735,6 @@ function RecipeDrawer({
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {view.menuItems.length > 0 && (
-            <Section label="Menu items using this recipe">
-              <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {view.menuItems.map((mi) => (
-                  <li
-                    key={mi.name}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--color-border-subtle)',
-                      background: '#fff', fontSize: '13px',
-                    }}
-                  >
-                    <span style={{ color: 'var(--color-text-primary)' }}>{mi.name}</span>
-                    <span
-                      style={{
-                        fontSize: '11px', fontWeight: 600,
-                        color: mi.posLinked ? 'var(--color-success)' : 'var(--color-text-muted)',
-                      }}
-                    >
-                      {mi.posLinked ? 'POS linked' : 'Not on POS'}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
-
           {(view.ingredients.length > 0 || (view.subRecipes && view.subRecipes.length > 0)) && (
             <Section label="Recipe components">
               <div style={{ border: '1px solid var(--color-border-subtle)', borderRadius: '10px', overflow: 'hidden' }}>
@@ -849,20 +829,23 @@ function RecipeDrawer({
             </Section>
           )}
 
-          {view.modifierGroups.length > 0 && (
+          {(view.modifierGroupIds?.length ?? 0) > 0 && (
             <Section label="Attached modifier groups">
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {view.modifierGroups.map((g) => (
-                  <span
-                    key={g}
-                    style={{
-                      padding: '4px 10px', borderRadius: '8px', background: 'var(--color-bg-hover)',
-                      color: 'var(--color-text-primary)', fontSize: '12px', fontWeight: 600,
-                    }}
-                  >
-                    {g}
-                  </span>
-                ))}
+                {(view.modifierGroupIds ?? []).map((gid) => {
+                  const group = allGroups.find((g) => g.id === gid);
+                  return (
+                    <span
+                      key={gid}
+                      style={{
+                        padding: '4px 10px', borderRadius: '8px', background: 'var(--color-bg-hover)',
+                        color: 'var(--color-text-primary)', fontSize: '12px', fontWeight: 600,
+                      }}
+                    >
+                      {group?.name ?? gid}
+                    </span>
+                  );
+                })}
               </div>
             </Section>
           )}
@@ -1149,11 +1132,29 @@ function AttachGroupModal({
 }: {
   selectedRecipes: Recipe[];
   onCancel: () => void;
-  onConfirm: (group: typeof MODIFIER_GROUPS[number]) => void;
+  onConfirm: (group: ModifierGroup) => void;
 }) {
-  const [pickedId, setPickedId] = useState<string>('mg-alt-milks');
-  const picked = MODIFIER_GROUPS.find((g) => g.id === pickedId)!;
-  const alreadyAttached = selectedRecipes.filter((r) => r.modifierGroups.includes(picked.name)).length;
+  const groups = useModifierGroups();
+  const [pickedId, setPickedId] = useState<string>(groups[0]?.id ?? '');
+  const picked = groups.find((g) => g.id === pickedId);
+
+  if (!picked) {
+    return (
+      <ModalShell
+        title="Attach modifier group"
+        subtitle="No modifier groups yet"
+        onCancel={onCancel}
+        onConfirm={onCancel}
+        confirmLabel="Close"
+      >
+        <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
+          Create a modifier group first in <strong>Manage modifier groups</strong>, then come back here to attach it.
+        </div>
+      </ModalShell>
+    );
+  }
+
+  const alreadyAttached = selectedRecipes.filter((r) => (r.modifierGroupIds ?? []).includes(picked.id)).length;
   const toAttach = selectedRecipes.length - alreadyAttached;
 
   return (
@@ -1167,7 +1168,7 @@ function AttachGroupModal({
     >
       <div style={sectionLabelStyle}>Choose group</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '14px' }}>
-        {MODIFIER_GROUPS.map((g) => {
+        {groups.map((g) => {
           const on = pickedId === g.id;
           return (
             <button
@@ -1198,7 +1199,7 @@ function AttachGroupModal({
                 {g.name}
               </span>
               <span style={{ fontSize: '11.5px', color: 'var(--color-text-muted)' }}>
-                {g.optionsCount} options · already on {g.attachedCount}
+                {g.options.length} options
               </span>
             </button>
           );

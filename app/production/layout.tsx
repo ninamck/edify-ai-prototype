@@ -19,6 +19,9 @@ import {
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import DemoControls from '@/components/DemoControls/DemoControls';
 import SpokeAdhocRequestCard from '@/components/Production/SpokeAdhocRequestCard';
+import EndProductionControl from '@/components/Production/EndProductionControl';
+import { useProductionSite } from '@/components/Production/ProductionSiteContext';
+import { DEMO_TODAY } from '@/components/Production/fixtures';
 
 const SPOKE_PERSONA_SITE_ID = 'site-spoke-south';
 const SPOKE_PERSONA_HUB_ID = 'hub-central';
@@ -270,13 +273,20 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
             </div>
           )}
 
-          {/* Right-aligned slot for sub-page-owned actions to portal into.
-              AmountsView fills it with the End production / Reopen
-              control on Today + Plan; other pages can opt in by
-              targeting `#production-nav-actions` via createPortal.
-              Lives behind the spoke block above so spoke-only pages
-              stay focused, and stays empty (collapses) when no page
-              is mounting an action. */}
+          {/* Right-aligned slot. Two things live here:
+              1. The End production / Reopen control for Hub, Hybrid
+                 and Standalone personas while they're in the Run
+                 group (Today, Run sheet, Benches, PCR queue, Live
+                 sales). Mounted once at the layout level so the
+                 button is identical on every run sub-tab and the
+                 state survives navigation between them.
+              2. A `#production-nav-actions` portal target left in
+                 place for sub-page-owned actions that haven't yet
+                 been lifted up (e.g. the prod-2 AmountsView). New
+                 pages should prefer rendering directly here rather
+                 than portalling.
+              Spoke persona is excluded entirely; their spoke order
+              page already carries its own right-side action above. */}
           {!(isSpoke && pathname.startsWith('/production/spokes')) && (
             <div
               id="production-nav-actions"
@@ -286,7 +296,11 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
                 alignItems: 'center',
                 gap: 8,
               }}
-            />
+            >
+              {!isSpoke && productionGroup === 'run' && (
+                <RunNavEndProductionSlot />
+              )}
+            </div>
           )}
         </nav>
 
@@ -322,4 +336,21 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
     </div>
     </HubOperatorProviders>
   );
+}
+
+/**
+ * Thin wrapper that reads the currently-selected production site from
+ * `ProductionSiteContext` and renders `<EndProductionControl />` for
+ * `DEMO_TODAY`. Pulled out as its own component because the context
+ * lives inside `HubOperatorProviders`, which wraps the layout body
+ * below the top-level hooks — so calling `useProductionSite()` has to
+ * happen in a descendant component, not at the layout's root.
+ *
+ * Persona / route gating (Hub-Hybrid-Standalone × Run group) is done
+ * by the parent before mounting this slot, so the slot just needs to
+ * read the site id and hand it to the control.
+ */
+function RunNavEndProductionSlot() {
+  const { siteId } = useProductionSite();
+  return <EndProductionControl siteId={siteId} date={DEMO_TODAY} />;
 }

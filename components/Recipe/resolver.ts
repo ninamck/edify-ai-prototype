@@ -1,22 +1,22 @@
 /**
- * applyModifiers — flatten a (menu item + selected options + site)
+ * applyModifiers — flatten a (recipe + selected options + site)
  * triple into a `ResolvedComposition`: the concrete list of
  * ingredient lines that should be deducted from stock when this
  * order fires.
  *
- * This is the single function consumers (costing, production planning,
- * the menu-item preview, POS event handlers) call to know "what does
- * this order actually use?". By centralising the rules here, the rest
- * of the system only ever speaks in resolved compositions.
+ * Post-merge: a Recipe IS the sellable unit. The MenuItem entity is gone.
+ * The recipe carries its own `slots` and `modifierGroupIds`, and this
+ * resolver folds them together with the customer's selections and the
+ * site context to produce a deterministic line list.
  *
  * Effect application order (deterministic):
- *   1. Start with the recipe's ingredient list (via the slot lookup
- *      where applicable).
- *   2. Apply `set-slot` effects — these change the composition's slot
- *      ingredient + qty before any other math runs.
- *   3. Apply `replace` effects — swap ingredients in place.
- *   4. Apply `add` effects — append new ingredients.
- *   5. Apply `scale` effects — multiply quantities (last so it picks
+ *   1. Start with the recipe's typed ingredient list (`ingredientsV2`).
+ *   2. Apply `set-slot` effects — these update the live slot map BEFORE
+ *      lines are materialised, so the spirit / wine / size patterns work.
+ *   3. Add slot lines for slots that don't duplicate a recipe ingredient.
+ *   4. Apply `replace` effects — swap ingredients in place.
+ *   5. Apply `add` effects — append new ingredients.
+ *   6. Apply `scale` effects — multiply quantities (last so it picks
  *      up adds and replaces).
  *
  * Site overrides:
@@ -28,9 +28,9 @@ import type {
   Recipe,
   RecipeIngredient,
   RecipeIngredientQty,
+  RecipeSlot,
 } from '@/components/Recipe/libraryFixtures';
 import type {
-  IngredientEffect,
   ModifierGroup,
   ModifierOption,
   Quantity,
@@ -40,22 +40,15 @@ import {
   resolveIngredientRef,
   type IngredientRef,
 } from '@/components/Ingredients/catalogue';
-import type { MenuItem, MenuItemSlot } from './types';
 
 export type ResolvedLine = {
-  /** Stable line id for diffing in previews. */
   id: string;
-  /** The ingredient ref used for this line (master or product). */
   ref: IngredientRef;
-  /** Display name pulled via the catalogue. */
   name: string;
-  /** Quantity for this order, after all modifier effects + site
-   *  overrides have been applied. */
   qty: Quantity;
-  /** Provenance — useful for debugging and the preview's "why is this
-   *  here?" affordance. */
   source:
     | { kind: 'recipe-base' }
+    | { kind: 'recipe-packaging' }
     | { kind: 'slot'; slotKey: string }
     | { kind: 'modifier-add'; groupId: string; optionId: string }
     | { kind: 'modifier-replace'; groupId: string; optionId: string; replacedRef: IngredientRef }
@@ -63,20 +56,18 @@ export type ResolvedLine = {
 };
 
 export type ResolvedComposition = {
-  menuItemId: string;
-  recipeId?: string;
+  recipeId: string;
   siteId?: string;
   selectedOptionIds: string[];
   lines: ResolvedLine[];
-  /** Sum of priceDeltas from selected options, before VAT. */
   priceDelta: number;
-  /** Issues encountered while resolving (missing slots, dangling refs,
-   *  etc.). UI surfaces these as warnings rather than failing hard. */
   warnings: string[];
 };
 
 function refKey(ref: IngredientRef): string {
-  return ref.kind === 'master' ? `m:${ref.masterProductId}` : `p:${ref.productId}`;
+  if (ref.kind === 'master') return `m:${ref.masterProductId}`;
+  if (ref.kind === 'product') return `p:${ref.productId}`;
+  return `s:${ref.recipeId}`;
 }
 
 function refsEqual(a: IngredientRef, b: IngredientRef): boolean {
@@ -88,9 +79,9 @@ function nameForRef(ref: IngredientRef): string {
 }
 
 /** Resolve "do these refs target the same underlying master?" — used
- *  by replace + scale effects so a `replace { from: master X }` can
- *  match a recipe row that picked a Product whose masterProductId
- *  is X. */
+ *  by replace + scale + slot-dedupe so a modifier targeting
+ *  `master X` matches a recipe row that picked a Product whose
+ *  `masterProductId` is X. */
 function refsShareMaster(a: IngredientRef, b: IngredientRef): boolean {
   if (refsEqual(a, b)) return true;
   const ra = resolveIngredientRef(a);
@@ -114,21 +105,17 @@ function newLineId(): string {
 }
 
 export function applyModifiers(input: {
-  menuItem: MenuItem;
-  recipe?: Recipe;
+  recipe: Recipe;
   selectedOptionIds: string[];
   siteId?: string;
-  /** Optional override map of group → option (single-select) for use
-   *  when callers know the resolved picks but haven't flattened them
-   *  to a list. The `selectedOptionIds` arg above is canonical;
-   *  this one is appended. */
+  /** Optional override map of group → option ids (single-select callers
+   *  can use a flat array via `selectedOptionIds`; the map form is
+   *  convenient for the editor preview where state is keyed by group). */
   selectedByGroup?: Record<string, string[]>;
 }): ResolvedComposition {
-  const { menuItem, recipe, siteId } = input;
+  const { recipe, siteId } = input;
   const warnings: string[] = [];
 
-  // Flatten the selected option ids — preserve declared order across groups
-  // so deterministic effect application is possible.
   const selectedIds = new Set(input.selectedOptionIds);
   if (input.selectedByGroup) {
     for (const ids of Object.values(input.selectedByGroup)) {
@@ -136,14 +123,14 @@ export function applyModifiers(input: {
     }
   }
 
-  // Look up groups + selected options for every group attached to the
-  // menu item (so we also pick up `isDefault` options when no override
-  // is provided).
+  // Pull groups + selected options for every group attached to the
+  // recipe. We also pick up `isDefault` options when no override is
+  // provided so default orders resolve correctly.
   const orderedSelections: Array<{ group: ModifierGroup; option: ModifierOption }> = [];
-  for (const groupId of menuItem.modifierGroupIds) {
+  for (const groupId of recipe.modifierGroupIds ?? []) {
     const group = findGroup(groupId);
     if (!group) {
-      warnings.push(`Modifier group ${groupId} attached to menu item but not found in catalogue.`);
+      warnings.push(`Modifier group ${groupId} attached to recipe but not found in catalogue.`);
       continue;
     }
     const overridden = group.options.filter((o) => selectedIds.has(o.id));
@@ -159,12 +146,9 @@ export function applyModifiers(input: {
   }
 
   // ── Step 0 — slot map ────────────────────────────────────────────────────
-  // Build the live slot map. Modifier `set-slot` effects update this
-  // map BEFORE we materialise the recipe lines, so the ref / qty used
-  // for the slot reflects the customer's pick.
-  type LiveSlot = { slot: MenuItemSlot; ref?: IngredientRef; qty?: Quantity };
+  type LiveSlot = { slot: RecipeSlot; ref?: IngredientRef; qty?: Quantity };
   const slotMap = new Map<string, LiveSlot>();
-  for (const slot of menuItem.slots) {
+  for (const slot of recipe.slots ?? []) {
     slotMap.set(slot.key, { slot, ref: slot.defaultRef, qty: slot.defaultQty });
   }
   for (const { group, option } of orderedSelections) {
@@ -172,7 +156,7 @@ export function applyModifiers(input: {
       if (eff.kind !== 'set-slot') continue;
       const live = slotMap.get(eff.slotKey);
       if (!live) {
-        warnings.push(`Modifier "${group.name} → ${option.name}" targets slot "${eff.slotKey}" which doesn't exist on "${menuItem.name}".`);
+        warnings.push(`Modifier "${group.name} → ${option.name}" targets slot "${eff.slotKey}" which doesn't exist on "${recipe.name}".`);
         continue;
       }
       slotMap.set(eff.slotKey, {
@@ -185,10 +169,7 @@ export function applyModifiers(input: {
 
   // ── Step 1 — base lines from the recipe ──────────────────────────────────
   const lines: ResolvedLine[] = [];
-  // Read the typed ingredient list (post-rethink) when present. The legacy
-  // free-text `recipe.ingredients` array is intentionally NOT consumed
-  // here — those rows can't be resolved to a master / product ref.
-  if (recipe?.ingredientsV2) {
+  if (recipe.ingredientsV2) {
     for (const ri of recipe.ingredientsV2) {
       lines.push({
         id: newLineId(),
@@ -199,18 +180,31 @@ export function applyModifiers(input: {
       });
     }
   }
+  // Packaging is just another kind of product the order consumes, so
+  // it goes into the same line list as ingredients. Modifier effects
+  // (replace / add / scale) therefore work on packaging too — e.g.
+  // Large coffee → replace 8oz cup with 12oz cup.
+  if (recipe.packagingV2) {
+    for (const ri of recipe.packagingV2) {
+      lines.push({
+        id: newLineId(),
+        ref: ri.ref,
+        name: nameForRef(ri.ref),
+        qty: pickRecipeIngredientQty(ri, siteId),
+        source: { kind: 'recipe-packaging' },
+      });
+    }
+  }
 
-  // ── Step 1b — slot lines (modifier-driven items + recipes whose
+  // ── Step 1b — slot lines (modifier-driven recipes + recipes whose
   //               composition relies on a slot ingredient) ────────────────
   for (const [, live] of slotMap) {
     if (!live.ref) continue;
-    // Skip if the recipe already provides this ingredient (slot is just
-    // a hint for modifier targeting, not a duplicate row).
+    // Skip if the recipe already provides this ingredient — slot is
+    // just a hint for modifier targeting, not a duplicate row.
     const dupe = lines.some((ln) => refsShareMaster(ln.ref, live.ref!));
     if (dupe) continue;
     if (!live.qty) {
-      // No qty — likely a required-but-not-yet-set slot. Surface as a
-      // warning rather than silently dropping.
       warnings.push(`Slot "${live.slot.label}" has no quantity (waiting on a modifier choice).`);
       continue;
     }
@@ -279,15 +273,13 @@ export function applyModifiers(input: {
     }
   }
 
-  // ── Price delta sum ──────────────────────────────────────────────────────
   const priceDelta = orderedSelections.reduce(
     (sum, { option }) => sum + (option.priceDelta ?? 0),
     0,
   );
 
   return {
-    menuItemId: menuItem.id,
-    recipeId: recipe?.id,
+    recipeId: recipe.id,
     siteId,
     selectedOptionIds: Array.from(selectedIds),
     lines,
@@ -298,12 +290,11 @@ export function applyModifiers(input: {
 
 /**
  * Convenience: pick the default-selected option ids for every modifier
- * group attached to a menu item. Used by the editor preview's "show me
- * what a default order looks like" mode.
+ * group attached to a recipe.
  */
-export function defaultSelectionFor(menuItem: MenuItem): string[] {
+export function defaultSelectionFor(recipe: Recipe): string[] {
   const out: string[] = [];
-  for (const groupId of menuItem.modifierGroupIds) {
+  for (const groupId of recipe.modifierGroupIds ?? []) {
     const group = findGroup(groupId);
     if (!group) continue;
     for (const opt of group.options) {

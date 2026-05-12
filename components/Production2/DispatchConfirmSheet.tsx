@@ -10,6 +10,7 @@ import {
   dayOfWeek,
   getRecipe,
   getSite,
+  SHORTFALL_REASON_LABELS,
   type DispatchTransferLine,
   type ProductionRecipe,
   type SiteId,
@@ -41,6 +42,17 @@ type Props = {
   manifest: DispatchManifestEntry[];
   /** Demo display name for "Sent by" attribution. */
   sentBy: string;
+  /**
+   * Recipe display names that had a shortfall reallocation applied to
+   * the lines below. Non-blocking — drives the info banner at the top
+   * of the sheet so the manager has a one-line summary.
+   */
+  reallocatedRecipes?: string[];
+  /**
+   * How many of `reallocatedRecipes` were auto-applied vs manager
+   * edited. Used purely for banner copy ("Auto-cut N of M").
+   */
+  autoReallocatedCount?: number;
   onCancel: () => void;
   /**
    * Called when the manager confirms. The manifest may have been edited
@@ -68,9 +80,16 @@ export default function DispatchConfirmSheet({
   forDate,
   manifest,
   sentBy,
+  reallocatedRecipes = [],
+  autoReallocatedCount = 0,
   onCancel,
   onConfirm,
 }: Props) {
+  const hasReallocations = reallocatedRecipes.length > 0;
+  const manuallyAdjustedCount = Math.max(
+    0,
+    reallocatedRecipes.length - autoReallocatedCount,
+  );
   const [note, setNote] = useState('');
   const [openSpokes, setOpenSpokes] = useState<Set<SiteId>>(() => {
     // For single-spoke send, expand by default. For bulk, collapse so the
@@ -293,6 +312,40 @@ export default function DispatchConfirmSheet({
             gap: 10,
           }}
         >
+          {hasReallocations && (
+            <div
+              role="status"
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: 'var(--color-warning-light)',
+                border: '1px solid var(--color-warning-border)',
+                color: 'var(--color-warning)',
+                fontSize: 11,
+                lineHeight: 1.5,
+              }}
+            >
+              <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>
+                <strong>
+                  {autoReallocatedCount > 0 && manuallyAdjustedCount === 0
+                    ? `Auto-reallocated ${reallocatedRecipes.length} short ${
+                        reallocatedRecipes.length === 1 ? 'recipe' : 'recipes'
+                      }.`
+                    : autoReallocatedCount === 0
+                      ? `${reallocatedRecipes.length} ${
+                          reallocatedRecipes.length === 1 ? 'recipe' : 'recipes'
+                        } reallocated.`
+                      : `Reallocated ${reallocatedRecipes.length} short recipes (${autoReallocatedCount} auto, ${manuallyAdjustedCount} manual).`}
+                </strong>{' '}
+                Cuts use demand-led by default — each affected line below shows the spoke-visible
+                reason. Cancel and tap a row's banner if you want to override.
+              </span>
+            </div>
+          )}
           {adjustedManifest.map(entry => {
             const isOpen = openSpokes.has(entry.spokeId);
             const spoke = getSite(entry.spokeId);
@@ -577,6 +630,30 @@ function ManifestLineRow({
             }}
           >
             <EdifyMark size={9} /> Quinn
+          </span>
+        )}
+        {line.shortfallReason && line.originalRequested !== undefined && (
+          <span
+            title={`Cut from ${line.originalRequested}: ${SHORTFALL_REASON_LABELS[line.shortfallReason]}${
+              line.shortfallNote ? ` — ${line.shortfallNote}` : ''
+            }`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+              fontSize: 9,
+              fontWeight: 700,
+              color: 'var(--color-warning)',
+              background: 'var(--color-warning-light)',
+              border: '1px solid var(--color-warning-border)',
+              padding: '1px 6px',
+              borderRadius: 999,
+              whiteSpace: 'nowrap',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            <AlertTriangle size={9} />
+            −{line.originalRequested - line.units} · {SHORTFALL_REASON_LABELS[line.shortfallReason]}
           </span>
         )}
       </div>

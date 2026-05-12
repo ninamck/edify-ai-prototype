@@ -1678,6 +1678,26 @@ function AmountRow({
                   ? `Sched ${runPlanned} · = ${runPlanned + variablePlanned}`
                   : `Scheduled · ${runPlanned}`}
               </span>
+              {/* Forecast reference under the VAR top-up stepper —
+                  placeholder number for now (day projection); the
+                  proper variable-phase forecast (projection minus
+                  what the run baseline already covers) is the next
+                  iteration. */}
+              {counterUnits > 0 && (
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 600,
+                    color: 'var(--color-text-muted)',
+                    textAlign: 'center',
+                    fontVariantNumeric: 'tabular-nums',
+                    letterSpacing: '0.02em',
+                  }}
+                  title="Quinn forecast for today"
+                >
+                  fc {counterUnits}
+                </span>
+              )}
             </div>
           ) : (
             <div
@@ -1789,21 +1809,40 @@ function AmountRow({
               )}
             </div>
           )}
-          {/* Per-drop caption beneath the stepper for drops items —
-              keeps the "× N drops" math visible while editing. */}
-          {segmentEditable && !dropsVary && (
-            <span
-              style={{
-                fontSize: 9,
-                fontWeight: 600,
-                color: 'var(--color-text-muted)',
-                fontVariantNumeric: 'tabular-nums',
-              }}
-              title={`${perDropPlanned} per drop × ${dropsCount} drops`}
-            >
-              per drop · = {perDropPlanned * dropsCount}
-            </span>
-          )}
+        {/* Per-drop caption beneath the stepper for drops items —
+            keeps the "× N drops" math visible while editing. */}
+        {segmentEditable && !dropsVary && (
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 600,
+              color: 'var(--color-text-muted)',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+            title={`${perDropPlanned} per drop × ${dropsCount} drops`}
+          >
+            per drop · = {perDropPlanned * dropsCount}
+          </span>
+        )}
+        {/* Forecast caption beneath the stepper for variable-mode items —
+            shows Quinn's day projection as a reference number while the
+            floor dials the plan. Placeholder for now; the proper "VP
+            forecast" math (projection minus what's already covered)
+            lands in a later slice. */}
+        {line.item.mode === 'variable' && counterUnits > 0 && (
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 600,
+              color: 'var(--color-text-muted)',
+              fontVariantNumeric: 'tabular-nums',
+              letterSpacing: '0.02em',
+            }}
+            title="Quinn forecast for today"
+          >
+            fc {counterUnits}
+          </span>
+        )}
         </div>
         )}
 

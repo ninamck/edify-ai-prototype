@@ -37,13 +37,24 @@ function newRowId(): string {
 }
 
 export function IngredientsV2Section({
-  rows, sites, onChange,
+  rows, sites, onChange, itemLabel = 'ingredient',
 }: {
   rows: RecipeIngredient[];
   /** Sites available on this recipe (drives the site-qty popover). */
   sites: string[];
   onChange: (next: RecipeIngredient[]) => void;
+  /**
+   * What kind of row this is, for copy purposes (column header, empty
+   * state, add button, picker placeholder). The underlying data shape
+   * and picker behaviour are identical — packaging is just-a-product,
+   * same as an ingredient, so we share the picker and modifier-targeting
+   * machinery.
+   */
+  itemLabel?: 'ingredient' | 'packaging';
 }) {
+  const labelSingular = itemLabel === 'packaging' ? 'packaging item' : 'ingredient';
+  const labelPluralLower = itemLabel === 'packaging' ? 'packaging' : 'ingredients';
+  const headerLabel = itemLabel === 'packaging' ? 'Packaging' : 'Ingredient';
   function update(id: string, patch: Partial<RecipeIngredient>) {
     onChange(rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
@@ -75,7 +86,7 @@ export function IngredientsV2Section({
     <>
       <div style={tableHeaderStyle}>
         <span />
-        <span>Ingredient</span>
+        <span>{headerLabel}</span>
         <span>Source</span>
         <span>Qty</span>
         <span>Unit</span>
@@ -85,7 +96,7 @@ export function IngredientsV2Section({
 
       {rows.length === 0 && (
         <div style={{ padding: '16px 8px', textAlign: 'center', fontSize: 12.5, color: 'var(--color-text-muted)' }}>
-          No ingredients yet. Search and add one below.
+          No {labelPluralLower} yet. Search and add one below.
         </div>
       )}
 
@@ -104,7 +115,16 @@ export function IngredientsV2Section({
       ))}
 
       <div style={{ marginTop: 10 }}>
-        <UnifiedAddIngredient onPick={add} alreadyPickedRefs={rows.map((r) => r.ref)} />
+        <UnifiedAddIngredient
+          onPick={add}
+          alreadyPickedRefs={rows.map((r) => r.ref)}
+          buttonLabel={`Add ${labelSingular}`}
+          placeholder={
+            itemLabel === 'packaging'
+              ? 'Search packaging (cups, lids, bags, labels)…'
+              : 'Search ingredients (masters, supplier SKUs, sub-recipes)…'
+          }
+        />
       </div>
     </>
   );
@@ -113,7 +133,14 @@ export function IngredientsV2Section({
 function sameRef(a: IngredientRef, b: IngredientRef): boolean {
   if (a.kind === 'master' && b.kind === 'master') return a.masterProductId === b.masterProductId;
   if (a.kind === 'product' && b.kind === 'product') return a.productId === b.productId;
+  if (a.kind === 'subrecipe' && b.kind === 'subrecipe') return a.recipeId === b.recipeId;
   return false;
+}
+
+function refKey(r: IngredientRef): string {
+  if (r.kind === 'master') return r.masterProductId;
+  if (r.kind === 'product') return r.productId;
+  return r.recipeId;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -189,6 +216,18 @@ function KindChip({ ref, resolved }: { ref: IngredientRef; resolved: ReturnType<
   if (ref.kind === 'master') {
     return <Chip tone="navy">Master</Chip>;
   }
+  if (ref.kind === 'subrecipe') {
+    return (
+      <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 1 }}>
+        <Chip tone="green">Sub-recipe</Chip>
+        {resolved?.subRecipe?.category && (
+          <span style={{ fontSize: 9.5, color: 'var(--color-text-muted)' }}>
+            {resolved.subRecipe.category}
+          </span>
+        )}
+      </span>
+    );
+  }
   if (resolved?.productSource === 'made') {
     return (
       <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 1 }}>
@@ -217,11 +256,12 @@ function abbrevSupplier(id: string): string {
   return id.replace(/^sup-/, '').slice(0, 12);
 }
 
-function Chip({ children, tone }: { children: React.ReactNode; tone: 'navy' | 'soft' | 'warm' }) {
+function Chip({ children, tone }: { children: React.ReactNode; tone: 'navy' | 'soft' | 'warm' | 'green' }) {
   const tones = {
-    navy: { bg: 'rgba(3,28,89,0.08)', color: 'var(--color-accent-active)' },
-    soft: { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' },
-    warm: { bg: 'rgba(241,180,52,0.18)', color: 'var(--color-warning)' },
+    navy:  { bg: 'rgba(3,28,89,0.08)',   color: 'var(--color-accent-active)' },
+    soft:  { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' },
+    warm:  { bg: 'rgba(241,180,52,0.18)', color: 'var(--color-warning)' },
+    green: { bg: 'rgba(82,170,150,0.18)', color: 'var(--color-success, #347262)' },
   } as const;
   const t = tones[tone];
   return (
@@ -355,10 +395,12 @@ function SiteQtyPopover({
 // Unified add-ingredient affordance + picker
 
 function UnifiedAddIngredient({
-  onPick, alreadyPickedRefs,
+  onPick, alreadyPickedRefs, buttonLabel = 'Add ingredient', placeholder = 'Search ingredients (master products + supplier SKUs)…',
 }: {
   onPick: (ref: IngredientRef) => void;
   alreadyPickedRefs: IngredientRef[];
+  buttonLabel?: string;
+  placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -397,7 +439,7 @@ function UnifiedAddIngredient({
             fontSize: 12.5, fontWeight: 600, fontFamily: 'var(--font-primary)', cursor: 'pointer',
           }}
         >
-          <Plus size={13} strokeWidth={2.2} /> Add ingredient
+          <Plus size={13} strokeWidth={2.2} /> {buttonLabel}
         </button>
       ) : (
         <div
@@ -413,7 +455,7 @@ function UnifiedAddIngredient({
               autoFocus
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search ingredients (master products + supplier SKUs)…"
+              placeholder={placeholder}
               style={{
                 flex: 1, border: 'none', outline: 'none', background: 'transparent',
                 fontFamily: 'var(--font-primary)', fontSize: 13,
@@ -435,7 +477,7 @@ function UnifiedAddIngredient({
               const picked = isPicked(row);
               return (
                 <button
-                  key={`${row.ref.kind}:${'masterProductId' in row.ref ? row.ref.masterProductId : row.ref.productId}-${i}`}
+                  key={`${row.ref.kind}:${refKey(row.ref)}-${i}`}
                   type="button"
                   disabled={picked}
                   onClick={() => { onPick(row.ref); setOpen(false); setQ(''); }}
@@ -495,11 +537,12 @@ function UnifiedAddIngredient({
   );
 }
 
-function pickerKindChip(kind: 'master' | 'supplier' | 'made'): React.CSSProperties {
+function pickerKindChip(kind: 'master' | 'supplier' | 'made' | 'subrecipe'): React.CSSProperties {
   const tones = {
-    master:   { bg: 'rgba(3,28,89,0.08)', color: 'var(--color-accent-active)' },
-    supplier: { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' },
-    made:     { bg: 'rgba(241,180,52,0.16)', color: 'var(--color-warning)' },
+    master:    { bg: 'rgba(3,28,89,0.08)',   color: 'var(--color-accent-active)' },
+    supplier:  { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' },
+    made:      { bg: 'rgba(241,180,52,0.16)', color: 'var(--color-warning)' },
+    subrecipe: { bg: 'rgba(82,170,150,0.18)', color: 'var(--color-success, #347262)' },
   } as const;
   const t = tones[kind];
   return {

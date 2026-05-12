@@ -40,7 +40,13 @@ export type RecipeSubRecipe = {
 
 export type IngredientRefShape =
   | { kind: 'master'; masterProductId: string }
-  | { kind: 'product'; productId: string };
+  | { kind: 'product'; productId: string }
+  // Sub-recipe / component recipe used as an ingredient (e.g. a
+  // tahini sauce made in-house added into a wrap). Picked from the
+  // same unified search as masters & supplier SKUs — the user doesn't
+  // have to know up-front whether what they're looking for is a
+  // master product, a supplier SKU, or another recipe.
+  | { kind: 'subrecipe'; recipeId: string };
 
 export type RecipeIngredientQty = { value: number; unit: string };
 
@@ -80,11 +86,32 @@ export function makeRecipeIngredient(
  *  `masterProductId` link. */
 export function resolveMasterProductId(ref: IngredientRefShape): string | undefined {
   if (ref.kind === 'master') return ref.masterProductId;
+  if (ref.kind === 'subrecipe') return undefined;
   // Lazy require to avoid pulling the Suppliers store into modules that
   // only need the type. The store is loaded by the time any caller runs.
   const { findProduct } = require('@/components/Suppliers/store') as typeof import('@/components/Suppliers/store');
   return findProduct(ref.productId)?.masterProductId;
 }
+
+/**
+ * A named ingredient placeholder on a recipe. `set-slot` modifier effects
+ * target a slot by `key`, allowing one shared modifier group (e.g.
+ * "Spirit measure 25/50ml") to apply to many recipes without naming
+ * each spirit explicitly. Most recipes don't need slots — they're the
+ * advanced unlock for the spirit / wine / size-driven patterns.
+ */
+export type RecipeSlot = {
+  /** Stable key targeted by `set-slot` modifier effects. */
+  key: string;
+  /** Human-readable label shown in the editor + preview. */
+  label: string;
+  /** Default ingredient filling this slot (e.g. "Smirnoff Vodka" for
+   *  the spirit slot of the Smirnoff recipe). */
+  defaultRef?: IngredientRefShape;
+  /** Default quantity when no modifier sets one. Often blank for
+   *  modifier-driven recipes (wine, where pour size is required). */
+  defaultQty?: RecipeIngredientQty;
+};
 
 /**
  * Rich row used by the new full-page editor (manual-intake-style). When set on
@@ -207,12 +234,6 @@ export type Recipe = {
   status: RecipeStatus;
   flag: RecipeFlag;
   /**
-   * @deprecated Display-only legacy field. Real menu-item linkage now
-   * lives in `components/MenuItems/store.ts`. Drawers should derive
-   * "Used by menu items" from `menuItemsUsingRecipe(recipeId)`.
-   */
-  menuItems: { name: string; posLinked: boolean }[];
-  /**
    * @deprecated Free-text ingredient list kept for back-compat with
    * the read-only drawer view + un-migrated fixtures. New writes go
    * to `ingredientsV2`. Resolver and editor read from `ingredientsV2`
@@ -222,16 +243,50 @@ export type Recipe = {
   /**
    * Typed, master/product-aware ingredient rows (post-rethink). When
    * present, this is the source of truth for the resolver, costing,
-   * and the new editor picker.
+   * and the editor picker.
    */
   ingredientsV2?: RecipeIngredient[];
   /**
-   * @deprecated Modifier groups live as catalogue-level entities in
-   * `components/Modifiers/store.ts` and are attached to menu items,
-   * not recipes. This array is kept for the drawer's tag display
-   * until fixtures and screens are migrated.
+   * Typed, master/product-aware packaging rows. Same shape as
+   * `ingredientsV2` — packaging is just "a different kind of product
+   * the order consumes" so it shares the same `RecipeIngredient`
+   * structure. Modifier `replace` / `add` / `scale` effects target
+   * packaging the same way they target ingredients (e.g. a Large
+   * coffee can swap the 8oz cup for the 12oz cup via Replace).
+   *
+   * The legacy free-text `formExtras.packaging` array is kept for
+   * back-compat with imported recipes but is invisible to the
+   * resolver — new packaging writes go here.
    */
-  modifierGroups: string[];
+  packagingV2?: RecipeIngredient[];
+  // ── Sellability / menu-item fields ───────────────────────────────────────
+  //
+  // A Recipe IS the sellable unit. There is no separate MenuItem entity
+  // any more — recipe and menu item are merged. `posLinked` is the
+  // canonical "is this on a POS button?" flag.
+  /**
+   * Catalogue-level modifier groups attached to this recipe. References
+   * `ModifierGroup.id` in `components/Modifiers/store.ts`. The same
+   * group can be attached to many recipes — add an alt milk in one
+   * place and every coffee picks it up.
+   */
+  modifierGroupIds?: string[];
+  /**
+   * Named ingredient placeholders that `set-slot` modifier effects can
+   * target. Allows one shared modifier group (e.g. "Spirit measure")
+   * to apply to many recipes (Smirnoff, Grey Goose, Tanqueray) without
+   * naming each spirit. Mostly empty — only the spirit / wine / size
+   * patterns use it.
+   */
+  slots?: RecipeSlot[];
+  /** Whether this recipe is linked to a POS button. Drives the
+   *  "Sellable on POS" filter on the recipes list. Sub-recipes,
+   *  components, made products, and prep items have this set to
+   *  false (or undefined). */
+  posLinked?: boolean;
+  /** Identifier from the upstream POS used to keep the link alive
+   *  across POS-to-Edify reconciliations. */
+  posSourceId?: string;
   /**
    * Hook for the franchise / template workstream. When set, this
    * recipe was inherited from a parent template and local edits
@@ -274,7 +329,27 @@ const coffeeIngs = (withMilkMl: number | null) => {
   return list;
 };
 
-export const FITZROY_RECIPES: Omit<Recipe, 'kind'>[] = [
+/**
+ * Private seed shape — keeps the pre-merge `menuItems[]` / `modifierGroups[]`
+ * fields locally so the existing fixture entries don't need to be rewritten
+ * line by line. The `migrateLegacySeed` helper below converts each entry to
+ * a clean `Recipe` (with `posLinked`, `modifierGroupIds`, `slots`) before
+ * export.
+ */
+type LegacyFitzroySeed =
+  Omit<Recipe, 'kind' | 'posLinked' | 'modifierGroupIds' | 'slots' | 'posSourceId'>
+  & {
+    menuItems: { name: string; posLinked: boolean }[];
+    modifierGroups: string[];
+    // Optional overrides for specific fixtures that want explicit values
+    // post-merge (e.g. wine / spirit recipes that need slots).
+    slots?: RecipeSlot[];
+    posLinked?: boolean;
+    posSourceId?: string;
+    modifierGroupIds?: string[];
+  };
+
+const FITZROY_RECIPES: LegacyFitzroySeed[] = [
   {
     id: 'rec-flat-white',
     name: 'Flat white (8oz)',
@@ -526,9 +601,13 @@ export const FITZROY_RECIPES: Omit<Recipe, 'kind'>[] = [
     modifierGroups: [],
     production: { visibility: null, shelfLifeMinutes: 60 * 8, prepTimeSeconds: null },
   },
+  // Slot-driven spirit recipes — share the same Spirit measure + Mixer
+  // modifier groups. The slot's `defaultRef` carries the specific spirit
+  // so the POS gets one shared 25/50ml button rather than 100s of
+  // spirit-specific buttons (fix for problem 8).
   {
     id: 'rec-smirnoff',
-    name: 'Smirnoff vodka',
+    name: 'Smirnoff Vodka',
     category: 'Spirits',
     ingredientCost: 0.95,
     priceDineIn: 4.50,
@@ -537,16 +616,50 @@ export const FITZROY_RECIPES: Omit<Recipe, 'kind'>[] = [
     marginPct: 79,
     status: 'Active',
     flag: null,
-    menuItems: [{ name: 'Smirnoff vodka', posLinked: true }],
-    ingredients: [
-      { name: 'Smirnoff vodka', qty: '25ml', supplier: 'Bidvest' },
+    menuItems: [{ name: 'Smirnoff Vodka', posLinked: true }],
+    ingredients: [],
+    modifierGroups: [],
+    posLinked: true,
+    posSourceId: 'pos-mi-smirnoff',
+    modifierGroupIds: ['mg-spirit-measure', 'mg-mixer'],
+    slots: [
+      {
+        key: 'spirit',
+        label: 'Spirit',
+        defaultRef: { kind: 'master', masterProductId: 'mp-smirnoff-vodka' },
+      },
     ],
-    modifierGroups: ['Pour size'],
+    production: { visibility: 'Bar', shelfLifeMinutes: null, prepTimeSeconds: 30 },
+  },
+  {
+    id: 'rec-grey-goose',
+    name: 'Grey Goose Vodka',
+    category: 'Spirits',
+    ingredientCost: 2.30,
+    priceDineIn: 6.50,
+    priceTakeaway: 6.50,
+    priceDelivery: 7.00,
+    marginPct: 65,
+    status: 'Active',
+    flag: null,
+    menuItems: [{ name: 'Grey Goose Vodka', posLinked: true }],
+    ingredients: [],
+    modifierGroups: [],
+    posLinked: true,
+    posSourceId: 'pos-mi-grey-goose',
+    modifierGroupIds: ['mg-spirit-measure', 'mg-mixer'],
+    slots: [
+      {
+        key: 'spirit',
+        label: 'Spirit',
+        defaultRef: { kind: 'master', masterProductId: 'mp-grey-goose-vodka' },
+      },
+    ],
     production: { visibility: 'Bar', shelfLifeMinutes: null, prepTimeSeconds: 30 },
   },
   {
     id: 'rec-tanqueray',
-    name: 'Tanqueray gin',
+    name: 'Tanqueray Gin',
     category: 'Spirits',
     ingredientCost: 1.15,
     priceDineIn: 5.00,
@@ -555,29 +668,49 @@ export const FITZROY_RECIPES: Omit<Recipe, 'kind'>[] = [
     marginPct: 77,
     status: 'Active',
     flag: null,
-    menuItems: [{ name: 'Tanqueray gin', posLinked: true }],
-    ingredients: [
-      { name: 'Tanqueray gin', qty: '25ml', supplier: 'Bidvest' },
+    menuItems: [{ name: 'Tanqueray Gin', posLinked: true }],
+    ingredients: [],
+    modifierGroups: [],
+    posLinked: true,
+    posSourceId: 'pos-mi-tanqueray',
+    modifierGroupIds: ['mg-spirit-measure', 'mg-mixer'],
+    slots: [
+      {
+        key: 'spirit',
+        label: 'Spirit',
+        defaultRef: { kind: 'master', masterProductId: 'mp-tanqueray-gin' },
+      },
     ],
-    modifierGroups: ['Pour size'],
     production: { visibility: 'Bar', shelfLifeMinutes: null, prepTimeSeconds: 30 },
   },
+  // Modifier-driven wine — no default ingredient row, composition is
+  // fully delegated to the Wine pour-size modifier group via a slot.
+  // This is the post-rethink fix for problem 7 (no fake placeholder
+  // ingredient needed to publish the recipe).
   {
     id: 'rec-savvy-b',
-    name: 'Savvy B',
+    name: 'Marlborough Sauvignon Blanc',
     category: 'Wine',
-    ingredientCost: 8.20,
-    priceDineIn: 22.00,
-    priceTakeaway: 22.00,
-    priceDelivery: 24.00,
-    marginPct: 63,
-    status: 'Draft',
-    flag: { type: 'missing-size', label: 'no size modifier' },
-    menuItems: [{ name: 'Savvy B', posLinked: false }],
-    ingredients: [
-      { name: 'Marlborough Sauv Blanc', qty: '750ml', supplier: 'Bidvest' },
-    ],
+    ingredientCost: 0,
+    priceDineIn: 6.50,
+    priceTakeaway: 6.50,
+    priceDelivery: 7.00,
+    marginPct: 60,
+    status: 'Active',
+    flag: null,
+    menuItems: [{ name: 'Marlborough Sauvignon Blanc', posLinked: true }],
+    ingredients: [],
     modifierGroups: [],
+    posLinked: true,
+    posSourceId: 'pos-mi-savvy-b',
+    modifierGroupIds: ['mg-wine-pour'],
+    slots: [
+      {
+        key: 'wine',
+        label: 'Wine',
+        defaultRef: { kind: 'master', masterProductId: 'mp-savvy-b' },
+      },
+    ],
     production: { visibility: 'Bar', shelfLifeMinutes: null, prepTimeSeconds: 30 },
   },
   {
@@ -738,6 +871,10 @@ function pricingFor(r: typeof PRET_RECIPES[number], kind: RecipeKind): {
 export const PRET_LIBRARY_RECIPES: Recipe[] = PRET_RECIPES.map((r) => {
   const kind = deriveKind(r);
   const pricing = pricingFor(r, kind);
+  // Components and prep items aren't sold directly — they're consumed by
+  // assemblies. Stand-alone Pret items (sandwiches, salads, snacks) ARE
+  // sellable on the POS.
+  const sellable = kind === 'standalone' && !r.isPrep;
   return {
     id: r.id,
     name: r.name,
@@ -745,9 +882,8 @@ export const PRET_LIBRARY_RECIPES: Recipe[] = PRET_RECIPES.map((r) => {
     ...pricing,
     status: 'Active' as RecipeStatus,
     flag: null,
-    menuItems: [],
     ingredients: [],
-    modifierGroups: [],
+    posLinked: sellable,
     production: {
       visibility: null,
       shelfLifeMinutes: r.shelfLifeMinutes,
@@ -821,30 +957,98 @@ const FITZROY_INGREDIENTSV2_BY_RECIPE: Record<string, RecipeIngredient[]> = {
       baseQty: { value: 150, unit: 'ml' },
     },
   ],
-  'rec-smirnoff': [
+  // Spirit recipes deliberately have NO base ingredients — composition
+  // comes from the `spirit` slot + Spirit measure modifier. Same for
+  // wine (rec-savvy-b).
+};
+
+// Typed packaging rows by recipe id. Same shape as ingredients —
+// packaging IS just-a-product-the-order-consumes, so modifier
+// effects (replace / add / scale) can target it the same way.
+//
+// Demonstrates: Large coffee modifier → Replace 8oz cup with 12oz cup
+// (see `mg-coffee-size-large` in components/Modifiers/fixtures.ts).
+const FITZROY_PACKAGINGV2_BY_RECIPE: Record<string, RecipeIngredient[]> = {
+  'rec-flat-white': [
     {
-      id: 'ri-smirnoff-spirit',
-      ref: { kind: 'master', masterProductId: 'mp-smirnoff-vodka' },
-      baseQty: { value: 25, unit: 'ml' },
+      id: 'rp-flat-cup', ref: { kind: 'master', masterProductId: 'mp-cup-takeaway-8oz' },
+      baseQty: { value: 1, unit: 'each' },
+    },
+    {
+      id: 'rp-flat-lid', ref: { kind: 'master', masterProductId: 'mp-cup-lid' },
+      baseQty: { value: 1, unit: 'each' },
     },
   ],
-  'rec-tanqueray': [
+  'rec-latte': [
     {
-      id: 'ri-tanqueray-spirit',
-      ref: { kind: 'master', masterProductId: 'mp-tanqueray-gin' },
-      baseQty: { value: 25, unit: 'ml' },
+      id: 'rp-latte-cup', ref: { kind: 'master', masterProductId: 'mp-cup-takeaway-8oz' },
+      baseQty: { value: 1, unit: 'each' },
+    },
+    {
+      id: 'rp-latte-lid', ref: { kind: 'master', masterProductId: 'mp-cup-lid' },
+      baseQty: { value: 1, unit: 'each' },
+    },
+  ],
+  'rec-cappuccino': [
+    {
+      id: 'rp-capp-cup', ref: { kind: 'master', masterProductId: 'mp-cup-takeaway-8oz' },
+      baseQty: { value: 1, unit: 'each' },
+    },
+    {
+      id: 'rp-capp-lid', ref: { kind: 'master', masterProductId: 'mp-cup-lid' },
+      baseQty: { value: 1, unit: 'each' },
     },
   ],
 };
 
 function withIngredientsV2(r: Recipe): Recipe {
   const v2 = FITZROY_INGREDIENTSV2_BY_RECIPE[r.id];
-  if (!v2) return r;
-  return { ...r, ingredientsV2: v2 };
+  const pkg = FITZROY_PACKAGINGV2_BY_RECIPE[r.id];
+  if (!v2 && !pkg) return r;
+  return {
+    ...r,
+    ingredientsV2: v2 ?? r.ingredientsV2,
+    packagingV2: pkg ?? r.packagingV2,
+  };
+}
+
+// Map legacy free-text modifier-group names to catalogue-level
+// ModifierGroup ids (`components/Modifiers/fixtures.ts`).
+const LEGACY_MODGROUP_NAME_TO_ID: Record<string, string> = {
+  'Alt milks': 'mg-alt-milks',
+  'Cup sizes': 'mg-coffee-size',
+  'Pour size': 'mg-spirit-measure',
+};
+
+/**
+ * Convert a legacy seed entry to a clean Recipe (kind injected by caller).
+ * Computes `posLinked` from the deprecated `menuItems[].posLinked` field
+ * and resolves the free-text `modifierGroups[]` names to catalogue ids.
+ * Fixture-level overrides (e.g. wine / spirit recipes that set their
+ * own `posLinked`, `modifierGroupIds`, or `slots`) take precedence.
+ */
+function migrateLegacySeed(s: LegacyFitzroySeed): Omit<Recipe, 'kind'> {
+  const { menuItems, modifierGroups, ...rest } = s;
+  const derivedPosLinked = menuItems.length > 0
+    ? menuItems.some((m) => m.posLinked)
+    : false;
+  const derivedGroupIds = modifierGroups
+    .map((name) => LEGACY_MODGROUP_NAME_TO_ID[name])
+    .filter((id): id is string => !!id);
+  return {
+    ...rest,
+    posLinked: rest.posLinked ?? derivedPosLinked,
+    modifierGroupIds: rest.modifierGroupIds ?? (derivedGroupIds.length > 0 ? derivedGroupIds : undefined),
+    slots: rest.slots,
+    posSourceId: rest.posSourceId,
+  };
 }
 
 export const ALL_LIBRARY_RECIPES: Recipe[] = [
-  ...FITZROY_RECIPES.map((r): Recipe => withIngredientsV2({ ...r, kind: 'standalone' })),
+  ...FITZROY_RECIPES.map((s): Recipe => withIngredientsV2({
+    ...migrateLegacySeed(s),
+    kind: 'standalone',
+  })),
   ...PRET_LIBRARY_RECIPES,
 ];
 

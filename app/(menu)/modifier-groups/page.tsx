@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, ArrowRight, AlertTriangle, Lock } from 'lucide-react';
 import { useModifierGroups, upsertGroup, genGroupId } from '@/components/Modifiers/store';
-import { useMenuItems, menuItemsUsingGroup } from '@/components/MenuItems/store';
+import { useRecipes, recipesUsingGroup } from '@/components/Recipe/recipeStore';
 import type { ModifierGroup } from '@/components/Modifiers/types';
 
 function describeOption(opt: ModifierGroup['options'][number]): string {
@@ -20,7 +20,8 @@ function describeOption(opt: ModifierGroup['options'][number]): string {
 export default function ModifierGroupsPage() {
   const router = useRouter();
   const groups = useModifierGroups();
-  const items = useMenuItems(); // subscribe so usage counts re-render
+  const recipes = useRecipes(); // subscribe so usage counts re-render
+  void recipes;
   const [q, setQ] = useState('');
 
   const filtered = useMemo(() => {
@@ -61,7 +62,7 @@ export default function ModifierGroupsPage() {
         </button>
       </div>
       <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '0 0 18px' }}>
-        Catalogue-level modifiers shared across menu items. Add an alt milk in one place — every coffee picks it up.
+        Catalogue-level modifiers shared across recipes. Add an alt milk in one place — every coffee picks it up.
       </p>
 
       <div
@@ -85,7 +86,7 @@ export default function ModifierGroupsPage() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {filtered.map((g) => {
-          const usedBy = menuItemsUsingGroup(g.id);
+          const usedBy = recipesUsingGroup(g.id);
           return (
             <button
               key={g.id}
@@ -160,12 +161,12 @@ export default function ModifierGroupsPage() {
                 <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)' }}>
                   {usedBy.length}
                   <span style={{ fontWeight: 500, color: 'var(--color-text-muted)', marginLeft: 4 }}>
-                    menu item{usedBy.length === 1 ? '' : 's'}
+                    recipe{usedBy.length === 1 ? '' : 's'}
                   </span>
                 </span>
                 {usedBy.length > 0 && (
                   <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)', textAlign: 'right', maxWidth: 220 }}>
-                    {usedBy.slice(0, 3).map((m) => m.name).join(', ')}
+                    {usedBy.slice(0, 3).map((r) => r.name).join(', ')}
                     {usedBy.length > 3 && `, +${usedBy.length - 3} more`}
                   </span>
                 )}

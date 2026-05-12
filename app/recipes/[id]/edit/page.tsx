@@ -13,7 +13,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Save, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Save, Image as ImageIcon, Pencil, Plus } from 'lucide-react';
 import {
   type Recipe,
   type RecipeCategory,
@@ -21,10 +21,16 @@ import {
   type ItemComponent,
   type RecipeComponent,
   type RecipeIngredient,
+  type RecipeSlot,
   buildUsedInIndex,
 } from '@/components/Recipe/libraryFixtures';
 import { IngredientsV2Section } from '@/components/Recipe/IngredientsV2Section';
-import { menuItemsUsingRecipe, useMenuItems } from '@/components/MenuItems/store';
+import { useModifierGroups } from '@/components/Modifiers/store';
+import type { ModifierGroup } from '@/components/Modifiers/types';
+import { GroupEditorDrawer } from '@/components/Modifiers/GroupEditorDrawer';
+import { applyModifiers, defaultSelectionFor } from '@/components/Recipe/resolver';
+import { resolveIngredientRef, type IngredientRef } from '@/components/Ingredients/catalogue';
+import { IngredientRefPicker } from '@/components/Recipe/IngredientRefPicker';
 import {
   type ProductionWorkflow,
 } from '@/components/Production/fixtures';
@@ -101,6 +107,30 @@ type FormDraft = {
    * "Ingredients" card writes here. Saved to `Recipe.ingredientsV2`.
    */
   ingredientsV2: RecipeIngredient[];
+  /**
+   * Typed packaging list. Same shape as ingredients — packaging is just
+   * another product the order consumes. Modifier `replace` / `add` /
+   * `scale` effects target packaging the same way they target
+   * ingredients (e.g. Large coffee swaps the 8oz cup for a 12oz cup).
+   * Saved to `Recipe.packagingV2`.
+   */
+  packagingV2: RecipeIngredient[];
+  // ── Sellability / modifier-driven composition (post-merge) ─────────────
+  /** POS-linked? Drives the "Sellable on POS" filter on the recipes list
+   *  and whether modifier groups should resolve. */
+  posLinked: boolean;
+  /** Upstream POS item id used to keep the link alive across POS-to-Edify
+   *  reconciliations. Editable as a hidden link reference. */
+  posSourceId: string;
+  /** Catalogue-level modifier groups attached to this recipe. */
+  modifierGroupIds: string[];
+  /** Slot definitions — only used by spirit / wine / size-driven recipes. */
+  slots: RecipeSlot[];
+  /** Whether the advanced "Slots" collapsible is open. */
+  showSlots: boolean;
+  /** Live preview selection state, keyed by group id → option ids. Not
+   *  persisted; resets when the editor remounts. */
+  previewByGroup: Record<string, string[]>;
   components: ComponentRow[];
   variables: VariableRow[];
   packaging: PackagingRow[];
@@ -264,6 +294,16 @@ function recipeToDraft(r: Recipe): FormDraft {
       ...row,
       siteOverrides: row.siteOverrides ? { ...row.siteOverrides } : undefined,
     })) ?? [],
+    packagingV2: r.packagingV2?.map((row) => ({
+      ...row,
+      siteOverrides: row.siteOverrides ? { ...row.siteOverrides } : undefined,
+    })) ?? [],
+    posLinked: r.posLinked ?? false,
+    posSourceId: r.posSourceId ?? '',
+    modifierGroupIds: [...(r.modifierGroupIds ?? [])],
+    slots: (r.slots ?? []).map((s) => ({ ...s })),
+    showSlots: (r.slots?.length ?? 0) > 0,
+    previewByGroup: {},
     components: buildInitialComponents(r),
     variables: fx.variableIngredients?.map((row) => ({ ...row })) ?? [],
     packaging: fx.packaging?.map((row) => ({ ...row })) ?? [],
@@ -329,6 +369,11 @@ function draftToRecipe(
     status: (draft.status as Recipe['status']) || base.status,
     ingredients,
     ingredientsV2: draft.ingredientsV2.length > 0 ? draft.ingredientsV2 : undefined,
+    packagingV2: draft.packagingV2.length > 0 ? draft.packagingV2 : undefined,
+    posLinked: draft.posLinked,
+    posSourceId: draft.posSourceId.trim() || undefined,
+    modifierGroupIds: draft.modifierGroupIds.length > 0 ? draft.modifierGroupIds : undefined,
+    slots: draft.slots.length > 0 ? draft.slots : undefined,
     subRecipes,
     production: {
       visibility: productionVisibility,
@@ -427,8 +472,7 @@ function EditRecipeForm({
 
   const recipesById = useMemo(() => new Map(allRecipes.map((r) => [r.id, r])), [allRecipes]);
   const usedInIds = useMemo(() => buildUsedInIndex(allRecipes).get(original.id) ?? [], [allRecipes, original.id]);
-  const menuItems = useMenuItems();
-  const usedByMenuItems = useMemo(() => menuItemsUsingRecipe(original.id), [menuItems, original.id]);
+  const allGroups = useModifierGroups();
 
   const [draft, setDraft] = useState<FormDraft>(() => recipeToDraft(original));
   const [draftKind, setDraftKind] = useState<Recipe['kind']>(original.kind);
@@ -442,17 +486,37 @@ function EditRecipeForm({
     !!(original.subRecipes?.length || original.workflowId),
   );
 
-  // Sub-recipes are derived from the unified component list (preserves order).
+  // Sub-recipes are derived from BOTH (a) the legacy unified component
+  // list (preserves seed-data order) and (b) any rows in the new
+  // Ingredients section with `ref.kind === 'subrecipe'`. The new
+  // typed picker is now the primary way to attach a sub-recipe, but
+  // existing seed data still flows through `draft.components`.
+  // Dedupe by recipeId so a sub-recipe added in both places counts once.
   const draftSubRecipes = useMemo<Recipe['subRecipes']>(() => {
-    const subs = draft.components
-      .filter((c): c is RecipeComponent => c.kind === 'recipe')
-      .map((c) => ({
+    const seen = new Set<string>();
+    const out: NonNullable<Recipe['subRecipes']> = [];
+    for (const c of draft.components) {
+      if (c.kind !== 'recipe') continue;
+      if (seen.has(c.recipeId)) continue;
+      seen.add(c.recipeId);
+      out.push({
         recipeId: c.recipeId,
         quantityPerUnit: typeof c.qty === 'number' ? c.qty : 1,
         unit: c.uom,
-      }));
-    return subs.length ? subs : undefined;
-  }, [draft.components]);
+      });
+    }
+    for (const ri of draft.ingredientsV2) {
+      if (ri.ref.kind !== 'subrecipe') continue;
+      if (seen.has(ri.ref.recipeId)) continue;
+      seen.add(ri.ref.recipeId);
+      out.push({
+        recipeId: ri.ref.recipeId,
+        quantityPerUnit: ri.baseQty.value,
+        unit: ri.baseQty.unit,
+      });
+    }
+    return out.length ? out : undefined;
+  }, [draft.components, draft.ingredientsV2]);
 
   // Computed totals — item rows by unit cost, recipe rows by linked recipe's ingredientCost.
   const ingredientCost = useMemo(() => {
@@ -530,6 +594,10 @@ function EditRecipeForm({
     // explicit fields the user controls separately.
     updated.kind = draftKind;
     updated.isPrep = draftIsPrep;
+    // Persist the workflow attachment (or detachment). The previous
+    // editor assumed workflowId was fixed; now the user can flip
+    // attach/detach via the Production flow dropdown.
+    updated.workflowId = draftWorkflow?.id;
 
     updateRecipe(updated);
     if (draftWorkflow) updateWorkflow(draftWorkflow);
@@ -738,11 +806,15 @@ function EditRecipeForm({
             </div>
           </Card>
 
-          {/* Ingredients (post-rethink) — typed, master/product-aware rows */}
+          {/* Ingredients (post-rethink) — typed, master/product-aware rows.
+              This is also where sub-recipes / components are pulled in
+              (replaces the legacy "Build steps & sub-recipes" card).
+              Build order is top → bottom; use the up/down arrows to
+              reorder. */}
           <Card>
             <SectionHeader
               title="Ingredients"
-              hint="Search across master products and supplier SKUs in one place. Pick whichever you recognise — Edify resolves the rest. Use the Site qty button to set per-site quantities (e.g. 16g at Site A, 18g at Site B)."
+              hint="Search across master products, supplier SKUs, and your own sub-recipes / components in one place — pick whichever you recognise and Edify resolves the rest. Build order is top → bottom (use the row arrows to reorder). Use the Site qty button to set per-site quantities (e.g. 16g at Site A, 18g at Site B)."
             />
             <IngredientsV2Section
               rows={draft.ingredientsV2}
@@ -751,63 +823,54 @@ function EditRecipeForm({
             />
           </Card>
 
-          {/* Recipe components — legacy unified list (sub-recipes + free-text rows) */}
+          {/* Packaging (post-rethink) — same shape as Ingredients. Packaging
+              IS just-a-product, so modifier replace / add / scale effects
+              can target it the same way (e.g. a Large coffee swaps the
+              8oz cup for a 12oz cup automatically). */}
           <Card>
             <SectionHeader
-              title="Build steps & sub-recipes"
-              hint="Pull in another recipe as a sub-recipe (build order is top → bottom). Free-text ingredient rows here are kept for back-compat — new ingredients should use the Ingredients section above."
+              title="Packaging"
+              hint="Cups, lids, bags, labels — anything physical the order consumes. Listed here so modifiers can swap or add packaging (e.g. Large coffee → 12oz cup) without you maintaining a separate matching table."
             />
-            <ComponentTable
-              rows={draft.components}
-              recipesById={recipesById}
-              selfId={original.id}
-              onChange={setComponents}
-              onPromoteToStage={(workType, leadOffset, label) => {
-                // Promote an implicit ingredient prep tag into an explicit
-                // workflow stage on this recipe. The stage uses a sensible
-                // default capability ('prep' covers most ingredient prep
-                // work — author can refine in the Workflow editor below).
-                setDraftWorkflow((wf) => {
-                  if (!wf) return wf;
-                  const newId = `stage-${Date.now().toString(36)}`;
-                  const prevId = wf.stages[wf.stages.length - 1]?.id;
-                  return {
-                    ...wf,
-                    stages: [
-                      ...wf.stages,
-                      {
-                        id: newId,
-                        label,
-                        capability: 'prep',
-                        workType,
-                        leadOffset,
-                        durationMinutes: 10,
-                      },
-                    ],
-                    edges: prevId ? [...wf.edges, { from: prevId, to: newId }] : wf.edges,
-                  };
-                });
-                setShowWorkflowSections(true);
-              }}
+            <IngredientsV2Section
+              rows={draft.packagingV2}
+              sites={draft.sites.length > 0 ? draft.sites : SITES}
+              onChange={(next) => patch('packagingV2', next)}
+              itemLabel="packaging"
             />
           </Card>
 
-          {/* Variable (legacy — superseded by catalogue-level Modifier Groups) */}
-          <CollapsibleCard
-            label="Variable ingredients (legacy)"
-            hint={draft.variables.length
-              ? `${draft.variables.length} row${draft.variables.length === 1 ? '' : 's'} · superseded by Modifier Groups (Manage modifier groups → attach on Menu Item)`
-              : 'Superseded by Modifier Groups. Attach a shared group to a menu item instead — add the alt milk in one place and every coffee picks it up.'}
-            open={draft.showVariable}
-            onToggle={() => patch('showVariable', !draft.showVariable)}
-          >
-            <VariableTable
-              rows={draft.variables}
-              onChange={(rid, p) => patch('variables', draft.variables.map((r) => r.id === rid ? { ...r, ...p } : r))}
-              onRemove={(rid) => patch('variables', draft.variables.filter((r) => r.id !== rid))}
-              onAdd={() => patch('variables', [...draft.variables, emptyVariable()])}
+          {/* POS & modifiers — sellability + catalogue-level modifier-group
+              attachments. This is where the recipe becomes "menu-item-like":
+              flip on POS-linked and attach the alt-milks / cup-sizes groups
+              you already maintain in Manage modifier groups. */}
+          <Card>
+            <SectionHeader
+              title="POS & modifiers"
+              hint="Sellability + attached modifier groups. Toggle POS-linked once this recipe is ready to fire from the till. Attach catalogue-level modifier groups instead of duplicating variable ingredients across recipes."
             />
-          </CollapsibleCard>
+            <PosAndModifiersSection
+              posLinked={draft.posLinked}
+              posSourceId={draft.posSourceId}
+              modifierGroupIds={draft.modifierGroupIds}
+              allGroups={allGroups}
+              onPatchPosLinked={(v) => patch('posLinked', v)}
+              onPatchPosSourceId={(v) => patch('posSourceId', v)}
+              onPatchGroups={(v) => patch('modifierGroupIds', v)}
+            />
+          </Card>
+
+          {/* Slot-driven (advanced) section is hidden from the editor for
+              now — the concept of named slots driving shared modifier
+              groups isn't earning its complexity in user testing. The
+              `draft.slots` field and the `SlotsSection` helper below are
+              kept intact so:
+                • Existing recipes that already carry slot data continue
+                  to round-trip cleanly on save (see the save payload
+                  builders that still reference `draft.slots`).
+                • Re-enabling the surface is a one-block paste — render
+                  <CollapsibleCard label="Slot-driven (advanced)"…> back
+                  here and the wiring still works.  */}
 
           {/* Packaging */}
           <CollapsibleCard
@@ -867,45 +930,93 @@ function EditRecipeForm({
             </label>
           </Card>
 
-          {/* Workflow stages */}
-          {draftWorkflow && (
-            <CollapsibleCard
-              label="Workflow stages"
-              hint={`${draftWorkflow.stages.length} stage${draftWorkflow.stages.length === 1 ? '' : 's'} across D-2 / D-1 / D0`}
-              open={showWorkflowSections}
-              onToggle={() => setShowWorkflowSections((v) => !v)}
-            >
-              <WorkflowEditor
-                workflow={draftWorkflow}
-                onChange={(updater) => setDraftWorkflow((wf) => (wf ? updater(wf) : wf))}
-              />
-            </CollapsibleCard>
-          )}
+          {/* Production flow — combined card for workflow attachment +
+              diagram + stage editor. Was previously two separate cards
+              ("Workflow stages" + "Production flow") which were
+              conceptually the same area; the dropdown makes the
+              workflow itself optional on a recipe. */}
+          <CollapsibleCard
+            label="Production flow"
+            hint={
+              draftWorkflow
+                ? `Workflow ${draftWorkflow.id} · ${draftWorkflow.stages.length} stage${draftWorkflow.stages.length === 1 ? '' : 's'} across D-2 / D-1 / D0`
+                : (draftSubRecipes?.length ?? 0) > 0
+                  ? `${draftSubRecipes!.length} sub-recipe${draftSubRecipes!.length === 1 ? '' : 's'} · no workflow attached`
+                  : 'Optional. Attach a workflow to see stages cascade across D-2 / D-1 / D0.'
+            }
+            open={showWorkflowSections}
+            onToggle={() => setShowWorkflowSections((v) => !v)}
+          >
+            {/* Workflow attach dropdown — None or any catalogue workflow.
+                Edits to a workflow affect every recipe sharing it. */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+              <FieldLabel>Workflow <Soft>(optional)</Soft></FieldLabel>
+              <select
+                value={draftWorkflow?.id ?? ''}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  if (!id) {
+                    setDraftWorkflow(null);
+                  } else if (allWorkflows[id]) {
+                    setDraftWorkflow(cloneWorkflow(allWorkflows[id]));
+                  }
+                }}
+                style={{ ...selectStyle, width: 280 }}
+              >
+                <option value="">— None —</option>
+                {Object.values(allWorkflows).map((wf) => (
+                  <option key={wf.id} value={wf.id}>
+                    {wf.id} ({wf.stages.length} stage{wf.stages.length === 1 ? '' : 's'})
+                  </option>
+                ))}
+              </select>
+              {draftWorkflow && (
+                <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                  Edits apply to every recipe sharing this workflow.
+                </span>
+              )}
+            </div>
 
-          {/* Production flow — visual summary of sub-recipes + workflow */}
-          {((draftSubRecipes?.length ?? 0) > 0 || draftWorkflow) && (
-            <Card>
-              <SectionHeader
-                title="Production flow"
-                hint="How components and stages cascade across D-2 / D-1 / D0."
-              />
-              <WorkflowDiagram
-                recipe={{ ...original, subRecipes: draftSubRecipes }}
-                recipesById={recipesById}
-                workflows={
-                  draftWorkflow
-                    ? { ...workflows, [draftWorkflow.id]: draftWorkflow }
-                    : workflows
-                }
-              />
-              <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--color-text-muted)' }}>
-                {kindToModeLabel({ ...original, kind: draftKind, isPrep: draftIsPrep })}
-                {draft.shelfLifeValue !== '' && (
-                  <> · Shelf life {formatShelfLife(shelfLifeToMinutes(draft.shelfLifeValue, draft.shelfLifeUnit) ?? 0)}</>
-                )}
+            {/* Diagram — visible whenever there's something to draw
+                (workflow attached OR sub-recipes present). */}
+            {((draftSubRecipes?.length ?? 0) > 0 || draftWorkflow) ? (
+              <>
+                <WorkflowDiagram
+                  recipe={{ ...original, subRecipes: draftSubRecipes }}
+                  recipesById={recipesById}
+                  workflows={
+                    draftWorkflow
+                      ? { ...workflows, [draftWorkflow.id]: draftWorkflow }
+                      : workflows
+                  }
+                />
+                <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                  {kindToModeLabel({ ...original, kind: draftKind, isPrep: draftIsPrep })}
+                  {draft.shelfLifeValue !== '' && (
+                    <> · Shelf life {formatShelfLife(shelfLifeToMinutes(draft.shelfLifeValue, draft.shelfLifeUnit) ?? 0)}</>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div style={{ padding: '12px', fontSize: 12, color: 'var(--color-text-muted)', background: 'var(--color-bg-hover)', borderRadius: 8 }}>
+                No workflow attached and no sub-recipes in this recipe yet. Pick a workflow above to add stages, or add a sub-recipe in the Ingredients section.
               </div>
-            </Card>
-          )}
+            )}
+
+            {/* Stage editor — only when a workflow is attached. */}
+            {draftWorkflow && (
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--color-border-subtle)' }}>
+                <SectionHeader
+                  title="Stages"
+                  hint="Reorder, rename, or add stages. Stages on a shared workflow affect every recipe using it."
+                />
+                <WorkflowEditor
+                  workflow={draftWorkflow}
+                  onChange={(updater) => setDraftWorkflow((wf) => (wf ? updater(wf) : wf))}
+                />
+              </div>
+            )}
+          </CollapsibleCard>
 
           {/* Production settings */}
           <CollapsibleCard
@@ -1080,65 +1191,17 @@ function EditRecipeForm({
             srpIncDelivery={srpInc(draft.srpDeliveryEx, draft.vatPct)}
           />
 
-          {/* Used by menu items — read from the catalogue-level MenuItems
-              store. Replaces the legacy `Recipe.menuItems` display field. */}
-          <div
-            style={{
-              background: '#fff', border: '1px solid var(--color-border-subtle)',
-              borderRadius: '12px', padding: '16px',
-            }}
-          >
-            <div
-              style={{
-                fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em',
-                textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: '8px',
-                display: 'flex', alignItems: 'center', gap: 6,
-              }}
-            >
-              Used by menu items
-              <span style={{ marginLeft: 'auto', fontWeight: 700, color: 'var(--color-text-secondary)' }}>
-                {usedByMenuItems.length}
-              </span>
-            </div>
-            {usedByMenuItems.length === 0 ? (
-              <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
-                Not yet attached to any menu item. Open Manage menu items to attach this recipe to a POS-visible item.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {usedByMenuItems.map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => router.push(`/menu-items/${m.id}/edit`)}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-                      padding: '7px 11px', borderRadius: 8,
-                      border: '1px solid var(--color-border-subtle)',
-                      background: '#fff', cursor: 'pointer', fontFamily: 'var(--font-primary)',
-                      color: 'var(--color-text-primary)',
-                    }}
-                  >
-                    <span style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
-                      <span style={{ fontSize: '12.5px', fontWeight: 600 }}>{m.name}</span>
-                      {m.modifierGroupIds.length > 0 && (
-                        <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>
-                          + {m.modifierGroupIds.length} modifier group{m.modifierGroupIds.length === 1 ? '' : 's'}
-                        </span>
-                      )}
-                    </span>
-                    <span style={{
-                      padding: '2px 7px', borderRadius: 100,
-                      background: m.posLinked ? 'rgba(3,28,89,0.08)' : 'var(--color-bg-hover)',
-                      color: m.posLinked ? 'var(--color-accent-active)' : 'var(--color-text-muted)',
-                      fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
-                    }}>
-                      {m.posLinked ? 'POS' : 'Draft'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* What gets sold — live preview of the resolved composition for
+              the current modifier selection. Folds the recipe's
+              ingredientsV2 + slots + attached modifier groups through the
+              resolver so the user can sanity-check what fires when this
+              recipe is ordered with various options. */}
+          <WhatGetsSoldPreview
+            recipe={original}
+            draft={draft}
+            allGroups={allGroups}
+            onPreviewChange={(next) => patch('previewByGroup', next)}
+          />
 
           {usedInIds.length > 0 && (
             <div
@@ -1217,6 +1280,509 @@ function EditRecipeForm({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── POS & modifiers section ──────────────────────────────────────────────────
+
+function PosAndModifiersSection({
+  posLinked, posSourceId, modifierGroupIds, allGroups,
+  onPatchPosLinked, onPatchPosSourceId, onPatchGroups,
+}: {
+  posLinked: boolean;
+  posSourceId: string;
+  modifierGroupIds: string[];
+  allGroups: ReturnType<typeof useModifierGroups>;
+  onPatchPosLinked: (v: boolean) => void;
+  onPatchPosSourceId: (v: string) => void;
+  onPatchGroups: (v: string[]) => void;
+}) {
+  type DrawerState =
+    | { open: false }
+    | { open: true; mode: 'create' }
+    | { open: true; mode: 'edit'; group: ModifierGroup };
+  const [drawer, setDrawer] = useState<DrawerState>({ open: false });
+
+  function toggle(id: string) {
+    onPatchGroups(modifierGroupIds.includes(id)
+      ? modifierGroupIds.filter((g) => g !== id)
+      : [...modifierGroupIds, id]);
+  }
+  function openCreate() {
+    setDrawer({ open: true, mode: 'create' });
+  }
+  function openEdit(group: ModifierGroup) {
+    setDrawer({ open: true, mode: 'edit', group });
+  }
+  function handleSaved(group: ModifierGroup) {
+    // Create mode: auto-attach the new group. Edit mode: catalogue
+    // already updated via upsertGroup; pills re-render on the
+    // useModifierGroups subscription.
+    if (drawer.open && drawer.mode === 'create') {
+      if (!modifierGroupIds.includes(group.id)) {
+        onPatchGroups([...modifierGroupIds, group.id]);
+      }
+    }
+  }
+  function handleDeleted(id: string) {
+    if (modifierGroupIds.includes(id)) {
+      onPatchGroups(modifierGroupIds.filter((g) => g !== id));
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'flex-end' }}>
+        <div>
+          <FieldLabel>POS link</FieldLabel>
+          <label
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '8px 12px', borderRadius: 8,
+              border: '1px solid var(--color-border-subtle)',
+              background: posLinked ? 'rgba(3,28,89,0.05)' : '#fff',
+              cursor: 'pointer', fontFamily: 'var(--font-primary)', fontSize: 13,
+              color: posLinked ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
+              fontWeight: 600,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={posLinked}
+              onChange={(e) => onPatchPosLinked(e.target.checked)}
+              style={{ margin: 0 }}
+            />
+            {posLinked ? 'Sellable on POS' : 'Internal / not sold'}
+          </label>
+        </div>
+        <div>
+          <FieldLabel>POS source id <Soft>(optional)</Soft></FieldLabel>
+          <input
+            value={posSourceId}
+            onChange={(e) => onPatchPosSourceId(e.target.value)}
+            placeholder="e.g. pos-mi-latte"
+            style={inputStyle}
+            disabled={!posLinked}
+          />
+        </div>
+      </div>
+
+      <div>
+        <FieldLabel>Modifier groups <Soft>({modifierGroupIds.length} attached)</Soft></FieldLabel>
+        {allGroups.length === 0 ? (
+          <div
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+              padding: '10px 12px', borderRadius: 8,
+              background: 'var(--color-bg-hover)',
+              fontSize: 12.5, color: 'var(--color-text-muted)',
+            }}
+          >
+            <span>No modifier groups yet.</span>
+            <button type="button" onClick={openCreate} style={newGroupChip}>
+              <Plus size={12} strokeWidth={2.4} /> Create one now
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+            {allGroups.map((g) => {
+              const on = modifierGroupIds.includes(g.id);
+              return (
+                <span
+                  key={g.id}
+                  style={{
+                    display: 'inline-flex', alignItems: 'stretch',
+                    borderRadius: 100, overflow: 'hidden',
+                    border: on ? '1px solid var(--color-accent-active)' : '1px solid var(--color-border-subtle)',
+                    background: on ? 'rgba(3,28,89,0.06)' : '#fff',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggle(g.id)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '6px 11px', border: 'none', background: 'transparent',
+                      color: on ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
+                      fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                      fontFamily: 'var(--font-primary)',
+                    }}
+                  >
+                    <span style={{
+                      width: 14, height: 14, borderRadius: 4,
+                      border: '1.5px solid ' + (on ? 'var(--color-accent-active)' : 'var(--color-border)'),
+                      background: on ? 'var(--color-accent-active)' : '#fff',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {on && <span style={{ width: 6, height: 6, borderRadius: 1, background: '#fff' }} />}
+                    </span>
+                    {g.name}
+                    <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>
+                      · {g.options.length}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openEdit(g)}
+                    title={`Edit "${g.name}"`}
+                    aria-label={`Edit ${g.name}`}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      padding: '0 9px', border: 'none',
+                      borderLeft: '1px solid ' + (on ? 'rgba(3,28,89,0.20)' : 'var(--color-border-subtle)'),
+                      background: 'transparent',
+                      color: 'var(--color-text-muted)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Pencil size={11} />
+                  </button>
+                </span>
+              );
+            })}
+            <button type="button" onClick={openCreate} style={newGroupChip}>
+              <Plus size={12} strokeWidth={2.4} /> New modifier group
+            </button>
+          </div>
+        )}
+      </div>
+
+      <GroupEditorDrawer
+        open={drawer.open}
+        mode={drawer.open && drawer.mode === 'edit' ? 'edit' : 'create'}
+        initial={drawer.open && drawer.mode === 'edit' ? drawer.group : null}
+        onClose={() => setDrawer({ open: false })}
+        onSaved={handleSaved}
+        onDeleted={handleDeleted}
+      />
+    </div>
+  );
+}
+
+const newGroupChip: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 5,
+  padding: '6px 11px', borderRadius: 100,
+  border: '1px dashed var(--color-border)', background: '#fff',
+  color: 'var(--color-text-secondary)',
+  fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+  fontFamily: 'var(--font-primary)',
+};
+
+// ── Slots section (advanced) ─────────────────────────────────────────────────
+
+function SlotsSection({
+  slots, onChange,
+}: {
+  slots: RecipeSlot[];
+  onChange: (next: RecipeSlot[]) => void;
+}) {
+  function patchAt(i: number, p: Partial<RecipeSlot>) {
+    onChange(slots.map((s, idx) => idx === i ? { ...s, ...p } : s));
+  }
+  function removeAt(i: number) {
+    onChange(slots.filter((_, idx) => idx !== i));
+  }
+  function add() {
+    onChange([
+      ...slots,
+      { key: `slot-${slots.length + 1}`, label: `Slot ${slots.length + 1}` },
+    ]);
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.4 }}>
+        Slots are ingredient placeholders that <code>set-slot</code> modifier effects can target.
+        Use this for the spirit (one Spirit measure group targets every spirit recipe), wine (no
+        default pour size), or sized-portion patterns.
+      </div>
+      {slots.map((s, i) => (
+        <div
+          key={i}
+          style={{
+            border: '1px solid var(--color-border-subtle)', borderRadius: 10,
+            padding: 12, background: 'var(--color-bg-hover)',
+            display: 'grid', gridTemplateColumns: '180px 1fr 220px auto', gap: 10, alignItems: 'flex-end',
+          }}
+        >
+          <div>
+            <FieldLabel>Key</FieldLabel>
+            <input
+              value={s.key}
+              onChange={(e) => patchAt(i, { key: e.target.value })}
+              placeholder="e.g. spirit"
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <FieldLabel>Label</FieldLabel>
+            <input
+              value={s.label}
+              onChange={(e) => patchAt(i, { label: e.target.value })}
+              placeholder="e.g. Spirit"
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <FieldLabel>Default ingredient <Soft>(optional)</Soft></FieldLabel>
+            <IngredientRefPicker
+              value={s.defaultRef}
+              onChange={(ref) => patchAt(i, { defaultRef: ref })}
+              placeholder="Pick default…"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => removeAt(i)}
+            style={{
+              padding: '7px 10px', borderRadius: 8,
+              border: '1px solid var(--color-border-subtle)', background: '#fff',
+              fontSize: 12, fontFamily: 'var(--font-primary)',
+              color: 'var(--color-text-secondary)', cursor: 'pointer',
+            }}
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={add}
+        style={{
+          alignSelf: 'flex-start',
+          padding: '7px 12px', borderRadius: 8,
+          border: '1px dashed var(--color-border)',
+          background: '#fff', fontSize: 12.5, fontWeight: 600,
+          color: 'var(--color-text-secondary)', cursor: 'pointer',
+          fontFamily: 'var(--font-primary)',
+        }}
+      >
+        + Add slot
+      </button>
+    </div>
+  );
+}
+
+// ── What gets sold (live resolver preview) ───────────────────────────────────
+
+function WhatGetsSoldPreview({
+  recipe, draft, allGroups, onPreviewChange,
+}: {
+  recipe: Recipe;
+  draft: FormDraft;
+  allGroups: ReturnType<typeof useModifierGroups>;
+  onPreviewChange: (next: Record<string, string[]>) => void;
+}) {
+  // Build a draft Recipe from the current form state so the resolver sees
+  // the editor's pending changes (not what's on disk).
+  const draftRecipe: Recipe = useMemo(() => ({
+    ...recipe,
+    name: draft.name.trim() || recipe.name,
+    ingredientsV2: draft.ingredientsV2.length > 0 ? draft.ingredientsV2 : undefined,
+    packagingV2: draft.packagingV2.length > 0 ? draft.packagingV2 : undefined,
+    modifierGroupIds: draft.modifierGroupIds.length > 0 ? draft.modifierGroupIds : undefined,
+    slots: draft.slots.length > 0 ? draft.slots : undefined,
+    posLinked: draft.posLinked,
+  }), [recipe, draft.name, draft.ingredientsV2, draft.packagingV2, draft.modifierGroupIds, draft.slots, draft.posLinked]);
+
+  const attached = useMemo(
+    () => (draftRecipe.modifierGroupIds ?? [])
+      .map((id) => allGroups.find((g) => g.id === id))
+      .filter((g): g is NonNullable<typeof g> => !!g),
+    [draftRecipe.modifierGroupIds, allGroups],
+  );
+
+  // Default-fill any group that has no explicit selection so the preview
+  // matches what a customer with no modifier picks would see.
+  const effectiveSelection: Record<string, string[]> = useMemo(() => {
+    const out: Record<string, string[]> = { ...draft.previewByGroup };
+    for (const g of attached) {
+      if (out[g.id] !== undefined) continue;
+      const defaults = g.options.filter((o) => o.isDefault).map((o) => o.id);
+      out[g.id] = defaults;
+    }
+    return out;
+  }, [attached, draft.previewByGroup]);
+
+  const resolved = useMemo(() => applyModifiers({
+    recipe: draftRecipe,
+    selectedOptionIds: defaultSelectionFor(draftRecipe),
+    selectedByGroup: effectiveSelection,
+    siteId: draft.sites[0],
+  }), [draftRecipe, effectiveSelection, draft.sites]);
+
+  function toggleOption(group: ReturnType<typeof useModifierGroups>[number], optionId: string) {
+    const current = effectiveSelection[group.id] ?? [];
+    let next: string[];
+    if (group.selection === 'one') {
+      next = current.includes(optionId) ? [] : [optionId];
+    } else {
+      next = current.includes(optionId)
+        ? current.filter((id) => id !== optionId)
+        : [...current, optionId];
+    }
+    onPreviewChange({ ...draft.previewByGroup, [group.id]: next });
+  }
+
+  return (
+    <div
+      style={{
+        background: '#fff', border: '1px solid var(--color-border-subtle)',
+        borderRadius: '12px', padding: '16px',
+      }}
+    >
+      <div
+        style={{
+          fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em',
+          textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: '8px',
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}
+      >
+        What gets sold
+        <span style={{ marginLeft: 'auto', fontWeight: 700, color: 'var(--color-text-secondary)' }}>
+          {resolved.lines.length} line{resolved.lines.length === 1 ? '' : 's'}
+        </span>
+      </div>
+
+      {!draft.posLinked && (
+        <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginBottom: 10 }}>
+          Not POS-linked — modifier groups won&apos;t fire on the till. Toggle POS link in the
+          &ldquo;POS &amp; modifiers&rdquo; section to enable.
+        </div>
+      )}
+
+      {attached.length === 0 && (
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
+          No modifier groups attached yet. Preview shows the base composition only.
+        </div>
+      )}
+
+      {attached.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+          {attached.map((g) => {
+            const selected = effectiveSelection[g.id] ?? [];
+            return (
+              <div key={g.id}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+                  {g.name}{' '}
+                  <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>
+                    · {g.selection === 'one' ? 'pick one' : 'pick many'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {g.options.map((opt) => {
+                    const on = selected.includes(opt.id);
+                    return (
+                      <button
+                        type="button"
+                        key={opt.id}
+                        onClick={() => toggleOption(g, opt.id)}
+                        style={{
+                          padding: '4px 9px', borderRadius: 100,
+                          border: on
+                            ? '1px solid var(--color-accent-active)'
+                            : '1px solid var(--color-border-subtle)',
+                          background: on ? 'rgba(3,28,89,0.06)' : '#fff',
+                          color: on ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
+                          fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
+                          fontFamily: 'var(--font-primary)',
+                        }}
+                      >
+                        {opt.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {resolved.lines.length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+            No resolved ingredients. Add ingredients above or fill in a slot default.
+          </div>
+        ) : (
+          resolved.lines.map((ln) => (
+            <PreviewLine key={ln.id} ingredient={ln.ref} name={ln.name} qty={ln.qty} source={ln.source} />
+          ))
+        )}
+      </div>
+
+      {resolved.warnings.length > 0 && (
+        <div style={{
+          marginTop: 10, padding: '8px 10px',
+          background: 'rgba(241,180,52,0.12)', border: '1px solid rgba(241,180,52,0.4)',
+          borderRadius: 8,
+        }}>
+          {resolved.warnings.map((w, i) => (
+            <div key={i} style={{ fontSize: 11.5, color: 'var(--color-warning)' }}>{w}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PreviewLine({
+  ingredient, name, qty, source,
+}: {
+  ingredient: IngredientRef;
+  name: string;
+  qty: { value: number; unit: string };
+  source: ReturnType<typeof applyModifiers>['lines'][number]['source'];
+}) {
+  const resolved = resolveIngredientRef(ingredient);
+  const tone = source.kind === 'recipe-base'
+    ? 'base'
+    : source.kind === 'recipe-packaging'
+      ? 'pkg'
+      : source.kind === 'slot'
+        ? 'slot'
+        : 'mod';
+  const toneStyles: Record<typeof tone, React.CSSProperties> = {
+    base: { background: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' },
+    pkg:  { background: 'rgba(82,170,150,0.16)', color: 'var(--color-success, #347262)' },
+    slot: { background: 'rgba(241,180,52,0.16)', color: 'var(--color-warning)' },
+    mod:  { background: 'rgba(3,28,89,0.08)', color: 'var(--color-accent-active)' },
+  };
+  const label = source.kind === 'recipe-base'
+    ? 'base'
+    : source.kind === 'recipe-packaging'
+      ? 'packaging'
+      : source.kind === 'slot'
+        ? `slot · ${source.slotKey}`
+        : source.kind === 'modifier-add'
+          ? 'add'
+          : source.kind === 'modifier-replace'
+            ? 'replace'
+            : `× ${source.factor}`;
+  return (
+    <div
+      style={{
+        display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 8, alignItems: 'center',
+        padding: '6px 9px', borderRadius: 7,
+        border: '1px solid var(--color-border-subtle)', background: '#fff',
+      }}
+    >
+      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-primary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {name}
+        {resolved?.master && !resolved.product && (
+          <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 500, color: 'var(--color-text-muted)' }}>master</span>
+        )}
+      </span>
+      <span style={{ fontSize: 11.5, color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+        {qty.value}{qty.unit}
+      </span>
+      <span style={{
+        padding: '2px 7px', borderRadius: 100, fontSize: 9.5, fontWeight: 700,
+        letterSpacing: '0.04em', textTransform: 'uppercase', ...toneStyles[tone],
+      }}>
+        {label}
+      </span>
     </div>
   );
 }

@@ -29,15 +29,10 @@ import WorkTypeChip from '@/components/Production/WorkTypeChip';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Shared option lists used by editors and pickers.
-
-export const MODIFIER_GROUPS = [
-  { id: 'mg-alt-milks', name: 'Alt milks',   optionsCount: 3, attachedCount: 14 },
-  { id: 'mg-cup-sizes', name: 'Cup sizes',   optionsCount: 3, attachedCount: 22 },
-  { id: 'mg-pour-size', name: 'Pour size',   optionsCount: 2, attachedCount: 37 },
-  { id: 'mg-mixers',    name: 'Mixers',      optionsCount: 6, attachedCount: 37 },
-  { id: 'mg-syrups',    name: 'Syrup shots', optionsCount: 5, attachedCount: 18 },
-  { id: 'mg-extras',    name: 'Extras',      optionsCount: 4, attachedCount: 9 },
-];
+//
+// The legacy `MODIFIER_GROUPS` constant (hardcoded chip catalogue) was removed
+// when modifier groups became first-class catalogue entities — read them from
+// `@/components/Modifiers/store` via `useModifierGroups()` instead.
 
 export const ALL_RECIPE_CATEGORIES: RecipeCategory[] = [
   'Coffee', 'Tea', 'Pastry', 'Food', 'Wine', 'Spirits', 'Kids',
@@ -996,35 +991,6 @@ export function IngredientsEditor({
       >
         <Plus size={13} /> Add ingredient
       </button>
-    </div>
-  );
-}
-
-export function ModifierGroupsEditor({
-  selected, onChange,
-}: {
-  selected: string[];
-  onChange: (next: string[]) => void;
-}) {
-  function toggle(name: string) {
-    if (selected.includes(name)) onChange(selected.filter((g) => g !== name));
-    else onChange([...selected, name]);
-  }
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-      {MODIFIER_GROUPS.map((g) => {
-        const on = selected.includes(g.name);
-        return (
-          <button
-            key={g.id}
-            onClick={() => toggle(g.name)}
-            style={{ ...editChipBase, ...(on ? editChipActive : {}) }}
-          >
-            {on && <Check size={12} strokeWidth={2.6} style={{ marginRight: '5px' }} />}
-            {g.name}
-          </button>
-        );
-      })}
     </div>
   );
 }

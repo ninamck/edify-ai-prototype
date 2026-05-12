@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, Download, FileText, Layers, ListChecks } from 'lucide-react';
+import { ChevronDown, Download, FileText, Layers, ListChecks, Wand2 } from 'lucide-react';
 import BenchCardBoard from '@/components/Production2/BenchCardBoard';
 import BatchDetailPanel from '@/components/Production2/BatchDetailPanel';
 import CadenceDetailPanel from '@/components/Production2/CadenceDetailPanel';
@@ -33,6 +33,14 @@ const MODE_TABS: Array<{ id: ModeTabId; label: string }> = [
   { id: 'increment', label: 'Increment' },
 ];
 
+type RunTabId = 'all' | string;
+
+/** Convert "HH:MM" to minutes-from-midnight for ordering run pills. */
+function hhmmToMins(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
 export default function ProductionBoardPage() {
   const { siteId } = useProductionSite();
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
@@ -40,6 +48,7 @@ export default function ProductionBoardPage() {
   const [selectedBenchId, setSelectedBenchId] = useState<string | null>(null);
   const [focusedItemId, setFocusedItemId] = useState<ProductionItemId | null>(null);
   const [modeTab, setModeTab] = useState<ModeTabId>('all');
+  const [runTab, setRunTab] = useState<RunTabId>('all');
   const site = getSite(siteId) ?? PRET_SITES[0];
 
   // Counts per tab — based on bench primaryMode at the current site.
@@ -52,6 +61,48 @@ export default function ProductionBoardPage() {
     }
     return counts;
   }, [site.id]);
+
+  // Distinct run labels across all benches at this site, ordered by the
+  // earliest start time we see for each label. So a site with a bakery N1
+  // + R1/R2 and a prep N1 + R1/R2/R3 renders pills as N1 · R1 · R2 · R3.
+  // Counts represent the number of benches that include a run with that
+  // label (matches BenchCardBoard's run filter scope).
+  const runTabs = useMemo(() => {
+    const benches = benchesAt(site.id);
+    const earliestStart = new Map<string, number>();
+    const benchCount = new Map<string, number>();
+    for (const b of benches) {
+      const labelsOnBench = new Set<string>();
+      for (const r of b.runs ?? []) {
+        const cur = earliestStart.get(r.label);
+        const startMins = hhmmToMins(r.startTime);
+        if (cur === undefined || startMins < cur) earliestStart.set(r.label, startMins);
+        labelsOnBench.add(r.label);
+      }
+      for (const label of labelsOnBench) {
+        benchCount.set(label, (benchCount.get(label) ?? 0) + 1);
+      }
+    }
+    const labels = Array.from(earliestStart.keys()).sort((a, b) => {
+      const sa = earliestStart.get(a) ?? 0;
+      const sb = earliestStart.get(b) ?? 0;
+      return sa - sb;
+    });
+    return labels.map(label => ({
+      id: label,
+      label,
+      count: benchCount.get(label) ?? 0,
+    }));
+  }, [site.id]);
+
+  // Switching sites can leave runTab pointing at a label the new site
+  // doesn't have (e.g. switching from a P3-using site back to one with
+  // only R1/R2). Reset to 'all' so the board doesn't silently render an
+  // empty board.
+  useEffect(() => {
+    if (runTab === 'all') return;
+    if (!runTabs.some(t => t.id === runTab)) setRunTab('all');
+  }, [runTab, runTabs]);
 
   // Clear focus when switching site so stale ids don't resolve on the wrong graph.
   useEffect(() => {
@@ -158,8 +209,64 @@ export default function ProductionBoardPage() {
           })}
         </div>
         <div style={{ flex: 1 }} />
+        <PrefillBenchesButton />
         <DownloadMenuButton siteId={site.id} date={DEMO_TODAY} lines={lines} />
       </div>
+
+      {/* Run-label filter — sits beneath the mode tabs and scopes the
+          board to a single scheduled run (R1, R2, R3, N1, …). Composes
+          with the mode tabs above: e.g. Mode=Run + Run=R1 narrows to
+          run-mode benches' first run. Hidden if the site has no
+          scheduled runs (rare; covers the make-to-order-only case). */}
+      {runTabs.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 32px',
+            borderBottom: '1px solid var(--color-border-subtle)',
+            background: '#ffffff',
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              color: 'var(--color-text-muted)',
+              marginRight: 4,
+            }}
+          >
+            Run
+          </span>
+          <div
+            role="tablist"
+            aria-label="Run filter"
+            style={{
+              display: 'flex',
+              gap: 6,
+              flexWrap: 'wrap',
+            }}
+          >
+            <RunPill
+              label="All"
+              active={runTab === 'all'}
+              onClick={() => setRunTab('all')}
+            />
+            {runTabs.map(t => (
+              <RunPill
+                key={t.id}
+                label={t.label}
+                count={t.count}
+                active={runTab === t.id}
+                onClick={() => setRunTab(t.id)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {focusedRecipeName && (
         <FocusBar recipeName={focusedRecipeName} onClear={() => setFocusedItemId(null)} />
@@ -174,6 +281,7 @@ export default function ProductionBoardPage() {
           onFocusChange={(id) => setFocusedItemId(id)}
           onClearFocus={() => setFocusedItemId(null)}
           modeFilter={modeTab}
+          runFilter={runTab}
           onBenchClick={(id) => setSelectedBenchId(id)}
         />
       </div>
@@ -191,6 +299,43 @@ export default function ProductionBoardPage() {
         onClose={() => setSelectedBenchId(null)}
       />
     </div>
+  );
+}
+
+/**
+ * Visual-only "Prefill benches" toolbar button. Placeholder for the
+ * upcoming auto-assignment flow that will spread the day's planned
+ * recipes across the right benches based on capability, capacity and
+ * batch rules. For now it's just the affordance — managers can see it
+ * sitting next to Download so we can validate placement and copy
+ * before the underlying behaviour ships.
+ */
+function PrefillBenchesButton() {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        // No-op placeholder — auto-prefill logic will land here.
+      }}
+      aria-label="Prefill benches with the day's recipes"
+      title="Prefill benches"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '8px 14px',
+        borderRadius: 8,
+        fontSize: 12,
+        fontWeight: 600,
+        fontFamily: 'var(--font-primary)',
+        background: '#ffffff',
+        color: 'var(--color-text-secondary)',
+        border: '1px solid var(--color-border)',
+        cursor: 'pointer',
+      }}
+    >
+      <Wand2 size={14} /> Prefill benches
+    </button>
   );
 }
 
@@ -361,6 +506,70 @@ function DownloadMenuItem({
           {hint}
         </span>
       </span>
+    </button>
+  );
+}
+
+/**
+ * Compact pill used by the run-filter row. Visually lighter than the mode
+ * tabs above so the two layers read as related-but-secondary. Active pill
+ * borrows the accent colour; the count badge is hidden when undefined (so
+ * the "All" pill stays minimal).
+ */
+function RunPill({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count?: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '5px 11px',
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 600,
+        fontFamily: 'var(--font-primary)',
+        cursor: 'pointer',
+        background: active ? 'var(--color-accent-active)' : '#ffffff',
+        color: active ? '#ffffff' : 'var(--color-text-secondary)',
+        border: `1px solid ${active ? 'var(--color-accent-active)' : 'var(--color-border)'}`,
+        fontVariantNumeric: 'tabular-nums',
+        transition: 'all 0.15s',
+      }}
+    >
+      {label}
+      {count !== undefined && (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minWidth: 16,
+            height: 16,
+            padding: '0 4px',
+            borderRadius: 100,
+            fontSize: 10,
+            fontWeight: 700,
+            background: active ? 'rgba(255,255,255,0.25)' : 'var(--color-border-subtle)',
+            color: active ? '#fff' : 'var(--color-text-secondary)',
+          }}
+        >
+          {count}
+        </span>
+      )}
     </button>
   );
 }

@@ -10,6 +10,7 @@ import {
   Search,
   X,
   Link2,
+  AlertTriangle,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import StatusPill from './StatusPill';
@@ -18,11 +19,14 @@ import {
   dayOfWeek,
   getRecipe,
   getSite,
+  hubAvailableSupply,
   productionItemsAt,
+  SHORTFALL_REASON_LABELS,
   submissionsForHub,
   type DispatchTransfer,
   type DispatchTransferLine,
   type ProductionRecipe,
+  type RecipeId,
   type Site,
   type SiteId,
   type SkuId,
@@ -32,6 +36,11 @@ import {
 import { useDispatchTransfers, formatSentClock } from './dispatchStore';
 import { useSpokeRejects } from './rejectsStore';
 import { useAdhocRequests } from './adhocStore';
+import ShortfallReallocationModal, {
+  type ShortfallReallocationInput,
+  type ShortfallReallocationResult,
+} from './ShortfallReallocationModal';
+import { computeAllocation } from './dispatchShortfall';
 
 /**
  * Manifest line built by the matrix for a single spoke — the unit of work
@@ -63,6 +72,18 @@ type Props = {
    * confirm sheet in bulk mode.
    */
   onSendAll?: (requests: SpokeDispatchRequest[]) => void;
+  /**
+   * Currently-applied shortfall reallocations, keyed by recipeId. Page-level
+   * state — the matrix banner and the request builder both read from this.
+   * Empty object on first load; the modal populates entries via
+   * `onApplyShortfall` when the manager accepts a reallocation.
+   */
+  shortfallApplied?: Record<RecipeId, ShortfallReallocationResult>;
+  /**
+   * Called when the manager applies (or re-applies) a reallocation. Page
+   * lifts the result into `shortfallApplied`.
+   */
+  onApplyShortfall?: (result: ShortfallReallocationResult) => void;
 };
 
 // Statuses where the spoke's order is locked-in enough to be safely
@@ -98,6 +119,13 @@ type RecipeRow = {
   rowTotal: number;
   /** Number of spokes that asked for this recipe (cell.value > 0). */
   spokeCount: number;
+  /**
+   * Hub-available supply for this SKU today, if a stubbed shortfall exists.
+   * `undefined` means "supply isn't the limiting factor" — no banner fires.
+   * When defined AND less than `rowTotal`, the recipe row renders a
+   * shortfall banner and the request builder applies the reallocation.
+   */
+  availableSupply?: number;
 };
 
 /**
@@ -119,7 +147,21 @@ export default function HubSpokeBreakdown({
   forDate = dayOffset(1),
   onSendSpoke,
   onSendAll,
+  shortfallApplied = {},
+  onApplyShortfall,
 }: Props) {
+  // Per-recipe shortfall modal state — null when the modal is closed.
+  // Carrying the full modal-input payload (not just recipeId) means we can
+  // open the modal without re-deriving inputs from the in-flight state of
+  // the matrix, which would jitter if a parent re-renders mid-flow.
+  const [shortfallModal, setShortfallModal] = useState<{
+    recipeId: RecipeId;
+    skuId: SkuId;
+    recipeName: string;
+    totalRequested: number;
+    availableSupply: number;
+    inputs: ShortfallReallocationInput[];
+  } | null>(null);
   const submissions = useMemo(() => submissionsForHub(hubId, forDate), [hubId, forDate]);
   const { transferFor, undoTransfer } = useDispatchTransfers();
   const [query, setQuery] = useState('');
@@ -162,7 +204,8 @@ export default function HubSpokeBreakdown({
       });
       const rowTotal = cells.reduce((a, c) => a + (c.value ?? 0), 0);
       const spokeCount = cells.filter(c => (c.value ?? 0) > 0).length;
-      rows.push({ recipe, skuId, cells, rowTotal, spokeCount });
+      const availableSupply = hubAvailableSupply(hubId, skuId, forDate);
+      rows.push({ recipe, skuId, cells, rowTotal, spokeCount, availableSupply });
     }
 
     rows.sort((a, b) => {
@@ -179,6 +222,42 @@ export default function HubSpokeBreakdown({
     if (!q) return allRows;
     return allRows.filter(r => r.recipe.name.toLowerCase().includes(q));
   }, [allRows, query]);
+
+  // Effective allocations = auto demand-led for every short row that
+  // hasn't been touched by the manager, MERGED with explicit
+  // `shortfallApplied` entries (manager edits win). The dispatch send
+  // path reads from this so cuts are baked in whether the manager opened
+  // the modal or not — the modal becomes an "override" surface rather
+  // than a gate. The matrix banner reads from this too, so every short
+  // row shows a resolved state on first render.
+  const effectiveAllocations = useMemo(() => {
+    const merged: Record<RecipeId, ShortfallReallocationResult> = {};
+    for (const row of allRows) {
+      if (row.availableSupply === undefined) continue;
+      if (row.rowTotal <= row.availableSupply) continue;
+      const inputs: ShortfallReallocationInput[] = row.cells
+        .map((c, i) => ({
+          spokeId: submissions[i].fromSiteId,
+          skuId: row.skuId,
+          requested: c.value ?? 0,
+        }))
+        .filter(i => i.requested > 0);
+      if (inputs.length === 0) continue;
+      const allocRows = computeAllocation('demand-led', inputs, row.availableSupply);
+      merged[row.recipe.id] = {
+        recipeId: row.recipe.id,
+        skuId: row.skuId,
+        availableSupply: row.availableSupply,
+        strategy: 'demand-led',
+        rows: allocRows,
+        autoApplied: true,
+      };
+    }
+    for (const [id, applied] of Object.entries(shortfallApplied)) {
+      merged[id] = applied;
+    }
+    return merged;
+  }, [allRows, submissions, shortfallApplied]);
 
   // Group filtered rows by category for the section headers.
   const grouped = useMemo(() => {
@@ -215,14 +294,35 @@ export default function HubSpokeBreakdown({
   // proposal when the spoke hasn't confirmed (draft/auto-finalised lines
   // can carry confirmed=null). Lines with zero units are dropped so the
   // manifest stays clean.
+  //
+  // Applied shortfall reallocations are stamped onto matching lines: the
+  // line's `units` is replaced with the allocator's suggestion for this
+  // spoke, `originalRequested` captures what was asked for, and
+  // `shortfallReason` (+ optional `shortfallNote`) carries the
+  // spoke-visible justification through to the confirm sheet and the
+  // dispatch transfer record.
   const buildRequestFor = (sub: SpokeSubmission): SpokeDispatchRequest => {
     const lines: DispatchTransferLine[] = [];
     let totalUnits = 0;
     for (const l of sub.lines) {
       const wasQuinnProposed = l.confirmedUnits === null;
-      const units = effectiveUnits(l.confirmedUnits, l.quinnProposedUnits);
-      if (units <= 0) continue;
-      lines.push({ skuId: l.skuId, recipeId: l.recipeId, units, wasQuinnProposed });
+      const requested = effectiveUnits(l.confirmedUnits, l.quinnProposedUnits);
+      if (requested <= 0) continue;
+      const allocation = effectiveAllocations[l.recipeId];
+      const allocRow = allocation?.rows.find(r => r.spokeId === sub.fromSiteId);
+      const units = allocRow ? allocRow.suggested : requested;
+      const line: DispatchTransferLine = {
+        skuId: l.skuId,
+        recipeId: l.recipeId,
+        units,
+        wasQuinnProposed,
+      };
+      if (allocRow && allocRow.delta < 0) {
+        line.originalRequested = requested;
+        line.shortfallReason = allocRow.reason;
+        if (allocation?.managerNote) line.shortfallNote = allocation.managerNote;
+      }
+      lines.push(line);
       totalUnits += units;
     }
     return {
@@ -691,6 +791,25 @@ export default function HubSpokeBreakdown({
                     forDate={forDate}
                     isExpanded={expanded.has(row.skuId)}
                     onToggle={() => toggleExpand(row.skuId)}
+                    shortfallResult={effectiveAllocations[row.recipe.id]}
+                    onOpenShortfall={() => {
+                      if (row.availableSupply === undefined) return;
+                      const inputs: ShortfallReallocationInput[] = row.cells
+                        .map((c, i) => ({
+                          spokeId: submissions[i].fromSiteId,
+                          skuId: row.skuId,
+                          requested: c.value ?? 0,
+                        }))
+                        .filter(i => i.requested > 0);
+                      setShortfallModal({
+                        recipeId: row.recipe.id,
+                        skuId: row.skuId,
+                        recipeName: row.recipe.name,
+                        totalRequested: row.rowTotal,
+                        availableSupply: row.availableSupply,
+                        inputs,
+                      });
+                    }}
                   />
                 ))}
               </div>
@@ -698,8 +817,130 @@ export default function HubSpokeBreakdown({
           })}
         </div>
       </div>
+
+      {shortfallModal && (
+        <ShortfallReallocationModal
+          recipeId={shortfallModal.recipeId}
+          skuId={shortfallModal.skuId}
+          recipeName={shortfallModal.recipeName}
+          totalRequested={shortfallModal.totalRequested}
+          availableSupply={shortfallModal.availableSupply}
+          inputs={shortfallModal.inputs}
+          initial={effectiveAllocations[shortfallModal.recipeId]}
+          onCancel={() => setShortfallModal(null)}
+          onApply={(result) => {
+            onApplyShortfall?.(result);
+            setShortfallModal(null);
+          }}
+        />
+      )}
     </div>
   );
+}
+
+// ─── Shortfall banner (one per affected recipe row) ────────────────────────
+
+function ShortfallBanner({
+  shortBy,
+  promised,
+  produced,
+  result,
+  onOpen,
+}: {
+  shortBy: number;
+  promised: number;
+  produced: number;
+  /**
+   * Effective allocation for this row — always present when the row is
+   * short (auto demand-led when the manager hasn't touched it; the
+   * applied result once they have). The banner uses `autoApplied` to
+   * decide between the "Auto-reallocated" copy (subtle) and
+   * "Reallocated" copy (manager-confirmed, slightly bolder).
+   */
+  result?: ShortfallReallocationResult;
+  onOpen: () => void;
+}) {
+  const isAuto = !!result?.autoApplied;
+  const isApplied = !!result;
+  // Auto = blue/info tone, manager-applied = green/success tone, missing
+  // result = warning. In practice `result` is always present for short
+  // rows now (auto fills the gap), so the warning branch only kicks in
+  // if the auto pass produced no rows — defensive only.
+  const tone = !isApplied
+    ? { bg: 'var(--color-warning-light)', fg: 'var(--color-warning)' }
+    : isAuto
+      ? { bg: 'var(--color-info-light)', fg: 'var(--color-info)' }
+      : { bg: 'var(--color-success-light)', fg: 'var(--color-success)' };
+  const label = !isApplied
+    ? `Short by ${shortBy}`
+    : isAuto
+      ? 'Auto-reallocated'
+      : 'Reallocated';
+  return (
+    <div
+      onClick={e => {
+        e.stopPropagation();
+        onOpen();
+      }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '8px 16px 8px 53px',
+        borderBottom: '1px solid var(--color-border-subtle)',
+        background: tone.bg,
+        color: tone.fg,
+        fontSize: 11,
+        cursor: 'pointer',
+      }}
+      title={
+        isAuto
+          ? `Demand-led cut of ${shortBy} applied automatically — click to override`
+          : isApplied
+            ? 'Reallocation applied — click to edit'
+            : 'Tap to reallocate the shortfall'
+      }
+    >
+      <AlertTriangle size={13} style={{ flexShrink: 0 }} />
+      <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{label}</span>
+      <span
+        style={{
+          fontSize: 10,
+          color: 'var(--color-text-muted)',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {produced} produced of {promised} promised
+        {isApplied && ` · ${strategyLabel(result.strategy)}`}
+        {isAuto && ' (auto)'}
+      </span>
+      <div style={{ flex: 1 }} />
+      <span
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+        }}
+      >
+        {isApplied ? (isAuto ? 'Override ▸' : 'Edit ▸') : 'Reallocate ▸'}
+      </span>
+    </div>
+  );
+}
+
+function strategyLabel(s: ShortfallReallocationResult['strategy']): string {
+  if (s === 'demand-led') return 'Demand-led';
+  if (s === 'pro-rata') return 'Pro-rata';
+  return 'Manual';
 }
 
 // ─── Recipe row (card-style) ──────────────────────────────────────────────
@@ -712,6 +953,8 @@ function DispatchRecipeRow({
   forDate,
   isExpanded,
   onToggle,
+  shortfallResult,
+  onOpenShortfall,
 }: {
   row: RecipeRow;
   cols: string;
@@ -720,6 +963,10 @@ function DispatchRecipeRow({
   forDate: string;
   isExpanded: boolean;
   onToggle: () => void;
+  /** Previously-applied reallocation, if any. Drives the banner's state. */
+  shortfallResult?: ShortfallReallocationResult;
+  /** Opens the reallocation modal. Only meaningful when the row is short. */
+  onOpenShortfall: () => void;
 }) {
   const { transferFor } = useDispatchTransfers();
   const { unrolledUnitsFor } = useSpokeRejects();
@@ -923,6 +1170,20 @@ function DispatchRecipeRow({
           {hasOrders ? row.rowTotal + totalRejects : '—'}
         </span>
       </div>
+
+      {/* Shortfall banner — only rendered when the hub's stubbed supply
+          for this SKU is less than the row total. Tap opens the
+          reallocation modal. Once applied, the banner flips to a
+          "resolved" pill with the chosen strategy + a re-edit affordance. */}
+      {row.availableSupply !== undefined && row.rowTotal > row.availableSupply && (
+        <ShortfallBanner
+          shortBy={row.rowTotal - row.availableSupply}
+          promised={row.rowTotal}
+          produced={row.availableSupply}
+          result={shortfallResult}
+          onOpen={onOpenShortfall}
+        />
+      )}
 
       {/* Expanded panel — per-spoke breakdown */}
       {isExpanded && (

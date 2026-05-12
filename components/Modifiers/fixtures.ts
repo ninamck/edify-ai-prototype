@@ -60,7 +60,7 @@ export const SEED_MODIFIER_GROUPS: ModifierGroup[] = [
     selection: 'one',
     required: true,
     posSourceId: 'pos-mg-cup',
-    notes: 'Affects coffee dose, milk volume, and cup size in one go.',
+    notes: 'One modifier affects coffee dose, milk volume, and the takeaway cup in one go — including swapping the cup as packaging.',
     options: [
       {
         id: 'mg-coffee-size-small',
@@ -77,6 +77,15 @@ export const SEED_MODIFIER_GROUPS: ModifierGroup[] = [
             kind: 'scale',
             factor: 1.25,
             targetMasterProductIds: ['mp-whole-milk-1l', 'mp-oat-milk-1l', 'mp-skim-milk-1l', 'mp-espresso-blend'],
+          },
+          // Packaging swap — the cup physically changes for a large
+          // coffee. Replace effects target ingredients OR packaging
+          // identically: both sit in the resolved line list.
+          {
+            kind: 'replace',
+            from: { kind: 'master', masterProductId: 'mp-cup-takeaway-8oz' },
+            to: { kind: 'master', masterProductId: 'mp-cup-takeaway-12oz' },
+            qtyMode: 'same',
           },
         ],
       },

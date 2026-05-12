@@ -85,27 +85,60 @@ export function SmallButton({ label, onClick, variant = 'secondary' }: {
   );
 }
 
-export function Checkbox({ checked, onClick }: { checked: boolean; onClick: () => void }) {
+export function Checkbox({
+  checked,
+  onClick,
+  indeterminate = false,
+  disabled = false,
+  ariaLabel,
+}: {
+  checked: boolean;
+  onClick: () => void;
+  /** Tri-state mode: when true, renders a − bar instead of a tick. Used by
+   *  the "select all" header when only some visible rows are selected. */
+  indeterminate?: boolean;
+  disabled?: boolean;
+  ariaLabel?: string;
+}) {
+  const filled = checked || indeterminate;
+  const ariaChecked: boolean | 'mixed' = indeterminate ? 'mixed' : checked;
   return (
     <span
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (disabled) return;
+        onClick();
+      }}
       role="checkbox"
-      aria-checked={checked}
+      aria-checked={ariaChecked}
+      aria-label={ariaLabel}
+      aria-disabled={disabled || undefined}
       style={{
         width: 18, height: 18, borderRadius: 5,
-        border: '1.5px solid ' + (checked ? 'var(--color-accent-active)' : 'var(--color-border)'),
-        background: checked ? 'var(--color-accent-active)' : '#fff',
+        border: '1.5px solid ' + (
+          disabled ? 'var(--color-border-subtle)'
+          : filled ? 'var(--color-accent-active)'
+          : 'var(--color-border)'
+        ),
+        background: disabled ? 'transparent'
+          : filled ? 'var(--color-accent-active)'
+          : '#fff',
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         flexShrink: 0,
-        cursor: 'pointer',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.5 : 1,
         transition: 'all 0.12s',
       }}
     >
-      {checked && (
-        <svg width={11} height={11} viewBox="0 0 11 11" fill="none">
+      {indeterminate ? (
+        <svg width={11} height={11} viewBox="0 0 11 11" fill="none" aria-hidden="true">
+          <path d="M2 5.5h7" stroke="#fff" strokeWidth={2.2} strokeLinecap="round" />
+        </svg>
+      ) : checked ? (
+        <svg width={11} height={11} viewBox="0 0 11 11" fill="none" aria-hidden="true">
           <path d="M2 5.5l2.5 2.5L9 2.5" stroke="#fff" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-      )}
+      ) : null}
     </span>
   );
 }

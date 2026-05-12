@@ -19,8 +19,6 @@ import {
   MapPin,
   User,
   Settings,
-  ListChecks,
-  SlidersHorizontal,
   PanelLeftOpen,
   PanelLeftClose,
 } from 'lucide-react';
@@ -234,9 +232,13 @@ export default function Sidebar() {
 
         {/* SETUP — full set for both personas (per the demo brief). */}
         <NavGroup title="SETUP" compact={compact}>
-          <NavItem label="Manage recipes" icon={Star} compact={compact} active={is('/recipes')} onClick={() => router.push('/recipes')} />
-          <NavItem label="Manage menu items" icon={ListChecks} compact={compact} active={is('/menu-items')} onClick={() => router.push('/menu-items')} />
-          <NavItem label="Manage modifier groups" icon={SlidersHorizontal} compact={compact} active={is('/modifier-groups')} onClick={() => router.push('/modifier-groups')} />
+          <NavItem
+            label="Manage menu"
+            icon={Star}
+            compact={compact}
+            active={is('/recipes') || is('/modifier-groups') || is('/pos-connection') || is('/item-matching')}
+            onClick={() => router.push('/recipes')}
+          />
           <NavItem label="Manage suppliers" icon={MapPin} compact={compact} active={is('/suppliers')} onClick={() => router.push('/suppliers')} />
           <NavItem label="Manage users" icon={User} compact={compact} active={is('/users')} />
           <NavItem label="Manage checklists" icon={ClipboardList} compact={compact} active={is('/checklists')} onClick={() => router.push('/checklists')} />
