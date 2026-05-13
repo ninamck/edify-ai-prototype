@@ -394,7 +394,7 @@ function SingleSelect({
                   textTransform: 'uppercase',
                 }}
               >
-                Quinn
+                Edify
               </span>
             )}
           </button>
@@ -474,7 +474,7 @@ function NumericInput({
             textTransform: 'uppercase',
           }}
         >
-          Quinn draft
+          Edify draft
         </span>
       )}
     </div>

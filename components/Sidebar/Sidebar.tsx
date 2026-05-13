@@ -12,7 +12,7 @@ import {
   FileCheck,
   Clock,
   FileX,
-  Gauge,
+  Box,
   ShieldCheck,
   Layers,
   Star,
@@ -215,7 +215,7 @@ export default function Sidebar() {
               Stocktake history. Previously split across two sidebar items
               ("Monitor stock" + "Count stock") — folded into one so the
               operator doesn't route-hop between monitoring and counting. */}
-          <NavItem label="Manage stock" icon={Gauge} compact={compact} active={is('/stock')} onClick={() => router.push('/stock')} />
+          <NavItem label="Manage stock" icon={Box} compact={compact} active={is('/stock')} onClick={() => router.push('/stock')} />
           {!isSpoke && (
             <NavItem label="Match invoices" icon={FileCheck} compact={compact} badge={invoiceReviewCount || undefined} active={is('/invoices')} onClick={() => router.push('/invoices')} />
           )}

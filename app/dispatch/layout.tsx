@@ -10,6 +10,13 @@ import QuinnProductionPanel, { QuinnTrigger } from '@/components/Production/Quin
 import { RoleSwitcher } from '@/components/Production/RoleContext';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import DemoControls, { DemoControlsSection } from '@/components/DemoControls/DemoControls';
+import {
+  TOP_NAV_BAR_PADDING,
+  TOP_NAV_PILL_ACTIVE,
+  TOP_NAV_PILL_BASE,
+  TOP_NAV_PILL_GAP,
+  TOP_NAV_PILL_IDLE_TRANSPARENT,
+} from '@/components/Production/topNavStyles';
 
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
 
@@ -123,7 +130,9 @@ export default function DispatchLayout({ children }: { children: React.ReactNode
 
           {/* Sub-tabs — sticky so the manager can swap between Today /
               Customer orders / Customers / Products / Invoices without
-              losing context as they scroll. */}
+              losing context as they scroll. Sized via the shared
+              TOP_NAV_* constants so this row matches the production
+              today/run/plan tab strip exactly. */}
           <nav
             style={{
               position: 'sticky',
@@ -131,8 +140,9 @@ export default function DispatchLayout({ children }: { children: React.ReactNode
               zIndex: 150,
               flexShrink: 0,
               display: 'flex',
-              gap: 4,
-              padding: '6px 12px',
+              alignItems: 'center',
+              gap: TOP_NAV_PILL_GAP,
+              padding: TOP_NAV_BAR_PADDING,
               borderBottom: '1px solid var(--color-border-subtle)',
               background: '#ffffff',
               overflowX: 'auto',
@@ -145,16 +155,8 @@ export default function DispatchLayout({ children }: { children: React.ReactNode
                   key={tab.id}
                   onClick={() => router.push(tab.href)}
                   style={{
-                    padding: '6px 12px',
-                    borderRadius: 8,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    fontFamily: 'var(--font-primary)',
-                    background: active ? 'var(--color-accent-active)' : 'transparent',
-                    color: active ? 'var(--color-text-on-active)' : 'var(--color-text-secondary)',
-                    border: '1px solid transparent',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
+                    ...TOP_NAV_PILL_BASE,
+                    ...(active ? TOP_NAV_PILL_ACTIVE : TOP_NAV_PILL_IDLE_TRANSPARENT),
                   }}
                 >
                   {tab.label}

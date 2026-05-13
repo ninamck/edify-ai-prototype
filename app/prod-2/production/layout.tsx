@@ -56,7 +56,7 @@ const HUB_PLAN_TABS: SubTab[] = [
   { id: 'sales-report',    label: 'Sales vs forecast', href: '/production/sales-report' },
   { id: 'site-settings',   label: 'Settings',          href: '/production/settings' },
   { id: 'settings-health', label: 'Settings health',   href: '/production/settings-health' },
-  { id: 'setup',           label: 'Setup (Quinn)',     href: '/production/setup' },
+  { id: 'setup',           label: 'Setup',             href: '/production/setup' },
 ];
 
 /** Same prefix list the Sidebar uses to highlight Run vs Plan. Kept in

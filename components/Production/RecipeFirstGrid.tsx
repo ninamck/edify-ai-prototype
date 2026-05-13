@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Filter, Inbox, Clock, AlertCircle, Package } from 'lucide-react';
+import { ChevronDown, ChevronRight, Filter, Inbox, Clock, AlertCircle, AlertTriangle, Package } from 'lucide-react';
 import {
+  DEMO_TODAY,
   PRET_SITES,
   getSite,
   getRecipe,
@@ -27,6 +28,7 @@ import QtyStepper from './QtyStepper';
 import SpokeUnlockControl from './SpokeUnlockControl';
 import { useDispatchTransfers } from './dispatchStore';
 import { useHubOverrides } from './hubOverrideStore';
+import { useShortfallStatus } from './ingredientShortfallStore';
 import { useHybridOrder, useHybridOrderActions, sumSlots } from './hybridOrderStore';
 import HybridOrderSubmitBar from './HybridOrderSubmitBar';
 import { daySummary } from './salesReport';
@@ -92,6 +94,16 @@ const P_INDEX_BY_MODE: Record<Exclude<ViewMode, 'all'>, number> = {
   p3: 2,
   p4: 3,
 };
+
+/**
+ * Synthetic "now" anchor for the demo. Drives the On-demand pin on
+ * the expanded HotProdDrops strip so the active drop is always
+ * visible at the leftmost position when the user is looking at
+ * today's plan. Matches the same `'07:30'` value the bench-board
+ * surface uses, so the two views stay in sync if the user pivots
+ * from plan → board mid-demo.
+ */
+const DEMO_NOW_HHMM = '07:30';
 
 export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: RecipeFirstGridProps) {
   const site = getSite(siteId) ?? PRET_SITES[0];
@@ -492,14 +504,16 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
     return map;
   }, [showAvailNow, siteId, date]);
 
-  // Hub view drops the trailing `Total` column by default — for a hub
-  // everything in the row already adds up to the per-spoke breakdown,
-  // and the hub doesn't bake anything for itself, so a separate grand
-  // total is duplicate noise. Edit mode flips it back on though: once
-  // the manager is adjusting per-run / per-spoke amounts, they want a
-  // running per-row total of the hub's bake commitment in the rightmost
-  // column so the dials they're turning have an obvious sum-to figure.
-  const showRowTotal = !isHub || editMode;
+  // Per-row Total column. Self-producing sites already need it (the
+  // sum across runs / VP / Hot Prod is the only single number that
+  // expresses the recipe's commitment for the day). For hub view we
+  // also keep it on by default now: when the manager is reading down
+  // the bake plan, the per-recipe sum across spokes is the headline
+  // number for that recipe, and pairs with the new "Total to make"
+  // banner above the table for the day-level total. Edit mode flipped
+  // this on previously and keeps doing so — that branch just folds
+  // into the always-on rule below.
+  const showRowTotal = true;
 
   // Editable run cells. Plan is the drafting surface so every P-slot is
   // an inline stepper there. On Today we also flip this on once a hub
@@ -630,6 +644,21 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
               )}
             </div>
           )}
+
+        {/* Hub total — headline number for "what does this hub need to
+            make today, all in". Hub view normally hides the per-row Total
+            column (it's only shown in edit mode), so without this banner
+            there's nowhere on the page that surfaces the day's grand
+            total at a glance. The number is independent of any active
+            P-slot or spoke filter so the manager has a stable reference
+            even while drilling into runs / individual spokes. */}
+        {isHub && hubTotals && grouped.length > 0 && (
+          <HubMakeTotalChip
+            totalUnits={hubTotals.grand}
+            recipeCount={grouped.reduce((s, g) => s + g.rows.length, 0)}
+            spokeCount={spokes.length}
+          />
+        )}
 
         <div
           style={{
@@ -889,7 +918,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
           {isPlanSurface ? (
             <>
               Each cell is editable — use the steppers to adjust planned
-              units. The faded <em>fc</em> number underneath is Quinn's
+              units. The faded <em>fc</em> number underneath is Edify's
               forecast for that slot, shown for reference.
             </>
           ) : expandAllPSlots ? (
@@ -958,6 +987,105 @@ type RowDataset = {
 };
 
 type PlanStoreApi = ReturnType<typeof usePlanStore>;
+
+/**
+ * Compact summary card sitting above the recipe-first grid on hub view.
+ * Headline number is the day's grand total (sum of every recipe's
+ * planned qty) so the hub manager always has the "how big is today"
+ * answer without scanning the table footer or scrolling to find it.
+ * The supporting line shows the breadth of the day — how many recipe
+ * lines and how many spokes the total covers.
+ */
+function HubMakeTotalChip({
+  totalUnits,
+  recipeCount,
+  spokeCount,
+}: {
+  totalUnits: number;
+  recipeCount: number;
+  spokeCount: number;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '12px 14px',
+        marginBottom: 10,
+        background: '#ffffff',
+        border: '1px solid var(--color-border-subtle)',
+        borderLeft: '3px solid var(--color-info)',
+        borderRadius: 'var(--radius-card)',
+      }}
+    >
+      <div
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 9,
+          background: 'var(--color-info-light)',
+          color: 'var(--color-info)',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <Package size={18} />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <span
+          style={{
+            fontSize: 10.5,
+            fontWeight: 700,
+            color: 'var(--color-text-muted)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+          }}
+        >
+          Total to make today
+        </span>
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'baseline',
+            gap: 8,
+            marginTop: 2,
+            flexWrap: 'wrap',
+          }}
+        >
+          <span
+            style={{
+              fontSize: 22,
+              fontWeight: 800,
+              color: 'var(--color-text-primary)',
+              fontVariantNumeric: 'tabular-nums',
+              lineHeight: 1.1,
+            }}
+          >
+            {totalUnits.toLocaleString()}
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+            units
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
+          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+            {recipeCount} recipe{recipeCount === 1 ? '' : 's'}
+          </span>
+          {spokeCount > 0 && (
+            <>
+              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
+              <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                {spokeCount} spoke{spokeCount === 1 ? '' : 's'}
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function CategoryGroup({
   category,
@@ -1269,13 +1397,6 @@ function RecipeRow({
   // the whole qty. Receive rows (HYBRID receiving from hub) skip the column.
   const totalDisplay: string | number = isReceive ? '—' : line ? line.planned : 0;
 
-  // Per-spoke total (HUB) sums the spokes' confirmed qty for this SKU —
-  // an honest "what the spokes asked for" number that the manager can
-  // sanity-check against the planned bake.
-  const perSpokeTotal = showSpokeCols
-    ? spokes.reduce((acc, sp) => acc + (perSpokeBySku.get(`${sp.id}|${row.skuId}`) ?? 0), 0)
-    : 0;
-
   return (
     <>
       <tr
@@ -1315,6 +1436,17 @@ function RecipeRow({
                 {!line && !isReceive && (
                   <StatusPill tone="neutral" label="Not planned" size="xs" />
                 )}
+                {/* Ingredient-shortfall chip — only fires when there's a
+                    seeded constraint for this (hub, recipe, date). Two
+                    states: warning outline while open, info outline once
+                    the manager's accepted the pro-rata cut from the
+                    drawer. The drawer hosts the full detail + the
+                    Apply/Undo CTAs. */}
+                <ShortfallRowChip
+                  hubId={siteId}
+                  recipeId={row.recipe.id}
+                  forDate={date}
+                />
               </div>
             </div>
             {row.itemId && (
@@ -1702,22 +1834,6 @@ function RecipeRow({
             ) : (
               <span style={{ ...numStyle(), fontWeight: 800 }}>
                 {totalDisplay}
-                {showSpokeCols && perSpokeTotal !== totalDisplay && (
-                  <span
-                    style={{
-                      display: 'block',
-                      fontSize: 9,
-                      fontWeight: 600,
-                      color:
-                        perSpokeTotal > (totalDisplay as number)
-                          ? 'var(--color-error)'
-                          : 'var(--color-text-muted)',
-                    }}
-                    title={`Spokes asked for ${perSpokeTotal} units in total`}
-                  >
-                    spokes: {perSpokeTotal}
-                  </span>
-                )}
               </span>
             )}
           </td>
@@ -1737,6 +1853,14 @@ function RecipeRow({
               total={hotProdQty}
               forecastTotal={line.forecast?.projectedUnits ?? 0}
               forecastByPhase={line.forecast?.byPhase}
+              // Only pin a "now" cell when the row is showing today's
+              // plan — for past or future days the cadence is a draft
+              // and the wall clock is irrelevant. The pin advances
+              // automatically as `DEMO_NOW_HHMM` ticks through the
+              // cadence (it's a constant for now, but a future iteration
+              // can make it live-clock driven without changing the
+              // rendering contract).
+              nowHHMM={date === DEMO_TODAY ? DEMO_NOW_HHMM : undefined}
               onChangeDrop={(idx, next) => {
                 const updated = perDropPlan.slice();
                 updated[idx] = Math.max(0, Math.round(next));
@@ -2241,7 +2365,7 @@ function PlanStepperCell({
       </QtyStepper>
       {forecast != null && forecast > 0 ? (
         <span
-          title="Quinn forecast"
+          title="Edify forecast"
           style={{
             fontSize: 10,
             fontWeight: 600,
@@ -2300,6 +2424,7 @@ function HotProdDrops({
   total,
   forecastTotal,
   forecastByPhase,
+  nowHHMM,
   onChangeDrop,
 }: {
   recipeName: string;
@@ -2308,6 +2433,11 @@ function HotProdDrops({
   total: number;
   forecastTotal: number;
   forecastByPhase?: { morning: number; midday: number; afternoon: number };
+  /** Synthetic wall-clock for the demo. When provided, drives the
+   *  pinned On-demand cell at the front of the strip so the manager
+   *  can see the active drop without scanning the cadence. Omit on
+   *  past or future days — the pin only makes sense for "today". */
+  nowHHMM?: string;
   onChangeDrop?: (index: number, next: number) => void;
 }) {
   const editable = !!onChangeDrop;
@@ -2334,6 +2464,8 @@ function HotProdDrops({
         ? endMins + Math.round((qty * cadence.intervalMinutes) / forecast)
         : null;
     return {
+      startMins,
+      endMins,
       label: `${formatHHMM(startMins)}–${formatHHMM(endMins)}`,
       // Range starts at the drop's end (product ready) and runs to
       // the projected sell-out. Lets the eye scan a column and see
@@ -2347,6 +2479,41 @@ function HotProdDrops({
       forecast,
     };
   });
+
+  // ── On-demand "now" pin ──
+  // Locate the cadence slot that the wall clock currently falls into
+  // so the strip can pin a duplicated, distinctly-styled cell at the
+  // front. Three states surface different copy + behaviour:
+  //   - 'pre'  → before the first drop. Pin previews the first slot,
+  //              labelled "Up next" so it isn't mistaken for active.
+  //   - 'in'   → mid-cadence. Pin mirrors the active drop's qty +
+  //              forecast and is labelled NOW; the same drop in the
+  //              cadence list gets a thicker accent border so the
+  //              eye can join the two.
+  //   - 'post' → cadence finished. Pin shows the last drop's qty
+  //              for reference, labelled DONE so the manager doesn't
+  //              read it as "needs baking now".
+  // When `nowHHMM` is undefined (looking at a future or past day),
+  // none of this fires and the original strip renders unchanged.
+  const nowMins = nowHHMM ? parseHHMM(nowHHMM) : null;
+  const cadenceStartMins = parseHHMM(cadence.startTime);
+  const cadenceEndMins = parseHHMM(cadence.endTime);
+  let activeStatus: 'pre' | 'in' | 'post' | null = null;
+  let activeIndex: number | null = null;
+  if (nowMins !== null && perDropPlan.length > 0) {
+    if (nowMins < cadenceStartMins) {
+      activeStatus = 'pre';
+      activeIndex = 0;
+    } else if (nowMins >= cadenceEndMins) {
+      activeStatus = 'post';
+      activeIndex = perDropPlan.length - 1;
+    } else {
+      activeStatus = 'in';
+      const idx = Math.floor((nowMins - cadenceStartMins) / cadence.intervalMinutes);
+      activeIndex = Math.max(0, Math.min(perDropPlan.length - 1, idx));
+    }
+  }
+  const activeSlot = activeIndex !== null ? slots[activeIndex] : null;
 
   return (
     <div style={{ padding: '12px 18px 16px', borderLeft: '3px solid var(--color-warning)' }}>
@@ -2373,101 +2540,381 @@ function HotProdDrops({
         <span>·</span>
         <span>{cadence.intervalMinutes}-min cadence</span>
       </div>
+      {/* Strip = optional On-demand pin on the left + cadence grid on
+          the right. We use a flex row (instead of folding the pin
+          into the same grid) so the pin's width is independent of
+          the cadence cells and a vertical divider can sit between
+          them, making the "front of the strip" reading explicit. */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
-          gap: 6,
+          display: 'flex',
+          alignItems: 'stretch',
+          gap: 10,
         }}
       >
-        {slots.map((s, i) => (
-          <div
-            key={i}
-            style={{
-              padding: '6px 8px',
-              border: '1px solid var(--color-warning-border)',
-              borderRadius: 6,
-              background: '#ffffff',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 4,
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            <span
-              style={{
-                fontSize: 9,
-                fontWeight: 700,
-                color: 'var(--color-text-muted)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                fontVariantNumeric: 'tabular-nums',
-                alignSelf: 'flex-start',
-              }}
-            >
-              {s.label}
-            </span>
-            {editable ? (
-              <PlanStepperCell
-                value={s.qty}
-                forecast={s.forecast}
-                step={1}
-                onChange={next => onChangeDrop!(i, next)}
-              />
-            ) : (
-              <>
+        {activeSlot && activeStatus && (
+          <NowPinCell
+            slot={activeSlot}
+            status={activeStatus}
+            nowHHMM={nowHHMM ?? ''}
+            // Only the live ('in') drop is editable from the pin —
+            // the 'up next' and 'done' states stay read-only because
+            // the manager can scroll to those drops in the cadence
+            // grid if they want to edit them. The pin's stepper is
+            // explicitly an "add more units NOW" affordance.
+            onAddNow={
+              editable && activeStatus === 'in' && activeIndex !== null
+                ? next => onChangeDrop!(activeIndex, next)
+                : undefined
+            }
+          />
+        )}
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
+            gap: 6,
+          }}
+        >
+          {slots.map((s, i) => {
+            const isActive = i === activeIndex && activeStatus === 'in';
+            const isPast = activeStatus !== null && activeIndex !== null && i < activeIndex;
+            // 'in' = currently being baked → accent border so the eye
+            //   joins it to the pin; subtle background fill keeps the
+            //   highlight from competing with the pin's own emphasis.
+            // 'past' = cadence-position-already-elapsed → muted opacity
+            //   so the manager's eye glides over the historical drops
+            //   towards the live ones. Past drops are still readable
+            //   on hover (opacity 0.55 rather than fully ghosted).
+            return (
+              <div
+                key={i}
+                style={{
+                  padding: '6px 8px',
+                  border: `1px solid ${
+                    isActive ? 'var(--color-warning)' : 'var(--color-warning-border)'
+                  }`,
+                  boxShadow: isActive
+                    ? '0 0 0 2px rgba(217, 119, 6, 0.18)'
+                    : 'none',
+                  borderRadius: 6,
+                  background: isActive ? 'var(--color-warning-light)' : '#ffffff',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 4,
+                  opacity: isPast ? 0.55 : 1,
+                  transition: 'opacity 0.15s, box-shadow 0.15s',
+                }}
+                onClick={e => e.stopPropagation()}
+              >
                 <span
                   style={{
-                    fontSize: 14,
+                    fontSize: 9,
                     fontWeight: 700,
-                    color: 'var(--color-text-primary)',
+                    color: 'var(--color-text-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
                     fontVariantNumeric: 'tabular-nums',
+                    alignSelf: 'flex-start',
                   }}
                 >
-                  {s.qty}
+                  {s.label}
                 </span>
-                {s.forecast > 0 && (
+                {editable ? (
+                  <PlanStepperCell
+                    value={s.qty}
+                    forecast={s.forecast}
+                    step={1}
+                    onChange={next => onChangeDrop!(i, next)}
+                  />
+                ) : (
+                  <>
+                    <span
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 700,
+                        color: 'var(--color-text-primary)',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {s.qty}
+                    </span>
+                    {s.forecast > 0 && (
+                      <span
+                        title="Edify forecast for this slot"
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          fontVariantNumeric: 'tabular-nums',
+                          color: 'var(--color-text-muted)',
+                          letterSpacing: '0.02em',
+                        }}
+                      >
+                        fc {s.forecast}
+                      </span>
+                    )}
+                  </>
+                )}
+                {/* Coverage caption — how long this drop's planned qty
+                    holds the floor at the forecast sell-through rate. A
+                    range that matches the drop-window label format above
+                    so the comparison is visually direct: if the two
+                    ranges line up the bake is balanced; if the coverage
+                    band extends past or stops short of the drop end,
+                    it's an over- or under-bake signal at a glance. */}
+                {s.coverageLabel && (
                   <span
-                    title="Quinn forecast for this slot"
+                    title="Estimated time this drop's product lasts at the forecast sell-through rate"
                     style={{
-                      fontSize: 10,
+                      fontSize: 9,
                       fontWeight: 600,
-                      fontVariantNumeric: 'tabular-nums',
                       color: 'var(--color-text-muted)',
+                      fontVariantNumeric: 'tabular-nums',
                       letterSpacing: '0.02em',
+                      textAlign: 'center',
                     }}
                   >
-                    fc {s.forecast}
+                    covers {s.coverageLabel}
                   </span>
                 )}
-              </>
-            )}
-            {/* Coverage caption — how long this drop's planned qty
-                holds the floor at the forecast sell-through rate. A
-                range that matches the drop-window label format above
-                so the comparison is visually direct: if the two
-                ranges line up the bake is balanced; if the coverage
-                band extends past or stops short of the drop end,
-                it's an over- or under-bake signal at a glance. */}
-            {s.coverageLabel && (
-              <span
-                title="Estimated time this drop's product lasts at the forecast sell-through rate"
-                style={{
-                  fontSize: 9,
-                  fontWeight: 600,
-                  color: 'var(--color-text-muted)',
-                  fontVariantNumeric: 'tabular-nums',
-                  letterSpacing: '0.02em',
-                  textAlign: 'center',
-                }}
-              >
-                covers {s.coverageLabel}
-              </span>
-            )}
-          </div>
-        ))}
+              </div>
+            );
+          })}
+        </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Pinned "On-demand" cell rendered at the leftmost edge of the
+ * HotProdDrops strip. Mirrors the active cadence slot's data so the
+ * manager always has a "what's happening right now" reference cell,
+ * regardless of how far they've scrolled or how many drops the
+ * cadence has.
+ *
+ * Three modes (driven by `status`):
+ *   - 'in'   → NOW pin. Accent border + warning fill + "NOW · HH:MM"
+ *              header. Mirrors the active slot's qty/forecast/cover.
+ *   - 'pre'  → Up-next pin. Same shape but a quieter info tone, since
+ *              the cadence hasn't started — copy reads "UP NEXT" and
+ *              the time is the upcoming first slot.
+ *   - 'post' → Done pin. Muted neutral tone, copy reads "DONE", qty
+ *              shown for reference but not as an action.
+ */
+function NowPinCell({
+  slot,
+  status,
+  nowHHMM,
+  onAddNow,
+}: {
+  slot: {
+    label: string;
+    qty: number;
+    forecast: number;
+    coverageLabel: string | null;
+  };
+  status: 'pre' | 'in' | 'post';
+  nowHHMM: string;
+  /** When provided, the planned-qty line becomes a +/− stepper so the
+   *  manager can bump the active drop without scrolling to it in the
+   *  cadence strip. Only wired in 'in' state — the pin's whole point
+   *  is a one-tap "add more units now" affordance. */
+  onAddNow?: (next: number) => void;
+}) {
+  const tone =
+    status === 'in'
+      ? {
+          headerLabel: 'NOW',
+          headerBg: 'var(--color-warning)',
+          headerColor: '#ffffff',
+          border: 'var(--color-warning)',
+          background: 'var(--color-warning-light)',
+          subtitle: nowHHMM,
+        }
+      : status === 'pre'
+        ? {
+            headerLabel: 'UP NEXT',
+            headerBg: 'var(--color-info)',
+            headerColor: '#ffffff',
+            border: 'var(--color-info)',
+            background: 'var(--color-info-light)',
+            subtitle: `Cadence starts ${slot.label.split('–')[0]}`,
+          }
+        : {
+            headerLabel: 'DONE',
+            headerBg: 'var(--color-text-muted)',
+            headerColor: '#ffffff',
+            border: 'var(--color-border)',
+            background: 'var(--color-bg-hover)',
+            subtitle: 'Cadence finished',
+          };
+
+  return (
+    <div
+      title={
+        status === 'in'
+          ? `Active drop at ${nowHHMM} — ${slot.qty} planned, fc ${slot.forecast}`
+          : status === 'pre'
+            ? 'First drop hasn\u2019t started yet'
+            : 'Cadence is over for the day'
+      }
+      style={{
+        flex: '0 0 auto',
+        width: 132,
+        padding: '6px 8px 8px',
+        borderRadius: 8,
+        border: `2px solid ${tone.border}`,
+        background: tone.background,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        gap: 5,
+        position: 'relative',
+      }}
+      onClick={e => e.stopPropagation()}
+    >
+      <div
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 4,
+          alignSelf: 'flex-start',
+          padding: '2px 6px',
+          borderRadius: 4,
+          background: tone.headerBg,
+          color: tone.headerColor,
+          fontSize: 9,
+          fontWeight: 800,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {tone.headerLabel}
+        {status === 'in' && (
+          <span
+            aria-hidden
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: '#ffffff',
+              boxShadow: '0 0 0 2px rgba(255,255,255,0.45)',
+              display: 'inline-block',
+            }}
+          />
+        )}
+      </div>
+      <span
+        style={{
+          fontSize: 9,
+          fontWeight: 700,
+          color: 'var(--color-text-muted)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {tone.subtitle}
+      </span>
+      {onAddNow ? (
+        // Inline stepper — replaces the static "X planned" row for the
+        // live drop. We use the `emphasized` size so the buttons are
+        // tap-targets at-a-glance from across the floor (this pin
+        // doubles as a quick-add control during the bake), and keep
+        // the centre slot as a read-only span (no keyboard input)
+        // because the cadence grid's PlanStepperCell already covers
+        // typed entry. "+1 / −1" here is the canonical action.
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <QtyStepper
+            size="emphasized"
+            canDecrement={slot.qty > 0}
+            onDecrement={() => onAddNow(Math.max(0, slot.qty - 1))}
+            onIncrement={() => onAddNow(slot.qty + 1)}
+            decrementLabel="Decrease planned units"
+            incrementLabel="Add one unit now"
+          >
+            <span
+              aria-live="polite"
+              style={{
+                minWidth: 32,
+                fontSize: 22,
+                fontWeight: 800,
+                textAlign: 'center',
+                color: 'var(--color-text-primary)',
+                fontVariantNumeric: 'tabular-nums',
+                lineHeight: 1,
+                fontFamily: 'var(--font-primary)',
+              }}
+            >
+              {slot.qty}
+            </span>
+          </QtyStepper>
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              color: 'var(--color-text-muted)',
+              fontVariantNumeric: 'tabular-nums',
+              textAlign: 'center',
+            }}
+          >
+            planned
+          </span>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+          <span
+            style={{
+              fontSize: 22,
+              fontWeight: 800,
+              color: 'var(--color-text-primary)',
+              fontVariantNumeric: 'tabular-nums',
+              lineHeight: 1,
+            }}
+          >
+            {slot.qty}
+          </span>
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              color: 'var(--color-text-muted)',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {status === 'post' ? 'baked' : 'planned'}
+          </span>
+        </div>
+      )}
+      {slot.forecast > 0 && (
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            color: 'var(--color-text-muted)',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          fc {slot.forecast} this slot
+        </span>
+      )}
+      {slot.coverageLabel && status !== 'post' && (
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 600,
+            color: 'var(--color-text-muted)',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          covers {slot.coverageLabel}
+        </span>
+      )}
     </div>
   );
 }
@@ -2841,5 +3288,61 @@ function SpokeFilterDropdown({
       </select>
       <ChevronDown size={13} aria-hidden style={{ color: 'var(--color-text-muted)', marginLeft: -4 }} />
     </label>
+  );
+}
+
+/**
+ * Tiny outlined chip that surfaces an ingredient shortfall on a
+ * recipe row. Renders nothing when there's no seeded constraint, so
+ * it's safe to drop into every row's chip strip without polluting
+ * unrelated rows.
+ *
+ * Two appearances:
+ *   • open    → warning outline + AlertTriangle, label "Ingredient
+ *               short". Tells the manager there's something to act
+ *               on; the drawer carries the Apply CTA.
+ *   • applied → info outline + AlertTriangle (muted), label "Cut
+ *               applied · -N". Reads as "resolved, see drawer for
+ *               undo".
+ */
+function ShortfallRowChip({
+  hubId,
+  recipeId,
+  forDate,
+}: {
+  hubId: SiteId;
+  recipeId: string;
+  forDate: string;
+}) {
+  const status = useShortfallStatus(hubId, recipeId, forDate);
+  if (status.kind === 'none') return null;
+  const isApplied = status.kind === 'applied';
+  const tone = isApplied ? 'var(--color-info)' : 'var(--color-warning)';
+  const label = isApplied
+    ? `Cut applied · -${status.record.totalRequestedUnits - status.record.totalAllocatedUnits}`
+    : 'Ingredient short';
+  return (
+    <span
+      title={status.seed.detail}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '1px 6px 1px 5px',
+        borderRadius: 'var(--radius-badge)',
+        background: 'transparent',
+        color: tone,
+        border: `1px solid ${tone}`,
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+        whiteSpace: 'nowrap',
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      <AlertTriangle size={10} strokeWidth={2.4} />
+      {label}
+    </span>
   );
 }

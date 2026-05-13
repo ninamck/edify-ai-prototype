@@ -1251,7 +1251,7 @@ function DispatchRecipeRow({
                     <StatusChip status={sub.status} />
                     {c.isQuinn && (
                       <span
-                        title="Quinn's proposal — spoke hasn't confirmed"
+                        title="Edify's proposal — spoke hasn't confirmed"
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -1260,7 +1260,7 @@ function DispatchRecipeRow({
                           color: 'var(--color-warning)',
                         }}
                       >
-                        <EdifyMark size={10} /> Quinn proposal
+                        <EdifyMark size={10} /> Edify proposal
                       </span>
                     )}
                     {transfer && (
@@ -1533,10 +1533,10 @@ function StatusChip({ status }: { status: SpokeSubmission['status'] }) {
 /** Build a single-line tooltip explaining where each chunk of the cell qty came from. */
 function tooltipFor(ordered: number, rejects: number, adhoc: number, isQuinn: boolean): string {
   const parts: string[] = [];
-  if (ordered > 0) parts.push(isQuinn ? `Quinn-proposed ${ordered}` : `Spoke ordered ${ordered}`);
+  if (ordered > 0) parts.push(isQuinn ? `Edify-proposed ${ordered}` : `Spoke ordered ${ordered}`);
   if (rejects > 0) parts.push(`+${rejects} from rejects`);
   if (adhoc > 0)   parts.push(`+${adhoc} approved ad-hoc`);
   return parts.length === 0
-    ? (isQuinn ? 'Quinn-proposed (not yet confirmed by spoke)' : 'Confirmed by spoke')
+    ? (isQuinn ? 'Edify-proposed (not yet confirmed by spoke)' : 'Confirmed by spoke')
     : parts.join(' · ');
 }

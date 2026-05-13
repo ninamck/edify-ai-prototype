@@ -10,9 +10,12 @@ import {
   DEMO_TODAY,
   benchesAt,
   getProductionItem,
+  SEEDED_SIGNED_PCR_DRAFTS_BY_SITE,
+  SEEDED_FAILED_PCR_DRAFTS_BY_SITE,
   type BenchId,
   type ProductionBatch,
   type BatchStatus,
+  type SiteId,
 } from '@/components/Production/fixtures';
 import { hhmmToMinutes } from '@/components/Production/time';
 import { useProductionSite } from '@/components/Production/ProductionSiteContext';
@@ -24,10 +27,29 @@ export default function PCRQueuePage() {
   const canSign = can('pcr.sign');
   const { siteId } = useProductionSite();
   const [benchFilter, setBenchFilter] = useState<BenchFilter>('all');
-  /** Map of batchId -> signed PCR draft (locally captured this session). */
-  const [signed, setSigned] = useState<Record<string, PCRDraft>>({});
+  /**
+   * Map of batchId -> signed PCR draft. Seeded from fixtures on first
+   * mount so the "Reviewed today" section has content (a clean PCR
+   * queue with a single populated section feels broken on a demo).
+   * Reset whenever the active site changes — a draft signed for one
+   * site shouldn't leak into the next.
+   */
+  const [signed, setSigned] = useState<Record<string, PCRDraft>>(() =>
+    seedDraftsFor(SEEDED_SIGNED_PCR_DRAFTS_BY_SITE, siteId),
+  );
   /** Map of batchId -> failed PCR draft (quality or label fail). */
-  const [failed, setFailed] = useState<Record<string, PCRDraft>>({});
+  const [failed, setFailed] = useState<Record<string, PCRDraft>>(() =>
+    seedDraftsFor(SEEDED_FAILED_PCR_DRAFTS_BY_SITE, siteId),
+  );
+
+  // When the user switches site, swap the seeded session state in too.
+  // We use the site id as a coarse-grained "session key": any in-session
+  // signs/fails on the previous site are intentionally dropped, which
+  // matches the manager's mental model (the queue is per-site).
+  useEffect(() => {
+    setSigned(seedDraftsFor(SEEDED_SIGNED_PCR_DRAFTS_BY_SITE, siteId));
+    setFailed(seedDraftsFor(SEEDED_FAILED_PCR_DRAFTS_BY_SITE, siteId));
+  }, [siteId]);
 
   // Source-of-truth batches come from the live board plan (same data the
   // Benches page renders), not the static `PRET_PLAN.batches` array which
@@ -287,6 +309,24 @@ export default function PCRQueuePage() {
       </div>
     </div>
   );
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Convert the per-site SeededPCRDraft fixture into the keyed `Record`
+ * shape the page state expects. Drafts referencing batches that aren't
+ * currently in the awaiting/signed/failed pool are still kept — the
+ * page filters on the live `allSiteBatches` set anyway.
+ */
+function seedDraftsFor(
+  source: Record<SiteId, Array<{ batchId: string } & Omit<PCRDraft, 'batchId'>>>,
+  siteId: SiteId,
+): Record<string, PCRDraft> {
+  const drafts = source[siteId] ?? [];
+  const out: Record<string, PCRDraft> = {};
+  for (const d of drafts) out[d.batchId] = d;
+  return out;
 }
 
 // ─── Subcomponents ────────────────────────────────────────────────────────────

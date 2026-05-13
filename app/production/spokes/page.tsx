@@ -2,27 +2,33 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Clock,
-  Send,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
-  Lock,
-  Unlock,
-  FastForward,
-  Search,
-  X,
   ChevronDown,
   ChevronRight,
+  Clock,
+  FastForward,
+  Lock,
   RotateCcw,
+  Search,
+  Send,
+  Unlock,
+  X,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import StatusPill from '@/components/Production/StatusPill';
 import QtyStepper from '@/components/Production/QtyStepper';
 import { useRole, StaffLockBanner } from '@/components/Production/RoleContext';
-import SpokeRejectsCard from '@/components/Production/SpokeRejectsCard';
 import { useHubUnlocks } from '@/components/Production/hubUnlockStore';
 import {
+  useIngredientShortfallStore,
+  type AppliedIngredientShortfall,
+} from '@/components/Production/ingredientShortfallStore';
+import {
+  PRET_INGREDIENT_SHORTFALL_SEEDS,
   PRET_SITES,
+  getRecipe,
   getSite,
   isHubLinked,
   spokeOrderForDate,
@@ -310,6 +316,21 @@ export default function SpokeSubmissionsPage() {
   const locked = baseLocked && !isUnlocked;
   const autoFinalised = status === 'auto-finalised' && !isUnlocked;
 
+  // Ingredient-shortfall — when the hub manager has applied a
+  // pro-rata cut from the recipe-first plan grid, the spoke needs to
+  // see exactly which recipes lost units and by how much. We pull
+  // the records from the store and filter to ones touching this
+  // (spoke, hub, forDate). The Quinn nudge feed already mirrors the
+  // headline; this banner adds line-level detail right above the
+  // ledger so the spoke's eye lands on it before they open
+  // individual rows.
+  const { forSpoke: shortfallsForSpoke } = useIngredientShortfallStore();
+  const spokeShortfallsToday = useMemo<AppliedIngredientShortfall[]>(() => {
+    return shortfallsForSpoke(spokeId).filter(
+      r => r.hubId === hubId && r.forDate === date,
+    );
+  }, [shortfallsForSpoke, spokeId, hubId, date]);
+
   // Hub-side unlock affordance — only relevant when the active persona is
   // the hub manager. The control needs the underlying SpokeSubmission
   // (not the SpokeOrderSummary used elsewhere on this page) so it can
@@ -519,14 +540,10 @@ export default function SpokeSubmissionsPage() {
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '14px 16px 32px' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* PAC140 — log rejects against the most-recent received drop. The
-              card is a no-op when this site hasn't received a hub dispatch yet. */}
-          <div style={{ margin: '0 -16px' }}>
-            <SpokeRejectsCard spokeId={spokeId} hubId={hubId} recordedBy={recordedBy} />
-          </div>
-          {/* Ad-hoc request trigger now lives in the production sub-tab nav
-              (see app/production/layout.tsx) so it stays one click away
-              without taking page real estate. */}
+          {/* Reject logging used to live here; it now lives on the spoke
+              Today view as part of the unified delivery-confirmation
+              flow (SpokeDeliveryConfirmCard). The order page stays
+              focused on the order itself. */}
           <StaffLockBanner reason="Spoke orders are confirmed by the Manager before cutoff." />
 
           {/* Day header — day caption + cutoff marker + submit action all
@@ -701,12 +718,12 @@ export default function SpokeSubmissionsPage() {
               <EdifyMark size={16} color="var(--color-info)" style={{ flexShrink: 0, marginTop: 1 }} />
               <div style={{ flex: 1, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
                 <strong style={{ color: 'var(--color-text-primary)' }}>
-                  Quinn has drafted your full {dayOfWeek(date)} order.
+                  Edify has drafted your full {dayOfWeek(date)} order.
                 </strong>{' '}
                 Each row uses your forecast for {dayOfWeek(date)}, nets out anything you carried over from yesterday,
                 and lands on the proposed quantity. Adjust whatever feels off, then submit before cutoff.
                 {cutoffPolicy === 'lock' && (
-                  <> If you don&rsquo;t submit by cutoff, Quinn&rsquo;s draft is sent through automatically.</>
+                  <> If you don&rsquo;t submit by cutoff, Edify&rsquo;s draft is sent through automatically.</>
                 )}
               </div>
             </div>
@@ -733,7 +750,7 @@ export default function SpokeSubmissionsPage() {
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
                   The {formatCutoff(order.cutoffDateTime)} cutoff passed before you submitted, so {hubDisplayName} is on
-                  the hook for Quinn&rsquo;s draft as-is ({totalConfirmed} units). The order is locked and
+                  the hook for Edify&rsquo;s draft as-is ({totalConfirmed} units). The order is locked and
                   acknowledged on the hub side.
                 </div>
               </div>
@@ -745,6 +762,122 @@ export default function SpokeSubmissionsPage() {
               >
                 Demo: rewind
               </button>
+            </div>
+          )}
+
+          {/* Ingredient-shortfall banner — fires when the hub has
+              applied a pro-rata cut on a recipe in this spoke's order
+              for `date`. Lists each affected recipe with its before
+              → after units so the spoke sees the line-level impact
+              before scrolling the ledger below. Multiple records
+              stack as separate rows under one shared banner header
+              (a single butter shortage typically hits both croissant
+              and pain au chocolat — they read as one event). */}
+          {spokeShortfallsToday.length > 0 && (
+            <div
+              style={{
+                padding: '14px 16px',
+                borderRadius: 'var(--radius-card)',
+                border: '1px solid var(--color-warning-border)',
+                background: 'var(--color-warning-light)',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 12,
+              }}
+            >
+              <AlertTriangle
+                size={18}
+                color="var(--color-warning)"
+                style={{ flexShrink: 0, marginTop: 1 }}
+              />
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: 'var(--color-text-primary)',
+                  }}
+                >
+                  {hubDisplayName} cut {spokeShortfallsToday.length} recipe
+                  {spokeShortfallsToday.length === 1 ? '' : 's'} due to ingredient shortage
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--color-text-secondary)',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  The hub re-allocated everyone&rsquo;s order pro-rata so the bake fits
+                  the available ingredient stock. Your committed quantities are below;
+                  no action needed unless you want to discuss with the hub.
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4,
+                    marginTop: 2,
+                  }}
+                >
+                  {spokeShortfallsToday.map(rec => {
+                    const seed = PRET_INGREDIENT_SHORTFALL_SEEDS.find(
+                      s => s.id === rec.seedId,
+                    );
+                    const recipeName = getRecipe(rec.recipeId)?.name ?? rec.recipeId;
+                    const myLine = rec.lines.find(l => l.spokeId === spokeId);
+                    if (!myLine) return null;
+                    const cut = myLine.cutUnits;
+                    return (
+                      <div
+                        key={rec.seedId}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'baseline',
+                          gap: 8,
+                          padding: '6px 10px',
+                          background: '#ffffff',
+                          borderRadius: 6,
+                          border: '1px solid var(--color-warning-border)',
+                          fontSize: 12,
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontWeight: 700,
+                            color: 'var(--color-text-primary)',
+                          }}
+                        >
+                          {recipeName}
+                        </span>
+                        <span style={{ color: 'var(--color-text-muted)' }}>
+                          {seed?.reason ?? 'Ingredient shortage'} — bottleneck:{' '}
+                          {seed?.bottleneckIngredient ?? 'an ingredient'}
+                        </span>
+                        <span
+                          style={{
+                            marginLeft: 'auto',
+                            fontVariantNumeric: 'tabular-nums',
+                            color: 'var(--color-text-muted)',
+                          }}
+                        >
+                          {myLine.requestedUnits} → {myLine.allocatedUnits}
+                        </span>
+                        <span
+                          style={{
+                            color: 'var(--color-warning)',
+                            fontWeight: 700,
+                            fontVariantNumeric: 'tabular-nums',
+                          }}
+                        >
+                          -{cut}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
 
@@ -793,7 +926,7 @@ export default function SpokeSubmissionsPage() {
               flexWrap: 'wrap',
             }}
           >
-            <Metric label="Quinn proposed" value={totalQuinn} />
+            <Metric label="Edify proposed" value={totalQuinn} />
             <Metric label="You confirmed" value={totalConfirmed} bold />
             <Metric label="Delta" value={delta} signed />
             <div style={{ flex: 1 }} />
@@ -862,7 +995,7 @@ export default function SpokeSubmissionsPage() {
                   opacity: locked ? 0.5 : 1,
                 }}
               >
-                <RotateCcw size={11} /> Reset to Quinn
+                <RotateCcw size={11} /> Reset to Edify
               </button>
             )}
           </div>
@@ -1193,7 +1326,7 @@ function displayStatusTreatment(status: DisplayStatus): {
     case 'acknowledged':    return { label: 'Acknowledged', fg: 'var(--color-text-secondary)',   bg: 'var(--color-bg-hover)',      border: 'var(--color-border-subtle)' };
     case 'modified-by-hub': return { label: 'Modified',     fg: 'var(--color-text-secondary)',   bg: 'var(--color-bg-hover)',      border: 'var(--color-border-subtle)' };
     case 'auto-finalised':  return { label: 'Auto-locked',  fg: 'var(--color-text-secondary)',   bg: 'var(--color-bg-hover)',      border: 'var(--color-border-subtle)' };
-    case 'derived':         return { label: 'Quinn draft',  fg: 'var(--color-text-muted)',       bg: '#ffffff',                    border: 'var(--color-border-subtle)' };
+    case 'derived':         return { label: 'Edify draft',  fg: 'var(--color-text-muted)',       bg: '#ffffff',                    border: 'var(--color-border-subtle)' };
   }
 }
 
@@ -1286,7 +1419,7 @@ function SpokeOrderRow({
               {row.hasSeeded ? (
                 <StatusPill tone="info" label="You changed" size="xs" />
               ) : (
-                <StatusPill tone="neutral" label="Quinn default" size="xs" />
+                <StatusPill tone="neutral" label="Edify default" size="xs" />
               )}
             </div>
           </div>
@@ -1361,7 +1494,7 @@ function SpokeOrderRow({
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase',
                 }}
-                title={`Quinn forecast for P${i + 1}: ${fc} units`}
+                title={`Edify forecast for P${i + 1}: ${fc} units`}
               >
                 fc {fc}
               </span>
@@ -1373,7 +1506,7 @@ function SpokeOrderRow({
           {total}
           {lineDelta !== 0 && (
             <div style={{ fontSize: 9, fontWeight: 700, color: lineDelta > 0 ? 'var(--color-warning)' : 'var(--color-info)' }}>
-              {lineDelta > 0 ? `+${lineDelta}` : lineDelta} vs Quinn
+              {lineDelta > 0 ? `+${lineDelta}` : lineDelta} vs Edify
             </div>
           )}
         </div>
@@ -1420,14 +1553,14 @@ function SpokeOrderRow({
           </div>
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', marginBottom: 8 }}>
-              How Quinn got to {quinnProposed}
+              How Edify got to {quinnProposed}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: 'var(--color-text-secondary)' }}>
               <LedgerLine label="Forecast" value={forecast?.projectedUnits ?? 0} />
               <LedgerLine label="Carry-over" value={-(carriedUnits)} />
               <div style={{ borderTop: '1px dashed var(--color-border-subtle)', paddingTop: 4, marginTop: 2, display: 'flex', gap: 6 }}>
                 <EdifyMark size={11} color="var(--color-text-muted)" />
-                <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Quinn proposes</span>
+                <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Edify proposes</span>
                 <span style={{ marginLeft: 'auto', fontWeight: 700, color: 'var(--color-text-primary)' }}>{quinnProposed}</span>
               </div>
               {lineDelta !== 0 && (
@@ -1450,7 +1583,7 @@ function SpokeOrderRow({
                       opacity: locked ? 0.5 : 1,
                     }}
                   >
-                    Reset to Quinn
+                    Reset to Edify
                   </button>
                 </div>
               )}

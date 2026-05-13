@@ -175,9 +175,9 @@ export default function HybridOrderSubmitBar({ siteId, hubId, hubLabel, date, or
             fontFamily: 'var(--font-primary)',
             minHeight: 38,
           }}
-          title="Wipe your edits and re-seed from Quinn's proposal"
+          title="Wipe your edits and re-seed from Edify's proposal"
         >
-          <RotateCcw size={11} /> Reset to Quinn
+          <RotateCcw size={11} /> Reset to Edify
         </button>
       )}
 
@@ -262,7 +262,7 @@ export default function HybridOrderSubmitBar({ siteId, hubId, hubLabel, date, or
         >
           <EdifyMark size={14} color="var(--color-info)" style={{ flexShrink: 0, marginTop: 2 }} />
           <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
-            <strong style={{ color: 'var(--color-text-primary)' }}>Quinn drafted these numbers</strong> from your{' '}
+            <strong style={{ color: 'var(--color-text-primary)' }}>Edify drafted these numbers</strong> from your{' '}
             {dayOfWeek(date)} forecast. Tweak any P-slot stepper on a Receive row, then submit so {hubLabel}{' '}
             can bake your share with the rest of the day&rsquo;s plan.
           </span>

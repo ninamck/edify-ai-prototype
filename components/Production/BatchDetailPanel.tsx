@@ -162,7 +162,7 @@ export default function BatchDetailPanel({ batchId, onClose }: Props) {
               status={data.status}
             />
 
-            <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto', overscrollBehavior: 'contain', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
               {/* Quantity hero */}
               <QuantityHero
                 qty={data.displayQty}
@@ -290,7 +290,7 @@ function FailedFooter({ wasteUrl }: { wasteUrl: string }) {
     >
       <AlertTriangle size={14} color="var(--color-error)" style={{ flexShrink: 0 }} />
       <span style={{ fontSize: 11, color: 'var(--color-text-primary)', lineHeight: 1.4 }}>
-        Failed batch routed to waste. Quinn has queued a remake against the day&rsquo;s plan.
+        Failed batch routed to waste. Edify has queued a remake against the day&rsquo;s plan.
       </span>
       <div style={{ flex: 1 }} />
       <Link
@@ -588,7 +588,7 @@ function ViolationCard({
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Quinn proposes
+              Edify proposes
             </span>
             <span style={{ fontSize: 12, color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
               {split.batches.length} batches · total {split.total}

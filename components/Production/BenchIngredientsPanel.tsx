@@ -319,7 +319,9 @@ export default function BenchIngredientsPanel({ siteId, date, benchId, onClose }
             <div
               style={{
                 flex: 1,
+                minHeight: 0,
                 overflow: 'auto',
+                overscrollBehavior: 'contain',
                 padding: '16px 18px',
                 display: 'flex',
                 flexDirection: 'column',

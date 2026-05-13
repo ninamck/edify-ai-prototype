@@ -6,6 +6,7 @@ import {
   benchesAt,
   DEMO_TODAY,
   effectiveBatchRules,
+  EXTRA_PRODUCTION_INSTANCES_BY_SITE,
   getRecipe,
   getWorkflow,
   proposeBatchSplit,
@@ -597,12 +598,20 @@ export function deriveBoardPlan(
   const lines = resolvePlan(siteId, date, overrides, perDropOverrides, variableOverrides, perRunOverrides);
 
   // Start from the authored fixture plan — only when we're on the same site.
-  const basePlan = PRET_PLAN.siteId === siteId
+  // The hand-authored `PRET_PLAN` covers `hub-central`. For every other
+  // site we still want a populated plan (so the PCR queue, bench card
+  // board, etc. have something to show on first load), so we splice
+  // `EXTRA_PRODUCTION_INSTANCES_BY_SITE[siteId]` into the empty
+  // fallback. Items already present in `PRET_PLAN.plannedInstances`
+  // (i.e. `hub-central`) are deduped by id below so the merge is
+  // idempotent — running for `hub-central` won't double-count anything.
+  const seededExtras = EXTRA_PRODUCTION_INSTANCES_BY_SITE[siteId] ?? [];
+  const basePlan: ProductionPlan = PRET_PLAN.siteId === siteId
     ? PRET_PLAN
     : {
         ...PRET_PLAN,
         siteId,
-        plannedInstances: [],
+        plannedInstances: seededExtras.slice(),
         batches: [],
         pcrRecords: [],
       };
@@ -612,10 +621,21 @@ export function deriveBoardPlan(
   const overriddenItemIds = new Set(
     lines.filter(l => l.isOverridden).map(l => l.item.id),
   );
-  const authoredPlannedInstances = basePlan.plannedInstances.filter(pi => {
+  const filteredAuthored = basePlan.plannedInstances.filter(pi => {
     if (pi.date !== date) return true; // out-of-date-range stays
     return !overriddenItemIds.has(pi.productionItemId);
   });
+  // For `hub-central`, also splice in the extra-instance seeds (they
+  // pad out the awaiting queue with prep/sandwich/salad work the
+  // hand-authored plan doesn't include). Deduped by id so a future
+  // edit to `PRET_PLAN` that promotes one of these wouldn't break.
+  const seenIds = new Set(filteredAuthored.map(pi => pi.id));
+  const extrasForSite = PRET_PLAN.siteId === siteId
+    ? seededExtras
+        .filter(pi => !seenIds.has(pi.id))
+        .filter(pi => !overriddenItemIds.has(pi.productionItemId))
+    : [];
+  const authoredPlannedInstances = [...filteredAuthored, ...extrasForSite];
   const authoredBatches = basePlan.batches.filter(b => {
     if (b.date !== date) return true;
     return !overriddenItemIds.has(b.productionItemId);

@@ -520,7 +520,7 @@ export default function AmountsView({
               cursor: 'pointer',
             }}
           >
-            <RotateCcw size={12} /> Reset {dateOverrideCount} to Quinn
+            <RotateCcw size={12} /> Reset {dateOverrideCount} to Edify
           </button>
         )}
         {/* End / Reopen production lives in the production nav, not
@@ -1693,7 +1693,7 @@ function AmountRow({
                     fontVariantNumeric: 'tabular-nums',
                     letterSpacing: '0.02em',
                   }}
-                  title="Quinn forecast for today"
+                  title="Edify forecast for today"
                 >
                   fc {counterUnits}
                 </span>
@@ -1788,7 +1788,7 @@ function AmountRow({
               {deltaFromQuinn !== 0 && canEdit && (
                 <button
                   type="button"
-                  aria-label="Reset to Quinn"
+                  aria-label="Reset to Edify"
                   onClick={onResetToQuinn}
                   style={{
                     width: 28,
@@ -1802,7 +1802,7 @@ function AmountRow({
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
-                  title="Reset to Quinn's proposal"
+                  title="Reset to Edify's proposal"
                 >
                   <RotateCcw size={12} />
                 </button>
@@ -1838,7 +1838,7 @@ function AmountRow({
               fontVariantNumeric: 'tabular-nums',
               letterSpacing: '0.02em',
             }}
-            title="Quinn forecast for today"
+            title="Edify forecast for today"
           >
             fc {counterUnits}
           </span>
@@ -2371,7 +2371,7 @@ function AmountRow({
                     key={d.spokeId}
                     label={`→ ${d.spokeName}`}
                     value={d.units}
-                    sub={d.isQuinn ? 'quinn-proposed · spoke not yet confirmed' : `confirmed · ${d.status}`}
+                    sub={d.isQuinn ? 'edify-proposed · spoke not yet confirmed' : `confirmed · ${d.status}`}
                     quinn={d.isQuinn}
                   />
                 ))}
@@ -2392,7 +2392,7 @@ function AmountRow({
                   }}
                 >
                   <EdifyMark size={11} color="var(--color-text-muted)" />
-                  <span>Quinn proposes</span>
+                  <span>Edify proposes</span>
                   <span style={{ marginLeft: 'auto' }}>{quinnProposed}</span>
                 </div>
               </div>

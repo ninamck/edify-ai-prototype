@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CheckCircle2, Trash2, ArrowDown } from 'lucide-react';
+import { CheckCircle2, Trash2, ArrowDown, Undo2 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import StatusPill from '@/components/Production/StatusPill';
 import { useRole, StaffLockBanner } from '@/components/Production/RoleContext';
@@ -13,7 +13,12 @@ import {
   type CarryOverEntry,
 } from '@/components/Production/fixtures';
 
+// `wasted` is a manager-driven status — they've decided to bin the
+// carry-over instead of folding it into today's plan. `confirmed`
+// covers both confirm-as-carry and confirm-as-waste; `mode` tracks
+// the destination so the UI can label it correctly.
 type DisplayStatus = 'draft' | 'confirmed' | 'adjusted';
+type CarryMode = 'carry' | 'waste';
 
 export default function CarryOverPage() {
   const { can } = useRole();
@@ -22,9 +27,9 @@ export default function CarryOverPage() {
   // Site comes from the shared ProductionSiteContext — picker lives in
   // the production layout above the nav.
   const { siteId } = useProductionSite();
-  // Local ephemeral adjustments (carriedUnits overrides + status changes)
+  // Local ephemeral adjustments (carriedUnits overrides + status / mode changes)
   const [overrides, setOverrides] = useState<
-    Record<string, { carriedUnits?: number; status?: DisplayStatus }>
+    Record<string, { carriedUnits?: number; status?: DisplayStatus; mode?: CarryMode }>
   >({});
 
   const siteEntries = useMemo(
@@ -35,14 +40,23 @@ export default function CarryOverPage() {
   const enriched = siteEntries.map(e => {
     const ov = overrides[e.id] ?? {};
     const carried = ov.carriedUnits ?? e.carriedUnits;
-    const adjustment = e.carriedUnits === 0 ? 0 : -carried;
+    const mode: CarryMode = ov.mode ?? 'carry';
+    // When the row is destined for waste the plan no longer benefits
+    // from the leftovers — adjustment is zero. When carrying we still
+    // net it out of today's plan.
+    const adjustment = mode === 'waste' || e.carriedUnits === 0 ? 0 : -carried;
     const status: DisplayStatus =
       ov.status ?? (e.status === 'confirmed' ? 'confirmed' : 'draft');
-    return { entry: e, carried, adjustment, status };
+    return { entry: e, carried, adjustment, status, mode };
   });
 
   const draftCount = enriched.filter(x => x.status === 'draft').length;
-  const totalCarried = enriched.reduce((a, b) => a + b.carried, 0);
+  const totalCarried = enriched
+    .filter(x => x.mode === 'carry')
+    .reduce((a, b) => a + b.carried, 0);
+  const totalWasted = enriched
+    .filter(x => x.mode === 'waste')
+    .reduce((a, b) => a + b.carried, 0);
   const totalAdjustment = enriched.reduce((a, b) => a + b.adjustment, 0);
 
   function adjust(id: string, delta: number) {
@@ -67,6 +81,19 @@ export default function CarryOverPage() {
     setOverrides(prev => ({
       ...prev,
       [id]: { ...prev[id], status: 'confirmed' },
+    }));
+  }
+
+  function setMode(id: string, mode: CarryMode) {
+    setOverrides(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        mode,
+        // Flipping mode resets the row to a fresh draft so the
+        // manager re-confirms the new destination.
+        status: 'adjusted',
+      },
     }));
   }
 
@@ -99,7 +126,7 @@ export default function CarryOverPage() {
           >
             <EdifyMark size={20} color="var(--color-info)" style={{ flexShrink: 0, marginTop: 2 }} />
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Quinn's carry-over draft</h2>
+              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Carry-over draft</h2>
               <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
                 Yesterday&rsquo;s unsold counter items within shelf life reduce today&rsquo;s plan. Review each line, adjust if needed, and confirm. Expired items are logged to waste automatically.
                 {getSite(siteId)?.type === 'HUB' && (
@@ -113,6 +140,7 @@ export default function CarryOverPage() {
             </div>
             <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
               <KPI label="Carried" value={totalCarried} />
+              <KPI label="To waste" value={totalWasted} tone={totalWasted > 0 ? 'warning' : undefined} />
               <KPI label="Plan Δ" value={totalAdjustment} signed />
               <button
                 type="button"
@@ -131,24 +159,26 @@ export default function CarryOverPage() {
                   whiteSpace: 'nowrap',
                 }}
               >
-                Confirm all {draftCount > 0 ? `(${draftCount})` : ''}
+                Apply all {draftCount > 0 ? `(${draftCount})` : ''}
               </button>
             </div>
           </div>
 
           {/* Carry-over rows */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {enriched.map(({ entry, carried, adjustment, status }) => (
+            {enriched.map(({ entry, carried, adjustment, status, mode }) => (
               <CarryOverRow
                 key={entry.id}
                 entry={entry}
                 carried={carried}
                 adjustment={adjustment}
                 status={status}
+                mode={mode}
                 canAdjust={canAdjust}
                 canConfirm={canConfirm}
                 onAdjust={delta => adjust(entry.id, delta)}
                 onConfirm={() => confirm(entry.id)}
+                onSetMode={next => setMode(entry.id, next)}
               />
             ))}
           </div>
@@ -160,9 +190,24 @@ export default function CarryOverPage() {
 
 // ─── Subcomponents ────────────────────────────────────────────────────────────
 
-function KPI({ label, value, signed = false }: { label: string; value: number; signed?: boolean }) {
+function KPI({
+  label,
+  value,
+  signed = false,
+  tone,
+}: {
+  label: string;
+  value: number;
+  signed?: boolean;
+  tone?: 'warning';
+}) {
   const sign = signed && value !== 0 ? (value > 0 ? '+' : '') : '';
-  const valueColor = signed && value < 0 ? 'var(--color-warning)' : 'var(--color-text-primary)';
+  const valueColor =
+    tone === 'warning'
+      ? 'var(--color-warning)'
+      : signed && value < 0
+        ? 'var(--color-warning)'
+        : 'var(--color-text-primary)';
   return (
     <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 2 }}>
       <span style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
@@ -180,44 +225,52 @@ function CarryOverRow({
   carried,
   adjustment,
   status,
+  mode,
   canAdjust,
   canConfirm,
   onAdjust,
   onConfirm,
+  onSetMode,
 }: {
   entry: CarryOverEntry;
   carried: number;
   adjustment: number;
   status: DisplayStatus;
+  mode: CarryMode;
   canAdjust: boolean;
   canConfirm: boolean;
   onAdjust: (delta: number) => void;
   onConfirm: () => void;
+  onSetMode: (mode: CarryMode) => void;
 }) {
   const recipe = getRecipe(entry.recipeId);
   if (!recipe) return null;
 
-  const isExpired = entry.carriedUnits === 0; // Quinn drafted zero → expired
+  const isExpired = entry.carriedUnits === 0; // Edify drafted zero → expired
+  const isWasted = mode === 'waste';
   const tone =
+    isWasted ? 'warning' :
     status === 'confirmed' ? 'success' :
     status === 'adjusted' ? 'warning' :
     'neutral';
   const statusLabel =
-    status === 'confirmed' ? 'Confirmed' :
-    status === 'adjusted' ? 'Manager adjusted' :
-    'Quinn draft';
+    isWasted
+      ? status === 'confirmed' ? 'Wasted' : 'To waste'
+      : status === 'confirmed' ? 'Confirmed' :
+        status === 'adjusted' ? 'Manager adjusted' :
+        'Edify draft';
 
   return (
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'minmax(200px, 1.4fr) auto 120px 180px auto',
+        gridTemplateColumns: 'minmax(200px, 1.4fr) auto 140px 180px auto',
         alignItems: 'center',
         gap: 14,
         padding: '14px 32px',
         borderRadius: 'var(--radius-card)',
-        border: '1px solid var(--color-border-subtle)',
-        background: '#ffffff',
+        border: `1px solid ${isWasted ? 'var(--color-warning-border)' : 'var(--color-border-subtle)'}`,
+        background: isWasted ? 'var(--color-warning-light)' : '#ffffff',
       }}
     >
       {/* Recipe + reason */}
@@ -235,7 +288,7 @@ function CarryOverRow({
         <StatusPill tone={tone} label={statusLabel} size="xs" />
       </div>
 
-      {/* Qty stepper */}
+      {/* Qty stepper / waste pill */}
       {isExpired ? (
         <div
           style={{
@@ -253,6 +306,25 @@ function CarryOverRow({
           }}
         >
           <Trash2 size={12} /> To waste
+        </div>
+      ) : isWasted ? (
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '5px 10px',
+            borderRadius: 999,
+            background: '#ffffff',
+            color: 'var(--color-warning)',
+            border: '1.5px solid var(--color-warning)',
+            fontSize: 11,
+            fontWeight: 700,
+            justifySelf: 'center',
+          }}
+        >
+          <Trash2 size={12} />
+          {carried} units to waste
         </div>
       ) : (
         <div
@@ -283,16 +355,66 @@ function CarryOverRow({
         </div>
       )}
 
-      {/* Plan adjustment arrow */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifySelf: 'center' }}>
+      {/* Plan adjustment arrow / mode toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifySelf: 'center' }}>
         {isExpired ? (
           <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>No plan change</span>
+        ) : isWasted ? (
+          <button
+            type="button"
+            onClick={() => onSetMode('carry')}
+            disabled={!canAdjust}
+            title="Send back to carry-over"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: '6px 10px',
+              borderRadius: 6,
+              fontSize: 11,
+              fontWeight: 600,
+              fontFamily: 'var(--font-primary)',
+              background: '#ffffff',
+              color: 'var(--color-text-secondary)',
+              border: '1px solid var(--color-border)',
+              cursor: !canAdjust ? 'not-allowed' : 'pointer',
+              opacity: !canAdjust ? 0.5 : 1,
+            }}
+          >
+            <Undo2 size={11} /> Carry over instead
+          </button>
         ) : (
           <>
             <ArrowDown size={14} color="var(--color-warning)" />
             <span style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--color-warning)' }}>
               {adjustment} units
             </span>
+            <button
+              type="button"
+              onClick={() => onSetMode('waste')}
+              disabled={!canAdjust}
+              title="Send these to waste instead of carrying over"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '4px 8px',
+                borderRadius: 6,
+                fontSize: 10,
+                fontWeight: 600,
+                fontFamily: 'var(--font-primary)',
+                marginLeft: 4,
+                background: 'transparent',
+                color: 'var(--color-text-muted)',
+                border: '1px dashed var(--color-border)',
+                cursor: !canAdjust ? 'not-allowed' : 'pointer',
+                opacity: !canAdjust ? 0.5 : 1,
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+              }}
+            >
+              <Trash2 size={10} /> Waste
+            </button>
           </>
         )}
       </div>
@@ -319,7 +441,7 @@ function CarryOverRow({
           opacity: status === 'confirmed' || !canConfirm ? 0.7 : 1,
         }}
       >
-        <CheckCircle2 size={12} /> {status === 'confirmed' ? 'Confirmed' : 'Confirm'}
+        <CheckCircle2 size={12} /> {status === 'confirmed' ? 'Applied' : 'Apply'}
       </button>
     </div>
   );

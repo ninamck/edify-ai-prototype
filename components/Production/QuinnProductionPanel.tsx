@@ -13,6 +13,7 @@ import { useRejectNudges } from './rejectsStore';
 import { useHubAdhocNudges, useSpokeAdhocNudges } from './adhocStore';
 import { useHubRemakeNudges, useSpokeRemakeNudges } from './remakeStore';
 import { useSpokeUnlockNudges } from './hubUnlockStore';
+import { useSpokeIngredientShortfallNudges } from './ingredientShortfallStore';
 import { DEMO_TODAY } from './fixtures';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import { useDemoNotifications, type DemoNotificationKey } from './demoNotificationsStore';
@@ -76,6 +77,11 @@ function useQuinnNudges(): QuinnNudge[] {
   // has reopened their order past cutoff. Tone is success/positive
   // since the hub has actively offered them more capacity.
   const spokeUnlockNudges = useSpokeUnlockNudges('site-spoke-south');
+  // Ingredient-shortfall — fires once the hub manager has applied a
+  // pro-rata cut from the recipe-first plan grid drawer. Tone is
+  // warning rather than error: the spoke is still getting a delivery,
+  // just a smaller one.
+  const spokeShortfallNudges = useSpokeIngredientShortfallNudges('site-spoke-south');
   const staticNudges = useMemo(() => getQuinnNudges(), []);
   const spokeStaticNudges = useMemo(() => getSpokeSubmissionNudges(), []);
 
@@ -156,9 +162,21 @@ function useQuinnNudges(): QuinnNudge[] {
       cta: n.cta,
       surface: 'spokes',
     }));
+    // Ingredient-shortfall (spoke side) lands on the spokes/order
+    // surface — the spoke manager's natural next action is to open
+    // their order to confirm the new committed quantity.
+    const spokeShortfallAsGeneric: QuinnNudge[] = spokeShortfallNudges.map(n => ({
+      id: n.id,
+      tone: n.tone,
+      title: n.title,
+      body: n.body,
+      cta: n.cta,
+      surface: 'spokes',
+    }));
     // Spoke persona: only surface what a spoke manager can act on.
     // - Critical incidents the spoke raised (status updates back).
     // - Hub unlock offers (active editing window for tomorrow's order).
+    // - Ingredient shortfalls the hub has just applied to their order.
     // - Their own ad-hoc requests (responses from hub).
     // No PCR / failed batches / carry-over / plan / productivity /
     // sales-report / settings / submit-to-hub reminders — all of those
@@ -166,6 +184,7 @@ function useQuinnNudges(): QuinnNudge[] {
     if (isSpoke) {
       return [
         ...spokeRemakeAsGeneric,
+        ...spokeShortfallAsGeneric,
         ...spokeUnlockAsGeneric,
         ...spokeStaticNudges,
         ...spokeAdhocAsGeneric,
@@ -189,7 +208,7 @@ function useQuinnNudges(): QuinnNudge[] {
       ...planAsGeneric,
       ...staticNudges,
     ].filter(n => !dismissed.has(n.id));
-  }, [isSpoke, planNudges, lowStockNudges, rejectNudges, hubAdhocNudges, spokeAdhocNudges, hubRemakeNudges, spokeRemakeNudges, spokeUnlockNudges, staticNudges, spokeStaticNudges, dismissed]);
+  }, [isSpoke, planNudges, lowStockNudges, rejectNudges, hubAdhocNudges, spokeAdhocNudges, hubRemakeNudges, spokeRemakeNudges, spokeUnlockNudges, spokeShortfallNudges, staticNudges, spokeStaticNudges, dismissed]);
 }
 
 export default function QuinnProductionPanel({ hideTrigger = false }: QuinnProductionPanelProps = {}) {
@@ -217,7 +236,7 @@ export default function QuinnProductionPanel({ hideTrigger = false }: QuinnProdu
       {!hideTrigger && (
         <button
           type="button"
-          aria-label="Open Quinn"
+          aria-label="Open Edify"
           onClick={toggleQuinnOpen}
           style={{
             position: 'fixed',
@@ -326,7 +345,7 @@ export default function QuinnProductionPanel({ hideTrigger = false }: QuinnProdu
                   <EdifyMark size={16} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>Quinn — today at a glance</div>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>Edify — today at a glance</div>
                   <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
                     {visible === 0 ? 'Nothing needs you right now.' : `${visible} item${visible === 1 ? '' : 's'} worth a look.`}
                   </div>
@@ -401,7 +420,7 @@ export function QuinnTrigger() {
   return (
     <button
       type="button"
-      aria-label="Open Quinn"
+      aria-label="Open Edify"
       aria-expanded={open}
       onClick={toggleQuinnOpen}
       style={{

@@ -6,6 +6,8 @@ import {
   ChevronRight,
   ChevronDown,
   Check,
+  Circle,
+  CircleDashed,
   RotateCcw,
   Search,
   X,
@@ -128,6 +130,105 @@ type RecipeRow = {
   availableSupply?: number;
 };
 
+// ─── Dispatch run breakdown ──────────────────────────────────────────────────
+//
+// Multi-drop dispatch model — most hub→spoke flows ship in three runs
+// across the day (R1 ~05:30 commuter, R2 ~10:00 mid-morning top-up,
+// R3 ~13:30 lunch reset). The matrix lets the manager filter to one
+// run at a time, or stay in "All" and see a row-level breakdown of
+// what's already gone out vs what's on the bench right now vs what's
+// still scheduled.
+//
+// In this prototype the run schedule is mocked: R1 has always been
+// sent for every recipe, R2 is ready for roughly half the recipes
+// (deterministic by recipe id so the mock is stable across renders),
+// and R3 hasn't started baking. Hooking this up to real production
+// schedules is a follow-up — the shape of the helper is intentionally
+// simple so the swap-in is local to `splitIntoRuns`.
+
+type RunId = 'R1' | 'R2' | 'R3';
+type RunStatus = 'sent' | 'ready' | 'pending';
+type RunFilter = 'all' | RunId;
+
+const RUN_IDS: RunId[] = ['R1', 'R2', 'R3'];
+
+type RunSlice = {
+  runId: RunId;
+  units: number;
+  status: RunStatus;
+};
+
+/** Three-slice projection of a recipe's row total across R1/R2/R3. */
+type RunBreakdown = Record<RunId, RunSlice>;
+
+const RUN_SHARES: Record<RunId, number> = { R1: 0.4, R2: 0.35, R3: 0.25 };
+
+/**
+ * Stable per-recipe hash → 0..1. Used to decide which recipes have R2
+ * ready in the demo (~half do). We avoid `Math.random` so the mock
+ * doesn't shimmer when the matrix re-renders.
+ */
+function recipeHash01(recipeId: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < recipeId.length; i++) {
+    h ^= recipeId.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return (h % 1000) / 1000;
+}
+
+/**
+ * Split a recipe-row total into R1/R2/R3 slices and tag each with a
+ * mock status. Sum of slice units always equals `total` — the leftover
+ * after rounding goes to R3 so R1/R2 stay clean for the "what's gone"
+ * vs "what's ready" reading. Returns zero-unit slices when `total === 0`.
+ */
+function splitIntoRuns(total: number, recipeId: string): RunBreakdown {
+  if (total <= 0) {
+    return {
+      R1: { runId: 'R1', units: 0, status: 'sent' },
+      R2: { runId: 'R2', units: 0, status: r2StatusFor(recipeId) },
+      R3: { runId: 'R3', units: 0, status: 'pending' },
+    };
+  }
+  const r1 = Math.floor(total * RUN_SHARES.R1);
+  const r2 = Math.floor(total * RUN_SHARES.R2);
+  const r3 = total - r1 - r2;
+  return {
+    R1: { runId: 'R1', units: r1, status: 'sent' },
+    R2: { runId: 'R2', units: r2, status: r2StatusFor(recipeId) },
+    R3: { runId: 'R3', units: r3, status: 'pending' },
+  };
+}
+
+function r2StatusFor(recipeId: string): RunStatus {
+  // ~55% of recipes have R2 ready, the rest are still pending. Picking
+  // a slightly-over-half threshold so the matrix shows a clear mix
+  // rather than nearly-all-ready or nearly-all-pending.
+  return recipeHash01(recipeId) < 0.55 ? 'ready' : 'pending';
+}
+
+const RUN_STATUS_COPY: Record<RunStatus, { label: string; tone: string; bg: string; border: string }> = {
+  sent: {
+    label: 'Sent',
+    tone: 'var(--color-success)',
+    bg: 'rgba(34, 134, 88, 0.08)',
+    border: 'rgba(34, 134, 88, 0.32)',
+  },
+  ready: {
+    label: 'Ready',
+    tone: 'var(--color-info)',
+    bg: 'rgba(56, 102, 184, 0.08)',
+    border: 'rgba(56, 102, 184, 0.32)',
+  },
+  pending: {
+    label: 'Pending',
+    tone: 'var(--color-text-muted)',
+    bg: 'var(--color-bg-hover)',
+    border: 'var(--color-border-subtle)',
+  },
+};
+
 /**
  * Hub-side dispatch view — answers the question "what's leaving the building
  * tomorrow, for whom?". Two stacked cards:
@@ -166,6 +267,11 @@ export default function HubSpokeBreakdown({
   const { transferFor, undoTransfer } = useDispatchTransfers();
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState<Set<SkuId>>(new Set());
+  // Run filter: 'all' shows totals + a per-row R1/R2/R3 status strip;
+  // a specific run narrows every cell to that run's slice with the
+  // matching status badge. Drives total roll-ups too so the spoke
+  // control card and row totals stay consistent with the picker.
+  const [runFilter, setRunFilter] = useState<RunFilter>('all');
 
   // Pre-index each submission's lines by skuId for O(1) cell lookup, and
   // build a stable map sub.fromSiteId → submission for the column headers
@@ -526,7 +632,8 @@ export default function HubSpokeBreakdown({
                       {spoke?.name ?? sub.fromSiteId}
                     </span>
                     {spoke && <LinkTypeChip site={spoke} />}
-                    <StatusChip status={sub.status} />
+                    <DispatchStatusChip status={sub.status} hasTransfer={!!transfer} />
+                    <ProvenanceChip status={sub.status} />
                   </div>
                   <div
                     style={{
@@ -606,6 +713,12 @@ export default function HubSpokeBreakdown({
               {orderedRecipeCount} ordered today
             </span>
             <div style={{ flex: 1 }} />
+            {/* Run filter — narrows every cell + total to a single
+                dispatch run (R1 / R2 / R3) or stays in "All" with a
+                per-row run-status strip. Sits between the ledger
+                header and the search box so the manager can filter
+                without scrolling. */}
+            <RunFilterStrip value={runFilter} onChange={setRunFilter} />
             <div
               style={{
                 display: 'inline-flex',
@@ -789,6 +902,7 @@ export default function HubSpokeBreakdown({
                     submissions={submissions}
                     hubId={hubId}
                     forDate={forDate}
+                    runFilter={runFilter}
                     isExpanded={expanded.has(row.skuId)}
                     onToggle={() => toggleExpand(row.skuId)}
                     shortfallResult={effectiveAllocations[row.recipe.id]}
@@ -951,6 +1065,7 @@ function DispatchRecipeRow({
   submissions,
   hubId,
   forDate,
+  runFilter,
   isExpanded,
   onToggle,
   shortfallResult,
@@ -961,6 +1076,9 @@ function DispatchRecipeRow({
   submissions: SpokeSubmission[];
   hubId: SiteId;
   forDate: string;
+  /** Active run filter — drives whether cells show the full row total
+   *  or a single run's slice, and toggles the per-row run-status strip. */
+  runFilter: RunFilter;
   isExpanded: boolean;
   onToggle: () => void;
   /** Previously-applied reallocation, if any. Drives the banner's state. */
@@ -986,6 +1104,18 @@ function DispatchRecipeRow({
   const totalRejects = rejectUnitsBySpoke.reduce((a, n) => a + n, 0);
   const totalAdhoc = adhocUnitsBySpoke.reduce((a, n) => a + n, 0);
   const hasOrders = row.rowTotal > 0 || totalRejects > 0 || totalAdhoc > 0;
+
+  // ── Run breakdown ──────────────────────────────────────────────────
+  // Row-level slice (used by the "All" status strip) and per-cell
+  // slices (used to scale the spoke columns when a specific run is
+  // active). Per-cell scaling rounds against the cell value with R3
+  // soaking the rounding remainder, mirroring `splitIntoRuns` so a
+  // sum of cell slices equals the row's slice.
+  const rowBreakdown = splitIntoRuns(row.rowTotal, row.recipe.id);
+  const isSingleRun = runFilter !== 'all';
+  const activeRunStatus: RunStatus | null = isSingleRun
+    ? rowBreakdown[runFilter as RunId].status
+    : null;
 
   return (
     <>
@@ -1064,6 +1194,17 @@ function DispatchRecipeRow({
               {row.recipe.batchRules?.multipleOf && row.recipe.batchRules.multipleOf > 1 && (
                 <span>steps of {row.recipe.batchRules.multipleOf}</span>
               )}
+              {/* In "All" mode, surface a tiny per-run status strip
+                  inline with the recipe meta so the manager can scan
+                  what's gone vs what's ready vs what's still on the
+                  bench without expanding the row. The strip hides in
+                  single-run mode (the cells already say it). */}
+              {!isSingleRun && hasOrders && (
+                <RunStatusStrip breakdown={rowBreakdown} compact />
+              )}
+              {isSingleRun && hasOrders && activeRunStatus && (
+                <RunStatusBadge status={activeRunStatus} runId={runFilter as RunId} />
+              )}
             </div>
           </div>
         </div>
@@ -1075,10 +1216,23 @@ function DispatchRecipeRow({
           const adhoc = adhocUnitsBySpoke[i];
           const ordered = c.value ?? 0;
           const empty = c.value === null && rejects === 0 && adhoc === 0;
-          // The displayed qty is the spoke's order + reject roll-forward
-          // + any approved ad-hoc top-ups for this date. Each augmentation
-          // gets its own chip so the hub sees where the units came from.
-          const displayValue = empty ? '—' : ordered + rejects + adhoc;
+          const fullCellTotal = ordered + rejects + adhoc;
+          // When a specific run is active, scale the cell to that run's
+          // share. Rejects + ad-hoc are aggregate concepts (they don't
+          // belong to a run), so we just suppress those badges in
+          // single-run mode and show only the recipe slice.
+          const cellValue = isSingleRun
+            ? splitIntoRuns(ordered, row.recipe.id)[runFilter as RunId].units
+            : fullCellTotal;
+          const displayValue = empty
+            ? '—'
+            : isSingleRun && cellValue === 0
+              ? '·'
+              : cellValue;
+          // R2 pending / R3 pending → cell numbers should look "not
+          // ready", so we pull the same muted styling we use for
+          // already-sent. Ready (R2 ready) reads as a normal active cell.
+          const runMuted = isSingleRun && activeRunStatus === 'pending';
           return (
             <div
               key={sub.fromSiteId}
@@ -1096,7 +1250,7 @@ function DispatchRecipeRow({
                   fontWeight: empty ? 400 : 700,
                   color: empty
                     ? 'var(--color-text-muted)'
-                    : wasSent
+                    : wasSent || runMuted
                       ? 'var(--color-text-muted)'
                       : 'var(--color-text-primary)',
                   fontVariantNumeric: 'tabular-nums',
@@ -1104,24 +1258,33 @@ function DispatchRecipeRow({
                   alignItems: 'center',
                   justifyContent: 'flex-end',
                   gap: 4,
-                  textDecoration: wasSent && !empty ? 'line-through' : 'none',
+                  textDecoration:
+                    (wasSent || (isSingleRun && activeRunStatus === 'sent')) && !empty
+                      ? 'line-through'
+                      : 'none',
                   textDecorationColor: 'var(--color-text-muted)',
-                  opacity: wasSent && !empty ? 0.7 : 1,
+                  opacity: (wasSent && !empty) || runMuted ? 0.7 : 1,
                 }}
                 title={
                   empty
                     ? `${getSite(sub.fromSiteId)?.name ?? sub.fromSiteId} did not order this`
                     : wasSent
                       ? 'Already dispatched'
-                      : tooltipFor(ordered, rejects, adhoc, c.isQuinn)
+                      : isSingleRun
+                        ? `${runFilter} · ${RUN_STATUS_COPY[activeRunStatus!].label.toLowerCase()} · ${cellValue} units`
+                        : tooltipFor(ordered, rejects, adhoc, c.isQuinn)
                 }
               >
                 {displayValue}
-                {c.isQuinn && !empty && !wasSent && (
+                {c.isQuinn && !empty && !wasSent && !isSingleRun && (
                   <EdifyMark size={10} color="var(--color-text-muted)" />
                 )}
               </div>
-              {rejects > 0 && !wasSent && (
+              {/* Reject + ad-hoc augmentation chips are aggregate concepts —
+                  they don't slice into per-run buckets. Hide them when a
+                  specific run is active so the cell reads cleanly as
+                  "this run's units only". */}
+              {!isSingleRun && rejects > 0 && !wasSent && (
                 <span
                   style={{
                     fontSize: 9,
@@ -1138,7 +1301,7 @@ function DispatchRecipeRow({
                   ↺ +{rejects} rejects
                 </span>
               )}
-              {adhoc > 0 && !wasSent && (
+              {!isSingleRun && adhoc > 0 && !wasSent && (
                 <span
                   style={{
                     fontSize: 9,
@@ -1163,11 +1326,28 @@ function DispatchRecipeRow({
             textAlign: 'right',
             fontSize: 14,
             fontWeight: 700,
-            color: hasOrders ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+            color: hasOrders
+              ? isSingleRun && activeRunStatus === 'pending'
+                ? 'var(--color-text-muted)'
+                : 'var(--color-text-primary)'
+              : 'var(--color-text-muted)',
             fontVariantNumeric: 'tabular-nums',
+            opacity: isSingleRun && activeRunStatus === 'pending' ? 0.7 : 1,
+            textDecoration:
+              isSingleRun && activeRunStatus === 'sent' && hasOrders ? 'line-through' : 'none',
+            textDecorationColor: 'var(--color-text-muted)',
           }}
+          title={
+            isSingleRun
+              ? `${runFilter} · ${RUN_STATUS_COPY[activeRunStatus!].label}`
+              : `${row.rowTotal + totalRejects} total units across all runs`
+          }
         >
-          {hasOrders ? row.rowTotal + totalRejects : '—'}
+          {hasOrders
+            ? isSingleRun
+              ? rowBreakdown[runFilter as RunId].units
+              : row.rowTotal + totalRejects
+            : '—'}
         </span>
       </div>
 
@@ -1260,10 +1440,11 @@ function DispatchRecipeRow({
                     >
                       {spoke?.name ?? sub.fromSiteId}
                     </span>
-                    <StatusChip status={sub.status} />
+                    <DispatchStatusChip status={sub.status} hasTransfer={!!transfer} />
+                    <ProvenanceChip status={sub.status} />
                     {c.isQuinn && (
                       <span
-                        title="Quinn's proposal — spoke hasn't confirmed"
+                        title="Edify's proposal — spoke hasn't confirmed"
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -1272,7 +1453,7 @@ function DispatchRecipeRow({
                           color: 'var(--color-warning)',
                         }}
                       >
-                        <EdifyMark size={10} /> Quinn proposal
+                        <EdifyMark size={10} /> Edify proposal
                       </span>
                     )}
                     {transfer && (
@@ -1311,6 +1492,151 @@ function DispatchRecipeRow({
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
+
+// ─── Run filter UI ───────────────────────────────────────────────────────────
+
+function RunFilterStrip({
+  value,
+  onChange,
+}: {
+  value: RunFilter;
+  onChange: (next: RunFilter) => void;
+}) {
+  const opts: Array<{ id: RunFilter; label: string; hint: string }> = [
+    { id: 'all', label: 'All', hint: 'Show full row totals + per-run breakdown' },
+    { id: 'R1', label: 'R1', hint: 'Filter to first dispatch run (already out)' },
+    { id: 'R2', label: 'R2', hint: 'Filter to mid-morning top-up run' },
+    { id: 'R3', label: 'R3', hint: 'Filter to lunch reset run' },
+  ];
+  return (
+    <div
+      role="tablist"
+      aria-label="Filter by dispatch run"
+      style={{
+        display: 'inline-flex',
+        background: 'var(--color-bg-hover)',
+        borderRadius: 100,
+        padding: 3,
+        gap: 2,
+      }}
+    >
+      {opts.map(opt => {
+        const active = opt.id === value;
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            title={opt.hint}
+            onClick={() => onChange(opt.id)}
+            style={{
+              padding: '5px 12px',
+              borderRadius: 100,
+              border: 'none',
+              fontSize: 11,
+              fontWeight: 700,
+              fontFamily: 'var(--font-primary)',
+              cursor: 'pointer',
+              background: active ? 'var(--color-accent-active)' : 'transparent',
+              color: active ? 'var(--color-text-on-active)' : 'var(--color-text-secondary)',
+              transition: 'all 0.15s',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Per-row R1/R2/R3 status strip — shown inline in "All" mode beneath
+ * the recipe name. Three tiny chips, one per run, each carrying the
+ * unit slice and a status icon. Keeps the same vertical density as
+ * the existing meta row so we don't bloat the recipe row.
+ */
+function RunStatusStrip({
+  breakdown,
+  compact,
+}: {
+  breakdown: RunBreakdown;
+  compact?: boolean;
+}) {
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      {RUN_IDS.map(id => {
+        const slice = breakdown[id];
+        return (
+          <span
+            key={id}
+            title={`${id} · ${RUN_STATUS_COPY[slice.status].label} · ${slice.units} units`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+              padding: compact ? '1px 5px' : '2px 6px',
+              borderRadius: 4,
+              border: `1px solid ${RUN_STATUS_COPY[slice.status].border}`,
+              background: RUN_STATUS_COPY[slice.status].bg,
+              color: RUN_STATUS_COPY[slice.status].tone,
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: '0.03em',
+              fontVariantNumeric: 'tabular-nums',
+              textDecoration: slice.status === 'sent' ? 'line-through' : 'none',
+              textDecorationColor: 'currentColor',
+            }}
+          >
+            <RunStatusIcon status={slice.status} size={9} />
+            {id}
+            <span style={{ fontWeight: 600, opacity: 0.85 }}>{slice.units}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Single-run badge shown beside the recipe meta when a specific run
+ * is selected — calls out whether THAT run is sent / ready / pending
+ * for this recipe at a glance. Different from the per-cell rendering
+ * because the badge is recipe-scoped, not spoke-scoped.
+ */
+function RunStatusBadge({ runId, status }: { runId: RunId; status: RunStatus }) {
+  const copy = RUN_STATUS_COPY[status];
+  return (
+    <span
+      title={`${runId} · ${copy.label}`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '2px 8px',
+        borderRadius: 999,
+        border: `1px solid ${copy.border}`,
+        background: copy.bg,
+        color: copy.tone,
+        fontSize: 9,
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        letterSpacing: '0.05em',
+      }}
+    >
+      <RunStatusIcon status={status} size={9} />
+      {runId} · {copy.label}
+    </span>
+  );
+}
+
+function RunStatusIcon({ status, size = 10 }: { status: RunStatus; size?: number }) {
+  if (status === 'sent') return <Check size={size} aria-hidden />;
+  if (status === 'ready') return <Circle size={size} fill="currentColor" aria-hidden />;
+  return <CircleDashed size={size} aria-hidden />;
+}
 
 function effectiveUnits(confirmed: number | null, quinn: number): number {
   return confirmed ?? quinn;
@@ -1512,21 +1838,78 @@ function LinkTypeChip({ site }: { site: Site }) {
   return null;
 }
 
-function StatusChip({ status }: { status: SpokeSubmission['status'] }) {
-  const treatments: Record<SpokeSubmission['status'], { label: string; bg: string; color: string; border: string }> = {
-    draft:           { label: 'Draft',        bg: 'var(--color-warning-light)', color: 'var(--color-warning)', border: 'var(--color-warning-border)' },
-    submitted:       { label: 'Submitted',    bg: 'var(--color-info-light)',    color: 'var(--color-info)',    border: 'var(--color-info)' },
-    acknowledged:    { label: 'Acknowledged', bg: 'var(--color-bg-hover)',      color: 'var(--color-text-secondary)', border: 'var(--color-border-subtle)' },
-    'modified-by-hub': { label: 'Modified',   bg: 'var(--color-bg-hover)',      color: 'var(--color-text-secondary)', border: 'var(--color-border-subtle)' },
-    'auto-finalised':  { label: 'Auto-locked', bg: 'var(--color-bg-hover)',     color: 'var(--color-text-secondary)', border: 'var(--color-border-subtle)' },
-  };
-  const t = treatments[status];
+// ─── Dispatch status + provenance chips ─────────────────────────────────────
+//
+// The dispatch screen used to surface the spoke's submission status
+// directly (`SUBMITTED`, `ACKNOWLEDGED`, etc.). That language is
+// spoke-side: it answers "what did the spoke do?" rather than what the
+// hub manager actually cares about — "where is this dispatch in MY
+// flow?". The chip below collapses the submission states into three
+// dispatch-side states the manager works against:
+//
+//   - Awaiting order → spoke is still drafting; no action available
+//   - Ready to send  → order locked; the Send button is live
+//   - Dispatched     → manager has hit Send; transfer is in transit
+//
+// Order provenance (hub-edited, auto-locked, etc.) is still meaningful
+// but secondary — it lives on a smaller `ProvenanceChip` rendered
+// alongside the primary chip, only when there's a story to tell.
+// "Submitted" / "Acknowledged" / vanilla submissions don't deserve a
+// chip in the dispatch context — they're the default success path
+// and the primary dispatch chip already says "Ready to send".
+
+type DispatchStatus = 'awaiting-order' | 'ready' | 'dispatched';
+
+function deriveDispatchStatus(
+  subStatus: SpokeSubmission['status'],
+  hasTransfer: boolean,
+): DispatchStatus {
+  if (hasTransfer) return 'dispatched';
+  if (subStatus === 'draft') return 'awaiting-order';
+  return 'ready';
+}
+
+const DISPATCH_STATUS_TREATMENTS: Record<
+  DispatchStatus,
+  { label: string; bg: string; color: string; border: string }
+> = {
+  'awaiting-order': {
+    label: 'Awaiting order',
+    bg: 'var(--color-warning-light)',
+    color: 'var(--color-warning)',
+    border: 'var(--color-warning-border)',
+  },
+  ready: {
+    label: 'Ready to send',
+    bg: '#ffffff',
+    color: 'var(--color-success)',
+    border: 'var(--color-success)',
+  },
+  dispatched: {
+    label: 'Dispatched',
+    bg: 'var(--color-bg-hover)',
+    color: 'var(--color-text-secondary)',
+    border: 'var(--color-border-subtle)',
+  },
+};
+
+function DispatchStatusChip({
+  status,
+  hasTransfer,
+}: {
+  status: SpokeSubmission['status'];
+  hasTransfer: boolean;
+}) {
+  const dispatchStatus = deriveDispatchStatus(status, hasTransfer);
+  const t = DISPATCH_STATUS_TREATMENTS[dispatchStatus];
   return (
     <span
+      title={t.label}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        padding: '2px 7px',
+        gap: 4,
+        padding: '2px 8px',
         borderRadius: 4,
         fontSize: 9,
         fontWeight: 700,
@@ -1537,18 +1920,72 @@ function StatusChip({ status }: { status: SpokeSubmission['status'] }) {
         border: `1px solid ${t.border}`,
       }}
     >
+      {dispatchStatus === 'dispatched' ? (
+        <Check size={9} aria-hidden />
+      ) : dispatchStatus === 'ready' ? (
+        <Circle size={9} fill="currentColor" aria-hidden />
+      ) : (
+        <CircleDashed size={9} aria-hidden />
+      )}
       {t.label}
     </span>
   );
 }
 
+/**
+ * Optional secondary chip — only rendered when the order's provenance
+ * is worth surfacing (manager-edited, Quinn auto-locked). Plain
+ * `submitted` / `acknowledged` orders deliberately don't render a chip
+ * here so the spoke control card stays uncluttered.
+ */
+function ProvenanceChip({ status }: { status: SpokeSubmission['status'] }) {
+  if (status === 'modified-by-hub') {
+    return (
+      <span
+        title="Order was edited by the hub before lock-in"
+        style={provenanceStyle()}
+      >
+        Hub-edited
+      </span>
+    );
+  }
+  if (status === 'auto-finalised') {
+    return (
+      <span
+        title="Spoke didn't confirm by deadline — Edify auto-locked the proposal"
+        style={provenanceStyle()}
+      >
+        <EdifyMark size={9} color="var(--color-text-muted)" /> Auto-locked
+      </span>
+    );
+  }
+  return null;
+}
+
+function provenanceStyle(): React.CSSProperties {
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 3,
+    padding: '2px 7px',
+    borderRadius: 4,
+    fontSize: 9,
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    background: 'transparent',
+    color: 'var(--color-text-muted)',
+    border: '1px dashed var(--color-border)',
+  };
+}
+
 /** Build a single-line tooltip explaining where each chunk of the cell qty came from. */
 function tooltipFor(ordered: number, rejects: number, adhoc: number, isQuinn: boolean): string {
   const parts: string[] = [];
-  if (ordered > 0) parts.push(isQuinn ? `Quinn-proposed ${ordered}` : `Spoke ordered ${ordered}`);
+  if (ordered > 0) parts.push(isQuinn ? `Edify-proposed ${ordered}` : `Spoke ordered ${ordered}`);
   if (rejects > 0) parts.push(`+${rejects} from rejects`);
   if (adhoc > 0)   parts.push(`+${adhoc} approved ad-hoc`);
   return parts.length === 0
-    ? (isQuinn ? 'Quinn-proposed (not yet confirmed by spoke)' : 'Confirmed by spoke')
+    ? (isQuinn ? 'Edify-proposed (not yet confirmed by spoke)' : 'Confirmed by spoke')
     : parts.join(' · ');
 }

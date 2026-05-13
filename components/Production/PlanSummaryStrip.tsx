@@ -74,7 +74,7 @@ export default function PlanSummaryStrip({ siteId, date, linkToAmounts = true }:
       {dateOverrideCount > 0 && (
         <SummaryChip
           label="Manager edits"
-          value={`${dateOverrideCount} · ${formatSigned(summary.variance)} vs Quinn`}
+          value={`${dateOverrideCount} · ${formatSigned(summary.variance)} vs Edify`}
           tone="warning"
         />
       )}
@@ -106,7 +106,7 @@ export default function PlanSummaryStrip({ siteId, date, linkToAmounts = true }:
             cursor: 'pointer',
           }}
         >
-          <RotateCcw size={10} /> Reset all to Quinn
+          <RotateCcw size={10} /> Reset all to Edify
         </button>
       )}
       {linkToAmounts && (

@@ -2,7 +2,15 @@
 
 import { useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ChefHat, Package, Calculator, Truck, Users } from 'lucide-react';
+import {
+  AlertTriangle,
+  Calculator,
+  ChefHat,
+  Package,
+  Truck,
+  Users,
+  X,
+} from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import {
   getProductionItem,
@@ -14,6 +22,7 @@ import {
   primaryBenchForItem,
   linkedReceiversFor,
   submissionsForHub,
+  type IngredientShortfallSeed,
   type SiteId,
   type ProductionItemId,
   type Site,
@@ -21,6 +30,13 @@ import {
 import { productionSiteLabel } from './productionSiteOptions';
 import { usePlan } from './PlanStore';
 import StatusPill from './StatusPill';
+import {
+  computeProRataCut,
+  useIngredientShortfallStore,
+  useShortfallInputs,
+  useShortfallStatus,
+  type AppliedIngredientShortfall,
+} from './ingredientShortfallStore';
 
 /**
  * Per-recipe focus panel — opens as a side drawer when a row is tapped on
@@ -200,6 +216,19 @@ export default function RecipeFocusPanel({
             gap: 18,
           }}
         >
+          {/* 0. Ingredient shortfall (HUB only) — sits at the top so the
+              manager sees the constraint before reading VP math. The
+              section auto-hides when there's no seeded shortfall, so the
+              drawer stays clean for unaffected recipes. */}
+          {site?.type === 'HUB' && recipe && (
+            <IngredientShortfallSection
+              hubId={siteId}
+              recipeId={recipe.id}
+              skuId={recipe.skuId}
+              forDate={date}
+            />
+          )}
+
           {/* 1. VP math — per recipe. Replaces live Edify's nine-column-wide
               math row with one focused breakdown for the recipe in hand. */}
           {item && recipe && (
@@ -266,7 +295,7 @@ function VPMathSection({
           hint={carryOver?.reason}
         />
         <Divider />
-        <Ledger label="Quinn proposes" value={quinnProposed} bold quinn />
+        <Ledger label="Edify proposes" value={quinnProposed} bold quinn />
         {line && line.item.mode === 'run' && (
           <>
             <Ledger label="Run baseline" value={runPlanned} muted />
@@ -652,4 +681,246 @@ function modeLabel(mode: 'run' | 'variable' | 'increment'): string {
   if (mode === 'run') return 'Run (P-slots)';
   if (mode === 'variable') return 'Variable (VP)';
   return 'Hot Production';
+}
+
+// ─── Ingredient shortfall section ─────────────────────────────────────────────
+
+/**
+ * Shows the ingredient-shortage constraint for a recipe (when one
+ * exists at the seeded fixture) and offers the manager a single,
+ * unambiguous CTA to pro-rata-cut spoke allocations down to fit
+ * under the available cap.
+ *
+ * Single-CTA on purpose:
+ *   - The user explicitly asked for "click the add and it pro-ratas
+ *     the amount down" — no modal, no strategy picker. Keeps the
+ *     decision surface a one-tap action.
+ *   - The pro-rata math is deterministic (`computeProRataCut`) so a
+ *     preview of the per-spoke split sits inside the section before
+ *     the manager commits, mitigating the lack of a confirm dialog.
+ *
+ * Once applied, the same section renders the per-spoke breakdown of
+ * the recorded cut + an Undo affordance, matching the lifecycle
+ * shape used by `hubUnlockStore`.
+ */
+function IngredientShortfallSection({
+  hubId,
+  recipeId,
+  skuId,
+  forDate,
+}: {
+  hubId: SiteId;
+  recipeId: string;
+  skuId: string;
+  forDate: string;
+}) {
+  const status = useShortfallStatus(hubId, recipeId, forDate);
+  const inputs = useShortfallInputs(hubId, skuId, forDate);
+  const { apply, undo } = useIngredientShortfallStore();
+
+  if (status.kind === 'none') return null;
+
+  const { seed } = status;
+  // Preview the per-spoke split so the manager can see who absorbs
+  // what before they commit. When the cut is applied the saved record
+  // wins — that way a manager who tweaks order quantities on another
+  // surface mid-flow still sees the historic split they signed off on,
+  // not a recomputed one.
+  const previewLines =
+    status.kind === 'applied'
+      ? status.record.lines
+      : computeProRataCut(inputs, seed.availableUnits);
+
+  const totalRequested = previewLines.reduce((acc, l) => acc + l.requestedUnits, 0);
+  const totalAllocated = previewLines.reduce((acc, l) => acc + l.allocatedUnits, 0);
+  const totalCut = totalRequested - totalAllocated;
+
+  const isApplied = status.kind === 'applied';
+  const tone = seed.tone === 'error' ? 'var(--color-error)' : 'var(--color-warning)';
+  const accent = isApplied ? 'var(--color-info)' : tone;
+
+  return (
+    <Section
+      icon={<AlertTriangle size={14} color={accent} />}
+      title="Ingredient shortfall"
+      subtitle={seed.detail}
+    >
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+          padding: 12,
+          borderRadius: 'var(--radius-card)',
+          border: `1px solid ${accent}`,
+          background: 'transparent',
+        }}
+      >
+        {/* Headline numbers */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <Pair label="Bottleneck" value={seed.bottleneckIngredient} />
+          <Pair label="Total requested" value={String(totalRequested)} />
+          <Pair label="Capacity (cap)" value={String(seed.availableUnits)} />
+          <Pair
+            label={isApplied ? 'Cut applied' : 'Cut needed'}
+            value={`-${totalCut}`}
+          />
+        </div>
+
+        {/* Per-spoke preview / committed split */}
+        {previewLines.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+              paddingTop: 8,
+              borderTop: '1px dashed var(--color-border-subtle)',
+            }}
+          >
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                color: 'var(--color-text-muted)',
+              }}
+            >
+              {isApplied ? 'Committed split' : 'Suggested pro-rata split'}
+            </div>
+            {previewLines.map(line => {
+              const spoke = getSite(line.spokeId);
+              const cut = line.cutUnits;
+              return (
+                <div
+                  key={line.spokeId}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr auto auto',
+                    gap: 8,
+                    fontSize: 12,
+                    alignItems: 'baseline',
+                  }}
+                >
+                  <span
+                    style={{
+                      color: 'var(--color-text-primary)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {spoke?.name ?? line.spokeId}
+                  </span>
+                  <span
+                    style={{
+                      color: 'var(--color-text-muted)',
+                      fontVariantNumeric: 'tabular-nums',
+                      minWidth: 48,
+                      textAlign: 'right',
+                    }}
+                  >
+                    {line.requestedUnits} → {line.allocatedUnits}
+                  </span>
+                  <span
+                    style={{
+                      color: cut > 0 ? tone : 'var(--color-text-muted)',
+                      fontVariantNumeric: 'tabular-nums',
+                      fontWeight: cut > 0 ? 700 : 500,
+                      minWidth: 28,
+                      textAlign: 'right',
+                    }}
+                  >
+                    {cut > 0 ? `-${cut}` : '0'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Action — single CTA. Open → Apply, Applied → Undo. The
+            spoke-side nudge / banner fires off `apply()`, so the
+            committed state is the source of truth across surfaces. */}
+        {!isApplied ? (
+          <button
+            type="button"
+            onClick={() =>
+              apply({
+                seedId: seed.id,
+                hubId,
+                recipeId,
+                skuId,
+                forDate,
+                availableUnits: seed.availableUnits,
+                inputs,
+              })
+            }
+            disabled={inputs.length === 0}
+            title={
+              inputs.length === 0
+                ? 'No spoke orders to pro-rate against.'
+                : `Trim each spoke's allocation in proportion to their ask, capping the bake at ${seed.availableUnits} units.`
+            }
+            style={{
+              alignSelf: 'flex-end',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 14px',
+              borderRadius: 'var(--radius-item)',
+              border: `1px solid ${tone}`,
+              background: tone,
+              color: '#fff',
+              fontSize: 12,
+              fontWeight: 700,
+              fontFamily: 'var(--font-primary)',
+              cursor: inputs.length === 0 ? 'not-allowed' : 'pointer',
+              opacity: inputs.length === 0 ? 0.6 : 1,
+            }}
+          >
+            <AlertTriangle size={12} strokeWidth={2.4} />
+            Adjust to capacity (pro-rata)
+          </button>
+        ) : (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span
+              style={{
+                fontSize: 11,
+                color: 'var(--color-text-muted)',
+              }}
+            >
+              Spokes have been notified.
+            </span>
+            <button
+              type="button"
+              onClick={() => undo(hubId, recipeId, forDate)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 'var(--radius-item)',
+                border: '1px solid var(--color-border)',
+                background: '#fff',
+                color: 'var(--color-text-secondary)',
+                fontSize: 11,
+                fontWeight: 600,
+                fontFamily: 'var(--font-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              Undo cut
+            </button>
+          </div>
+        )}
+      </div>
+    </Section>
+  );
 }

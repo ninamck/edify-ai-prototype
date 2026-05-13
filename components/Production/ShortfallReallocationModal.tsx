@@ -365,7 +365,13 @@ export default function ShortfallReallocationModal({
           <div
             style={{
               flex: 1,
+              // `min-height: 0` lets this scroll body actually shrink
+              // below its content's natural height inside the flex
+              // column. `overscroll-behavior: contain` keeps wheel
+              // events from leaking through the modal to the page.
+              minHeight: 0,
               overflow: 'auto',
+              overscrollBehavior: 'contain',
               padding: '8px 20px 12px',
               display: 'flex',
               flexDirection: 'column',

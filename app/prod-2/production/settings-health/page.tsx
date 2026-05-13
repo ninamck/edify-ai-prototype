@@ -88,7 +88,7 @@ export default function SettingsHealthPage() {
           <div>
             <div style={{ fontSize: 13, fontWeight: 700 }}>Settings health</div>
             <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-              Keep the foundation clean. One-tap fixes, or hand it to Quinn.
+              Keep the foundation clean. One-tap fixes, or hand it to Edify.
             </div>
           </div>
         </div>

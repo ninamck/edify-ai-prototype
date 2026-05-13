@@ -94,7 +94,7 @@ export default function CadenceDetailPanel({ productionItemId, date, onClose }: 
             }}
           >
             <Header recipeName={data.recipe.name} overridden={!!overridden} onClose={onClose} />
-            <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto', overscrollBehavior: 'contain', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
               <CadenceHero
                 intervalMinutes={activeInterval}
                 startTime={data.item.cadence!.startTime}
@@ -298,7 +298,7 @@ function CadenceHero({
               fontFamily: 'var(--font-primary)',
             }}
           >
-            Reset to Quinn
+            Reset to Edify
           </button>
         )}
       </div>
@@ -322,10 +322,10 @@ function QuinnProvenance({ quinnProposed, overridden }: { quinnProposed: boolean
       <EdifyMark size={16} color={overridden ? 'var(--color-warning)' : 'var(--color-info)'} style={{ flexShrink: 0, marginTop: 1 }} />
       <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-primary)', lineHeight: 1.5 }}>
         {overridden
-          ? 'This cadence was overridden at the hub. Quinn is no longer maintaining it against forecast.'
+          ? 'This cadence was overridden at the hub. Edify is no longer maintaining it against forecast.'
           : quinnProposed
-          ? 'Quinn proposed this cadence based on demand and shelf life. Managers can override.'
-          : 'Cadence is fixed (no Quinn proposal on record).'}
+          ? 'Edify proposed this cadence based on demand and shelf life. Managers can override.'
+          : 'Cadence is fixed (no Edify proposal on record).'}
       </p>
     </div>
   );
@@ -444,7 +444,7 @@ function Footer({
       }}
     >
       <button type="button" onClick={onKeepQuinn} style={{ ...actionBtn('secondary'), flex: 1 }}>
-        {locallyOverridden ? 'Cancel' : 'Keep Quinn'}
+        {locallyOverridden ? 'Cancel' : 'Keep Edify'}
       </button>
       <button
         type="button"

@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import HubSpokeBreakdown, {
   type SpokeDispatchRequest,
 } from '@/components/Production/HubSpokeBreakdown';
+import HubCarryOverSection from '@/components/Production/HubCarryOverSection';
 import DispatchConfirmSheet, {
   type DispatchManifestEntry,
 } from '@/components/Production/DispatchConfirmSheet';
@@ -11,9 +12,7 @@ import { useDispatchTransfers } from '@/components/Production/dispatchStore';
 import { useSpokeRejects } from '@/components/Production/rejectsStore';
 import { useHubUnlocks } from '@/components/Production/hubUnlockStore';
 import {
-  PRET_SITES,
   dayOffset,
-  dayOfWeek,
   getRecipe,
   type DispatchTransfer,
   type RecipeId,
@@ -49,8 +48,13 @@ export default function DispatchTodayPage() {
 }
 
 function DispatchTodayPageInner() {
-  const hubs = useMemo(() => PRET_SITES.filter(s => s.type === 'HUB'), []);
-  const [hubId, setHubId] = useState<SiteId>(hubs[0]?.id ?? 'hub-central');
+  // The demo only ships one hub (`hub-central`). Hard-coding it removes
+  // the redundant in-page hub picker — the layout's site switcher up
+  // top is already the global "which site am I on" control. If a
+  // multi-hub demo is needed later, switch this back to local state
+  // driven by `PRET_SITES.filter(s => s.type === 'HUB')` and re-add a
+  // picker control.
+  const hubId: SiteId = 'hub-central';
   const forDate = dayOffset(1);
 
   // Pending requests fed into the confirm sheet — `null` means closed.
@@ -68,14 +72,6 @@ function DispatchTodayPageInner() {
   const [shortfallApplied, setShortfallApplied] = useState<
     Record<RecipeId, ShortfallReallocationResult>
   >({});
-
-  // Reset shortfall state when the hub changes — supply stubs are
-  // hub-scoped, so the resolutions a manager built for hub-central
-  // don't apply (and shouldn't carry) to a different hub.
-  function changeHub(next: SiteId) {
-    setHubId(next);
-    setShortfallApplied({});
-  }
 
   function applyShortfall(result: ShortfallReallocationResult) {
     setShortfallApplied(prev => ({ ...prev, [result.recipeId]: result }));
@@ -189,68 +185,19 @@ function DispatchTodayPageInner() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {/* Page header — hub picker + dispatch date caption */}
-      <div
-        style={{
-          padding: '12px 32px',
-          borderBottom: '1px solid var(--color-border-subtle)',
-          background: '#ffffff',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          flexWrap: 'wrap',
-        }}
-      >
-        <label
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            fontSize: 10,
-            color: 'var(--color-text-muted)',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}
-        >
-          Hub
-        </label>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {hubs.map(s => {
-            const active = s.id === hubId;
-            return (
-              <button
-                key={s.id}
-                onClick={() => changeHub(s.id)}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  fontFamily: 'var(--font-primary)',
-                  background: active ? 'var(--color-accent-active)' : '#ffffff',
-                  color: active ? 'var(--color-text-on-active)' : 'var(--color-text-secondary)',
-                  border: `1px solid ${active ? 'var(--color-accent-active)' : 'var(--color-border)'}`,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {s.name}
-              </button>
-            );
-          })}
-        </div>
-        <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginLeft: 'auto' }}>
-          Dispatching for {forDate} ({dayOfWeek(forDate)})
-        </span>
-      </div>
-
       {/* Dispatch is for SENDING only. Incoming-from-spokes triage
           (rejects, ad-hoc requests, urgent remakes) lives on the Today
           screen so the hub manager has a single inbox for things needing
           their attention. The dispatch matrix below still reads from the
           same stores, so approved ad-hoc + unrolled rejects still
           augment the cells with their chips. */}
+
+      {/* Yesterday's carry-over snapshot — both this hub's counter
+          unsold (the manager will review on /production/carry-over) and
+          each downstream spoke's leftovers (already netted out of
+          today's order, surfaced here for visibility before sending). */}
+      <HubCarryOverSection hubId={hubId} />
+
       <HubSpokeBreakdown
         hubId={hubId}
         forDate={forDate}

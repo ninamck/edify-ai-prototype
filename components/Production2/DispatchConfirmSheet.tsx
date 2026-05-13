@@ -295,7 +295,7 @@ export default function DispatchConfirmSheet({
                   color: 'var(--color-warning)',
                 }}
               >
-                <EdifyMark size={11} /> {quinnLineCount} on Quinn proposal
+                <EdifyMark size={11} /> {quinnLineCount} on Edify proposal
               </span>
             )}
           </div>
@@ -408,7 +408,7 @@ export default function DispatchConfirmSheet({
                   )}
                   {quinnCount > 0 && (
                     <span
-                      title={`${quinnCount} of ${entry.lines.length} lines came from Quinn's proposal`}
+                      title={`${quinnCount} of ${entry.lines.length} lines came from Edify's proposal`}
                       style={{
                         display: 'inline-flex',
                         alignItems: 'center',
@@ -471,7 +471,7 @@ export default function DispatchConfirmSheet({
               <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
               <span>
                 {quinnLineCount} {quinnLineCount === 1 ? 'line is' : 'lines are'} dispatching on
-                Quinn's proposal — the spoke hadn't confirmed those numbers yet. They're flagged in
+                Edify's proposal — the spoke hadn't confirmed those numbers yet. They're flagged in
                 the manifest above.
               </span>
             </div>
@@ -619,7 +619,7 @@ function ManifestLineRow({
         )}
         {line.wasQuinnProposed && (
           <span
-            title="Spoke hadn't confirmed — Quinn's proposal used"
+            title="Spoke hadn't confirmed — Edify's proposal used"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -629,7 +629,7 @@ function ManifestLineRow({
               fontWeight: 700,
             }}
           >
-            <EdifyMark size={9} /> Quinn
+            <EdifyMark size={9} /> Edify
           </span>
         )}
         {line.shortfallReason && line.originalRequested !== undefined && (

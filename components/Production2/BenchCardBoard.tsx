@@ -44,6 +44,8 @@ type Props = {
 };
 
 // ─── Stubbed "assigned to" per bench — placeholder until users/roles are wired in ──
+// Used as the bench-level "lead" or fallback when a specific run doesn't
+// have its own assignee (see `RUN_ASSIGNEES_BY_BENCH` below).
 const ASSIGNEE_BY_BENCH: Record<string, string> = {
   // hub-central — 7-bench Pret-style layout
   'bench-bakery':              'Farah K.',
@@ -63,6 +65,23 @@ const ASSIGNEE_BY_BENCH: Record<string, string> = {
   'bench-airport-build':       'Nadia B.',
   'bench-airport-prep':        'Jon F.',
   'bench-airport-cold-chain':  'Hana M.',
+};
+
+// Per-run assignees — different people often work R1 (early morning) and
+// R2 (mid-morning relief). N1 is the overnight shift and usually
+// continues into R1 with the same baker. Anything not seeded here falls
+// back to the bench-level lead in `ASSIGNEE_BY_BENCH`. The manager can
+// also override any single (bench, run) interactively from the run
+// header chip — that override lives in component state alongside the
+// bench-level overrides.
+const RUN_ASSIGNEES_BY_BENCH: Record<string, Record<string, string>> = {
+  // hub-central
+  'bench-bakery':              { n1: 'Farah K.', r1: 'Farah K.', r2: 'Bea L.' },
+  'bench-sandwich-build':      { r1: 'Wojtek P.', r2: 'Hana M.' },
+  'bench-salad-build':         { r1: 'Bea L.',   r2: 'Liv R.' },
+  // site-standalone-north
+  'bench-north-bakery':        { n1: 'Reza A.',  r1: 'Reza A.', r2: 'Yusuf A.' },
+  'bench-north-build':         { r1: 'Olu F.',   r2: 'Theo C.' },
 };
 
 // Roster shown in the assign-to picker. Combines everyone seeded above
@@ -132,6 +151,11 @@ type RunBucket = {
   productionMins: number;
   startMins: number;
   endMins: number;
+  /**
+   * Resolved assignee for this run. Falls back to the bench-level lead
+   * when neither a manager override nor a seeded run-level value exists.
+   */
+  assignee: string;
 };
 
 /**
@@ -201,6 +225,16 @@ export default function BenchCardBoard({
 
   const setAssignment = useCallback((benchId: string, name: string) => {
     setAssignmentOverrides(prev => ({ ...prev, [benchId]: name }));
+  }, []);
+
+  // Per-run overrides. Keyed by `${benchId}:${runId}` so each run on
+  // each bench can have its own person. Falls back through
+  // `RUN_ASSIGNEES_BY_BENCH` and finally the bench-level lead. Same
+  // demo-scope rationale as `assignmentOverrides`.
+  const [runAssignmentOverrides, setRunAssignmentOverrides] = useState<Record<string, string>>({});
+
+  const setRunAssignment = useCallback((benchId: string, runId: string, name: string) => {
+    setRunAssignmentOverrides(prev => ({ ...prev, [`${benchId}:${runId}`]: name }));
   }, []);
 
   // Per-line bench overrides — manager moves work between benches via
@@ -319,6 +353,25 @@ export default function BenchCardBoard({
             : overridden
           : ASSIGNEE_BY_BENCH[bench.id] ?? 'Unassigned';
 
+      // Resolve the assignee for each scheduled run bucket. Per-run
+      // overrides win, then the seeded `RUN_ASSIGNEES_BY_BENCH` map,
+      // and finally the bench's own lead/default. This way a bench can
+      // have R1 = Farah, R2 = Bea without forcing the manager to set
+      // both — they can also tweak any run from its header chip.
+      const runSeeded = RUN_ASSIGNEES_BY_BENCH[bench.id] ?? {};
+      for (const group of modeGroups) {
+        if (!group.runBuckets) continue;
+        for (const b of group.runBuckets) {
+          const runOverride = runAssignmentOverrides[`${bench.id}:${b.run.id}`];
+          b.assignee =
+            runOverride !== undefined
+              ? runOverride === UNASSIGNED
+                ? 'Unassigned'
+                : runOverride
+              : runSeeded[b.run.id] ?? assignee;
+        }
+      }
+
       return {
         bench,
         assignee,
@@ -333,7 +386,7 @@ export default function BenchCardBoard({
         hasWork: rows.length > 0,
       };
     });
-  }, [lines, siteBenches, assignmentOverrides, benchOverrides]);
+  }, [lines, siteBenches, assignmentOverrides, runAssignmentOverrides, benchOverrides]);
 
   // Dependency-highlight resolver (same machinery as KitchenBoard).
   const highlightFor = useMemo<(itemId: string) => HighlightMode>(() => {
@@ -418,6 +471,7 @@ export default function BenchCardBoard({
               onBenchClick={onBenchClick}
               onDownloadBench={downloadBench}
               onAssign={setAssignment}
+              onAssignRun={setRunAssignment}
               siteBenches={siteBenches}
               onMoveLine={moveLineToBench}
               runFilter={runFilter}
@@ -457,6 +511,7 @@ function BenchCard({
   onBenchClick,
   onDownloadBench,
   onAssign,
+  onAssignRun,
   siteBenches,
   onMoveLine,
   runFilter = 'all',
@@ -469,6 +524,8 @@ function BenchCard({
   onBenchClick?: (benchId: string) => void;
   onDownloadBench?: (benchId: string) => void;
   onAssign?: (benchId: string, name: string) => void;
+  /** Set the assignee for a specific run on this bench (R1/R2/N1). */
+  onAssignRun?: (benchId: string, runId: string, name: string) => void;
   /** All benches at the active site — destinations the row picker offers. */
   siteBenches: Bench[];
   /** Move a planned recipe row from this bench to another bench. */
@@ -643,6 +700,7 @@ function BenchCard({
                   siteBenches={siteBenches}
                   onMoveLine={onMoveLine}
                   runFilter={runFilter}
+                  onAssignRun={onAssignRun}
                 />
               </div>
             );
@@ -764,6 +822,7 @@ function ModeGroupSection({
   siteBenches,
   onMoveLine,
   runFilter = 'all',
+  onAssignRun,
 }: {
   group: ModeGroup;
   isFirst: boolean;
@@ -775,6 +834,8 @@ function ModeGroupSection({
   onMoveLine?: (itemId: ProductionItemId, benchId: string) => void;
   /** Active run label from the toolbar, or 'all' to show every bucket. */
   runFilter?: string;
+  /** Set the assignee for a specific run on the current bench. */
+  onAssignRun?: (benchId: string, runId: string, name: string) => void;
 }) {
   const treatment = MODE_TREATMENT[group.mode];
   // Secondary (off-mode) groups are rendered muted so they read as
@@ -818,6 +879,7 @@ function ModeGroupSection({
             currentBenchId={currentBenchId}
             siteBenches={siteBenches}
             onMoveLine={onMoveLine}
+            onAssignRun={onAssignRun}
           />
         ))
       ) : (
@@ -879,6 +941,7 @@ function RunBucketSection({
   currentBenchId,
   siteBenches,
   onMoveLine,
+  onAssignRun,
 }: {
   bucket: RunBucket;
   isFirst: boolean;
@@ -888,6 +951,8 @@ function RunBucketSection({
   currentBenchId: string;
   siteBenches: Bench[];
   onMoveLine?: (itemId: ProductionItemId, benchId: string) => void;
+  /** Reassign just this run on the current bench. */
+  onAssignRun?: (benchId: string, runId: string, name: string) => void;
 }) {
   const nowMins = nowHHMM ? hhmmToMins(nowHHMM) : -1;
   const state: RunTiming | null = nowMins >= 0 ? runTiming(bucket, nowMins) : null;
@@ -963,24 +1028,32 @@ function RunBucketSection({
             {formatHMS(bucket.productionMins)} · {bucket.rows.length} recipe{bucket.rows.length === 1 ? '' : 's'}
           </span>
         </div>
-        {state && (
-          <span
-            style={{
-              fontSize: 9.5,
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-              padding: '3px 8px',
-              borderRadius: 999,
-              background: '#ffffff',
-              color: statePillColor.fg,
-              border: `1.5px solid ${statePillColor.border}`,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {state === 'active' ? 'In progress' : state === 'upcoming' ? 'Upcoming' : 'Done'}
-          </span>
-        )}
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <AssigneeChip
+            assignee={bucket.assignee}
+            size="compact"
+            pickerLabel={`${bucket.run.label} — assign to`}
+            onAssign={onAssignRun ? name => onAssignRun(currentBenchId, bucket.run.id, name) : undefined}
+          />
+          {state && (
+            <span
+              style={{
+                fontSize: 9.5,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                padding: '3px 8px',
+                borderRadius: 999,
+                background: '#ffffff',
+                color: statePillColor.fg,
+                border: `1.5px solid ${statePillColor.border}`,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {state === 'active' ? 'In progress' : state === 'upcoming' ? 'Upcoming' : 'Done'}
+            </span>
+          )}
+        </div>
       </div>
 
       <ColumnHeader />
@@ -1303,10 +1376,16 @@ function MoveBenchButton({
 function AssigneeChip({
   assignee,
   onAssign,
+  size = 'default',
+  pickerLabel = 'Assign bench to',
 }: {
   assignee: string;
   /** When provided, the chip becomes a button that opens a staff picker. */
   onAssign?: (name: string) => void;
+  /** `compact` shrinks the chip + popover for the per-run run-header use. */
+  size?: 'default' | 'compact';
+  /** Header text inside the picker popover. */
+  pickerLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -1333,24 +1412,25 @@ function AssigneeChip({
 
   const isUnassigned = assignee === 'Unassigned';
   const interactive = !!onAssign;
+  const compact = size === 'compact';
 
   const chip = (
     <span
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 6,
-        padding: '5px 10px',
+        gap: compact ? 4 : 6,
+        padding: compact ? '2px 7px' : '5px 10px',
         borderRadius: 999,
         background: '#ffffff',
         color: isUnassigned ? 'var(--color-text-secondary)' : 'var(--color-info)',
-        fontSize: 11.5,
+        fontSize: compact ? 10.5 : 11.5,
         fontWeight: 600,
         whiteSpace: 'nowrap',
         border: `1.5px solid ${isUnassigned ? 'var(--color-border)' : 'var(--color-info)'}`,
       }}
     >
-      <User size={12} />
+      <User size={compact ? 10 : 12} />
       {assignee}
     </span>
   );
@@ -1382,7 +1462,7 @@ function AssigneeChip({
       {open && (
         <div
           role="listbox"
-          aria-label="Assign bench to"
+          aria-label={pickerLabel}
           onClick={e => e.stopPropagation()}
           style={{
             position: 'absolute',
@@ -1413,7 +1493,7 @@ function AssigneeChip({
               color: 'var(--color-text-muted)',
             }}
           >
-            Assign bench to
+            {pickerLabel}
           </div>
           <PickerOption
             label="Unassigned"
@@ -1642,6 +1722,9 @@ function bucketRowsIntoRuns(rows: RowData[], runs: RunSchedule[]): RunBucket[] {
       productionMins: 0,
       startMins,
       endMins: startMins + run.durationMinutes,
+      // Resolved later in the cards memo where the bench-level
+      // fallback name + per-run overrides are available.
+      assignee: '',
     };
   });
 

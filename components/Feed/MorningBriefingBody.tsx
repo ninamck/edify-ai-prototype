@@ -186,8 +186,11 @@ const CATEGORY = {
   'needs-call': {
     label: 'Needs your call',
     color: '#B91C1C',
-    bg: 'rgba(185,28,28,0.055)',
-    borderColor: 'rgba(185,28,28,0.22)',
+    // Transparent body keeps the wrapper quiet, but the red outline
+    // still groups the column as the urgent slice. Reads as an
+    // outlined chip rather than a tinted block.
+    bg: 'transparent',
+    borderColor: 'rgba(185,28,28,0.45)',
     dot: '#EF4444',
   },
   'handled': {

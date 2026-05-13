@@ -638,7 +638,7 @@ function SuggestionPanel({ report }: { report: SalesReport }) {
         }}
       >
         <Lightbulb size={16} color="var(--color-info)" />
-        <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>Quinn's suggestions</h3>
+        <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>Edify's suggestions</h3>
         <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 4 }}>
           Patterns worth feeding back into your demand model
         </span>

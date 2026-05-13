@@ -217,7 +217,7 @@ export default function QuinnProductionPanel({ hideTrigger = false }: QuinnProdu
       {!hideTrigger && (
         <button
           type="button"
-          aria-label="Open Quinn"
+          aria-label="Open Edify"
           onClick={toggleQuinnOpen}
           style={{
             position: 'fixed',
@@ -326,7 +326,7 @@ export default function QuinnProductionPanel({ hideTrigger = false }: QuinnProdu
                   <EdifyMark size={16} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>Quinn — today at a glance</div>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>Edify — today at a glance</div>
                   <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
                     {visible === 0 ? 'Nothing needs you right now.' : `${visible} item${visible === 1 ? '' : 's'} worth a look.`}
                   </div>
@@ -400,7 +400,7 @@ export function QuinnTrigger() {
   return (
     <button
       type="button"
-      aria-label="Open Quinn"
+      aria-label="Open Edify"
       aria-expanded={open}
       onClick={toggleQuinnOpen}
       style={{

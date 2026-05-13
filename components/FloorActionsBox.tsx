@@ -10,13 +10,11 @@ function FloorActionSquare({
   icon: Icon,
   onClick,
   badge,
-  dot,
 }: {
   label: ReactNode;
   icon: React.ElementType;
   onClick: () => void;
   badge?: number;
-  dot?: boolean;
 }) {
   return (
     <button
@@ -74,18 +72,6 @@ function FloorActionSquare({
           }}>
             {badge}
           </span>
-        )}
-        {dot && (
-          <span style={{
-            position: 'absolute',
-            top: '-2px',
-            right: '-6px',
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            background: 'var(--color-accent-active)',
-            border: '2px solid #fff',
-          }} />
         )}
       </span>
       <span style={{
@@ -175,7 +161,6 @@ export default function FloorActionsBox({
               key={action.id}
               label={action.label}
               icon={IconComp}
-              dot={action.id === 'receive-delivery'}
               onClick={() => handleActionClick(action)}
             />
           );

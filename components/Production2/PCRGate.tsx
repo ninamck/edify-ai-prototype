@@ -222,7 +222,7 @@ export default function PCRGate({
                   onChange={e => setNotes(e.target.value)}
                   placeholder={
                     qualityCheck === false
-                      ? 'Describe the defect so Quinn can suggest a remake…'
+                      ? 'Describe the defect so Edify can suggest a remake…'
                       : 'Anything worth flagging?'
                   }
                   rows={2}
@@ -253,7 +253,7 @@ export default function PCRGate({
                 >
                   <AlertCircle size={14} color="var(--color-error)" style={{ marginTop: 2, flexShrink: 0 }} />
                   <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-primary)', lineHeight: 1.4 }}>
-                    Failing quality routes the batch to <strong>waste</strong> and queues a remake for Quinn&rsquo;s review.
+                    Failing quality routes the batch to <strong>waste</strong> and queues a remake for Edify&rsquo;s review.
                   </p>
                 </div>
               )}

@@ -2630,6 +2630,598 @@ export const PRET_PLAN: ProductionPlan = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Extra production instances per site — drives the PCR queue
+//
+// `PRET_PLAN` above is hand-authored for `hub-central` only; without these
+// extras every other site falls back to the empty-plannedInstances stub
+// inside `deriveBoardPlan`, which leaves the PCR queue thin (only the
+// virtual instances scheduled by Quinn, most of which start after demo
+// "now"). These seeds give the queue concrete morning batches that
+// finish before `DEMO_NOW_HHMM` (07:30) on every productive site so the
+// "Awaiting review" section is populated on first load — and the bench
+// filter strip has at least one batch per bench to play against.
+//
+// `deriveBoardPlan` merges these into `plannedInstances` for the active
+// site, so the PCR page picks them up via `useBoardPlan(...)` without
+// any per-page wiring. Items already present in `PRET_PLAN.plannedInstances`
+// (i.e. hub-central's hand-authored set) are deduped by id so a manager
+// scrolling through the queue never sees the same batch twice.
+//
+// Keep these strictly to D0 (`DEMO_TODAY`). D-1 ferments live on
+// `PRET_PLAN.plannedInstances` already and are unrelated to the PCR
+// queue, which filters by `pi.date === DEMO_TODAY`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const EXTRA_PRODUCTION_INSTANCES: PlannedInstance[] = [
+  // ── hub-central — more morning bakes so the awaiting queue feels
+  //    busy. Spread across prep, sandwich-build and salad-build so the
+  //    bench filter shows non-zero counts for each. All of these
+  //    deliberately finish before 07:30 (the demo "now") so they slot
+  //    straight into the awaiting queue on first load.
+  // bench-prep — fillings and grilled components sequenced to feed the
+  // 06:30–07:00 sandwich build window.
+  {
+    id: 'pi-instance-egg-filling-0600',
+    productionItemId: 'pi-central-egg-filling',
+    stageId: 'prep',
+    date: DEMO_TODAY,
+    startTime: '06:00',
+    endTime: '06:14',
+    benchId: 'bench-prep',
+    plannedQty: 2,
+  },
+  {
+    id: 'pi-instance-tuna-filling-0614',
+    productionItemId: 'pi-central-tuna-filling',
+    stageId: 'prep',
+    date: DEMO_TODAY,
+    startTime: '06:14',
+    endTime: '06:24',
+    benchId: 'bench-prep',
+    plannedQty: 2,
+  },
+  {
+    id: 'pi-instance-hummus-0624',
+    productionItemId: 'pi-central-hummus',
+    stageId: 'prep',
+    date: DEMO_TODAY,
+    startTime: '06:24',
+    endTime: '06:36',
+    benchId: 'bench-prep',
+    plannedQty: 2,
+  },
+  {
+    id: 'pi-instance-grilled-halloumi-0636',
+    productionItemId: 'pi-central-grilled-halloumi',
+    stageId: 'prep',
+    date: DEMO_TODAY,
+    startTime: '06:36',
+    endTime: '06:48',
+    benchId: 'bench-prep',
+    plannedQty: 8,
+  },
+  {
+    id: 'pi-instance-chargrilled-veg-0648',
+    productionItemId: 'pi-central-chargrilled-veg',
+    stageId: 'prep',
+    date: DEMO_TODAY,
+    startTime: '06:48',
+    endTime: '07:02',
+    benchId: 'bench-prep',
+    plannedQty: 8,
+  },
+  {
+    id: 'pi-instance-crispy-bacon-0702',
+    productionItemId: 'pi-central-crispy-bacon',
+    stageId: 'prep',
+    date: DEMO_TODAY,
+    startTime: '07:02',
+    endTime: '07:12',
+    benchId: 'bench-prep',
+    plannedQty: 10,
+  },
+  // bench-sandwich-build — bulk pre-builds for the 07:00 floor opening.
+  {
+    id: 'pi-instance-egg-mayo-sw-0630',
+    productionItemId: 'pi-central-egg-mayo-sw',
+    stageId: 'assemble',
+    date: DEMO_TODAY,
+    startTime: '06:30',
+    endTime: '06:38',
+    benchId: 'bench-sandwich-build',
+    plannedQty: 10,
+  },
+  {
+    id: 'pi-instance-tuna-sw-0638',
+    productionItemId: 'pi-central-tuna-sw',
+    stageId: 'assemble',
+    date: DEMO_TODAY,
+    startTime: '06:38',
+    endTime: '06:46',
+    benchId: 'bench-sandwich-build',
+    plannedQty: 10,
+  },
+  {
+    id: 'pi-instance-ham-cheese-0646',
+    productionItemId: 'pi-central-ham-cheese',
+    stageId: 'assemble',
+    date: DEMO_TODAY,
+    startTime: '06:46',
+    endTime: '06:53',
+    benchId: 'bench-sandwich-build',
+    plannedQty: 8,
+  },
+  {
+    id: 'pi-instance-hummus-wrap-0653',
+    productionItemId: 'pi-central-hummus-wrap',
+    stageId: 'assemble',
+    date: DEMO_TODAY,
+    startTime: '06:53',
+    endTime: '06:59',
+    benchId: 'bench-sandwich-build',
+    plannedQty: 8,
+  },
+  // bench-salad-build — pots come together fast; clusters in the
+  // 06:30 window so the cold cabinet is full before service.
+  {
+    id: 'pi-instance-fruit-pot-0630',
+    productionItemId: 'pi-central-fruit-pot',
+    stageId: 'assemble',
+    date: DEMO_TODAY,
+    startTime: '06:30',
+    endTime: '06:34',
+    benchId: 'bench-salad-build',
+    plannedQty: 8,
+  },
+  {
+    id: 'pi-instance-yogurt-pot-0634',
+    productionItemId: 'pi-central-yogurt-pot',
+    stageId: 'assemble',
+    date: DEMO_TODAY,
+    startTime: '06:34',
+    endTime: '06:38',
+    benchId: 'bench-salad-build',
+    plannedQty: 8,
+  },
+  {
+    id: 'pi-instance-granola-pot-0638',
+    productionItemId: 'pi-central-granola-pot',
+    stageId: 'assemble',
+    date: DEMO_TODAY,
+    startTime: '06:38',
+    endTime: '06:42',
+    benchId: 'bench-salad-build',
+    plannedQty: 8,
+  },
+  {
+    id: 'pi-instance-bircher-pot-0642',
+    productionItemId: 'pi-central-bircher-pot',
+    stageId: 'assemble',
+    date: DEMO_TODAY,
+    startTime: '06:42',
+    endTime: '06:46',
+    benchId: 'bench-salad-build',
+    plannedQty: 8,
+  },
+
+  // ── site-standalone-north (Islington North) — single oven + small
+  //    prep crew. Bakery preheats at 05:30 so the counter is stocked
+  //    before the 06:00 doors open.
+  // bench-north-bakery — sequential single-oven schedule.
+  {
+    id: 'pi-north-instance-croissant-0530',
+    productionItemId: 'pi-north-croissant',
+    stageId: 'bake',
+    date: DEMO_TODAY,
+    startTime: '05:30',
+    endTime: '05:48',
+    benchId: 'bench-north-bakery',
+    plannedQty: 16,
+  },
+  {
+    id: 'pi-north-instance-pain-0548',
+    productionItemId: 'pi-north-pain',
+    stageId: 'bake',
+    date: DEMO_TODAY,
+    startTime: '05:48',
+    endTime: '06:08',
+    benchId: 'bench-north-bakery',
+    plannedQty: 12,
+  },
+  {
+    id: 'pi-north-instance-almond-0608',
+    productionItemId: 'pi-north-almond-croissant',
+    stageId: 'bake',
+    date: DEMO_TODAY,
+    startTime: '06:08',
+    endTime: '06:24',
+    benchId: 'bench-north-bakery',
+    plannedQty: 8,
+  },
+  {
+    id: 'pi-north-instance-cinnamon-0624',
+    productionItemId: 'pi-north-cinnamon-swirl',
+    stageId: 'bake',
+    date: DEMO_TODAY,
+    startTime: '06:24',
+    endTime: '06:42',
+    benchId: 'bench-north-bakery',
+    plannedQty: 8,
+  },
+  {
+    id: 'pi-north-instance-blueberry-0642',
+    productionItemId: 'pi-north-blueberry-muffin',
+    stageId: 'bake',
+    date: DEMO_TODAY,
+    startTime: '06:42',
+    endTime: '06:54',
+    benchId: 'bench-north-bakery',
+    plannedQty: 6,
+  },
+  {
+    id: 'pi-north-instance-banana-0654',
+    productionItemId: 'pi-north-banana-bread',
+    stageId: 'bake',
+    date: DEMO_TODAY,
+    startTime: '06:54',
+    endTime: '07:08',
+    benchId: 'bench-north-bakery',
+    plannedQty: 8,
+  },
+  {
+    id: 'pi-north-instance-brownie-0708',
+    productionItemId: 'pi-north-brownie',
+    stageId: 'bake',
+    date: DEMO_TODAY,
+    startTime: '07:08',
+    endTime: '07:24',
+    benchId: 'bench-north-bakery',
+    plannedQty: 6,
+  },
+  // bench-north-prep — fillings and roasts sequenced through the
+  // morning. Shorter blocks than the bakery so a couple finish
+  // overlapping with the bakery's last awaiting bake.
+  {
+    id: 'pi-north-instance-egg-filling-0600',
+    productionItemId: 'pi-north-egg-filling',
+    stageId: 'prep',
+    date: DEMO_TODAY,
+    startTime: '06:00',
+    endTime: '06:12',
+    benchId: 'bench-north-prep',
+    plannedQty: 1,
+  },
+  {
+    id: 'pi-north-instance-tuna-filling-0614',
+    productionItemId: 'pi-north-tuna-filling',
+    stageId: 'prep',
+    date: DEMO_TODAY,
+    startTime: '06:14',
+    endTime: '06:24',
+    benchId: 'bench-north-prep',
+    plannedQty: 1,
+  },
+  {
+    id: 'pi-north-instance-chicken-filling-0626',
+    productionItemId: 'pi-north-chicken-filling',
+    stageId: 'prep',
+    date: DEMO_TODAY,
+    startTime: '06:26',
+    endTime: '06:38',
+    benchId: 'bench-north-prep',
+    plannedQty: 1,
+  },
+  {
+    id: 'pi-north-instance-grilled-chicken-0640',
+    productionItemId: 'pi-north-grilled-chicken',
+    stageId: 'prep',
+    date: DEMO_TODAY,
+    startTime: '06:40',
+    endTime: '06:54',
+    benchId: 'bench-north-prep',
+    plannedQty: 1,
+  },
+  {
+    id: 'pi-north-instance-hummus-0656',
+    productionItemId: 'pi-north-hummus',
+    stageId: 'prep',
+    date: DEMO_TODAY,
+    startTime: '06:56',
+    endTime: '07:08',
+    benchId: 'bench-north-prep',
+    plannedQty: 1,
+  },
+  {
+    id: 'pi-north-instance-bacon-0710',
+    productionItemId: 'pi-north-crispy-bacon',
+    stageId: 'prep',
+    date: DEMO_TODAY,
+    startTime: '07:10',
+    endTime: '07:18',
+    benchId: 'bench-north-prep',
+    plannedQty: 1,
+  },
+
+  // ── site-hybrid-airport (Heathrow T5) — opens 04:30 so the
+  //    morning-rush queue starts even earlier. Cold-chain intake +
+  //    sandwich pre-builds + prep run in parallel.
+  // bench-airport-build — pre-built sandwiches for the 05:00
+  //    commuter rush.
+  {
+    id: 'pi-airport-instance-egg-mayo-0530',
+    productionItemId: 'pi-airport-egg-mayo-sw',
+    stageId: 'assemble',
+    date: DEMO_TODAY,
+    startTime: '05:30',
+    endTime: '05:38',
+    benchId: 'bench-airport-build',
+    plannedQty: 8,
+  },
+  {
+    id: 'pi-airport-instance-club-0538',
+    productionItemId: 'pi-airport-club',
+    stageId: 'assemble',
+    date: DEMO_TODAY,
+    startTime: '05:38',
+    endTime: '05:46',
+    benchId: 'bench-airport-build',
+    plannedQty: 8,
+  },
+  {
+    id: 'pi-airport-instance-chicken-avo-0546',
+    productionItemId: 'pi-airport-chicken-avo',
+    stageId: 'assemble',
+    date: DEMO_TODAY,
+    startTime: '05:46',
+    endTime: '05:53',
+    benchId: 'bench-airport-build',
+    plannedQty: 8,
+  },
+  {
+    id: 'pi-airport-instance-salad-0553',
+    productionItemId: 'pi-airport-salad',
+    stageId: 'assemble',
+    date: DEMO_TODAY,
+    startTime: '05:53',
+    endTime: '05:58',
+    benchId: 'bench-airport-build',
+    plannedQty: 6,
+  },
+  {
+    id: 'pi-airport-instance-yogurt-0558',
+    productionItemId: 'pi-airport-yogurt-pot',
+    stageId: 'assemble',
+    date: DEMO_TODAY,
+    startTime: '05:58',
+    endTime: '06:02',
+    benchId: 'bench-airport-build',
+    plannedQty: 6,
+  },
+  // bench-airport-prep — fillings and grills.
+  {
+    id: 'pi-airport-instance-egg-filling-0530',
+    productionItemId: 'pi-airport-egg-filling',
+    stageId: 'prep',
+    date: DEMO_TODAY,
+    startTime: '05:30',
+    endTime: '05:42',
+    benchId: 'bench-airport-prep',
+    plannedQty: 1,
+  },
+  {
+    id: 'pi-airport-instance-grilled-chx-0542',
+    productionItemId: 'pi-airport-grilled-chx',
+    stageId: 'prep',
+    date: DEMO_TODAY,
+    startTime: '05:42',
+    endTime: '05:56',
+    benchId: 'bench-airport-prep',
+    plannedQty: 6,
+  },
+  // bench-airport-cold-chain — D-1 ingredient intake from hub-central.
+  {
+    id: 'pi-airport-instance-eod-chicken-0600',
+    productionItemId: 'pi-airport-eod-chicken-prep',
+    stageId: 'prep',
+    date: DEMO_TODAY,
+    startTime: '06:00',
+    endTime: '06:12',
+    benchId: 'bench-airport-cold-chain',
+    plannedQty: 2,
+  },
+  {
+    id: 'pi-airport-instance-eod-dough-0612',
+    productionItemId: 'pi-airport-eod-dough-prep',
+    stageId: 'prep',
+    date: DEMO_TODAY,
+    startTime: '06:12',
+    endTime: '06:24',
+    benchId: 'bench-airport-cold-chain',
+    plannedQty: 4,
+  },
+];
+
+/**
+ * Per-site projection of the extra instances above. Pre-bucketed at
+ * module load so `deriveBoardPlan` doesn't re-filter on every render.
+ * Sites without an entry receive nothing, which is correct for spokes
+ * (receive-only — no production happens there).
+ */
+export const EXTRA_PRODUCTION_INSTANCES_BY_SITE: Record<SiteId, PlannedInstance[]> = (() => {
+  const byItem = new Map<ProductionItemId, SiteId>();
+  for (const item of PRET_PRODUCTION_ITEMS) byItem.set(item.id, item.siteId);
+  const out: Record<string, PlannedInstance[]> = {};
+  for (const pi of EXTRA_PRODUCTION_INSTANCES) {
+    const siteId = byItem.get(pi.productionItemId);
+    if (!siteId) continue;
+    const arr = out[siteId] ?? [];
+    arr.push(pi);
+    out[siteId] = arr;
+  }
+  return out as Record<SiteId, PlannedInstance[]>;
+})();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Seeded PCR drafts — pre-populates the "Reviewed today" and "Failed"
+// sections of the PCR queue page so the demo doesn't open with two
+// empty sections under a busy "Awaiting review" list.
+//
+// Keyed by `batchId` (which the PCR page derives as `pcr-${pi.id}`) so
+// the page can consume these via a simple `useState` initialiser.
+// Each entry is a fully-shaped PCRDraft minus the runtime-only fields
+// the page handles automatically. Times are timestamped a few minutes
+// after the bake/prep window's `endTime` to feel realistic.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type SeededPCRDraft = {
+  batchId: string;
+  made: number;
+  rejected: number;
+  madeBy: string;
+  qualityCheck: 'pass' | 'fail';
+  labelCheck: 'pass' | 'fail' | null;
+  signedBy: string;
+  signedAt: string;
+};
+
+/**
+ * Pre-signed PCR drafts. Show up in "Reviewed today".
+ * Most are clean passes; one airport entry has a small reject count to
+ * demonstrate that field rendering correctly.
+ */
+export const SEEDED_SIGNED_PCR_DRAFTS_BY_SITE: Record<SiteId, SeededPCRDraft[]> = {
+  'hub-central': [
+    {
+      batchId: 'pcr-pi-instance-egg-filling-0600',
+      made: 2,
+      rejected: 0,
+      madeBy: 'user-staff-central',
+      qualityCheck: 'pass',
+      labelCheck: 'pass',
+      signedBy: 'user-manager-central',
+      signedAt: `${DEMO_TODAY}T06:18:00Z`,
+    },
+    {
+      batchId: 'pcr-pi-instance-tuna-filling-0614',
+      made: 2,
+      rejected: 0,
+      madeBy: 'user-staff-central',
+      qualityCheck: 'pass',
+      labelCheck: 'pass',
+      signedBy: 'user-manager-central',
+      signedAt: `${DEMO_TODAY}T06:28:00Z`,
+    },
+    {
+      batchId: 'pcr-pi-instance-fruit-pot-0630',
+      made: 8,
+      rejected: 0,
+      madeBy: 'user-staff-central-2',
+      qualityCheck: 'pass',
+      labelCheck: 'pass',
+      signedBy: 'user-manager-central',
+      signedAt: `${DEMO_TODAY}T06:39:00Z`,
+    },
+  ],
+  'site-standalone-north': [
+    {
+      batchId: 'pcr-pi-north-instance-croissant-0530',
+      made: 16,
+      rejected: 0,
+      madeBy: 'user-staff-north',
+      qualityCheck: 'pass',
+      labelCheck: 'pass',
+      signedBy: 'user-manager-north',
+      signedAt: `${DEMO_TODAY}T05:52:00Z`,
+    },
+    {
+      batchId: 'pcr-pi-north-instance-pain-0548',
+      made: 12,
+      rejected: 0,
+      madeBy: 'user-staff-north',
+      qualityCheck: 'pass',
+      labelCheck: 'pass',
+      signedBy: 'user-manager-north',
+      signedAt: `${DEMO_TODAY}T06:11:00Z`,
+    },
+    {
+      batchId: 'pcr-pi-north-instance-egg-filling-0600',
+      made: 1,
+      rejected: 0,
+      madeBy: 'user-staff-north',
+      qualityCheck: 'pass',
+      labelCheck: 'pass',
+      signedBy: 'user-manager-north',
+      signedAt: `${DEMO_TODAY}T06:15:00Z`,
+    },
+  ],
+  'site-hybrid-airport': [
+    {
+      batchId: 'pcr-pi-airport-instance-egg-mayo-0530',
+      made: 7,
+      rejected: 1, // one mis-shape — manager logged but signed off
+      madeBy: 'user-staff-airport',
+      qualityCheck: 'pass',
+      labelCheck: 'pass',
+      signedBy: 'user-manager-airport',
+      signedAt: `${DEMO_TODAY}T05:40:00Z`,
+    },
+    {
+      batchId: 'pcr-pi-airport-instance-club-0538',
+      made: 8,
+      rejected: 0,
+      madeBy: 'user-staff-airport',
+      qualityCheck: 'pass',
+      labelCheck: 'pass',
+      signedBy: 'user-manager-airport',
+      signedAt: `${DEMO_TODAY}T05:48:00Z`,
+    },
+    {
+      batchId: 'pcr-pi-airport-instance-egg-filling-0530',
+      made: 1,
+      rejected: 0,
+      madeBy: 'user-staff-airport',
+      qualityCheck: 'pass',
+      labelCheck: 'pass',
+      signedBy: 'user-manager-airport',
+      signedAt: `${DEMO_TODAY}T05:46:00Z`,
+    },
+  ],
+} as Record<SiteId, SeededPCRDraft[]>;
+
+/**
+ * Pre-failed PCR drafts. Show up in "Failed — routed to waste".
+ * Kept sparse — typically one failure per site is enough to demonstrate
+ * the section without making the site look like it has a quality crisis.
+ */
+export const SEEDED_FAILED_PCR_DRAFTS_BY_SITE: Record<SiteId, SeededPCRDraft[]> = {
+  'hub-central': [
+    {
+      batchId: 'pcr-pi-instance-grilled-halloumi-0636',
+      made: 8,
+      rejected: 8,
+      madeBy: 'user-staff-central',
+      qualityCheck: 'fail',
+      labelCheck: 'pass',
+      signedBy: 'user-manager-central',
+      signedAt: `${DEMO_TODAY}T06:52:00Z`,
+    },
+  ],
+  'site-standalone-north': [
+    {
+      batchId: 'pcr-pi-north-instance-blueberry-0642',
+      made: 6,
+      rejected: 6,
+      madeBy: 'user-staff-north',
+      qualityCheck: 'fail',
+      labelCheck: 'pass',
+      signedBy: 'user-manager-north',
+      signedAt: `${DEMO_TODAY}T06:57:00Z`,
+    },
+  ],
+  'site-hybrid-airport': [],
+} as Record<SiteId, SeededPCRDraft[]>;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Carry-over — yesterday's unsold adjusts today's plan
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -3491,6 +4083,89 @@ export const PRET_DISPATCH_TRANSFER_SEEDS: DispatchTransfer[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Ingredient shortfall seeds — pre-bake constraints surfaced on the
+// recipe-first plan grid. Distinct from `HUB_AVAILABLE_SUPPLY_STUB`
+// (above) which is a *post-bake* dispatch cap. Here the cap fires
+// before the bake even runs: the hub's ingredient inventory can't
+// support the planned recipe quantity, so the planner needs to be
+// told and given a one-tap pro-rata cut option in the focus drawer.
+//
+// Two recipes share one event in the demo (a delayed butter delivery
+// hits both All-butter croissant and Pain au chocolat) so the story
+// reads as a single supply-chain incident, not two coincidences. The
+// `availableUnits` cap is intentionally below the planned bake at
+// `hub-central` for `DEMO_TODAY` so the chip + pro-rata flow are
+// always visible on first load.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type IngredientShortfallSeed = {
+  /** Stable id used as the nudge id and the keying prefix in
+   *  `ingredientShortfallStore`. */
+  id: string;
+  hubId: SiteId;
+  recipeId: string;
+  skuId: SkuId;
+  forDate: string;
+  /** Cap on the supportable bake. Anything above this can't be made
+   *  with current ingredient stock. The pro-rata flow trims spoke
+   *  allocations down to fit under this number. */
+  availableUnits: number;
+  /** Short label for the row chip + drawer header (≤ 32 chars). */
+  reason: string;
+  /** Free-text detail line shown inside the drawer. */
+  detail: string;
+  /** Which raw ingredient is the limiting factor. Surfaced in the
+   *  drawer + spoke nudge so the spoke knows it isn't a recipe-level
+   *  cut. */
+  bottleneckIngredient: string;
+  /** Severity tone — drives chip + nudge colour. `error` for hard
+   *  constraints, `warning` for soft. */
+  tone: 'warning' | 'error';
+};
+
+export const PRET_INGREDIENT_SHORTFALL_SEEDS: IngredientShortfallSeed[] = [
+  {
+    id: 'shortfall-croissant-thursday',
+    hubId: 'hub-central',
+    recipeId: 'prec-croissant',
+    skuId: 'sku-croissant',
+    forDate: DEMO_TODAY,
+    availableUnits: 80,
+    reason: 'Butter delivery short',
+    bottleneckIngredient: 'Unsalted butter',
+    detail:
+      'Supplier truck delayed — only 32kg butter on hand against the 40kg the plan needs. Supports ~80 croissants vs the 100 planned across all spokes.',
+    tone: 'warning',
+  },
+  {
+    id: 'shortfall-pain-au-choc-thursday',
+    hubId: 'hub-central',
+    recipeId: 'prec-pain-au-chocolat',
+    skuId: 'sku-pain-au-choc',
+    forDate: DEMO_TODAY,
+    availableUnits: 36,
+    reason: 'Butter delivery short',
+    bottleneckIngredient: 'Unsalted butter',
+    detail:
+      'Same delivery as the croissant — pain au chocolat shares the laminated dough. Supports ~36 vs the 48 planned.',
+    tone: 'warning',
+  },
+];
+
+/** Look up the seeded ingredient shortfall for a (hub, recipe, date)
+ *  triple. Returns `undefined` when there's no constraint, which the
+ *  callers should treat as "nothing to surface". */
+export function ingredientShortfallFor(
+  hubId: SiteId,
+  recipeId: string,
+  forDate: string,
+): IngredientShortfallSeed | undefined {
+  return PRET_INGREDIENT_SHORTFALL_SEEDS.find(
+    s => s.hubId === hubId && s.recipeId === recipeId && s.forDate === forDate,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Spoke rejects — PAC140 / PAC141 / PAC142
 //
 // When a spoke receives a hub dispatch, some units may arrive damaged, with
@@ -3920,7 +4595,7 @@ export const PRET_SETTINGS_HEALTH: SettingsHealthItem[] = [
     body: 'Recipe says max 8 but the oven at Islington North takes 12 comfortably. Likely a tuning opportunity.',
     remediations: [
       { id: 'r1', label: 'Refresh to 12', kind: 'refresh' },
-      { id: 'r2', label: 'Ask Quinn to propose', kind: 'ask-quinn' },
+      { id: 'r2', label: 'Ask Edify to propose', kind: 'ask-quinn' },
     ],
     impactSummary: '~50 extra cookies/day if lifted.',
   },
@@ -3945,7 +4620,7 @@ export const PRET_SETTINGS_HEALTH: SettingsHealthItem[] = [
     body: 'Cutoff is 15:00 but 62% of the last 20 submissions landed between 15:05 and 15:45.',
     remediations: [
       { id: 'r1', label: 'Move cutoff to 15:30', kind: 'edit' },
-      { id: 'r2', label: 'Ask Quinn', kind: 'ask-quinn' },
+      { id: 'r2', label: 'Ask Edify', kind: 'ask-quinn' },
     ],
     impactSummary: '12 late acknowledgements/month.',
   },
@@ -4065,7 +4740,7 @@ export const PRET_QUINN_SETUP_INTERVIEW: SetupInterviewScenario = {
     },
   ],
   summaryTemplate:
-    'Creating SPOKE site on corner format, supplied by London Central, tier-weekday Mon–Sat, tier-weekend Sun, cutoff 15:00. 1 front counter bench. No production items yet — Quinn will propose the first plan once 14 days of sales land.',
+    'Creating SPOKE site on corner format, supplied by London Central, tier-weekday Mon–Sat, tier-weekend Sun, cutoff 15:00. 1 front counter bench. No production items yet — Edify will propose the first plan once 14 days of sales land.',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

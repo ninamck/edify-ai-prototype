@@ -19,7 +19,6 @@ import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import StatusPill from '@/components/Production2/StatusPill';
 import QtyStepper from '@/components/Production2/QtyStepper';
 import { useRole, StaffLockBanner } from '@/components/Production2/RoleContext';
-import SpokeRejectsCard from '@/components/Production2/SpokeRejectsCard';
 import { useHubUnlocks } from '@/components/Production2/hubUnlockStore';
 import {
   PRET_SITES,
@@ -373,14 +372,10 @@ export default function SpokeSubmissionsPage() {
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '14px 16px 32px' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* PAC140 — log rejects against the most-recent received drop. The
-              card is a no-op when this site hasn't received a hub dispatch yet. */}
-          <div style={{ margin: '0 -16px' }}>
-            <SpokeRejectsCard spokeId={spokeId} hubId={hubId} recordedBy={recordedBy} />
-          </div>
-          {/* Ad-hoc request trigger now lives in the production sub-tab nav
-              (see app/production/layout.tsx) so it stays one click away
-              without taking page real estate. */}
+          {/* Reject logging used to live here; it now lives on the spoke
+              Today view as part of the unified delivery-confirmation
+              flow (SpokeDeliveryConfirmCard). The order page stays
+              focused on the order itself. */}
           <StaffLockBanner reason="Spoke orders are confirmed by the Manager before cutoff." />
 
           {/* Day header — day caption + cutoff marker + submit action all
@@ -555,12 +550,12 @@ export default function SpokeSubmissionsPage() {
               <EdifyMark size={16} color="var(--color-info)" style={{ flexShrink: 0, marginTop: 1 }} />
               <div style={{ flex: 1, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
                 <strong style={{ color: 'var(--color-text-primary)' }}>
-                  Quinn has drafted your full {dayOfWeek(date)} order.
+                  Edify has drafted your full {dayOfWeek(date)} order.
                 </strong>{' '}
                 Each row uses your forecast for {dayOfWeek(date)}, nets out anything you carried over from yesterday,
                 and lands on the proposed quantity. Adjust whatever feels off, then submit before cutoff.
                 {cutoffPolicy === 'lock' && (
-                  <> If you don&rsquo;t submit by cutoff, Quinn&rsquo;s draft is sent through automatically.</>
+                  <> If you don&rsquo;t submit by cutoff, Edify&rsquo;s draft is sent through automatically.</>
                 )}
               </div>
             </div>
@@ -587,7 +582,7 @@ export default function SpokeSubmissionsPage() {
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
                   The {formatCutoff(order.cutoffDateTime)} cutoff passed before you submitted, so {hubDisplayName} is on
-                  the hook for Quinn&rsquo;s draft as-is ({totalConfirmed} units). The order is locked and
+                  the hook for Edify&rsquo;s draft as-is ({totalConfirmed} units). The order is locked and
                   acknowledged on the hub side.
                 </div>
               </div>
@@ -647,7 +642,7 @@ export default function SpokeSubmissionsPage() {
               flexWrap: 'wrap',
             }}
           >
-            <Metric label="Quinn proposed" value={totalQuinn} />
+            <Metric label="Edify proposed" value={totalQuinn} />
             <Metric label="You confirmed" value={totalConfirmed} bold />
             <Metric label="Delta" value={delta} signed />
             <div style={{ flex: 1 }} />
@@ -716,7 +711,7 @@ export default function SpokeSubmissionsPage() {
                   opacity: locked ? 0.5 : 1,
                 }}
               >
-                <RotateCcw size={11} /> Reset to Quinn
+                <RotateCcw size={11} /> Reset to Edify
               </button>
             )}
           </div>
@@ -752,7 +747,7 @@ export default function SpokeSubmissionsPage() {
               <span>Recipe</span>
               <span style={{ textAlign: 'right' }}>Forecast</span>
               <span style={{ textAlign: 'right' }}>Carry-over</span>
-              <span style={{ textAlign: 'right' }}>Quinn</span>
+              <span style={{ textAlign: 'right' }}>Edify</span>
               <span style={{ textAlign: 'center' }}>You order</span>
               <span style={{ textAlign: 'right' }}>Total</span>
             </div>
@@ -1024,7 +1019,7 @@ function displayStatusTreatment(status: DisplayStatus): {
     case 'acknowledged':    return { label: 'Acknowledged', fg: 'var(--color-text-secondary)',   bg: 'var(--color-bg-hover)',      border: 'var(--color-border-subtle)' };
     case 'modified-by-hub': return { label: 'Modified',     fg: 'var(--color-text-secondary)',   bg: 'var(--color-bg-hover)',      border: 'var(--color-border-subtle)' };
     case 'auto-finalised':  return { label: 'Auto-locked',  fg: 'var(--color-text-secondary)',   bg: 'var(--color-bg-hover)',      border: 'var(--color-border-subtle)' };
-    case 'derived':         return { label: 'Quinn draft',  fg: 'var(--color-text-muted)',       bg: '#ffffff',                    border: 'var(--color-border-subtle)' };
+    case 'derived':         return { label: 'Edify draft',  fg: 'var(--color-text-muted)',       bg: '#ffffff',                    border: 'var(--color-border-subtle)' };
   }
 }
 
@@ -1112,7 +1107,7 @@ function SpokeOrderRow({
               {row.hasSeeded ? (
                 <StatusPill tone="info" label="You changed" size="xs" />
               ) : (
-                <StatusPill tone="neutral" label="Quinn default" size="xs" />
+                <StatusPill tone="neutral" label="Edify default" size="xs" />
               )}
               {recipe.batchRules?.multipleOf && recipe.batchRules.multipleOf > 1 && (
                 <span>steps of {recipe.batchRules.multipleOf}</span>
@@ -1184,7 +1179,7 @@ function SpokeOrderRow({
           {units}
           {lineDelta !== 0 && (
             <div style={{ fontSize: 9, fontWeight: 700, color: lineDelta > 0 ? 'var(--color-warning)' : 'var(--color-info)' }}>
-              {lineDelta > 0 ? `+${lineDelta}` : lineDelta} vs Quinn
+              {lineDelta > 0 ? `+${lineDelta}` : lineDelta} vs Edify
             </div>
           )}
         </div>
@@ -1231,14 +1226,14 @@ function SpokeOrderRow({
           </div>
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', marginBottom: 8 }}>
-              How Quinn got to {quinnProposed}
+              How Edify got to {quinnProposed}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: 'var(--color-text-secondary)' }}>
               <LedgerLine label="Forecast" value={forecast?.projectedUnits ?? 0} />
               <LedgerLine label="Carry-over" value={-(carriedUnits)} />
               <div style={{ borderTop: '1px dashed var(--color-border-subtle)', paddingTop: 4, marginTop: 2, display: 'flex', gap: 6 }}>
                 <EdifyMark size={11} color="var(--color-text-muted)" />
-                <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Quinn proposes</span>
+                <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Edify proposes</span>
                 <span style={{ marginLeft: 'auto', fontWeight: 700, color: 'var(--color-text-primary)' }}>{quinnProposed}</span>
               </div>
               {lineDelta !== 0 && (
@@ -1261,7 +1256,7 @@ function SpokeOrderRow({
                       opacity: locked ? 0.5 : 1,
                     }}
                   >
-                    Reset to Quinn
+                    Reset to Edify
                   </button>
                 </div>
               )}

@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import HubSpokeBreakdown, {
   type SpokeDispatchRequest,
 } from '@/components/Production2/HubSpokeBreakdown';
+import HubCarryOverSection from '@/components/Production2/HubCarryOverSection';
 import DispatchConfirmSheet, {
   type DispatchManifestEntry,
 } from '@/components/Production2/DispatchConfirmSheet';
@@ -246,6 +247,13 @@ function DispatchTodayPageInner() {
           their attention. The dispatch matrix below still reads from the
           same stores, so approved ad-hoc + unrolled rejects still
           augment the cells with their chips. */}
+
+      {/* Yesterday's carry-over snapshot — both this hub's counter
+          unsold (the manager will review on /production/carry-over) and
+          each downstream spoke's leftovers (already netted out of
+          today's order, surfaced here for visibility before sending). */}
+      <HubCarryOverSection hubId={hubId} />
+
       <HubSpokeBreakdown
         hubId={hubId}
         forDate={forDate}

@@ -13,7 +13,7 @@ import {
   ClipboardList,
   CalendarClock,
   Send,
-  Gauge,
+  Box,
   Clock,
   Layers,
   Star,
@@ -237,7 +237,7 @@ export default function MobileHamburgerDrawer({
             <SectionDivider label="Stock & ordering" />
             <div style={{ padding: '0 8px' }}>
               <DrawerNavItem icon={ShoppingCart} label="Review suggested orders" badge={3} onClick={() => go('/assisted-ordering')} />
-              <DrawerNavItem icon={Gauge} label="Manage stock" onClick={() => go('/stock')} />
+              <DrawerNavItem icon={Box} label="Manage stock" onClick={() => go('/stock')} />
               <DrawerNavItem icon={FileCheck} label="Match invoices" badge={needsReviewCount() || undefined} onClick={() => go('/invoices')} />
               <DrawerNavItem icon={Clock} label="View order history" onClick={() => go('/')} />
               <DrawerNavItem icon={FileX} label="Manage credit notes" onClick={() => go('/credit-notes')} />

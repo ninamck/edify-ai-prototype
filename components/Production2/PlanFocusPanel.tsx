@@ -129,7 +129,7 @@ export default function PlanFocusPanel({
       <motion.div
         key="focus-panel"
         role="dialog"
-        aria-label={`Quinn flagged: ${headline.title}`}
+        aria-label={`Edify flagged: ${headline.title}`}
         initial={{ x: '100%' }}
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
@@ -171,7 +171,7 @@ export default function PlanFocusPanel({
                   letterSpacing: '0.06em',
                 }}
               >
-                Quinn flagged · {affected.length} {affected.length === 1 ? 'recipe' : 'recipes'}
+                Edify flagged · {affected.length} {affected.length === 1 ? 'recipe' : 'recipes'}
               </span>
             </div>
             <button
@@ -244,7 +244,7 @@ export default function PlanFocusPanel({
               <Check size={20} color="var(--color-success)" style={{ marginBottom: 6 }} />
               <div style={{ fontWeight: 700 }}>All clear</div>
               <div style={{ fontSize: 11, marginTop: 4, color: 'var(--color-text-muted)' }}>
-                Nothing to action — this issue has been resolved since Quinn raised it.
+                Nothing to action — this issue has been resolved since Edify raised it.
               </div>
             </div>
           )}
@@ -573,7 +573,7 @@ function buildAffected(lines: PlanLine[], focusedItemId: string, reason: FocusRe
 }
 
 function headlineFor(reason: FocusReason, affected: PlanLine[], focused: PlanLine | undefined, lowStockMap: LowStockMap): { title: string; body: string } {
-  if (!focused) return { title: 'Quinn flagged a plan issue', body: 'Nothing to action right now.' };
+  if (!focused) return { title: 'Edify flagged a plan issue', body: 'Nothing to action right now.' };
   switch (reason) {
     case 'stockcap': {
       const binding = focused.stockCap?.bindingIngredients[0];
@@ -605,7 +605,7 @@ function headlineFor(reason: FocusReason, affected: PlanLine[], focused: PlanLin
         title: single
           ? `${focused.recipe.name} is off forecast by ${Math.abs(focused.planned - focused.quinnProposed)}`
           : `${affected.length} recipes are ±25% off forecast`,
-        body: 'Sanity-check the swings. Reset to Quinn\'s number per recipe, or open the row to keep your override and add a note.',
+        body: 'Sanity-check the swings. Reset to Edify\'s number per recipe, or open the row to keep your override and add a note.',
       };
     }
     case 'draft-forecast': {
@@ -614,7 +614,7 @@ function headlineFor(reason: FocusReason, affected: PlanLine[], focused: PlanLin
         title: single
           ? `Confirm forecast: ${focused.recipe.name}`
           : `${affected.length} forecasts still in draft`,
-        body: 'Confirm each forecast before R1 so the plan locks for the floor. Open the row to inspect Quinn\'s signals first.',
+        body: 'Confirm each forecast before R1 so the plan locks for the floor. Open the row to inspect Edify\'s signals first.',
       };
     }
     case 'lowstock': {
@@ -687,7 +687,7 @@ function cardDetail(line: PlanLine, reason: FocusReason, lowStockMap: LowStockMa
       const delta = line.planned - line.quinnProposed;
       return {
         cells: [
-          { label: 'Quinn', value: String(line.quinnProposed) },
+          { label: 'Edify', value: String(line.quinnProposed) },
           { label: 'You set', value: String(line.planned) },
           { label: 'Delta', value: `${delta > 0 ? '+' : ''}${delta}`, tone: 'error' },
         ],
@@ -701,7 +701,7 @@ function cardDetail(line: PlanLine, reason: FocusReason, lowStockMap: LowStockMa
           { label: 'Status', value: 'Draft', tone: 'error' },
           { label: 'Plan', value: String(line.planned) },
         ],
-        note: 'Open the row to read Quinn\'s signals before confirming.',
+        note: 'Open the row to read Edify\'s signals before confirming.',
         icon: <Info size={12} color="var(--color-info)" style={{ marginTop: 2, flexShrink: 0 }} />,
       };
     }
@@ -726,8 +726,8 @@ function cardDetail(line: PlanLine, reason: FocusReason, lowStockMap: LowStockMa
           },
         ],
         note: snap?.soldOut
-          ? `Quinn suggests bumping the variable add-on by ${suggestedTopUp} to cover the next push.`
-          : `Threshold is ${buffer}. Quinn suggests a +${suggestedTopUp} top-up.`,
+          ? `Edify suggests bumping the variable add-on by ${suggestedTopUp} to cover the next push.`
+          : `Threshold is ${buffer}. Edify suggests a +${suggestedTopUp} top-up.`,
         icon: <Activity size={12} color="var(--color-error)" style={{ marginTop: 2, flexShrink: 0 }} />,
       };
     }
@@ -738,7 +738,7 @@ function primaryActionLabel(line: PlanLine, reason: FocusReason, lowStockMap: Lo
   switch (reason) {
     case 'stockcap': return `Apply cap (${line.stockCap?.cap ?? 0})`;
     case 'assembly-short': return `Cover (${line.assemblyDemand.totalUnits})`;
-    case 'override': return `Reset to Quinn (${line.quinnProposed})`;
+    case 'override': return `Reset to Edify (${line.quinnProposed})`;
     case 'draft-forecast': return `Open row to confirm`;
     case 'lowstock': {
       const top = suggestedLowStockTopUp(line, lowStockMap);

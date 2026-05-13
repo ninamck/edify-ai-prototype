@@ -15,6 +15,8 @@ import {
   type SpokeSubmission,
 } from './fixtures';
 import { useDispatchTransfers, formatSentClock } from './dispatchStore';
+import { useRole } from './RoleContext';
+import SpokeDeliveryConfirmCard from './SpokeDeliveryConfirmCard';
 
 /**
  * SpokeTodayPanel — read-only summary of the hub→spoke transfer pipeline,
@@ -95,7 +97,9 @@ function submissionStatus(s: SpokeSubmission): ShipmentStatus {
 
 export default function SpokeTodayPanel({ spokeId, hubId, perspective = 'spoke' }: Props) {
   const { transfers } = useDispatchTransfers();
+  const { user } = useRole();
   const isHubView = perspective === 'hub';
+  const recordedBy = user?.name ?? 'Spoke manager';
 
   const spoke = getSite(spokeId);
   const hub = getSite(hubId);
@@ -208,6 +212,17 @@ export default function SpokeTodayPanel({ spokeId, hubId, perspective = 'spoke' 
           </div>
         </div>
       </div>
+
+      {/* Spoke-only: the confirm-delivery surface. When a hub→spoke
+          transfer has landed but hasn't been confirmed yet, this card
+          surfaces a primary "Confirm delivery" CTA that opens the
+          per-line review flow (with optional reject logging in the
+          same shot). After confirmation it collapses to a compact
+          summary above the day sections — replacing what used to be
+          the SpokeRejectsCard on the spoke order page. */}
+      {!isHubView && (
+        <SpokeDeliveryConfirmCard spokeId={spokeId} hubId={hubId} recordedBy={recordedBy} />
+      )}
 
       {/* Today's drop — framed as "arriving" for the spoke or "sending" for the hub */}
       <Section
