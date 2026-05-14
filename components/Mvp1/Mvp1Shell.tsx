@@ -1,6 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import {
+  Component,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ErrorInfo,
+  type ReactNode,
+} from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Sidebar from '@/components/Sidebar/Sidebar';
 import Mvp1TopBar from '@/components/Mvp1/Mvp1TopBar';
@@ -480,6 +488,7 @@ export default function Mvp1Shell() {
                 : { display: 'none' };
               return (
                 <div key={tab.id} style={panelStyle} aria-hidden={!isVisible}>
+                  <TabErrorBoundary tabName={tab.name}>
                   {tab.kind === 'dashboard' ? (
                     renderDashboardTab()
                   ) : (
@@ -562,6 +571,7 @@ export default function Mvp1Shell() {
                       />
                     </div>
                   )}
+                  </TabErrorBoundary>
                 </div>
               );
             })}
@@ -844,4 +854,83 @@ function TabSkeleton({ kind }: { kind: 'dashboard' | 'tables' }) {
       )}
     </div>
   );
+}
+
+/**
+ * Per-tab error boundary. If anything inside a tab throws during render —
+ * e.g. a malformed CSV row, a broken aggregation, or an OOM during a heavy
+ * mount — we want the FAILURE to be SCOPED to that tab. The user can still
+ * click another tab, the chat, or any other surface. Without this, an
+ * uncaught render error in a tab takes down the whole MVP1 shell on Vercel
+ * (white screen, no recovery short of a hard reload).
+ *
+ * Has to be a class component because hooks can't catch render errors.
+ */
+type TabErrorBoundaryProps = { tabName: string; children: ReactNode };
+type TabErrorBoundaryState = { error: Error | null };
+
+class TabErrorBoundary extends Component<TabErrorBoundaryProps, TabErrorBoundaryState> {
+  state: TabErrorBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: Error): TabErrorBoundaryState {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    // Surface the failure in dev tools so we can still debug it; we just
+    // don't let the error nuke the rest of the app.
+    if (typeof console !== 'undefined') {
+      console.error(`Tab "${this.props.tabName}" crashed:`, error, info);
+    }
+  }
+
+  handleReset = () => this.setState({ error: null });
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div
+        role="alert"
+        style={{
+          maxWidth: 720,
+          margin: '40px auto',
+          padding: 24,
+          border: '1px solid var(--color-border-subtle)',
+          borderRadius: 14,
+          background: '#fff',
+          boxShadow: '0 2px 8px rgba(58, 48, 40, 0.06)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+          textAlign: 'center',
+        }}
+      >
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+          We couldn&apos;t load &ldquo;{this.props.tabName}&rdquo;
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+          Something went wrong rendering this tab. The rest of the app is still
+          working — you can switch to another tab, or try again.
+        </div>
+        <button
+          type="button"
+          onClick={this.handleReset}
+          style={{
+            alignSelf: 'center',
+            marginTop: 4,
+            padding: '6px 14px',
+            borderRadius: 999,
+            border: '1px solid var(--color-border-subtle)',
+            background: 'var(--color-bg-hover)',
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: 'pointer',
+            color: 'var(--color-text-primary)',
+          }}
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
 }
