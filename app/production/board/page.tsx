@@ -6,6 +6,7 @@ import BenchCardBoard from '@/components/Production/BenchCardBoard';
 import BatchDetailPanel from '@/components/Production/BatchDetailPanel';
 import CadenceDetailPanel from '@/components/Production/CadenceDetailPanel';
 import BenchIngredientsPanel from '@/components/Production/BenchIngredientsPanel';
+import StepperLauncher from '@/components/Production/StepperLauncher';
 import type { ProductionItemId, ProductionMode } from '@/components/Production/fixtures';
 import {
   DEMO_TODAY,
@@ -209,6 +210,7 @@ export default function ProductionBoardPage() {
           })}
         </div>
         <div style={{ flex: 1 }} />
+        <StepperLauncher siteId={site.id} date={DEMO_TODAY} variant="ghost" />
         <PrefillBenchesButton />
         <DownloadMenuButton siteId={site.id} date={DEMO_TODAY} lines={lines} />
       </div>

@@ -1,16 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Filter, Inbox, Clock, AlertCircle, AlertTriangle, Package, PackagePlus, Sparkles } from 'lucide-react';
+import { ChevronDown, ChevronRight, Filter, Inbox, Clock, AlertCircle, AlertTriangle, Package, PackagePlus, Sparkles, UtensilsCrossed } from 'lucide-react';
 import {
   DEMO_TODAY,
   PRET_SITES,
-  autoFinaliseSubmissionFor,
+  effectiveSubmissionsForHub,
   getSite,
   getRecipe,
   productionItemsAt,
   linkedReceiversFor,
-  submissionsForHub,
   submissionCutoffFor,
   carryOverFor,
   type SiteId,
@@ -33,7 +32,9 @@ import { useHubExtras } from './hubExtrasStore';
 import { useShortfallStatus } from './ingredientShortfallStore';
 import { useHybridOrder, useHybridOrderActions, sumSlots } from './hybridOrderStore';
 import HybridOrderSubmitBar from './HybridOrderSubmitBar';
+import StepperLauncher from './StepperLauncher';
 import { daySummary } from './salesReport';
+import { unitPriceFor, formatCurrency } from '../Forecast/economics';
 import { Pencil, Check, RotateCcw, Activity } from 'lucide-react';
 
 /**
@@ -238,36 +239,9 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   //      if the spoke calls in to change them.
   // Cutoff state is read live (via Date.now) so the flip is purely time-
   // driven — no fixture edits required.
-  const effectiveSubmissions = useMemo(() => {
-    if (!isHub) return [] as SpokeSubmission[];
-    const real = submissionsForHub(siteId, date);
-    const byFromSite = new Map<SiteId, SpokeSubmission>();
-    for (const sub of real) byFromSite.set(sub.fromSiteId, sub);
-
-    const receivers = linkedReceiversFor(siteId);
-    const out = [...real];
-    for (const receiver of receivers) {
-      const existing = byFromSite.get(receiver.id);
-      // Auto-finalise when no real submission exists at all, or only a
-      // stale draft sits on file — both states mean the spoke didn't
-      // commit before cutoff.
-      const needsAuto = !existing || existing.status === 'draft';
-      if (!needsAuto) continue;
-      const cutoffISO = submissionCutoffFor(siteId, date);
-      if (new Date(cutoffISO).getTime() >= Date.now()) continue;
-      const synthesised = autoFinaliseSubmissionFor(receiver.id, siteId, date);
-      if (existing) {
-        // Replace the draft entry with the auto-finalised one so callers
-        // don't see two records for the same spoke.
-        const idx = out.findIndex(s => s.id === existing.id);
-        if (idx !== -1) out.splice(idx, 1, synthesised);
-        else out.push(synthesised);
-      } else {
-        out.push(synthesised);
-      }
-      byFromSite.set(receiver.id, synthesised);
-    }
-    return out;
+  const effectiveSubmissions = useMemo<SpokeSubmission[]>(() => {
+    if (!isHub) return [];
+    return effectiveSubmissionsForHub(siteId, date);
   }, [isHub, siteId, date]);
 
   // Per-(spoke, sku) quantity lookup. Builds the matrix cells.
@@ -612,27 +586,59 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
     let production = 0;
     let grand = 0;
     let extras = 0;
+    // Team-food units roll into the bake total ('grand') the same way
+    // extras do — the bench is making them, so they belong in "Total
+    // to make" — but stay out of every sales-aligned read below.
+    let teamFood = 0;
+    // £ rollups, mirroring the unit aggregates above. Every recipe is
+    // priced via `unitPriceFor` (synthesised from category + SKU seed)
+    // so the "Total sales" footer reads as projected revenue if every
+    // unit on the bake plan sells through. Team food intentionally
+    // contributes ZERO £ — staff lunch is a cost line, not revenue.
+    let carryOverSales = 0;
+    let productionSales = 0;
+    let grandSales = 0;
+    let extrasSales = 0;
     const pSlots = new Array<number>(pColumnCount).fill(0);
+    const pSlotsSales = new Array<number>(pColumnCount).fill(0);
     const spokeTotals = new Map<SiteId, number>();
-    for (const sp of visibleSpokes) spokeTotals.set(sp.id, 0);
+    const spokeSales = new Map<SiteId, number>();
+    for (const sp of visibleSpokes) {
+      spokeTotals.set(sp.id, 0);
+      spokeSales.set(sp.id, 0);
+    }
     for (const group of grouped) {
       for (const r of group.rows) {
+        const price = unitPriceFor(r.skuId);
         const co = carryOverFor(siteId, r.skuId);
-        carryOver += co?.carriedUnits ?? 0;
+        const coUnits = co?.carriedUnits ?? 0;
+        carryOver += coUnits;
+        carryOverSales += coUnits * price;
         const line = r.line;
         if (line) {
           grand += line.planned;
+          grandSales += line.planned * price;
           if (line.item.mode === 'run') {
             production += line.runPlanned;
+            productionSales += line.runPlanned * price;
             const pr = line.perRunPlan ?? [];
             for (let i = 0; i < pColumnCount; i++) {
-              pSlots[i] += pr[i] ?? 0;
+              const u = pr[i] ?? 0;
+              pSlots[i] += u;
+              pSlotsSales[i] += u * price;
             }
+          }
+          // Team food lifts the bake target only. No `*price` term —
+          // we deliberately skip the sales aggregates.
+          if (line.teamFoodPlanned > 0) {
+            teamFood += line.teamFoodPlanned;
+            grand += line.teamFoodPlanned;
           }
         }
         for (const sp of visibleSpokes) {
           const v = perSpokeBySku.get(`${sp.id}|${r.skuId}`) ?? 0;
           spokeTotals.set(sp.id, (spokeTotals.get(sp.id) ?? 0) + v);
+          spokeSales.set(sp.id, (spokeSales.get(sp.id) ?? 0) + v * price);
         }
         // Extras roll into the day's grand total because the bench is
         // baking them too — but they stay out of every spoke column by
@@ -641,12 +647,28 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
           const ex = getExtras(siteId, r.skuId, date);
           if (ex > 0) {
             extras += ex;
+            extrasSales += ex * price;
             grand += ex;
+            grandSales += ex * price;
           }
         }
       }
     }
-    return { carryOver, production, pSlots, grand, spokeTotals, extras };
+    return {
+      carryOver,
+      production,
+      pSlots,
+      grand,
+      spokeTotals,
+      extras,
+      teamFood,
+      carryOverSales,
+      productionSales,
+      pSlotsSales,
+      grandSales,
+      spokeSales,
+      extrasSales,
+    };
   }, [isHub, grouped, pColumnCount, siteId, visibleSpokes, perSpokeBySku, showExtras, getExtras, date]);
 
   return (
@@ -668,17 +690,25 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
 
       <div style={{ padding: '16px 30px 32px' }}>
         {/* Toolbar:
-              • HUB Today: All / P1..Pn slot tabs + spoke filter + Edit.
+              • HUB Today: All / P1..Pn slot tabs + spoke filter + Edit
+                + Stepper launcher.
               • Self-producing Today: production-type tabs (All / Run /
                 VP / Hot Prod) — slot tabs hidden because every P-slot
-                column is already on screen.
-              • Plan surface: nothing — Plan is "edit everything at once".
+                column is already on screen — plus the Stepper launcher.
+              • Plan surface: nothing — Plan is "edit everything at
+                once" and the Stepper only makes sense as a Run-
+                production affordance.
         */}
-        {showFilterControls &&
-          (viewModeTabs.length > 1 ||
-            (showSpokeCols && spokes.length > 1) ||
-            isHub ||
-            showModeFilter) && (
+        {(() => {
+          const hasFilters =
+            showFilterControls &&
+            (viewModeTabs.length > 1 ||
+              (showSpokeCols && spokes.length > 1) ||
+              isHub ||
+              showModeFilter);
+          const showStepperHere = !isPlanSurface;
+          if (!hasFilters && !showStepperHere) return null;
+          return (
             <div
               style={{
                 display: 'flex',
@@ -690,27 +720,27 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
             >
               {/* Slot tabs only on HUB Today; self-producing always
                   shows every P-slot inline. */}
-              {!expandAllPSlots && viewModeTabs.length > 1 && (
+              {showFilterControls && !expandAllPSlots && viewModeTabs.length > 1 && (
                 <ViewModeTabs
                   tabs={viewModeTabs}
                   value={viewMode}
                   onChange={setViewMode}
                 />
               )}
-              {showModeFilter && (
+              {showFilterControls && showModeFilter && (
                 <ProductionTypeTabs
                   value={modeFilter}
                   onChange={setModeFilter}
                 />
               )}
-              {showSpokeCols && spokes.length > 1 && (
+              {showFilterControls && showSpokeCols && spokes.length > 1 && (
                 <SpokeFilterDropdown
                   spokes={spokes}
                   value={spokeFilter}
                   onChange={setSpokeFilter}
                 />
               )}
-              {isHub && showSpokeCols && (
+              {showFilterControls && isHub && showSpokeCols && (
                 <EditHubPlanButton
                   editMode={editMode}
                   overrideCount={overrideTotal}
@@ -719,8 +749,15 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
                   onDone={() => setEditMode(false)}
                 />
               )}
+              {showStepperHere && (
+                <>
+                  <div style={{ flex: 1 }} />
+                  <StepperLauncher siteId={siteId} date={date} variant="ghost" />
+                </>
+              )}
             </div>
-          )}
+          );
+        })()}
 
         {/* Hub total — headline number for "what does this hub need to
             make today, all in". Hub view normally hides the per-row Total
@@ -1014,7 +1051,110 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
                     )}
                     {showRowTotal && (
                       <td style={footStyle({ totalCol: true })}>
-                        <span style={numStyle()}>{hubTotals.grand}</span>
+                        {hubTotals.teamFood > 0 ? (
+                          // Stacked grand-total: bake target on top, "incl.
+                          // N team food" caption underneath. Mirrors the
+                          // per-row total treatment so the footer reads
+                          // the same way (units on top, what's-in-them
+                          // chips underneath).
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              lineHeight: 1.15,
+                            }}
+                            title={`${hubTotals.grand} total · ${hubTotals.grand - hubTotals.teamFood - hubTotals.extras} sellable + ${hubTotals.extras} extra${hubTotals.extras === 1 ? '' : 's'} + ${hubTotals.teamFood} team food (not sold)`}
+                          >
+                            <span style={numStyle()}>{hubTotals.grand}</span>
+                            <span
+                              style={{
+                                fontSize: 9,
+                                color: 'var(--color-info)',
+                                fontVariantNumeric: 'tabular-nums',
+                                fontWeight: 700,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 2,
+                                marginTop: 1,
+                              }}
+                            >
+                              <UtensilsCrossed size={9} />
+                              incl. {hubTotals.teamFood} team
+                            </span>
+                          </span>
+                        ) : (
+                          <span style={numStyle()}>{hubTotals.grand}</span>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                  {/* Projected revenue row — mirrors the unit footer above
+                      so the manager can read "what will this bake make us
+                      if it all sells through" alongside "how much do we
+                      bake". Prices come from `unitPriceFor` (category-based
+                      synth, deterministic per SKU), so this is a directional
+                      read for the prototype rather than till-grade
+                      figures. */}
+                  <tr>
+                    <td style={footSubStyle({ left: true, sticky: true })}>
+                      Total sales
+                    </td>
+                    {showCarryOver && (
+                      <td style={footSubStyle()}>
+                        <span style={moneyStyle()}>
+                          {formatCurrency(Math.round(hubTotals.carryOverSales))}
+                        </span>
+                      </td>
+                    )}
+                    {showProductionTotal && (
+                      <td style={footSubStyle()}>
+                        <span style={moneyStyle()}>
+                          {formatCurrency(Math.round(hubTotals.productionSales))}
+                        </span>
+                      </td>
+                    )}
+                    {pColIndices.map(i => (
+                      <td key={`tots-p${i + 1}`} style={footSubStyle()}>
+                        <span style={moneyStyle()}>
+                          {formatCurrency(Math.round(hubTotals.pSlotsSales[i] ?? 0))}
+                        </span>
+                      </td>
+                    ))}
+                    {showVPInView && <td style={footSubStyle()}>—</td>}
+                    {showHotProdInView && <td style={footSubStyle()}>—</td>}
+                    {showAvailNow && <td style={footSubStyle()}>—</td>}
+                    {showSpokeCols &&
+                      visibleSpokes.map(sp => (
+                        <td key={`tots-${sp.id}`} style={footSubStyle()}>
+                          <span style={moneyStyle()}>
+                            {formatCurrency(
+                              Math.round(hubTotals.spokeSales.get(sp.id) ?? 0),
+                            )}
+                          </span>
+                        </td>
+                      ))}
+                    {showExtras && (
+                      <td style={footSubStyle()}>
+                        {hubTotals.extras > 0 ? (
+                          <span
+                            style={{
+                              ...moneyStyle(),
+                              color: 'var(--color-info)',
+                            }}
+                          >
+                            +{formatCurrency(Math.round(hubTotals.extrasSales))}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+                        )}
+                      </td>
+                    )}
+                    {showRowTotal && (
+                      <td style={footSubStyle({ totalCol: true })}>
+                        <span style={moneyStyle()}>
+                          {formatCurrency(Math.round(hubTotals.grandSales))}
+                        </span>
                       </td>
                     )}
                   </tr>
@@ -1561,13 +1701,19 @@ function RecipeRow({
   // column. Always 0 outside hub today (the column is hidden).
   const extrasUnits = showExtras ? getExtras(siteId, row.skuId, date) : 0;
 
-  // Total = whatever the plan resolved to + any hub-side extras. For run
-  // items `line.planned` already includes the variable additions; for
-  // variable / increment items it's the whole qty. Receive rows
-  // (HYBRID receiving from hub) skip the column.
+  // Team-food allocation — recipe-level "we're baking N more for
+  // staff lunch". Lifts the bake target (and the row total) the same
+  // way extras do, but stays out of every demand-aligned read so
+  // sales / forecast comparisons never count team food as sold.
+  const teamFoodUnits = line?.teamFoodPlanned ?? 0;
+
+  // Total = customer-facing plan + any hub-side extras + team food.
+  // For run items `line.planned` already includes the variable
+  // additions; for variable / increment items it's the whole qty.
+  // Receive rows (HYBRID receiving from hub) skip the column.
   const totalDisplay: string | number = isReceive
     ? '—'
-    : (line ? line.planned : 0) + extrasUnits;
+    : (line ? line.planned : 0) + extrasUnits + teamFoodUnits;
 
   return (
     <>
@@ -2016,10 +2162,11 @@ function RecipeRow({
                   <Inbox size={11} /> via hub
                 </span>
               )
-            ) : extrasUnits > 0 ? (
-              // Stacked total: the (now-inflated) row total on top, a
-              // muted breakdown line below so the manager can see at a
-              // glance how many of those units are the extras lane.
+            ) : extrasUnits > 0 || teamFoodUnits > 0 ? (
+              // Stacked total: the (now-inflated) row total on top, with
+              // muted breakdown chips below so the manager can see at a
+              // glance how many of those units are extras vs team food
+              // vs the customer-facing plan.
               <span
                 style={{
                   display: 'inline-flex',
@@ -2027,21 +2174,49 @@ function RecipeRow({
                   alignItems: 'flex-end',
                   lineHeight: 1.15,
                 }}
-                title={`${totalDisplay} total · ${line ? line.planned : 0} for spokes + ${extrasUnits} extra${extrasUnits === 1 ? '' : 's'}`}
+                title={[
+                  `${totalDisplay} total`,
+                  `${line ? line.planned : 0} for spokes`,
+                  extrasUnits > 0
+                    ? `${extrasUnits} extra${extrasUnits === 1 ? '' : 's'}`
+                    : null,
+                  teamFoodUnits > 0
+                    ? `${teamFoodUnits} team food (not sold)`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               >
                 <span style={{ ...numStyle(), fontWeight: 800 }}>
                   {totalDisplay}
                 </span>
-                <span
-                  style={{
-                    fontSize: 9,
-                    color: 'var(--color-info)',
-                    fontVariantNumeric: 'tabular-nums',
-                    fontWeight: 700,
-                  }}
-                >
-                  +{extrasUnits} extra
-                </span>
+                {extrasUnits > 0 && (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      color: 'var(--color-info)',
+                      fontVariantNumeric: 'tabular-nums',
+                      fontWeight: 700,
+                    }}
+                  >
+                    +{extrasUnits} extra
+                  </span>
+                )}
+                {teamFoodUnits > 0 && (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      color: 'var(--color-info)',
+                      fontVariantNumeric: 'tabular-nums',
+                      fontWeight: 700,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 2,
+                    }}
+                  >
+                    <UtensilsCrossed size={9} />+{teamFoodUnits} team
+                  </span>
+                )}
               </span>
             ) : (
               <span style={{ ...numStyle(), fontWeight: 800 }}>
@@ -3433,6 +3608,51 @@ function footStyle({
     fontFamily: 'var(--font-primary)',
     whiteSpace: 'nowrap',
     borderLeft: totalCol ? '1px solid var(--color-border-subtle)' : undefined,
+  };
+}
+
+// Sub-footer cell — the projected-revenue row that sits directly under
+// "Total to make". Same chassis as `footStyle` but without the heavy
+// top border (the unit row above already carries the divider) and a
+// lighter weight so the £ row reads as a complementary lens on the
+// units, not another bold totals band.
+function footSubStyle({
+  left,
+  sticky,
+  totalCol,
+}: {
+  left?: boolean;
+  sticky?: boolean;
+  totalCol?: boolean;
+} = {}): React.CSSProperties {
+  return {
+    padding: '10px 8px',
+    background: 'var(--color-bg-surface)',
+    borderTop: '1px solid var(--color-border-subtle)',
+    textAlign: left ? 'left' : 'center',
+    position: sticky ? 'sticky' : undefined,
+    left: sticky ? 0 : undefined,
+    zIndex: sticky ? 1 : undefined,
+    boxShadow: sticky ? '1px 0 0 var(--color-border-subtle)' : undefined,
+    fontSize: left ? 11 : 12,
+    fontWeight: left ? 700 : 600,
+    color: left ? 'var(--color-text-muted)' : 'var(--color-text-secondary)',
+    textTransform: left ? 'uppercase' : undefined,
+    letterSpacing: left ? '0.05em' : undefined,
+    fontFamily: 'var(--font-primary)',
+    whiteSpace: 'nowrap',
+    borderLeft: totalCol ? '1px solid var(--color-border-subtle)' : undefined,
+  };
+}
+
+// Currency cell content — same tabular-nums alignment as `numStyle`
+// but a touch lighter than the unit totals so the two footer rows
+// have a clear visual hierarchy (units = primary, £ = secondary).
+function moneyStyle(): React.CSSProperties {
+  return {
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 600,
+    color: 'var(--color-text-secondary)',
   };
 }
 

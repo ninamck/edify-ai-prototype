@@ -20,7 +20,7 @@ import {
  * so anything rendered outside the provider doesn't crash.
  *
  * The store is seeded from `PRET_SPOKE_REJECT_SEEDS` on first render so
- * the demo opens with one reject already on the loop (Clapham · 3
+ * the demo opens with one reject already on the loop (Fitzroy Espresso · 3
  * croissants damaged), exercising every downstream surface — hub waste,
  * dispatch acknowledge, and the next-drop roll-forward chip.
  *
@@ -159,7 +159,7 @@ export function useSpokeRejects(): SpokeRejectStore {
 /**
  * Live Quinn nudge derived from current reject state. Emitted as a single
  * nudge that summarises every unacknowledged reject targeting `hubId`,
- * with a body that names the spoke + the headline line ("Clapham · 3
+ * with a body that names the spoke + the headline line ("Fitzroy Espresso · 3
  * croissants damaged"). Disappears once the hub manager acknowledges
  * (and re-appears if a new reject comes in).
  */

@@ -2,7 +2,7 @@
  * Persona-themed labels for the production site selector.
  *
  * The fixture site graph (PRET_SITES) keeps its original Pret-style names
- * (London Central Hub, Clapham Junction, …) because lots of seeded data
+ * (London Central Hub, Fitzroy Espresso, …) because lots of seeded data
  * references those rows. The demo, however, presents everything under
  * the "Fitzroy" persona naming — so the user-facing site picker maps
  * fixture site IDs to friendlier persona labels.

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRightLeft, Check, ChevronRight, Clock, Download, Moon, PackagePlus, Repeat, Shuffle, User, UserMinus, Waves } from 'lucide-react';
+import { ArrowRightLeft, Check, ChevronRight, Clock, Download, Moon, PackagePlus, Repeat, Shuffle, User, UserMinus, UtensilsCrossed, Waves } from 'lucide-react';
 import {
   benchesAt,
   effectiveBatchRules,
@@ -146,6 +146,14 @@ type RowData = {
    * off-list demand vs spoke allocations.
    */
   extrasUnits: number;
+  /**
+   * Team-food (staff lunch) units folded into `totalQty` via
+   * `effectivePlanned`. Captioned separately on the row so the bench
+   * team understands "we're baking 24 because 4 of those are for
+   * team food, not for sale". Stays out of every sales-aligned read
+   * upstream — see PlanStore.PlanLine.teamFoodPlanned.
+   */
+  teamFoodUnits: number;
 };
 
 /**
@@ -302,6 +310,10 @@ export default function BenchCardBoard({
       const rows: RowData[] = benchLines.map(line => {
         const eff = effectiveBatchRules(line.recipe.batchRules, bench.batchRules);
         const extrasUnits = getExtras(site.id, line.recipe.skuId, date);
+        // `line.effectivePlanned` already has team food rolled in (see
+        // PlanStore.resolvePlan), so the bench bakes the union without
+        // any extra arithmetic here. We only pull `teamFoodPlanned`
+        // back out so the row caption can label "incl. N team food".
         const targetUnits = line.effectivePlanned + extrasUnits;
         const split = proposeBatchSplit(targetUnits, eff);
         const estMinutes = estimateMinutes(line, split.batches.length);
@@ -311,6 +323,7 @@ export default function BenchCardBoard({
           totalQty: split.batches.reduce((s, q) => s + q, 0),
           estMinutes,
           extrasUnits,
+          teamFoodUnits: line.teamFoodPlanned,
         };
       });
 
@@ -1148,8 +1161,9 @@ function RecipeRow({
   siteBenches: Bench[];
   onMoveLine?: (itemId: ProductionItemId, benchId: string) => void;
 }) {
-  const { line, totalQty, estMinutes, extrasUnits } = row;
+  const { line, totalQty, estMinutes, extrasUnits, teamFoodUnits } = row;
   const hasExtras = extrasUnits > 0;
+  const hasTeamFood = teamFoodUnits > 0;
 
   const tone =
     highlight === 'focus'      ? { bg: 'var(--color-bg-hover)',  accent: 'var(--color-accent-active)', opacity: 1 } :
@@ -1220,11 +1234,23 @@ function RecipeRow({
           lineHeight: 1.1,
         }}
         title={
-          hasExtras
-            ? `${totalQty} total · includes ${extrasUnits} off-list extra${extrasUnits === 1 ? '' : 's'} on top of spoke allocation${dispatchUnits > 0 ? ` (${dispatchUnits} for spoke dispatch)` : ''}`
-            : dispatchUnits > 0
-              ? `${totalQty} total · ${totalQty - dispatchUnits} for counter · ${dispatchUnits} for spoke dispatch`
-              : undefined
+          // Stitch the breakdown together from optional fragments so the
+          // tooltip reads naturally regardless of which lanes are in
+          // play (extras / team food / spoke dispatch — any combination).
+          [
+            `${totalQty} total`,
+            hasExtras
+              ? `incl. ${extrasUnits} off-list extra${extrasUnits === 1 ? '' : 's'}`
+              : null,
+            hasTeamFood
+              ? `incl. ${teamFoodUnits} team food (not sold)`
+              : null,
+            dispatchUnits > 0
+              ? `${dispatchUnits} for spoke dispatch`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')
         }
       >
         <span style={{ fontWeight: 700 }}>{totalQty}</span>
@@ -1242,6 +1268,27 @@ function RecipeRow({
           >
             <PackagePlus size={9} />
             +{extrasUnits} off-list
+          </span>
+        )}
+        {hasTeamFood && (
+          // Mirrors the "+N off-list" chip — same typography, same
+          // info-tone — but with a utensils icon and "team" label so
+          // the bench team distinguishes "this is for staff" from
+          // "this is for off-list customers" without having to mouse
+          // over the tooltip.
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 2,
+              fontSize: 9,
+              fontWeight: 700,
+              color: 'var(--color-info)',
+              marginTop: 1,
+            }}
+          >
+            <UtensilsCrossed size={9} />
+            incl. {teamFoodUnits} team food
           </span>
         )}
       </span>

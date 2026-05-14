@@ -109,6 +109,7 @@ function formatDuration(mins: number): string {
 }
 import { usePlan, type PlanLine } from './PlanStore';
 import WorkTypeChip from './WorkTypeChip';
+import StepperLauncher from './StepperLauncher';
 
 /**
  * Run sheet — pivots the day's planned work by `WorkType` instead of by
@@ -172,15 +173,26 @@ export default function RunSheetView({
 
   if (presentWorkTypes.length === 0) {
     return (
-      <div style={{ padding: 32, color: 'var(--color-text-muted)', fontSize: 13 }}>
-        Nothing planned for {date} yet — once a plan exists for this day it
-        will appear here grouped by stage.
+      <div style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <StepperLauncher siteId={siteId} date={date} variant="ghost" />
+        </div>
+        <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>
+          Nothing planned for {date} yet — once a plan exists for this day it
+          will appear here grouped by stage.
+        </div>
       </div>
     );
   }
 
   return (
     <div style={{ padding: '24px 32px 64px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* Run-sheet toolbar — single-action right now so the launcher
+          sits on its own row, aligned with the rest of the run sheet's
+          left margin. */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <StepperLauncher siteId={siteId} date={date} variant="ghost" />
+      </div>
       <DayShapeHeader
         sections={sections}
         presentWorkTypes={presentWorkTypes}

@@ -9,6 +9,7 @@ import {
   Package,
   Truck,
   Users,
+  UtensilsCrossed,
   X,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
@@ -21,15 +22,18 @@ import {
   recipeIngredientPrep,
   primaryBenchForItem,
   linkedReceiversFor,
-  submissionsForHub,
+  effectiveSubmissionsForHub,
   type IngredientShortfallSeed,
   type SiteId,
   type ProductionItemId,
   type Site,
 } from './fixtures';
 import { productionSiteLabel } from './productionSiteOptions';
-import { usePlan } from './PlanStore';
+import { usePlan, usePlanStore } from './PlanStore';
+import { useHubExtras } from './hubExtrasStore';
+import { useHubOverrides } from './hubOverrideStore';
 import StatusPill from './StatusPill';
+import QtyStepper from './QtyStepper';
 import {
   computeProRataCut,
   useIngredientShortfallStore,
@@ -216,10 +220,26 @@ export default function RecipeFocusPanel({
             gap: 18,
           }}
         >
-          {/* 0. Ingredient shortfall (HUB only) — sits at the top so the
-              manager sees the constraint before reading VP math. The
-              section auto-hides when there's no seeded shortfall, so the
-              drawer stays clean for unaffected recipes. */}
+          {/* 0. Team food — top-of-drawer editing affordance. Always
+              shown (even when zero) on make rows so the GM has a single,
+              discoverable place to dial staff lunch units up or down.
+              The section header says explicitly that these units are
+              additive to the bake but never counted as sold, so a manager
+              can't accidentally read them as a sales lift. */}
+          {item && line && recipe && (
+            <TeamFoodSection
+              line={line}
+              recipeName={recipe.name}
+              date={date}
+              siteId={siteId}
+              skuId={recipe.skuId}
+            />
+          )}
+
+          {/* 1. Ingredient shortfall (HUB only) — sits below team food so
+              the constraint reads as the next thing after the editing
+              affordance. Auto-hides when there's no seeded shortfall,
+              so the drawer stays clean for unaffected recipes. */}
           {site?.type === 'HUB' && recipe && (
             <IngredientShortfallSection
               hubId={siteId}
@@ -237,6 +257,7 @@ export default function RecipeFocusPanel({
               date={date}
               skuId={recipe.skuId}
               line={line}
+              isHub={site?.type === 'HUB'}
             />
           )}
 
@@ -265,16 +286,183 @@ export default function RecipeFocusPanel({
 
 // ─── Sections ──────────────────────────────────────────────────────────────────
 
+/**
+ * Top-of-drawer team-food editor. Replaces the inline mini-stepper that
+ * used to sit in the matrix's recipe-name cell — moving it into the
+ * drawer keeps the table dense (so the row is just "what's the plan")
+ * while giving the editing affordance more breathing room (a labelled
+ * stepper + an explicit "what does this number mean for sales?"
+ * subtitle, so the GM never has to guess whether bumping it inflates
+ * the sales-vs-forecast read).
+ *
+ * Stepper sizing: `default` (28px buttons) — bigger than the old
+ * compact mini-stepper, sized to match the drawer's other ledgers
+ * without dominating the section.
+ */
+function TeamFoodSection({
+  line,
+  recipeName,
+  date,
+  siteId,
+  skuId,
+}: {
+  line: ReturnType<typeof usePlan>[number];
+  recipeName: string;
+  date: string;
+  siteId: SiteId;
+  skuId: string;
+}) {
+  const { setTeamFoodPlan } = usePlanStore();
+  const { getExtras } = useHubExtras();
+  const value = line.teamFoodPlanned;
+  // Pull hub-side extras so the bake-target math here mirrors the
+  // matrix's row Total exactly: planned + extras + team food. On
+  // non-hub sites `getExtras` returns 0, so the term drops out
+  // gracefully.
+  const extras = getExtras(siteId, skuId, date);
+  const set = (next: number) => setTeamFoodPlan(line.item.id, next, date);
+  const inflated = value > 0;
+  return (
+    <section
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        padding: '12px 14px',
+        borderRadius: 10,
+        // Soft info-tint when team food is set, neutral surface when
+        // empty — same colour grammar as the row chip so the manager
+        // recognises the affordance as the same concept across surfaces.
+        background: inflated
+          ? 'var(--color-info-light)'
+          : 'var(--color-bg-surface)',
+        border: `1px solid ${inflated ? 'var(--color-info)' : 'var(--color-border-subtle)'}`,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            background: inflated ? 'var(--color-info)' : 'var(--color-bg-hover)',
+            color: inflated ? '#ffffff' : 'var(--color-text-secondary)',
+            flexShrink: 0,
+          }}
+        >
+          <UtensilsCrossed size={14} />
+        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
+          <h3
+            style={{
+              margin: 0,
+              fontSize: 13,
+              fontWeight: 700,
+              color: 'var(--color-text-primary)',
+              letterSpacing: '0.01em',
+            }}
+          >
+            Team food
+          </h3>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 11,
+              color: 'var(--color-text-muted)',
+              lineHeight: 1.45,
+            }}
+          >
+            Added to the bake target — never counted as sold.
+          </p>
+        </div>
+        <QtyStepper
+          size="default"
+          canDecrement={value > 0}
+          onDecrement={() => set(Math.max(0, value - 1))}
+          onIncrement={() => set(value + 1)}
+          decrementLabel="Decrease team food units"
+          incrementLabel="Increase team food units"
+        >
+          <input
+            type="number"
+            value={value}
+            onChange={e => {
+              const next = Number(e.target.value);
+              if (Number.isFinite(next)) set(Math.max(0, Math.round(next)));
+            }}
+            min={0}
+            step={1}
+            aria-label={`Team food units for ${recipeName}`}
+            style={{
+              width: 44,
+              border: 'none',
+              background: 'transparent',
+              fontSize: 14,
+              fontWeight: 700,
+              textAlign: 'center',
+              color: 'var(--color-text-primary)',
+              fontVariantNumeric: 'tabular-nums',
+              fontFamily: 'var(--font-primary)',
+              outline: 'none',
+              padding: 0,
+              MozAppearance: 'textfield',
+            }}
+          />
+        </QtyStepper>
+      </div>
+      {/* Math line — only renders once the GM has actually set team
+          food, so the empty state stays quiet. The breakdown mirrors
+          the matrix's row Total cell exactly (planned + extras + team
+          food) so the manager can cross-reference "the table says 24,
+          why?" against this section without doing arithmetic in their
+          head. The "+ N extra" fragment auto-hides when no hub extras
+          are stamped on this row. */}
+      {inflated && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            gap: 8,
+            fontSize: 11,
+            color: 'var(--color-text-secondary)',
+            paddingTop: 6,
+            borderTop: '1px dashed var(--color-info)',
+          }}
+        >
+          <span style={{ fontWeight: 600 }}>Bake target</span>
+          <span
+            style={{
+              marginLeft: 'auto',
+              fontVariantNumeric: 'tabular-nums',
+              fontWeight: 700,
+              color: 'var(--color-text-primary)',
+            }}
+          >
+            {line.planned} sellable
+            {extras > 0 ? ` + ${extras} extra` : ''}
+            {' '}+ {value} team food = {line.planned + extras + value}
+          </span>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function VPMathSection({
   siteId,
   date,
   skuId,
   line,
+  isHub,
 }: {
   siteId: SiteId;
   date: string;
   skuId: string;
   line: ReturnType<typeof usePlan>[number] | null;
+  isHub: boolean;
 }) {
   const forecast = forecastFor(siteId, skuId, date);
   const carryOver = carryOverFor(siteId, skuId);
@@ -284,6 +472,16 @@ function VPMathSection({
   const planned = line?.planned ?? quinnProposed;
   const variablePlanned = line?.variablePlanned ?? 0;
   const runPlanned = line?.runPlanned ?? 0;
+  // Hub-side overlays that lift the bake target above the sellable
+  // plan. Reading them straight from the same stores the matrix uses
+  // means the drawer's "Bake target" line is byte-for-byte the same
+  // number that the row's Total cell shows — no risk of the two
+  // surfaces drifting because of an off-by-one in either path.
+  const { getExtras } = useHubExtras();
+  const extras = isHub ? getExtras(siteId, skuId, date) : 0;
+  const teamFood = line?.teamFoodPlanned ?? 0;
+  const bakeTarget = planned + extras + teamFood;
+  const showBakeTarget = line != null && (extras > 0 || teamFood > 0);
 
   return (
     <Section icon={<Calculator size={14} />} title="Production math">
@@ -295,10 +493,10 @@ function VPMathSection({
           hint={carryOver?.reason}
         />
         <Divider />
-        <Ledger label="Edify proposes" value={quinnProposed} bold quinn />
+        <Ledger label="Edify proposes" value={quinnProposed} bold quinn total />
         {line && line.item.mode === 'run' && (
           <>
-            <Ledger label="Run baseline" value={runPlanned} muted />
+            <Ledger label="Run baseline" value={runPlanned} muted total />
             <Ledger
               label="Variable additions (VP)"
               value={variablePlanned}
@@ -309,7 +507,36 @@ function VPMathSection({
         {line && (
           <>
             <Divider />
-            <Ledger label="Final plan" value={planned} bold />
+            <Ledger
+              label={showBakeTarget ? 'Sellable plan' : 'Final plan'}
+              value={planned}
+              bold
+              total
+            />
+          </>
+        )}
+        {/* Bake-target reconciliation — only renders once an overlay
+            (extras or team food) has lifted the bake above the
+            sellable plan. The numbers and the order match the matrix's
+            row Total cell exactly: sellable + extras + team food. */}
+        {showBakeTarget && (
+          <>
+            {extras > 0 && (
+              <Ledger
+                label="Hub extras (off-list)"
+                value={extras}
+                hint="Off-list units added on top of every spoke's allocation. Folded into the bake but tracked separately."
+              />
+            )}
+            {teamFood > 0 && (
+              <Ledger
+                label="Team food (not sold)"
+                value={teamFood}
+                hint="Staff lunch units added to the bake target. Excluded from forecast accuracy and Total sales."
+              />
+            )}
+            <Divider />
+            <Ledger label="Bake target" value={bakeTarget} bold total />
           </>
         )}
         {forecast?.signals && forecast.signals.length > 0 && (
@@ -478,13 +705,32 @@ function PerSpokeSection({
   site: Site;
 }) {
   const spokes = useMemo(() => linkedReceiversFor(siteId), [siteId]);
-  const submissions = useMemo(() => submissionsForHub(siteId, date), [siteId, date]);
+  // Mirror the matrix's per-spoke read exactly:
+  //  1. Auto-finalise any spoke whose cutoff has passed without a real
+  //     submission — without this, spokes like Fitzroy Notting Hill or
+  //     Fitzroy Heathrow read as "0" in the drawer even though the
+  //     matrix shows their committed Quinn baseline.
+  //  2. Skip lingering drafts so the drawer doesn't drive bake numbers
+  //     off a half-edited order (drafts will display as "Pending" via
+  //     the falls-through-to-zero branch with the draft status pill).
+  //  3. Layer the hub manager's per-spoke overrides on top so anything
+  //     they've dialled in via Edit-mode reads here too.
+  // The combined effect: the per-spoke numbers in this drawer match
+  // the per-spoke columns in the matrix byte-for-byte.
+  const effective = useMemo(
+    () => effectiveSubmissionsForHub(siteId, date),
+    [siteId, date],
+  );
+  const { getOverride } = useHubOverrides();
 
   const rows = spokes.map(sp => {
-    const sub = submissions.find(s => s.fromSiteId === sp.id);
-    const ln = sub?.lines.find(l => l.skuId === skuId);
-    const qty = ln ? ln.confirmedUnits ?? ln.quinnProposedUnits : 0;
-    return { spoke: sp, qty, status: sub?.status };
+    const sub = effective.find(s => s.fromSiteId === sp.id);
+    const useSub = sub && sub.status !== 'draft' ? sub : undefined;
+    const ln = useSub?.lines.find(l => l.skuId === skuId);
+    const lineQty = ln ? ln.confirmedUnits ?? ln.quinnProposedUnits : 0;
+    const override = getOverride(siteId, sp.id, skuId, date);
+    const qty = override ?? lineQty;
+    return { spoke: sp, qty, status: sub?.status, overridden: override !== undefined };
   });
 
   const total = rows.reduce((a, r) => a + r.qty, 0);
@@ -608,6 +854,7 @@ function Ledger({
   bold = false,
   muted = false,
   quinn = false,
+  total = false,
 }: {
   label: string;
   value: number;
@@ -615,7 +862,25 @@ function Ledger({
   bold?: boolean;
   muted?: boolean;
   quinn?: boolean;
+  /**
+   * Render the value as a plain total (no leading `+`). Used for
+   * subtotal / final-target lines where the number stands on its own
+   * and should match the matrix's row Total cell formatting exactly,
+   * rather than reading as an additive ledger entry.
+   */
+  total?: boolean;
 }) {
+  // Default formatting reads as an additive ledger entry: "+5", "0",
+  // "-3". `total` switches to plain ("5") so subtotal lines like
+  // "Bake target" or "Final plan" align with the matrix's row total
+  // style (where 24 is just 24, never +24).
+  const display = total
+    ? String(value)
+    : value > 0
+      ? `+${value}`
+      : value === 0
+        ? '0'
+        : String(value);
   return (
     <div
       title={hint}
@@ -636,7 +901,7 @@ function Ledger({
           fontWeight: bold ? 700 : 500,
         }}
       >
-        {value > 0 ? `+${value}` : value === 0 ? '0' : value}
+        {display}
       </span>
     </div>
   );

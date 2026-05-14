@@ -73,6 +73,22 @@ type PerRunOverrides = Record<DatedKey, number[]>;
  * Day total = `runPlanned + variablePlanned`.
  */
 type VariableOverrides = Record<DatedKey, number>;
+/**
+ * Team-food (staff lunch) units bolted onto a recipe's daily plan. Lives
+ * in its own override map so it stays out of every demand-aligned read
+ * (forecasts, sales actuals, "Total sales") while still feeding the
+ * "produce this many" reads downstream — bench cards bake the union via
+ * `effectivePlanned`, the matrix footer sums it into "Total to make".
+ *
+ * Why a separate map (not folded into `variableOverrides`):
+ *  - Variable additions are sellable counter top-ups; team food is
+ *    consumed internally and must never count as sold. Mixing them
+ *    would force every downstream surface to know the difference.
+ *  - It lets us surface a row-level chip / caption ("incl. 4 team
+ *    food") so the bench team sees why the bake target sits above the
+ *    customer-facing plan.
+ */
+type TeamFoodOverrides = Record<DatedKey, number>;
 
 type SetPlannedFn = (itemId: ProductionItemId, qty: number, date: string) => void;
 type ResetFn = (itemId: ProductionItemId, date: string) => void;
@@ -87,12 +103,19 @@ type PlanStoreContextValue = {
   perRunOverrides: PerRunOverrides;
   /** Variable additions layered on top of Run-mode baselines. */
   variableOverrides: VariableOverrides;
+  /** Team-food (staff lunch) units layered on top of the customer-facing plan. */
+  teamFoodOverrides: TeamFoodOverrides;
   setPlanned: SetPlannedFn;
   setPerDropPlan: SetPerDropFn;
   /** Set the per-run plan for a run-mode item (replaces uniform split). */
   setPerRunPlan: SetPerDropFn;
   /** Set the variable add-on quantity for an item (does not touch the run baseline). */
   setVariablePlan: SetPlannedFn;
+  /**
+   * Set the team-food quantity for an item. Lifts the bake target without
+   * touching the customer-facing planned/forecast/sales numbers.
+   */
+  setTeamFoodPlan: SetPlannedFn;
   resetToQuinn: ResetFn;
   /** Reset overrides — pass a date to scope to that day, omit to clear everything. */
   resetAll: (date?: string) => void;
@@ -110,6 +133,7 @@ export function PlanStoreProvider({ children }: { children: React.ReactNode }) {
   const [perDropOverrides, setPerDropOverrides] = useState<PerDropOverrides>({});
   const [perRunOverrides, setPerRunOverrides] = useState<PerRunOverrides>({});
   const [variableOverrides, setVariableOverrides] = useState<VariableOverrides>({});
+  const [teamFoodOverrides, setTeamFoodOverrides] = useState<TeamFoodOverrides>({});
 
   const setPlanned: SetPlannedFn = useCallback((itemId, qty, date) => {
     const k = keyFor(date, itemId);
@@ -153,6 +177,23 @@ export function PlanStoreProvider({ children }: { children: React.ReactNode }) {
     setVariableOverrides(prev => ({ ...prev, [k]: Math.max(0, Math.round(qty)) }));
   }, []);
 
+  const setTeamFoodPlan: SetPlannedFn = useCallback((itemId, qty, date) => {
+    const k = keyFor(date, itemId);
+    const cleaned = Math.max(0, Math.round(qty));
+    setTeamFoodOverrides(prev => {
+      // Drop the key entirely when the manager dials back to zero so the
+      // override map stays a clean "what's been touched" signal — same
+      // shape the other override setters maintain on reset.
+      if (cleaned === 0) {
+        if (!(k in prev)) return prev;
+        const next = { ...prev };
+        delete next[k];
+        return next;
+      }
+      return { ...prev, [k]: cleaned };
+    });
+  }, []);
+
   const resetToQuinn: ResetFn = useCallback((itemId, date) => {
     const k = keyFor(date, itemId);
     setOverrides(prev => {
@@ -179,6 +220,12 @@ export function PlanStoreProvider({ children }: { children: React.ReactNode }) {
       delete next[k];
       return next;
     });
+    setTeamFoodOverrides(prev => {
+      if (!(k in prev)) return prev;
+      const next = { ...prev };
+      delete next[k];
+      return next;
+    });
   }, []);
 
   const resetAll = useCallback((date?: string) => {
@@ -187,6 +234,7 @@ export function PlanStoreProvider({ children }: { children: React.ReactNode }) {
       setPerDropOverrides({});
       setPerRunOverrides({});
       setVariableOverrides({});
+      setTeamFoodOverrides({});
       return;
     }
     const dropForDate = <T,>(map: Record<DatedKey, T>) => {
@@ -200,6 +248,7 @@ export function PlanStoreProvider({ children }: { children: React.ReactNode }) {
     setPerDropOverrides(prev => dropForDate(prev));
     setPerRunOverrides(prev => dropForDate(prev));
     setVariableOverrides(prev => dropForDate(prev));
+    setTeamFoodOverrides(prev => dropForDate(prev));
   }, []);
 
   const overrideCount = useCallback(
@@ -211,9 +260,10 @@ export function PlanStoreProvider({ children }: { children: React.ReactNode }) {
         ...collect(perDropOverrides),
         ...collect(perRunOverrides),
         ...collect(variableOverrides),
+        ...collect(teamFoodOverrides),
       ]).size;
     },
-    [overrides, perDropOverrides, perRunOverrides, variableOverrides],
+    [overrides, perDropOverrides, perRunOverrides, variableOverrides, teamFoodOverrides],
   );
 
   const value = useMemo<PlanStoreContextValue>(
@@ -222,15 +272,17 @@ export function PlanStoreProvider({ children }: { children: React.ReactNode }) {
       perDropOverrides,
       perRunOverrides,
       variableOverrides,
+      teamFoodOverrides,
       setPlanned,
       setPerDropPlan,
       setPerRunPlan,
       setVariablePlan,
+      setTeamFoodPlan,
       resetToQuinn,
       resetAll,
       overrideCount,
     }),
-    [overrides, perDropOverrides, perRunOverrides, variableOverrides, setPlanned, setPerDropPlan, setPerRunPlan, setVariablePlan, resetToQuinn, resetAll, overrideCount],
+    [overrides, perDropOverrides, perRunOverrides, variableOverrides, teamFoodOverrides, setPlanned, setPerDropPlan, setPerRunPlan, setVariablePlan, setTeamFoodPlan, resetToQuinn, resetAll, overrideCount],
   );
 
   return <PlanStoreContext.Provider value={value}>{children}</PlanStoreContext.Provider>;
@@ -245,10 +297,12 @@ export function usePlanStore(): PlanStoreContextValue {
       perDropOverrides: {},
       perRunOverrides: {},
       variableOverrides: {},
+      teamFoodOverrides: {},
       setPlanned: () => {},
       setPerDropPlan: () => {},
       setPerRunPlan: () => {},
       setVariablePlan: () => {},
+      setTeamFoodPlan: () => {},
       resetToQuinn: () => {},
       resetAll: () => {},
       overrideCount: () => 0,
@@ -287,12 +341,26 @@ export type AssemblyDemand = {
  *  - `effectivePlanned` — how much will actually be produced (max of own plan + assemblyDemand)
  */
 export type PlanLine = AmountsLine & {
-  /** Day total = `runPlanned + variablePlanned` (or per-drop sum for segment). */
+  /**
+   * Customer-facing day total = `runPlanned + variablePlanned` (or per-drop
+   * sum for segment items). Team food is intentionally NOT folded in here
+   * — `planned` is the demand-aligned number used by sales/forecast reads
+   * and the matrix's "Total sales" lens. The actual bake target is
+   * `effectivePlanned` below, which adds team food + assembly demand on
+   * top.
+   */
   planned: number;
   /** The Run-mode baseline portion (or the only portion for non-Run items). */
   runPlanned: number;
   /** Variable additions layered on top of the run baseline. */
   variablePlanned: number;
+  /**
+   * Team-food (staff lunch) units bolted onto the bake target. Excluded
+   * from `planned` so sales / forecast comparisons stay honest, and
+   * surfaced separately so the bench card can caption "(incl. N team
+   * food)" on each row.
+   */
+  teamFoodPlanned: number;
   isOverridden: boolean;
   assemblyDemand: AssemblyDemand;
   effectivePlanned: number;
@@ -332,6 +400,7 @@ export function resolvePlan(
   perDropOverrides: PerDropOverrides = {},
   variableOverrides: VariableOverrides = {},
   perRunOverrides: PerRunOverrides = {},
+  teamFoodOverrides: TeamFoodOverrides = {},
 ): PlanLine[] {
   const baseLines = amountsForSiteOnDate(siteId, date);
   const nowMins = hhmmToMinutes(DEMO_NOW_HHMM);
@@ -423,11 +492,13 @@ export function resolvePlan(
     const planned = directPlan.get(line.item.id) ?? line.quinnProposed;
     const runPlanned = runPlan.get(line.item.id) ?? line.quinnProposed;
     const variablePlanned = variablePlan.get(line.item.id) ?? 0;
+    const teamFoodPlanned = Math.max(0, teamFoodOverrides[k] ?? 0);
     const perDropStored = perDropOverrides[k];
     const isOverridden =
       overrides[k] !== undefined ||
       (perDropStored !== undefined && perDropStored.length > 0) ||
-      (variableOverrides[k] ?? 0) > 0;
+      (variableOverrides[k] ?? 0) > 0 ||
+      teamFoodPlanned > 0;
     const assemblyDemand: AssemblyDemand =
       demandByComponent.get(line.item.id) ?? { totalUnits: 0, sources: [] };
 
@@ -452,10 +523,16 @@ export function resolvePlan(
         }
       }
     }
-    // Effective production = max of direct plan and inbound assembly demand.
-    // If the Manager intentionally plans more than assemblies need, we honour it.
-    // If they plan less, the floor becomes the assembly demand (and we surface a shortfall).
-    const effectivePlanned = Math.max(planned, assemblyDemand.totalUnits);
+    // Effective production = max of direct plan and inbound assembly demand,
+    // plus any team-food allocation. Team food sits on top because it's
+    // an additive bake (the floor literally bakes those extra units for
+    // staff lunch) and is independent of customer-facing demand — taking
+    // the max with assembly demand would let team food vanish whenever
+    // assembly demand happened to dominate the customer plan, which is
+    // wrong. Adding keeps the bake target = "what customers will buy" +
+    // "what the team eats".
+    const effectivePlanned =
+      Math.max(planned, assemblyDemand.totalUnits) + teamFoodPlanned;
 
     // For segment items, expose a per-drop array. If the Manager has set a
     // per-drop plan, use it (after normalising length to dropsCount); else
@@ -534,6 +611,7 @@ export function resolvePlan(
       planned,
       runPlanned,
       variablePlanned,
+      teamFoodPlanned,
       isOverridden,
       assemblyDemand,
       effectivePlanned,
@@ -547,10 +625,10 @@ export function resolvePlan(
 
 /** Convenience hook that resolves the plan for a site/date using current overrides. */
 export function usePlan(siteId: SiteId, date: string): PlanLine[] {
-  const { overrides, perDropOverrides, perRunOverrides, variableOverrides } = usePlanStore();
+  const { overrides, perDropOverrides, perRunOverrides, variableOverrides, teamFoodOverrides } = usePlanStore();
   return useMemo(
-    () => resolvePlan(siteId, date, overrides, perDropOverrides, variableOverrides, perRunOverrides),
-    [siteId, date, overrides, perDropOverrides, perRunOverrides, variableOverrides],
+    () => resolvePlan(siteId, date, overrides, perDropOverrides, variableOverrides, perRunOverrides, teamFoodOverrides),
+    [siteId, date, overrides, perDropOverrides, perRunOverrides, variableOverrides, teamFoodOverrides],
   );
 }
 
@@ -594,8 +672,17 @@ export function deriveBoardPlan(
   perDropOverrides: PerDropOverrides = {},
   variableOverrides: VariableOverrides = {},
   perRunOverrides: PerRunOverrides = {},
+  teamFoodOverrides: TeamFoodOverrides = {},
 ): ProductionPlan {
-  const lines = resolvePlan(siteId, date, overrides, perDropOverrides, variableOverrides, perRunOverrides);
+  const lines = resolvePlan(
+    siteId,
+    date,
+    overrides,
+    perDropOverrides,
+    variableOverrides,
+    perRunOverrides,
+    teamFoodOverrides,
+  );
 
   // Start from the authored fixture plan — only when we're on the same site.
   // The hand-authored `PRET_PLAN` covers `hub-central`. For every other
@@ -804,10 +891,10 @@ export function deriveBoardPlan(
 
 /** Hook form — live-derived board plan reacting to Manager overrides. */
 export function useBoardPlan(siteId: SiteId, date: string): ProductionPlan {
-  const { overrides, perDropOverrides, perRunOverrides, variableOverrides } = usePlanStore();
+  const { overrides, perDropOverrides, perRunOverrides, variableOverrides, teamFoodOverrides } = usePlanStore();
   return useMemo(
-    () => deriveBoardPlan(siteId, date, overrides, perDropOverrides, variableOverrides, perRunOverrides),
-    [siteId, date, overrides, perDropOverrides, perRunOverrides, variableOverrides],
+    () => deriveBoardPlan(siteId, date, overrides, perDropOverrides, variableOverrides, perRunOverrides, teamFoodOverrides),
+    [siteId, date, overrides, perDropOverrides, perRunOverrides, variableOverrides, teamFoodOverrides],
   );
 }
 

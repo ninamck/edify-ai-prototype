@@ -1091,7 +1091,7 @@ function DispatchRecipeRow({
   const { approvedUnitsFor } = useAdhocRequests();
   // PAC142 — the inflated row total includes any unrolled rejects so the
   // header summary stays truthful ("3 spokes · 84 units" includes the +3
-  // croissants going back out for Clapham).
+  // croissants going back out for Fitzroy Espresso).
   const rejectUnitsBySpoke = submissions.map(sub =>
     unrolledUnitsFor(hubId, sub.fromSiteId, row.skuId),
   );

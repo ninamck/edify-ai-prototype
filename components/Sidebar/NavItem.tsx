@@ -17,6 +17,30 @@ interface NavItemProps {
   onClick?: () => void;
 }
 
+/** Two-digit notification badges crowd the icon and break the pill
+ *  shape, so we cap anything in the double digits at "9+". 1–9 still
+ *  render as-is. The "+" sits smaller and slightly raised so it reads
+ *  as a superscript without making the pill any wider. */
+function BadgeNumber({ value }: { value: number }) {
+  if (value <= 9) return <>{value}</>;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'baseline' }}>
+      9
+      <span
+        style={{
+          fontSize: '0.66em',
+          lineHeight: 1,
+          marginLeft: 1,
+          transform: 'translateY(-0.45em)',
+          display: 'inline-block',
+        }}
+      >
+        +
+      </span>
+    </span>
+  );
+}
+
 export default function NavItem({
   label,
   icon: Icon,
@@ -105,7 +129,7 @@ export default function NavItem({
                 fontFamily: 'var(--font-primary)',
               }}
             >
-              {badge}
+              <BadgeNumber value={badge} />
             </span>
           )}
           {compact && dot && !badge && (
@@ -142,7 +166,7 @@ export default function NavItem({
               lineHeight: 1,
             }}
           >
-            {badge}
+            <BadgeNumber value={badge} />
           </span>
         )}
 

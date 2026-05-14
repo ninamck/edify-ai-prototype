@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   Combine,
   Search,
+  Sparkles,
   X,
   Lock,
   Truck,
@@ -26,6 +27,7 @@ import {
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { getStepperButtonStyle } from './QtyStepper';
 import { StaffLockBanner } from './RoleContext';
+import StepperLauncher from './StepperLauncher';
 import { usePlan, usePlanStore, FILLING_TRAY_GRAMS, DEMO_NOW_HHMM, type PlanLine, type FocusReason, type AssemblyDemand } from './PlanStore';
 import { daySummary } from './salesReport';
 import PlanFocusPanel from './PlanFocusPanel';
@@ -34,6 +36,7 @@ import {
   proposeBatchSplit,
   DEMO_TODAY,
   getRecipe,
+  getSite,
   recipeWorkTypes,
   type SiteId,
   type ProductionRecipe,
@@ -368,6 +371,16 @@ export default function AmountsView({
 
   const dateOverrideCount = overrideCount(date);
   const isPastDay = date < DEMO_TODAY;
+  // PAC — "Apply forecast to plan" CTA for self-managed sites that author
+  // their own bake plan on this surface. Hubs already have a dispatch
+  // matrix + Quinn proposal flow; spokes don't land here. Hybrids that
+  // bake some of their own production and self-baking standalones (e.g.
+  // Fitzroy Islington) get an explicit one-tap action to re-baseline
+  // the plan against Edify's forecast-derived proposal — even when no
+  // overrides exist yet, so they can pull the forecast in proactively.
+  const planSite = getSite(siteId);
+  const showApplyForecast =
+    !!planSite && (planSite.type === 'HYBRID' || planSite.type === 'STANDALONE');
   // Default past-day banner. Hosts can override by passing their own
   // `topBanner` (e.g. the Plan page surfaces a styled "Showing past plan"
   // banner with extra context).
@@ -475,6 +488,13 @@ export default function AmountsView({
           })}
         </div>
         <div style={{ flex: 1 }} />
+        {/* Open stepper — one-recipe-at-a-time walk-through for a
+            specific bench + run. Only surfaces on the Today / Run
+            production view; Plan is the drafting surface and never
+            shows it. */}
+        {surface !== 'plan' && (
+          <StepperLauncher siteId={siteId} date={date} variant="ghost" />
+        )}
         {liveSales && <LiveSalesTile liveSales={liveSales} isToday={isToday} nowHHMM={DEMO_NOW_HHMM} />}
         {totals.shortfalls > 0 && (
           <button
@@ -521,6 +541,29 @@ export default function AmountsView({
             }}
           >
             <RotateCcw size={12} /> Reset {dateOverrideCount} to Edify
+          </button>
+        )}
+        {showApplyForecast && editable && (
+          <button
+            type="button"
+            onClick={() => resetAll(date)}
+            title="Pull Edify's forecast-derived recommendation into the plan for this day"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '10px 14px',
+              borderRadius: 8,
+              fontSize: 11,
+              fontWeight: 700,
+              fontFamily: 'var(--font-primary)',
+              background: '#ffffff',
+              color: 'var(--color-accent-active)',
+              border: '1px solid var(--color-accent-active)',
+              cursor: 'pointer',
+            }}
+          >
+            <Sparkles size={12} /> Apply forecast to plan
           </button>
         )}
         {/* End / Reopen production lives in the production nav, not

@@ -68,7 +68,7 @@ type DaySummary = {
 };
 
 export default function PlanStrip({ site, anchorDate = DEMO_TODAY }: Props) {
-  const { overrides, perDropOverrides, perRunOverrides, variableOverrides } = usePlanStore();
+  const { overrides, perDropOverrides, perRunOverrides, variableOverrides, teamFoodOverrides } = usePlanStore();
 
   // ─── 5-day window ──────────────────────────────────────────────────────────
   const days: DayMeta[] = useMemo(() => {
@@ -102,10 +102,11 @@ export default function PlanStrip({ site, anchorDate = DEMO_TODAY }: Props) {
         perDropOverrides,
         variableOverrides,
         perRunOverrides,
+        teamFoodOverrides,
       );
     }
     return out;
-  }, [site.id, days, overrides, perDropOverrides, variableOverrides, perRunOverrides]);
+  }, [site.id, days, overrides, perDropOverrides, variableOverrides, perRunOverrides, teamFoodOverrides]);
 
   // ─── Per-day stats for the 5-day outlook strip ─────────────────────────────
   const daySummaries = useMemo(() => {

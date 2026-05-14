@@ -13,6 +13,7 @@ import {
   RotateCcw,
   Search,
   Send,
+  Sparkles,
   Unlock,
   X,
 } from 'lucide-react';
@@ -997,6 +998,37 @@ export default function SpokeSubmissionsPage() {
                 }}
               >
                 <RotateCcw size={11} /> Reset to Edify
+              </button>
+            )}
+            {/* Apply forecast to plan — surfaced for HYBRID + STANDALONE
+                sites so the manager can pull Edify's forecast-derived
+                proposal into the order in one tap, even before any
+                edits exist. The action itself is identical to "Reset
+                to Edify"; framing flips from reactive (revert overrides)
+                to proactive (apply the forecast as the order). */}
+            {(spoke?.type === 'HYBRID' || spoke?.type === 'STANDALONE') && (
+              <button
+                type="button"
+                onClick={resetToQuinn}
+                disabled={locked}
+                title="Pull Edify's forecast-derived recommendation into the order for this day"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-primary)',
+                  background: '#ffffff',
+                  border: '1px solid var(--color-accent-active)',
+                  color: 'var(--color-accent-active)',
+                  cursor: locked ? 'not-allowed' : 'pointer',
+                  opacity: locked ? 0.5 : 1,
+                }}
+              >
+                <Sparkles size={11} /> Apply forecast to plan
               </button>
             )}
           </div>

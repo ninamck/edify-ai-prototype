@@ -27,7 +27,7 @@ import {
  *   hub markDispatched(transferId) → 'dispatched'
  *
  * The seeded record opens the demo with one critical incident already on
- * the hub's plate (Clapham · temperature breach on yesterday's drop), so
+ * the hub's plate (Fitzroy Espresso · temperature breach on yesterday's drop), so
  * the hub-side banner appears the moment the page loads.
  */
 

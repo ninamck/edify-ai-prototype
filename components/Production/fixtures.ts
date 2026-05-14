@@ -426,7 +426,7 @@ export const PRET_SITES: Site[] = [
     id: 'site-spoke-south',
     estateId: 'estate-pret',
     formatId: 'format-corner',
-    name: 'Clapham Junction',
+    name: 'Fitzroy Espresso',
     type: 'SPOKE',
     openingHours: { open: '06:00', close: '22:00' },
     hubId: 'hub-central',
@@ -3679,6 +3679,58 @@ export function autoFinaliseSubmissionFor(
 }
 
 /**
+ * Hub-side view of the day's spoke submissions — the same merge that
+ * the matrix's per-spoke columns build, exposed as a shared helper so
+ * other surfaces (drawer per-spoke breakdown, dispatch sheets, exports)
+ * can read identical numbers without re-implementing the auto-finalise
+ * cascade.
+ *
+ * Layers, in order:
+ *   1. Real seeded submissions for `(hubId, forDate)`.
+ *   2. For every linked receiver whose cutoff has already passed AND
+ *      whose existing submission is missing or still a draft, synthesise
+ *      an auto-finalised submission carrying Quinn's baseline numbers
+ *      (PAC138 — "the system commits the baseline on the spoke's
+ *      behalf so the hub has numbers to bake against").
+ *
+ * Drafts that are still inside the cutoff window are returned as-is —
+ * callers decide whether to skip them (e.g. don't drive bake numbers
+ * off a draft) or surface them (e.g. show "Pending" in a column).
+ *
+ * Cutoff state is read against `Date.now()` so the auto-finalise flip
+ * is purely time-driven; no fixture edits required.
+ */
+export function effectiveSubmissionsForHub(
+  hubId: SiteId,
+  forDate: string,
+): SpokeSubmission[] {
+  const real = submissionsForHub(hubId, forDate);
+  const byFromSite = new Map<SiteId, SpokeSubmission>();
+  for (const sub of real) byFromSite.set(sub.fromSiteId, sub);
+
+  const out: SpokeSubmission[] = [...real];
+  const receivers = linkedReceiversFor(hubId);
+  const cutoffPassed = new Date(submissionCutoffFor(hubId, forDate)).getTime() < Date.now();
+  if (!cutoffPassed) return out;
+
+  for (const receiver of receivers) {
+    const existing = byFromSite.get(receiver.id);
+    const needsAuto = !existing || existing.status === 'draft';
+    if (!needsAuto) continue;
+    const synthesised = autoFinaliseSubmissionFor(receiver.id, hubId, forDate);
+    if (existing) {
+      const idx = out.findIndex(s => s.id === existing.id);
+      if (idx !== -1) out.splice(idx, 1, synthesised);
+      else out.push(synthesised);
+    } else {
+      out.push(synthesised);
+    }
+    byFromSite.set(receiver.id, synthesised);
+  }
+  return out;
+}
+
+/**
  * All sites that pull from the given hub — regular SPOKEs and STANDALONEs
  * with `linkType: 'linked'` (PAC139 dark-kitchen pattern). HYBRIDs are
  * included too since they also receive partial production. Used by the
@@ -4278,7 +4330,7 @@ export type SpokeReject = {
 
 /**
  * One seeded reject so the demo opens with the loop populated:
- * Clapham received yesterday's drop, 3 of the 18 croissants arrived
+ * Fitzroy Espresso received yesterday's drop, 3 of the 18 croissants arrived
  * damaged. The hub side surfaces it on dispatch; tomorrow's drop will
  * show "+3 (rejects from Thu)" until rolled.
  */
@@ -4386,7 +4438,7 @@ export type AdhocRequest = {
 
 /**
  * One pending request so the demo opens with the loop populated:
- * Clapham Junction had a busy lunch and needs another 6 croissants +
+ * Fitzroy Espresso had a busy lunch and needs another 6 croissants +
  * 4 egg-mayo sandwiches for tomorrow's drop. Hub sees it on dispatch.
  */
 export const PRET_ADHOC_REQUEST_SEEDS: AdhocRequest[] = [
@@ -4520,7 +4572,7 @@ export type RemakeRequest = {
 
 /**
  * One pending remake to demo the critical-incident loop:
- * Clapham Junction received yesterday's drop and the cold-chain logger
+ * Fitzroy Espresso received yesterday's drop and the cold-chain logger
  * showed the load held at 8.5°C for 47 minutes (vehicle compressor
  * failure). The whole shipment is unsafe and a full remake is needed.
  */
@@ -4810,7 +4862,7 @@ export const PRET_USERS: User[] = [
   { id: 'user-staff-central-2', name: 'Sara — Staff, London Central',   role: 'Staff',   siteId: 'hub-central' },
   { id: 'user-staff-central-3', name: 'Marco — Staff, London Central',  role: 'Staff',   siteId: 'hub-central' },
   { id: 'user-staff-central-4', name: 'Ade — Staff, London Central',    role: 'Staff',   siteId: 'hub-central' },
-  { id: 'user-manager-south',   name: 'Nia — Manager, Clapham Junction', role: 'Manager', siteId: 'site-spoke-south' },
+  { id: 'user-manager-south',   name: 'Nia — Manager, Fitzroy Espresso', role: 'Manager', siteId: 'site-spoke-south' },
   { id: 'user-manager-north',   name: 'Jules — Manager, Islington North', role: 'Manager', siteId: 'site-standalone-north' },
   { id: 'user-staff-airport',   name: 'Rae — Staff, Heathrow T5',        role: 'Staff',   siteId: 'site-hybrid-airport' },
 ];

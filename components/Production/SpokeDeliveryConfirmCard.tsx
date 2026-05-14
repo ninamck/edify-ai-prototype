@@ -447,6 +447,86 @@ function ReviewScreen({
         </button>
       </div>
 
+      {/* Action bar — status + Cancel + Confirm delivery. Sits at the top
+          of the table (above bulk reason + lines) so the primary CTA is
+          always visible without scrolling through long line lists. */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '12px 14px',
+          borderBottom: '1px solid var(--color-border-subtle)',
+          background: 'var(--color-bg-surface)',
+          flexWrap: 'wrap',
+        }}
+      >
+        <span
+          style={{
+            fontSize: 11.5,
+            fontWeight: 600,
+            color: 'var(--color-text-secondary)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            flexWrap: 'wrap',
+          }}
+        >
+          {flaggedCount === 0 ? (
+            <>
+              <CheckCircle2 size={12} color="var(--color-success)" />
+              All {totalUnits} units received as expected
+            </>
+          ) : (
+            <>
+              <AlertTriangle size={12} color="var(--color-warning)" />
+              {receivedUnits} received · {totalRejected} reject{totalRejected === 1 ? '' : 's'} across{' '}
+              {flaggedCount} line{flaggedCount === 1 ? '' : 's'}
+            </>
+          )}
+        </span>
+        <div style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8 }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: '1px solid var(--color-border)',
+              background: '#ffffff',
+              color: 'var(--color-text-secondary)',
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'var(--font-primary)',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            style={{
+              padding: '8px 14px',
+              borderRadius: 8,
+              border: '1px solid var(--color-accent-active)',
+              background: 'var(--color-accent-active)',
+              color: 'var(--color-text-on-active)',
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: 'var(--font-primary)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <Check size={12} />
+            Confirm delivery
+          </button>
+        </div>
+      </div>
+
       {/* Bulk reason — only relevant once at least one issue is flagged. */}
       {flaggedCount > 0 && (
         <div
@@ -675,84 +755,6 @@ function ReviewScreen({
             </div>
           );
         })}
-      </div>
-
-      {/* Footer */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '12px 14px',
-          borderTop: '1px solid var(--color-border-subtle)',
-          background: 'var(--color-bg-surface)',
-          flexWrap: 'wrap',
-        }}
-      >
-        <span
-          style={{
-            fontSize: 11.5,
-            fontWeight: 600,
-            color: 'var(--color-text-secondary)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            flexWrap: 'wrap',
-          }}
-        >
-          {flaggedCount === 0 ? (
-            <>
-              <CheckCircle2 size={12} color="var(--color-success)" />
-              All {totalUnits} units received as expected
-            </>
-          ) : (
-            <>
-              <AlertTriangle size={12} color="var(--color-warning)" />
-              {receivedUnits} received · {totalRejected} reject{totalRejected === 1 ? '' : 's'} across{' '}
-              {flaggedCount} line{flaggedCount === 1 ? '' : 's'}
-            </>
-          )}
-        </span>
-        <div style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8 }}>
-          <button
-            type="button"
-            onClick={onCancel}
-            style={{
-              padding: '8px 12px',
-              borderRadius: 8,
-              border: '1px solid var(--color-border)',
-              background: '#ffffff',
-              color: 'var(--color-text-secondary)',
-              fontSize: 11,
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontFamily: 'var(--font-primary)',
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            style={{
-              padding: '8px 14px',
-              borderRadius: 8,
-              border: '1px solid var(--color-accent-active)',
-              background: 'var(--color-accent-active)',
-              color: 'var(--color-text-on-active)',
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: 'pointer',
-              fontFamily: 'var(--font-primary)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            <Check size={12} />
-            Confirm delivery
-          </button>
-        </div>
       </div>
     </div>
   );
