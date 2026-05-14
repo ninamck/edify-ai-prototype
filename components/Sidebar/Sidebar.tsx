@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   Home,
@@ -30,6 +30,8 @@ import { useApprovals } from '@/components/Approvals/approvalsStore';
 import { needsReviewCount } from '@/components/Invoicing/mockData';
 import { useDemoVersion } from '@/components/DemoControls/demoStore';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+import { ESTATE_SITES } from '@/components/Stock/fixtures';
+import { getStockStatus } from '@/components/Stock/status';
 
 export default function Sidebar() {
   const router = useRouter();
@@ -94,7 +96,25 @@ export default function Sidebar() {
   // don't dispatch (the hub does), don't match invoices or own credit
   // notes (estate-level), and don't see analytics / compare-sites
   // (estate-level performance views).
-  const { isSpoke, isHub } = useActiveSite();
+  const { isSpoke, isHub, isAllSites, activeSiteId } = useActiveSite();
+
+  // Badge on "Manage stock" — mirrors the AttentionTrigger pill on
+  // /stock so the operator sees the same "this many items need a
+  // decision" number from any page in the app. Site persona uses the
+  // matching ESTATE_SITES snapshot; All-sites aggregates across the
+  // estate. Computed from the seed fixture only (no live overrides),
+  // which is fine for the prototype — operators rarely edit values
+  // hard enough to flip an item across the healthy threshold mid-
+  // session, and any drift resolves on next mount.
+  const stockAttentionCount = useMemo(() => {
+    const tally = (items: { id: string }[]) =>
+      items.reduce((n, item) => n + (getStockStatus(item as Parameters<typeof getStockStatus>[0]) !== 'healthy' ? 1 : 0), 0);
+    if (isAllSites) {
+      return ESTATE_SITES.reduce((n, site) => n + tally(site.items), 0);
+    }
+    const site = ESTATE_SITES.find(s => s.siteId === activeSiteId);
+    return site ? tally(site.items) : 0;
+  }, [isAllSites, activeSiteId]);
 
   return (
     <aside
@@ -216,7 +236,7 @@ export default function Sidebar() {
               Stocktake history. Previously split across two sidebar items
               ("Monitor stock" + "Count stock") — folded into one so the
               operator doesn't route-hop between monitoring and counting. */}
-          <NavItem label="Manage stock" icon={Box} compact={compact} active={is('/stock')} onClick={() => router.push('/stock')} />
+          <NavItem label="Manage stock" icon={Box} compact={compact} badge={stockAttentionCount || undefined} active={is('/stock')} onClick={() => router.push('/stock')} />
           {!isSpoke && (
             <NavItem label="Match invoices" icon={FileCheck} compact={compact} badge={invoiceReviewCount || undefined} active={is('/invoices')} onClick={() => router.push('/invoices')} />
           )}

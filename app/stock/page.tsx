@@ -1,8 +1,11 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
-import { AlertCircle } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { X } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import HealthStrip from '@/components/Stock/HealthStrip';
 import AttentionList from '@/components/Stock/AttentionList';
@@ -41,13 +44,17 @@ import {
 //   • All sites    → [Estate] · [Stocktake] (estate-wide read-only history)
 //   • Any one site → [Stocktake] · [Live stock levels]
 //
+// Stocktake is the default landing surface for a site persona — it's
+// the workflow operators actively use day-to-day; "Live stock levels"
+// sits next to it as the comprehensive ledger reference.
+//
 // "Needs attention" no longer lives as its own tab — it's an always-
 // visible notification pill on the right of the nav strip
-// (`AttentionTrigger` below) that opens an inline popover listing the
-// flagged items. Modelled on the Quinn header trigger in Production:
-// the count is always on screen regardless of which tab you're on, so
-// the operator never has to leave their current surface to see what
-// needs a decision.
+// (`AttentionTrigger` below) that opens a right-anchored drawer
+// listing the flagged items. Modelled on the Quinn header trigger in
+// Production: the count is always on screen regardless of which tab
+// you're on, so the operator never has to leave their current surface
+// to see what needs a decision.
 //
 // The Stocktake tab has two internal modes: a list (open + completed
 // records, controlled by `activeStocktakeId === null`) and the count
@@ -102,9 +109,11 @@ function StockPageInner() {
     if (isAllSites) return 'estate';
     const tab = searchParams.get('tab');
     if (tab && SITE_VIEWS.has(tab as View)) return tab as View;
-    // 'all' (Live stock levels) is the default site-level surface now
-    // that 'attention' has been promoted to a header-level popover.
-    return 'all';
+    // Stocktake is the default site-level surface — it's the workflow
+    // operators reach for first, and the always-on AttentionTrigger
+    // covers the "what needs a decision right now" question that
+    // 'attention' used to answer.
+    return 'stocktake';
   })();
 
   const [view, setView] = useState<View>(initialView);
@@ -164,8 +173,8 @@ function StockPageInner() {
       setPendingView('estate');
     }
     if (!isAllSites && !SITE_VIEWS.has(view)) {
-      setView('all');
-      setPendingView('all');
+      setView('stocktake');
+      setPendingView('stocktake');
     }
   }, [isAllSites, view]);
 
@@ -238,22 +247,24 @@ function StockPageInner() {
 
   function handleSiteDrillIn(siteId: string) {
     setActiveSiteId(siteId);
-    selectView('all');
+    selectView('stocktake');
   }
 
-  // Site-level tabs lead with the comprehensive ledger ("Live stock
-  // levels"), then the workflow surface ("Stocktake"). The decision-
-  // oriented "Needs attention" view used to sit first; it's now an
-  // always-visible popover on the right of the nav instead, so the
-  // count is reachable from whichever tab the operator is on.
+  // Site-level tabs lead with the workflow surface ("Stocktake") —
+  // it's where operators actually do work day-to-day. "Live stock
+  // levels" follows as the comprehensive ledger reference. The
+  // decision-oriented "Needs attention" view used to sit first; it's
+  // now an always-visible drawer trigger on the right of the nav
+  // instead, so the count is reachable from whichever tab the
+  // operator is on.
   const tabs: Tab[] = isAllSites
     ? [
         { id: 'estate',    label: 'Estate' },
         { id: 'stocktake', label: 'Stocktake' },
       ]
     : [
-        { id: 'all',       label: 'Live stock levels' },
         { id: 'stocktake', label: 'Stocktake' },
+        { id: 'all',       label: 'Live stock levels' },
       ];
 
   // ── Stocktake derivations ──────────────────────────────────────────
@@ -269,15 +280,15 @@ function StockPageInner() {
     [activeSiteItems],
   );
 
-  // ── Needs-attention popover ────────────────────────────────────────
-  // Triggered from the pill on the right of the nav strip. We keep it
-  // closed by default, dismiss it on outside click + Escape, and force
-  // it shut whenever the persona flips to All-sites (there is no
-  // per-site attention list to show estate-wide). Anchoring is done
-  // via `attentionWrapperRef` so the popover floats below the trigger
-  // without needing a separate portal.
+  // ── Needs-attention drawer ─────────────────────────────────────────
+  // Triggered from the pill on the right of the nav strip. Right-
+  // anchored drawer (mirrors ItemDetailDrawer's portal + framer slide
+  // pattern) so the surface is familiar across the page. Closed by
+  // default; forced shut whenever the persona flips to All-sites
+  // (there is no per-site attention list to show estate-wide) or the
+  // active site changes (the open drawer would show items from the
+  // previous site).
   const [attentionOpen, setAttentionOpen] = useState(false);
-  const attentionWrapperRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (isAllSites && attentionOpen) setAttentionOpen(false);
@@ -286,24 +297,6 @@ function StockPageInner() {
   useEffect(() => {
     setAttentionOpen(false);
   }, [activeSiteId]);
-
-  useEffect(() => {
-    if (!attentionOpen) return;
-    function onDocClick(e: MouseEvent) {
-      const node = attentionWrapperRef.current;
-      if (!node) return;
-      if (!node.contains(e.target as Node)) setAttentionOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setAttentionOpen(false);
-    }
-    document.addEventListener('mousedown', onDocClick);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDocClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [attentionOpen]);
 
   const availableLocations = useMemo<StockLocation[]>(() => {
     const present = new Set<StockLocation>();
@@ -453,27 +446,31 @@ function StockPageInner() {
         {/* Right-aligned notification pill. Persona-gated to site-level
             views — estate-wide doesn't have a single attention list to
             show. Visually mirrors the QuinnTrigger pattern from the
-            Production header: pill with a red badge that surfaces a
-            count when there's something to look at. */}
+            Production header: navy pill with a white roundel inside
+            and a red count badge that lifts off the fill. */}
         {!isAllSites && (
-          <div
-            ref={attentionWrapperRef}
-            style={{ marginLeft: 'auto', position: 'relative' }}
-          >
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
             <AttentionTrigger
               count={flaggedItemCount}
               open={attentionOpen}
               onClick={() => setAttentionOpen(o => !o)}
             />
-            {attentionOpen && (
-              <AttentionPopover
-                count={flaggedItemCount}
-                items={activeSiteItems}
-              />
-            )}
           </div>
         )}
       </nav>
+
+      {/* Drawer lives at page level so it slides over the whole
+          content surface. Lazy-rendered by AnimatePresence inside the
+          component so it costs nothing until the operator opens it
+          for the first time. */}
+      {!isAllSites && (
+        <AttentionDrawer
+          open={attentionOpen}
+          count={flaggedItemCount}
+          items={activeSiteItems}
+          onClose={() => setAttentionOpen(false)}
+        />
+      )}
 
       <div
         style={{
@@ -586,17 +583,18 @@ function StockPageInner() {
 }
 
 /**
- * Notification-style pill that sits on the right of the stock nav and
- * exposes the per-site "needs attention" list as a popover. Models its
- * shape on the existing tab pills (TOP_NAV_PILL_BASE) so the strip
- * still reads as a single bar, and borrows the red badge treatment
- * from QuinnTrigger so the count stays legible even when the pill
- * itself is in its default outlined state.
+ * Notification pill that sits on the right of the stock nav. Mirrors
+ * the QuinnTrigger pattern from the Production header so the two
+ * surfaces read as one design system:
  *
- * Renders the AlertCircle glyph plus the literal "Needs attention"
- * label so the affordance is discoverable on cold landings (a bare
- * number badge would only make sense to someone who already knows
- * what it counts).
+ *   • Navy pill (border-radius 100) on a deep-accent border
+ *   • White roundel inside holding the Edify brand mark — same glyph
+ *     QuinnTrigger uses, so the two pills read as one family
+ *   • Red count badge perched on the top-right corner with a thin
+ *     white ring so it lifts off the navy fill at small sizes
+ *
+ * Active state deepens the fill for a clear pressed look; matches the
+ * way QuinnTrigger flips while its panel is open.
  */
 function AttentionTrigger({
   count,
@@ -621,31 +619,61 @@ function AttentionTrigger({
       onClick={onClick}
       style={{
         position: 'relative',
-        ...TOP_NAV_PILL_BASE,
-        background: open ? 'var(--color-accent-active)' : '#ffffff',
-        color: open ? 'var(--color-text-on-active)' : 'var(--color-text-secondary)',
-        borderColor: open ? 'var(--color-accent-active)' : 'var(--color-border)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        height: 44,
+        padding: '0 16px 0 10px',
+        borderRadius: 100,
+        background: open ? 'var(--color-accent-deep)' : 'var(--color-accent-active)',
+        border: '1px solid var(--color-accent-deep)',
+        cursor: 'pointer',
+        fontFamily: 'var(--font-primary)',
+        fontSize: 12,
+        fontWeight: 600,
+        color: '#ffffff',
+        whiteSpace: 'nowrap',
       }}
     >
-      <AlertCircle size={16} strokeWidth={2} style={{ opacity: 0.85 }} />
-      Needs attention
+      <span
+        aria-hidden
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: '50%',
+          background: '#ffffff',
+          color: 'var(--color-accent-active)',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <EdifyMark size={14} />
+      </span>
       {hasAttention && (
         <span
           aria-hidden
           style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            position: 'absolute',
+            top: -6,
+            right: -6,
             minWidth: 22,
             height: 22,
             padding: '0 6px',
             borderRadius: 11,
-            background: open ? 'rgba(255,255,255,0.22)' : 'var(--color-error)',
+            background: 'var(--color-error)',
             color: '#ffffff',
             fontSize: 12,
             fontWeight: 700,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             fontFamily: 'var(--font-primary)',
             fontVariantNumeric: 'tabular-nums',
+            // Thin white ring lifts the badge off the navy fill so it
+            // doesn't visually merge with the pill border at small sizes.
+            boxShadow: '0 0 0 1.5px #ffffff',
           }}
         >
           {count}
@@ -656,98 +684,171 @@ function AttentionTrigger({
 }
 
 /**
- * Floating panel anchored beneath the AttentionTrigger pill. Holds the
- * full AttentionList (same component the old tab used to render),
- * plus a header summarising "what am I looking at" and a friendly
- * empty state when nothing is flagged. Width is capped at ~520px so
- * it doesn't overrun smaller viewports and gets a max-height +
- * internal scroll so a long list never escapes the viewport.
+ * Right-anchored drawer that lists the items the operator needs to
+ * decide on. Same content the old "Needs attention" tab rendered —
+ * the AttentionList component — wrapped in the same portal + framer
+ * slide pattern as ItemDetailDrawer so the two drawers feel like
+ * siblings of one system. Backdrop dims the page and dismisses on
+ * click; Escape also closes.
  */
-function AttentionPopover({
+function AttentionDrawer({
+  open,
   count,
   items,
+  onClose,
 }: {
+  open: boolean;
   count: number;
   items: StockItem[];
+  onClose: () => void;
 }) {
-  return (
-    <div
-      role="dialog"
-      aria-label="Items needing attention"
-      style={{
-        position: 'absolute',
-        top: 'calc(100% + 8px)',
-        right: 0,
-        zIndex: 200,
-        width: 'min(540px, calc(100vw - 32px))',
-        maxHeight: 'min(70vh, 640px)',
-        overflowY: 'auto',
-        background: '#ffffff',
-        border: '1px solid var(--color-border)',
-        borderRadius: 12,
-        boxShadow: '0 16px 40px rgba(10, 20, 25, 0.18)',
-        padding: 14,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          gap: 12,
-          padding: '0 2px 10px',
-          borderBottom: '1px solid var(--color-border-subtle)',
-          marginBottom: 12,
-        }}
-      >
-        <div>
-          <div
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            key="attention-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            onClick={onClose}
             style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(58,48,40,0.18)',
+              zIndex: 700,
+            }}
+          />
+          <motion.aside
+            key="attention-drawer"
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
+            role="dialog"
+            aria-label="Items needing attention"
+            style={{
+              position: 'fixed',
+              top: 0,
+              right: 0,
+              bottom: 0,
+              width: 'min(560px, 100vw)',
+              background: '#fff',
+              boxShadow: '-20px 0 60px rgba(58,48,40,0.16)',
+              zIndex: 701,
+              display: 'flex',
+              flexDirection: 'column',
               fontFamily: 'var(--font-primary)',
-              fontSize: 14,
-              fontWeight: 700,
-              color: 'var(--color-text-primary)',
             }}
           >
-            Needs attention
-          </div>
-          <div
-            style={{
-              fontFamily: 'var(--font-primary)',
-              fontSize: 12,
-              color: 'var(--color-text-muted)',
-              marginTop: 2,
-            }}
-          >
-            {count === 0
-              ? 'Every item is on plan.'
-              : `${count} ${count === 1 ? 'item' : 'items'} flagged.`}
-          </div>
-        </div>
-        {count > 0 && (
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minWidth: 24,
-              height: 24,
-              padding: '0 8px',
-              borderRadius: 12,
-              background: 'var(--color-error)',
-              color: '#ffffff',
-              fontSize: 12,
-              fontWeight: 700,
-              fontFamily: 'var(--font-primary)',
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            {count}
-          </span>
-        )}
-      </div>
-      <AttentionList items={items} />
-    </div>
+            <div
+              style={{
+                padding: '14px 18px',
+                borderBottom: '1px solid var(--color-border-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+              }}
+            >
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                style={{
+                  width: 32,
+                  height: 32,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'transparent',
+                  border: '1px solid var(--color-border-subtle)',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  color: 'var(--color-text-secondary)',
+                  flexShrink: 0,
+                }}
+              >
+                <X size={16} />
+              </button>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 700,
+                    color: 'var(--color-text-primary)',
+                  }}
+                >
+                  Needs attention
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--color-text-muted)',
+                    marginTop: 2,
+                  }}
+                >
+                  {count === 0
+                    ? 'Every item is on plan.'
+                    : `${count} ${count === 1 ? 'item' : 'items'} flagged.`}
+                </div>
+              </div>
+              {count > 0 && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: 26,
+                    height: 26,
+                    padding: '0 8px',
+                    borderRadius: 13,
+                    background: 'var(--color-error)',
+                    color: '#ffffff',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    fontFamily: 'var(--font-primary)',
+                    fontVariantNumeric: 'tabular-nums',
+                    flexShrink: 0,
+                  }}
+                >
+                  {count}
+                </span>
+              )}
+            </div>
+
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: 'auto',
+                padding: 16,
+                background: 'var(--color-bg-surface)',
+              }}
+            >
+              <AttentionList items={items} />
+            </div>
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>,
+    document.body,
   );
 }
 
