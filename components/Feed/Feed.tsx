@@ -17,6 +17,10 @@ import {
   AlertTriangle,
   LayoutDashboard,
   Pin,
+  ThumbsUp,
+  ThumbsDown,
+  RotateCw,
+  MessageSquare,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import EdifyMarkThinking from '@/components/EdifyMark/EdifyMarkThinking';
@@ -906,8 +910,322 @@ function QuinnMessageBody({ text }: { text: string }) {
   );
 }
 
-function ChatBubble({ msg, children, showSignature = false }: { msg: ChatMsg; children?: ReactNode; showSignature?: boolean }) {
+// ── Eval-harness instrumentation ────────────────────────────────────────────
+// Lightweight, prototype-only feedback channel. Every interaction with a
+// Quinn response (rate, retry, comment) is mirrored to `window.__quinnEvalLog`
+// AND dispatched as a `quinn-eval-feedback` CustomEvent so an external eval
+// harness can observe outcomes without reaching into React state.
+
+type EvalRating = 'up' | 'down';
+
+type EvalFeedback = {
+  rating?: EvalRating;
+  comment?: string;
+  /** Number of times the user clicked Retry on this response. */
+  retried?: number;
+};
+
+type EvalHarnessEntry = {
+  ts: number;
+  messageId: string;
+  action: 'rating' | 'comment' | 'retry';
+  rating?: EvalRating | null;
+  comment?: string;
+};
+
+function recordEvalFeedback(entry: Omit<EvalHarnessEntry, 'ts'>) {
+  if (typeof window === 'undefined') return;
+  const payload: EvalHarnessEntry = { ts: Date.now(), ...entry };
+  const w = window as unknown as { __quinnEvalLog?: EvalHarnessEntry[] };
+  w.__quinnEvalLog = w.__quinnEvalLog ?? [];
+  w.__quinnEvalLog.push(payload);
+  window.dispatchEvent(new CustomEvent('quinn-eval-feedback', { detail: payload }));
+}
+
+function ResponseControlButton({
+  title,
+  active = false,
+  onClick,
+  children,
+}: {
+  title: string;
+  active?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      aria-pressed={active}
+      style={{
+        width: '26px',
+        height: '26px',
+        borderRadius: '6px',
+        border: '1px solid transparent',
+        background: active ? 'var(--color-accent-active)' : 'transparent',
+        color: active ? '#fff' : 'var(--color-text-muted)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        transition: 'background 0.12s, color 0.12s, border-color 0.12s',
+        padding: 0,
+      }}
+      onMouseEnter={e => {
+        if (active) return;
+        e.currentTarget.style.background = 'var(--color-bg-hover)';
+        e.currentTarget.style.borderColor = 'var(--color-border-subtle)';
+      }}
+      onMouseLeave={e => {
+        if (active) return;
+        e.currentTarget.style.background = 'transparent';
+        e.currentTarget.style.borderColor = 'transparent';
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ResponseControls({
+  messageId,
+  feedback,
+  commentOpen,
+  onRate,
+  onRetry,
+  onToggleComment,
+  onCommentChange,
+}: {
+  messageId: string;
+  feedback?: EvalFeedback;
+  commentOpen: boolean;
+  onRate: (rating: EvalRating) => void;
+  onRetry: () => void;
+  onToggleComment: () => void;
+  onCommentChange: (text: string) => void;
+}) {
+  const rating = feedback?.rating;
+  const comment = feedback?.comment ?? '';
+  const hasComment = comment.trim().length > 0;
+
+  return (
+    <div
+      data-eval-harness="response-controls"
+      data-eval-message-id={messageId}
+      style={{
+        // Stretch to match the parent (ChatBubble) column so the feedback
+        // panel below can run full-width up to the bubble's own cap.
+        alignSelf: 'stretch',
+        width: '100%',
+        maxWidth: '88%',
+        display: 'flex', flexDirection: 'column', gap: '6px',
+        marginTop: '6px', paddingLeft: '4px',
+      }}
+    >
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+        <ResponseControlButton
+          title={rating === 'up' ? 'Marked helpful' : 'Helpful'}
+          active={rating === 'up'}
+          onClick={() => onRate('up')}
+        >
+          <ThumbsUp size={13} strokeWidth={2} />
+        </ResponseControlButton>
+        <ResponseControlButton
+          title={rating === 'down' ? 'Marked not helpful' : 'Not helpful'}
+          active={rating === 'down'}
+          onClick={() => onRate('down')}
+        >
+          <ThumbsDown size={13} strokeWidth={2} />
+        </ResponseControlButton>
+        <ResponseControlButton title="Retry" onClick={onRetry}>
+          <RotateCw size={13} strokeWidth={2} />
+        </ResponseControlButton>
+        <ResponseControlButton
+          title={hasComment ? 'Edit your feedback' : 'Leave feedback'}
+          active={commentOpen || hasComment}
+          onClick={onToggleComment}
+        >
+          <MessageSquare size={13} strokeWidth={2} />
+        </ResponseControlButton>
+        {hasComment && !commentOpen && (
+          <span
+            style={{
+              fontFamily: 'var(--font-primary)',
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '0.04em',
+              color: 'var(--color-accent-active)',
+              marginLeft: '4px',
+              textTransform: 'uppercase',
+            }}
+          >
+            Thanks — feedback sent
+          </span>
+        )}
+      </div>
+
+      {commentOpen && (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            width: '100%',
+            background: '#fff',
+            border: '1px solid var(--color-border-subtle)',
+            borderRadius: '12px',
+            padding: '14px 16px',
+            boxShadow: '0 2px 8px rgba(58,48,40,0.04)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
+            <div
+              style={{
+                fontFamily: 'var(--font-primary)',
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                color: 'var(--color-text-muted)',
+                textTransform: 'uppercase',
+              }}
+            >
+              Your feedback
+            </div>
+            <span
+              style={{
+                fontFamily: 'var(--font-primary)',
+                fontSize: '12px',
+                color: 'var(--color-text-muted)',
+              }}
+            >
+              What landed, what we could do better.
+            </span>
+          </div>
+          <textarea
+            data-eval-harness="response-comment"
+            data-eval-message-id={messageId}
+            value={comment}
+            onChange={e => onCommentChange(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                onToggleComment();
+              }
+            }}
+            placeholder="Tell us how this answer landed — what was useful, what we could do better."
+            rows={3}
+            autoFocus
+            style={{
+              width: '100%',
+              resize: 'vertical',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '8px',
+              padding: '10px 12px',
+              fontFamily: 'var(--font-primary)',
+              fontSize: '13px',
+              lineHeight: 1.5,
+              color: 'var(--color-text-primary)',
+              background: 'var(--color-bg-hover)',
+              outline: 'none',
+              transition: 'border-color 0.15s, background 0.15s',
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = 'var(--color-accent-active)';
+              e.currentTarget.style.background = '#fff';
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = 'var(--color-border-subtle)';
+              e.currentTarget.style.background = 'var(--color-bg-hover)';
+            }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span
+              style={{
+                flex: 1,
+                fontFamily: 'var(--font-primary)',
+                fontSize: '11px',
+                color: 'var(--color-text-muted)',
+              }}
+            >
+              ⌘+Enter to send
+            </span>
+            <button
+              type="button"
+              onClick={onToggleComment}
+              style={{
+                fontFamily: 'var(--font-primary)',
+                fontSize: '12.5px',
+                fontWeight: 600,
+                color: 'var(--color-text-secondary)',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '7px 12px',
+                borderRadius: '8px',
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onToggleComment}
+              disabled={!comment.trim()}
+              style={{
+                fontFamily: 'var(--font-primary)',
+                fontSize: '12.5px',
+                fontWeight: 600,
+                color: '#fff',
+                background: comment.trim()
+                  ? 'var(--color-accent-active)'
+                  : 'var(--color-border)',
+                border: 'none',
+                cursor: comment.trim() ? 'pointer' : 'not-allowed',
+                padding: '7px 16px',
+                borderRadius: '8px',
+                transition: 'background 0.15s',
+              }}
+            >
+              Send feedback
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChatBubble({
+  msg,
+  children,
+  showSignature = false,
+  feedback,
+  commentOpen = false,
+  onRate,
+  onRetry,
+  onToggleComment,
+  onCommentChange,
+}: {
+  msg: ChatMsg;
+  children?: ReactNode;
+  showSignature?: boolean;
+  feedback?: EvalFeedback;
+  commentOpen?: boolean;
+  onRate?: (rating: EvalRating) => void;
+  onRetry?: () => void;
+  onToggleComment?: () => void;
+  onCommentChange?: (text: string) => void;
+}) {
   const isUser = msg.role === 'user';
+  const showControls =
+    !isUser &&
+    msg.msgType !== 'analytics-thinking' &&
+    !!onRate &&
+    !!onRetry &&
+    !!onToggleComment &&
+    !!onCommentChange;
   // Only the most recent Quinn response gets the signature, and never the
   // thinking placeholder (which already shows the animated mark inline).
   const showQuinnSignature = !isUser && msg.msgType !== 'analytics-thinking' && showSignature;
@@ -938,6 +1256,17 @@ function ChatBubble({ msg, children, showSignature = false }: { msg: ChatMsg; ch
         {isUser ? msg.text : <QuinnMessageBody text={msg.text} />}
         {children}
       </div>
+      {showControls && onRate && onRetry && onToggleComment && onCommentChange && (
+        <ResponseControls
+          messageId={msg.id}
+          feedback={feedback}
+          commentOpen={commentOpen}
+          onRate={onRate}
+          onRetry={onRetry}
+          onToggleComment={onToggleComment}
+          onCommentChange={onCommentChange}
+        />
+      )}
       {showQuinnSignature && (
         <motion.div
           initial={{ opacity: 0, y: -2 }}
@@ -1951,6 +2280,42 @@ export default function Feed({
   const [chatMinimized, setChatMinimized] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(true);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Eval-harness feedback state — keyed by message id, kept separate from
+  // ChatMsg so we don't mutate the message stream when an evaluator rates a
+  // response. See `recordEvalFeedback` for the side-channel surface.
+  const [evalFeedback, setEvalFeedback] = useState<Record<string, EvalFeedback>>({});
+  const [evalCommentOpenFor, setEvalCommentOpenFor] = useState<string | null>(null);
+
+  const handleEvalRate = (messageId: string, rating: EvalRating) => {
+    setEvalFeedback(prev => {
+      const current = prev[messageId];
+      const nextRating = current?.rating === rating ? undefined : rating;
+      recordEvalFeedback({ messageId, action: 'rating', rating: nextRating ?? null });
+      return { ...prev, [messageId]: { ...current, rating: nextRating } };
+    });
+  };
+
+  const handleEvalRetry = (messageId: string) => {
+    setEvalFeedback(prev => {
+      const current = prev[messageId];
+      const nextCount = (current?.retried ?? 0) + 1;
+      recordEvalFeedback({ messageId, action: 'retry' });
+      return { ...prev, [messageId]: { ...current, retried: nextCount } };
+    });
+  };
+
+  const handleEvalToggleComment = (messageId: string) => {
+    setEvalCommentOpenFor(prev => (prev === messageId ? null : messageId));
+  };
+
+  const handleEvalCommentChange = (messageId: string, comment: string) => {
+    setEvalFeedback(prev => ({
+      ...prev,
+      [messageId]: { ...prev[messageId], comment },
+    }));
+    recordEvalFeedback({ messageId, action: 'comment', comment });
+  };
   const [analyticsType, setAnalyticsType] = useState<AnalyticsChartId | null>(null);
   const [analyticsStep, setAnalyticsStep] = useState(0);
   const [pinnedChartIds, setPinnedChartIds] = useState<Set<AnalyticsChartId>>(
@@ -2432,7 +2797,45 @@ export default function Feed({
       detected = explicitChart;
     } else {
       // Prefix detection for typed input. Order matters (more specific first).
-      if (text.startsWith('Which site has'))      detected = 'growth';
+      const lower = text.toLowerCase();
+      const looksLikeCogsPct =
+        lower.includes('cogs') &&
+        (lower.includes('% of revenue') ||
+          lower.includes('percentage of revenue') ||
+          lower.includes('as a %') ||
+          lower.includes('as a percentage'));
+      const looksLikeTopIngredientsByCost =
+        lower.includes('ingredient') &&
+        (lower.includes('cost') || lower.includes('spend')) &&
+        (lower.includes('top') || lower.includes('biggest') || lower.includes('most'));
+      const looksLikeLowestMarginItems =
+        (lower.includes('lowest') ||
+          lower.includes('worst') ||
+          lower.includes('thinnest') ||
+          lower.includes('smallest')) &&
+        (lower.includes('margin') || lower.includes('gross margin') || lower.includes('gm '));
+      // Follow-up phrasings the user types after the weekly sales chart.
+      // We deliberately match short, conversational variants ("per day",
+      // "by hour", "now per hour") because the demo flow drills:
+      //   sales (by site) → sales-by-day → hour
+      const looksLikeBreakdownByDay =
+        (lower.includes('per day') ||
+          lower.includes('by day') ||
+          lower.includes('daily breakdown') ||
+          lower.includes('day by day')) &&
+        !lower.includes('per hour') &&
+        !lower.includes('by hour');
+      const looksLikeBreakdownByHour =
+        lower.includes('per hour') ||
+        lower.includes('by hour') ||
+        lower.includes('hourly') ||
+        lower.includes('hour by hour');
+      if (looksLikeCogsPct)                        detected = 'cogs-pct';
+      else if (looksLikeTopIngredientsByCost)      detected = 'cogs-top-ingredients';
+      else if (looksLikeLowestMarginItems)         detected = 'low-gross-margin-items';
+      else if (looksLikeBreakdownByDay)            detected = 'sales-by-day';
+      else if (looksLikeBreakdownByHour)           detected = 'hour';
+      else if (text.startsWith('Which site has'))  detected = 'growth';
       else if (text.startsWith('Which sites are')) detected = 'cogs';
       else if (text.startsWith('Which hour'))      detected = 'hour';
       else if (text.startsWith('What were'))       detected = 'sales';
@@ -2861,7 +3264,17 @@ export default function Feed({
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.28, ease: [0.25, 0.1, 0.25, 1] }}
                       >
-                      <ChatBubble key={m.id} msg={m} showSignature={m.id === lastQuinnSignatureId}>
+                      <ChatBubble
+                        key={m.id}
+                        msg={m}
+                        showSignature={m.id === lastQuinnSignatureId}
+                        feedback={evalFeedback[m.id]}
+                        commentOpen={evalCommentOpenFor === m.id}
+                        onRate={(rating) => handleEvalRate(m.id, rating)}
+                        onRetry={() => handleEvalRetry(m.id)}
+                        onToggleComment={() => handleEvalToggleComment(m.id)}
+                        onCommentChange={(text) => handleEvalCommentChange(m.id, text)}
+                      >
                         {m.msgType === 'analytics-thinking' && (
                           <QuinnThinkingContent />
                         )}

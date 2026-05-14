@@ -300,6 +300,7 @@ export const SEED_MASTER_PRODUCTS: MasterProduct[] = [
   // physically swaps when the customer picks a large coffee).
   { id: 'mp-cup-takeaway-8oz',  name: 'Takeaway Cup 8oz',  category: 'Packaging', unit: 'pack of 1000', slug: 'cup-takeaway-8oz' },
   { id: 'mp-cup-takeaway-12oz', name: 'Takeaway Cup 12oz', category: 'Packaging', unit: 'pack of 1000', slug: 'cup-takeaway-12oz' },
+  { id: 'mp-cup-takeaway-16oz', name: 'Takeaway Cup 16oz', category: 'Packaging', unit: 'pack of 1000', slug: 'cup-takeaway-16oz' },
   { id: 'mp-cup-lid',           name: 'Takeaway Cup Lid',  category: 'Packaging', unit: 'pack of 1000', slug: 'cup-lid' },
   { id: 'mp-whole-milk-1l', name: 'Whole Milk 1L', category: 'Dairy', unit: '1L carton', slug: 'whole-milk-1l' },
   { id: 'mp-skim-milk-1l', name: 'Skim Milk 1L', category: 'Dairy', unit: '1L carton', slug: 'skim-milk-1l' },

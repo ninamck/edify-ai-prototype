@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRightLeft, Check, ChevronRight, Clock, Download, Moon, Repeat, Shuffle, User, UserMinus, Waves } from 'lucide-react';
+import { ArrowRightLeft, Check, ChevronRight, Clock, Download, Moon, PackagePlus, Repeat, Shuffle, User, UserMinus, Waves } from 'lucide-react';
 import {
   benchesAt,
   effectiveBatchRules,
@@ -17,6 +17,7 @@ import {
 } from './fixtures';
 import { computeRelatedItems, usePlan, type PlanLine } from './PlanStore';
 import { useNightShiftPolicy } from '@/components/Settings/nightShiftPolicyStore';
+import { useHubExtras } from '@/components/Production/hubExtrasStore';
 import { downloadBenchPdf } from '@/lib/pdf/productionPdfs';
 
 type HighlightMode = 'focus' | 'upstream' | 'downstream' | 'dim' | 'none';
@@ -138,6 +139,13 @@ type RowData = {
   totalQty: number;
   /** Estimated bench time for this recipe (minutes). */
   estMinutes: number;
+  /**
+   * Hub-side off-list units folded into `totalQty` (and the batch
+   * split). Surfaced as a "+N off-list" chip on the row so the bench
+   * team can see at a glance how much of the bake covers walk-in /
+   * off-list demand vs spoke allocations.
+   */
+  extrasUnits: number;
 };
 
 /**
@@ -229,6 +237,12 @@ export default function BenchCardBoard({
   // next render because `policy` is in the `cards` memo dep array.
   const { policy: nightShiftPolicy } = useNightShiftPolicy();
 
+  // Hub-side off-list extras the GM has stamped on the matrix. Lifts
+  // the bench's `totalQty` (and therefore the batch split) so the
+  // floor bakes the right number; the chip on each row makes the
+  // off-list portion visible to the bench team.
+  const { getExtras } = useHubExtras();
+
   // Local manager-applied assignment overrides. Sentinel `UNASSIGNED`
   // means the manager explicitly cleared the seeded assignee. Lives in
   // local state so the demo can reassign benches around the team
@@ -280,16 +294,23 @@ export default function BenchCardBoard({
     return siteBenches.map(bench => {
       const benchLines = byBench.get(bench.id) ?? [];
 
-      // Convert lines → row data (batch split + est time).
+      // Convert lines → row data (batch split + est time). Hub-side
+      // extras fold into `effectivePlanned` here so the bench bakes the
+      // off-list units as part of the same run, with no extra trip back
+      // to a spoke ledger. Spoke allocations are untouched — extras
+      // live in their own store, attributed only to the hub row.
       const rows: RowData[] = benchLines.map(line => {
         const eff = effectiveBatchRules(line.recipe.batchRules, bench.batchRules);
-        const split = proposeBatchSplit(line.effectivePlanned, eff);
+        const extrasUnits = getExtras(site.id, line.recipe.skuId, date);
+        const targetUnits = line.effectivePlanned + extrasUnits;
+        const split = proposeBatchSplit(targetUnits, eff);
         const estMinutes = estimateMinutes(line, split.batches.length);
         return {
           line,
           batches: split.batches,
           totalQty: split.batches.reduce((s, q) => s + q, 0),
           estMinutes,
+          extrasUnits,
         };
       });
 
@@ -400,7 +421,7 @@ export default function BenchCardBoard({
         hasWork: rows.length > 0,
       };
     });
-  }, [lines, siteBenches, assignmentOverrides, runAssignmentOverrides, benchOverrides, nightShiftPolicy]);
+  }, [lines, siteBenches, assignmentOverrides, runAssignmentOverrides, benchOverrides, nightShiftPolicy, getExtras, site.id, date]);
 
   // Dependency-highlight resolver (same machinery as KitchenBoard).
   const highlightFor = useMemo<(itemId: string) => HighlightMode>(() => {
@@ -1129,7 +1150,8 @@ function RecipeRow({
   siteBenches: Bench[];
   onMoveLine?: (itemId: ProductionItemId, benchId: string) => void;
 }) {
-  const { line, totalQty, estMinutes } = row;
+  const { line, totalQty, estMinutes, extrasUnits } = row;
+  const hasExtras = extrasUnits > 0;
 
   const tone =
     highlight === 'focus'      ? { bg: 'var(--color-bg-hover)',  accent: 'var(--color-accent-active)', opacity: 1 } :
@@ -1192,14 +1214,38 @@ function RecipeRow({
         </span>
       </span>
       <span
-        style={{ textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}
+        style={{
+          display: 'inline-flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          fontVariantNumeric: 'tabular-nums',
+          lineHeight: 1.1,
+        }}
         title={
-          dispatchUnits > 0
-            ? `${totalQty} total · ${totalQty - dispatchUnits} for counter · ${dispatchUnits} for spoke dispatch`
-            : undefined
+          hasExtras
+            ? `${totalQty} total · includes ${extrasUnits} off-list extra${extrasUnits === 1 ? '' : 's'} on top of spoke allocation${dispatchUnits > 0 ? ` (${dispatchUnits} for spoke dispatch)` : ''}`
+            : dispatchUnits > 0
+              ? `${totalQty} total · ${totalQty - dispatchUnits} for counter · ${dispatchUnits} for spoke dispatch`
+              : undefined
         }
       >
-        {totalQty}
+        <span style={{ fontWeight: 700 }}>{totalQty}</span>
+        {hasExtras && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 2,
+              fontSize: 9,
+              fontWeight: 700,
+              color: 'var(--color-info)',
+              marginTop: 1,
+            }}
+          >
+            <PackagePlus size={9} />
+            +{extrasUnits} off-list
+          </span>
+        )}
       </span>
       <span
         style={{

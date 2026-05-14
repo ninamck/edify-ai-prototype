@@ -296,8 +296,27 @@ export function getVarianceFraction(item: StockItem): number | null {
   return Math.abs(item.theoreticalStock - item.currentStock) / item.theoreticalStock;
 }
 
+// Per-item status cache. `getStockStatus` is pure with respect to the
+// item reference, and the page hands the same item objects to multiple
+// surfaces in a single render (HealthStrip + AttentionList +
+// AllItemsTable rows + page-level summaries all status the same items).
+// Caching by reference turns those repeated calls into a single map
+// lookup, which adds up on a 50-item site where five components each
+// loop over the list. WeakMap keys mean the cache is automatically
+// freed when the items array is replaced (e.g. on site switch or after
+// `applyOverrides` rebuilds the list).
+const statusCache = new WeakMap<StockItem, StockStatus>();
+
 /** The core classifier. See STOCK-HEALTH-PLAN.md §5 for the rule set. */
 export function getStockStatus(item: StockItem): StockStatus {
+  const cached = statusCache.get(item);
+  if (cached !== undefined) return cached;
+  const result = computeStockStatus(item);
+  statusCache.set(item, result);
+  return result;
+}
+
+function computeStockStatus(item: StockItem): StockStatus {
   const daysCover = getDaysCover(item);
   const variance = getVarianceFraction(item);
   const par = item.parLevel ?? 0;

@@ -13,7 +13,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Save, Image as ImageIcon, Pencil, Plus } from 'lucide-react';
+import { ArrowLeft, Save, Image as ImageIcon, Pencil, Plus, X } from 'lucide-react';
 import {
   type Recipe,
   type RecipeCategory,
@@ -22,13 +22,18 @@ import {
   type RecipeComponent,
   type RecipeIngredient,
   type RecipeSlot,
+  type RecipeVariantDimension,
   buildUsedInIndex,
 } from '@/components/Recipe/libraryFixtures';
 import { IngredientsV2Section } from '@/components/Recipe/IngredientsV2Section';
+import { VariantsSection } from '@/components/Recipe/VariantsSection';
 import { useModifierGroups } from '@/components/Modifiers/store';
 import type { ModifierGroup } from '@/components/Modifiers/types';
 import { GroupEditorDrawer } from '@/components/Modifiers/GroupEditorDrawer';
-import { applyModifiers, defaultSelectionFor } from '@/components/Recipe/resolver';
+import {
+  applyModifiers,
+  defaultSelectionFor,
+} from '@/components/Recipe/resolver';
 import { resolveIngredientRef, type IngredientRef } from '@/components/Ingredients/catalogue';
 import { IngredientRefPicker } from '@/components/Recipe/IngredientRefPicker';
 import {
@@ -128,9 +133,15 @@ type FormDraft = {
   slots: RecipeSlot[];
   /** Whether the advanced "Slots" collapsible is open. */
   showSlots: boolean;
+  /** Variant dimensions (Size, Temperature, …). Customers must pick
+   *  exactly one option per dimension for the recipe to be orderable. */
+  variantDimensions: RecipeVariantDimension[];
   /** Live preview selection state, keyed by group id → option ids. Not
    *  persisted; resets when the editor remounts. */
   previewByGroup: Record<string, string[]>;
+  /** Live preview selection state for variants, keyed by dimension id →
+   *  option id. Not persisted; resets when the editor remounts. */
+  previewVariantSelection: Record<string, string>;
   components: ComponentRow[];
   variables: VariableRow[];
   packaging: PackagingRow[];
@@ -303,7 +314,19 @@ function recipeToDraft(r: Recipe): FormDraft {
     modifierGroupIds: [...(r.modifierGroupIds ?? [])],
     slots: (r.slots ?? []).map((s) => ({ ...s })),
     showSlots: (r.slots?.length ?? 0) > 0,
+    variantDimensions: (r.variantDimensions ?? []).map((d) => ({
+      ...d,
+      options: d.options.map((o) => ({
+        ...o,
+        ingredientOverrides: o.ingredientOverrides.map((ov) => ({ ...ov, qty: { ...ov.qty } })),
+        packagingOverrides: o.packagingOverrides.map((ov) => ({
+          ...ov,
+          qty: ov.qty ? { ...ov.qty } : undefined,
+        })),
+      })),
+    })),
     previewByGroup: {},
+    previewVariantSelection: {},
     components: buildInitialComponents(r),
     variables: fx.variableIngredients?.map((row) => ({ ...row })) ?? [],
     packaging: fx.packaging?.map((row) => ({ ...row })) ?? [],
@@ -374,6 +397,7 @@ function draftToRecipe(
     posSourceId: draft.posSourceId.trim() || undefined,
     modifierGroupIds: draft.modifierGroupIds.length > 0 ? draft.modifierGroupIds : undefined,
     slots: draft.slots.length > 0 ? draft.slots : undefined,
+    variantDimensions: draft.variantDimensions.length > 0 ? draft.variantDimensions : undefined,
     subRecipes,
     production: {
       visibility: productionVisibility,
@@ -840,6 +864,30 @@ function EditRecipeForm({
             />
           </Card>
 
+          {/* Variants — first-class size-like dimensions of this recipe.
+              Customers must pick exactly one option per dimension. Each
+              option overrides per-ingredient qty, packaging, and price.
+              Variants live BEFORE modifiers in the form because they
+              describe the recipe itself; modifiers are optional add-ons
+              on top of whatever variant was picked. */}
+          <Card>
+            <SectionHeader
+              title="Variants"
+              hint="Size-like dimensions where the customer must pick one (small / medium / large). Each option overrides per-ingredient qty, packaging, and price. Use modifiers below for optional one-to-one swaps (alt milks, extra shots)."
+            />
+            <VariantsSection
+              dimensions={draft.variantDimensions}
+              baseIngredients={draft.ingredientsV2}
+              basePackaging={draft.packagingV2}
+              basePrices={{
+                dineIn: typeof draft.srpDineInEx === 'number' ? draft.srpDineInEx : 0,
+                takeaway: typeof draft.srpTakeawayEx === 'number' ? draft.srpTakeawayEx : 0,
+                delivery: typeof draft.srpDeliveryEx === 'number' ? draft.srpDeliveryEx : 0,
+              }}
+              onChange={(next) => patch('variantDimensions', next)}
+            />
+          </Card>
+
           {/* POS & modifiers — sellability + catalogue-level modifier-group
               attachments. This is where the recipe becomes "menu-item-like":
               flip on POS-linked and attach the alt-milks / cup-sizes groups
@@ -847,7 +895,7 @@ function EditRecipeForm({
           <Card>
             <SectionHeader
               title="POS & modifiers"
-              hint="Sellability + attached modifier groups. Toggle POS-linked once this recipe is ready to fire from the till. Attach catalogue-level modifier groups instead of duplicating variable ingredients across recipes."
+              hint="Sellability + attached modifier groups. Toggle POS-linked once this recipe is ready to fire from the till. Modifier groups are created in the library; attach existing ones here."
             />
             <PosAndModifiersSection
               posLinked={draft.posLinked}
@@ -1192,15 +1240,17 @@ function EditRecipeForm({
           />
 
           {/* What gets sold — live preview of the resolved composition for
-              the current modifier selection. Folds the recipe's
-              ingredientsV2 + slots + attached modifier groups through the
-              resolver so the user can sanity-check what fires when this
-              recipe is ordered with various options. */}
+              the current variant + modifier selection. Folds the recipe's
+              ingredientsV2 + packagingV2 + variants + slots + attached
+              modifier groups through the resolver so the user can
+              sanity-check what fires when this recipe is ordered with
+              various options. */}
           <WhatGetsSoldPreview
             recipe={original}
             draft={draft}
             allGroups={allGroups}
             onPreviewChange={(next) => patch('previewByGroup', next)}
+            onVariantPreviewChange={(next) => patch('previewVariantSelection', next)}
           />
 
           {usedInIds.length > 0 && (
@@ -1298,37 +1348,30 @@ function PosAndModifiersSection({
   onPatchPosSourceId: (v: string) => void;
   onPatchGroups: (v: string[]) => void;
 }) {
-  type DrawerState =
-    | { open: false }
-    | { open: true; mode: 'create' }
-    | { open: true; mode: 'edit'; group: ModifierGroup };
-  const [drawer, setDrawer] = useState<DrawerState>({ open: false });
+  const router = useRouter();
+  // The drawer stays in edit-only mode. Inline creation was removed
+  // deliberately: groups are catalogue-level, and inline-create leads
+  // to duplicate near-identical groups across recipes — defeats the
+  // whole point of a library. Creation now happens only from
+  // /modifier-groups.
+  const [editGroup, setEditGroup] = useState<ModifierGroup | null>(null);
+  // Whether the "Attach existing" picker is open. Shows unattached
+  // groups only — attached ones live in the chip strip above.
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  function toggle(id: string) {
-    onPatchGroups(modifierGroupIds.includes(id)
-      ? modifierGroupIds.filter((g) => g !== id)
-      : [...modifierGroupIds, id]);
+  const attached = allGroups.filter((g) => modifierGroupIds.includes(g.id));
+  const unattached = allGroups.filter((g) => !modifierGroupIds.includes(g.id));
+
+  function detach(id: string) {
+    onPatchGroups(modifierGroupIds.filter((g) => g !== id));
   }
-  function openCreate() {
-    setDrawer({ open: true, mode: 'create' });
-  }
-  function openEdit(group: ModifierGroup) {
-    setDrawer({ open: true, mode: 'edit', group });
-  }
-  function handleSaved(group: ModifierGroup) {
-    // Create mode: auto-attach the new group. Edit mode: catalogue
-    // already updated via upsertGroup; pills re-render on the
-    // useModifierGroups subscription.
-    if (drawer.open && drawer.mode === 'create') {
-      if (!modifierGroupIds.includes(group.id)) {
-        onPatchGroups([...modifierGroupIds, group.id]);
-      }
-    }
+  function attach(id: string) {
+    if (modifierGroupIds.includes(id)) return;
+    onPatchGroups([...modifierGroupIds, id]);
+    setPickerOpen(false);
   }
   function handleDeleted(id: string) {
-    if (modifierGroupIds.includes(id)) {
-      onPatchGroups(modifierGroupIds.filter((g) => g !== id));
-    }
+    if (modifierGroupIds.includes(id)) detach(id);
   }
 
   return (
@@ -1369,8 +1412,10 @@ function PosAndModifiersSection({
       </div>
 
       <div>
-        <FieldLabel>Modifier groups <Soft>({modifierGroupIds.length} attached)</Soft></FieldLabel>
-        {allGroups.length === 0 ? (
+        <FieldLabel>
+          Modifier groups <Soft>({attached.length} attached · create new ones in the library)</Soft>
+        </FieldLabel>
+        {attached.length === 0 ? (
           <div
             style={{
               display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
@@ -1379,88 +1424,205 @@ function PosAndModifiersSection({
               fontSize: 12.5, color: 'var(--color-text-muted)',
             }}
           >
-            <span>No modifier groups yet.</span>
-            <button type="button" onClick={openCreate} style={newGroupChip}>
-              <Plus size={12} strokeWidth={2.4} /> Create one now
-            </button>
+            <span>No modifier groups attached.</span>
+            {unattached.length > 0 ? (
+              <button type="button" onClick={() => setPickerOpen(true)} style={attachChip}>
+                <Plus size={12} strokeWidth={2.4} /> Attach existing group
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => router.push('/modifier-groups')}
+                style={attachChip}
+              >
+                <Plus size={12} strokeWidth={2.4} /> Create in library
+              </button>
+            )}
           </div>
         ) : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-            {allGroups.map((g) => {
-              const on = modifierGroupIds.includes(g.id);
-              return (
-                <span
-                  key={g.id}
-                  style={{
-                    display: 'inline-flex', alignItems: 'stretch',
-                    borderRadius: 100, overflow: 'hidden',
-                    border: on ? '1px solid var(--color-accent-active)' : '1px solid var(--color-border-subtle)',
-                    background: on ? 'rgba(3,28,89,0.06)' : '#fff',
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggle(g.id)}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 6,
-                      padding: '6px 11px', border: 'none', background: 'transparent',
-                      color: on ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
-                      fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
-                      fontFamily: 'var(--font-primary)',
-                    }}
-                  >
-                    <span style={{
-                      width: 14, height: 14, borderRadius: 4,
-                      border: '1.5px solid ' + (on ? 'var(--color-accent-active)' : 'var(--color-border)'),
-                      background: on ? 'var(--color-accent-active)' : '#fff',
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      {on && <span style={{ width: 6, height: 6, borderRadius: 1, background: '#fff' }} />}
-                    </span>
-                    {g.name}
-                    <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>
-                      · {g.options.length}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openEdit(g)}
-                    title={`Edit "${g.name}"`}
-                    aria-label={`Edit ${g.name}`}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      padding: '0 9px', border: 'none',
-                      borderLeft: '1px solid ' + (on ? 'rgba(3,28,89,0.20)' : 'var(--color-border-subtle)'),
-                      background: 'transparent',
-                      color: 'var(--color-text-muted)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Pencil size={11} />
-                  </button>
-                </span>
-              );
-            })}
-            <button type="button" onClick={openCreate} style={newGroupChip}>
-              <Plus size={12} strokeWidth={2.4} /> New modifier group
-            </button>
+            {attached.map((g) => (
+              <AttachedGroupChip
+                key={g.id}
+                group={g}
+                onDetach={() => detach(g.id)}
+                onEdit={() => setEditGroup(g)}
+              />
+            ))}
+            {unattached.length > 0 && (
+              <button type="button" onClick={() => setPickerOpen(true)} style={attachChip}>
+                <Plus size={12} strokeWidth={2.4} /> Attach existing group
+              </button>
+            )}
           </div>
         )}
       </div>
 
+      {pickerOpen && (
+        <AttachGroupPicker
+          unattached={unattached}
+          onPick={(id) => attach(id)}
+          onClose={() => setPickerOpen(false)}
+          onGoToLibrary={() => router.push('/modifier-groups')}
+        />
+      )}
+
       <GroupEditorDrawer
-        open={drawer.open}
-        mode={drawer.open && drawer.mode === 'edit' ? 'edit' : 'create'}
-        initial={drawer.open && drawer.mode === 'edit' ? drawer.group : null}
-        onClose={() => setDrawer({ open: false })}
-        onSaved={handleSaved}
+        open={editGroup !== null}
+        mode="edit"
+        initial={editGroup}
+        onClose={() => setEditGroup(null)}
+        onSaved={() => { /* catalogue already updated via upsertGroup */ }}
         onDeleted={handleDeleted}
       />
     </div>
   );
 }
 
-const newGroupChip: React.CSSProperties = {
+function AttachedGroupChip({
+  group, onDetach, onEdit,
+}: {
+  group: ModifierGroup;
+  onDetach: () => void;
+  onEdit: () => void;
+}) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex', alignItems: 'stretch',
+        borderRadius: 100, overflow: 'hidden',
+        border: '1px solid var(--color-accent-active)',
+        background: 'rgba(3,28,89,0.06)',
+      }}
+    >
+      <span
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '6px 11px',
+          color: 'var(--color-accent-active)',
+          fontSize: 12.5, fontWeight: 600,
+          fontFamily: 'var(--font-primary)',
+        }}
+      >
+        {group.name}
+        <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>
+          · {group.options.length}
+        </span>
+      </span>
+      <button
+        type="button"
+        onClick={onEdit}
+        title={`Edit "${group.name}" in library`}
+        aria-label={`Edit ${group.name}`}
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 9px', border: 'none',
+          borderLeft: '1px solid rgba(3,28,89,0.20)',
+          background: 'transparent', color: 'var(--color-text-muted)',
+          cursor: 'pointer',
+        }}
+      >
+        <Pencil size={11} />
+      </button>
+      <button
+        type="button"
+        onClick={onDetach}
+        title={`Detach "${group.name}"`}
+        aria-label={`Detach ${group.name}`}
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 9px', border: 'none',
+          borderLeft: '1px solid rgba(3,28,89,0.20)',
+          background: 'transparent', color: 'var(--color-text-muted)',
+          cursor: 'pointer',
+        }}
+      >
+        <X size={11} />
+      </button>
+    </span>
+  );
+}
+
+function AttachGroupPicker({
+  unattached, onPick, onClose, onGoToLibrary,
+}: {
+  unattached: ModifierGroup[];
+  onPick: (id: string) => void;
+  onClose: () => void;
+  onGoToLibrary: () => void;
+}) {
+  return (
+    <div
+      style={{
+        padding: '12px 14px', borderRadius: 10,
+        background: '#fff', border: '1px solid var(--color-border-subtle)',
+        boxShadow: '0 4px 16px rgba(3,15,58,0.06)',
+        display: 'flex', flexDirection: 'column', gap: 8,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
+          Attach existing modifier group
+        </span>
+        <span style={{ flex: 1 }} />
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            padding: 4, color: 'var(--color-text-muted)',
+          }}
+        >
+          <X size={14} />
+        </button>
+      </div>
+      {unattached.length === 0 ? (
+        <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)' }}>
+          Every group in the library is already attached. Create a new one in
+          the modifier-group library.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {unattached.map((g) => (
+            <button
+              key={g.id}
+              type="button"
+              onClick={() => onPick(g.id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 10px', borderRadius: 8,
+                border: '1px solid var(--color-border-subtle)',
+                background: '#fff', cursor: 'pointer',
+                textAlign: 'left', fontFamily: 'var(--font-primary)',
+              }}
+            >
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-primary)', flex: 1 }}>
+                {g.name}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                {g.selection === 'one' ? 'pick one' : 'pick many'} · {g.options.length} options
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 4 }}>
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)', flex: 1 }}>
+          Need a new group?
+        </span>
+        <button
+          type="button"
+          onClick={onGoToLibrary}
+          style={attachChip}
+        >
+          Open library
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const attachChip: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 5,
   padding: '6px 11px', borderRadius: 100,
   border: '1px dashed var(--color-border)', background: '#fff',
@@ -1567,12 +1729,13 @@ function SlotsSection({
 // ── What gets sold (live resolver preview) ───────────────────────────────────
 
 function WhatGetsSoldPreview({
-  recipe, draft, allGroups, onPreviewChange,
+  recipe, draft, allGroups, onPreviewChange, onVariantPreviewChange,
 }: {
   recipe: Recipe;
   draft: FormDraft;
   allGroups: ReturnType<typeof useModifierGroups>;
   onPreviewChange: (next: Record<string, string[]>) => void;
+  onVariantPreviewChange: (next: Record<string, string>) => void;
 }) {
   // Build a draft Recipe from the current form state so the resolver sees
   // the editor's pending changes (not what's on disk).
@@ -1583,8 +1746,9 @@ function WhatGetsSoldPreview({
     packagingV2: draft.packagingV2.length > 0 ? draft.packagingV2 : undefined,
     modifierGroupIds: draft.modifierGroupIds.length > 0 ? draft.modifierGroupIds : undefined,
     slots: draft.slots.length > 0 ? draft.slots : undefined,
+    variantDimensions: draft.variantDimensions.length > 0 ? draft.variantDimensions : undefined,
     posLinked: draft.posLinked,
-  }), [recipe, draft.name, draft.ingredientsV2, draft.packagingV2, draft.modifierGroupIds, draft.slots, draft.posLinked]);
+  }), [recipe, draft.name, draft.ingredientsV2, draft.packagingV2, draft.modifierGroupIds, draft.slots, draft.variantDimensions, draft.posLinked]);
 
   const attached = useMemo(
     () => (draftRecipe.modifierGroupIds ?? [])
@@ -1605,12 +1769,48 @@ function WhatGetsSoldPreview({
     return out;
   }, [attached, draft.previewByGroup]);
 
+  // Default-fill variant dimensions the same way: any dimension without
+  // an explicit preview pick falls back to its default option (or first).
+  const effectiveVariantSelection: Record<string, string> = useMemo(() => {
+    const out: Record<string, string> = { ...draft.previewVariantSelection };
+    for (const dim of draftRecipe.variantDimensions ?? []) {
+      if (out[dim.id]) continue;
+      const fallback = dim.options.find((o) => o.isDefault)?.id ?? dim.options[0]?.id;
+      if (fallback) out[dim.id] = fallback;
+    }
+    return out;
+  }, [draftRecipe.variantDimensions, draft.previewVariantSelection]);
+
   const resolved = useMemo(() => applyModifiers({
     recipe: draftRecipe,
     selectedOptionIds: defaultSelectionFor(draftRecipe),
     selectedByGroup: effectiveSelection,
+    selectedVariantOptions: effectiveVariantSelection,
     siteId: draft.sites[0],
-  }), [draftRecipe, effectiveSelection, draft.sites]);
+  }), [draftRecipe, effectiveSelection, effectiveVariantSelection, draft.sites]);
+
+  // Effective per-channel prices for the previewed variant. Variants
+  // override channel-by-channel; channels with no variant override fall
+  // back to the editor's base prices in the form.
+  const effectivePrices = useMemo(() => {
+    function fallback(formVal: number | '' | undefined): number | null {
+      if (typeof formVal === 'number') return formVal;
+      return null;
+    }
+    return {
+      dineIn: resolved.variantPricing.priceDineIn ?? fallback(draft.srpDineInEx),
+      takeaway: resolved.variantPricing.priceTakeaway ?? fallback(draft.srpTakeawayEx),
+      delivery: resolved.variantPricing.priceDelivery ?? fallback(draft.srpDeliveryEx),
+    };
+  }, [resolved.variantPricing, draft.srpDineInEx, draft.srpTakeawayEx, draft.srpDeliveryEx]);
+  const hasVariantPricing =
+    resolved.variantPricing.priceDineIn !== undefined ||
+    resolved.variantPricing.priceTakeaway !== undefined ||
+    resolved.variantPricing.priceDelivery !== undefined;
+
+  function pickVariantOption(dimensionId: string, optionId: string) {
+    onVariantPreviewChange({ ...draft.previewVariantSelection, [dimensionId]: optionId });
+  }
 
   function toggleOption(group: ReturnType<typeof useModifierGroups>[number], optionId: string) {
     const current = effectiveSelection[group.id] ?? [];
@@ -1652,9 +1852,78 @@ function WhatGetsSoldPreview({
         </div>
       )}
 
-      {attached.length === 0 && (
+      {(draftRecipe.variantDimensions ?? []).length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+          {(draftRecipe.variantDimensions ?? []).map((dim) => {
+            const selectedId = effectiveVariantSelection[dim.id];
+            return (
+              <div key={dim.id}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 4, display: 'inline-flex', gap: 6 }}>
+                  {dim.name || '(unnamed dimension)'}
+                  <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>
+                    · pick one (mandatory)
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {dim.options.length === 0 && (
+                    <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+                      No options yet
+                    </span>
+                  )}
+                  {dim.options.map((opt) => {
+                    const on = selectedId === opt.id;
+                    return (
+                      <button
+                        type="button"
+                        key={opt.id}
+                        onClick={() => pickVariantOption(dim.id, opt.id)}
+                        style={{
+                          padding: '4px 9px', borderRadius: 100,
+                          border: on
+                            ? '1px solid var(--color-accent-active)'
+                            : '1px solid var(--color-border-subtle)',
+                          background: on ? 'rgba(3,28,89,0.06)' : '#fff',
+                          color: on ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
+                          fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
+                          fontFamily: 'var(--font-primary)',
+                        }}
+                      >
+                        {opt.name || '(unnamed)'}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {hasVariantPricing && (
+        <div
+          style={{
+            marginBottom: 12, padding: '8px 10px', borderRadius: 8,
+            background: 'rgba(3,28,89,0.05)',
+            border: '1px solid rgba(3,28,89,0.12)',
+            fontSize: 11.5, color: 'var(--color-accent-active)',
+          }}
+        >
+          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 3 }}>
+            Variant price
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <span>Dine-in {formatChannelPrice(effectivePrices.dineIn)}</span>
+            <span>·</span>
+            <span>Takeaway {formatChannelPrice(effectivePrices.takeaway)}</span>
+            <span>·</span>
+            <span>Delivery {formatChannelPrice(effectivePrices.delivery)}</span>
+          </div>
+        </div>
+      )}
+
+      {attached.length === 0 && (draftRecipe.variantDimensions ?? []).length === 0 && (
         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
-          No modifier groups attached yet. Preview shows the base composition only.
+          No variants or modifier groups attached. Preview shows the base composition only.
         </div>
       )}
 
@@ -1727,6 +1996,11 @@ function WhatGetsSoldPreview({
   );
 }
 
+function formatChannelPrice(v: number | null): string {
+  if (v == null) return '—';
+  return `£${v.toFixed(2)}`;
+}
+
 function PreviewLine({
   ingredient, name, qty, source,
 }: {
@@ -1736,30 +2010,40 @@ function PreviewLine({
   source: ReturnType<typeof applyModifiers>['lines'][number]['source'];
 }) {
   const resolved = resolveIngredientRef(ingredient);
-  const tone = source.kind === 'recipe-base'
-    ? 'base'
-    : source.kind === 'recipe-packaging'
-      ? 'pkg'
-      : source.kind === 'slot'
-        ? 'slot'
-        : 'mod';
-  const toneStyles: Record<typeof tone, React.CSSProperties> = {
-    base: { background: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' },
-    pkg:  { background: 'rgba(82,170,150,0.16)', color: 'var(--color-success, #347262)' },
-    slot: { background: 'rgba(241,180,52,0.16)', color: 'var(--color-warning)' },
-    mod:  { background: 'rgba(3,28,89,0.08)', color: 'var(--color-accent-active)' },
+  type Tone = 'base' | 'pkg' | 'variant' | 'slot' | 'mod';
+  const tone: Tone =
+    source.kind === 'recipe-base'
+      ? 'base'
+      : source.kind === 'recipe-packaging'
+        ? 'pkg'
+        : source.kind === 'variant-ingredient' || source.kind === 'variant-packaging'
+          ? 'variant'
+          : source.kind === 'slot'
+            ? 'slot'
+            : 'mod';
+  const toneStyles: Record<Tone, React.CSSProperties> = {
+    base:    { background: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' },
+    pkg:     { background: 'rgba(82,170,150,0.16)', color: 'var(--color-success, #347262)' },
+    variant: { background: 'rgba(143,92,199,0.16)', color: '#6F3FB0' },
+    slot:    { background: 'rgba(241,180,52,0.16)', color: 'var(--color-warning)' },
+    mod:     { background: 'rgba(3,28,89,0.08)', color: 'var(--color-accent-active)' },
   };
-  const label = source.kind === 'recipe-base'
-    ? 'base'
-    : source.kind === 'recipe-packaging'
-      ? 'packaging'
-      : source.kind === 'slot'
-        ? `slot · ${source.slotKey}`
-        : source.kind === 'modifier-add'
-          ? 'add'
-          : source.kind === 'modifier-replace'
-            ? 'replace'
-            : `× ${source.factor}`;
+  const label =
+    source.kind === 'recipe-base'
+      ? 'base'
+      : source.kind === 'recipe-packaging'
+        ? 'packaging'
+        : source.kind === 'variant-ingredient'
+          ? 'variant'
+          : source.kind === 'variant-packaging'
+            ? 'variant pkg'
+            : source.kind === 'slot'
+              ? `slot · ${source.slotKey}`
+              : source.kind === 'modifier-add'
+                ? 'add'
+                : source.kind === 'modifier-replace'
+                  ? 'replace'
+                  : `× ${source.factor}`;
   return (
     <div
       style={{

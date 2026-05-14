@@ -62,6 +62,10 @@ export type ModifierOption = {
   /** Defaults to false. When true, this option is selected by default. */
   isDefault?: boolean;
   effects: IngredientEffect[];
+  /** Upstream POS identifier for this option (e.g. Square modifier id).
+   *  Stored on the option itself rather than in a separate mapping
+   *  table — same pattern as variant options. */
+  posSourceId?: string;
 };
 
 export type ModifierGroup = {

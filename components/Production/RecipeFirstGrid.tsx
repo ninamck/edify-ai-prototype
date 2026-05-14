@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Filter, Inbox, Clock, AlertCircle, AlertTriangle, Package, Sparkles } from 'lucide-react';
+import { ChevronDown, ChevronRight, Filter, Inbox, Clock, AlertCircle, AlertTriangle, Package, PackagePlus, Sparkles } from 'lucide-react';
 import {
   DEMO_TODAY,
   PRET_SITES,
@@ -29,6 +29,7 @@ import QtyStepper from './QtyStepper';
 import SpokeUnlockControl from './SpokeUnlockControl';
 import { useDispatchTransfers } from './dispatchStore';
 import { useHubOverrides } from './hubOverrideStore';
+import { useHubExtras } from './hubExtrasStore';
 import { useShortfallStatus } from './ingredientShortfallStore';
 import { useHybridOrder, useHybridOrderActions, sumSlots } from './hybridOrderStore';
 import HybridOrderSubmitBar from './HybridOrderSubmitBar';
@@ -140,6 +141,10 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   //     and today alike.
   const showCarryOver = isPlanSurface ? true : baseShowCarryOver;
   const showSpokeCols = isPlanSurface ? false : isHub;
+  // Extras column rides next to the spoke columns — same gating (HUB
+  // today only). The column never reads from `perSpokeBySku`, so a
+  // bump here can't pollute any spoke's allocation.
+  const showExtras = showSpokeCols;
   const showHotProd = baseShowHotProd;
   const showVP = !isPlanSurface && baseShowVP;
   // VP cell is editable on today for self-producing sites (the floor
@@ -206,6 +211,16 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   // selected, not when viewing "All sites").
   const { getOverride, setOverride, clearOverride, overrideCount } = useHubOverrides();
   const overrideTotal = isHub ? overrideCount(siteId, date) : 0;
+
+  // Hub-side "Extras" — off-list units the manager adds on top of every
+  // spoke's allocation. Stored separately from `perSpokeBySku` so a bump
+  // here never inflates any spoke's number; it's a hub-only "production
+  // for walk-in / off-list demand" lane.
+  //
+  // The cells live in their own column on the right of the matrix; row
+  // totals + footer + headline make-total add them on top of the
+  // submitted/allocated spoke numbers.
+  const { getExtras, setExtras, clearExtras } = useHubExtras();
 
   // Per-spoke confirmed-units lookup, keyed `${spokeId}|${skuId}`. Built
   // once per render so each row cell is an O(1) read. Hub overrides
@@ -582,6 +597,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
     (showVPInView ? 1 : 0) +
     (showHotProdInView ? 1 : 0) +
     (showSpokeCols ? visibleSpokes.length : 0) +
+    (showExtras ? 1 : 0) +
     (showAvailNow ? 1 : 0) +
     (showRowTotal ? 1 : 0);
 
@@ -595,6 +611,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
     let carryOver = 0;
     let production = 0;
     let grand = 0;
+    let extras = 0;
     const pSlots = new Array<number>(pColumnCount).fill(0);
     const spokeTotals = new Map<SiteId, number>();
     for (const sp of visibleSpokes) spokeTotals.set(sp.id, 0);
@@ -617,10 +634,20 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
           const v = perSpokeBySku.get(`${sp.id}|${r.skuId}`) ?? 0;
           spokeTotals.set(sp.id, (spokeTotals.get(sp.id) ?? 0) + v);
         }
+        // Extras roll into the day's grand total because the bench is
+        // baking them too — but they stay out of every spoke column by
+        // construction (the lookup is hub-scoped, not spoke-scoped).
+        if (showExtras) {
+          const ex = getExtras(siteId, r.skuId, date);
+          if (ex > 0) {
+            extras += ex;
+            grand += ex;
+          }
+        }
       }
     }
-    return { carryOver, production, pSlots, grand, spokeTotals };
-  }, [isHub, grouped, pColumnCount, siteId, visibleSpokes, perSpokeBySku]);
+    return { carryOver, production, pSlots, grand, spokeTotals, extras };
+  }, [isHub, grouped, pColumnCount, siteId, visibleSpokes, perSpokeBySku, showExtras, getExtras, date]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -705,6 +732,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
         {isHub && hubTotals && grouped.length > 0 && (
           <HubMakeTotalChip
             totalUnits={hubTotals.grand}
+            extrasUnits={hubTotals.extras}
             recipeCount={grouped.reduce((s, g) => s + g.rows.length, 0)}
             spokeCount={spokes.length}
           />
@@ -841,6 +869,24 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
                         </th>
                       );
                     })}
+                  {showExtras && (
+                    <th
+                      style={headStyle({ minWidth: 90 })}
+                      title="Off-list units the hub bakes on top of every spoke's allocation. Lifts the row total and the day's make total, but never appears on any spoke's column."
+                    >
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <PackagePlus size={11} />
+                        Extras
+                      </span>
+                    </th>
+                  )}
                   {showRowTotal && (
                     <th style={headStyle({ minWidth: 70, totalCol: true })}>Total</th>
                   )}
@@ -878,6 +924,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
                     showVP={showVPInView}
                     showHotProd={showHotProdInView}
                     showSpokeCols={showSpokeCols}
+                    showExtras={showExtras}
                     showAvailNow={showAvailNow}
                     soldSoFarBySku={soldSoFarBySku}
                     editableVP={editableVP}
@@ -893,6 +940,9 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
                     setOverride={setOverride}
                     clearOverride={clearOverride}
                     getOverride={getOverride}
+                    getExtras={getExtras}
+                    setExtras={setExtras}
+                    clearExtras={clearExtras}
                     focusedItemId={focusedItemId}
                     expandedHotProdId={expandedHotProdId}
                     colCount={colCount}
@@ -944,6 +994,24 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
                           </span>
                         </td>
                       ))}
+                    {showExtras && (
+                      <td style={footStyle()}>
+                        {hubTotals.extras > 0 ? (
+                          <span
+                            style={{
+                              ...numStyle(),
+                              color: 'var(--color-info)',
+                              fontWeight: 700,
+                            }}
+                            title={`${hubTotals.extras} extra unit${hubTotals.extras === 1 ? '' : 's'} on top of every spoke's allocation`}
+                          >
+                            +{hubTotals.extras}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+                        )}
+                      </td>
+                    )}
                     {showRowTotal && (
                       <td style={footStyle({ totalCol: true })}>
                         <span style={numStyle()}>{hubTotals.grand}</span>
@@ -1048,10 +1116,15 @@ type PlanStoreApi = ReturnType<typeof usePlanStore>;
  */
 function HubMakeTotalChip({
   totalUnits,
+  extrasUnits,
   recipeCount,
   spokeCount,
 }: {
   totalUnits: number;
+  /** Off-list extras already rolled into `totalUnits` — surfaced as a
+   *  small "+N off-list" caption so the headline number's makeup is
+   *  legible without scanning the table footer. */
+  extrasUnits: number;
   recipeCount: number;
   spokeCount: number;
 }) {
@@ -1131,6 +1204,26 @@ function HubMakeTotalChip({
               </span>
             </>
           )}
+          {extrasUnits > 0 && (
+            <>
+              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: 'var(--color-info)',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+                title={`Includes ${extrasUnits} off-list extra${extrasUnits === 1 ? '' : 's'} (not on any spoke's order).`}
+              >
+                <PackagePlus size={11} />
+                +{extrasUnits} off-list
+              </span>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -1149,6 +1242,7 @@ function CategoryGroup({
   showVP,
   showHotProd,
   showSpokeCols,
+  showExtras,
   showAvailNow,
   soldSoFarBySku,
   editableVP,
@@ -1164,6 +1258,9 @@ function CategoryGroup({
   setOverride,
   clearOverride,
   getOverride,
+  getExtras,
+  setExtras,
+  clearExtras,
   focusedItemId,
   expandedHotProdId,
   colCount,
@@ -1184,6 +1281,7 @@ function CategoryGroup({
   showVP: boolean;
   showHotProd: boolean;
   showSpokeCols: boolean;
+  showExtras: boolean;
   showAvailNow: boolean;
   soldSoFarBySku: Map<SkuId, number>;
   editableVP: boolean;
@@ -1215,6 +1313,9 @@ function CategoryGroup({
     skuId: SkuId,
     forDate: string,
   ) => number | undefined;
+  getExtras: (hubId: SiteId, skuId: SkuId, forDate: string) => number;
+  setExtras: (hubId: SiteId, skuId: SkuId, forDate: string, units: number) => void;
+  clearExtras: (hubId: SiteId, skuId: SkuId, forDate: string) => void;
   focusedItemId: ProductionItemId | null;
   expandedHotProdId: ProductionItemId | null;
   colCount: number;
@@ -1276,6 +1377,7 @@ function CategoryGroup({
             showVP={showVP}
             showHotProd={showHotProd}
             showSpokeCols={showSpokeCols}
+            showExtras={showExtras}
             showAvailNow={showAvailNow}
             soldSoFarBySku={soldSoFarBySku}
             editableVP={editableVP}
@@ -1291,6 +1393,9 @@ function CategoryGroup({
             setOverride={setOverride}
             clearOverride={clearOverride}
             getOverride={getOverride}
+            getExtras={getExtras}
+            setExtras={setExtras}
+            clearExtras={clearExtras}
             focused={focused}
             hotProdExpanded={expanded}
             colCount={colCount}
@@ -1317,6 +1422,7 @@ function RecipeRow({
   showVP,
   showHotProd,
   showSpokeCols,
+  showExtras,
   showAvailNow,
   soldSoFarBySku,
   editableVP,
@@ -1332,6 +1438,9 @@ function RecipeRow({
   setOverride,
   clearOverride,
   getOverride,
+  getExtras,
+  setExtras,
+  clearExtras,
   focused,
   hotProdExpanded,
   colCount,
@@ -1351,6 +1460,7 @@ function RecipeRow({
   showVP: boolean;
   showHotProd: boolean;
   showSpokeCols: boolean;
+  showExtras: boolean;
   showAvailNow: boolean;
   soldSoFarBySku: Map<SkuId, number>;
   editableVP: boolean;
@@ -1382,6 +1492,9 @@ function RecipeRow({
     skuId: SkuId,
     forDate: string,
   ) => number | undefined;
+  getExtras: (hubId: SiteId, skuId: SkuId, forDate: string) => number;
+  setExtras: (hubId: SiteId, skuId: SkuId, forDate: string, units: number) => void;
+  clearExtras: (hubId: SiteId, skuId: SkuId, forDate: string) => void;
   focused: boolean;
   hotProdExpanded: boolean;
   colCount: number;
@@ -1442,10 +1555,19 @@ function RecipeRow({
     return arr;
   }, [line, pColumnCount]);
 
-  // Total = whatever the plan resolved to. For run items `planned` already
-  // includes the variable additions; for variable / increment items it's
-  // the whole qty. Receive rows (HYBRID receiving from hub) skip the column.
-  const totalDisplay: string | number = isReceive ? '—' : line ? line.planned : 0;
+  // Extras — hub-side off-list units this row carries (manager-typed).
+  // Lives in its own column AND lifts the row total. Stored separately
+  // from `perSpokeBySku`, so a bump here never inflates any spoke
+  // column. Always 0 outside hub today (the column is hidden).
+  const extrasUnits = showExtras ? getExtras(siteId, row.skuId, date) : 0;
+
+  // Total = whatever the plan resolved to + any hub-side extras. For run
+  // items `line.planned` already includes the variable additions; for
+  // variable / increment items it's the whole qty. Receive rows
+  // (HYBRID receiving from hub) skip the column.
+  const totalDisplay: string | number = isReceive
+    ? '—'
+    : (line ? line.planned : 0) + extrasUnits;
 
   return (
     <>
@@ -1778,6 +1900,19 @@ function RecipeRow({
             );
           })}
 
+        {/* Extras — hub-side off-list units. Editable inline stepper.
+            Lives outside `perSpokeBySku` so a bump never inflates any
+            spoke's column; lifts the row total + day's make total. */}
+        {showExtras && (
+          <td style={bodyStyle({ focused })}>
+            <ExtrasCell
+              value={extrasUnits}
+              onChange={next => setExtras(siteId, row.skuId, date, next)}
+              onReset={() => clearExtras(siteId, row.skuId, date)}
+            />
+          </td>
+        )}
+
         {/* Avail now — what's still on the floor: planned − sold so far,
             clamped at zero. Self-producing sites only (a hub or pure
             spoke has no retail floor). For HYBRID receive rows we
@@ -1881,6 +2016,33 @@ function RecipeRow({
                   <Inbox size={11} /> via hub
                 </span>
               )
+            ) : extrasUnits > 0 ? (
+              // Stacked total: the (now-inflated) row total on top, a
+              // muted breakdown line below so the manager can see at a
+              // glance how many of those units are the extras lane.
+              <span
+                style={{
+                  display: 'inline-flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-end',
+                  lineHeight: 1.15,
+                }}
+                title={`${totalDisplay} total · ${line ? line.planned : 0} for spokes + ${extrasUnits} extra${extrasUnits === 1 ? '' : 's'}`}
+              >
+                <span style={{ ...numStyle(), fontWeight: 800 }}>
+                  {totalDisplay}
+                </span>
+                <span
+                  style={{
+                    fontSize: 9,
+                    color: 'var(--color-info)',
+                    fontVariantNumeric: 'tabular-nums',
+                    fontWeight: 700,
+                  }}
+                >
+                  +{extrasUnits} extra
+                </span>
+              </span>
             ) : (
               <span style={{ ...numStyle(), fontWeight: 800 }}>
                 {totalDisplay}
@@ -2179,6 +2341,101 @@ function SpokeOverrideCell({
         >
           <RotateCcw size={9} />
           override
+        </button>
+      ) : (
+        <span style={{ height: 12 }} aria-hidden="true" />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Inline stepper for the hub-side Extras column. Visually distinct from
+ * `SpokeOverrideCell` because the semantics are different: an override
+ * replaces a spoke's number (warning tone), whereas extras are additive
+ * units that never touch a spoke's column (info tone).
+ *
+ * The "+N" label below the stepper appears once a value is set, so a
+ * row that's been bumped reads at a glance even when the manager is
+ * scanning down the column. A reset button only surfaces when the
+ * value > 0 — keeps the empty state quiet.
+ */
+function ExtrasCell({
+  value,
+  onChange,
+  onReset,
+}: {
+  value: number;
+  onChange: (next: number) => void;
+  onReset: () => void;
+}) {
+  const hasValue = value > 0;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 3,
+      }}
+      onClick={e => e.stopPropagation()}
+    >
+      <QtyStepper
+        size="compact"
+        canDecrement={value > 0}
+        onDecrement={() => onChange(Math.max(0, value - 1))}
+        onIncrement={() => onChange(value + 1)}
+        decrementLabel="Decrease extras"
+        incrementLabel="Increase extras"
+      >
+        <input
+          type="number"
+          value={value}
+          onChange={e => {
+            const next = Number(e.target.value);
+            if (Number.isFinite(next)) onChange(Math.max(0, Math.round(next)));
+          }}
+          min={0}
+          step={1}
+          style={{
+            width: 36,
+            border: 'none',
+            background: 'transparent',
+            fontSize: 13,
+            fontWeight: 700,
+            textAlign: 'center',
+            color: hasValue ? 'var(--color-info)' : 'var(--color-text-muted)',
+            fontVariantNumeric: 'tabular-nums',
+            fontFamily: 'var(--font-primary)',
+            outline: 'none',
+            padding: 0,
+            MozAppearance: 'textfield',
+          }}
+        />
+      </QtyStepper>
+      {hasValue ? (
+        <button
+          type="button"
+          onClick={onReset}
+          title="Clear extras for this row"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 3,
+            padding: '1px 4px',
+            border: 'none',
+            background: 'transparent',
+            color: 'var(--color-info)',
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+            fontFamily: 'var(--font-primary)',
+          }}
+        >
+          <RotateCcw size={9} />
+          clear
         </button>
       ) : (
         <span style={{ height: 12 }} aria-hidden="true" />

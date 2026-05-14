@@ -411,7 +411,6 @@ export const SUGGESTED_ORDERS: SuggestedOrder[] = [
         whyOverride: [
           'You stocked out of doughnuts 3 times in the past week',
           'Increased from 1 to 2 boxes to cover the next 2 days until your next Bidvest delivery',
-          'Currently at 0 units — next delivery is Thursday',
         ],
       },
       {
@@ -580,7 +579,6 @@ export const RECURRING_ORDERS: RecurringOrder[] = [
         suggestedQty: 6,
         salesVelocity7d: 5.2,
         reasons: [
-          'Sold out 5 of the last 7 days',
           'You ran out by 11am on average — missing ~3 hrs of peak selling time each day',
           'Selling ~5.2 boxes/day vs your current order of 4',
         ],
@@ -593,7 +591,6 @@ export const RECURRING_ORDERS: RecurringOrder[] = [
         suggestedQty: 2,
         salesVelocity7d: 1.4,
         reasons: [
-          'Averaging 1.4 boxes/day over the last week',
           'You\'re wasting ~1.6 boxes/day — roughly £45/day or £315/week thrown away',
           'Reducing to 2 boxes still leaves a small buffer for busier days',
         ],

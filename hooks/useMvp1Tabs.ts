@@ -359,9 +359,25 @@ export function useMvp1Tabs() {
     setHydrated(true);
   }, []);
 
+  // Defer the localStorage write off the click frame. JSON.stringifying the
+  // full tabs payload (which can include thousands of column metadata entries)
+  // on every `activeId` change was adding noticeable jank to tab clicks. We
+  // collapse rapid back-to-back updates by always cancelling the pending
+  // write before scheduling the next one.
   useEffect(() => {
     if (!hydrated) return;
-    persist({ tabs, activeId });
+    if (typeof window === 'undefined') {
+      persist({ tabs, activeId });
+      return;
+    }
+    const schedule =
+      (window as unknown as { requestIdleCallback?: (cb: () => void) => number })
+        .requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 0));
+    const cancel =
+      (window as unknown as { cancelIdleCallback?: (handle: number) => void })
+        .cancelIdleCallback ?? ((handle: number) => window.clearTimeout(handle));
+    const handle = schedule(() => persist({ tabs, activeId }));
+    return () => cancel(handle as number);
   }, [tabs, activeId, hydrated]);
 
   const activeTab = tabs.find((t) => t.id === activeId) ?? tabs[0];

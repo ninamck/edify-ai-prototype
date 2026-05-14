@@ -19,11 +19,11 @@ Question #,Segment,Subsegment,Question,Question ID,Chart ID,Chart label,Chart st
 18,Sales,,What were sales during the breakfast vs lunch vs afternoon daypart?,sales-what-were-sales-during-the,daypart,Revenue by daypart · per site,Horizontal stacked bar,Composition by daypart per site
 19,Sales,,Which sites underperformed against their sales target this month?,sales-which-sites-underperformed-against-their,cogs,COGS variance vs budget by site,Horizontal diverging bar,Variance vs budget by site
 20,Sales,,How has our average transaction value changed over the last quarter?,sales-how-has-our-average-transaction,trend,Revenue trend — last 12 weeks,Area chart,Single-metric area over time (12-week default)
-21,COGS,,What is our COGS as a percentage of revenue across all sites this month?,cogs-what-is-our-cogs-as,labour,Revenue per labour hour by site,Coloured bar by site,"Single £/metric per site, coloured by threshold"
+21,COGS,,What is our COGS as a percentage of revenue across all sites this month?,cogs-what-is-our-cogs-as,cogs-pct,COGS % of revenue · by site,Bullet chart,Actual vs target per site with threshold markers
 22,COGS,,Which site has the highest COGS variance against theoretical this week?,cogs-which-site-has-the-highest,cogs,COGS variance vs budget by site,Horizontal diverging bar,Variance vs budget by site
-23,COGS,,What are the top 5 ingredients driving the most cost this month?,cogs-what-are-the-top-5,waste-top10,Top 10 most wasted items · network,Ranked horizontal bar,Top N ranked by value
+23,COGS,,What are the top 5 ingredients driving the most cost this month?,cogs-what-are-the-top-5,cogs-top-ingredients,Top 5 ingredients by cost · this month,Ranked horizontal bar,Top N ingredients ranked by spend
 24,COGS,,How has our overall COGS % trended over the last 12 weeks?,cogs-how-has-our-overall-cogs,trend,Revenue trend — last 12 weeks,Area chart,Single-metric area over time (12-week default)
-25,COGS,,Which menu items have the lowest gross margin?,cogs-which-menu-items-have-the,waste-top10,Top 10 most wasted items · network,Ranked horizontal bar,Top N ranked by value
+25,COGS,,Which menu items have the lowest gross margin?,cogs-which-menu-items-have-the,low-gross-margin-items,Lowest gross margin menu items,Ranked horizontal bar,Bottom N items ranked by gross margin %
 26,COGS,,What is the theoretical vs actual COGS gap at each site?,cogs-what-is-the-theoretical-vs,labour-hours,Actual vs scheduled labour hours · this week,Grouped bar,Two side-by-side bars per category
 27,COGS,,Which supplier invoices have the largest price variance vs contract rates?,cogs-which-supplier-invoices-have-the,growth,Month-on-month growth by site,Horizontal diverging bar,Per-site ± change around zero
 28,COGS,,How much did coffee bean costs change after our last supplier review?,cogs-how-much-did-coffee-bean,waste-kpi,Total waste this week · estate,Big number + sparkline,Single metric with 8-period trend (locked to half width)

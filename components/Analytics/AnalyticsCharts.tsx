@@ -36,6 +36,7 @@ import {
 /** Original chart ids, backed by the cafe-estate mock data. */
 type LegacyAnalyticsChartId =
   | 'sales'
+  | 'sales-by-day'
   | 'hour'
   | 'trend'
   | 'growth'
@@ -47,6 +48,9 @@ type LegacyAnalyticsChartId =
   | 'waste-top10'
   | 'produced-sold'
   | 'labour-pct'
+  | 'cogs-pct'
+  | 'cogs-top-ingredients'
+  | 'low-gross-margin-items'
   | 'waste-heatmap'
   | 'oos-pareto'
   | 'labour-hours'
@@ -95,6 +99,18 @@ const WEEKLY_SALES = [
   { site: 'Shoreditch', current: 43.6, prior: 42.9 },
   { site: 'Kings X', current: 44.2, prior: 43.0 },
   { site: 'S. Yarra', current: 37.6, prior: 35.5 },
+];
+
+// Same week as WEEKLY_SALES, but rolled up estate-wide and broken down per day.
+// Daily totals reconcile to the per-site weekly totals: 312k last week, 300k prior.
+const WEEKLY_SALES_BY_DAY = [
+  { day: 'Mon', current: 38.4, prior: 36.5 },
+  { day: 'Tue', current: 41.2, prior: 39.8 },
+  { day: 'Wed', current: 44.0, prior: 41.5 },
+  { day: 'Thu', current: 47.2, prior: 45.0 },
+  { day: 'Fri', current: 53.8, prior: 51.2 },
+  { day: 'Sat', current: 56.6, prior: 54.0 },
+  { day: 'Sun', current: 30.8, prior: 32.0 },
 ];
 
 const HOURLY_REVENUE = [
@@ -200,6 +216,17 @@ const TOP_WASTED = [
   { item: 'Vegan wrap',            waste: 38,  units: 12 },
 ];
 
+// Top ingredients by spend, estate-wide month-to-date. Volume figures (kg /
+// litres) line up roughly with realistic per-site monthly throughput across
+// a 7-site cafe estate.
+const TOP_INGREDIENTS_BY_COST = [
+  { item: 'Whole milk',          cost: 4820, volume: '2,410 L' },
+  { item: 'Espresso beans',      cost: 3140, volume: '184 kg' },
+  { item: 'Oat milk',            cost: 1860, volume: '780 L' },
+  { item: 'Brioche & pastries',  cost: 1420, volume: '6,200 units' },
+  { item: 'Cured meats',         cost: 1280, volume: '128 kg' },
+];
+
 const PRODUCED_SOLD = [
   { item: 'Blueberry muffin',      produced: 48, sold: 32 },
   { item: 'Ham & cheese baguette', produced: 36, sold: 24 },
@@ -220,6 +247,20 @@ const LABOUR_PCT = [
   { site: 'Canary',     actual: 33.4 },
 ];
 const LABOUR_TARGET = 28;
+
+// COGS % of revenue per site — month to date. Numbers reconcile with the
+// COGS_BUDGET_VAR variances above (budget anchor = 30%): a +2.1% variance at
+// City Ctr lands at 32.1% actual, etc.
+const COGS_PCT = [
+  { site: 'Kings X',    actual: 29.1 },
+  { site: 'Fitzroy',    actual: 29.5 },
+  { site: 'Riverside',  actual: 29.8 },
+  { site: 'S. Yarra',   actual: 30.6 },
+  { site: 'Shoreditch', actual: 31.4 },
+  { site: 'Canary',     actual: 31.8 },
+  { site: 'City Ctr',   actual: 32.1 },
+];
+const COGS_TARGET = 30;
 
 // Waste heatmap: £ wasted by day × hour (last 4 weeks aggregated)
 const HEATMAP_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -359,6 +400,24 @@ export function SalesChart() {
       <BarChart data={WEEKLY_SALES} margin={{ top: 4, right: 8, bottom: 0, left: -8 }} barCategoryGap="20%">
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border-subtle)" />
         <XAxis dataKey="site" tick={TICK_STYLE} axisLine={false} tickLine={false} />
+        <YAxis tickFormatter={(v: number) => `£${v}k`} tick={TICK_STYLE} axisLine={false} tickLine={false} />
+        <Tooltip
+          formatter={(v, name) => [`£${Number(v)}k`, name === 'current' ? 'Last week' : 'Prior week']}
+          contentStyle={TOOLTIP_STYLE}
+        />
+        <Bar dataKey="prior" name="Prior week" fill="var(--color-border-subtle)" radius={[3, 3, 0, 0]} />
+        <Bar dataKey="current" name="Last week" fill={ACCENT} radius={[3, 3, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function SalesByDayChart() {
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <BarChart data={WEEKLY_SALES_BY_DAY} margin={{ top: 4, right: 8, bottom: 0, left: -8 }} barCategoryGap="20%">
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border-subtle)" />
+        <XAxis dataKey="day" tick={TICK_STYLE} axisLine={false} tickLine={false} />
         <YAxis tickFormatter={(v: number) => `£${v}k`} tick={TICK_STYLE} axisLine={false} tickLine={false} />
         <Tooltip
           formatter={(v, name) => [`£${Number(v)}k`, name === 'current' ? 'Last week' : 'Prior week']}
@@ -670,6 +729,51 @@ export function WasteTop10Chart() {
   );
 }
 
+export function CogsTopIngredientsChart() {
+  const max = Math.max(...TOP_INGREDIENTS_BY_COST.map((r) => r.cost));
+  return (
+    <ResponsiveContainer width="100%" height={240}>
+      <BarChart
+        data={TOP_INGREDIENTS_BY_COST}
+        layout="vertical"
+        margin={{ top: 4, right: 56, bottom: 0, left: 16 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border-subtle)" />
+        <XAxis
+          type="number"
+          tickFormatter={(v: number) => `£${(v / 1000).toFixed(1)}k`}
+          tick={TICK_STYLE}
+          axisLine={false}
+          tickLine={false}
+          domain={[0, max * 1.12]}
+        />
+        <YAxis
+          type="category"
+          dataKey="item"
+          tick={TICK_STYLE}
+          axisLine={false}
+          tickLine={false}
+          width={150}
+        />
+        <Tooltip
+          formatter={(v, _name, entry) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const payload = (entry as any)?.payload;
+            const volume = payload?.volume ?? '';
+            return [`£${Number(v).toLocaleString()} · ${volume}`, 'Spend MTD'];
+          }}
+          contentStyle={TOOLTIP_STYLE}
+        />
+        <Bar dataKey="cost" radius={[0, 3, 3, 0]}>
+          {TOP_INGREDIENTS_BY_COST.map((_, i) => (
+            <Cell key={i} fill={i < 2 ? WARN : i < 4 ? ACCENT_MID : ACCENT} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
 export function ProducedSoldChart() {
   const data = PRODUCED_SOLD;
   const rowHeight = 28;
@@ -775,6 +879,49 @@ export function LabourBulletChart() {
           {LABOUR_PCT.map((r, i) => {
             const over = r.actual - LABOUR_TARGET;
             const fill = over > 2 ? WARN : over > 0 ? ACCENT_MID : OK;
+            return <Cell key={i} fill={fill} />;
+          })}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function CogsBulletChart() {
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <BarChart data={COGS_PCT} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 16 }} barCategoryGap={10}>
+        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border-subtle)" />
+        <XAxis
+          type="number"
+          domain={[0, 40]}
+          tickFormatter={(v: number) => `${v}%`}
+          tick={TICK_STYLE}
+          axisLine={false}
+          tickLine={false}
+        />
+        <YAxis
+          type="category"
+          dataKey="site"
+          tick={TICK_STYLE}
+          axisLine={false}
+          tickLine={false}
+          width={64}
+        />
+        <Tooltip
+          formatter={(v) => [`${Number(v).toFixed(1)}%`, 'COGS % of revenue']}
+          contentStyle={TOOLTIP_STYLE}
+        />
+        <ReferenceLine
+          x={COGS_TARGET}
+          stroke="var(--color-text-primary)"
+          strokeDasharray="4 3"
+          label={{ value: `Target ${COGS_TARGET}%`, position: 'top', fontSize: 11, fill: 'var(--color-text-primary)', fontFamily: 'var(--font-primary)' }}
+        />
+        <Bar dataKey="actual" radius={[0, 3, 3, 0]} barSize={12}>
+          {COGS_PCT.map((r, i) => {
+            const over = r.actual - COGS_TARGET;
+            const fill = over > 1.5 ? WARN : over > 0 ? ACCENT_MID : OK;
             return <Cell key={i} fill={fill} />;
           })}
         </Bar>
@@ -1227,6 +1374,18 @@ const GROSS_MARGIN_PRODUCTS = [
   { item: 'Flat white',        gmPct: 78, revenue: 1248 },
   { item: 'Iced tea',          gmPct: 76, revenue: 280 },
   { item: 'Almond croissant',  gmPct: 64, revenue: 736 },
+];
+
+// Bottom of the menu by gross margin %. Sorted ascending so the worst item
+// sits at the top of the bar list — the natural reading order for a
+// "lowest margin" question. Revenue is monthly (estate-wide) so the
+// tooltip can show how exposed each line really is.
+const LOW_GM_ITEMS = [
+  { item: 'Avocado smash on sourdough', gmPct: 38, revenue: 4820 },
+  { item: 'Smoked salmon bagel',        gmPct: 42, revenue: 3860 },
+  { item: 'Chicken Caesar salad',       gmPct: 44, revenue: 5280 },
+  { item: 'Beef brisket sandwich',      gmPct: 47, revenue: 3120 },
+  { item: 'Granola & berry bowl',       gmPct: 51, revenue: 2960 },
 ];
 
 const INGREDIENT_PRICE_CHANGES = [
@@ -1685,6 +1844,53 @@ export function GrossMarginProductsChart() {
   );
 }
 
+export function LowGrossMarginItemsChart() {
+  return (
+    <ResponsiveContainer width="100%" height={240}>
+      <BarChart
+        data={LOW_GM_ITEMS}
+        layout="vertical"
+        margin={{ top: 4, right: 32, bottom: 0, left: 16 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border-subtle)" />
+        <XAxis
+          type="number"
+          domain={[0, 100]}
+          tickFormatter={(v: number) => `${v}%`}
+          tick={TICK_STYLE}
+          axisLine={false}
+          tickLine={false}
+        />
+        <YAxis
+          type="category"
+          dataKey="item"
+          tick={TICK_STYLE}
+          axisLine={false}
+          tickLine={false}
+          width={170}
+        />
+        <Tooltip
+          formatter={(v, _name, entry) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const payload = (entry as any)?.payload;
+            const revenue = payload?.revenue ?? 0;
+            return [`${Number(v)}% GM · £${Number(revenue).toLocaleString()} sold MTD`, 'Margin'];
+          }}
+          contentStyle={TOOLTIP_STYLE}
+        />
+        <Bar dataKey="gmPct" radius={[0, 3, 3, 0]}>
+          {LOW_GM_ITEMS.map((row, i) => (
+            <Cell
+              key={i}
+              fill={row.gmPct < 45 ? WARN : row.gmPct < 50 ? ACCENT_MID : ACCENT}
+            />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
 export function IngredientPriceChangesChart() {
   const sorted = [...INGREDIENT_PRICE_CHANGES].sort((a, b) => b.deltaPct - a.deltaPct);
   const absMax = Math.max(...sorted.map((r) => Math.abs(r.deltaPct)));
@@ -1738,6 +1944,7 @@ export function renderAnalyticsChart(chartId: AnalyticsChartId) {
   }
   switch (chartId) {
     case 'sales':                  return <SalesChart />;
+    case 'sales-by-day':           return <SalesByDayChart />;
     case 'hour':                   return <HourChart />;
     case 'trend':                  return <TrendChart />;
     case 'growth':                 return <GrowthChart />;
@@ -1749,6 +1956,8 @@ export function renderAnalyticsChart(chartId: AnalyticsChartId) {
     case 'waste-top10':            return <WasteTop10Chart />;
     case 'produced-sold':          return <ProducedSoldChart />;
     case 'labour-pct':             return <LabourBulletChart />;
+    case 'cogs-pct':               return <CogsBulletChart />;
+    case 'cogs-top-ingredients':   return <CogsTopIngredientsChart />;
     case 'waste-heatmap':          return <WasteHeatmapChart />;
     case 'oos-pareto':             return <OosParetoChart />;
     case 'labour-hours':           return <LabourHoursChart />;
@@ -1765,6 +1974,7 @@ export function renderAnalyticsChart(chartId: AnalyticsChartId) {
     case 'deliveries-by-supplier': return <DeliveriesBySupplierChart />;
     case 'delivery-issues':        return <DeliveryIssuesChart />;
     case 'gross-margin-products':  return <GrossMarginProductsChart />;
+    case 'low-gross-margin-items': return <LowGrossMarginItemsChart />;
     case 'ingredient-price-changes': return <IngredientPriceChangesChart />;
   }
 }
@@ -1780,6 +1990,11 @@ export const ANALYTICS_CONFIG: Record<AnalyticsChartId, {
     label: 'Total sales by site — last week',
     chartLabel: 'Here\'s total sales by site for last week, compared against the prior week:',
     reasoning: 'Fitzroy led the estate at **£52.4k**, up 6.2% week-on-week. Riverside showed the biggest jump (+11.2%), driven by extended trading hours. City Centre was the only site to soften slightly (-0.9%). The estate total came in at **£312k**, 3.8% ahead of the prior week — driven primarily by a strong Saturday across all sites.',
+  },
+  'sales-by-day': {
+    label: 'Total sales by day — last week',
+    chartLabel: 'Here\'s the same week broken down per day, estate-wide, against the prior week:',
+    reasoning: '**Saturday led the week at £56.6k**, with Friday close behind at £53.8k — together those two days drove ~35% of last week\'s revenue. The biggest week-on-week growth came on **Wednesday (+£2.5k)** and **Thursday (+£2.2k)**, which suggests the midweek lunchtime push is starting to land. **Sunday is the only day that softened (-£1.2k)** — likely the cooler weather. The weekend stays the leverage point: keep an eye on Saturday staffing — you ran lean two weekends ago and missed the peak.',
   },
   hour: {
     label: 'Revenue by hour — weekday average',
@@ -1835,6 +2050,16 @@ export const ANALYTICS_CONFIG: Record<AnalyticsChartId, {
     label: 'Labour % of sales · vs target',
     chartLabel: 'Here\'s labour as a % of sales by site this month, compared to the 28% target:',
     reasoning: 'Four sites are at or under the **28% target** — Fitzroy is the leanest at 24.1%. **Canary Wharf is the biggest miss at 33.4%** (5.4 points over), followed by City Centre at 30.2%. The main drivers: Canary\'s late-evening roster and City Centre\'s weekend over-staffing. Two tactical shifts (clip the late hour at Canary, cut one weekend shift at City Centre) should close most of the gap.',
+  },
+  'cogs-pct': {
+    label: 'COGS % of revenue · by site',
+    chartLabel: 'Here\'s COGS as a % of revenue by site this month, compared to the 30% target:',
+    reasoning: 'Estate-wide COGS is running at **30.6% of revenue this month** — 0.6 points over the 30% target. **Three sites are over budget**: City Centre (32.1%), Canary Wharf (31.8%), and Shoreditch (31.4%). **Kings Cross is the leanest at 29.1%**, with Fitzroy and Riverside also inside target. The main drivers across over-budget sites are dairy and produce variance — supplier pricing drift and yield issues are worth checking with your ops team.',
+  },
+  'cogs-top-ingredients': {
+    label: 'Top 5 ingredients by cost · this month',
+    chartLabel: 'Here are the 5 ingredients driving the most cost across the estate this month:',
+    reasoning: '**Whole milk is by far the biggest line at £4,820** — about 36% of the top-5 spend, driven by 2,410L of throughput. **Espresso beans follow at £3,140** (184kg). Together those two ingredients account for nearly 60% of the top-5 cost. **Oat milk has climbed to £1,860 (£2.38/L)** and is the line most worth pressure-testing — even a 10% supplier discount or a switch to a cheaper alt-milk default would save ~£190/month estate-wide. Brioche & pastries (£1,420) and cured meats (£1,280) round out the top 5 — both stable month-on-month and harder to flex without changing the menu.',
   },
   'waste-heatmap': {
     label: 'Waste heatmap · day × hour',
@@ -1916,6 +2141,11 @@ export const ANALYTICS_CONFIG: Record<AnalyticsChartId, {
     label: 'Highest gross margin products · yesterday',
     chartLabel: 'Here are yesterday\'s top products by gross margin %:',
     reasoning: 'The hot-drink core is doing the heavy lifting on margin: **filter coffee at 88%, espresso at 84%, flat white at 78%**. Together they delivered ~£2,340 of yesterday\'s revenue at a combined 82% GM. Almond croissant is the lowest-GM item in the top 5 at 64% — still healthy, but worth keeping an eye on as butter prices climb.',
+  },
+  'low-gross-margin-items': {
+    label: 'Lowest gross margin menu items',
+    chartLabel: 'Here are the 5 menu items with the lowest gross margin this month:',
+    reasoning: '**Avocado smash on sourdough is the worst margin on the menu at 38%** — and it\'s far from a marginal seller (£4,820 MTD), so this is the line where a price tweak or recipe change moves real money. Smoked salmon bagel (42%) and Chicken Caesar salad (44%) are the next two; the salad in particular pulls high revenue (£5,280) at a thin margin, making it the second-biggest opportunity. **A 2-point margin lift across the bottom three would add roughly £280/month at current sales mix.** Beef brisket and granola bowl round out the bottom 5 but trade lower volume, so they\'re less of a priority.',
   },
   'ingredient-price-changes': {
     label: 'Top ingredient price changes',

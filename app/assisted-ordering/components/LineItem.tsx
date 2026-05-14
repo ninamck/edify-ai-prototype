@@ -4,8 +4,9 @@ import { useState } from 'react';
 import type { SuggestedOrderLine, DismissReason } from '../types';
 import { getIngredient, getProduct } from '../data/mockOrders';
 import QtyControl from './QtyControl';
-import ConfidenceBadge from './ConfidenceBadge';
 import DismissReasonPrompt from './DismissReason';
+import TrustPanels from './TrustPanels';
+import { getTrustPanelDataForLine } from '../data/trustPanelData';
 
 interface Props {
   line: SuggestedOrderLine;
@@ -39,17 +40,15 @@ function buildWhyCopy(
       ? Math.round((currentStock - (parLevel ?? 0)) / line.salesVelocity7d)
       : null;
     return [
-      `Current stock: ${currentStock}${stockUnit} — target is ${parStr}`,
+      `Included now to help reach ${supplier.replace('sup-', '')} minimum order`,
       daysLeft !== null
         ? `Would need reordering in ~${Math.abs(daysLeft)} days anyway`
         : `Would need reordering soon anyway`,
-      `Included now to help reach ${supplier.replace('sup-', '')} minimum order`,
     ];
   }
 
   if (!line.posDataAvailable) {
     return [
-      `Current stock: ${currentStock}${stockUnit} — target is ${parStr}`,
       `No POS data available — suggestion based on par levels and stocktake only`,
       `${qty} ${product.unitName} brings you to ${projected}${stockUnit}`,
     ];
@@ -60,9 +59,8 @@ function buildWhyCopy(
     const dayNames = ['today', 'tomorrow', 'in 2 days', 'in 3 days', 'by Friday', 'by the weekend', 'next week'];
     const dayStr = dayNames[Math.min(runOutDay, dayNames.length - 1)];
     return [
-      `Current stock: ${currentStock}${stockUnit} — target is ${parStr}`,
       `Selling ~${line.salesVelocity7d}${stockUnit}/day — you'd run out ${dayStr} without this order`,
-      `${qty} ${product.unitName} (${(qty * product.unitSize).toFixed(1)}${stockUnit}) brings you to ${projected}${stockUnit}${daysEstimate ? ` — ~${daysEstimate} days cover` : ''}`,
+      `${qty} ${product.unitName} brings you to ${projected}${stockUnit}${daysEstimate ? ` — ~${daysEstimate} days cover` : ''}`,
     ];
   }
 
@@ -84,7 +82,7 @@ export default function LineItem({
   supplierName,
   deliveryDate,
 }: Props) {
-  const [whyExpanded, setWhyExpanded] = useState(line.whyHighlight ?? false);
+  const [insightsExpanded, setInsightsExpanded] = useState(false);
   const [showDismiss, setShowDismiss] = useState(false);
 
   const ingredient = getIngredient(line.ingredientId);
@@ -274,7 +272,6 @@ export default function LineItem({
             >
               {ingredient.variant}
             </span>
-            <ConfidenceBadge score={line.confidenceScore} factors={line.confidenceFactors} />
             {wasEdited && (
               <span
                 style={{
@@ -427,7 +424,7 @@ export default function LineItem({
 
             <button
               type="button"
-              onClick={() => setWhyExpanded((v) => !v)}
+              onClick={() => setInsightsExpanded((v) => !v)}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -441,41 +438,16 @@ export default function LineItem({
                 textUnderlineOffset: '2px',
               }}
             >
-              {whyExpanded ? 'Hide ▲' : 'Why? ▼'}
+              {insightsExpanded ? 'Hide insights ▲' : 'Insights ▼'}
             </button>
           </div>
 
-          {whyExpanded && (
-            <ul
-              style={{
-                margin: '6px 0 0 0',
-                padding: '10px 14px',
-                background: 'var(--color-bg-hover)',
-                borderRadius: 'var(--radius-item)',
-                listStyle: 'disc',
-                paddingLeft: '28px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '4px',
-              }}
-            >
-              {whyCopy.map((text, i) => (
-                <li
-                  key={i}
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: line.whyHighlight && i === 0 ? 600 : 500,
-                    color: line.whyHighlight && i === 0
-                      ? 'var(--color-text-primary)'
-                      : 'var(--color-text-secondary)',
-                    fontFamily: 'var(--font-primary)',
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {text}
-                </li>
-              ))}
-            </ul>
+          {insightsExpanded && (
+            <TrustPanels
+              data={getTrustPanelDataForLine(line, ingredient)}
+              why={whyCopy}
+              whyHighlightFirst={line.whyHighlight ?? false}
+            />
           )}
         </div>
       )}

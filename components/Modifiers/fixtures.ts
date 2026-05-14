@@ -25,12 +25,14 @@ export const SEED_MODIFIER_GROUPS: ModifierGroup[] = [
         id: 'mg-alt-milks-whole',
         name: 'Whole milk',
         isDefault: true,
+        posSourceId: 'pos-mg-milks-whole',
         effects: [], // no-op — the recipe's default
       },
       {
         id: 'mg-alt-milks-oat',
         name: 'Oat milk',
         priceDelta: 0.40,
+        posSourceId: 'pos-mg-milks-oat',
         effects: [
           {
             kind: 'replace',
@@ -56,11 +58,15 @@ export const SEED_MODIFIER_GROUPS: ModifierGroup[] = [
   },
   {
     id: 'mg-coffee-size',
-    name: 'Coffee size',
+    name: 'Coffee size (legacy)',
     selection: 'one',
     required: true,
     posSourceId: 'pos-mg-cup',
-    notes: 'One modifier affects coffee dose, milk volume, and the takeaway cup in one go — including swapping the cup as packaging.',
+    notes:
+      'LEGACY — size-as-modifier pattern. Kept here for the audit story; the three '
+      + 'coffees now model size as a first-class variant dimension. Do not attach '
+      + 'to new recipes — promote size to a variant instead so cross-site reporting '
+      + 'works and POS variations map cleanly.',
     options: [
       {
         id: 'mg-coffee-size-small',

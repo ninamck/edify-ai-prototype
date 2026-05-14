@@ -113,6 +113,86 @@ export type RecipeSlot = {
   defaultQty?: RecipeIngredientQty;
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Variants — a named, mandatory dimension of a recipe (most commonly Size).
+//
+// Variants are deliberately distinct from modifiers and from slots:
+//   - Variants are WITHIN a recipe: the customer must pick exactly one
+//     option per dimension for the recipe to be orderable. Each option
+//     overrides per-ingredient quantities, packaging, and price.
+//   - Modifiers are OPTIONAL one-to-one changes (replace / add / scale).
+//   - Slots are CROSS-recipe — one modifier group attaching to many
+//     recipes via a named placeholder (spirit, wine).
+//
+// Naming the concept separately keeps cross-site reporting honest and
+// maps cleanly onto POS-side "variations" (Square / Toast / Lightspeed).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Per-ingredient quantity override applied when this variant option is
+ * picked. Targets a `RecipeIngredient.id` on the recipe's `ingredientsV2`
+ * list. `constant: true` is a UI hint meaning "keep this ingredient the
+ * same as base across all variants" — useful for coffee dose, which most
+ * coffee shops hold constant across sizes.
+ */
+export type VariantIngredientOverride = {
+  recipeIngredientId: string;
+  qty: RecipeIngredientQty;
+  constant?: boolean;
+};
+
+/**
+ * Per-packaging override applied when this variant option is picked.
+ * Targets a `RecipeIngredient.id` on the recipe's `packagingV2` list.
+ * The `ref` swap is the headline behaviour (small coffee → 8oz cup,
+ * large coffee → 12oz cup); `qty` is rarely needed but supported.
+ */
+export type VariantPackagingOverride = {
+  recipePackagingId: string;
+  ref: IngredientRefShape;
+  qty?: RecipeIngredientQty;
+};
+
+/**
+ * One option inside a variant dimension. Customers pick exactly one per
+ * dimension. The option carries any per-ingredient / per-packaging
+ * overrides and the channel prices for that variant.
+ */
+export type RecipeVariantOption = {
+  id: string;
+  name: string;
+  /** When true, used as the preview default and the implicit pick when
+   *  resolving without an explicit selection. Exactly one option per
+   *  dimension should be `isDefault: true`; the resolver falls back to
+   *  the first option otherwise. */
+  isDefault?: boolean;
+  ingredientOverrides: VariantIngredientOverride[];
+  packagingOverrides: VariantPackagingOverride[];
+  /** Per-channel price overrides. When unset, the recipe's base
+   *  channel price is used. Cost is always derived from the resolved
+   *  ingredient list — never overridden here. */
+  priceDineIn?: number;
+  priceTakeaway?: number;
+  priceDelivery?: number;
+  /** Upstream POS identifier for this variant option (e.g. Square
+   *  variation id). Stored on the option itself rather than in a
+   *  separate mapping table. */
+  posSourceId?: string;
+};
+
+/**
+ * A named dimension of a recipe (Size, Temperature, …). One or more
+ * options must be picked at order time. Most recipes have one dimension;
+ * v1 caps at two (e.g. size × temperature). The dimension is configured
+ * per recipe — variant dimensions don't live in a library because the
+ * sizes of a coffee aren't the sizes of a salad.
+ */
+export type RecipeVariantDimension = {
+  id: string;
+  name: string;
+  options: RecipeVariantOption[];
+};
+
 /**
  * Rich row used by the new full-page editor (manual-intake-style). When set on
  * a recipe these take precedence over `ingredients` / `packaging` for editing.
@@ -279,6 +359,14 @@ export type Recipe = {
    * patterns use it.
    */
   slots?: RecipeSlot[];
+  /**
+   * Variant dimensions for this recipe (most commonly Size). When set,
+   * the customer must pick exactly one option per dimension for the
+   * recipe to be orderable; each option overrides per-ingredient qty,
+   * packaging, and price. Distinct from modifiers (optional one-to-one
+   * changes) and slots (cross-recipe placeholders).
+   */
+  variantDimensions?: RecipeVariantDimension[];
   /** Whether this recipe is linked to a POS button. Drives the
    *  "Sellable on POS" filter on the recipes list. Sub-recipes,
    *  components, made products, and prep items have this set to
@@ -329,6 +417,96 @@ const coffeeIngs = (withMilkMl: number | null) => {
   return list;
 };
 
+// Demo helper — builds a Size variant dimension for a coffee recipe.
+//
+//   - Coffee dose is constant at 18g across sizes (most coffee shops
+//     hold this fixed). The `constant: true` flag is informational.
+//   - Milk volume scales per size (smallMl / mediumMl / largeMl).
+//   - The takeaway cup is swapped for the appropriate size.
+//   - Dine-in / takeaway / delivery prices step up by £0.40 / £0.80.
+//
+// The override targets reference the ingredient + packaging ids set up
+// in `FITZROY_INGREDIENTSV2_BY_RECIPE` / `FITZROY_PACKAGINGV2_BY_RECIPE`
+// (e.g. `ri-flat-espresso`, `rp-flat-cup`). The id prefix encodes the
+// recipe so we can derive both halves from the recipe id.
+function coffeeSizeDimension(
+  recipeId: string,
+  smallMl: number,
+  mediumMl: number,
+  largeMl: number,
+): RecipeVariantDimension {
+  // recipe id → ingredient id prefix used in the V2 maps. `rec-flat-white`
+  // uses `ri-flat-*`; `rec-cappuccino` uses `ri-capp-*`; `rec-latte`
+  // uses `ri-latte-*`. Keeping the lookup explicit avoids any "clever"
+  // string magic that the next maintainer would have to reverse.
+  const prefix =
+    recipeId === 'rec-flat-white' ? 'flat' :
+    recipeId === 'rec-cappuccino' ? 'capp' :
+    recipeId === 'rec-latte' ? 'latte' :
+    recipeId;
+  const espressoId = `ri-${prefix}-espresso`;
+  const milkId = `ri-${prefix}-milk`;
+  const cupId = `rp-${prefix}-cup`;
+  return {
+    id: `vd-${prefix}-size`,
+    name: 'Size',
+    options: [
+      {
+        id: `vd-${prefix}-size-small`,
+        name: 'Small (8oz)',
+        isDefault: true,
+        posSourceId: `pos-var-${prefix}-sm`,
+        ingredientOverrides: [
+          { recipeIngredientId: espressoId, qty: { value: 18, unit: 'g' }, constant: true },
+          { recipeIngredientId: milkId, qty: { value: smallMl, unit: 'ml' } },
+        ],
+        packagingOverrides: [
+          {
+            recipePackagingId: cupId,
+            ref: { kind: 'master', masterProductId: 'mp-cup-takeaway-8oz' },
+          },
+        ],
+      },
+      {
+        id: `vd-${prefix}-size-medium`,
+        name: 'Medium (12oz)',
+        posSourceId: `pos-var-${prefix}-md`,
+        ingredientOverrides: [
+          { recipeIngredientId: espressoId, qty: { value: 18, unit: 'g' }, constant: true },
+          { recipeIngredientId: milkId, qty: { value: mediumMl, unit: 'ml' } },
+        ],
+        packagingOverrides: [
+          {
+            recipePackagingId: cupId,
+            ref: { kind: 'master', masterProductId: 'mp-cup-takeaway-12oz' },
+          },
+        ],
+        priceDineIn: 4.40,
+        priceTakeaway: 4.20,
+        priceDelivery: 4.60,
+      },
+      {
+        id: `vd-${prefix}-size-large`,
+        name: 'Large (16oz)',
+        posSourceId: `pos-var-${prefix}-lg`,
+        ingredientOverrides: [
+          { recipeIngredientId: espressoId, qty: { value: 18, unit: 'g' }, constant: true },
+          { recipeIngredientId: milkId, qty: { value: largeMl, unit: 'ml' } },
+        ],
+        packagingOverrides: [
+          {
+            recipePackagingId: cupId,
+            ref: { kind: 'master', masterProductId: 'mp-cup-takeaway-16oz' },
+          },
+        ],
+        priceDineIn: 4.80,
+        priceTakeaway: 4.60,
+        priceDelivery: 5.00,
+      },
+    ],
+  };
+}
+
 /**
  * Private seed shape — keeps the pre-merge `menuItems[]` / `modifierGroups[]`
  * fields locally so the existing fixture entries don't need to be rewritten
@@ -337,7 +515,7 @@ const coffeeIngs = (withMilkMl: number | null) => {
  * export.
  */
 type LegacyFitzroySeed =
-  Omit<Recipe, 'kind' | 'posLinked' | 'modifierGroupIds' | 'slots' | 'posSourceId'>
+  Omit<Recipe, 'kind' | 'posLinked' | 'modifierGroupIds' | 'slots' | 'posSourceId' | 'variantDimensions'>
   & {
     menuItems: { name: string; posLinked: boolean }[];
     modifierGroups: string[];
@@ -347,12 +525,13 @@ type LegacyFitzroySeed =
     posLinked?: boolean;
     posSourceId?: string;
     modifierGroupIds?: string[];
+    variantDimensions?: RecipeVariantDimension[];
   };
 
 const FITZROY_RECIPES: LegacyFitzroySeed[] = [
   {
     id: 'rec-flat-white',
-    name: 'Flat white (8oz)',
+    name: 'Flat white',
     category: 'Coffee',
     ingredientCost: 0.84,
     priceDineIn: 4.00,
@@ -366,7 +545,11 @@ const FITZROY_RECIPES: LegacyFitzroySeed[] = [
       { name: 'Oat flat white', posLinked: true },
     ],
     ingredients: coffeeIngs(180),
-    modifierGroups: ['Alt milks', 'Cup sizes'],
+    // Size is modelled as a first-class variant dimension below; we
+    // deliberately don't attach the legacy "Cup sizes" modifier group.
+    // Alt milks stays a modifier — it's an optional one-to-one swap.
+    modifierGroups: ['Alt milks'],
+    variantDimensions: [coffeeSizeDimension('rec-flat-white', 140, 180, 220)],
     production: { visibility: 'Bar', shelfLifeMinutes: null, prepTimeSeconds: 90 },
   },
   {
@@ -382,7 +565,8 @@ const FITZROY_RECIPES: LegacyFitzroySeed[] = [
     flag: { type: 'cost-drift', label: 'cost drift' },
     menuItems: [{ name: 'Cappuccino', posLinked: true }],
     ingredients: coffeeIngs(150),
-    modifierGroups: ['Alt milks', 'Cup sizes'],
+    modifierGroups: ['Alt milks'],
+    variantDimensions: [coffeeSizeDimension('rec-cappuccino', 120, 150, 200)],
     production: { visibility: 'Bar', shelfLifeMinutes: null, prepTimeSeconds: 95 },
   },
   {
@@ -398,7 +582,8 @@ const FITZROY_RECIPES: LegacyFitzroySeed[] = [
     flag: null,
     menuItems: [{ name: 'Latte', posLinked: true }],
     ingredients: coffeeIngs(200),
-    modifierGroups: ['Alt milks', 'Cup sizes'],
+    modifierGroups: ['Alt milks'],
+    variantDimensions: [coffeeSizeDimension('rec-latte', 160, 200, 260)],
     production: { visibility: 'Bar', shelfLifeMinutes: null, prepTimeSeconds: 100 },
   },
   {
@@ -1041,6 +1226,7 @@ function migrateLegacySeed(s: LegacyFitzroySeed): Omit<Recipe, 'kind'> {
     modifierGroupIds: rest.modifierGroupIds ?? (derivedGroupIds.length > 0 ? derivedGroupIds : undefined),
     slots: rest.slots,
     posSourceId: rest.posSourceId,
+    variantDimensions: rest.variantDimensions,
   };
 }
 

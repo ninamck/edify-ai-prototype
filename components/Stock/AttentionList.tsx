@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import type { StockItem } from './status';
 import { getStockStatus, sortByUrgency } from './status';
 import AttentionCard from './AttentionCard';
@@ -13,8 +14,14 @@ interface Props {
 // the All items table.
 
 export default function AttentionList({ items }: Props) {
-  const needsAttention = sortByUrgency(
-    items.filter(item => getStockStatus(item) !== 'healthy'),
+  // Memoised so we don't re-sort the entire item list on every parent
+  // render — `sortByUrgency` is O(N log N) with multiple
+  // `getStockStatus` calls per comparison, which adds up on a 50-item
+  // site any time the page re-renders for an unrelated reason
+  // (overrides change, drawer opens, etc).
+  const needsAttention = useMemo(
+    () => sortByUrgency(items.filter(item => getStockStatus(item) !== 'healthy')),
+    [items],
   );
 
   if (needsAttention.length === 0) {

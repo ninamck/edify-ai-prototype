@@ -160,6 +160,23 @@ export function recurringFrequencyBadgeLabel(frequency: string): string {
   return `${sentenceCaseFrequency(frequency)} recurring`;
 }
 
+// ─── Trust panels (demo decoration) ──────────────────────────────────────────
+
+export interface TrustPanelData {
+  history: {
+    dayOfWeek: string;
+    points: { date: string; qty: number }[];
+    unit: string;
+    average: number;
+  };
+  consumption: {
+    value: number;
+    unit: string;
+    window: string;
+    driver: string;
+  };
+}
+
 // ─── View state ───────────────────────────────────────────────────────────────
 
 export type View = 'notifications' | 'review' | 'confirmed';

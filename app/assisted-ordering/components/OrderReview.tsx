@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import type { SuggestedOrder, GroupBy, DismissReason, ManualLine, RecurringOrder } from '../types';
-import { getVariancePercent, needsReview, recurringFrequencyBadgeLabel, sentenceCaseFrequency } from '../types';
-import { getSupplier, getIngredient, getProduct, SUPPLIERS, SUPPLIER_PRODUCTS, isUrgent } from '../data/mockOrders';
+import { getVariancePercent, needsReview, recurringFrequencyBadgeLabel } from '../types';
+import { getSupplier, getIngredient, getProduct, SUPPLIER_PRODUCTS } from '../data/mockOrders';
 import GroupToggle from './GroupToggle';
 import DetailToggle from './DetailToggle';
 import SupplierSection from './SupplierSection';
@@ -11,6 +11,8 @@ import LineItem from './LineItem';
 import AddItemSheet from './AddItemSheet';
 import MovProgressBar from './MovProgressBar';
 import QtyControl from './QtyControl';
+import TrustPanels from './TrustPanels';
+import { getTrustPanelDataForRecurring } from '../data/trustPanelData';
 
 interface Props {
   orders: SuggestedOrder[];
@@ -486,7 +488,7 @@ function NewSupplierSection({
 
 // ─── Recurring order inline section ──────────────────────────────────────────
 
-import type { Supplier as SupplierType, RecurringOrderLine } from '../types';
+import type { Supplier as SupplierType, RecurringOrderLine, Ingredient } from '../types';
 
 function RecurringOrderSection({
   order,
@@ -902,11 +904,11 @@ function RecurringLineDetail({
   isUp: boolean;
   action: 'accepted' | 'reverted' | undefined;
   product: { unitName: string };
-  ingredient: { currentStock: number; stockUnit: string; parLevel: number | null; parConfirmed: boolean };
+  ingredient: Ingredient;
   onAccept: (lineId: string) => void;
   onRevert: (lineId: string) => void;
 }) {
-  const [whyExpanded, setWhyExpanded] = useState(false);
+  const [insightsExpanded, setInsightsExpanded] = useState(false);
 
   return (
     <div
@@ -940,7 +942,7 @@ function RecurringLineDetail({
 
         <button
           type="button"
-          onClick={() => setWhyExpanded((v) => !v)}
+          onClick={() => setInsightsExpanded((v) => !v)}
           style={{
             background: 'transparent',
             border: 'none',
@@ -954,7 +956,7 @@ function RecurringLineDetail({
             textUnderlineOffset: '2px',
           }}
         >
-          {whyExpanded ? 'Hide ▲' : 'Why? ▼'}
+          {insightsExpanded ? 'Hide insights ▲' : 'Insights ▼'}
         </button>
 
         {/* Accept / revert actions */}
@@ -1044,34 +1046,11 @@ function RecurringLineDetail({
         </div>
       </div>
 
-      {whyExpanded && (
-        <ul
-          style={{
-            margin: '6px 0 0 0',
-            padding: '10px 14px',
-            background: 'var(--color-bg-hover)',
-            borderRadius: 'var(--radius-item)',
-            listStyle: 'disc',
-            paddingLeft: '28px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '4px',
-          }}
-        >
-          {line.reasons.map((text, i) => (
-            <li
-              key={i}
-              style={{
-                fontSize: '12px', fontWeight: 500,
-                color: 'var(--color-text-secondary)',
-                fontFamily: 'var(--font-primary)',
-                lineHeight: 1.5,
-              }}
-            >
-              {text}
-            </li>
-          ))}
-        </ul>
+      {insightsExpanded && (
+        <TrustPanels
+          data={getTrustPanelDataForRecurring(line, ingredient)}
+          why={line.reasons}
+        />
       )}
     </div>
   );
@@ -1109,6 +1088,96 @@ function RecurringVarianceBadge({ variance }: { variance: number }) {
       {isUp && '↑ '}{isDown && '↓ '}
       {variance === 0 ? 'No change' : `${variance > 0 ? '+' : ''}${variance}%`}
     </span>
+  );
+}
+
+// ─── Forecast net sales (demo, hard-coded) ───────────────────────────────────
+
+interface ForecastCardData {
+  label: string;
+  date: string;
+  netSales: number;
+  covers: number;
+  comparison: string;
+}
+
+const FORECAST_CARDS: ForecastCardData[] = [
+  {
+    label: 'Today',
+    date: 'Thu 10 Apr',
+    netSales: 720,
+    covers: 24,
+    comparison: '−2% vs last Thu',
+  },
+  {
+    label: 'Tomorrow',
+    date: 'Fri 11 Apr',
+    netSales: 980,
+    covers: 32,
+    comparison: '+6% vs last Fri',
+  },
+  {
+    label: 'Saturday',
+    date: 'Sat 12 Apr',
+    netSales: 1180,
+    covers: 38,
+    comparison: '+11% vs last Sat',
+  },
+];
+
+function ForecastCard({ card, hero }: { card: ForecastCardData; hero: boolean }) {
+  return (
+    <div
+      style={{
+        flex: '0 0 auto',
+        padding: hero ? '14px 18px' : '12px 16px',
+        borderRadius: 'var(--radius-card)',
+        border: hero
+          ? '1px solid var(--color-accent-active)'
+          : '1px solid var(--color-border-subtle)',
+        background: hero ? 'var(--color-accent-active)' : 'var(--color-bg-surface)',
+        color: hero ? '#fff' : 'var(--color-text-primary)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '2px',
+        minWidth: '140px',
+      }}
+    >
+      <span
+        style={{
+          fontSize: '11px',
+          fontWeight: 700,
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+          opacity: hero ? 0.85 : 1,
+          color: hero ? '#fff' : 'var(--color-text-secondary)',
+          fontFamily: 'var(--font-primary)',
+        }}
+      >
+        {card.label} · {card.date}
+      </span>
+      <span
+        style={{
+          fontSize: '22px',
+          fontWeight: 700,
+          fontFamily: 'var(--font-primary)',
+          lineHeight: 1.15,
+        }}
+      >
+        £{card.netSales.toLocaleString()}
+      </span>
+      <span
+        style={{
+          fontSize: '12px',
+          fontWeight: 500,
+          fontFamily: 'var(--font-primary)',
+          opacity: hero ? 0.85 : 1,
+          color: hero ? '#fff' : 'var(--color-text-secondary)',
+        }}
+      >
+        {card.covers} covers · {card.comparison}
+      </span>
+    </div>
   );
 }
 
@@ -1221,7 +1290,7 @@ export default function OrderReview({
             </div>
           </div>
 
-          {/* Summary cards row */}
+          {/* Forecast net sales — today + next 2 days */}
           <div
             style={{
               display: 'flex',
@@ -1230,162 +1299,9 @@ export default function OrderReview({
               flexWrap: 'nowrap',
             }}
           >
-            {/* Grand total card */}
-            <div
-              style={{
-                flex: '0 0 auto',
-                padding: '14px 18px',
-                borderRadius: 'var(--radius-card)',
-                border: '1px solid var(--color-border-subtle)',
-                background: 'var(--color-accent-active)',
-                color: '#fff',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '2px',
-                minWidth: '140px',
-              }}
-            >
-              <span style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'var(--font-primary)' }}>
-                £{grandTotal.toFixed(0)}
-              </span>
-              <span style={{ fontSize: '12px', fontWeight: 500, fontFamily: 'var(--font-primary)', opacity: 0.85 }}>
-                {totalItems} items · {orders.length} supplier{orders.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-
-            {/* Per-supplier mini cards */}
-            {orders.map((order) => {
-              const supplier = getSupplier(order.supplierId);
-              const urgent = isUrgent(supplier);
-              const total = supplierTotals[order.supplierId] ?? 0;
-              return (
-                <div
-                  key={order.id}
-                  style={{
-                    flex: '0 0 auto',
-                    padding: '10px 14px',
-                    borderRadius: 'var(--radius-card)',
-                    border: urgent
-                      ? '1.5px solid rgba(185,28,28,0.30)'
-                      : '1px solid var(--color-border-subtle)',
-                    background: urgent ? 'rgba(185,28,28,0.03)' : 'var(--color-bg-surface)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '2px',
-                    minWidth: '120px',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span
-                      style={{
-                        fontSize: '13px',
-                        fontWeight: 700,
-                        color: 'var(--color-text-primary)',
-                        fontFamily: 'var(--font-primary)',
-                      }}
-                    >
-                      {supplier.name}
-                    </span>
-                    {urgent && (
-                      <span style={{ fontSize: '12px', fontWeight: 500, color: '#B91C1C' }}>●</span>
-                    )}
-                  </div>
-                  <span
-                    style={{
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      color: urgent ? '#B91C1C' : 'var(--color-text-primary)',
-                      fontFamily: 'var(--font-primary)',
-                    }}
-                  >
-                    £{total.toFixed(0)}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: '12px', fontWeight: 500,
-                      color: 'var(--color-text-secondary)',
-                      fontFamily: 'var(--font-primary)',
-                    }}
-                  >
-                    {order.deliveryDate}
-                  </span>
-                </div>
-              );
-            })}
-
-            {/* Recurring order mini cards */}
-            {recurringOrders.map((recOrder) => {
-              const recSupplier = getSupplier(recOrder.supplierId);
-              const reviewCount = recOrder.lines.filter((l) => needsReview(l.recurringBaseQty, l.suggestedQty)).length;
-              const recTotal = recOrder.lines.reduce((sum, l) => {
-                const p = getProduct(l.ingredientId, l.supplierId);
-                const q = recurringQtys[l.id] ?? l.suggestedQty;
-                return sum + q * p.unitCost;
-              }, 0);
-              return (
-                <div
-                  key={recOrder.id}
-                  style={{
-                    flex: '0 0 auto',
-                    padding: '10px 14px',
-                    borderRadius: 'var(--radius-card)',
-                    border: '1px solid rgba(34,68,68,0.20)',
-                    background: 'var(--color-bg-surface)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '2px',
-                    minWidth: '120px',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span
-                      style={{
-                        fontSize: '13px',
-                        fontWeight: 700,
-                        color: 'var(--color-text-primary)',
-                        fontFamily: 'var(--font-primary)',
-                      }}
-                    >
-                      {recSupplier.name}
-                    </span>
-                    <span
-                      style={{
-                        padding: '2px 6px',
-                        borderRadius: 'var(--radius-badge)',
-                        background: 'rgba(34,68,68,0.08)',
-                        color: 'var(--color-accent-active)',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        letterSpacing: '0.03em',
-                        fontFamily: 'var(--font-primary)',
-                        textTransform: 'none',
-                      }}
-                    >
-                      {recurringFrequencyBadgeLabel(recOrder.frequency)}
-                    </span>
-                  </div>
-                  <span
-                    style={{
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      color: 'var(--color-text-primary)',
-                      fontFamily: 'var(--font-primary)',
-                    }}
-                  >
-                    £{recTotal.toFixed(0)}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: '12px', fontWeight: 500,
-                      color: 'var(--color-text-secondary)',
-                      fontFamily: 'var(--font-primary)',
-                    }}
-                  >
-                    {reviewCount} to review · {sentenceCaseFrequency(recOrder.frequency)}
-                  </span>
-                </div>
-              );
-            })}
+            {FORECAST_CARDS.map((card, i) => (
+              <ForecastCard key={card.date} card={card} hero={i === 0} />
+            ))}
           </div>
 
           {/* Toggles row */}

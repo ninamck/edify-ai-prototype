@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Sidebar from '@/components/Sidebar/Sidebar';
 import Mvp1TopBar from '@/components/Mvp1/Mvp1TopBar';
@@ -21,6 +21,7 @@ import TablesTab, {
 } from '@/components/Mvp1/Tables/TablesTab';
 import TableBuilderModal from '@/components/Mvp1/Tables/TableBuilderModal';
 import { fullSourceQuery, type TableQuery } from '@/components/Mvp1/Tables/query';
+import { DATA_SOURCES } from '@/components/Mvp1/Tables/dataSources';
 import { pinnedChartIdOf, type DashboardLayoutEntry } from '@/components/Dashboard/layoutTypes';
 import type { BriefingPhase } from '@/components/briefing';
 import { phaseFromHour, timeAwareGreeting } from '@/components/briefing';
@@ -49,7 +50,7 @@ export default function Mvp1Shell() {
   const [addInsightShape, setAddInsightShape] = useState<'all' | 'chart' | 'table'>('all');
   const [addInsightTargetTabId, setAddInsightTargetTabId] = useState<string | null>(null);
   const [phaseOverride, setPhaseOverride] = useState<PhaseOverride>('auto');
-  const [dateRange, setDateRange] = useState<DateRange>('week');
+  const [dateRange, setDateRange] = useState<DateRange>({ kind: 'week' });
   /**
    * When set, the AddInsightPopup opens directly into a Quinn-led chat seeded
    * with this starter table. Used by the empty-state "Build manually" card and
@@ -90,6 +91,103 @@ export default function Mvp1Shell() {
   const effectivePhase: BriefingPhase =
     phaseOverride === 'auto' ? phaseFromHour(new Date().getHours()) : phaseOverride;
   const isMobileShell = useMediaQuery(MOBILE_SHELL_BREAKPOINT);
+
+  // Pre-warm every CSV data source on shell mount. The loaders are memoised
+  // at module level, so calling .load() now means the first runQuery for
+  // each table doesn't have to wait for fetch + parseCsv. Errors are
+  // swallowed because individual TableCards still surface their own load
+  // failures with a real error UI; this is purely a head-start.
+  useEffect(() => {
+    for (const src of Object.values(DATA_SOURCES)) {
+      void src.load().catch(() => {});
+    }
+  }, []);
+
+  // Tab-switch UX. We track two related sets:
+  //
+  //  - `visitedTabIds`: tabs whose React subtree is in the DOM. Once a tab
+  //    is mounted we never unmount it on tab change — we just toggle CSS
+  //    visibility. First visit pays the mount cost; everything after that
+  //    is essentially free.
+  //
+  //  - `renderedTabIds`: tabs whose body is OK to show to the user. A tab
+  //    is "rendered" only after the loading skeleton has had time to
+  //    register visually (a minimum gate, see effect below). This is what
+  //    fixes the previous "Sales Deep Dive doesn't show the skeleton"
+  //    problem — small tabs were mounting fast enough that React's
+  //    deferred-render machinery never had a frame to flag isPending,
+  //    so the skeleton flashed for 0ms. Now the skeleton always shows for
+  //    a reliable minimum window on first visit.
+  const [visitedTabIds, setVisitedTabIds] = useState<Set<string>>(
+    () => new Set([activeId]),
+  );
+  const [renderedTabIds, setRenderedTabIds] = useState<Set<string>>(
+    () => new Set([activeId]),
+  );
+  // React docs pattern "Adjusting some state when a prop changes" — call
+  // setState during render guarded by a previous-value comparison so the
+  // mount kicks off in the same render that the click triggered, without
+  // an extra effect-driven double paint.
+  const [prevActiveId, setPrevActiveId] = useState(activeId);
+  if (activeId !== prevActiveId) {
+    setPrevActiveId(activeId);
+    if (!visitedTabIds.has(activeId)) {
+      setVisitedTabIds(new Set([...visitedTabIds, activeId]));
+    }
+  }
+  // Minimum skeleton dwell — long enough to register as "loading" even when
+  // the underlying mount is sub-frame, short enough not to feel artificial.
+  const SKELETON_MIN_MS = 420;
+  useEffect(() => {
+    if (renderedTabIds.has(activeId)) return;
+    const handle = window.setTimeout(() => {
+      setRenderedTabIds((prev) =>
+        prev.has(activeId) ? prev : new Set([...prev, activeId]),
+      );
+    }, SKELETON_MIN_MS);
+    return () => window.clearTimeout(handle);
+    // We deliberately depend only on activeId — re-running on every
+    // renderedTabIds change would reset the timer mid-flight.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId]);
+
+  // Prune both sets when a tab is closed so the closed-tab subtree drops
+  // out of the render and gets GC'd.
+  const [prevTabsRef, setPrevTabsRef] = useState(tabs);
+  if (tabs !== prevTabsRef) {
+    setPrevTabsRef(tabs);
+    const liveIds = new Set(tabs.map((t) => t.id));
+    let staleVisited = false;
+    for (const id of visitedTabIds) {
+      if (!liveIds.has(id)) {
+        staleVisited = true;
+        break;
+      }
+    }
+    if (staleVisited) {
+      const next = new Set<string>();
+      for (const id of visitedTabIds) if (liveIds.has(id)) next.add(id);
+      setVisitedTabIds(next);
+    }
+    let staleRendered = false;
+    for (const id of renderedTabIds) {
+      if (!liveIds.has(id)) {
+        staleRendered = true;
+        break;
+      }
+    }
+    if (staleRendered) {
+      const next = new Set<string>();
+      for (const id of renderedTabIds) if (liveIds.has(id)) next.add(id);
+      setRenderedTabIds(next);
+    }
+  }
+  // The skeleton is shown whenever the current tab hasn't passed through
+  // the rendered gate yet. First visit only — return visits never re-trigger
+  // because `renderedTabIds` is monotonically additive.
+  const isTabSwitching = !renderedTabIds.has(activeId);
+  // Resolve the destination tab so the skeleton can match its kind.
+  const incomingTab = tabs.find((t) => t.id === activeId) ?? activeTab;
 
   // ?build=table opens the Tables-filtered Add insight popup pointed at the
   // first available tables tab (or creates one if there isn't one yet). The
@@ -360,90 +458,115 @@ export default function Mvp1Shell() {
             )}
           </div>
 
-          {activeTab.kind === 'dashboard' ? (
-            renderDashboardTab()
-          ) : (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 14,
-                maxWidth: 1400,
-                margin: '0 auto',
-                width: '100%',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <EditableTabHeading
-                  key={activeTab.id}
-                  name={activeTab.name}
-                  editing={editingTablesView}
-                  onCommit={(next) => renameTab(activeTab.id, next)}
-                />
-                <DashboardEditToolbar
-                  editing={editingTablesView}
-                  onToggleEdit={() => setEditingTablesView((v) => !v)}
-                  onAddInsight={() => setAddInsightOpen(true)}
-                  leadingControls={dateControls}
-                />
-              </div>
-              <TablesTab
-                key={activeTab.id}
-                editing={editingTablesView}
-                tables={activeTab.tables.filter(
-                  (t) => !t.roleScope || t.roleScope.includes(briefingRole),
-                )}
-                charts={activeTab.charts}
-                defaultFilters={activeTab.id === 'sales-deep-dive' ? [] : undefined}
-                onChange={(next) => {
-                  // Merge back any tables hidden for this role so toggling the
-                  // role pill stays reversible.
-                  const hidden = activeTab.tables.filter(
-                    (t) => t.roleScope && !t.roleScope.includes(briefingRole),
-                  );
-                  updateTablesForTab(activeTab.id, [...next, ...hidden]);
-                }}
-                onChartsChange={(next) => updateChartsForTab(activeTab.id, next)}
-                onAskQuinn={() => {
-                  setAddInsightShape('all');
-                  setAddInsightTargetTabId(activeTab.id);
-                  setAddInsightOpen(true);
-                }}
-                onBrowseLibrary={() => {
-                  setAddInsightShape('table');
-                  setAddInsightTargetTabId(activeTab.id);
-                  setAddInsightOpen(true);
-                }}
-                onOpenBuilder={() => {
-                  setAddInsightShape('all');
-                  setAddInsightTargetTabId(activeTab.id);
-                  setTableChatState({
-                    prompt: 'Help me build a custom table from scratch.',
-                    query: fullSourceQuery('flashReport'),
-                    title: 'Custom table',
-                    targetTabId: activeTab.id,
-                  });
-                  setAddInsightOpen(true);
-                }}
-                onEditQuery={(instance) => {
-                  setTableBuilderState({
-                    tabId: activeTab.id,
-                    tableId: instance.id,
-                    initialQuery: instance.query,
-                    initialTitle: instance.title,
-                  });
-                }}
-              />
-            </div>
-          )}
+          {/*
+            Tab panels — every tab the user has visited stays mounted. We
+            use `display: contents` for the visible panel so it behaves
+            like a direct child of the outer flex column (preserving the
+            original layout exactly), and `display: none` for everything
+            else. First visit pays the mount cost; every visit after that
+            is a CSS toggle.
+
+            While `isTabSwitching` is true (the user clicked a first-visit
+            tab and the skeleton minimum-dwell hasn't elapsed yet), every
+            panel is hidden and the `<TabSkeleton>` below takes the body
+            slot — it's the "blocks until the data is ready" placeholder.
+          */}
+          {tabs
+            .filter((tab) => visitedTabIds.has(tab.id))
+            .map((tab) => {
+              const isVisible = !isTabSwitching && tab.id === activeId;
+              const panelStyle: CSSProperties = isVisible
+                ? { display: 'contents' }
+                : { display: 'none' };
+              return (
+                <div key={tab.id} style={panelStyle} aria-hidden={!isVisible}>
+                  {tab.kind === 'dashboard' ? (
+                    renderDashboardTab()
+                  ) : (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 14,
+                        maxWidth: 1400,
+                        margin: '0 auto',
+                        width: '100%',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <EditableTabHeading
+                          name={tab.name}
+                          editing={editingTablesView}
+                          onCommit={(next) => renameTab(tab.id, next)}
+                        />
+                        <DashboardEditToolbar
+                          editing={editingTablesView}
+                          onToggleEdit={() => setEditingTablesView((v) => !v)}
+                          onAddInsight={() => setAddInsightOpen(true)}
+                          leadingControls={dateControls}
+                        />
+                      </div>
+                      <TablesTab
+                        editing={editingTablesView}
+                        tables={tab.tables.filter(
+                          (t) => !t.roleScope || t.roleScope.includes(briefingRole),
+                        )}
+                        charts={tab.charts}
+                        defaultFilters={tab.id === 'sales-deep-dive' ? [] : undefined}
+                        onChange={(next) => {
+                          // Merge back any tables hidden for this role so toggling the
+                          // role pill stays reversible.
+                          const hidden = tab.tables.filter(
+                            (t) => t.roleScope && !t.roleScope.includes(briefingRole),
+                          );
+                          updateTablesForTab(tab.id, [...next, ...hidden]);
+                        }}
+                        onChartsChange={(next) => updateChartsForTab(tab.id, next)}
+                        onAskQuinn={() => {
+                          setAddInsightShape('all');
+                          setAddInsightTargetTabId(tab.id);
+                          setAddInsightOpen(true);
+                        }}
+                        onBrowseLibrary={() => {
+                          setAddInsightShape('table');
+                          setAddInsightTargetTabId(tab.id);
+                          setAddInsightOpen(true);
+                        }}
+                        onOpenBuilder={() => {
+                          setAddInsightShape('all');
+                          setAddInsightTargetTabId(tab.id);
+                          setTableChatState({
+                            prompt: 'Help me build a custom table from scratch.',
+                            query: fullSourceQuery('flashReport'),
+                            title: 'Custom table',
+                            targetTabId: tab.id,
+                          });
+                          setAddInsightOpen(true);
+                        }}
+                        onEditQuery={(instance) => {
+                          setTableBuilderState({
+                            tabId: tab.id,
+                            tableId: instance.id,
+                            initialQuery: instance.query,
+                            initialTitle: instance.title,
+                          });
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+          {isTabSwitching && <TabSkeleton kind={incomingTab.kind} />}
         </div>
       </div>
 
@@ -642,5 +765,83 @@ function EditableTabHeading({
         minWidth: 220,
       }}
     />
+  );
+}
+
+/**
+ * Page-level skeleton placeholder shown while a first-visit tab is mounting.
+ * The shape mirrors the destination tab kind so once the real content
+ * lands the layout doesn't visually shift:
+ *   - dashboard tabs render a responsive grid of card-shaped blocks
+ *   - tables tabs render a vertical stack of large card-shaped blocks
+ * Both share a header strip mimicking the title + edit toolbar.
+ */
+function TabSkeleton({ kind }: { kind: 'dashboard' | 'tables' }) {
+  // Heights are intentionally varied so the skeleton reads as content rather
+  // than a uniform grid of grey rectangles. Numbers are tuned to roughly
+  // match the chart cards / table cards the user will see next.
+  const dashboardBlocks = [200, 240, 220, 260, 220, 240];
+  const tablesBlocks = [320, 280, 280];
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-label="Loading tab content"
+      style={{
+        maxWidth: 1400,
+        margin: '0 auto',
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 14,
+      }}
+    >
+      {/* Header strip — mimics page heading + edit toolbar */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div
+          className="quinn-skeleton-shimmer"
+          style={{ height: 24, width: 'min(240px, 60%)', borderRadius: 6 }}
+        />
+        <div
+          className="quinn-skeleton-shimmer"
+          style={{ height: 32, width: 156, borderRadius: 999 }}
+        />
+      </div>
+
+      {kind === 'dashboard' ? (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: 14,
+          }}
+        >
+          {dashboardBlocks.map((h, i) => (
+            <div
+              key={i}
+              className="quinn-skeleton-shimmer"
+              style={{ height: h, borderRadius: 14 }}
+            />
+          ))}
+        </div>
+      ) : (
+        tablesBlocks.map((h, i) => (
+          <div
+            key={i}
+            className="quinn-skeleton-shimmer"
+            style={{ height: h, borderRadius: 14 }}
+          />
+        ))
+      )}
+    </div>
   );
 }

@@ -7,6 +7,7 @@ import {
   CalendarClock,
   ChefHat,
   ClipboardList,
+  LineChart,
   Send,
   ShoppingCart,
   FileCheck,
@@ -227,11 +228,24 @@ export default function Sidebar() {
         </NavGroup>
 
         {/* Group 3 — Performance (Manager+)
-            Trimmed to Compare sites only. Dashboard, Analytics, and the
-            table builder remain wired up in the app but are hidden from
-            the sidebar to keep the demo focused on the cross-site
-            comparison view. */}
+            Two surfaces, both retrospective / oversight:
+              • Forecast demand — Quinn's predictions, with backtest
+                accuracy and a downstream-impact previewer. Sits here
+                rather than next to Plan production because it answers
+                "how is the model doing?" first and "let me retune it"
+                second — both performance questions.
+              • Compare sites    — cross-estate comparison.
+            Dashboard, Analytics, and the table builder remain wired up
+            in the app but are hidden from the sidebar to keep the demo
+            focused on these two views. */}
         <NavGroup title="Performance" compact={compact}>
+          <NavItem
+            label="Forecast demand"
+            icon={LineChart}
+            compact={compact}
+            active={is('/forecast')}
+            onClick={() => router.push('/forecast')}
+          />
           <NavItem label="Compare sites" icon={Layers} compact={compact} active={is('/compare')} />
         </NavGroup>
 

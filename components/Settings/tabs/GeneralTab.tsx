@@ -28,7 +28,6 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import QtyStepper, { getStepperValueStyle } from '@/components/Production/QtyStepper';
 import StatusPill from '@/components/Production/StatusPill';
 import {
   DAYS_OF_WEEK,
@@ -106,7 +105,6 @@ export default function GeneralTab({ siteId, editing, staged, onStage, health }:
   const hubId = stagedCore.hubId === undefined ? core.hubId : stagedCore.hubId;
   const open = stagedCore.openingHours?.open ?? core.openingHours.open;
   const close = stagedCore.openingHours?.close ?? core.openingHours.close;
-  const salesFactor = stagedCore.salesFactor ?? core.salesFactor;
 
   // ── Production setup (local UI state for fields not in the overlay) ──
   // Defaults derived from site type so the form starts in a sensible
@@ -330,35 +328,6 @@ export default function GeneralTab({ siteId, editing, staged, onStage, health }:
           }
         />
 
-        {hubId && !isHub && (
-          <FieldRow
-            label="Sales factor"
-            hint="Demand share relative to the hub. Quinn uses this to derive a per-site forecast when none is set explicitly."
-            control={
-              <QtyStepper
-                size="emphasized"
-                disabled={!editing}
-                onIncrement={() =>
-                  setCore({
-                    salesFactor: Math.min(2, round2(salesFactor + 0.05)),
-                  })
-                }
-                onDecrement={() =>
-                  setCore({
-                    salesFactor: Math.max(0.05, round2(salesFactor - 0.05)),
-                  })
-                }
-                decrementLabel="Lower factor"
-                incrementLabel="Raise factor"
-              >
-                <span style={getStepperValueStyle('emphasized')}>{salesFactor.toFixed(2)}</span>
-              </QtyStepper>
-            }
-            cascade={`Default · ${core.defaults.salesFactor.toFixed(2)}`}
-            isOverridden={round2(salesFactor) !== round2(core.defaults.salesFactor)}
-            onReset={() => setCore({ salesFactor: core.defaults.salesFactor })}
-          />
-        )}
       </Section>
 
       <Section
@@ -745,6 +714,3 @@ function suggestCloseTime(open: string): string {
   return `${hh}:${mm}`;
 }
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}

@@ -8,6 +8,7 @@ import { RemakeRequestStoreProvider } from '@/components/Production/remakeStore'
 import { HubUnlockStoreProvider } from '@/components/Production/hubUnlockStore';
 import { IngredientShortfallStoreProvider } from '@/components/Production/ingredientShortfallStore';
 import { HubOverrideStoreProvider } from '@/components/Production/hubOverrideStore';
+import { HubExtrasStoreProvider } from '@/components/Production/hubExtrasStore';
 import { DispatchTransferStoreProvider } from '@/components/Production/dispatchStore';
 import { DemoNotificationsProvider } from '@/components/Production/demoNotificationsStore';
 import { HybridOrderStoreProvider } from '@/components/Production/hybridOrderStore';
@@ -35,13 +36,15 @@ export default function HubOperatorProviders({ children }: { children: React.Rea
               <HubUnlockStoreProvider>
                 <IngredientShortfallStoreProvider>
                   <HubOverrideStoreProvider>
-                    <DispatchTransferStoreProvider>
-                      <DemoNotificationsProvider>
-                        <HybridOrderStoreProvider>
-                          <ProductionSiteProvider>{children}</ProductionSiteProvider>
-                        </HybridOrderStoreProvider>
-                      </DemoNotificationsProvider>
-                    </DispatchTransferStoreProvider>
+                    <HubExtrasStoreProvider>
+                      <DispatchTransferStoreProvider>
+                        <DemoNotificationsProvider>
+                          <HybridOrderStoreProvider>
+                            <ProductionSiteProvider>{children}</ProductionSiteProvider>
+                          </HybridOrderStoreProvider>
+                        </DemoNotificationsProvider>
+                      </DispatchTransferStoreProvider>
+                    </HubExtrasStoreProvider>
                   </HubOverrideStoreProvider>
                 </IngredientShortfallStoreProvider>
               </HubUnlockStoreProvider>

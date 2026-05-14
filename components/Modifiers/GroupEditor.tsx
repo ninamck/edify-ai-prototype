@@ -195,6 +195,22 @@ function OptionEditor({
         </span>
       </div>
 
+      {/* Per-option POS source id — separate from the group-level id
+          above. Square / Toast give each modifier option its own id,
+          so we mirror that one-to-one here. Stored on the option
+          itself; no separate mapping table. */}
+      <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '24px 1fr', gap: 10, alignItems: 'center' }}>
+        <span />
+        <Field label="POS source id (optional)">
+          <input
+            value={option.posSourceId ?? ''}
+            onChange={(e) => onPatch({ posSourceId: e.target.value || undefined })}
+            placeholder="e.g. pos-mg-milks-oat"
+            style={textInput}
+          />
+        </Field>
+      </div>
+
       <div style={{ marginTop: 10 }}>
         <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: 6 }}>
           Effects

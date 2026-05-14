@@ -178,7 +178,7 @@ export const QUESTION_LIBRARY: QuestionEntry[] = [
     id: 'cogs-what-is-our-cogs-as',
     segment: 'cogs',
     text: 'What is our COGS as a percentage of revenue across all sites this month?',
-    suggestedChartId: 'labour',
+    suggestedChartId: 'cogs-pct',
   },
   {
     id: 'cogs-which-site-has-the-highest',
@@ -190,7 +190,7 @@ export const QUESTION_LIBRARY: QuestionEntry[] = [
     id: 'cogs-what-are-the-top-5',
     segment: 'cogs',
     text: 'What are the top 5 ingredients driving the most cost this month?',
-    suggestedChartId: 'waste-top10',
+    suggestedChartId: 'cogs-top-ingredients',
   },
   {
     id: 'cogs-how-has-our-overall-cogs',
@@ -202,7 +202,7 @@ export const QUESTION_LIBRARY: QuestionEntry[] = [
     id: 'cogs-which-menu-items-have-the',
     segment: 'cogs',
     text: 'Which menu items have the lowest gross margin?',
-    suggestedChartId: 'waste-top10',
+    suggestedChartId: 'low-gross-margin-items',
   },
   {
     id: 'cogs-what-is-the-theoretical-vs',

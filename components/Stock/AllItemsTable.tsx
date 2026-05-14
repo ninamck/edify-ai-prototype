@@ -220,6 +220,15 @@ export default function AllItemsTable({ items, onItemSelect, onItemEdit }: Props
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Single-shot stylesheet for the row hover state. Doing this in
+          CSS removes one `onMouseEnter` + one `onMouseLeave` closure
+          per row plus the imperative style writes they triggered, which
+          on a 50-item site is ~100 listeners and a layout-thrashing
+          inline-style mutation per pointer move. */}
+      <style>{`
+        .stock-row { transition: background 0.1s ease; }
+        .stock-row:hover { background: var(--color-bg-hover); }
+      `}</style>
       {/* Quick filter strip — segmented pill matching the
           All/Completed/Needs review pattern on the Stocktake list.
           Lives outside the table card so it reads as a top-level
@@ -450,18 +459,11 @@ export default function AllItemsTable({ items, onItemSelect, onItemEdit }: Props
               return (
                 <tr
                   key={item.id}
+                  className="stock-row"
                   onClick={() => onItemSelect(item)}
                   style={{
                     borderTop: '1px solid var(--color-border-subtle)',
                     cursor: 'pointer',
-                    transition: 'background 0.1s ease',
-                  }}
-                  onMouseEnter={e => {
-                    (e.currentTarget as HTMLTableRowElement).style.background =
-                      'var(--color-bg-hover)';
-                  }}
-                  onMouseLeave={e => {
-                    (e.currentTarget as HTMLTableRowElement).style.background = 'transparent';
                   }}
                 >
                   <Td>
