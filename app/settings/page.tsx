@@ -11,7 +11,7 @@ import { listAllSites } from '@/components/Settings/siteSettingsStore';
 import type { SiteId } from '@/components/Production/fixtures';
 
 const TAB_IDS: SettingsTabId[] = [
-  'general', 'cutoffs', 'benches', 'team', 'windows', 'range-tiers',
+  'general', 'cutoffs', 'benches', 'team', 'windows', 'range-tiers', 'night-shift',
 ];
 
 export default function SettingsPage() {

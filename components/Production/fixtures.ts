@@ -3630,6 +3630,55 @@ export function submissionCutoffFor(hubId: SiteId, forDate: string): string {
 }
 
 /**
+ * PAC138 — synthesise an auto-finalised submission for a spoke that
+ * didn't submit before its hub cutoff.
+ *
+ * Rather than letting the hub bake without numbers for that spoke (the
+ * old "No order" pill), Quinn commits Quinn's baseline on the spoke's
+ * behalf — same numbers the spoke would have seen as the default if
+ * they'd opened the order — and tags the submission as
+ * `'auto-finalised'`. The hub still has the Unlock affordance per
+ * column if the spoke calls in and wants to override.
+ *
+ * The seeded line shape mirrors a manually-submitted one:
+ *   - `quinnProposedUnits` = `quinnProposed` from `spokeOrderForDate`
+ *     (forecast − carry-over).
+ *   - `confirmedUnits`      = same value, since the system is
+ *     committing in the spoke's absence.
+ *
+ * This is a pure function — it doesn't write to `PRET_SPOKE_SUBMISSIONS`.
+ * Callers are expected to merge the synthetic submission alongside the
+ * seeded list when computing hub-side reads (see `RecipeFirstGrid`).
+ */
+export function autoFinaliseSubmissionFor(
+  spokeId: SiteId,
+  hubId: SiteId,
+  forDate: string,
+): SpokeSubmission {
+  const ledger = spokeOrderForDate(spokeId, hubId, forDate);
+  return {
+    id: `auto-finalised-${spokeId}-${forDate}`,
+    fromSiteId: spokeId,
+    toHubId: hubId,
+    forDate,
+    cutoffDateTime: submissionCutoffFor(hubId, forDate),
+    status: 'auto-finalised',
+    lines: ledger.lines
+      // Drop zero-quantity lines so the matrix only shows recipes the
+      // spoke actually needs — keeps the auto-finalised column visually
+      // similar to a manually-submitted one (manually-submitted lines
+      // also tend to omit recipes the spoke doesn't want).
+      .filter(l => l.quinnProposed > 0)
+      .map(l => ({
+        skuId: l.skuId,
+        recipeId: l.recipeId,
+        quinnProposedUnits: l.quinnProposed,
+        confirmedUnits: l.quinnProposed,
+      })),
+  };
+}
+
+/**
  * All sites that pull from the given hub — regular SPOKEs and STANDALONEs
  * with `linkType: 'linked'` (PAC139 dark-kitchen pattern). HYBRIDs are
  * included too since they also receive partial production. Used by the

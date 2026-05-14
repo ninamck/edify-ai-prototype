@@ -7,7 +7,6 @@ import { useRouter, usePathname } from 'next/navigation';
 import QuinnProductionPanel, { QuinnTrigger } from '@/components/Production/QuinnProductionPanel';
 import { RoleSwitcher } from '@/components/Production/RoleContext';
 import HubOperatorProviders from '@/components/Operator/HubOperatorProviders';
-import ProductionSiteSelector from '@/components/Production/ProductionSiteSelector';
 import { DemoControlsSection } from '@/components/DemoControls/DemoControls';
 import {
   TOP_NAV_BAR_PADDING,
@@ -303,19 +302,6 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
             </div>
           )}
         </nav>
-
-        {/* Shared site selector — single source of truth for which site
-            every production sub-page operates on. Hidden for the spoke
-            persona since they're locked to their own site, and hidden
-            on hub-kitchen-only views (Benches, PCR queue, Run sheet)
-            where the selector would just be noise. Also hidden across
-            the entire Run group (Today / Run sheet / Sales / Spokes /
-            Productivity) — once a manager has picked a site they're
-            running, swapping mid-shift loses live-floor context. The
-            site stays anchored via the SiteSwitcher in the top bar. */}
-        {!pathname.startsWith('/production/board') &&
-          !pathname.startsWith('/production/pcr') &&
-          productionGroupForPath(pathname) !== 'run' && <ProductionSiteSelector />}
 
         {/* Page body — flows in normal document scroll so the page itself
             scrolls rather than an inner container. */}

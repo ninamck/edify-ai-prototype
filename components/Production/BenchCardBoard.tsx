@@ -7,15 +7,16 @@ import {
   effectiveBatchRules,
   getWorkflow,
   isNightShiftHHMM,
-  PRET_NIGHT_SHIFT_POLICY,
   proposeBatchSplit,
   type Bench,
+  type NightShiftPolicy,
   type ProductionItemId,
   type ProductionMode,
   type RunSchedule,
   type Site,
 } from './fixtures';
 import { computeRelatedItems, usePlan, type PlanLine } from './PlanStore';
+import { useNightShiftPolicy } from '@/components/Settings/nightShiftPolicyStore';
 import { downloadBenchPdf } from '@/lib/pdf/productionPdfs';
 
 type HighlightMode = 'focus' | 'upstream' | 'downstream' | 'dim' | 'none';
@@ -156,6 +157,13 @@ type RunBucket = {
    * when neither a manager override nor a seeded run-level value exists.
    */
   assignee: string;
+  /**
+   * True when this run starts inside the central night-shift window
+   * (per the live `NightShiftPolicy`). Stamped here at construction
+   * time so downstream UI doesn't need to thread the policy through
+   * prop trees — the bench card just reads `bucket.isNight`.
+   */
+  isNight: boolean;
 };
 
 /**
@@ -214,6 +222,12 @@ export default function BenchCardBoard({
   onBenchClick,
 }: Props) {
   const lines = usePlan(site.id, date);
+
+  // PAC070 / P129 — the night-shift bucketing + ordering uses the live
+  // central policy from the Support Centre store. Changes to the
+  // policy (via the Night-shift settings tab) flow through here on the
+  // next render because `policy` is in the `cards` memo dep array.
+  const { policy: nightShiftPolicy } = useNightShiftPolicy();
 
   // Local manager-applied assignment overrides. Sentinel `UNASSIGNED`
   // means the manager explicitly cleared the seeded assignee. Lives in
@@ -315,7 +329,7 @@ export default function BenchCardBoard({
         // the card can render per-run subsections and surface "next run".
         const runBuckets =
           isPrimary && mode === 'run' && bench.runs && bench.runs.length > 0
-            ? bucketRowsIntoRuns(groupRows, bench.runs)
+            ? bucketRowsIntoRuns(groupRows, bench.runs, nightShiftPolicy)
             : undefined;
         modeGroups.push({
           mode,
@@ -386,7 +400,7 @@ export default function BenchCardBoard({
         hasWork: rows.length > 0,
       };
     });
-  }, [lines, siteBenches, assignmentOverrides, runAssignmentOverrides, benchOverrides]);
+  }, [lines, siteBenches, assignmentOverrides, runAssignmentOverrides, benchOverrides, nightShiftPolicy]);
 
   // Dependency-highlight resolver (same machinery as KitchenBoard).
   const highlightFor = useMemo<(itemId: string) => HighlightMode>(() => {
@@ -954,7 +968,7 @@ function RunBucketSection({
 }) {
   const nowMins = nowHHMM ? hhmmToMins(nowHHMM) : -1;
   const state: RunTiming | null = nowMins >= 0 ? runTiming(bucket, nowMins) : null;
-  const isNight = isNightBucket(bucket);
+  const isNight = bucket.isNight;
 
   const statePillColor =
     state === 'active'   ? { fg: 'var(--color-success)',         border: 'var(--color-success)' } :
@@ -1711,7 +1725,11 @@ function groupLabelFor(
  * only one run, all rows go into it. If phase data is missing we fall back
  * to category heuristics (viennoiserie in R1, loaves in R1, etc.).
  */
-function bucketRowsIntoRuns(rows: RowData[], runs: RunSchedule[]): RunBucket[] {
+function bucketRowsIntoRuns(
+  rows: RowData[],
+  runs: RunSchedule[],
+  policy: NightShiftPolicy,
+): RunBucket[] {
   const buckets: RunBucket[] = runs.map(run => {
     const startMins = hhmmToMins(run.startTime);
     return {
@@ -1723,13 +1741,14 @@ function bucketRowsIntoRuns(rows: RowData[], runs: RunSchedule[]): RunBucket[] {
       // Resolved later in the cards memo where the bench-level
       // fallback name + per-run overrides are available.
       assignee: '',
+      isNight: isNightShiftHHMM(run.startTime, policy),
     };
   });
 
   if (buckets.length === 0) return buckets;
 
   for (const row of rows) {
-    const idx = pickRunIndex(row, runs);
+    const idx = pickRunIndex(row, runs, policy);
     const bucket = buckets[idx] ?? buckets[0];
     bucket.rows.push(row);
     bucket.productionMins += row.estMinutes;
@@ -1740,23 +1759,27 @@ function bucketRowsIntoRuns(rows: RowData[], runs: RunSchedule[]): RunBucket[] {
   // exact sequence, then categoryOrder, then shelf-life ascending so the
   // most fragile items finish closest to handover.
   for (const bucket of buckets) {
-    if (isNightBucket(bucket)) sortNightBucket(bucket);
+    if (bucket.isNight) sortNightBucket(bucket, policy);
   }
 
   // Drop empty buckets so we don't render ghost sections.
   return buckets.filter(b => b.rows.length > 0);
 }
 
-function pickRunIndex(row: RowData, runs: RunSchedule[]): number {
+function pickRunIndex(
+  row: RowData,
+  runs: RunSchedule[],
+  policy: NightShiftPolicy,
+): number {
   if (runs.length === 1) return 0;
 
   // PAC070 — first-order SKUs go straight to the night-shift run if one
   // exists. The policy lists them in the exact sequence they should come
   // off the bench (long-ferment first, then long-cool items).
   const skuId = row.line.item.skuId;
-  const isNightFirst = PRET_NIGHT_SHIFT_POLICY.firstOrder.includes(skuId);
+  const isNightFirst = policy.firstOrder.includes(skuId);
   if (isNightFirst) {
-    const nightIdx = runs.findIndex(r => isNightShiftHHMM(r.startTime));
+    const nightIdx = runs.findIndex(r => isNightShiftHHMM(r.startTime, policy));
     if (nightIdx !== -1) return nightIdx;
   }
 
@@ -1774,7 +1797,7 @@ function pickRunIndex(row: RowData, runs: RunSchedule[]): number {
     let bestIdx = -1;
     let bestDelta = Infinity;
     runs.forEach((r, i) => {
-      if (isNightShiftHHMM(r.startTime)) return;
+      if (isNightShiftHHMM(r.startTime, policy)) return;
       const start = hhmmToMins(r.startTime);
       const delta = Math.abs(peakMins - start);
       if (delta < bestDelta) {
@@ -1788,32 +1811,25 @@ function pickRunIndex(row: RowData, runs: RunSchedule[]): number {
   // Fallback: category-based. Recipes tagged "morning"/"breakfast" go to
   // the first non-night run; anything else to the last run.
   const tags = row.line.recipe.selectionTags ?? [];
-  const firstDayIdx = runs.findIndex(r => !isNightShiftHHMM(r.startTime));
+  const firstDayIdx = runs.findIndex(r => !isNightShiftHHMM(r.startTime, policy));
   if (tags.includes('morning') || tags.includes('breakfast')) {
     return firstDayIdx === -1 ? 0 : firstDayIdx;
   }
   return runs.length - 1;
 }
 
-/** True when this bucket's run starts inside the central night-shift window. */
-function isNightBucket(bucket: RunBucket): boolean {
-  return isNightShiftHHMM(bucket.run.startTime);
-}
-
 /**
- * Apply PRET_NIGHT_SHIFT_POLICY ordering to a night-shift bucket, in place.
+ * Apply the central night-shift policy to a night-shift bucket, in place.
  * firstOrder SKUs come first in their declared sequence; everything else
  * is ordered by categoryOrder index then shelf-life ascending.
  */
-function sortNightBucket(bucket: RunBucket): void {
+function sortNightBucket(bucket: RunBucket, policy: NightShiftPolicy): void {
   const firstOrderRank = (skuId: string): number => {
-    const idx = PRET_NIGHT_SHIFT_POLICY.firstOrder.indexOf(skuId);
+    const idx = policy.firstOrder.indexOf(skuId);
     return idx === -1 ? Infinity : idx;
   };
   const categoryRank = (cat: string): number => {
-    const idx = PRET_NIGHT_SHIFT_POLICY.categoryOrder.indexOf(
-      cat as (typeof PRET_NIGHT_SHIFT_POLICY.categoryOrder)[number],
-    );
+    const idx = (policy.categoryOrder as readonly string[]).indexOf(cat);
     return idx === -1 ? Infinity : idx;
   };
 

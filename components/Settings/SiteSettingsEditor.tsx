@@ -41,6 +41,11 @@ import BenchesTab from './tabs/BenchesTab';
 import TeamTab from './tabs/TeamTab';
 import ProductionWindowsTab from './tabs/ProductionWindowsTab';
 import RangeTiersTab from './tabs/RangeTiersTab';
+import NightShiftTab from './tabs/NightShiftTab';
+import {
+  countPolicyOverrides,
+  useNightShiftPolicy,
+} from './nightShiftPolicyStore';
 
 export type SettingsTabId =
   | 'general'
@@ -48,15 +53,28 @@ export type SettingsTabId =
   | 'benches'
   | 'team'
   | 'windows'
-  | 'range-tiers';
+  | 'range-tiers'
+  | 'night-shift';
 
-const TAB_DEFINITIONS: Array<{ id: SettingsTabId; label: string; healthSurfaces: SettingsHealthItem['surface'][] }> = [
+/**
+ * The night-shift tab is estate-scoped — it edits a single central
+ * policy rather than per-site overrides. Marked here so the tab bar
+ * can show a "Central" caption and so site-scoped logic (override
+ * counts, "switch site" copy) skips it cleanly.
+ */
+const TAB_DEFINITIONS: Array<{
+  id: SettingsTabId;
+  label: string;
+  healthSurfaces: SettingsHealthItem['surface'][];
+  scope?: 'site' | 'estate';
+}> = [
   { id: 'general',     label: 'General',            healthSurfaces: [] },
   { id: 'cutoffs',     label: 'Cutoffs & ordering', healthSurfaces: ['cutoffs'] },
   { id: 'benches',     label: 'Benches',            healthSurfaces: ['batch-rules', 'bench-capabilities'] },
   { id: 'team',        label: 'Team & duties',      healthSurfaces: [] },
   { id: 'windows',     label: 'Production windows', healthSurfaces: [] },
   { id: 'range-tiers', label: 'Range & tiers',      healthSurfaces: ['ranges', 'selection-tags'] },
+  { id: 'night-shift', label: 'Night shift',        healthSurfaces: [], scope: 'estate' },
 ];
 
 export type SiteSettingsEditorProps = {
@@ -171,19 +189,29 @@ export default function SiteSettingsEditor({
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
+  // Estate-scoped tabs (currently just night-shift) read their override
+  // count from their own store rather than the per-site overlay.
+  const nightShift = useNightShiftPolicy();
+  const nightShiftOverrideCount = useMemo(
+    () => countPolicyOverrides(nightShift.policy),
+    [nightShift.policy],
+  );
+
   const tabBadgeForId = useCallback(
     (id: SettingsTabId) => {
       const def = TAB_DEFINITIONS.find(t => t.id === id);
       if (!def) return { overrides: 0, health: 0 };
-      const overrides = stagedCounts.byTab[id === 'range-tiers' ? 'general' : id] ?? 0;
-      // The range-tiers tab is read-only in v1 so it has no overrides.
       const health = def.healthSurfaces.reduce(
         (acc, s) => acc + (healthBySurface.get(s)?.length ?? 0),
         0,
       );
-      return { overrides: id === 'range-tiers' ? 0 : overrides, health };
+      // range-tiers is read-only in v1; night-shift is estate-scoped.
+      if (id === 'range-tiers') return { overrides: 0, health };
+      if (id === 'night-shift') return { overrides: nightShiftOverrideCount, health };
+      const overrides = stagedCounts.byTab[id] ?? 0;
+      return { overrides, health };
     },
-    [stagedCounts, healthBySurface],
+    [stagedCounts, healthBySurface, nightShiftOverrideCount],
   );
 
   const tabContent = renderTab(activeTab, {
@@ -451,6 +479,8 @@ function renderTab(
       return <ProductionWindowsTab {...ctx} />;
     case 'range-tiers':
       return <RangeTiersTab {...ctx} />;
+    case 'night-shift':
+      return <NightShiftTab {...ctx} />;
   }
 }
 
@@ -583,6 +613,7 @@ const QUINN_PROMPTS: Record<SettingsTabId, string> = {
   team:        'Add three new GMs to the bench rotation.',
   windows:     'Push P1 back by 30 minutes on Mondays.',
   'range-tiers': 'Tell me what the Range & tiers redesign should solve.',
+  'night-shift': 'Move egg-mayo filling above tuna-mayo in the night sequence.',
 };
 
 function QuinnRampButton({ activeTab }: { activeTab: SettingsTabId }) {

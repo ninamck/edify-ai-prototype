@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { ActiveSiteProvider } from "@/components/ActiveSite/ActiveSiteContext";
 import { SiteSettingsStoreProvider } from "@/components/Settings/siteSettingsStore";
+import { NightShiftPolicyProvider } from "@/components/Settings/nightShiftPolicyStore";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -25,7 +26,9 @@ export default function RootLayout({
       <body className="h-full">
         <ActiveSiteProvider>
           <SiteSettingsStoreProvider>
-            {children}
+            <NightShiftPolicyProvider>
+              {children}
+            </NightShiftPolicyProvider>
           </SiteSettingsStoreProvider>
         </ActiveSiteProvider>
       </body>

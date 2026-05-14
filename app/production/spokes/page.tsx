@@ -154,11 +154,12 @@ export default function SpokeSubmissionsPage() {
   // + hybrids. The page is now a generic "site → hub" order editor, not just
   // for SPOKE-typed sites.
   const spokes = useMemo(() => PRET_SITES.filter(isHubLinked), []);
-  // Spoke selection is driven by the layout-level ProductionSiteSelector —
-  // the spoke picker that used to live in this page body has been removed
-  // so there's a single source of truth for "which site am I viewing".
+  // Spoke selection is driven by the sidebar SiteSwitcher in the
+  // production layout's top bar — the inline picker that used to sit
+  // below the sub-tabs has been removed so there's a single source of
+  // truth for "which site am I viewing".
   //  - Spoke persona: locked to their own fixture site (site-spoke-south)
-  //  - Hub persona: whatever is selected in the top site picker. If the
+  //  - Hub persona: whatever is selected in the top site switcher. If the
   //    hub itself is selected (e.g. hub-central), this surface falls back
   //    to the first hub-linked site since you can't place a spoke order
   //    against the hub itself.

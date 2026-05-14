@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Filter, Inbox, Clock, AlertCircle, AlertTriangle, Package } from 'lucide-react';
+import { ChevronDown, ChevronRight, Filter, Inbox, Clock, AlertCircle, AlertTriangle, Package, Sparkles } from 'lucide-react';
 import {
   DEMO_TODAY,
   PRET_SITES,
+  autoFinaliseSubmissionFor,
   getSite,
   getRecipe,
   productionItemsAt,
@@ -211,14 +212,61 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   // win over the spoke's submitted number so totals + cell displays
   // both reflect the override.
   //
+  // PAC138 — the effective submissions list for the hub's view of `date`.
+  // Combines:
+  //   1. Real seeded submissions (`submissionsForHub`).
+  //   2. Synthetic 'auto-finalised' submissions, one per linked receiver
+  //      whose cutoff has passed without a real submission on file. Quinn
+  //      commits Quinn's baseline numbers on their behalf so the hub bake
+  //      plan has values for that spoke instead of a blank "No order"
+  //      column. The hub Unlock affordance is still available per column
+  //      if the spoke calls in to change them.
+  // Cutoff state is read live (via Date.now) so the flip is purely time-
+  // driven — no fixture edits required.
+  const effectiveSubmissions = useMemo(() => {
+    if (!isHub) return [] as SpokeSubmission[];
+    const real = submissionsForHub(siteId, date);
+    const byFromSite = new Map<SiteId, SpokeSubmission>();
+    for (const sub of real) byFromSite.set(sub.fromSiteId, sub);
+
+    const receivers = linkedReceiversFor(siteId);
+    const out = [...real];
+    for (const receiver of receivers) {
+      const existing = byFromSite.get(receiver.id);
+      // Auto-finalise when no real submission exists at all, or only a
+      // stale draft sits on file — both states mean the spoke didn't
+      // commit before cutoff.
+      const needsAuto = !existing || existing.status === 'draft';
+      if (!needsAuto) continue;
+      const cutoffISO = submissionCutoffFor(siteId, date);
+      if (new Date(cutoffISO).getTime() >= Date.now()) continue;
+      const synthesised = autoFinaliseSubmissionFor(receiver.id, siteId, date);
+      if (existing) {
+        // Replace the draft entry with the auto-finalised one so callers
+        // don't see two records for the same spoke.
+        const idx = out.findIndex(s => s.id === existing.id);
+        if (idx !== -1) out.splice(idx, 1, synthesised);
+        else out.push(synthesised);
+      } else {
+        out.push(synthesised);
+      }
+      byFromSite.set(receiver.id, synthesised);
+    }
+    return out;
+  }, [isHub, siteId, date]);
+
+  // Per-(spoke, sku) quantity lookup. Builds the matrix cells.
+  //
   // Draft submissions are intentionally skipped — a spoke that hasn't
   // submitted yet shouldn't be driving hub bake numbers. The spoke
   // column will read "Pending" instead of a stale Quinn proposal.
+  // Auto-finalised submissions (PAC138) ARE included: that's the whole
+  // point — the system commits Quinn's baseline so the hub has numbers
+  // to bake against even when the spoke missed the cutoff.
   const perSpokeBySku = useMemo(() => {
     const map = new Map<string, number>();
     if (!isHub) return map;
-    const subs = submissionsForHub(siteId, date);
-    for (const sub of subs) {
+    for (const sub of effectiveSubmissions) {
       if (sub.status === 'draft') continue;
       for (const ln of sub.lines) {
         const qty = ln.confirmedUnits ?? ln.quinnProposedUnits;
@@ -227,32 +275,34 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
       }
     }
     return map;
-  }, [isHub, siteId, date, getOverride]);
+  }, [isHub, effectiveSubmissions, siteId, date, getOverride]);
 
   // Set of spokes that have actually placed an order for `date`. Used to
   // gate header countdowns and per-cell "—" placeholders. Anything not
-  // in this set hasn't submitted yet.
+  // in this set hasn't submitted yet. Auto-finalised submissions count
+  // as "submitted" for this purpose — the cells should render the
+  // committed numbers, not the "—" placeholder.
   const submittedSpokeIds = useMemo(() => {
     const set = new Set<SiteId>();
     if (!isHub) return set;
-    for (const sub of submissionsForHub(siteId, date)) {
+    for (const sub of effectiveSubmissions) {
       if (sub.status !== 'draft') set.add(sub.fromSiteId);
     }
     return set;
-  }, [isHub, siteId, date]);
+  }, [isHub, effectiveSubmissions]);
 
   // Hub-side per-spoke unlock context — needed to render the inline
   // Lock / Unlock affordance on each spoke column header. Computed
   // once per render so the SpokeUnlockControl component just plugs in.
   const { transferFor } = useDispatchTransfers();
   const spokeSubmissions = useMemo(() => {
-    if (!isHub) return new Map<SiteId, ReturnType<typeof submissionsForHub>[number]>();
-    const map = new Map<SiteId, ReturnType<typeof submissionsForHub>[number]>();
-    for (const sub of submissionsForHub(siteId, date)) {
+    if (!isHub) return new Map<SiteId, SpokeSubmission>();
+    const map = new Map<SiteId, SpokeSubmission>();
+    for (const sub of effectiveSubmissions) {
       map.set(sub.fromSiteId, sub);
     }
     return map;
-  }, [isHub, siteId, date]);
+  }, [isHub, effectiveSubmissions]);
 
   // For HYBRID: which SKUs the site bakes itself (everything else is
   // received from the hub). Drives the Make / Receive tag per row.
@@ -2190,6 +2240,28 @@ function SpokeSubmissionStatus({
     return () => window.clearInterval(id);
   }, [isCountingDown]);
 
+  // PAC138 — auto-finalised submissions get their own pill so the hub
+  // can tell at a glance which spokes the system committed for. Sits
+  // ahead of the regular `submitted` branch because Quinn-on-behalf
+  // shouldn't read the same as a manually-submitted order.
+  if (submission && submission.status === 'auto-finalised') {
+    const sent = dispatched;
+    const lineCount = submission.lines.length;
+    return (
+      <span
+        title={
+          sent
+            ? `Sent — Quinn auto-finalised this spoke's order (${lineCount} line${lineCount === 1 ? '' : 's'}) at the ${formatCutoffClock(submission.cutoffDateTime)} cutoff and the hub has since dispatched it.`
+            : `Auto-finalised — the spoke didn't submit before ${formatCutoffClock(submission.cutoffDateTime)}, so Quinn committed the baseline (${lineCount} line${lineCount === 1 ? '' : 's'}) on their behalf. Use Unlock to reopen for the spoke if it's needed.`
+        }
+        style={pillStyle('auto')}
+      >
+        <Sparkles size={9} />
+        {sent ? 'Sent (auto)' : 'Auto-finalised'}
+      </span>
+    );
+  }
+
   if (submitted) {
     const sent = dispatched;
     return (
@@ -2208,6 +2280,11 @@ function SpokeSubmissionStatus({
   }
 
   if (cutoffPassed) {
+    // Reached only when there's no submission record at all — auto-
+    // finalisation requires a linked receiver row to anchor against,
+    // so the grid populates one upstream and this branch is now
+    // effectively a defensive fallback (e.g. a non-receiver site
+    // accidentally rendered as a spoke column).
     return (
       <span
         title={`Cutoff passed (${formatCutoffClock(cutoffISO)}) and no submission was sent — the hub won't be ordering for this spoke today. Use Unlock to reopen the order if it's needed.`}
@@ -2244,7 +2321,7 @@ function SpokeSubmissionStatus({
 }
 
 function pillStyle(
-  variant: 'submitted' | 'pending' | 'missed',
+  variant: 'submitted' | 'pending' | 'missed' | 'auto',
 ): React.CSSProperties {
   const palette = {
     submitted: {
@@ -2261,6 +2338,16 @@ function pillStyle(
       bg: 'var(--color-error-light, #fdecec)',
       fg: 'var(--color-error, #c62b2b)',
       border: 'var(--color-error-border, #f0c2c2)',
+    },
+    // PAC138 — distinct visual for system-committed orders so the hub
+    // manager can tell auto-finalised columns apart from
+    // manually-submitted ones at a glance. Warning palette reads as
+    // "look at me, you might want to check these numbers" without
+    // implying error.
+    auto: {
+      bg: 'var(--color-warning-light, #fff4dc)',
+      fg: 'var(--color-warning, #a16400)',
+      border: 'var(--color-warning-border, #f0d496)',
     },
   }[variant];
   return {

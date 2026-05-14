@@ -7,7 +7,6 @@ import { useRouter, usePathname } from 'next/navigation';
 import QuinnProductionPanel, { QuinnTrigger } from '@/components/Production2/QuinnProductionPanel';
 import { RoleSwitcher } from '@/components/Production2/RoleContext';
 import HubOperatorProviders from '@/components/Operator/HubOperatorProviders';
-import ProductionSiteSelector from '@/components/Production2/ProductionSiteSelector';
 import {
   TOP_NAV_BAR_PADDING,
   TOP_NAV_PILL_ACTIVE,
@@ -255,15 +254,6 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
             />
           )}
         </nav>
-
-        {/* Shared site selector — single source of truth for which site
-            every production sub-page operates on. Hidden for the spoke
-            persona since they're locked to their own site, and hidden
-            on hub-kitchen-only views (Benches, PCR queue) where the
-            selector would just be noise. */}
-        {!pathname.startsWith('/production/board') &&
-          !pathname.startsWith('/production/pcr') &&
-          !pathname.startsWith('/production/run-sheet') && <ProductionSiteSelector />}
 
         {/* Page body — flows in normal document scroll so the page itself
             scrolls rather than an inner container. */}
