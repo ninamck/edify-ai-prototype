@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, Filter, Inbox, Clock, AlertCircle, AlertTria
 import {
   DEMO_TODAY,
   PRET_SITES,
+  demoNow,
   effectiveSubmissionsForHub,
   getSite,
   getRecipe,
@@ -510,7 +511,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
     if (!isHub || spokeFilter === 'all') return null;
     const submission = spokeSubmissions.get(spokeFilter);
     const cutoffISO = submission?.cutoffDateTime ?? submissionCutoffFor(siteId, date);
-    const cutoffPassed = new Date(cutoffISO).getTime() < Date.now();
+    const cutoffPassed = new Date(cutoffISO).getTime() < demoNow().getTime();
     const hasTransfer = !!transferFor(siteId, spokeFilter, date);
     return { submission, cutoffISO, cutoffPassed, hasTransfer };
   }, [isHub, spokeFilter, spokeSubmissions, siteId, date, transferFor]);
@@ -870,7 +871,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
                       const cutoffISO =
                         submission?.cutoffDateTime ?? submissionCutoffFor(siteId, date);
                       const cutoffPassed =
-                        new Date(cutoffISO).getTime() < Date.now();
+                        new Date(cutoffISO).getTime() < demoNow().getTime();
                       const hasTransfer = !!transferFor(siteId, sp.id, date);
                       return (
                         <th key={sp.id} style={headStyle({ minWidth: 130 })}>
@@ -2736,7 +2737,7 @@ function SpokeSubmissionStatus({
   // Hover copy is what differentiates them — both pills count down
   // to the same cutoff so the hub manager sees the time-pressure at a
   // glance regardless of why it's outstanding.
-  const msLeft = new Date(cutoffISO).getTime() - Date.now();
+  const msLeft = new Date(cutoffISO).getTime() - demoNow().getTime();
   const tooltip =
     submission && submission.status === 'draft'
       ? `Spoke has a draft started but hasn't submitted. Cutoff at ${formatCutoffClock(cutoffISO)}.`

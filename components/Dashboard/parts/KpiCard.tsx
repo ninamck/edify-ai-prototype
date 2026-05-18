@@ -8,7 +8,7 @@ export default function KpiCard({ label, value, delta, deltaLabel, positive }: K
       style={{
         padding: '14px 16px',
         borderRadius: '10px',
-        border: '1px solid var(--color-border-subtle)',
+        border: '1px solid #001C35',
         background: '#fff',
         boxShadow: '0 2px 8px rgba(58,48,40,0.08), 0 0 0 1px rgba(58,48,40,0.03)',
       }}

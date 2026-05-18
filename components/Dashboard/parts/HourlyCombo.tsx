@@ -14,19 +14,19 @@ import {
 } from 'recharts';
 import type { HourlyTradingRow } from '@/components/Dashboard/data/managerMockData';
 
-const ACCENT = 'var(--color-accent-deep)';
-const ACCENT_MID = 'var(--color-accent-mid)';
-const OK = '#166534';
-const WARN = '#B45309';
-const GHOST = 'rgba(58,48,40,0.14)';
+const ACCENT = '#001C35';
+const ACCENT_MID = '#1A148A';
+const OK = '#28AFC9';
+const WARN = '#FF0058';
+const GHOST = '#F8E8D6';
 
 const tipStyle = {
-  background: '#fff',
-  border: '1px solid var(--color-border-subtle)',
+  background: '#FCF6EE',
+  border: '1px solid #001C35',
   borderRadius: '8px',
   fontSize: '12px',
   fontWeight: 500,
-  color: 'var(--color-text-primary)',
+  color: '#001C35',
 };
 
 type BarColour = { hour: string; fill: string };
@@ -135,7 +135,7 @@ export default function HourlyCombo({ data }: { data: HourlyTradingRow[] }) {
           stroke={ACCENT_MID}
           strokeWidth={2}
           strokeDasharray="4 3"
-          dot={{ r: 3, fill: '#fff', stroke: ACCENT_MID, strokeWidth: 2 }}
+          dot={{ r: 3, fill: '#FCF6EE', stroke: ACCENT_MID, strokeWidth: 2 }}
           connectNulls={false}
         />
       </ComposedChart>

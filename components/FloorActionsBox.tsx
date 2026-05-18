@@ -49,7 +49,7 @@ function FloorActionSquare({
           width: '34px',
           height: '34px',
           borderRadius: '8px',
-          background: 'var(--color-bg-surface)',
+          background: '#fff',
         }}>
           <Icon size={17} color="var(--color-text-secondary)" strokeWidth={2} />
         </span>
@@ -107,8 +107,8 @@ export default function FloorActionsBox({
         width: '100%',
         padding: '14px 20px',
         borderRadius: '12px',
-        background: '#fff',
-        border: '2px solid rgba(217, 215, 212, 1)',
+        background: 'var(--color-floor-actions-bg, #fff)',
+        border: '1px solid rgba(0, 28, 53, 1)',
         boxShadow: '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.03)',
       }}
     >

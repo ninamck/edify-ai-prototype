@@ -185,13 +185,13 @@ interface InsightGroup {
 const CATEGORY = {
   'needs-call': {
     label: 'Needs your call',
-    color: '#B91C1C',
-    // Transparent body keeps the wrapper quiet, but the red outline
+    color: '#001C35',
+    // Transparent body keeps the wrapper quiet, but the blue outline
     // still groups the column as the urgent slice. Reads as an
     // outlined chip rather than a tinted block.
     bg: 'transparent',
-    borderColor: 'rgba(185,28,28,0.45)',
-    dot: '#EF4444',
+    borderColor: 'rgba(0, 28, 53, 0.45)',
+    dot: '#001C35',
   },
   'handled': {
     label: "Quinn's handled this",
@@ -1696,8 +1696,8 @@ function ApprovalsSubcard({ pending }: { pending: ReturnType<typeof useApprovals
           fontWeight: 700,
           padding: '2px 7px',
           borderRadius: '100px',
-          background: 'var(--color-warning-light)',
-          color: 'var(--color-warning)',
+          background: 'var(--color-bg-hover)',
+          color: 'var(--color-text-secondary)',
         }}>
           {pending.length}
         </span>
@@ -1744,7 +1744,7 @@ function ApprovalsSubcard({ pending }: { pending: ReturnType<typeof useApprovals
                   alignItems: 'center',
                   gap: '5px',
                   fontSize: '10px',
-                  color: 'var(--color-warning)',
+                  color: 'var(--color-text-muted)',
                   fontWeight: 600,
                 }}>
                   <AlertCircle size={10} strokeWidth={2.2} />

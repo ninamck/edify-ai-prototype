@@ -46,8 +46,8 @@ function ChartCard({
     <div
       style={{
         padding: '16px 16px 12px',
-        borderRadius: 12,
-        border: '1px solid var(--color-border-subtle)',
+        borderRadius: '12px 0 12px 12px',
+        border: '1px solid #001C35',
         background: '#fff',
         boxShadow: '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.03)',
         minHeight: 0,
@@ -127,7 +127,7 @@ export default function ManagerDashboard({
           style={{
             padding: '14px 16px 10px',
             borderRadius: 12,
-            border: '1px solid var(--color-border-subtle)',
+            border: '1px solid #001C35',
             background: '#fff',
             boxShadow: '0 2px 12px rgba(58,48,40,0.07)',
           }}
@@ -159,7 +159,7 @@ export default function ManagerDashboard({
         return (
           <ChartCard
             title="Sales v staff v forecast · hour by hour"
-            subtitle="Bars: actual £ (green = ahead of forecast, amber = behind, grey = not yet). Line: forecast £. Right axis: staff headcount — solid for hours worked, dashed for the rest of the roster."
+            subtitle="Bars: actual £ (cyan = ahead of forecast, pink = behind, sand = not yet). Line: forecast £. Right axis: staff headcount — solid for hours worked, dashed for the rest of the roster."
             height={280}
           >
             <HourlyCombo data={hourlyTrading} />

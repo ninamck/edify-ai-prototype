@@ -1322,7 +1322,7 @@ function ClaudeComposer({
         width: '100%',
       background: '#fff',
       borderRadius: '20px',
-      border: ghost ? '1.5px solid var(--color-accent-mid, rgba(34,68,68,0.35))' : '1.5px solid rgba(217, 215, 212, 1)',
+      border: ghost ? '1.5px solid var(--color-accent-mid, rgba(34,68,68,0.35))' : '1.5px solid rgba(0, 28, 53, 1)',
       boxShadow: '0 4px 20px rgba(58,48,40,0.09)',
       overflow: 'hidden',
       transition: 'border-color 0.15s ease',
@@ -3029,10 +3029,10 @@ export default function Feed({
                 <span
                   style={{
                     display: 'inline-block',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    letterSpacing: '0.06em',
-                    color: 'var(--color-text-muted)',
+                    fontSize: '72px',
+                    fontWeight: 900,
+                    letterSpacing: '-0.03em',
+                    color: 'rgba(0, 28, 53, 1)',
                     textTransform: 'uppercase',
                   }}
                 >
@@ -3043,7 +3043,7 @@ export default function Feed({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '12px',
+                  gap: '6px',
                   flexWrap: 'wrap',
                 }}>
                   <EdifyMark size={22} color="var(--color-accent-quinn)" strokeWidth={2} style={{ flexShrink: 0 }} />

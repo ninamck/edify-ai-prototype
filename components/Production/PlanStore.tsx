@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useMemo, useState } from 'react
 import {
   amountsForSiteOnDate,
   benchesAt,
+  DEMO_NOW_HHMM,
   DEMO_TODAY,
   effectiveBatchRules,
   EXTRA_PRODUCTION_INSTANCES_BY_SITE,
@@ -27,10 +28,13 @@ import {
 import { hhmmToMinutes, minutesToHHMM } from './time';
 
 /**
- * Demo wall-clock time. The Run-locking logic compares scheduled bench runs
- * against this. Bumped when the demo needs to feel later in the day.
+ * Demo wall-clock time. Re-exported from fixtures so existing imports
+ * via `PlanStore` keep working — fixtures now owns the canonical value
+ * because the cutoff-evaluation helpers there (e.g.
+ * `effectiveSubmissionsForHub`) need it too and PlanStore imports
+ * from fixtures (the reverse direction would form a cycle).
  */
-export const DEMO_NOW_HHMM = '07:30';
+export { DEMO_NOW_HHMM };
 
 /**
  * One tray of filling weighs ~4kg in this demo. Used to convert gram-based

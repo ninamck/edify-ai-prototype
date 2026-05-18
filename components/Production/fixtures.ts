@@ -290,6 +290,32 @@ export const DAYS_OF_WEEK: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sa
 /** Demo "today" — a Thursday. All timing in fixtures is relative to this. */
 export const DEMO_TODAY = '2026-04-23'; // Thursday
 
+/**
+ * Demo wall-clock time on `DEMO_TODAY`. Kept aligned with `PlanStore`'s
+ * `DEMO_NOW_HHMM` so every surface (plan board, hub spoke pills,
+ * countdown timers) agrees on what "now" feels like. Living here in
+ * fixtures so the cutoff-evaluation helpers below don't have to reach
+ * back into PlanStore (which would form a cycle — PlanStore already
+ * imports from fixtures).
+ */
+export const DEMO_NOW_HHMM = '07:30';
+
+/**
+ * The demo's frozen wall-clock moment, as a real `Date`. Used wherever
+ * the codebase needs to ask "has X happened yet?" without leaking real
+ * calendar time into the prototype — if we compared cutoffs to actual
+ * `Date.now()`, then on any day past `DEMO_TODAY` every demo cutoff
+ * (which is anchored on April 22-25, 2026) would look like it had
+ * already passed, and the hub would synthesise AUTO-FINALISED
+ * submissions for every spoke on every future-day column the manager
+ * clicked through on the Today day-strip. Treating "now" as
+ * `DEMO_TODAY T DEMO_NOW_HHMM Z` keeps the demo timeline self-consistent
+ * regardless of when the prototype is opened.
+ */
+export function demoNow(): Date {
+  return new Date(`${DEMO_TODAY}T${DEMO_NOW_HHMM}:00Z`);
+}
+
 /** Offset a day (-2 for D-2, 0 for today, +1 for tomorrow, etc.). Returns ISO yyyy-mm-dd. */
 export function dayOffset(days: number, anchor: string = DEMO_TODAY): string {
   const d = new Date(`${anchor}T00:00:00Z`);
@@ -3697,8 +3723,11 @@ export function autoFinaliseSubmissionFor(
  * callers decide whether to skip them (e.g. don't drive bake numbers
  * off a draft) or surface them (e.g. show "Pending" in a column).
  *
- * Cutoff state is read against `Date.now()` so the auto-finalise flip
- * is purely time-driven; no fixture edits required.
+ * Cutoff state is read against `demoNow()` so the auto-finalise flip
+ * is purely time-driven relative to the demo's frozen wall clock — if
+ * we used the real `Date.now()` instead, every future-date column on
+ * the hub day-strip would auto-finalise because the real clock is way
+ * past every demo cutoff.
  */
 export function effectiveSubmissionsForHub(
   hubId: SiteId,
@@ -3710,7 +3739,7 @@ export function effectiveSubmissionsForHub(
 
   const out: SpokeSubmission[] = [...real];
   const receivers = linkedReceiversFor(hubId);
-  const cutoffPassed = new Date(submissionCutoffFor(hubId, forDate)).getTime() < Date.now();
+  const cutoffPassed = new Date(submissionCutoffFor(hubId, forDate)).getTime() < demoNow().getTime();
   if (!cutoffPassed) return out;
 
   for (const receiver of receivers) {

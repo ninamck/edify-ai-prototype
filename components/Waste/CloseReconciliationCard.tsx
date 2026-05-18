@@ -36,20 +36,20 @@ export default function CloseReconciliationCard({ phase }: { phase: BriefingPhas
       transition={{ duration: 0.26, ease: 'easeOut' }}
       style={{
         borderRadius: '10px',
-        background: 'rgba(185,28,28,0.055)',
-        border: '1px solid rgba(185,28,28,0.22)',
+        background: 'rgba(0, 28, 53, 0)',
+        border: '1px solid #001C35',
         padding: '12px',
         marginBottom: '10px',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '8px' }}>
-        <ClipboardCheck size={13} color="#B91C1C" strokeWidth={2.2} />
+        <ClipboardCheck size={13} color="#001C35" strokeWidth={2.2} />
         <span
           style={{
             fontSize: '12px',
             fontWeight: 700,
             letterSpacing: '0.04em',
-            color: '#B91C1C',
+            color: '#001C35',
           }}
         >
           {title}
@@ -58,7 +58,7 @@ export default function CloseReconciliationCard({ phase }: { phase: BriefingPhas
           style={{
             fontSize: '11px',
             fontWeight: 600,
-            color: '#B91C1C',
+            color: '#001C35',
             opacity: 0.75,
             marginLeft: '2px',
           }}
@@ -121,7 +121,7 @@ export default function CloseReconciliationCard({ phase }: { phase: BriefingPhas
                 marginBottom: '10px',
               }}
             >
-              <strong style={{ color: '#B91C1C' }}>{short} short</strong>
+              <strong style={{ color: '#001C35' }}>{short} short</strong>
               {' · £'}
               {(short * product.unitCost).toFixed(2)} at stake
             </div>
@@ -136,9 +136,9 @@ export default function CloseReconciliationCard({ phase }: { phase: BriefingPhas
                   fontWeight: 600,
                   fontFamily: 'var(--font-primary)',
                   cursor: 'pointer',
-                  border: 'none',
-                  background: '#B91C1C',
-                  color: '#fff',
+                  border: '1px solid #001C35',
+                  background: 'transparent',
+                  color: '#001C35',
                 }}
               >
                 Waste {short}

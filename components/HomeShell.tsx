@@ -126,7 +126,7 @@ export default function HomeShell() {
           minWidth: 0,
           minHeight: 0,
           overflow: 'hidden',
-          background: '#fff',
+          background: 'var(--color-bg-main, #fff)',
         }}
       >
       <ShellTopBar
@@ -144,7 +144,7 @@ export default function HomeShell() {
           minWidth: 0,
           minHeight: 0,
           overflow: 'hidden',
-          background: '#fff',
+          background: 'var(--color-bg-main, #fff)',
         }}
       >
 
@@ -238,7 +238,7 @@ export default function HomeShell() {
               flexDirection: 'column',
               minWidth: 0,
               minHeight: 0,
-              padding: 12,
+              padding: 20,
               gap: 12,
               overflow: 'auto',
               background: 'var(--color-bg-surface)',

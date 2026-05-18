@@ -332,15 +332,22 @@ export default function Sidebar() {
           padding: compact ? '8px 0 8px' : '8px 12px 8px',
         }}
       >
-        <img
-          src="/edify-logo.svg"
-          alt="Edify"
+        <span
+          role="img"
+          aria-label="Edify"
           style={{
             display: 'block',
             width: compact ? 28 : 32,
-            height: 'auto',
-            color: '#ffffff',
-            filter: 'brightness(0) invert(1)',
+            height: compact ? 48 : 56,
+            backgroundColor: 'var(--color-brand-mark, #ffffff)',
+            WebkitMaskImage: 'url(/edify-logo.svg)',
+            maskImage: 'url(/edify-logo.svg)',
+            WebkitMaskRepeat: 'no-repeat',
+            maskRepeat: 'no-repeat',
+            WebkitMaskPosition: 'center',
+            maskPosition: 'center',
+            WebkitMaskSize: 'contain',
+            maskSize: 'contain',
           }}
         />
       </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { TrendingUp, TrendingDown, Clock, Target } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 const OK = '#166534';
 const WARN = '#B45309';
@@ -13,17 +13,19 @@ interface ShiftKpi {
   positive?: boolean;
   context?: string;
   icon?: ReactNode;
+  borderRadius?: string | number;
+  valueStyle?: CSSProperties;
 }
 
-function KpiTile({ label, value, delta, positive, context, icon }: ShiftKpi) {
+function KpiTile({ label, value, delta, positive, context, icon, borderRadius = 10, valueStyle }: ShiftKpi) {
   const deltaColor = positive === undefined ? 'var(--color-text-secondary)' : positive ? OK : WARN;
   const DeltaIcon = positive === undefined ? null : positive ? TrendingUp : TrendingDown;
   return (
     <div
       style={{
         padding: '14px 16px',
-        borderRadius: 10,
-        border: '1px solid var(--color-border-subtle)',
+        borderRadius,
+        border: '1px solid #001C35',
         background: '#fff',
         boxShadow: '0 2px 8px rgba(58,48,40,0.08), 0 0 0 1px rgba(58,48,40,0.03)',
         display: 'flex',
@@ -38,7 +40,7 @@ function KpiTile({ label, value, delta, positive, context, icon }: ShiftKpi) {
           {label}
         </span>
       </div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+      <div style={{ fontSize: 40, fontWeight: 700, color: '#1A148A', ...valueStyle }}>
         {value}
       </div>
       {(delta || context) && (
@@ -89,12 +91,14 @@ export default function ShiftKpiRow({
         positive={varianceAhead}
         context={`as at ${asAt} · vs forecast to now`}
         icon={<Clock size={13} color={muted} strokeWidth={2.2} />}
+        borderRadius="10px 0 10px 10px"
       />
       <KpiTile
         label="Forecast to now"
         value={`£${forecastToNow.toLocaleString()}`}
         context={`as at ${asAt} · model prediction`}
         icon={<Target size={13} color={muted} strokeWidth={2.2} />}
+        borderRadius="10px 0 10px 10px"
       />
       <KpiTile
         label="Expected EOD"
@@ -103,12 +107,14 @@ export default function ShiftKpiRow({
         positive={eodAhead}
         context="vs full-day forecast"
         icon={<TrendingUp size={13} color={accent} strokeWidth={2.2} />}
+        borderRadius="10px 0 10px 10px"
       />
       <KpiTile
         label="Full-day forecast"
         value={`£${fullDayForecast.toLocaleString()}`}
         context="baseline target"
         icon={<Target size={13} color={muted} strokeWidth={2.2} />}
+        borderRadius="10px 0 10px 10px"
       />
     </div>
   );

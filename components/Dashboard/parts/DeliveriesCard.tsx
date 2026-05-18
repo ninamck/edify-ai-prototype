@@ -34,8 +34,8 @@ export default function DeliveriesCard({
     <div
       style={{
         padding: '16px 16px 14px',
-        borderRadius: 12,
-        border: '1px solid var(--color-border-subtle)',
+        borderRadius: '12px 0 12px 12px',
+        border: '1px solid #001C35',
         background: '#fff',
         boxShadow: '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.03)',
         display: 'flex',
