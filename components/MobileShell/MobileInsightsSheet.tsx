@@ -89,18 +89,11 @@ export default function MobileInsightsSheet({
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
+              justifyContent: 'flex-end',
               padding: '6px 16px 12px',
               borderBottom: '1px solid var(--color-border-subtle)',
               flexShrink: 0,
             }}>
-              <span style={{
-                fontSize: '15px',
-                fontWeight: 700,
-                color: 'var(--color-text-primary)',
-              }}>
-                Quinn &amp; Review
-              </span>
               <button
                 type="button"
                 onClick={onClose}

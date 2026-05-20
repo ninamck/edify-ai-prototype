@@ -30,6 +30,7 @@ import {
   ChevronRight,
   Columns3,
   Filter,
+  RotateCcw,
   Search,
 } from 'lucide-react';
 import { formatCell, type Column, type ColumnType } from './dataSources';
@@ -111,6 +112,23 @@ export default function DataTable<TRow extends Row>({
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(initialVisibility);
   const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
+
+  // Inline cell editing: keep the displayed rows in local state so edits can
+  // be applied without round-tripping through the parent. Re-seeded whenever
+  // the upstream `data` reference changes (e.g. a fresh query result).
+  const [editedRows, setEditedRows] = useState<TRow[]>(data);
+  const [editedCellKeys, setEditedCellKeys] = useState<Set<string>>(() => new Set());
+  const [editingCell, setEditingCell] = useState<{ rowIdx: number; colKey: string } | null>(
+    null,
+  );
+  const [editDraft, setEditDraft] = useState('');
+
+  useEffect(() => {
+    setEditedRows(data);
+    setEditedCellKeys(new Set());
+    setEditingCell(null);
+  }, [data]);
+
   const [filterPopover, setFilterPopover] = useState<{
     columnId: string;
     rect: { top: number; left: number; bottom: number; right: number };
@@ -179,7 +197,7 @@ export default function DataTable<TRow extends Row>({
   }, [columns]);
 
   const table = useReactTable({
-    data,
+    data: editedRows,
     columns: tableColumns,
     state: { sorting, columnFilters, globalFilter, columnVisibility },
     onSortingChange: setSorting,
@@ -207,6 +225,79 @@ export default function DataTable<TRow extends Row>({
     for (const c of columns) map.set(c.key as string, c);
     return map;
   }, [columns]);
+
+  function startEdit(rowIdx: number, colKey: string, raw: unknown) {
+    if (raw === null || raw === undefined) {
+      setEditDraft('');
+    } else {
+      setEditDraft(String(raw));
+    }
+    setEditingCell({ rowIdx, colKey });
+  }
+
+  function cancelEdit() {
+    setEditingCell(null);
+  }
+
+  function commitEdit() {
+    if (!editingCell) return;
+    const { rowIdx, colKey } = editingCell;
+    const colMeta = colByKey.get(colKey);
+    const original = (editedRows[rowIdx] as Record<string, unknown> | undefined)?.[colKey];
+
+    let parsed: unknown = editDraft;
+    const trimmed = editDraft.trim();
+    if (colMeta) {
+      const numeric =
+        colMeta.type === 'number' ||
+        colMeta.type === 'currency' ||
+        colMeta.type === 'percent' ||
+        colMeta.type === 'integer';
+      if (numeric) {
+        if (trimmed === '') {
+          parsed = null;
+        } else {
+          const n = Number(trimmed.replace(/[$,%\s]/g, ''));
+          if (!Number.isFinite(n)) {
+            // Invalid number — abandon without writing.
+            setEditingCell(null);
+            return;
+          }
+          parsed = colMeta.type === 'integer' ? Math.round(n) : n;
+        }
+      } else if (colMeta.type === 'date' || colMeta.type === 'string') {
+        parsed = trimmed === '' ? null : editDraft;
+      }
+    }
+
+    // Skip the update if the value didn't actually change.
+    const sameValue =
+      parsed === original ||
+      (parsed === null && (original === null || original === undefined || original === ''));
+    if (!sameValue) {
+      setEditedRows((prev) => {
+        if (rowIdx < 0 || rowIdx >= prev.length) return prev;
+        const next = prev.slice();
+        const row = next[rowIdx] as Record<string, unknown>;
+        next[rowIdx] = { ...row, [colKey]: parsed } as TRow;
+        return next;
+      });
+      setEditedCellKeys((prev) => {
+        const next = new Set(prev);
+        next.add(`${rowIdx}|${colKey}`);
+        return next;
+      });
+    }
+    setEditingCell(null);
+  }
+
+  function resetEdits() {
+    setEditedRows(data);
+    setEditedCellKeys(new Set());
+    setEditingCell(null);
+  }
+
+  const hasEdits = editedCellKeys.size > 0;
 
   // Pre-compute the cumulative left offsets for any pinned-left columns so a
   // future second pinned column would slot in next to the first without
@@ -316,6 +407,19 @@ export default function DataTable<TRow extends Row>({
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {rightSlot}
+          {hasEdits && (
+            <button
+              type="button"
+              onClick={resetEdits}
+              style={pillButton(true)}
+              title="Discard all edits made to this table"
+            >
+              <RotateCcw size={12} strokeWidth={2.2} color="var(--color-accent-active)" />
+              <span>
+                Reset edits ({editedCellKeys.size})
+              </span>
+            </button>
+          )}
           <div style={{ position: 'relative' }}>
             <button
               ref={columnsBtnRef}
@@ -612,11 +716,32 @@ export default function DataTable<TRow extends Row>({
                         const align = meta && meta.type !== 'string' && meta.type !== 'date' ? 'right' : 'left';
                         const pinnedLeft = pinnedLeftOffsetById.get(cell.column.id);
                         const isPinned = pinnedLeft !== undefined;
+                        const isEditing =
+                          editingCell?.rowIdx === row.index &&
+                          editingCell.colKey === cell.column.id;
+                        const wasEdited = editedCellKeys.has(`${row.index}|${cell.column.id}`);
+                        const inputType =
+                          meta?.type === 'date'
+                            ? 'date'
+                            : meta && meta.type !== 'string'
+                              ? 'number'
+                              : 'text';
+                        const inputStep =
+                          meta?.type === 'integer'
+                            ? '1'
+                            : meta && meta.type !== 'string' && meta.type !== 'date'
+                              ? 'any'
+                              : undefined;
                         return (
                           <td
                             key={cell.id}
+                            onDoubleClick={() => {
+                              if (!isEditing) {
+                                startEdit(row.index, cell.column.id, cell.getValue());
+                              }
+                            }}
                             style={{
-                              padding: '7px 10px',
+                              padding: isEditing ? '2px 4px' : '7px 10px',
                               borderBottom: '1px solid var(--color-border-faint, rgba(58,48,40,0.06))',
                               color: 'var(--color-text-primary)',
                               textAlign: align,
@@ -625,19 +750,69 @@ export default function DataTable<TRow extends Row>({
                               textOverflow: 'ellipsis',
                               maxWidth: cell.column.getSize(),
                               fontVariantNumeric: align === 'right' ? 'tabular-nums' : 'normal',
+                              cursor: isEditing ? 'text' : 'cell',
+                              position: 'relative',
+                              ...(wasEdited && !isEditing
+                                ? { background: 'rgba(40, 175, 201, 0.10)' }
+                                : null),
                               ...(isPinned
                                 ? {
                                     position: 'sticky',
                                     left: pinnedLeft,
                                     zIndex: 1,
-                                    background: pinnedCellBg,
+                                    background: wasEdited
+                                      ? 'rgba(40, 175, 201, 0.10)'
+                                      : pinnedCellBg,
                                     boxShadow: '1px 0 0 var(--color-border-subtle)',
                                   }
                                 : null),
                             }}
-                            title={String(cell.getValue() ?? '')}
+                            title={
+                              isEditing
+                                ? ''
+                                : `${String(cell.getValue() ?? '')}${
+                                    wasEdited ? ' (edited)' : ' · Double-click to edit'
+                                  }`
+                            }
                           >
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            {isEditing ? (
+                              <input
+                                autoFocus
+                                type={inputType}
+                                step={inputStep}
+                                value={editDraft}
+                                onChange={(e) => setEditDraft(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    commitEdit();
+                                  } else if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    cancelEdit();
+                                  }
+                                }}
+                                onBlur={commitEdit}
+                                onFocus={(e) => e.currentTarget.select()}
+                                style={{
+                                  width: '100%',
+                                  boxSizing: 'border-box',
+                                  padding: '5px 6px',
+                                  fontSize: 12,
+                                  fontFamily: 'var(--font-primary)',
+                                  border: '1px solid var(--color-accent-active)',
+                                  outline: '2px solid rgba(40, 175, 201, 0.25)',
+                                  outlineOffset: 0,
+                                  borderRadius: 4,
+                                  background: '#fff',
+                                  color: 'var(--color-text-primary)',
+                                  textAlign: align,
+                                  fontVariantNumeric:
+                                    align === 'right' ? 'tabular-nums' : 'normal',
+                                }}
+                              />
+                            ) : (
+                              flexRender(cell.column.columnDef.cell, cell.getContext())
+                            )}
                           </td>
                         );
                       })}

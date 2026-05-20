@@ -154,7 +154,7 @@ export default function MobileBottomNav({
       />
       <NavButton
         icon={EdifyMark}
-        label="Quinn"
+        label="Today"
         active={activeTab === 'insights'}
         onClick={() => onTabChange('insights')}
       />

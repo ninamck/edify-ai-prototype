@@ -408,7 +408,7 @@ export default function AddInsightPopup({
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
                   <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                    {mode === 'chat' ? 'Ask Quinn' : 'Add to your dashboard'}
+                    {mode === 'chat' ? 'Ask Edify' : 'Add to your dashboard'}
                   </span>
                   <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)' }}>
                     {mode === 'chat'

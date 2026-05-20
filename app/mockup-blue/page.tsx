@@ -13,7 +13,7 @@ const poppins = Poppins({
  * rebound to an indigo palette anchored on #1A148A, and swaps the type
  * stack to Poppins. Nothing in globals.css changes — the overrides are
  * scoped to this wrapper, so every other route keeps the original navy
- * + Plus Jakarta Sans.
+ * + Poppins.
  */
 export default function MockupBluePage() {
   return (

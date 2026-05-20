@@ -520,7 +520,7 @@ function ButtonsSection() {
         ]}
         preview={
           <button style={{ ...navyFillBtn, padding: '10px 14px', borderRadius: 10, fontSize: 13, fontWeight: 700 }}>
-            Ask Quinn
+            Ask Edify
           </button>
         }
       />
@@ -675,7 +675,7 @@ function ButtonsSection() {
 
       <VariantRow
         rule="legacy"
-        name="Pill — bulk action Ask Quinn"
+        name="Pill — bulk action Ask Edify"
         source="components/Suppliers/BulkActionBar.tsx"
         note="A fully filled, pill-shaped, 700-weight primary — yet another shape for a primary action."
         specs={[
@@ -686,7 +686,7 @@ function ButtonsSection() {
         ]}
         preview={
           <button style={{ ...navyFillBtn, padding: '8px 16px', borderRadius: 100, fontSize: 12.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Sparkles size={13} /> Ask Quinn
+            <Sparkles size={13} /> Ask Edify
           </button>
         }
       />
@@ -719,7 +719,7 @@ function ButtonsSection() {
           ['border', '1px solid --color-border-subtle'],
         ]}
         preview={
-          <button aria-label="Ask Quinn" style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid var(--color-border-subtle)', background: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+          <button aria-label="Ask Edify" style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid var(--color-border-subtle)', background: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
             <Sparkles size={14} color="var(--color-accent-active)" />
           </button>
         }
@@ -2222,7 +2222,7 @@ function NavItemsSection() {
 
       <VariantRow
         rule="legacy"
-        name="Ask Quinn nav CTA"
+        name="Ask Edify nav CTA"
         source="components/Sidebar/QuinnButton.tsx"
         specs={[
           ['padding',    '11px 14px'],
@@ -2240,7 +2240,7 @@ function NavItemsSection() {
             display: 'inline-flex', alignItems: 'center', gap: 10,
             fontFamily: 'var(--font-primary)', fontSize: 13, fontWeight: 600,
           }}>
-            <Sparkles size={16} /> Ask Quinn
+            <Sparkles size={16} /> Ask Edify
           </button>
         }
       />

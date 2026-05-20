@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Send,
   Maximize2,
@@ -37,6 +38,23 @@ import {
 } from '@/components/Mvp1/Tables/query';
 import DataTable from '@/components/Mvp1/Tables/DataTable';
 import type { Column } from '@/components/Mvp1/Tables/dataSources';
+import { parseCommand } from '@/components/Feed/commands/parsers';
+import { COMMAND_REGISTRY, getCommand } from '@/components/Feed/commands/registry';
+import { useCommandRunner } from '@/components/Feed/commands/useCommandRunner';
+import SlashMenu from '@/components/Feed/commands/SlashMenu';
+import WasteCommandCard from '@/components/Feed/commands/cards/WasteCommandCard';
+import StockCountCommandCard from '@/components/Feed/commands/cards/StockCountCommandCard';
+import RecipePickerCard from '@/components/Feed/commands/cards/RecipePickerCard';
+import RecipeActionPickerCard from '@/components/Feed/commands/cards/RecipeActionPickerCard';
+import RecipeIngredientPickerCard from '@/components/Feed/commands/cards/RecipeIngredientPickerCard';
+import RecipeNewIngredientCard from '@/components/Feed/commands/cards/RecipeNewIngredientCard';
+import RecipeEditSummaryCard from '@/components/Feed/commands/cards/RecipeEditSummaryCard';
+import ProductionFieldCard from '@/components/Feed/commands/cards/ProductionFieldCard';
+import MenuActionCard from '@/components/Feed/commands/cards/MenuActionCard';
+import SupplierFieldCard from '@/components/Feed/commands/cards/SupplierFieldCard';
+import AmbiguityPicker from '@/components/Feed/commands/cards/AmbiguityPicker';
+import ReceiptCard from '@/components/Feed/commands/cards/ReceiptCard';
+import type { AmbiguityChoice } from '@/components/Feed/commands/types';
 
 function QuinnAvatar({
   size = 30,
@@ -135,6 +153,27 @@ const PROMPT_CHIPS: {
   },
 ];
 
+// Commands intentionally hidden from the in-chat menus. The parser still
+// recognises them (so /waste and natural language like "waste 3 muffins"
+// keep working) — they just don't surface as quick-action chips or
+// slash-menu entries. Waste sits up in the floor-actions strip, so
+// duplicating it in chat would be noisy.
+const HIDDEN_FROM_MENU_COMMAND_IDS = new Set<string>(['waste']);
+
+// Quick-actions row — one chip per chat command. Click opens an empty
+// confirmation card and Quinn prompts for the missing detail.
+const QUICK_ACTION_CHIPS: {
+  commandId: string;
+  label: string;
+  icon: typeof ChefHat;
+}[] = COMMAND_REGISTRY
+  .filter((c) => !HIDDEN_FROM_MENU_COMMAND_IDS.has(c.id))
+  .map((c) => ({
+    commandId: c.id,
+    label: c.chipLabel,
+    icon: c.chipIcon,
+  }));
+
 // ─── Data integrity checks ────────────────────────────────────────────────────
 
 type IntegrityStatus = 'issue' | 'warning' | 'ok';
@@ -169,6 +208,12 @@ type ChatMsg = {
   chartId?: string;
   tableQuery?: TableQuery;
   tableTitle?: string;
+  /** For command cards — serialised args the card was opened with. */
+  cmdArgsJson?: string;
+  /** For ambiguity pickers — serialised candidate choices. */
+  cmdChoicesJson?: string;
+  /** Which command this message belongs to (for command cards / receipts). */
+  cmdId?: string;
 };
 
 type RecipeIngredient = { name: string; qty: string; unit: string };
@@ -1250,7 +1295,7 @@ function ChatBubble({
       }}>
         {!isUser && (
           <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-accent-active)', marginBottom: '6px', letterSpacing: '0.04em' }}>
-            QUINN
+            EDIFY
           </div>
         )}
         {isUser ? msg.text : <QuinnMessageBody text={msg.text} />}
@@ -1286,7 +1331,7 @@ function ChatBubble({
           }}
         >
           <EdifyMark size={12} color="var(--color-accent-deep)" strokeWidth={2.2} />
-          Quinn
+          Edify
         </motion.div>
       )}
     </div>
@@ -1301,6 +1346,10 @@ type ComposerProps = {
   disabled: boolean;
   placeholder: string;
   minHeight: number;
+  /** Called when the user picks a quick-action command from the
+   *  `+` popover. The receiver is responsible for running the
+   *  command via the command runner. */
+  onQuickAction?: (commandId: string) => void;
 };
 
 function ClaudeComposer({
@@ -1311,7 +1360,56 @@ function ClaudeComposer({
   disabled,
   placeholder,
   minHeight,
+  onQuickAction,
 }: ComposerProps) {
+  const [quickActionsOpen, setQuickActionsOpen] = useState(false);
+
+  // The popover is portalled to document.body so it can escape the
+  // composer's `overflow: hidden` rounded wrapper. We compute its
+  // position from the trigger button's bounding rect, recomputing on
+  // open (also on window resize / scroll for safety).
+  const quickActionsTriggerRef = useRef<HTMLButtonElement>(null);
+  const quickActionsPopoverRef = useRef<HTMLDivElement>(null);
+  const [quickActionsPos, setQuickActionsPos] = useState<{ left: number; bottom: number } | null>(null);
+
+  useEffect(() => {
+    if (!quickActionsOpen) {
+      setQuickActionsPos(null);
+      return;
+    }
+    function recompute() {
+      const btn = quickActionsTriggerRef.current;
+      if (!btn) return;
+      const r = btn.getBoundingClientRect();
+      setQuickActionsPos({
+        left: r.left,
+        // `bottom` here is the distance from the viewport bottom — so the
+        // popover sits flush with the top of the trigger button + 8px gap.
+        bottom: window.innerHeight - r.top + 8,
+      });
+    }
+    recompute();
+    window.addEventListener('resize', recompute);
+    window.addEventListener('scroll', recompute, true);
+    return () => {
+      window.removeEventListener('resize', recompute);
+      window.removeEventListener('scroll', recompute, true);
+    };
+  }, [quickActionsOpen]);
+
+  // Click-outside dismissal — applies to both the trigger and the
+  // portalled popover.
+  useEffect(() => {
+    if (!quickActionsOpen) return;
+    function handler(e: MouseEvent) {
+      const target = e.target as Node;
+      if (quickActionsTriggerRef.current?.contains(target)) return;
+      if (quickActionsPopoverRef.current?.contains(target)) return;
+      setQuickActionsOpen(false);
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [quickActionsOpen]);
   const hasText = value.trim().length > 0;
   const ghost = getGhostSuggestion(value);
   const fullSuggestion = ghost ? value + ghost : '';
@@ -1430,9 +1528,12 @@ function ClaudeComposer({
         }}
       >
         <button
+          ref={quickActionsTriggerRef}
           type="button"
-          aria-label="Add attachment"
+          aria-label="Quick actions"
+          aria-expanded={quickActionsOpen}
           disabled={disabled}
+          onClick={() => setQuickActionsOpen((v) => !v)}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -1441,36 +1542,109 @@ function ClaudeComposer({
             height: '32px',
             borderRadius: '10px',
             border: 'none',
-            background: 'transparent',
+            background: quickActionsOpen ? 'rgba(40,175,201,0.12)' : 'transparent',
             cursor: disabled ? 'not-allowed' : 'pointer',
-            color: 'var(--color-text-muted)',
+            color: quickActionsOpen ? 'var(--color-accent-mid, #28AFC9)' : 'var(--color-text-muted)',
+            transition: 'background 0.12s ease, color 0.12s ease',
           }}
         >
-          <Plus size={18} strokeWidth={2} />
-        </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, justifyContent: 'flex-end' }}>
-          <button
-            type="button"
-            aria-label="Model"
-            disabled={disabled}
+          <Plus
+            size={18}
+            strokeWidth={2}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '6px 10px',
-              borderRadius: '100px',
-              border: 'none',
-              background: 'transparent',
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              fontSize: '12px',
-              fontWeight: 600,
-              color: 'var(--color-text-secondary)',
-              fontFamily: 'var(--font-primary)',
+              transform: quickActionsOpen ? 'rotate(45deg)' : 'rotate(0deg)',
+              transition: 'transform 0.15s ease',
             }}
-          >
-            Quinn
-            <ChevronDown size={14} color="var(--color-text-muted)" strokeWidth={2.2} />
-          </button>
+          />
+        </button>
+        {quickActionsOpen && onQuickAction && quickActionsPos && typeof document !== 'undefined' &&
+          createPortal(
+            <div
+              ref={quickActionsPopoverRef}
+              role="menu"
+              style={{
+                position: 'fixed',
+                left: quickActionsPos.left,
+                bottom: quickActionsPos.bottom,
+                minWidth: '240px',
+                zIndex: 9999,
+                background: '#fff',
+                borderRadius: '14px',
+                border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.12))',
+                boxShadow: '0 12px 28px rgba(58,48,40,0.18)',
+                overflow: 'hidden',
+                fontFamily: 'var(--font-primary)',
+              }}
+            >
+              <div
+                style={{
+                  padding: '8px 12px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  color: 'var(--color-text-secondary)',
+                  borderBottom: '1px solid var(--color-border-subtle, rgba(0,28,53,0.08))',
+                }}
+              >
+                Quick actions
+              </div>
+              <div>
+                {QUICK_ACTION_CHIPS.map((chip) => {
+                  const Icon = chip.icon;
+                  return (
+                    <button
+                      key={chip.commandId}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setQuickActionsOpen(false);
+                        onQuickAction(chip.commandId);
+                      }}
+                      style={{
+                        display: 'flex',
+                        width: '100%',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '10px 12px',
+                        border: 'none',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        fontFamily: 'var(--font-primary)',
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.background = 'rgba(40,175,201,0.08)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.background = 'transparent';
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '28px',
+                          height: '28px',
+                          borderRadius: '8px',
+                          background: 'var(--color-quinn-bg, rgba(40,175,201,0.12))',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Icon size={13} color="var(--color-accent-mid, #28AFC9)" strokeWidth={2.2} />
+                      </span>
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                        {chip.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>,
+            document.body,
+          )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, justifyContent: 'flex-end' }}>
           <button
             type="button"
             aria-label="Voice input"
@@ -2328,6 +2502,32 @@ export default function Feed({
    */
   const [pinnedChartTargets, setPinnedChartTargets] = useState<Set<string>>(new Set());
 
+  // ── Chat-command framework ──────────────────────────────────────────────
+  // Drives the in-chat command cards (waste, stock, recipe, production,
+  // menu, supplier). The hook owns the per-message state map and
+  // exposes confirm/cancel handlers used by each card's render branch.
+  const commandRunner = useCommandRunner({
+    setMessages,
+    setChatStarted,
+    setChatMinimized,
+    // Reset any in-flight task flows so a fresh command isn't polluted
+    // by leftover recipe / production / analytics state.
+    onFreshTask: () => {
+      setRecipeFlow(0);
+      setProductionFlow(0);
+      setAnalyticsType(null);
+      setAnalyticsStep(0);
+      setInput('');
+    },
+  });
+
+  // Shared handler for the composer's `+` popover.
+  const handleQuickAction = (commandId: string) => {
+    const cmd = getCommand(commandId);
+    if (!cmd) return;
+    commandRunner.runCommand({ commandId: cmd.id, args: {}, confidence: 1 });
+  };
+
   const greeting = timeAwareGreeting(briefingRole);
 
   useEffect(() => {
@@ -2750,6 +2950,18 @@ export default function Feed({
     setChatMinimized(false);
     setInput('');
 
+    // Chat-command detection — runs before analytics so phrases like
+    // "waste 3 muffins" don't get routed to a fallback text reply.
+    // Skip when an explicit chart / table query was forced by the caller
+    // (auto-send / pinned chart re-runs).
+    if (explicitChart === undefined && !tableOpts) {
+      const intent = parseCommand(text);
+      if (intent) {
+        commandRunner.runCommand(intent, { userText: text });
+        return;
+      }
+    }
+
     // Table flow takes precedence when an explicit table query was provided.
     if (tableOpts) {
       const thinkingId = `q-table-thinking-${Date.now()}`;
@@ -2923,7 +3135,7 @@ export default function Feed({
           <QuinnAvatar mode="sparkle" />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-              Quinn
+              Ask Edify
             </div>
             {quinnExpanded && !chatStarted && (
               <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
@@ -3061,15 +3273,24 @@ export default function Feed({
                 </div>
               </div>
 
-              <ClaudeComposer
-                value={input}
-                onChange={setInput}
-                onSend={() => sendMessage()}
-                onAcceptSuggestion={(full) => sendMessage(full)}
-                disabled={false}
-                placeholder={PLACEHOLDER}
-                minHeight={72}
-              />
+              <div style={{ position: 'relative' }}>
+                <SlashMenu
+                  value={input}
+                  visible={input.trimStart().startsWith('/')}
+                  onPick={(slash) => setInput(slash)}
+                  onClose={() => setInput('')}
+                />
+                <ClaudeComposer
+                  value={input}
+                  onChange={setInput}
+                  onSend={() => sendMessage()}
+                  onAcceptSuggestion={(full) => sendMessage(full)}
+                  disabled={false}
+                  placeholder={PLACEHOLDER}
+                  minHeight={72}
+                  onQuickAction={handleQuickAction}
+                />
+              </div>
 
               <div style={{
                 display: 'flex',
@@ -3118,6 +3339,7 @@ export default function Feed({
                   );
                 })}
               </div>
+
 
               {/* Chat history — shown only when minimised and there are messages */}
               {chatMinimized && messages.length > 0 && (
@@ -3406,6 +3628,149 @@ export default function Feed({
                             onOpenTableInNewView={onOpenTableInNewView}
                           />
                         )}
+                        {/* ── Chat-command cards ───────────────────────── */}
+                        {m.msgType === 'cmd-waste-card' && (
+                          <WasteCommandCard
+                            initialArgs={m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : {}}
+                            state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                            onConfirm={(final) => commandRunner.confirmWaste(m.id, final)}
+                            onCancel={() => commandRunner.cancelCard(m.id)}
+                          />
+                        )}
+                        {m.msgType === 'cmd-stock-card' && (
+                          <StockCountCommandCard
+                            initialArgs={m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : {}}
+                            state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                            onConfirm={(final) => commandRunner.confirmStock(m.id, final)}
+                            onCancel={() => commandRunner.cancelCard(m.id)}
+                          />
+                        )}
+                        {m.msgType === 'cmd-recipe-pick-recipe' && (
+                          <RecipePickerCard
+                            state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                            onPick={(recipeId, recipeName) =>
+                              commandRunner.pickRecipeForEdit(m.id, recipeId, recipeName)
+                            }
+                            onCancel={() => commandRunner.cancelCard(m.id)}
+                          />
+                        )}
+                        {m.msgType === 'cmd-recipe-pick-action' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            recipeId: string;
+                            recipeName: string;
+                          };
+                          return (
+                            <RecipeActionPickerCard
+                              recipeName={args.recipeName}
+                              state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                              onPick={(kind) => commandRunner.pickRecipeActionForEdit(m.id, args, kind)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-recipe-pick-ingredient' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            recipeId: string;
+                            recipeName: string;
+                            kind: 'swap' | 'remove';
+                          };
+                          return (
+                            <RecipeIngredientPickerCard
+                              recipeId={args.recipeId}
+                              recipeName={args.recipeName}
+                              action={args.kind}
+                              state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                              onPick={(name) => commandRunner.pickRecipeIngredientForEdit(m.id, args, name)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-recipe-new-ingredient' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            recipeId: string;
+                            recipeName: string;
+                            kind: 'swap' | 'add';
+                            fromName?: string;
+                          };
+                          return (
+                            <RecipeNewIngredientCard
+                              recipeName={args.recipeName}
+                              swapFrom={args.kind === 'swap' ? args.fromName : undefined}
+                              state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                              onSubmit={(input) => commandRunner.submitRecipeNewIngredient(m.id, args, input)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-recipe-summary' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            recipeId: string;
+                            recipeName: string;
+                            kind: 'swap' | 'add' | 'remove';
+                            fromName?: string;
+                            toName?: string;
+                            qty?: number;
+                            uom?: string;
+                          };
+                          return (
+                            <RecipeEditSummaryCard
+                              recipeId={args.recipeId}
+                              recipeName={args.recipeName}
+                              kind={args.kind}
+                              fromName={args.fromName}
+                              toName={args.toName}
+                              qty={args.qty}
+                              uom={args.uom}
+                              state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                              onConfirm={(final) => commandRunner.confirmRecipeEdit(m.id, final)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-prod-card' && (
+                          <ProductionFieldCard
+                            initialArgs={m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : {}}
+                            state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                            onConfirm={(final) => commandRunner.confirmProduction(m.id, final)}
+                            onCancel={() => commandRunner.cancelCard(m.id)}
+                          />
+                        )}
+                        {m.msgType === 'cmd-menu-card' && (
+                          <MenuActionCard
+                            initialArgs={m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : {}}
+                            state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                            onConfirm={(final) => commandRunner.confirmMenu(m.id, final)}
+                            onCancel={() => commandRunner.cancelCard(m.id)}
+                          />
+                        )}
+                        {m.msgType === 'cmd-supplier-card' && (
+                          <SupplierFieldCard
+                            initialArgs={m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : {}}
+                            state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                            onConfirm={(final) => commandRunner.confirmSupplier(m.id, final)}
+                            onCancel={() => commandRunner.cancelCard(m.id)}
+                          />
+                        )}
+                        {m.msgType === 'cmd-ambiguity' && m.cmdChoicesJson && m.cmdId && (
+                          <AmbiguityPicker
+                            prompt={m.text}
+                            choices={JSON.parse(m.cmdChoicesJson) as AmbiguityChoice[]}
+                            state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                            onPick={(choice) => commandRunner.pickAmbiguity(m.id, m.cmdId!, choice)}
+                            onCancel={() => commandRunner.cancelCard(m.id)}
+                          />
+                        )}
+                        {m.msgType === 'cmd-receipt' && (() => {
+                          const receipt = commandRunner.getReceipt(m.id);
+                          if (!receipt) return null;
+                          return (
+                            <ReceiptCard
+                              receipt={receipt}
+                              undone={!!commandRunner.cmdUndone[m.id]}
+                              onUndo={() => commandRunner.undoReceipt(m.id)}
+                            />
+                          );
+                        })()}
                         {m.msgType === 'analytics-pinned' && pinTarget !== 'view' && (
                           <button
                             type="button"
@@ -3471,7 +3836,14 @@ export default function Feed({
                 width: '100%',
                 maxWidth: '680px',
                 padding: '12px 24px 8px',
+                position: 'relative',
               }}>
+                <SlashMenu
+                  value={input}
+                  visible={!composerDisabled && input.trimStart().startsWith('/')}
+                  onPick={(slash) => setInput(slash)}
+                  onClose={() => setInput('')}
+                />
                 <ClaudeComposer
                   value={input}
                   onChange={setInput}
@@ -3480,6 +3852,7 @@ export default function Feed({
                   disabled={composerDisabled}
                   placeholder={composerPlaceholder}
                   minHeight={composerMinH}
+                  onQuickAction={handleQuickAction}
                 />
               </div>
             </div>

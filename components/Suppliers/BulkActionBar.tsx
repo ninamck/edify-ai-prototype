@@ -82,7 +82,7 @@ export default function BulkActionBar({
               }}
             >
               <EdifyMark size={12} color="#fff" strokeWidth={2.2} />
-              Ask Quinn what to do
+              Ask Edify what to do
             </button>
           </div>
         </motion.div>

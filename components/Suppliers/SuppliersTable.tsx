@@ -291,7 +291,7 @@ export default function SuppliersTable({
             </span>
             <StatusPill status={s.status} />
             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-              <RowQuinnButton onClick={() => onAskQuinn(s.id)} ariaLabel={`Ask Quinn about ${s.name}`} />
+              <RowQuinnButton onClick={() => onAskQuinn(s.id)} ariaLabel={`Ask Edify about ${s.name}`} />
               <SmallButton
                 label="Edit"
                 onClick={() => { onOpenSupplier(s.id); router.push(`/suppliers/${s.id}`); }}

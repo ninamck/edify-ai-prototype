@@ -22,11 +22,13 @@ import {
   type RecipeComponent,
   type RecipeIngredient,
   type RecipeSlot,
-  type RecipeVariantDimension,
+  type RecipeVariant,
+  flattenDimensionsToVariants,
   buildUsedInIndex,
 } from '@/components/Recipe/libraryFixtures';
 import { IngredientsV2Section } from '@/components/Recipe/IngredientsV2Section';
 import { VariantsSection } from '@/components/Recipe/VariantsSection';
+import StyledSelect from '@/components/ui/StyledSelect';
 import { useModifierGroups } from '@/components/Modifiers/store';
 import type { ModifierGroup } from '@/components/Modifiers/types';
 import { GroupEditorDrawer } from '@/components/Modifiers/GroupEditorDrawer';
@@ -58,7 +60,6 @@ import {
   type VariableRow,
   type PackagingRow,
   ALLERGENS,
-  PRODUCT_CLASSES,
   STATUSES,
   YIELD_UOMS,
   SHELF_LIFE_UNITS,
@@ -133,15 +134,17 @@ type FormDraft = {
   slots: RecipeSlot[];
   /** Whether the advanced "Slots" collapsible is open. */
   showSlots: boolean;
-  /** Variant dimensions (Size, Temperature, …). Customers must pick
-   *  exactly one option per dimension for the recipe to be orderable. */
-  variantDimensions: RecipeVariantDimension[];
+  /** Variants (flat). Each variant is a full alternative composition
+   *  of the recipe (its own ingredients, packaging, modifier groups,
+   *  prices). When non-empty, the customer must pick exactly one for
+   *  the recipe to be orderable. */
+  variants: RecipeVariant[];
   /** Live preview selection state, keyed by group id → option ids. Not
    *  persisted; resets when the editor remounts. */
   previewByGroup: Record<string, string[]>;
-  /** Live preview selection state for variants, keyed by dimension id →
-   *  option id. Not persisted; resets when the editor remounts. */
-  previewVariantSelection: Record<string, string>;
+  /** Live preview: which variant is currently selected in the preview.
+   *  Empty string when no variants exist. Not persisted. */
+  previewVariantId: string;
   components: ComponentRow[];
   variables: VariableRow[];
   packaging: PackagingRow[];
@@ -289,9 +292,46 @@ function deriveProductionVisibility(multi: string[]): Recipe['production']['visi
   return null;
 }
 
+function cloneRecipeIngredient(ri: RecipeIngredient): RecipeIngredient {
+  return {
+    ...ri,
+    baseQty: { ...ri.baseQty },
+    siteOverrides: ri.siteOverrides ? { ...ri.siteOverrides } : undefined,
+    tags: ri.tags ? [...ri.tags] : undefined,
+  };
+}
+
+function cloneVariant(v: RecipeVariant): RecipeVariant {
+  return {
+    ...v,
+    ingredients: v.ingredients.map(cloneRecipeIngredient),
+    packaging: v.packaging.map(cloneRecipeIngredient),
+    modifierGroupIds: [...v.modifierGroupIds],
+  };
+}
+
 function recipeToDraft(r: Recipe): FormDraft {
   const fx = r.formExtras ?? {};
   const sl = minutesToShelfLife(r.production.shelfLifeMinutes);
+  // Prefer the new flat `variants` shape. Legacy fixtures that still
+  // carry `variantDimensions` get flattened into a working list here
+  // — first dimension's options become variants; a second axis is
+  // dropped on purpose (the new model intentionally caps at one
+  // axis per recipe). The flatten is read-only; the migration is
+  // committed on save.
+  const seedVariants: RecipeVariant[] = r.variants && r.variants.length > 0
+    ? r.variants.map(cloneVariant)
+    : (flattenDimensionsToVariants(
+        r.variantDimensions,
+        r.ingredientsV2 ?? [],
+        r.packagingV2 ?? [],
+        r.modifierGroupIds ?? [],
+        {
+          dineIn: r.priceDineIn,
+          takeaway: r.priceTakeaway,
+          delivery: r.priceDelivery,
+        },
+      ) ?? []);
   return {
     name: r.name,
     category: r.category,
@@ -314,19 +354,9 @@ function recipeToDraft(r: Recipe): FormDraft {
     modifierGroupIds: [...(r.modifierGroupIds ?? [])],
     slots: (r.slots ?? []).map((s) => ({ ...s })),
     showSlots: (r.slots?.length ?? 0) > 0,
-    variantDimensions: (r.variantDimensions ?? []).map((d) => ({
-      ...d,
-      options: d.options.map((o) => ({
-        ...o,
-        ingredientOverrides: o.ingredientOverrides.map((ov) => ({ ...ov, qty: { ...ov.qty } })),
-        packagingOverrides: o.packagingOverrides.map((ov) => ({
-          ...ov,
-          qty: ov.qty ? { ...ov.qty } : undefined,
-        })),
-      })),
-    })),
+    variants: seedVariants,
     previewByGroup: {},
-    previewVariantSelection: {},
+    previewVariantId: seedVariants.find((v) => v.isDefault)?.id ?? seedVariants[0]?.id ?? '',
     components: buildInitialComponents(r),
     variables: fx.variableIngredients?.map((row) => ({ ...row })) ?? [],
     packaging: fx.packaging?.map((row) => ({ ...row })) ?? [],
@@ -397,7 +427,11 @@ function draftToRecipe(
     posSourceId: draft.posSourceId.trim() || undefined,
     modifierGroupIds: draft.modifierGroupIds.length > 0 ? draft.modifierGroupIds : undefined,
     slots: draft.slots.length > 0 ? draft.slots : undefined,
-    variantDimensions: draft.variantDimensions.length > 0 ? draft.variantDimensions : undefined,
+    variants: draft.variants.length > 0 ? draft.variants : undefined,
+    // Clear the legacy dimension shape on save — once a recipe is
+    // edited through this UI it lives in `variants`. Without this the
+    // resolver would still see the old dimensions and double up.
+    variantDimensions: undefined,
     subRecipes,
     production: {
       visibility: productionVisibility,
@@ -725,16 +759,19 @@ function EditRecipeForm({
             />
 
             <div style={{ marginTop: '16px' }}>
-              <FieldLabel>Category</FieldLabel>
-              <PillSingle
-                options={ALL_CATEGORIES}
-                selected={draft.category}
-                onChange={(v) => {
+              <FieldLabel>Product class</FieldLabel>
+              <StyledSelect
+                width={260}
+                value={draft.category}
+                onChange={(e) => {
+                  const v = e.target.value;
                   patch('category', (v as FormCategory | ''));
                   if (v) applyCategoryDefaults(v as FormCategory);
                 }}
-                allowClear
-              />
+              >
+                <option value="">— None —</option>
+                {ALL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </StyledSelect>
             </div>
 
             <div style={{ marginTop: '16px' }}>
@@ -747,13 +784,25 @@ function EditRecipeForm({
                   onChange={(e) => patch('yieldQty', e.target.value === '' ? '' : Number(e.target.value))}
                   style={{ ...inputStyle, width: '80px', flexShrink: 0 }}
                 />
-                <PillSingle options={YIELD_UOMS} selected={draft.yieldUom} onChange={(v) => patch('yieldUom', v)} />
+                <StyledSelect
+                  width={140}
+                  value={draft.yieldUom}
+                  onChange={(e) => patch('yieldUom', e.target.value)}
+                >
+                  {YIELD_UOMS.map((u) => <option key={u} value={u}>{u}</option>)}
+                </StyledSelect>
               </div>
             </div>
 
             <div style={{ marginTop: '16px' }}>
               <FieldLabel>Sites</FieldLabel>
-              <PillMulti options={SITES} selected={draft.sites} onChange={(v) => patch('sites', v)} />
+              <PillMulti
+                options={SITES}
+                selected={draft.sites}
+                onChange={(v) => patch('sites', v)}
+                size="sm"
+                selectAll={{ allLabel: 'All sites', clearLabel: 'Clear all' }}
+              />
             </div>
 
             <div style={{ marginTop: '16px' }}>
@@ -830,78 +879,91 @@ function EditRecipeForm({
             </div>
           </Card>
 
-          {/* Ingredients (post-rethink) — typed, master/product-aware rows.
-              This is also where sub-recipes / components are pulled in
-              (replaces the legacy "Build steps & sub-recipes" card).
-              Build order is top → bottom; use the up/down arrows to
-              reorder. */}
-          <Card>
-            <SectionHeader
-              title="Ingredients"
-              hint="Search across master products, supplier SKUs, and your own sub-recipes / components in one place — pick whichever you recognise and Edify resolves the rest. Build order is top → bottom (use the row arrows to reorder). Use the Site qty button to set per-site quantities (e.g. 16g at Site A, 18g at Site B)."
-            />
-            <IngredientsV2Section
-              rows={draft.ingredientsV2}
-              sites={draft.sites.length > 0 ? draft.sites : SITES}
-              onChange={(next) => patch('ingredientsV2', next)}
-            />
-          </Card>
+          {/* Ingredients & Packaging & POS-modifiers cards — only shown
+              when the recipe has NO variants. Once variants exist, the
+              composition lives inside the Variants matrix instead so we
+              don't end up with two surfaces editing the same data. */}
+          {draft.variants.length === 0 && (
+            <>
+              <Card>
+                <SectionHeader
+                  title="Ingredients"
+                  hint="Search across master products, supplier SKUs, and your own sub-recipes / components in one place — pick whichever you recognise and Edify resolves the rest. Build order is top → bottom (use the row arrows to reorder). Use the Site qty button to set per-site quantities (e.g. 16g at Site A, 18g at Site B)."
+                />
+                <IngredientsV2Section
+                  rows={draft.ingredientsV2}
+                  sites={draft.sites.length > 0 ? draft.sites : SITES}
+                  onChange={(next) => patch('ingredientsV2', next)}
+                />
+              </Card>
 
-          {/* Packaging (post-rethink) — same shape as Ingredients. Packaging
-              IS just-a-product, so modifier replace / add / scale effects
-              can target it the same way (e.g. a Large coffee swaps the
-              8oz cup for a 12oz cup automatically). */}
-          <Card>
-            <SectionHeader
-              title="Packaging"
-              hint="Cups, lids, bags, labels — anything physical the order consumes. Listed here so modifiers can swap or add packaging (e.g. Large coffee → 12oz cup) without you maintaining a separate matching table."
-            />
-            <IngredientsV2Section
-              rows={draft.packagingV2}
-              sites={draft.sites.length > 0 ? draft.sites : SITES}
-              onChange={(next) => patch('packagingV2', next)}
-              itemLabel="packaging"
-            />
-          </Card>
+              <Card>
+                <SectionHeader
+                  title="Packaging"
+                  hint="Cups, lids, bags, labels — anything physical the order consumes. Listed here so modifiers can swap or add packaging (e.g. Large coffee → 12oz cup) without you maintaining a separate matching table."
+                />
+                <IngredientsV2Section
+                  rows={draft.packagingV2}
+                  sites={draft.sites.length > 0 ? draft.sites : SITES}
+                  onChange={(next) => patch('packagingV2', next)}
+                  itemLabel="packaging"
+                />
+              </Card>
+            </>
+          )}
 
-          {/* Variants — first-class size-like dimensions of this recipe.
-              Customers must pick exactly one option per dimension. Each
-              option overrides per-ingredient qty, packaging, and price.
-              Variants live BEFORE modifiers in the form because they
-              describe the recipe itself; modifiers are optional add-ons
-              on top of whatever variant was picked. */}
+          {/* Variants — alternative full compositions of the recipe,
+              rendered as a matrix. When this section has rows, the base
+              Ingredients / Packaging / POS-modifiers cards above are
+              hidden so there's only one place to think about what fires
+              per variant. */}
           <Card>
             <SectionHeader
               title="Variants"
-              hint="Size-like dimensions where the customer must pick one (small / medium / large). Each option overrides per-ingredient qty, packaging, and price. Use modifiers below for optional one-to-one swaps (alt milks, extra shots)."
+              hint="Alternative versions of this recipe — Small / Medium / Large, Hot / Iced, etc. Each variant is a column in the matrix below; cells that differ across variants are highlighted. When no variants exist, the recipe uses the base Ingredients / Packaging / Modifiers cards."
             />
             <VariantsSection
-              dimensions={draft.variantDimensions}
+              variants={draft.variants}
               baseIngredients={draft.ingredientsV2}
               basePackaging={draft.packagingV2}
+              baseModifierGroupIds={draft.modifierGroupIds}
               basePrices={{
                 dineIn: typeof draft.srpDineInEx === 'number' ? draft.srpDineInEx : 0,
                 takeaway: typeof draft.srpTakeawayEx === 'number' ? draft.srpTakeawayEx : 0,
                 delivery: typeof draft.srpDeliveryEx === 'number' ? draft.srpDeliveryEx : 0,
               }}
-              onChange={(next) => patch('variantDimensions', next)}
+              onChange={(next) => {
+                // Keep the live preview pointed at a still-existing variant.
+                if (next.length > 0 && !next.some((v) => v.id === draft.previewVariantId)) {
+                  const fallback = next.find((v) => v.isDefault)?.id ?? next[0].id;
+                  setDraft((d) => ({ ...d, variants: next, previewVariantId: fallback }));
+                  return;
+                }
+                if (next.length === 0 && draft.previewVariantId) {
+                  setDraft((d) => ({ ...d, variants: next, previewVariantId: '' }));
+                  return;
+                }
+                patch('variants', next);
+              }}
             />
           </Card>
 
-          {/* POS & modifiers — sellability + catalogue-level modifier-group
-              attachments. This is where the recipe becomes "menu-item-like":
-              flip on POS-linked and attach the alt-milks / cup-sizes groups
-              you already maintain in Manage modifier groups. */}
+          {/* POS & modifiers — sellability is always shown; base modifier
+              attachments only when the recipe has no variants (variants
+              own their own modifier groups via the matrix). */}
           <Card>
             <SectionHeader
               title="POS & modifiers"
-              hint="Sellability + attached modifier groups. Toggle POS-linked once this recipe is ready to fire from the till. Modifier groups are created in the library; attach existing ones here."
+              hint={draft.variants.length > 0
+                ? 'Sellability for this recipe. Modifier groups are attached per-variant in the matrix above.'
+                : 'Sellability + attached modifier groups. Toggle POS-linked once this recipe is ready to fire from the till. Modifier groups are created in the library; attach existing ones here.'}
             />
             <PosAndModifiersSection
               posLinked={draft.posLinked}
               posSourceId={draft.posSourceId}
               modifierGroupIds={draft.modifierGroupIds}
               allGroups={allGroups}
+              showModifierGroups={draft.variants.length === 0}
               onPatchPosLinked={(v) => patch('posLinked', v)}
               onPatchPosSourceId={(v) => patch('posSourceId', v)}
               onPatchGroups={(v) => patch('modifierGroupIds', v)}
@@ -1165,10 +1227,11 @@ function EditRecipeForm({
                   {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
-              <div>
-                <FieldLabel>Product class</FieldLabel>
-                <PillSingle options={PRODUCT_CLASSES} selected={draft.productClass} onChange={(v) => patch('productClass', v)} allowClear />
-              </div>
+              {/* Product class moved to Core (now labelled "Product
+                  class", backed by the same `draft.category` field).
+                  The legacy `draft.productClass` value is still
+                  round-tripped through the form draft so existing
+                  fixtures keep their value on save. */}
 
               <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
                 <CheckRow label="Sub-recipe" checked={draft.isSubRecipe} onChange={(v) => patch('isSubRecipe', v)} />
@@ -1250,7 +1313,7 @@ function EditRecipeForm({
             draft={draft}
             allGroups={allGroups}
             onPreviewChange={(next) => patch('previewByGroup', next)}
-            onVariantPreviewChange={(next) => patch('previewVariantSelection', next)}
+            onVariantPreviewChange={(next) => patch('previewVariantId', next)}
           />
 
           {usedInIds.length > 0 && (
@@ -1338,12 +1401,17 @@ function EditRecipeForm({
 
 function PosAndModifiersSection({
   posLinked, posSourceId, modifierGroupIds, allGroups,
+  showModifierGroups = true,
   onPatchPosLinked, onPatchPosSourceId, onPatchGroups,
 }: {
   posLinked: boolean;
   posSourceId: string;
   modifierGroupIds: string[];
   allGroups: ReturnType<typeof useModifierGroups>;
+  /** When false, only the POS sellability fields are rendered — the
+   *  modifier-group attach UI is hidden because variants own their own
+   *  modifier-group attachments in the matrix above. */
+  showModifierGroups?: boolean;
   onPatchPosLinked: (v: boolean) => void;
   onPatchPosSourceId: (v: string) => void;
   onPatchGroups: (v: string[]) => void;
@@ -1411,6 +1479,7 @@ function PosAndModifiersSection({
         </div>
       </div>
 
+      {showModifierGroups && (
       <div>
         <FieldLabel>
           Modifier groups <Soft>({attached.length} attached · create new ones in the library)</Soft>
@@ -1457,8 +1526,9 @@ function PosAndModifiersSection({
           </div>
         )}
       </div>
+      )}
 
-      {pickerOpen && (
+      {showModifierGroups && pickerOpen && (
         <AttachGroupPicker
           unattached={unattached}
           onPick={(id) => attach(id)}
@@ -1735,20 +1805,44 @@ function WhatGetsSoldPreview({
   draft: FormDraft;
   allGroups: ReturnType<typeof useModifierGroups>;
   onPreviewChange: (next: Record<string, string[]>) => void;
-  onVariantPreviewChange: (next: Record<string, string>) => void;
+  onVariantPreviewChange: (next: string) => void;
 }) {
-  // Build a draft Recipe from the current form state so the resolver sees
-  // the editor's pending changes (not what's on disk).
+  // Pick the active variant for the preview. When the recipe has no
+  // variants, this is undefined and we resolve against the base.
+  const activeVariant = useMemo(() => {
+    if (draft.variants.length === 0) return undefined;
+    return (
+      draft.variants.find((v) => v.id === draft.previewVariantId)
+      ?? draft.variants.find((v) => v.isDefault)
+      ?? draft.variants[0]
+    );
+  }, [draft.variants, draft.previewVariantId]);
+
+  // Build the draft Recipe the resolver should see. When a variant is
+  // active, swap its ingredients / packaging / modifier groups into the
+  // recipe — that's what makes the preview match "what fires for this
+  // variant". Variant dimensions are gone from this code path entirely.
   const draftRecipe: Recipe = useMemo(() => ({
     ...recipe,
     name: draft.name.trim() || recipe.name,
-    ingredientsV2: draft.ingredientsV2.length > 0 ? draft.ingredientsV2 : undefined,
-    packagingV2: draft.packagingV2.length > 0 ? draft.packagingV2 : undefined,
-    modifierGroupIds: draft.modifierGroupIds.length > 0 ? draft.modifierGroupIds : undefined,
+    ingredientsV2: activeVariant
+      ? (activeVariant.ingredients.length > 0 ? activeVariant.ingredients : undefined)
+      : (draft.ingredientsV2.length > 0 ? draft.ingredientsV2 : undefined),
+    packagingV2: activeVariant
+      ? (activeVariant.packaging.length > 0 ? activeVariant.packaging : undefined)
+      : (draft.packagingV2.length > 0 ? draft.packagingV2 : undefined),
+    modifierGroupIds: activeVariant
+      ? (activeVariant.modifierGroupIds.length > 0 ? activeVariant.modifierGroupIds : undefined)
+      : (draft.modifierGroupIds.length > 0 ? draft.modifierGroupIds : undefined),
     slots: draft.slots.length > 0 ? draft.slots : undefined,
-    variantDimensions: draft.variantDimensions.length > 0 ? draft.variantDimensions : undefined,
+    variantDimensions: undefined,
+    variants: draft.variants.length > 0 ? draft.variants : undefined,
     posLinked: draft.posLinked,
-  }), [recipe, draft.name, draft.ingredientsV2, draft.packagingV2, draft.modifierGroupIds, draft.slots, draft.variantDimensions, draft.posLinked]);
+  }), [
+    recipe, draft.name, draft.ingredientsV2, draft.packagingV2,
+    draft.modifierGroupIds, draft.slots, draft.variants, draft.posLinked,
+    activeVariant,
+  ]);
 
   const attached = useMemo(
     () => (draftRecipe.modifierGroupIds ?? [])
@@ -1769,48 +1863,32 @@ function WhatGetsSoldPreview({
     return out;
   }, [attached, draft.previewByGroup]);
 
-  // Default-fill variant dimensions the same way: any dimension without
-  // an explicit preview pick falls back to its default option (or first).
-  const effectiveVariantSelection: Record<string, string> = useMemo(() => {
-    const out: Record<string, string> = { ...draft.previewVariantSelection };
-    for (const dim of draftRecipe.variantDimensions ?? []) {
-      if (out[dim.id]) continue;
-      const fallback = dim.options.find((o) => o.isDefault)?.id ?? dim.options[0]?.id;
-      if (fallback) out[dim.id] = fallback;
-    }
-    return out;
-  }, [draftRecipe.variantDimensions, draft.previewVariantSelection]);
-
   const resolved = useMemo(() => applyModifiers({
     recipe: draftRecipe,
     selectedOptionIds: defaultSelectionFor(draftRecipe),
     selectedByGroup: effectiveSelection,
-    selectedVariantOptions: effectiveVariantSelection,
     siteId: draft.sites[0],
-  }), [draftRecipe, effectiveSelection, effectiveVariantSelection, draft.sites]);
+  }), [draftRecipe, effectiveSelection, draft.sites]);
 
-  // Effective per-channel prices for the previewed variant. Variants
-  // override channel-by-channel; channels with no variant override fall
-  // back to the editor's base prices in the form.
+  // Effective per-channel prices for the previewed variant. The variant
+  // overrides per channel; unset channels fall back to the recipe's
+  // base channel prices in the form.
   const effectivePrices = useMemo(() => {
     function fallback(formVal: number | '' | undefined): number | null {
       if (typeof formVal === 'number') return formVal;
       return null;
     }
     return {
-      dineIn: resolved.variantPricing.priceDineIn ?? fallback(draft.srpDineInEx),
-      takeaway: resolved.variantPricing.priceTakeaway ?? fallback(draft.srpTakeawayEx),
-      delivery: resolved.variantPricing.priceDelivery ?? fallback(draft.srpDeliveryEx),
+      dineIn: activeVariant?.priceDineIn ?? fallback(draft.srpDineInEx),
+      takeaway: activeVariant?.priceTakeaway ?? fallback(draft.srpTakeawayEx),
+      delivery: activeVariant?.priceDelivery ?? fallback(draft.srpDeliveryEx),
     };
-  }, [resolved.variantPricing, draft.srpDineInEx, draft.srpTakeawayEx, draft.srpDeliveryEx]);
-  const hasVariantPricing =
-    resolved.variantPricing.priceDineIn !== undefined ||
-    resolved.variantPricing.priceTakeaway !== undefined ||
-    resolved.variantPricing.priceDelivery !== undefined;
-
-  function pickVariantOption(dimensionId: string, optionId: string) {
-    onVariantPreviewChange({ ...draft.previewVariantSelection, [dimensionId]: optionId });
-  }
+  }, [activeVariant, draft.srpDineInEx, draft.srpTakeawayEx, draft.srpDeliveryEx]);
+  const hasVariantPricing = activeVariant !== undefined && (
+    activeVariant.priceDineIn !== undefined
+    || activeVariant.priceTakeaway !== undefined
+    || activeVariant.priceDelivery !== undefined
+  );
 
   function toggleOption(group: ReturnType<typeof useModifierGroups>[number], optionId: string) {
     const current = effectiveSelection[group.id] ?? [];
@@ -1852,50 +1930,38 @@ function WhatGetsSoldPreview({
         </div>
       )}
 
-      {(draftRecipe.variantDimensions ?? []).length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-          {(draftRecipe.variantDimensions ?? []).map((dim) => {
-            const selectedId = effectiveVariantSelection[dim.id];
-            return (
-              <div key={dim.id}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 4, display: 'inline-flex', gap: 6 }}>
-                  {dim.name || '(unnamed dimension)'}
-                  <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>
-                    · pick one (mandatory)
-                  </span>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {dim.options.length === 0 && (
-                    <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
-                      No options yet
-                    </span>
-                  )}
-                  {dim.options.map((opt) => {
-                    const on = selectedId === opt.id;
-                    return (
-                      <button
-                        type="button"
-                        key={opt.id}
-                        onClick={() => pickVariantOption(dim.id, opt.id)}
-                        style={{
-                          padding: '4px 9px', borderRadius: 100,
-                          border: on
-                            ? '1px solid var(--color-accent-active)'
-                            : '1px solid var(--color-border-subtle)',
-                          background: on ? 'rgba(3,28,89,0.06)' : '#fff',
-                          color: on ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
-                          fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
-                          fontFamily: 'var(--font-primary)',
-                        }}
-                      >
-                        {opt.name || '(unnamed)'}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+      {draft.variants.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 4, display: 'inline-flex', gap: 6 }}>
+            Variant
+            <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>
+              · pick one (mandatory)
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            {draft.variants.map((v) => {
+              const on = activeVariant?.id === v.id;
+              return (
+                <button
+                  type="button"
+                  key={v.id}
+                  onClick={() => onVariantPreviewChange(v.id)}
+                  style={{
+                    padding: '4px 9px', borderRadius: 100,
+                    border: on
+                      ? '1px solid var(--color-accent-active)'
+                      : '1px solid var(--color-border-subtle)',
+                    background: on ? 'rgba(3,28,89,0.06)' : '#fff',
+                    color: on ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
+                    fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
+                    fontFamily: 'var(--font-primary)',
+                  }}
+                >
+                  {v.name || '(unnamed)'}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -1921,7 +1987,7 @@ function WhatGetsSoldPreview({
         </div>
       )}
 
-      {attached.length === 0 && (draftRecipe.variantDimensions ?? []).length === 0 && (
+      {attached.length === 0 && draft.variants.length === 0 && (
         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
           No variants or modifier groups attached. Preview shows the base composition only.
         </div>

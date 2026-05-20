@@ -136,7 +136,7 @@ The palette is **warm not cold** — warm whites and warm browns instead of grey
 
 ### Typography
 
-**Plus Jakarta Sans** — geometric sans, slightly humanist. Modern and precise without feeling corporate or clinical. Set with antialiasing for screen clarity.
+**Poppins** — geometric sans, slightly humanist. Modern and precise without feeling corporate or clinical. Set with antialiasing for screen clarity.
 
 - **Page titles / totals:** 18–22px, weight 700
 - **Card labels:** 13–14px, weight 600

@@ -55,7 +55,7 @@ export default function IntakeLauncherPage() {
       icon: MessageSquare,
       iconBg: 'rgba(3,28,89,0.08)',
       iconColor: 'var(--color-accent-active)',
-      title: 'Ask Quinn',
+      title: 'Ask Edify',
       description: 'Type, paste, or dictate a recipe. Quinn walks you through it in chat.',
       onClick: () => router.push('/?flow=recipe'),
     },

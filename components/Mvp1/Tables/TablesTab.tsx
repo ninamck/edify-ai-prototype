@@ -233,7 +233,7 @@ export default function TablesTab({
           {onAskQuinn && (
             <button type="button" onClick={onAskQuinn} style={addButton}>
               <EdifyMark size={13} strokeWidth={2.4} color="currentColor" />
-              <span>Ask Quinn</span>
+              <span>Ask Edify</span>
             </button>
           )}
         </div>
@@ -681,7 +681,7 @@ function EmptyState({
           Build your first table
         </div>
         <div style={{ fontSize: 12, marginTop: 4 }}>
-          Ask Quinn, pick a question, or build one manually.
+          Ask Edify, pick a question, or build one manually.
         </div>
       </div>
       <div
@@ -697,7 +697,7 @@ function EmptyState({
         {onAskQuinn && (
           <ChoiceCard
             icon={<EdifyMark size={16} strokeWidth={2.2} color="var(--color-accent-active)" />}
-            title="Ask Quinn"
+            title="Ask Edify"
             description="Describe the table you want in your own words."
             onClick={onAskQuinn}
           />

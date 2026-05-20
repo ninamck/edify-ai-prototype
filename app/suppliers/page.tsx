@@ -141,7 +141,7 @@ export default function SuppliersPage() {
           onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-accent-active-hover, var(--color-accent-active))'; e.currentTarget.style.opacity = '0.92'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--color-accent-active)'; e.currentTarget.style.opacity = '1'; }}
         >
-          <EdifyMark size={13} /> Ask Quinn
+          <EdifyMark size={13} /> Ask Edify
         </button>
       </nav>
 

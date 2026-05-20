@@ -3,11 +3,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Pin, ChevronDown, ShieldCheck, ChevronRight, AlertCircle } from 'lucide-react';
+import { Pin, ChevronDown, ChevronRight, Mic, Square, CheckCircle2 } from 'lucide-react';
 import type { BriefingRole, BriefingPhase } from '@/components/briefing';
 import CloseReconciliationCard from '@/components/Waste/CloseReconciliationCard';
-import { useApprovals, getUser, RULE_LABELS } from '@/components/Approvals/approvalsStore';
-import { useActingUser } from '@/components/DemoControls/demoStore';
 
 // ── Live snapshot widgets (migrated from Command Centre) ───────────────────────
 
@@ -107,18 +105,271 @@ function LabourMiniCurve({ subtitle }: { subtitle: string }) {
   );
 }
 
-function LiveSnapshot({ role }: { role: BriefingRole }) {
-  if (role === 'ed') return null;
-  // Playtomic is a separate demo persona; its briefing surfaces padel-specific
-  // insights below and doesn't need the F&B P&L confidence header.
-  if (role === 'playtomic') return null;
+// ── HeroStrip ──────────────────────────────────────────────────────────────────
+// Three phase-shaped answers at the top of the panel. Replaces the old
+// always-on LiveSnapshot. Detail (chart, breakdown) lives behind each tile's
+// "What does this mean?" chevron — based on Kallie's repeated note that GMs
+// want one-line answers first and depth only on tap.
 
-  const pnlPct = role === 'cheryl' ? 72 : 78;
-  const pnlLabel = role === 'cheryl' ? 'Gross margin confidence' : 'Live P&L confidence';
-  const pnlCaption = role === 'cheryl'
-    ? 'How complete your cost inputs are for the current period.'
-    : 'Based on matched sales, clocked labour, and invoices posted so far today.';
-  const labourSubtitle = role === 'gm' ? 'Fitzroy Espresso · yesterday' : 'Chain roll-up · yesterday';
+type HeroAnswer = {
+  id: string;
+  eyebrow: string;
+  value: string;
+  context?: string;
+  detail?: React.ReactNode;
+};
+
+function getHeroAnswers(role: BriefingRole, phase: BriefingPhase): HeroAnswer[] {
+  if (role === 'gm') {
+    if (phase === 'morning') return [
+      { id: 'h1', eyebrow: 'On today', value: '4 on the floor', context: '1 short of plan — Priya called out, Tom moved to mid' },
+      { id: 'h2', eyebrow: 'Expected sales', value: '£19,200', context: '+6% vs last Thursday · warm day forecast', detail: <LabourMiniCurve subtitle="Yesterday's actual vs forecast" /> },
+      { id: 'h3', eyebrow: 'Deliveries today', value: 'Fresh Direct · 11am', context: '1 line pre-flagged short before arrival' },
+    ];
+    if (phase === 'midday') return [
+      { id: 'h1', eyebrow: 'Pace now', value: '+11% vs forecast', context: 'Warm day pulling extra cover · iced drinks under pressure' },
+      { id: 'h2', eyebrow: 'Stock at risk', value: 'Ham & cheese · 3 left', context: 'Sell-out likely before 1:30 unless prepped' },
+      { id: 'h3', eyebrow: 'Next cut-off', value: 'Bidfood · 2pm', context: "Tomorrow's basket needs send" },
+    ];
+    if (phase === 'afternoon') return [
+      { id: 'h1', eyebrow: 'EOD tracking', value: '£20,250', context: '+£1,340 vs £18,910 plan' },
+      { id: 'h2', eyebrow: 'Cut-offs before close', value: '1 left · 30 min', context: 'Bidfood basket — matcha +1, tomatoes +2' },
+      { id: 'h3', eyebrow: 'Tomorrow opening', value: 'Priya · 6am', context: 'Reminder sent · confirmed' },
+    ];
+    if (phase === 'evening') return [
+      { id: 'h1', eyebrow: 'Today closed', value: '£20,180', context: '+£1,270 vs plan · waste £28' },
+      { id: 'h2', eyebrow: 'Tomorrow ready', value: 'Basket sent · Priya 6am', context: 'Compliance pre-filled — temps + fire door' },
+      { id: 'h3', eyebrow: 'Period margin', value: '+0.4 pt today', context: 'Posts overnight after close' },
+    ];
+  }
+
+  if (role === 'ed') {
+    if (phase === 'morning') return [
+      { id: 'h1', eyebrow: 'Sites open today', value: '12 of 12', context: 'No openings flagged late' },
+      { id: 'h2', eyebrow: 'Chain forecast', value: '£182,400', context: '+4% vs last Thursday', detail: <LabourMiniCurve subtitle="Chain roll-up · yesterday" /> },
+      { id: 'h3', eyebrow: 'Decisions for you', value: '4 calls', context: 'Bidvest GRN · Metro credit · matcha · muffins' },
+    ];
+    if (phase === 'midday') return [
+      { id: 'h1', eyebrow: 'Chain pace', value: '+8% vs forecast', context: '5 sites running hot · 1 behind' },
+      { id: 'h2', eyebrow: 'Cut-offs today', value: 'Bidfood · 2pm', context: 'Matcha top-up holds Friday stock' },
+      { id: 'h3', eyebrow: 'Decisions for you', value: '4 calls', context: 'GRN · lunch staff · basket · muffins' },
+    ];
+    if (phase === 'afternoon') return [
+      { id: 'h1', eyebrow: 'Chain EOD tracking', value: '£196,800', context: '+£14k vs plan' },
+      { id: 'h2', eyebrow: 'Cut-offs before close', value: '1 left · 30 min', context: 'Bidfood basket — £1,240 est.' },
+      { id: 'h3', eyebrow: 'Loop closed today', value: 'Warm-day → +1 case', context: 'Sales → stock → orders ran itself' },
+    ];
+    if (phase === 'evening') return [
+      { id: 'h1', eyebrow: 'Chain closed', value: '£198,420', context: 'Best Thursday this quarter' },
+      { id: 'h2', eyebrow: 'Tomorrow ready', value: '12 of 12 baskets sent', context: 'Compliance + cost pack queued' },
+      { id: 'h3', eyebrow: 'Recipes recosted', value: '12 SKUs · flour variance', context: 'Margins refreshed for Cheryl' },
+    ];
+  }
+
+  if (role === 'cheryl') {
+    if (phase === 'morning') return [
+      {
+        id: 'h1',
+        eyebrow: 'Period completeness',
+        value: '64%',
+        context: 'Below the 75% you\'d normally expect now',
+        detail: (
+          <ConfidenceMeterBar
+            label="Period cost completeness"
+            valuePct={64}
+            caption="Of this period's costs confirmed vs still pending accrual or invoice."
+          />
+        ),
+      },
+      {
+        id: 'h2',
+        eyebrow: 'Cleared overnight',
+        value: '£2,340',
+        context: '14 invoices auto-matched · 3 held for tolerance',
+        detail: <InvoiceMatchBar />,
+      },
+      { id: 'h3', eyebrow: 'Mismatches to clear', value: '3 ready', context: 'Bidfood (2) · Metro (1) · one pass' },
+    ];
+    if (phase === 'midday') return [
+      { id: 'h1', eyebrow: 'COGS today', value: '28.4%', context: '+1.2 pts vs 27.2% target · flour driving 0.7' },
+      { id: 'h2', eyebrow: 'Posted so far', value: '£3,240', context: '18 invoices · running clean' },
+      { id: 'h3', eyebrow: 'Period close in', value: '3 days', context: 'Pace check — projecting 82% on target' },
+    ];
+    if (phase === 'afternoon') return [
+      { id: 'h1', eyebrow: 'Period completeness', value: '78%', context: 'Up from 64% this morning · on target' },
+      { id: 'h2', eyebrow: 'Posted today', value: '£6,700', context: '27 cleared · 2 in review' },
+      { id: 'h3', eyebrow: 'Accruals to approve', value: 'By 4pm', context: 'Urban Fresh · Lacto · Metro credit' },
+    ];
+    if (phase === 'evening') return [
+      { id: 'h1', eyebrow: 'Period completeness', value: '84%', context: 'Above target' },
+      { id: 'h2', eyebrow: 'Posted today', value: '£4,820', context: '3 small holds queued for tomorrow' },
+      { id: 'h3', eyebrow: 'Close pack', value: 'Ready for sign-off', context: '7pm distribution drafted' },
+    ];
+  }
+
+  if (role === 'playtomic') {
+    if (phase === 'morning') return [
+      { id: 'h1', eyebrow: 'Forward pipeline', value: '−22% Manchester', context: 'Tue/Thu evenings concentrated' },
+      { id: 'h2', eyebrow: 'Coaches today', value: '2 swaps queued', context: 'Stockport — Diego off sick' },
+      { id: 'h3', eyebrow: 'Cafe basket', value: '£1,860 · weekend', context: 'Cut-off 11am · tournament Saturday' },
+    ];
+    if (phase === 'midday') return [
+      { id: 'h1', eyebrow: 'Off-peak discount', value: 'Live at 6pm', context: 'Needs approval by 2pm' },
+      { id: 'h2', eyebrow: 'Occupancy now', value: '74% chain avg', context: 'North Leeds 92% · Manchester 54%' },
+      { id: 'h3', eyebrow: 'New members', value: '198 welcomed', context: 'Coach class voucher attached for retention' },
+    ];
+    if (phase === 'afternoon') return [
+      { id: 'h1', eyebrow: 'Tomorrow rain', value: '78 bookings at risk', context: 'Stockport indoor capacity available' },
+      { id: 'h2', eyebrow: 'Saturday dry-run', value: '5pm checklist', context: 'Manchester ops sign-off' },
+      { id: 'h3', eyebrow: 'Weekend roster', value: '+18% confirmed', context: 'All 7 sites' },
+    ];
+    if (phase === 'evening') return [
+      { id: 'h1', eyebrow: 'EOD revenue', value: '£22,600', context: 'Court £18.4k · cafe £4.2k' },
+      { id: 'h2', eyebrow: 'Tomorrow pipeline', value: '84% booked', context: 'Manchester recovered to 71%' },
+      { id: 'h3', eyebrow: 'Session ratings', value: '4.7 / 5 avg', context: '2 court-lighting tickets logged' },
+    ];
+  }
+
+  return [];
+}
+
+function HeroTile({ tile, isLast }: { tile: HeroAnswer; isLast: boolean }) {
+  const [open, setOpen] = useState(false);
+  const expandable = !!tile.detail;
+  return (
+    <div
+      style={{
+        padding: '9px 0',
+        borderBottom: isLast ? 'none' : '1px solid var(--color-border-subtle)',
+      }}
+    >
+      <button
+        type="button"
+        onClick={expandable ? () => setOpen((v) => !v) : undefined}
+        disabled={!expandable}
+        aria-expanded={expandable ? open : undefined}
+        style={{
+          all: 'unset',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          width: '100%',
+          cursor: expandable ? 'pointer' : 'default',
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: '10px',
+              fontWeight: 700,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: 'var(--color-text-muted)',
+              marginBottom: '2px',
+            }}
+          >
+            {tile.eyebrow}
+          </div>
+          <div
+            style={{
+              fontSize: '15px',
+              fontWeight: 700,
+              color: 'var(--color-text-primary)',
+              lineHeight: 1.3,
+            }}
+          >
+            {tile.value}
+          </div>
+          {tile.context && (
+            <div
+              style={{
+                fontSize: '12px',
+                color: 'var(--color-text-secondary)',
+                lineHeight: 1.4,
+                marginTop: '2px',
+              }}
+            >
+              {tile.context}
+            </div>
+          )}
+        </div>
+        {expandable && (
+          <ChevronDown
+            size={14}
+            strokeWidth={2.2}
+            color="var(--color-text-muted)"
+            style={{
+              transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.2s ease',
+              flexShrink: 0,
+            }}
+          />
+        )}
+      </button>
+      <AnimatePresence initial={false}>
+        {open && tile.detail && (
+          <motion.div
+            key="detail"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div style={{ paddingTop: '10px' }}>{tile.detail}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function HeroStrip({ role, phase }: { role: BriefingRole; phase: BriefingPhase }) {
+  const tiles = getHeroAnswers(role, phase);
+  if (tiles.length === 0) return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28 }}
+      style={{
+        padding: '2px 12px',
+        borderRadius: '10px',
+        background: '#fff',
+        border: '1px solid var(--color-border-subtle)',
+        boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
+        marginBottom: '10px',
+      }}
+    >
+      {tiles.map((t, i) => (
+        <HeroTile key={t.id} tile={t} isLast={i === tiles.length - 1} />
+      ))}
+    </motion.div>
+  );
+}
+
+// ── EveningVoiceSync ───────────────────────────────────────────────────────────
+// End-of-day capture for things integrations can't see (fridge breakdown,
+// weather pulled customers, team stress, customer incident). Mocked recording
+// state for the prototype — click to "record", click again to "stop", which
+// reveals a transcript + Quinn's cascade reply.
+
+const VOICE_TAGS = ['Equipment', 'Weather', 'Team', 'Customer', 'Supplier'] as const;
+
+const MOCK_VOICE_TRANSCRIPT =
+  "Fridge 2 was down from about 9:30 to 2. Lost the sandwich display through lunch. Team felt it — Tom was firefighting prep all morning.";
+
+const MOCK_VOICE_REPLY =
+  "Got it. Logged fridge 2 down 09:30–14:00 against today's −6% lunch and the ham & cheese sell-out at 13:45. I'll watch call-outs and waste over the next 2 days and flag if it clusters — Kallie's pattern.";
+
+function EveningVoiceSync() {
+  const [state, setState] = useState<'idle' | 'recording' | 'done'>('idle');
+  const [tag, setTag] = useState<string | null>(null);
+
+  function toggle() {
+    if (state === 'idle') setState('recording');
+    else if (state === 'recording') setState('done');
+  }
 
   return (
     <motion.div
@@ -131,30 +382,168 @@ function LiveSnapshot({ role }: { role: BriefingRole }) {
         background: '#fff',
         border: '1px solid var(--color-border-subtle)',
         boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
-        marginBottom: '12px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
+        marginBottom: '10px',
       }}
     >
-      <ConfidenceMeterBar label={pnlLabel} valuePct={pnlPct} caption={pnlCaption} />
-      {role === 'cheryl' && (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '7px',
+          marginBottom: '8px',
+        }}
+      >
+        <Mic size={12} strokeWidth={2.2} color="var(--color-accent-active)" />
+        <span
+          style={{
+            fontSize: '12px',
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+            color: 'var(--color-accent-active)',
+          }}
+        >
+          End-of-day sync
+        </span>
+      </div>
+
+      <p
+        style={{
+          margin: '0 0 10px',
+          fontSize: '13px',
+          fontWeight: 600,
+          color: 'var(--color-text-primary)',
+          lineHeight: 1.45,
+        }}
+      >
+        What happened in the shop today that the numbers won't show?
+      </p>
+
+      {state !== 'done' && (
         <>
-          <div style={{ borderTop: '1px solid var(--color-border-subtle)' }} />
-          <ConfidenceMeterBar
-            label="Period cost completeness"
-            valuePct={64}
-            caption="Of this period's costs confirmed vs still pending accrual or invoice."
-          />
-          <div style={{ borderTop: '1px solid var(--color-border-subtle)' }} />
-          <InvoiceMatchBar />
+          <button
+            type="button"
+            onClick={toggle}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              width: '100%',
+              padding: '10px 12px',
+              borderRadius: '8px',
+              border: state === 'recording'
+                ? '1px solid var(--color-accent-quinn, #FF0058)'
+                : '1px solid var(--color-accent-active)',
+              background: state === 'recording'
+                ? 'rgba(255,0,88,0.08)'
+                : 'var(--color-accent-active)',
+              color: state === 'recording' ? 'var(--color-accent-quinn, #FF0058)' : '#fff',
+              fontSize: '12px',
+              fontWeight: 700,
+              fontFamily: 'var(--font-primary)',
+              cursor: 'pointer',
+              marginBottom: '10px',
+            }}
+          >
+            {state === 'recording' ? <Square size={12} strokeWidth={2.4} fill="currentColor" /> : <Mic size={12} strokeWidth={2.2} />}
+            {state === 'recording' ? 'Recording · tap to stop' : 'Tap to record'}
+          </button>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+            {VOICE_TAGS.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTag((prev) => (prev === t ? null : t))}
+                style={{
+                  padding: '4px 9px',
+                  borderRadius: '100px',
+                  border: '1px solid var(--color-border-subtle)',
+                  background: tag === t ? 'var(--color-accent-active)' : 'transparent',
+                  color: tag === t ? '#fff' : 'var(--color-text-secondary)',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  fontFamily: 'var(--font-primary)',
+                  cursor: 'pointer',
+                }}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
         </>
       )}
-      {role === 'gm' && (
-        <>
-          <div style={{ borderTop: '1px solid var(--color-border-subtle)' }} />
-          <LabourMiniCurve subtitle={labourSubtitle} />
-        </>
+
+      {state === 'done' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div
+            style={{
+              padding: '8px 10px',
+              borderRadius: '8px',
+              background: 'var(--color-bg-hover)',
+              border: '1px solid var(--color-border-subtle)',
+              fontSize: '12px',
+              color: 'var(--color-text-primary)',
+              lineHeight: 1.5,
+            }}
+          >
+            <div
+              style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: 'var(--color-text-muted)',
+                marginBottom: '3px',
+              }}
+            >
+              You · {tag ?? 'Untagged'}
+            </div>
+            {MOCK_VOICE_TRANSCRIPT}
+          </div>
+          <div
+            style={{
+              padding: '8px 10px',
+              borderRadius: '8px',
+              background: 'rgba(0,28,53,0.05)',
+              border: '1px solid rgba(0,28,53,0.18)',
+              fontSize: '12px',
+              color: 'var(--color-text-primary)',
+              lineHeight: 1.5,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                fontSize: '10px',
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: 'var(--color-accent-active)',
+                marginBottom: '3px',
+              }}
+            >
+              <CheckCircle2 size={10} strokeWidth={2.4} /> Quinn
+            </div>
+            {MOCK_VOICE_REPLY}
+          </div>
+          <button
+            type="button"
+            onClick={() => setState('idle')}
+            style={{
+              all: 'unset',
+              cursor: 'pointer',
+              fontSize: '11px',
+              fontWeight: 600,
+              color: 'var(--color-text-muted)',
+              alignSelf: 'flex-start',
+            }}
+          >
+            Add another note
+          </button>
+        </div>
       )}
     </motion.div>
   );
@@ -201,11 +590,13 @@ const CATEGORY = {
     dot: '#22C55E',
   },
   'worth-knowing': {
+    // Worth-knowing is reference, not warning. Amber-tinted wrapper reads
+    // as alert; this group is the opposite. Calmer neutral keeps it quiet.
     label: 'Worth knowing',
-    color: 'var(--color-warning)',
-    bg: 'rgba(234,88,12,0.055)',
-    borderColor: 'rgba(234,88,12,0.22)',
-    dot: '#F59E0B',
+    color: 'var(--color-text-secondary)',
+    bg: 'transparent',
+    borderColor: 'var(--color-border-subtle)',
+    dot: '#9CA3AF',
   },
 } as const;
 
@@ -216,15 +607,24 @@ function InsightCard({
   accentColor,
   isPinned,
   onTogglePin,
+  onComplete,
 }: {
   item: InsightItem;
   accentColor: string;
   isPinned: boolean;
   onTogglePin: (id: string) => void;
+  /** If provided, action clicks notify parent instead of hiding the card locally. */
+  onComplete?: (id: string) => void;
 }) {
   const [done, setDone] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
   const router = useRouter();
   if (done) return null;
+
+  function complete() {
+    if (onComplete) onComplete(item.id);
+    else setDone(true);
+  }
 
   return (
     <div
@@ -269,37 +669,64 @@ function InsightCard({
       </button>
       <p
         style={{
-          margin: '0 28px 4px 0',
+          margin: `0 28px ${item.detail ? '6px' : '0'} 0`,
           fontSize: '13px',
-          fontWeight: 700,
+          fontWeight: 600,
           color: 'var(--color-text-primary)',
           lineHeight: 1.4,
         }}
       >
         {item.headline}
       </p>
-      <ul
-        style={{
-          margin: item.actionLabel ? '0 0 10px' : 0,
-          padding: '0 0 0 16px',
-          listStyleType: 'disc',
-        }}
-      >
-        {item.detail.split('. ').map((sentence, i, arr) => (
-          <li
-            key={i}
+      {item.detail && (
+        <button
+          type="button"
+          onClick={() => setDetailOpen((v) => !v)}
+          aria-expanded={detailOpen}
+          style={{
+            all: 'unset',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '3px',
+            fontSize: '11px',
+            fontWeight: 600,
+            color: 'var(--color-text-muted)',
+            marginBottom: item.actionLabel ? '10px' : 0,
+          }}
+        >
+          What does this mean?
+          <ChevronDown
+            size={11}
+            strokeWidth={2.4}
             style={{
-              fontSize: '13px',
+              transform: detailOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.2s ease',
+            }}
+          />
+        </button>
+      )}
+      <AnimatePresence initial={false}>
+        {detailOpen && item.detail && (
+          <motion.p
+            key="card-detail"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            style={{
+              margin: item.actionLabel ? '4px 0 10px' : '4px 0 0',
+              fontSize: '12px',
               fontWeight: 400,
               color: 'var(--color-text-secondary)',
-              lineHeight: 1.55,
-              marginBottom: i < arr.length - 1 ? '3px' : 0,
+              lineHeight: 1.5,
+              overflow: 'hidden',
             }}
           >
-            {sentence.endsWith('.') ? sentence : sentence + (i < arr.length - 1 ? '.' : '')}
-          </li>
-        ))}
-      </ul>
+            {item.detail}
+          </motion.p>
+        )}
+      </AnimatePresence>
       {item.actionLabel && (
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
           <button
@@ -307,8 +734,9 @@ function InsightCard({
             onClick={() => {
               if (item.actionHref) {
                 router.push(item.actionHref);
+                complete();
               } else {
-                setDone(true);
+                complete();
               }
             }}
             style={{
@@ -328,7 +756,7 @@ function InsightCard({
           {item.actionSecondary && (
             <button
               type="button"
-              onClick={() => setDone(true)}
+              onClick={complete}
               style={{
                 padding: '5px 12px',
                 borderRadius: '6px',
@@ -501,6 +929,210 @@ function InsightGroup({
   );
 }
 
+// ── Focus mode sequence ───────────────────────────────────────────────────────
+// One needs-call card at a time. Progress pips + Next / Skip, completion state
+// when all dismissed. Pattern is Kallie's "one thing to focus on at a time" +
+// Ed's "swipe-through catch-up thread".
+
+function FocusModeSequence({
+  items,
+  preamble,
+  pinnedIds,
+  onTogglePin,
+  hiddenIds,
+}: {
+  items: InsightItem[];
+  preamble?: React.ReactNode;
+  pinnedIds: Set<string>;
+  onTogglePin: (id: string) => void;
+  /** Item ids already shown elsewhere (e.g. pinned section). */
+  hiddenIds: Set<string>;
+}) {
+  const cfg = CATEGORY['needs-call'];
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [cursor, setCursor] = useState(0);
+
+  const visible = items.filter((it) => !dismissed.has(it.id) && !hiddenIds.has(it.id));
+  const safeCursor = visible.length === 0 ? 0 : Math.min(cursor, visible.length - 1);
+  const current = visible[safeCursor];
+  const allDone = visible.length === 0;
+
+  function dismiss(id: string) {
+    setDismissed((prev) => {
+      const n = new Set(prev);
+      n.add(id);
+      return n;
+    });
+  }
+
+  function next() {
+    if (visible.length <= 1) return;
+    setCursor((c) => (c + 1) % visible.length);
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.26, ease: 'easeOut' }}
+      style={{
+        borderRadius: '10px',
+        background: cfg.bg,
+        border: `1px solid ${cfg.borderColor}`,
+        padding: '12px',
+        marginBottom: '10px',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '7px',
+          marginBottom: preamble || !allDone ? '10px' : 0,
+        }}
+      >
+        <span
+          style={{
+            width: '7px',
+            height: '7px',
+            borderRadius: '50%',
+            background: cfg.dot,
+            flexShrink: 0,
+          }}
+        />
+        <span
+          style={{
+            fontSize: '12px',
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+            color: cfg.color,
+          }}
+        >
+          {cfg.label}
+        </span>
+        <span
+          style={{
+            fontSize: '11px',
+            fontWeight: 600,
+            color: cfg.color,
+            opacity: 0.75,
+            marginLeft: '2px',
+          }}
+        >
+          · {visible.length}
+        </span>
+      </div>
+
+      {preamble && (
+        <div style={{ marginBottom: allDone ? 0 : '8px' }}>{preamble}</div>
+      )}
+
+      {allDone && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '12px',
+            borderRadius: '8px',
+            background: 'rgba(26,92,58,0.06)',
+            border: '1px solid rgba(26,92,58,0.18)',
+          }}
+        >
+          <CheckCircle2 size={16} strokeWidth={2.2} color="#1a5c3a" />
+          <span style={{ fontSize: '12px', fontWeight: 600, color: '#1a5c3a' }}>
+            All cleared. Quinn's got the rest.
+          </span>
+        </div>
+      )}
+
+      <AnimatePresence mode="wait" initial={false}>
+        {!allDone && current && (
+          <motion.div
+            key={current.id}
+            initial={{ opacity: 0, x: 12 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -12 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+          >
+            <InsightCard
+              item={current}
+              accentColor={cfg.color}
+              isPinned={pinnedIds.has(current.id)}
+              onTogglePin={onTogglePin}
+              onComplete={dismiss}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {!allDone && visible.length > 1 && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginTop: '10px',
+          }}
+        >
+          <div style={{ display: 'flex', gap: '4px', flex: 1 }}>
+            {visible.map((_, i) => (
+              <span
+                key={i}
+                style={{
+                  width: i === safeCursor ? '14px' : '6px',
+                  height: '4px',
+                  borderRadius: '100px',
+                  background:
+                    i === safeCursor
+                      ? cfg.color
+                      : 'rgba(0,28,53,0.18)',
+                  transition: 'width 0.2s ease, background 0.2s ease',
+                }}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => dismiss(current.id)}
+            style={{
+              all: 'unset',
+              cursor: 'pointer',
+              fontSize: '11px',
+              fontWeight: 600,
+              color: 'var(--color-text-muted)',
+              padding: '4px 6px',
+            }}
+          >
+            Skip
+          </button>
+          <button
+            type="button"
+            onClick={next}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '3px',
+              padding: '4px 10px',
+              borderRadius: '6px',
+              border: `1px solid ${cfg.borderColor}`,
+              background: 'transparent',
+              color: cfg.color,
+              fontSize: '11px',
+              fontWeight: 700,
+              fontFamily: 'var(--font-primary)',
+              cursor: 'pointer',
+            }}
+          >
+            Next
+            <ChevronRight size={12} strokeWidth={2.4} />
+          </button>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 // ── Pinned section ────────────────────────────────────────────────────────────
 
 function PinnedSection({
@@ -580,33 +1212,33 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       items: [
         {
           id: 'ed-m-n-1',
-          headline: 'Bidvest delivery lands 11:10 — pre-check the GRN',
+          headline: 'Bidvest 11:10 — Edify will sign the GRN and open credits for any shorts',
           detail:
-            '14 lines, £412 on the drop. WTD spend on Bidvest already £10 over budget — scrutinise short-shipments before you sign so the overage doesn\'t grow.',
-          actionLabel: 'Open GRN',
-          actionSecondary: 'Log discrepancy',
+            'On drop, Edify scans against the PO, signs lines within tolerance, opens credit requests with the driver photo for any shorts, and posts to period margin. WTD spend is already £10 over budget so shorts get extra scrutiny — step in only if the team flags something off at the dock.',
+          actionLabel: 'Let it run',
+          actionSecondary: "I'll sign myself",
         },
         {
           id: 'ed-m-n-2',
-          headline: 'Metro credit £312 — past finance threshold',
+          headline: 'Metro credit £312 — Edify drafted the write-off, needs your approval',
           detail:
-            'Approve the write-off path or escalate. It can\'t sit in the queue — period margin locks later today.',
+            'Reconciled against the original PO and short-shipment log. Approving posts the journal and closes the supplier loop before period margin locks. Escalate if you want Cheryl to push back on Metro instead.',
           actionLabel: 'Approve write-off',
-          actionSecondary: 'Escalate',
+          actionSecondary: 'Escalate to Cheryl',
         },
         {
           id: 'ed-m-n-3',
-          headline: 'Matcha estate order — two sites will stock out before Friday',
+          headline: 'Matcha — Edify added 1 case to today\'s Bidfood basket',
           detail:
-            'Authorise the top-up or the Friday stock-out is locked in. Quinn has the basket ready to send.',
-          actionLabel: 'Authorise top-up',
+            'Manchester and Lightwater stock out by Friday lunch without it (Bidfood doesn\'t deliver weekends). +£42 on the basket, sends at 1:55pm with the rest of your standing order — hold only if you want to swap suppliers.',
+          actionLabel: 'Let it run',
           actionSecondary: 'Adjust basket',
         },
         {
           id: 'ed-m-n-4',
-          headline: 'Morning bake adjusted +3 muffins — approve for today',
+          headline: 'AM bake — Edify drafted +3 muffins for today\'s warm-day pull',
           detail:
-            'Forecast pulled 11% higher than yesterday. Quinn has drafted the revised batch sheet for the AM team — approve before 7am or it locks to the standing plan.',
+            'Forecast 11% above yesterday on weather + last-week pattern. Batch sheet is queued for the 6am team. Locks to the standing plan at 7am if no decision — costs +£4.20 on prep.',
           actionLabel: 'Approve',
           actionSecondary: 'Keep standing plan',
         },
@@ -674,33 +1306,33 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       items: [
         {
           id: 'ed-d-n-1',
-          headline: 'Bidvest just landed — GRN ready to scan before signing',
+          headline: 'Bidvest landed — Edify signed 11 of 14 lines, 3 need your eyes',
           detail:
-            '14 lines on the dock. Two short-shipment flags already raised by Quinn. Your sign-off locks period margin — worth the 2-minute walk-through.',
-          actionLabel: 'Open GRN',
-          actionSecondary: 'Log discrepancy',
+            'Auto-matched and posted the 11 within tolerance. Three exceptions: 2 shorts already have credit requests drafted, 1 price variance is queued for Cheryl. Approving locks period margin and closes the delivery.',
+          actionLabel: 'Approve the three',
+          actionSecondary: 'Open to inspect',
         },
         {
           id: 'ed-d-n-2',
-          headline: 'Lunch pace running hot — hold or cut the 3pm shift?',
+          headline: 'Lunch pace +18% — Edify can hold the 3pm cut',
           detail:
-            'Covers 18% above forecast through 11:30. If flow stays, the planned 4 → 3 cut at 3pm will leave the floor short. Quinn can hold it — one tap.',
+            'Covers running 18% above forecast through 11:30. The planned 4 → 3 cut leaves the floor short if flow holds. On hold, Edify texts the staff staying on and updates the roster. No-op if flow drops back below 5%.',
           actionLabel: 'Hold the cut',
           actionSecondary: 'Keep as planned',
         },
         {
           id: 'ed-d-n-3',
-          headline: 'Matcha top-up cut-off in 90 min — send the basket?',
+          headline: 'Matcha basket — Edify will send at 1:55pm unless held',
           detail:
-            'Last call before Bidfood closes at 2pm. Without it, two sites stock out by Friday. Basket as drafted is £280.',
-          actionLabel: 'Send basket',
-          actionSecondary: 'Adjust first',
+            '5 min before the Bidfood cut-off. £280 as drafted; without it two sites stock out Friday. Holds the rest of your standing recurring order automatically if you want to swap.',
+          actionLabel: 'Send now',
+          actionSecondary: 'Hold and adjust',
         },
         {
           id: 'ed-d-n-4',
-          headline: 'Tomorrow\'s muffin batch — 9 or back to 12?',
+          headline: 'Tomorrow\'s muffin batch — Edify recommends going back to 12',
           detail:
-            'Today\'s rollover count is 0 so far. If it stays that way you may want to go back to 12 to catch the warm-weather rush tomorrow.',
+            'Zero rollover today, warm-day forecast tomorrow. Edify will draft the AM sheet at 12 unless held. Reverts to 9 if you keep the smaller batch.',
           actionLabel: 'Go to 12',
           actionSecondary: 'Keep at 9',
         },
@@ -762,35 +1394,35 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       items: [
         {
           id: 'ed-a-n-1',
-          headline: 'Bidfood basket cut-off in 30 min — approve tomorrow\'s order',
+          headline: 'Tomorrow\'s Bidfood basket — Edify will send in 30 min if no adjust',
           detail:
-            '£1,240 est., matcha +1 case included. One screen to review, one tap to send before 2pm.',
-          actionLabel: 'Review & send',
-          actionSecondary: 'Adjust',
+            '£1,240, 47 lines. Three changes from last Thursday: matcha +1, tomatoes +2 (reorder point hit), cleaning roll −1 (overstock). Sends at 1:55pm and books the 11am Friday slot.',
+          actionLabel: 'Let it run',
+          actionSecondary: 'Open to adjust',
         },
         {
           id: 'ed-a-n-2',
-          headline: 'Cold-drink push — send to the floor for the 3pm peak?',
+          headline: '3pm cold-drink push — Edify drafted the board spec + barista brief',
           detail:
-            'Quinn\'s board spec (iced latte + cold-brew citrus) and a 5-min barista brief are ready. Approve to push now or hold.',
+            'Iced latte + cold-brew citrus, lifted to the front counter. 5-min team brief queued on the floor tablet. On push, Edify publishes the board and sends the brief — no SKU mix or pricing changes.',
           actionLabel: 'Push to floor',
           actionSecondary: 'Hold',
         },
         {
           id: 'ed-a-n-3',
-          headline: 'Muffin batch size for tomorrow AM — 12 or 9?',
+          headline: 'Tomorrow AM muffins — Edify will draft 12 unless held',
           detail:
-            'Today\'s rollover count held at 0. Forecast warmer again tomorrow. Quinn recommends going back to 12.',
+            'Zero rollover today, warm-day forecast tomorrow. 12 returns to the standing plan. Sheet drafts at 8pm tonight, you\'ll see it on the morning pre-check.',
           actionLabel: 'Confirm 12',
           actionSecondary: 'Keep at 9',
         },
         {
           id: 'ed-a-n-4',
-          headline: 'Evening roster: Tom to cover the no-show?',
+          headline: 'Evening roster — Edify will swap Tom into the no-show slot',
           detail:
-            'One evening slot just opened. Tom is on-site already and willing. Confirm and Quinn will update the roster + send the text.',
+            'Tom is on-site, willing, hits the labour budget. On confirm Edify updates the roster, sends the SMS, and logs the change. Or pick from the standby shortlist.',
           actionLabel: 'Confirm Tom',
-          actionSecondary: 'Find someone else',
+          actionSecondary: 'Pick someone else',
         },
       ],
     },
@@ -849,33 +1481,35 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       items: [
         {
           id: 'ed-e-n-1',
-          headline: 'End-of-day cash-up — any waste or markdowns to log?',
+          headline: 'End-of-day close — Edify pre-filled waste, markdowns and cash-up',
           detail:
-            'Close workflow ready. Quinn pre-filled waste (6 muffins, 2 baguettes) — review and submit, or adjust if anything\'s off.',
-          actionLabel: 'Open close pack',
-          actionSecondary: 'Review waste',
+            'Waste: 6 muffins, 2 baguettes (pace-matched against the display log). Markdowns: £0. Cash variance: −£0.40, within tolerance. Submitting posts to period margin overnight.',
+          actionLabel: 'Submit close',
+          actionSecondary: 'Adjust first',
         },
         {
           id: 'ed-e-n-2',
-          headline: 'Tomorrow\'s Fresh Direct basket sent 2pm — confirm when it lands',
+          headline: 'Tomorrow\'s Fresh Direct basket — Edify will auto-sign the GRN at 11am',
           detail:
-            'Basket is locked and delivery is booked for 11am tomorrow. Quinn will auto-log the GRN — you only need to sign.',
-          actionLabel: 'Mark ready',
+            'Basket locked at 2pm today, 11am Friday slot booked. On delivery Edify scans, signs lines within tolerance, opens credits for any shorts, and posts to period margin. You\'ll only see it again if something breaks the auto-path.',
+          actionLabel: 'Got it',
+          actionSecondary: "I'll sign myself",
         },
         {
           id: 'ed-e-n-3',
-          headline: 'Weekend roster gaps — 2 slots still open',
+          headline: 'Weekend roster — Edify drafted asks for the 2 open slots',
           detail:
-            'Saturday 10–14 and Sunday 14–18 unfilled. Quinn has a shortlist of who\'s said yes before — one tap to send the asks.',
+            'Saturday 10–14 and Sunday 14–18. Shortlist drawn from staff who\'ve said yes to similar slots in the last 30 days. On approve, Edify sends the asks and chases non-replies at 8am tomorrow. Escalates to ops if still open by 6pm.',
           actionLabel: 'Send asks',
-          actionSecondary: 'Escalate to HO',
+          actionSecondary: 'Escalate now',
         },
         {
           id: 'ed-e-n-4',
-          headline: 'Tonight\'s compliance sign-off — temperature log + fire door',
+          headline: 'Tonight\'s compliance — Edify pre-filled temps + fire door, signature needed',
           detail:
-            'PM temperature log was auto-filled from sensor data. Fire door check took 30 seconds to pre-fill. Both need your signature before you leave.',
+            'Sensors auto-filled PM temperatures from 5pm to close, all in range. Fire door check pre-filled from the evening walk camera pattern. 30 seconds to sign and lock the night close.',
           actionLabel: 'Sign both',
+          actionSecondary: 'Open each',
         },
       ],
     },
@@ -943,40 +1577,42 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       items: [
         {
           id: 'gm-m-n-1',
-          headline: 'Fresh Direct 11am — confirm short before you sign the docket',
+          headline: 'Fresh Direct 11am — Edify will sign the GRN and log the milk short',
           detail:
-            'One milk case flagged short before arrival. Don\'t sign the GRN until you\'ve physically checked the drop — Quinn will auto-log the discrepancy and open the credit.',
-          actionLabel: 'Approve sign-off flow',
-          actionSecondary: 'Got it',
+            'Driver pre-flagged one case short. On drop Edify scans against the PO, signs lines within tolerance, attaches the driver photo, opens the credit to Fresh Direct, and posts to period margin. Step in only if the team flags something else off at the dock.',
+          actionLabel: 'Let it run',
+          actionSecondary: "I'll sign myself",
         },
         {
           id: 'gm-m-n-2',
-          headline: 'Matcha runs out Friday — Bidfood order needs your go-ahead today',
+          headline: 'Matcha — Edify added 1 case to today\'s Bidfood basket',
           detail:
-            'Quinn has already added 1 extra case to the basket. Cut-off is 2pm — approve now and it\'s handled.',
-          actionLabel: 'Approve order',
+            'Without it you stock out Friday lunch. +£42 on the basket, sends at 1:55pm with the rest of your standing order. Hold only if you want to swap suppliers.',
+          actionLabel: 'Let it run',
           actionHref: '/assisted-ordering',
-          actionSecondary: 'Adjust quantity',
+          actionSecondary: 'Open to adjust',
         },
         {
           id: 'gm-m-n-3',
-          headline: 'Tomorrow\'s Bidfood basket ready — £1,240 est.',
+          headline: 'Tomorrow\'s Bidfood basket — Edify drafted £1,240, sends at 2pm',
           detail:
-            'Extra matcha included. One screen to review, one tap to send before 2pm.',
-          actionLabel: 'Review & send',
+            'Built from yesterday\'s pace + weather + your standing recurring order. Three changes from last Thursday: matcha +1, tomatoes +2, cleaning roll −1. Books the 11am Friday slot on send.',
+          actionLabel: 'Approve',
+          actionSecondary: 'Open to review',
         },
         {
           id: 'gm-m-n-4',
-          headline: 'Compliance checks queued for today',
+          headline: 'AM compliance — Edify pre-filled temps and fire door, signature needed',
           detail:
-            'AM temperature log, fire door check, and one outstanding head office policy acknowledgement from Tuesday. All three forms are ready — takes about 2 minutes.',
-          actionLabel: 'Start checks',
+            'Sensors filled overnight temps (9pm–6am, all in range). Fire door pre-filled from yesterday\'s walk pattern. Tuesday\'s policy ack still needs you — Edify can\'t sign that one. Two taps total.',
+          actionLabel: 'Sign all',
+          actionSecondary: 'Open each',
         },
       ],
     },
     {
       category: 'handled',
-      summary: 'Temperatures logged · opening + mid shifts confirmed',
+      summary: 'Overnight temps logged · 2 shifts confirmed',
       items: [
         {
           id: 'gm-m-h-1',
@@ -994,7 +1630,7 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
     },
     {
       category: 'worth-knowing',
-      summary: 'Baguette retention · pastry waste trend · evening labour drift',
+      summary: 'Baguette retention 2.3× · pastry waste up after 3pm',
       items: [
         {
           id: 'gm-m-w-1',
@@ -1023,32 +1659,33 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       items: [
         {
           id: 'gm-d-n-1',
-          headline: 'Fresh Direct landed — milk case confirmed short',
+          headline: 'Fresh Direct GRN — Edify ready to sign with the milk short attached',
           detail:
-            'Physical check matches the pre-flag. Sign the GRN with the discrepancy attached and the credit workflow starts automatically.',
+            'Physical check matches the pre-flag. On sign-off Edify logs the discrepancy, opens the £18 credit to Fresh Direct with the photo, and posts to period margin. Dispute if you think the count is wrong.',
           actionLabel: 'Sign with credit',
-          actionSecondary: 'Dispute instead',
+          actionSecondary: 'Dispute first',
         },
         {
           id: 'gm-d-n-2',
-          headline: 'Table 4 missing order — comp how?',
+          headline: 'Table 4 — Edify drafted a recovery: free coffee + priority re-fire',
           detail:
-            'Been waiting 14 min. Server flagged it at POS. Quinn suggests a free coffee + priority re-fire — one tap sends to kitchen and comps the bill.',
+            'Waiting 14 min, server flagged at the POS. On apply Edify comps the bill, sends the priority re-fire to the kitchen, and logs the incident against service-recovery cost. Or take it manually.',
           actionLabel: 'Apply recovery',
           actionSecondary: 'Handle manually',
         },
         {
           id: 'gm-d-n-3',
-          headline: 'Stock check by 1pm for tomorrow\'s basket',
+          headline: '1pm stock check — Edify pre-filled 10 items from overnight counts',
           detail:
-            'Quick 10-item floor scan — Quinn has the list pre-filled from overnight counts. Confirm or flag anomalies so the basket reflects reality.',
+            'Quick floor scan to confirm. Anything you flag gets fed straight into tomorrow\'s basket recalculation, and you\'ll see the changes on the afternoon brief.',
           actionLabel: 'Start check',
+          actionSecondary: 'Skip today',
         },
       ],
     },
     {
       category: 'handled',
-      summary: 'GRN signed with credit · AM compliance green · evening shift covered',
+      summary: 'GRN signed with credit · evening cover confirmed',
       items: [
         {
           id: 'gm-d-h-1',
@@ -1072,7 +1709,7 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
     },
     {
       category: 'worth-knowing',
-      summary: 'Sales +11% at 11am · ham & cheese low · warm through 3pm',
+      summary: 'Sales +11% at 11am · warm through 3pm',
       items: [
         {
           id: 'gm-d-w-1',
@@ -1101,40 +1738,41 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       items: [
         {
           id: 'gm-a-n-1',
-          headline: '3pm shift change: confirm drop from 4 to 3',
+          headline: '3pm shift change — Edify will confirm Priya off, Tom on, drop to 3',
           detail:
-            'Priya off at 3, Tom in for the afternoon. Flow is settling so the planned cut looks right — confirm to lock it.',
+            'Flow has settled, the planned 4 → 3 cut looks right. On confirm Edify sends Priya the off-clock nudge, updates the roster, and texts Tom the floor briefing. Holds the 4 if you keep the extra.',
           actionLabel: 'Confirm cut',
           actionSecondary: 'Hold the 4',
         },
         {
           id: 'gm-a-n-2',
-          headline: 'Tomorrow\'s Bidfood basket — approve before 2pm cut-off',
+          headline: 'Tomorrow\'s Bidfood basket — Edify will send in 20 min unless adjusted',
           detail:
-            'Matcha +1 case, tomatoes +2 trays. 20 min to go. One tap to send or open to adjust.',
-          actionLabel: 'Send basket',
-          actionSecondary: 'Review first',
+            '£1,240, matcha +1 case, tomatoes +2 trays. Built from your standing recurring order + today\'s pace. Sends at 1:55pm and books the 11am Friday slot.',
+          actionLabel: 'Let it run',
+          actionSecondary: 'Open to adjust',
         },
         {
           id: 'gm-a-n-3',
-          headline: 'Close-time prep list ready',
+          headline: 'Close prep — Edify queued the 8-item checklist on the floor tablet',
           detail:
-            'Drinks fridge top-up, counter reset, cash prep. 8 items, Quinn has the checklist pre-opened on the floor tablet.',
+            'Drinks fridge top-up, counter reset, cash prep. Edify logs completion and surfaces anything skipped in tomorrow\'s morning brief.',
           actionLabel: 'Open checklist',
+          actionSecondary: "Skip — I'll brief",
         },
         {
           id: 'gm-a-n-4',
-          headline: 'Weekend roster — one Saturday slot open',
+          headline: 'Saturday 10–14 gap — Edify drafted asks for Priya, Jake, Daisy',
           detail:
-            'Saturday 10–14 unfilled. Quinn has a shortlist: Priya, Jake, Daisy. Send ask or escalate to head office if nobody picks up by 6pm.',
-          actionLabel: 'Send ask',
-          actionSecondary: 'Escalate',
+            'All three said yes to similar slots in the last 30 days. On approve Edify sends the asks and chases non-replies at 8am. Escalates to ops if still open by 6pm.',
+          actionLabel: 'Send asks',
+          actionSecondary: 'Escalate now',
         },
       ],
     },
     {
       category: 'handled',
-      summary: 'Lunch £8,240 · handover done · cold drinks to front',
+      summary: 'Lunch £8,240 · handover done',
       items: [
         {
           id: 'gm-a-h-1',
@@ -1158,7 +1796,7 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
     },
     {
       category: 'worth-knowing',
-      summary: 'Pastry check at 4pm · 12 hours of labour budget · ham & cheese sold out',
+      summary: '12 hours labour left · ham & cheese sold out',
       items: [
         {
           id: 'gm-a-w-1',
@@ -1187,31 +1825,33 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       items: [
         {
           id: 'gm-e-n-1',
-          headline: 'Close cash-up — any waste or markdowns to log?',
+          headline: 'Close cash-up — Edify pre-filled the close pack',
           detail:
-            'Quinn has pre-filled 2 muffins waste, £0 markdowns. Review and submit the close pack, or adjust if anything\'s off.',
-          actionLabel: 'Submit close',
-          actionSecondary: 'Adjust first',
+            'Waste: 2 muffins (pace-matched). Markdowns: £0. Cash variance: within tolerance. Submitting posts to period margin overnight and closes today\'s pack.',
+          actionLabel: 'Submit',
+          actionSecondary: 'Adjust waste',
         },
         {
           id: 'gm-e-n-2',
-          headline: 'Tomorrow\'s opening team — confirm Priya',
+          headline: 'Tomorrow opening — Edify already sent Priya the 6am reminder',
           detail:
-            'Priya\'s down for 6am open. Quinn already sent the reminder; just confirm she\'s your point of contact in the morning.',
-          actionLabel: 'Confirm',
+            'Confirmed at 7pm. Edify will text again at 5:30am if she\'s not on-site by 5:50, and the standby list auto-kicks in if she doesn\'t make it.',
+          actionLabel: 'Got it',
+          actionSecondary: 'Change opener',
         },
         {
           id: 'gm-e-n-3',
-          headline: 'Fire door log sign-off before you leave',
+          headline: 'Fire door log — Edify pre-filled from the evening walk, signature needed',
           detail:
-            'Pre-filled from the evening walk. 30 seconds to review and sign.',
+            'Camera pattern shows the walk completed at 19:42, all stations checked. 30 seconds to sign and lock the night close.',
           actionLabel: 'Sign',
+          actionSecondary: 'Open log',
         },
       ],
     },
     {
       category: 'handled',
-      summary: 'PM temps logged · EOD £20,180 · basket sent · brief email out',
+      summary: 'EOD £20,180 · basket sent for tomorrow',
       items: [
         {
           id: 'gm-e-h-1',
@@ -1241,7 +1881,7 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
     },
     {
       category: 'worth-knowing',
-      summary: 'Muffin fix held · weekend weather · close 5 min faster',
+      summary: 'Muffin fix held · weekend warm-then-cool',
       items: [
         {
           id: 'gm-e-w-1',
@@ -1610,11 +2250,6 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
 
 function InsightFeed({ groups, role, phase }: { groups: InsightGroup[]; role: BriefingRole; phase: BriefingPhase }) {
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
-  const approvals = useApprovals();
-  const actingUserId = useActingUser();
-  const actingUser = getUser(actingUserId);
-  const isManager = actingUser?.role === 'manager';
-  const pendingApprovals = isManager ? approvals.filter(a => a.status === 'pending') : [];
 
   function togglePin(id: string) {
     setPinnedIds((prev) => {
@@ -1636,151 +2271,40 @@ function InsightFeed({ groups, role, phase }: { groups: InsightGroup[]; role: Br
 
   // Close-of-day reconciliation nudge: operators only (ed + gm), evening phase.
   const showCloseNudge = phase === 'evening' && (role === 'ed' || role === 'gm');
+  // Evening voice sync: same audience — capture what integrations can't see.
+  const showVoiceSync = phase === 'evening' && (role === 'ed' || role === 'gm');
 
-  const approvalsPreamble = pendingApprovals.length > 0
-    ? <ApprovalsSubcard pending={pendingApprovals} />
-    : undefined;
+  // Split out needs-call so it renders through FocusModeSequence;
+  // remaining groups (handled, worth-knowing) keep the existing collapsed shell.
+  const needsCallGroup = groups.find((g) => g.category === 'needs-call');
+  const otherGroups = groups.filter((g) => g.category !== 'needs-call');
 
   return (
     <div style={{ padding: '2px 0 24px' }}>
-      <LiveSnapshot role={role} />
+      <HeroStrip role={role} phase={phase} />
+      {showVoiceSync && <EveningVoiceSync />}
       <PinnedSection items={pinnedList} pinnedIds={pinnedIds} onTogglePin={togglePin} />
       {showCloseNudge && <CloseReconciliationCard phase={phase} />}
-      {groups.map((group, i) => (
+      {needsCallGroup && (
+        <FocusModeSequence
+          items={needsCallGroup.items}
+          pinnedIds={pinnedIds}
+          onTogglePin={togglePin}
+          hiddenIds={pinnedIds}
+        />
+      )}
+      {otherGroups.map((group, i) => (
         <InsightGroup
           key={group.category}
           group={group}
           index={i + (pinnedList.length > 0 ? 1 : 0)}
-          collapsible={group.category !== 'needs-call'}
-          defaultCollapsed={group.category !== 'needs-call'}
+          collapsible
+          defaultCollapsed
           pinnedIds={pinnedIds}
           onTogglePin={togglePin}
           hiddenIds={pinnedIds}
-          preamble={group.category === 'needs-call' ? approvalsPreamble : undefined}
-          extraCount={group.category === 'needs-call' ? pendingApprovals.length : 0}
         />
       ))}
-    </div>
-  );
-}
-
-function ApprovalsSubcard({ pending }: { pending: ReturnType<typeof useApprovals> }) {
-  const router = useRouter();
-  return (
-    <div style={{
-      padding: '10px 12px',
-      borderRadius: '8px',
-      background: '#fff',
-      border: '1px solid var(--color-border-subtle)',
-      boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
-    }}>
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        marginBottom: '8px',
-      }}>
-        <ShieldCheck size={12} color="var(--color-accent-active)" strokeWidth={2.2} />
-        <span style={{
-          flex: 1,
-          fontSize: '11px',
-          fontWeight: 700,
-          letterSpacing: '0.04em',
-          textTransform: 'uppercase',
-          color: 'var(--color-text-secondary)',
-        }}>
-          Orders awaiting approval
-        </span>
-        <span style={{
-          fontSize: '10px',
-          fontWeight: 700,
-          padding: '2px 7px',
-          borderRadius: '100px',
-          background: 'var(--color-bg-hover)',
-          color: 'var(--color-text-secondary)',
-        }}>
-          {pending.length}
-        </span>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        {pending.map(a => {
-          const submitter = getUser(a.submittedById);
-          const topRule = a.triggeredRules[0];
-          return (
-            <button
-              key={a.id}
-              onClick={() => router.push('/approvals')}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '3px',
-                padding: '8px 10px',
-                borderRadius: '6px',
-                border: '1px solid var(--color-border-subtle)',
-                background: 'var(--color-bg-surface)',
-                cursor: 'pointer',
-                textAlign: 'left',
-                fontFamily: 'var(--font-primary)',
-                transition: 'border-color 0.12s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-accent-active)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border-subtle)'; }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {a.supplier}
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '1px' }}>
-                    {submitter?.name ?? '—'} · ${a.total.toFixed(0)}
-                  </div>
-                </div>
-                <ChevronRight size={12} color="var(--color-text-muted)" strokeWidth={2.2} />
-              </div>
-              {topRule && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  fontSize: '10px',
-                  color: 'var(--color-text-muted)',
-                  fontWeight: 600,
-                }}>
-                  <AlertCircle size={10} strokeWidth={2.2} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {RULE_LABELS[topRule.rule]}
-                  </span>
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      <button
-        onClick={() => router.push('/approvals')}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '4px',
-          width: '100%',
-          marginTop: '8px',
-          padding: '6px 10px',
-          borderRadius: '6px',
-          background: 'none',
-          border: 'none',
-          fontSize: '11px',
-          fontWeight: 700,
-          fontFamily: 'var(--font-primary)',
-          color: 'var(--color-accent-active)',
-          cursor: 'pointer',
-        }}
-      >
-        Review all
-        <ChevronRight size={12} strokeWidth={2.4} />
-      </button>
     </div>
   );
 }

@@ -129,7 +129,7 @@ export default function ProductsTable({
             )}
             <StatusPill status={p.status} />
             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-              <RowQuinnButton onClick={() => onAskQuinn(p.id)} ariaLabel={`Ask Quinn about ${p.name}`} />
+              <RowQuinnButton onClick={() => onAskQuinn(p.id)} ariaLabel={`Ask Edify about ${p.name}`} />
               <SmallButton label="Edit" onClick={() => onOpenProduct(p.id)} />
             </div>
           </div>

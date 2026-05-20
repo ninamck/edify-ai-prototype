@@ -209,7 +209,7 @@ export default function SupplierDrawer({
           {onAskQuinn && (
             <button onClick={onAskQuinn} style={quinnBtnStyle}>
               <EdifyMark size={12} color="var(--color-accent-active)" strokeWidth={2.4} />
-              Ask Quinn
+              Ask Edify
             </button>
           )}
           <button onClick={archive} style={dangerBtnStyle}>

@@ -83,11 +83,11 @@ Define these as CSS variables in `app/globals.css` (or equivalent) and use them 
   --radius-item:  9px;
   --radius-badge: 8px;
 
-  --font-primary: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-primary: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 ```
 
-**Typography (Plus Jakarta Sans):**
+**Typography (Poppins):**
 - Page titles / hero greeting: 28–30px / weight 600 / letter-spacing -0.01em
 - H2 / tab content titles: 18px / weight 700
 - Card labels: 13px / weight 700
@@ -287,19 +287,19 @@ Each phase below is a **discrete prompt** you can paste into Claude Code. Each e
 > - This is a TypeScript codebase, strict mode is on.
 > - Use the design tokens from §2.2 — no hardcoded hex.
 > - Inline styles are fine; do not introduce a new styling library.
-> - Plus Jakarta Sans is the only font.
+> - Poppins is the only font.
 > - Lucide is the only icon library.
 > - Recharts for charts; Tanstack Table for tables.
 > - Don't run extra installs without confirming first.
 
 ### Phase 0 — Repo prep
 
-**Goal:** the new code lands in a Next.js (App Router) repo with strict TypeScript, the tokens defined, and `Plus Jakarta Sans` loaded.
+**Goal:** the new code lands in a Next.js (App Router) repo with strict TypeScript, the tokens defined, and `Poppins` loaded.
 
 **Prompt for Claude:**
 
 > Set up the Insights Home foundation in our existing Next.js repo:
-> 1. Add `Plus Jakarta Sans` (weights 400, 500, 600, 700) via `next/font` and apply it as the document body font.
+> 1. Add `Poppins` (weights 400, 500, 600, 700) via `next/font` and apply it as the document body font.
 > 2. Add the design tokens from this snippet to `app/globals.css` (CSS variables, `:root` block).
 > 3. Install runtime deps if missing: `recharts`, `@tanstack/react-table`, `lucide-react`, `framer-motion`. Do not bump existing pinned versions.
 > 4. Create empty stub files for `app/insights/page.tsx`, `components/Insights/InsightsShell.tsx` so the route resolves.
@@ -310,7 +310,7 @@ Each phase below is a **discrete prompt** you can paste into Claude Code. Each e
 
 **Acceptance criteria:**
 - `/insights` renders the placeholder.
-- `getComputedStyle(document.body).fontFamily` includes `Plus Jakarta Sans`.
+- `getComputedStyle(document.body).fontFamily` includes `Poppins`.
 - Tokens resolve in DevTools (`var(--color-accent-active)` evaluates to `#224444`).
 
 ---
@@ -1114,7 +1114,7 @@ Tick every box before declaring MVP 1 done.
 - [ ] `npm run lint` passes (no errors).
 - [ ] `npm run build` passes.
 - [ ] No hardcoded hex colours in components — all token-driven.
-- [ ] Plus Jakarta Sans is the only font used.
+- [ ] Poppins is the only font used.
 - [ ] Lucide is the only icon library.
 - [ ] No `any` types without a justifying comment.
 - [ ] Loading + error states present for every async surface.

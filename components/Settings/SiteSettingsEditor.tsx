@@ -650,7 +650,7 @@ function QuinnRampButton({ activeTab }: { activeTab: SettingsTabId }) {
         whiteSpace: 'nowrap',
       }}
     >
-      <EdifyMark size={11} color="var(--color-info)" /> Ask Quinn instead
+      <EdifyMark size={11} color="var(--color-info)" /> Ask Edify instead
     </button>
   );
 }

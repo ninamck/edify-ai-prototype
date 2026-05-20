@@ -173,7 +173,7 @@ export default function QuinnSheet({
         exit={{ x: '100%' }}
         transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
         role="dialog"
-        aria-label="Ask Quinn"
+        aria-label="Ask Edify"
         style={{
           position: 'fixed', top: 0, right: 0, bottom: 0,
           width: 'min(480px, 100vw)',
@@ -364,11 +364,11 @@ export default function QuinnSheet({
 // Sub-components
 
 function scopeLabel(scope: QuinnScope | null): string {
-  if (!scope) return 'Ask Quinn';
+  if (!scope) return 'Ask Edify';
   if (scope.kind === 'product') return 'Editing a product';
   if (scope.kind === 'supplier') return 'Editing a supplier';
   if (scope.kind === 'bulk-products') return `${scope.selectedIds.length} products selected`;
-  return 'Ask Quinn anything';
+  return 'Ask Edify anything';
 }
 
 function TurnBubble({ turn }: { turn: Turn }) {

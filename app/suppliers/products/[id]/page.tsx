@@ -145,7 +145,7 @@ export default function ProductEditPage() {
           style={quinnBtnStyle}
         >
           <EdifyMark size={13} color="var(--color-accent-active)" strokeWidth={2.4} />
-          Ask Quinn
+          Ask Edify
         </button>
         <button onClick={archive} style={dangerBtnStyle}>
           <Trash2 size={13} /> Archive

@@ -117,7 +117,7 @@ export default function SuppliersHero({
             flexShrink: 0,
           }}
         >
-          <Send size={12} /> Ask Quinn
+          <Send size={12} /> Ask Edify
         </button>
       </div>
 

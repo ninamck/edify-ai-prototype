@@ -171,7 +171,7 @@ export default function MasterProductDetailPage() {
                   <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                     <RowQuinnButton
                       onClick={() => setQuinn({ open: true, scope: { kind: 'product', productId: p.id } })}
-                      ariaLabel={`Ask Quinn about ${p.name}`}
+                      ariaLabel={`Ask Edify about ${p.name}`}
                     />
                     <button
                       onClick={(e) => { e.stopPropagation(); router.push(`/suppliers/${p.supplierId}`); }}

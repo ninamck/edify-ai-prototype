@@ -122,7 +122,7 @@ export default function QuestionLibraryPicker({
           }}
         >
           <EdifyMark size={11} color={ACCENT} strokeWidth={2.4} />
-          Ask Quinn
+          Ask Edify
         </div>
 
         <form
@@ -169,7 +169,7 @@ export default function QuestionLibraryPicker({
           <button
             type="submit"
             disabled={!canSend}
-            aria-label="Ask Quinn"
+            aria-label="Ask Edify"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -607,7 +607,7 @@ function EmptyState({ query, onAsk }: { query: string; onAsk: () => void }) {
             fontWeight: 700,
           }}
         >
-          Ask Quinn: &ldquo;{q.length > 40 ? q.slice(0, 40) + '…' : q}&rdquo;
+          Ask Edify: &ldquo;{q.length > 40 ? q.slice(0, 40) + '…' : q}&rdquo;
         </button>
       )}
     </div>

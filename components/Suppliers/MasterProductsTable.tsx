@@ -92,7 +92,7 @@ export default function MasterProductsTable({
               {bestPrice === null ? <Dash /> : formatPrice(bestPrice)}
             </span>
             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-              <RowQuinnButton onClick={() => onAskQuinn(m.id)} ariaLabel={`Ask Quinn about ${m.name}`} />
+              <RowQuinnButton onClick={() => onAskQuinn(m.id)} ariaLabel={`Ask Edify about ${m.name}`} />
               <SmallButton label="Compare" onClick={() => router.push(`/suppliers/master-products/${m.id}`)} />
             </div>
           </div>

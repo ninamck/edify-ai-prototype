@@ -43,7 +43,7 @@ export function RowQuinnButton({ onClick, ariaLabel }: { onClick: (e: React.Mous
     <button
       onClick={(e) => { e.stopPropagation(); onClick(e); }}
       aria-label={ariaLabel}
-      title="Ask Quinn"
+      title="Ask Edify"
       style={{
         width: 30, height: 30, borderRadius: 8,
         border: '1px solid var(--color-border-subtle)',

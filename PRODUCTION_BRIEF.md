@@ -356,7 +356,7 @@ Follows conventions in [app/](app/) and [components/](components/).
   - `+/−` stepper for any numeric adjust (planned qty, batch size, increment cadence qty, carry-over override)
   - Pill multi-select for range/tier SKU curation, selection tags, site bulk-apply
   - Green success banner + summary card on every flow completion (carry-over, PCR submission, spoke submission, setup interview)
-  - Plus Jakarta Sans typography, warm palette, generous radii — inherit, don't override
+  - Poppins typography, warm palette, generous radii — inherit, don't override
 
 ---
 

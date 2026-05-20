@@ -169,3 +169,55 @@ export function entriesLoggedToday(): LoggedEntry[] {
 export function entriesLast7Days(): LoggedEntry[] {
   return LOGGED_ENTRIES;
 }
+
+// ── Mutable layer for in-session writes ────────────────────────────────────
+// `LOGGED_ENTRIES` above stays the read-only seed. Anything logged through
+// the chat command (or any future surface that wants to write) goes here
+// so the picker tabs reflect the new entry without us mutating the seed.
+const SESSION_ENTRIES: LoggedEntry[] = [];
+const wasteListeners = new Set<() => void>();
+
+export function subscribeWaste(l: () => void): () => void {
+  wasteListeners.add(l);
+  return () => { wasteListeners.delete(l); };
+}
+
+function notifyWaste() {
+  for (const l of wasteListeners) l();
+}
+
+/** Time formatter used by `appendWasteEntry` — keeps the timestamp shape
+ *  consistent with the seed entries ("HH:mm" for today). */
+function formatNowTime(): string {
+  const d = new Date();
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+}
+
+export function appendWasteEntry(entry: Omit<LoggedEntry, 'id' | 'timestamp' | 'isToday'> & { isToday?: boolean; timestamp?: string }): LoggedEntry {
+  const full: LoggedEntry = {
+    id: `l-cmd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    productId: entry.productId,
+    qty: entry.qty,
+    uom: entry.uom,
+    reasonId: entry.reasonId,
+    isToday: entry.isToday ?? true,
+    timestamp: entry.timestamp ?? formatNowTime(),
+  };
+  SESSION_ENTRIES.push(full);
+  notifyWaste();
+  return full;
+}
+
+export function removeWasteEntry(id: string): void {
+  const idx = SESSION_ENTRIES.findIndex((e) => e.id === id);
+  if (idx >= 0) {
+    SESSION_ENTRIES.splice(idx, 1);
+    notifyWaste();
+  }
+}
+
+/** All entries — seed + session writes — sorted today-first. Used by the
+ *  picker history tabs. */
+export function allLoggedEntries(): LoggedEntry[] {
+  return [...SESSION_ENTRIES, ...LOGGED_ENTRIES];
+}

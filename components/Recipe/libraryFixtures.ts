@@ -186,12 +186,125 @@ export type RecipeVariantOption = {
  * v1 caps at two (e.g. size × temperature). The dimension is configured
  * per recipe — variant dimensions don't live in a library because the
  * sizes of a coffee aren't the sizes of a salad.
+ *
+ * @deprecated Superseded by the flat `Recipe.variants` model
+ * (`RecipeVariant`). The dimension × option structure proved too busy
+ * in the editor — most shops actually want "base recipe + N alternative
+ * full variants" rather than a sparse-override matrix. Kept here so
+ * legacy fixtures continue to load; the editor migrates them into
+ * `variants` on first save.
  */
 export type RecipeVariantDimension = {
   id: string;
   name: string;
   options: RecipeVariantOption[];
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Variants (post-rethink) — flat list of full alternative compositions.
+//
+// Replaces the dimension × option model with something closer to how
+// operators actually think about variants: "Latte" is the recipe, and
+// "Small / Medium / Large" are three full alternative compositions
+// (each with their own ingredients, packaging, and modifier groups).
+//
+// Each variant carries the COMPLETE ingredient + packaging + modifier
+// set for that variant — not a sparse override of a base. This makes
+// the editor simpler (each variant looks like its own mini-recipe) at
+// the cost of some duplication (the espresso row appears in Small,
+// Medium and Large). The cost is acceptable: variants are bounded
+// (typically ≤ 5 per recipe) and the duplication is what makes the
+// "what gets sold" preview obvious without resolution gymnastics.
+//
+// The recipe's base `ingredientsV2` / `packagingV2` / `modifierGroupIds`
+// still act as the default composition when `variants` is empty, AND
+// as the seed when a new variant is added (the new variant starts as
+// a copy of base, then the user diverges it).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One full alternative composition of a recipe. Variants are mutually
+ * exclusive — the customer picks exactly one when the recipe has any.
+ * When `recipe.variants` is empty the recipe is sold as a single SKU
+ * using the recipe's base composition.
+ */
+export type RecipeVariant = {
+  id: string;
+  name: string;
+  /** Pre-selected variant for the customer + the implicit pick when
+   *  resolving without an explicit selection. Exactly one variant per
+   *  recipe should be `isDefault: true`; the resolver falls back to
+   *  the first variant otherwise. */
+  isDefault?: boolean;
+  /** Full ingredient list for this variant. Does NOT inherit from the
+   *  recipe's base — each variant carries its own complete list. New
+   *  variants are seeded as a copy of the base, then diverge. */
+  ingredients: RecipeIngredient[];
+  /** Full packaging list for this variant. Same model as ingredients. */
+  packaging: RecipeIngredient[];
+  /** Catalogue-level modifier groups attached to this variant. Same
+   *  shape as `Recipe.modifierGroupIds`; the variant's groups REPLACE
+   *  the recipe's base groups when this variant is selected. */
+  modifierGroupIds: string[];
+  /** Per-channel prices for this variant. When unset, the recipe's
+   *  base channel price is used. Cost is always derived from the
+   *  resolved ingredient list. */
+  priceDineIn?: number;
+  priceTakeaway?: number;
+  priceDelivery?: number;
+  /** Upstream POS identifier for this variant (e.g. Square variation
+   *  id). Stored on the variant itself rather than a separate mapping
+   *  table. */
+  posSourceId?: string;
+};
+
+/**
+ * Flatten a legacy `variantDimensions` structure into the new flat
+ * `RecipeVariant[]` shape. Only the first dimension is consumed — a
+ * second axis (e.g. temperature × size) is dropped with the
+ * expectation that the operator promotes it to a separate recipe or
+ * to a modifier group. The base ingredients / packaging / modifiers
+ * are folded into each variant so the variant is self-contained.
+ *
+ * No-op when `dimensions` is empty — returns `undefined`.
+ */
+export function flattenDimensionsToVariants(
+  dimensions: RecipeVariantDimension[] | undefined,
+  baseIngredients: RecipeIngredient[],
+  basePackaging: RecipeIngredient[],
+  baseModifierGroupIds: string[],
+  baseChannelPrices: { dineIn?: number; takeaway?: number; delivery?: number },
+): RecipeVariant[] | undefined {
+  if (!dimensions || dimensions.length === 0) return undefined;
+  const dim = dimensions[0];
+  if (!dim || dim.options.length === 0) return undefined;
+  return dim.options.map((opt) => {
+    const ingOverrideById = new Map(
+      opt.ingredientOverrides.map((ov) => [ov.recipeIngredientId, ov.qty]),
+    );
+    const pkgOverrideById = new Map(
+      opt.packagingOverrides.map((ov) => [ov.recipePackagingId, ov]),
+    );
+    return {
+      id: opt.id,
+      name: opt.name,
+      isDefault: opt.isDefault,
+      ingredients: baseIngredients.map((ri) => {
+        const ov = ingOverrideById.get(ri.id);
+        return ov ? { ...ri, baseQty: ov } : { ...ri };
+      }),
+      packaging: basePackaging.map((rp) => {
+        const ov = pkgOverrideById.get(rp.id);
+        return ov ? { ...rp, ref: ov.ref, baseQty: ov.qty ?? rp.baseQty } : { ...rp };
+      }),
+      modifierGroupIds: [...baseModifierGroupIds],
+      priceDineIn: opt.priceDineIn ?? baseChannelPrices.dineIn,
+      priceTakeaway: opt.priceTakeaway ?? baseChannelPrices.takeaway,
+      priceDelivery: opt.priceDelivery ?? baseChannelPrices.delivery,
+      posSourceId: opt.posSourceId,
+    };
+  });
+}
 
 /**
  * Rich row used by the new full-page editor (manual-intake-style). When set on
@@ -360,13 +473,26 @@ export type Recipe = {
    */
   slots?: RecipeSlot[];
   /**
-   * Variant dimensions for this recipe (most commonly Size). When set,
-   * the customer must pick exactly one option per dimension for the
-   * recipe to be orderable; each option overrides per-ingredient qty,
-   * packaging, and price. Distinct from modifiers (optional one-to-one
-   * changes) and slots (cross-recipe placeholders).
+   * Variant dimensions for this recipe.
+   *
+   * @deprecated Superseded by the flat `variants` field below. Read on
+   * load and migrated to `variants` on first save. New writes should
+   * go to `variants`.
    */
   variantDimensions?: RecipeVariantDimension[];
+  /**
+   * Flat list of full alternative compositions of this recipe (Small /
+   * Medium / Large, Hot / Iced, …). When set, the customer must pick
+   * exactly one variant for the recipe to be orderable; the chosen
+   * variant's ingredients, packaging, and modifier groups replace the
+   * recipe's base. Distinct from modifiers (optional one-to-one
+   * changes) and slots (cross-recipe placeholders).
+   *
+   * When unset / empty the recipe is sold as a single SKU using the
+   * recipe's base composition (`ingredientsV2` / `packagingV2` /
+   * `modifierGroupIds`).
+   */
+  variants?: RecipeVariant[];
   /** Whether this recipe is linked to a POS button. Drives the
    *  "Sellable on POS" filter on the recipes list. Sub-recipes,
    *  components, made products, and prep items have this set to

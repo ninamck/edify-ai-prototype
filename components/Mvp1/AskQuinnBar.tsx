@@ -11,7 +11,7 @@ import EdifyMark from '@/components/EdifyMark/EdifyMark';
  */
 export default function AskQuinnBar({
   onAsk,
-  label = 'Ask Quinn for a chart',
+  label = 'Ask Edify for a chart',
 }: {
   /** Called with no seed for the bare button click. */
   onAsk: (seed?: string) => void;

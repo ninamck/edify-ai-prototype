@@ -217,30 +217,65 @@ export function Soft({ children }: { children: React.ReactNode }) {
 // ── Pills, tag input, check row ───────────────────────────────────────────────
 
 export function PillMulti({
-  options, selected, onChange,
+  options, selected, onChange, size = 'md', selectAll,
 }: {
   options: readonly string[]; selected: string[]; onChange: (sel: string[]) => void;
+  /** Pill visual density. `sm` is for lists of many options (e.g. site
+   *  multi-selects) where the default size eats too much width. */
+  size?: 'sm' | 'md';
+  /** When provided, prepends a single Select-all / Clear-all toggle
+   *  pill. Toggles between selecting every option and clearing the
+   *  selection. */
+  selectAll?: { allLabel: string; clearLabel: string };
 }) {
+  const isSmall = size === 'sm';
+  const padding = isSmall ? '4px 10px' : '6px 12px';
+  const fontSize = isSmall ? '11.5px' : '12px';
+  const gap = isSmall ? '5px' : '6px';
+  const iconSize = isSmall ? 10 : 11;
+
+  const allOn = options.length > 0 && options.every((o) => selected.includes(o));
+
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap }}>
+      {selectAll && (
+        <button
+          key="__select_all__"
+          type="button"
+          onClick={() => onChange(allOn ? [] : [...options])}
+          style={{
+            padding,
+            borderRadius: '100px',
+            border: '1px dashed var(--color-border)',
+            background: '#fff',
+            color: 'var(--color-text-secondary)',
+            fontSize, fontWeight: 600,
+            cursor: 'pointer', fontFamily: 'var(--font-primary)',
+            display: 'inline-flex', alignItems: 'center', gap: '5px',
+          }}
+        >
+          {allOn ? selectAll.clearLabel : selectAll.allLabel}
+        </button>
+      )}
       {options.map((opt) => {
         const on = selected.includes(opt);
         return (
           <button
             key={opt}
+            type="button"
             onClick={() => onChange(on ? selected.filter((s) => s !== opt) : [...selected, opt])}
             style={{
-              padding: '6px 12px',
+              padding,
               borderRadius: '100px',
               border: on ? '1px solid transparent' : '1px solid var(--color-border-subtle)',
               background: on ? 'var(--color-accent-active)' : '#fff',
               color: on ? '#fff' : 'var(--color-text-secondary)',
-              fontSize: '12px', fontWeight: 600,
+              fontSize, fontWeight: 600,
               cursor: 'pointer', fontFamily: 'var(--font-primary)',
               display: 'inline-flex', alignItems: 'center', gap: '5px',
             }}
           >
-            {on && <Check size={11} strokeWidth={2.6} />}
+            {on && <Check size={iconSize} strokeWidth={2.6} />}
             {opt}
           </button>
         );

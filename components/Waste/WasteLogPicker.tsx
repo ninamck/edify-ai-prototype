@@ -10,8 +10,8 @@ import {
   WASTE_REASONS,
   likelyToBinAtPhase,
   getProduct,
-  entriesLoggedToday,
-  entriesLast7Days,
+  allLoggedEntries,
+  subscribeWaste,
   type WasteProduct,
   type LoggedEntry,
 } from '@/components/Waste/wasteData';
@@ -29,8 +29,13 @@ export default function WasteLogPicker({ phase }: { phase: BriefingPhase }) {
   const [pendingDelete, setPendingDelete] = useState<LoggedEntry | null>(null);
   const undoTimerRef = useRef<number | null>(null);
 
-  const allToday = useMemo(() => entriesLoggedToday(), []);
-  const allWeek = useMemo(() => entriesLast7Days(), []);
+  // Subscribe to the waste store so newly-logged entries (e.g. from the chat
+  // command) show up live in the Today / Last 7 days tabs without a refresh.
+  const [storeTick, setStoreTick] = useState(0);
+  useEffect(() => subscribeWaste(() => setStoreTick((t) => t + 1)), []);
+  const allEntries = useMemo(() => allLoggedEntries(), [storeTick]);
+  const allToday = useMemo(() => allEntries.filter((e) => e.isToday), [allEntries]);
+  const allWeek = allEntries;
   const likely = useMemo(() => likelyToBinAtPhase(phase), [phase]);
   const todayEntries = useMemo(
     () => allToday.filter((e) => !deletedIds.has(e.id)),
