@@ -203,6 +203,7 @@ export default function ItemMatchingPage() {
         <StatTile
           label="Matched"
           value={counts.matched}
+          total={counts.all}
           active={filter === 'matched'}
           accent="var(--color-success, #2DA160)"
           onClick={() => setFilter(filter === 'matched' ? 'all' : 'matched')}
@@ -210,6 +211,7 @@ export default function ItemMatchingPage() {
         <StatTile
           label="Unmatched"
           value={counts.unmatched}
+          total={counts.all}
           active={filter === 'unmatched'}
           accent="var(--color-text-primary)"
           onClick={() => setFilter(filter === 'unmatched' ? 'all' : 'unmatched')}
@@ -217,6 +219,7 @@ export default function ItemMatchingPage() {
         <StatTile
           label="Needs review"
           value={counts.review}
+          total={counts.all}
           active={filter === 'review'}
           accent="var(--color-warning, #C7821C)"
           onClick={() => setFilter(filter === 'review' ? 'all' : 'review')}
@@ -224,6 +227,7 @@ export default function ItemMatchingPage() {
         <StatTile
           label="Hidden"
           value={counts.hidden}
+          total={counts.all + counts.hidden}
           active={showHidden}
           accent="var(--color-text-muted)"
           onClick={() => setShowHidden((v) => !v)}
@@ -395,14 +399,20 @@ export default function ItemMatchingPage() {
 }
 
 function StatTile({
-  label, value, active, accent, onClick,
+  label, value, total, active, accent, onClick,
 }: {
   label: string;
   value: number;
+  /** When set, the tile shows `value / total` as a percentage plus
+   *  the "X of Y" denominator line. Falls back to just the raw number
+   *  when omitted (or when `total` is 0). */
+  total?: number;
   active: boolean;
   accent: string;
   onClick: () => void;
 }) {
+  const hasRatio = total !== undefined && total > 0;
+  const pct = hasRatio ? Math.round((value / (total as number)) * 100) : 0;
   return (
     <button
       onClick={onClick}
@@ -425,12 +435,31 @@ function StatTile({
       }}>
         {label}
       </span>
-      <span style={{
-        fontSize: 26, fontWeight: 700, lineHeight: 1,
-        color: accent,
-      }}>
-        {value}
-      </span>
+      {hasRatio ? (
+        <>
+          <span style={{
+            fontSize: 30, fontWeight: 700, lineHeight: 1,
+            color: accent,
+            letterSpacing: '-0.02em',
+          }}>
+            {pct}
+            <span style={{ fontSize: 18, fontWeight: 700, marginLeft: 2 }}>%</span>
+          </span>
+          <span style={{
+            fontSize: 12, fontWeight: 600, color: 'var(--color-text-muted)',
+            marginTop: 2,
+          }}>
+            {value} of {total}
+          </span>
+        </>
+      ) : (
+        <span style={{
+          fontSize: 26, fontWeight: 700, lineHeight: 1,
+          color: accent,
+        }}>
+          {value}
+        </span>
+      )}
     </button>
   );
 }
