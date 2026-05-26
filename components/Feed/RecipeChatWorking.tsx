@@ -69,7 +69,7 @@ export default function RecipeChatWorking({ workStep }: RecipeChatWorkingProps) 
             marginTop: '4px',
             lineHeight: 1.45,
           }}>
-            Same engine as Ask Quinn — matching suppliers, costing, and production.
+            Same engine as Ask Edify — matching suppliers, costing, and production.
           </div>
         </div>
       </div>

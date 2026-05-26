@@ -14,7 +14,7 @@ interface QuinnButtonProps {
 }
 
 const LABEL: Record<QuinnState, string> = {
-  idle:     'Ask Quinn',
+  idle:     'Ask Edify',
   thinking: 'Quinn is thinking…',
   ready:    'Quinn is ready',
 };

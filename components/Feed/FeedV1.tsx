@@ -479,7 +479,7 @@ export default function FeedV1() {
           boxShadow: '0 2px 8px rgba(58,48,40,0.08), 0 0 0 1px rgba(58,48,40,0.03)',
         }}>
           <input
-            placeholder="Ask Quinn anything…"
+            placeholder="Ask Edify anything…"
             style={{
               flex: 1, border: 'none', outline: 'none',
               fontSize: '13.5px', color: 'var(--color-text-primary)',
