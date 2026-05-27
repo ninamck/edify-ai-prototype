@@ -753,9 +753,47 @@ function TimelineEvent({ event, isLast }: { event: ChaseEvent; isLast: boolean }
               {event.method}
             </span>
           )}
-          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginLeft: 'auto' }}>
-            {event.by}
-          </span>
+          {event.automated ? (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                marginLeft: 'auto',
+                padding: '1px 8px 1px 5px',
+                borderRadius: '100px',
+                background: 'var(--color-quinn-bg)',
+                color: '#fff',
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '0.01em',
+              }}
+              title="Automated follow-up sent by Edify on the customer's behalf"
+            >
+              <span
+                aria-label="Edify"
+                style={{
+                  display: 'block',
+                  width: '12px',
+                  height: '12px',
+                  backgroundColor: '#fff',
+                  WebkitMaskImage: 'url(/edify-logo.svg)',
+                  maskImage: 'url(/edify-logo.svg)',
+                  WebkitMaskRepeat: 'no-repeat',
+                  maskRepeat: 'no-repeat',
+                  WebkitMaskPosition: 'center',
+                  maskPosition: 'center',
+                  WebkitMaskSize: 'contain',
+                  maskSize: 'contain',
+                }}
+              />
+              {event.by} · Auto
+            </span>
+          ) : (
+            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginLeft: 'auto' }}>
+              {event.by}
+            </span>
+          )}
         </div>
         <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
           {event.date}
