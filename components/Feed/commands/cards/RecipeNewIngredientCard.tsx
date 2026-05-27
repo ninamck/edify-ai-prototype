@@ -66,7 +66,6 @@ export default function RecipeNewIngredientCard({
     const q = query.trim().toLowerCase();
     if (!q) return products.slice(0, 6);
     return products
-      .filter((p) => p.status !== 'Archived')
       .filter((p) =>
         p.name.toLowerCase().includes(q) ||
         p.category.toLowerCase().includes(q) ||
