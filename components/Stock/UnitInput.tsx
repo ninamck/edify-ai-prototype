@@ -57,12 +57,18 @@ export interface UnitInputProps {
   unit: string;
   value: string;
   onChange: (next: string) => void;
-  /** Input width override. Defaults to 90px which suits the count
-   *  flow's wide grid. Use a smaller value (e.g. 64) when stacking
+  /** Input width override. Defaults to 96px which suits the count
+   *  flow's wide grid. Use a smaller value (e.g. 72) when stacking
    *  inputs inside a narrower drawer. */
   inputWidth?: number;
   /** Min width for the unit tag column. Defaults to 56. */
   tagMinWidth?: number;
+  /** Font size for the number input. Defaults to 18 (intentionally
+   *  matched against the "Theoretical" / "Count" readouts on the
+   *  count flow so the operator's tally reads as a peer of the
+   *  system's figure rather than a smaller scratchpad). Drawer
+   *  surfaces with less breathing room can pass a smaller value. */
+  inputFontSize?: number;
   /** Optional aria-label override. */
   ariaLabel?: string;
 }
@@ -71,8 +77,9 @@ export default function UnitInput({
   unit,
   value,
   onChange,
-  inputWidth = 90,
+  inputWidth = 96,
   tagMinWidth = 56,
+  inputFontSize = 18,
   ariaLabel,
 }: UnitInputProps) {
   const { tone, tagBg } = UNIT_TONES[unitCategory(unit)];
@@ -102,7 +109,8 @@ export default function UnitInput({
           padding: '8px 12px',
           border: 'none',
           outline: 'none',
-          fontSize: 14,
+          fontSize: inputFontSize,
+          fontWeight: hasValue ? 700 : 500,
           fontFamily: 'var(--font-primary)',
           color: 'var(--color-text-primary)',
           background: 'transparent',

@@ -14,6 +14,7 @@ import EstateGrid from '@/components/Stock/EstateGrid';
 import ItemDetailDrawer from '@/components/Stock/ItemDetailDrawer';
 import StocktakeView from '@/components/Stock/StocktakeView';
 import StocktakeList from '@/components/Stock/StocktakeList';
+import StocktakeReviewView from '@/components/Stock/StocktakeReviewView';
 import VoiceCountView from '@/components/Stock/VoiceCountView';
 import { ESTATE_SITES } from '@/components/Stock/fixtures';
 import {
@@ -28,6 +29,7 @@ import {
   type StockItem,
   type StockLocation,
   type StocktakeRecord,
+  type StocktakeStatus,
 } from '@/components/Stock/status';
 import {
   TOP_NAV_BAR_PADDING,
@@ -138,6 +140,14 @@ function StockPageInner() {
     startViewTransition(() => setView(next));
   }, []);
   const [overrides, setOverrides] = useState<Record<string, ItemOverride>>({});
+  // Per-record status overrides — set by the variance-review surface
+  // when the operator submits a needs-review stocktake. Lets the
+  // Stocktake list show the row as Completed straight after submit,
+  // without needing fixture rewrites. Keyed by record id; merged at
+  // render time so the underlying fixtures stay untouched.
+  const [stocktakeStatusOverrides, setStocktakeStatusOverrides] = useState<
+    Record<string, StocktakeStatus>
+  >({});
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   // Stocktake drill-in state. `null` (default) → the Stocktake tab
   // shows the list view. When set, the count flow renders against
@@ -333,6 +343,24 @@ function StockPageInner() {
     [],
   );
 
+  // Apply the operator's in-session status overrides to a record set.
+  // Pure helper — both per-site and estate-wide histories run through
+  // this so a submitted review reads as "Completed" on either view.
+  const applyStatusOverrides = useCallback(
+    (records: StocktakeRecord[]): StocktakeRecord[] => {
+      return records.map(record => {
+        const patched = stocktakeStatusOverrides[record.id];
+        return patched ? { ...record, status: patched } : record;
+      });
+    },
+    [stocktakeStatusOverrides],
+  );
+
+  const activeSiteHistory = useMemo(
+    () => applyStatusOverrides(activeSite.stocktakeHistory),
+    [activeSite.stocktakeHistory, applyStatusOverrides],
+  );
+
   // Estate-wide stocktake history with each record's site denormalised
   // onto it. Sorted most recent first so the table reads as a single
   // timeline across the estate. Only consumed by the All-sites
@@ -344,10 +372,11 @@ function StockPageInner() {
         merged.push({ ...record, siteName: site.siteName });
       }
     }
-    return merged.sort(
+    const overridden = applyStatusOverrides(merged);
+    return overridden.sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );
-  }, []);
+  }, [applyStatusOverrides]);
 
   // Persist a newly-created group against the active site. Called by
   // StocktakeList when the operator hits "Save" on the create panel.
@@ -375,7 +404,7 @@ function StockPageInner() {
         return {
           countItems: activeSiteItems,
           countRecord:
-            activeSite.stocktakeHistory.find(r => r.id === activeTarget.recordId) ?? null,
+            activeSiteHistory.find(r => r.id === activeTarget.recordId) ?? null,
         };
       case 'full':
         return { countItems: activeSiteItems, countRecord: null };
@@ -402,7 +431,54 @@ function StockPageInner() {
         };
       }
     }
-  }, [activeTarget, activeSite.stocktakeHistory, activeSiteItems, siteGroups]);
+  }, [activeTarget, activeSiteHistory, activeSiteItems, siteGroups]);
+
+  // Variance-review submit handlers. The review view emits one event
+  // per stock-affecting resolution (accept-count / log-waste) and a
+  // single summary event at the end. We translate the per-line events
+  // into the same item-override map that powers manual edits, and the
+  // summary event flips the record's status to 'completed' so the
+  // Stocktake list reflects the decision on the next render.
+  const handleReviewLineResolved = useCallback<
+    React.ComponentProps<typeof StocktakeReviewView>['onLineResolved']
+  >((line, resolution) => {
+    if (resolution === 'recount') return;
+    setOverrides(prev => ({
+      ...prev,
+      [line.itemId]: {
+        ...prev[line.itemId],
+        currentStock: line.countedQty,
+      },
+    }));
+  }, []);
+
+  const handleReviewSubmit = useCallback<
+    React.ComponentProps<typeof StocktakeReviewView>['onSubmit']
+  >(summary => {
+    // Mark as completed only when there's nothing left to recount;
+    // if the reviewer parked any lines for a recount the record
+    // stays in 'needs-review' so it remains on the table's open
+    // list.
+    if (summary.pendingRecountCount === 0) {
+      setStocktakeStatusOverrides(prev => ({
+        ...prev,
+        [summary.recordId]: 'completed',
+      }));
+    }
+    // Give the inline "Review submitted" affordance a beat to play
+    // before bouncing back to the list so the operator sees the
+    // outcome land.
+    window.setTimeout(() => setActiveTarget(null), 900);
+  }, []);
+
+  // Branch decision for the Stocktake tab body: review view kicks in
+  // when continuing a record that's in needs-review and carries
+  // per-line data. Anything else (no record, fresh count, in-progress
+  // continue) keeps using the existing StocktakeView.
+  const showReviewView =
+    activeTarget?.kind === 'continue' &&
+    countRecord?.status === 'needs-review' &&
+    (countRecord.lines?.length ?? 0) > 0;
 
   return (
     <>
@@ -517,12 +593,26 @@ function StockPageInner() {
           />
         ) : view === 'stocktake' ? (
           activeTarget ? (
-            // Voice is a presentation modality layered over the same
-            // count scope, not a separate scope of its own. Closing
-            // voice returns to the manual surface so the operator can
-            // review / submit; only `onBack` from the manual view
-            // exits the count entirely.
-            voiceMode ? (
+            // Three count surfaces share this slot:
+            //   • Variance review when continuing a needs-review
+            //     record (focused list of just the variance lines
+            //     with per-line resolutions).
+            //   • Voice when the operator toggled it on inside the
+            //     manual surface.
+            //   • Manual count for everything else (fresh count or
+            //     resuming an in-progress one).
+            // Closing review / voice returns to the manual surface so
+            // the operator can keep working; only `onBack` from the
+            // manual view exits the count entirely.
+            showReviewView && countRecord ? (
+              <StocktakeReviewView
+                record={countRecord}
+                siteName={activeSite.siteName}
+                onBack={() => setActiveTarget(null)}
+                onLineResolved={handleReviewLineResolved}
+                onSubmit={handleReviewSubmit}
+              />
+            ) : voiceMode ? (
               <VoiceCountView
                 items={countItems}
                 siteName={activeSite.siteName}
@@ -541,7 +631,7 @@ function StockPageInner() {
             )
           ) : (
             <StocktakeList
-              history={activeSite.stocktakeHistory}
+              history={activeSiteHistory}
               siteName={activeSite.siteName}
               siteId={activeSite.siteId}
               flaggedItemCount={flaggedItemCount}

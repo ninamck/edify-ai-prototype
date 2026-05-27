@@ -117,11 +117,11 @@ export default function DatePickerPopover({
           disabled={prevDisabled}
           onClick={() => stepMonth(-1)}
         >
-          <ChevronLeft size={14} />
+          <ChevronLeft size={15} />
         </ArrowButton>
         <span
           style={{
-            fontSize: 12.5,
+            fontSize: 13.5,
             fontWeight: 700,
             color: 'var(--color-text-primary)',
             fontVariantNumeric: 'tabular-nums',
@@ -134,7 +134,7 @@ export default function DatePickerPopover({
           disabled={nextDisabled}
           onClick={() => stepMonth(1)}
         >
-          <ChevronRight size={14} />
+          <ChevronRight size={15} />
         </ArrowButton>
       </div>
 
@@ -152,7 +152,7 @@ export default function DatePickerPopover({
             key={label}
             style={{
               textAlign: 'center',
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: 600,
               color: 'var(--color-text-muted)',
               letterSpacing: '0.04em',
@@ -239,7 +239,7 @@ export default function DatePickerPopover({
               background: '#ffffff',
               color: 'var(--color-text-secondary)',
               borderRadius: 6,
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: 600,
               cursor: 'pointer',
               fontFamily: 'var(--font-primary)',
@@ -317,7 +317,7 @@ function dayCellStyle({
       : '1px solid transparent',
     background: isSelected ? 'var(--color-accent-active)' : 'transparent',
     color: isSelected ? '#ffffff' : color,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: isSelected || isToday ? 700 : 500,
     fontFamily: 'var(--font-primary)',
     fontVariantNumeric: 'tabular-nums',

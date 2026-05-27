@@ -9,6 +9,7 @@ export interface ChaseEvent {
   method?: ChaseMethod;
   note?: string;
   by: string;
+  automated?: boolean;
 }
 
 export interface CreditNote {
@@ -54,8 +55,9 @@ export const MOCK_CREDIT_NOTES: CreditNote[] = [
         date: '18 Mar 2026 · 11:30',
         type: 'chased',
         method: 'Email',
-        note: 'Sent follow-up email to accounts@bidfood.co.uk',
-        by: 'Sarah T.',
+        note: 'Edify sent an automated follow-up email to accounts@bidfood.co.uk on Sarah\u2019s behalf — referencing GRN-1231 and the £54.00 short-delivery credit.',
+        by: 'Edify',
+        automated: true,
       },
       {
         id: 'ce-3',
@@ -92,8 +94,9 @@ export const MOCK_CREDIT_NOTES: CreditNote[] = [
         date: '27 Mar 2026 · 09:00',
         type: 'chased',
         method: 'Email',
-        note: 'Chased Fresh Direct via email — no response yet.',
-        by: 'James R.',
+        note: 'Edify sent an automated follow-up email to Fresh Direct on James\u2019s behalf — no response yet.',
+        by: 'Edify',
+        automated: true,
       },
     ],
   },
@@ -154,8 +157,9 @@ export const MOCK_CREDIT_NOTES: CreditNote[] = [
         date: '14 Mar 2026 · 09:00',
         type: 'chased',
         method: 'Email',
-        note: 'Emailed accounts@metro.co.uk requesting credit note.',
-        by: 'James R.',
+        note: 'Edify emailed accounts@metro.co.uk on James\u2019s behalf to request the credit note.',
+        by: 'Edify',
+        automated: true,
       },
       {
         id: 'ce-10',
@@ -201,8 +205,9 @@ export const MOCK_CREDIT_NOTES: CreditNote[] = [
         date: '8 Mar 2026 · 10:00',
         type: 'chased',
         method: 'Email',
-        note: 'Emailed Urban Fresh accounts.',
-        by: 'James R.',
+        note: 'Edify emailed Urban Fresh accounts on James\u2019s behalf to request the credit note.',
+        by: 'Edify',
+        automated: true,
       },
       {
         id: 'ce-14',

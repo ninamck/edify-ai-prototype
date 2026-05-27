@@ -281,7 +281,7 @@ export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso',
         display: 'flex', alignItems: 'center', gap: '6px',
       }}>
         <ClipboardCheck size={12} color="var(--color-text-secondary)" />
-        Top 3 · Quinn needs your approval
+        Top 3 · Edify needs your approval
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {QUINN_ACTIONS.map((a, i) => (

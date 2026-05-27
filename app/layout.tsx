@@ -4,6 +4,7 @@ import "./globals.css";
 import { ActiveSiteProvider } from "@/components/ActiveSite/ActiveSiteContext";
 import { SiteSettingsStoreProvider } from "@/components/Settings/siteSettingsStore";
 import { NightShiftPolicyProvider } from "@/components/Settings/nightShiftPolicyStore";
+import { CompanyContextProvider } from "@/components/Settings/companyContextStore";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -27,7 +28,9 @@ export default function RootLayout({
         <ActiveSiteProvider>
           <SiteSettingsStoreProvider>
             <NightShiftPolicyProvider>
-              {children}
+              <CompanyContextProvider>
+                {children}
+              </CompanyContextProvider>
             </NightShiftPolicyProvider>
           </SiteSettingsStoreProvider>
         </ActiveSiteProvider>

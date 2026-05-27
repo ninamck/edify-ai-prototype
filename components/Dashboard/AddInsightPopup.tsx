@@ -412,8 +412,8 @@ export default function AddInsightPopup({
                   </span>
                   <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)' }}>
                     {mode === 'chat'
-                      ? 'Quinn will answer here. Pin any chart to your dashboard.'
-                      : 'Chat with Quinn, or pick one of 180 curated questions.'}
+                      ? 'Edify will answer here. Pin any chart to your dashboard.'
+                      : 'Chat with Edify, or pick one of 180 curated questions.'}
                   </span>
                 </div>
 

@@ -20,6 +20,7 @@ import {
   MapPin,
   User,
   Settings,
+  NotebookPen,
   PanelLeftOpen,
   PanelLeftClose,
 } from 'lucide-react';
@@ -248,16 +249,22 @@ export default function Sidebar() {
         </NavGroup>
 
         {/* Group 3 — Performance (Manager+)
-            Two surfaces, both retrospective / oversight:
-              • Forecast demand — Quinn's predictions, with backtest
+            Three surfaces, all retrospective / oversight:
+              • Forecast demand — Edify's predictions, with backtest
                 accuracy and a downstream-impact previewer. Sits here
                 rather than next to Plan production because it answers
                 "how is the model doing?" first and "let me retune it"
                 second — both performance questions.
-              • Compare sites    — cross-estate comparison.
+              • Notebook        — the long-running record the operator
+                builds with Edify (notes, themes, data signals). Lives
+                here because it's reflection-on-business: what the
+                numbers don't show. The "Note for Edify" card on the
+                briefing panel is the daily entry point; this is the
+                full log.
+              • Compare sites   — cross-estate comparison.
             Dashboard, Analytics, and the table builder remain wired up
             in the app but are hidden from the sidebar to keep the demo
-            focused on these two views. */}
+            focused on these three views. */}
         <NavGroup title="Performance" compact={compact}>
           <NavItem
             label="Forecast demand"
@@ -265,6 +272,13 @@ export default function Sidebar() {
             compact={compact}
             active={is('/forecast')}
             onClick={() => router.push('/forecast')}
+          />
+          <NavItem
+            label="Notebook"
+            icon={NotebookPen}
+            compact={compact}
+            active={is('/notebook')}
+            onClick={() => router.push('/notebook')}
           />
           <NavItem label="Compare sites" icon={Layers} compact={compact} active={is('/compare')} />
         </NavGroup>

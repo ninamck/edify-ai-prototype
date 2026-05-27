@@ -168,7 +168,7 @@ function DrawerBody({
           <div style={{ minWidth: 0, flex: 1 }}>
             <span
               style={{
-                fontSize: 9,
+                fontSize: 10,
                 fontWeight: 700,
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
@@ -180,7 +180,7 @@ function DrawerBody({
             <h2
               style={{
                 margin: '4px 0 2px',
-                fontSize: 16,
+                fontSize: 18,
                 fontWeight: 700,
                 color: 'var(--color-text-primary)',
                 overflow: 'hidden',
@@ -191,7 +191,7 @@ function DrawerBody({
             >
               {row.recipe.name}
             </h2>
-            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+            <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
               {dayOfWeek(date)} · {date} · {row.category}
             </span>
           </div>
@@ -212,7 +212,7 @@ function DrawerBody({
               cursor: 'pointer',
             }}
           >
-            <X size={14} />
+            <X size={15} />
           </button>
         </header>
 
@@ -227,7 +227,7 @@ function DrawerBody({
           }}
         >
           {!forecast ? (
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: 0 }}>
+            <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: 0 }}>
               No forecast on file for {dayOfWeek(date)} {date}.
             </p>
           ) : (
@@ -246,7 +246,7 @@ function DrawerBody({
               >
                 <span
                   style={{
-                    fontSize: 28,
+                    fontSize: 30,
                     fontWeight: 800,
                     color: 'var(--color-text-primary)',
                     fontVariantNumeric: 'tabular-nums',
@@ -255,7 +255,7 @@ function DrawerBody({
                 >
                   {forecast.projectedUnits.toLocaleString()}
                 </span>
-                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
                   units projected · status{' '}
                   <span
                     style={{
@@ -272,7 +272,7 @@ function DrawerBody({
               <section>
                 <SectionHeader title="Signals driving this forecast" />
                 {normalisedSignals.length === 0 ? (
-                  <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '6px 0 0' }}>
+                  <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '6px 0 0' }}>
                     No signal weights recorded for this entry.
                   </p>
                 ) : (
@@ -296,10 +296,10 @@ function DrawerBody({
                             marginBottom: 4,
                           }}
                         >
-                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
                             {SIGNAL_LABELS[s.signal] ?? s.signal}
                           </span>
-                          <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                          <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
                             {Math.round(s.pct)}%
                           </span>
                         </div>
@@ -324,7 +324,7 @@ function DrawerBody({
                           <span
                             style={{
                               display: 'block',
-                              fontSize: 11,
+                              fontSize: 12,
                               color: 'var(--color-text-secondary)',
                               marginTop: 4,
                               lineHeight: 1.4,
@@ -354,12 +354,12 @@ function DrawerBody({
                 <p
                   style={{
                     margin: '8px 0 0',
-                    fontSize: 11,
+                    fontSize: 12,
                     color: 'var(--color-text-muted)',
                     lineHeight: 1.5,
                   }}
                 >
-                  Solid line is Quinn&rsquo;s prior forecast for each day. Dotted line is what
+                  Solid line is the prior forecast for each day. Dotted line is what
                   actually sold (synthesised from the till feed). The closer they sit, the
                   less work the model needs from a manager override.
                 </p>
@@ -377,7 +377,7 @@ function SectionHeader({ title }: { title: string }) {
     <h3
       style={{
         margin: '0 0 8px',
-        fontSize: 9,
+        fontSize: 10,
         fontWeight: 700,
         letterSpacing: '0.08em',
         textTransform: 'uppercase',
@@ -421,13 +421,13 @@ function PhaseBars({
               gap: 4,
             }}
           >
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
               {p.label}
             </span>
-            <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
               {v}
             </span>
-            <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
               {Math.round(pct)}%
             </span>
           </div>
@@ -490,11 +490,11 @@ function Sparkline({ points }: { points: Array<{ date: string; forecast: number;
       </svg>
       {/* Legend + day labels */}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--color-text-secondary)' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--color-text-secondary)' }}>
           <span style={{ width: 14, height: 2, background: 'var(--color-accent-active)' }} /> Forecast
           <span style={{ width: 14, height: 2, background: 'var(--color-success)', marginLeft: 10 }} /> Actual
         </span>
-        <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
           {points[0]?.date} → {points[points.length - 1]?.date}
         </span>
       </div>

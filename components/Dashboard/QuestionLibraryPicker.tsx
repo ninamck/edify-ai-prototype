@@ -585,7 +585,7 @@ function EmptyState({ query, onAsk }: { query: string; onAsk: () => void }) {
             lineHeight: 1.5,
           }}
         >
-          Quinn can still answer. Try the question directly.
+          Edify can still answer. Try the question directly.
         </div>
       </div>
       {q && (

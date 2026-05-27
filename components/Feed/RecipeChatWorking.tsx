@@ -53,7 +53,7 @@ export default function RecipeChatWorking({ workStep }: RecipeChatWorkingProps) 
             color: 'var(--color-accent-quinn)',
             marginBottom: '4px',
           }}>
-            Quinn · Edify
+            Edify
           </div>
           <div style={{
             fontSize: '13.5px',

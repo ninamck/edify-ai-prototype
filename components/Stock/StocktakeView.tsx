@@ -39,6 +39,7 @@ import {
   formatStock,
   formatRelativeDate,
   locationForItem,
+  rollupCounts,
   scopeLabel,
 } from './status';
 
@@ -201,23 +202,28 @@ export default function StocktakeView({
     );
   }
 
-  // Live £ value of what's been counted so far. We sum each item's
-  // stockUnit-cell value × unitPrice; cells in alternate units are
-  // intentionally ignored because `unitPrice` is denominated per
-  // stockUnit and we don't carry unit-conversion factors. Practically
-  // that means: the operator can scratchpad in g / cases / bags while
-  // counting, but the £ rollup only reflects the canonical-unit tally
-  // they commit to. Items without a unitPrice (rare) skip the sum
-  // entirely. Updates on every keystroke so the rollup tracks the
-  // count in real-time.
+  // Live £ value of what's been counted so far. Each item's
+  // multi-UOM entries are rolled up into a single quantity in the
+  // item's primary stockUnit (via `rollupCounts` — mass/volume
+  // conversions inferred, pack-style alts use the item's seeded
+  // factors), then multiplied by `unitPrice`. That way a row counted
+  // as "2 bags + 0.5 kg" of pasta correctly contributes
+  // 2 × bagFactor + 0.5 = 2.5 kg × unit £, rather than ignoring the
+  // bag cell. Items without a unitPrice (rare) skip the sum entirely.
+  // Updates on every keystroke so the rollup tracks the count in
+  // real-time.
   const countedValue = useMemo(() => {
     let total = 0;
     for (const item of items) {
       if (item.unitPrice == null) continue;
-      const raw = counts[keyFor(item.id, item.stockUnit)] ?? '';
-      const value = Number.parseFloat(raw);
-      if (!Number.isFinite(value) || value < 0) continue;
-      total += value * item.unitPrice;
+      const allUnits = [item.stockUnit, ...(item.alternateUnits ?? [])];
+      const rawByUnit: Record<string, string> = {};
+      for (const unit of allUnits) {
+        rawByUnit[unit] = counts[keyFor(item.id, unit)] ?? '';
+      }
+      const rollup = rollupCounts(item, rawByUnit);
+      if (!rollup.hasInput) continue;
+      total += rollup.total * item.unitPrice;
     }
     return total;
   }, [items, counts]);
@@ -616,18 +622,22 @@ function CountRow({
 }) {
   const alternates = item.alternateUnits ?? [];
   const allUnits = [item.stockUnit, ...alternates];
-  const multiUnit = allUnits.length > 1;
 
-  // Has any cell on this row been filled? Drives the row's "counted"
-  // affordance and the variance readout (primary unit only).
-  const primaryValue = counts[keyFor(item.id, item.stockUnit)] ?? '';
-  const primaryParsed = parseFloat(primaryValue);
-  const hasPrimary = primaryValue.trim() !== '' && !Number.isNaN(primaryParsed);
+  // Roll every cell on this row into a single quantity expressed in
+  // the item's primary stockUnit. The rollup powers the "Count"
+  // readout, the £-value line, and the variance — so an entry in any
+  // unit (kg, g, bags, packs, loaves, …) influences the totals
+  // exactly the same way the primary cell would.
+  const rawByUnit: Record<string, string> = {};
+  for (const u of allUnits) {
+    rawByUnit[u] = counts[keyFor(item.id, u)] ?? '';
+  }
+  const rollup = rollupCounts(item, rawByUnit);
 
   const theoretical = item.theoreticalStock ?? item.currentStock;
-  const variance = hasPrimary ? primaryParsed - theoretical : null;
+  const variance = rollup.hasInput ? rollup.total - theoretical : null;
   const variancePct =
-    hasPrimary && theoretical > 0
+    rollup.hasInput && theoretical > 0
       ? Math.round((Math.abs(variance!) / theoretical) * 100)
       : null;
 
@@ -639,9 +649,7 @@ function CountRow({
     return 'var(--color-error)';
   })();
 
-  const rowCounted = allUnits.some(
-    u => (counts[keyFor(item.id, u)] ?? '').trim() !== '',
-  );
+  const rowCounted = rollup.hasInput;
 
   return (
     <article
@@ -715,21 +723,23 @@ function CountRow({
         </div>
       </div>
 
-      {/* Right — category · unit price · counted value · theoretical ·
-          variance. The price line uses the operator's currency and the
-          item's stockUnit (e.g. "£3.50/L"); the line below it shows
-          the live £-value of what the operator has actually counted
-          for this row ("£15.20 counted"), so the rollup tracks the
-          count rather than theoretical on-hand. Falls back to "—"
-          until they enter a value (or if the item has no unit price). */}
+      {/* Right — category badge sitting above the Count / Theoretical
+          pair, with variance underneath. Count and Theoretical share
+          the same scale (label 11px / value 18px-700) so the eye
+          treats them as a directly-comparable pair: the operator's
+          tally vs. what the system thought was there. Count rolls up
+          every UOM cell on the row (kg, g, bags, packs, …) into a
+          single quantity in the item's primary stockUnit so an entry
+          in any unit moves the dial. £-value line below count shows
+          the live cash equivalent. */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'flex-end',
           justifyContent: 'space-between',
-          gap: 4,
-          minWidth: 130,
+          gap: 8,
+          minWidth: 140,
         }}
       >
         <span
@@ -738,63 +748,100 @@ function CountRow({
             color: 'var(--color-text-secondary)',
           }}
         >
-          {item.category}
+          {item.category} · {formatPrice(item.unitPrice, item.stockUnit)}
         </span>
-        <div style={{ textAlign: 'right' }}>
-          <div
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: 'var(--color-text-primary)',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {formatPrice(item.unitPrice, item.stockUnit)}
-          </div>
-          <div
-            style={{
-              fontSize: 11,
-              color: 'var(--color-text-secondary)',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {hasPrimary && item.unitPrice != null
-              ? `${formatPrice(primaryParsed * item.unitPrice)} counted`
-              : '— counted'}
-          </div>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
-            Theoretical
-          </div>
-          <div
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: 'var(--color-text-primary)',
-            }}
-          >
-            {item.theoreticalStock !== null
-              ? formatStock(theoretical, item.stockUnit)
-              : '—'}
-          </div>
-        </div>
+
         <div
           style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: varianceTone,
-            whiteSpace: 'nowrap',
+            display: 'flex',
+            gap: 16,
+            alignItems: 'flex-start',
             textAlign: 'right',
           }}
         >
-          {variance === null
-            ? '—'
-            : variance === 0
-              ? 'on target'
-              : `${variance > 0 ? '+' : '−'}${Math.abs(variance).toFixed(1)} ${item.stockUnit}${
-                  variancePct !== null ? ` · ${variancePct}%` : ''
-                }`}
+          <div>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                color: rollup.hasInput
+                  ? 'var(--color-success)'
+                  : 'var(--color-text-secondary)',
+              }}
+            >
+              Count
+            </div>
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                lineHeight: 1.15,
+                color: rollup.hasInput
+                  ? 'var(--color-text-primary)'
+                  : 'var(--color-text-secondary)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {rollup.hasInput ? formatStock(rollup.total, item.stockUnit) : '—'}
+            </div>
+            <div
+              style={{
+                fontSize: 11,
+                color: 'var(--color-text-secondary)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {rollup.hasInput && item.unitPrice != null
+                ? `${formatPrice(rollup.total * item.unitPrice)} counted`
+                : '— counted'}
+              {rollup.hasUnconvertible ? ' · entry skipped' : ''}
+            </div>
+          </div>
+
+          <div>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                color: 'var(--color-text-secondary)',
+              }}
+            >
+              Theoretical
+            </div>
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                lineHeight: 1.15,
+                color: 'var(--color-text-primary)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {item.theoreticalStock !== null
+                ? formatStock(theoretical, item.stockUnit)
+                : '—'}
+            </div>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: varianceTone,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {variance === null
+                ? '—'
+                : Math.abs(variance) < 0.01
+                  ? 'on target'
+                  : `${variance > 0 ? '+' : '−'}${Math.abs(variance).toFixed(1)} ${item.stockUnit}${
+                      variancePct !== null ? ` · ${variancePct}%` : ''
+                    }`}
+            </div>
+          </div>
         </div>
       </div>
     </article>

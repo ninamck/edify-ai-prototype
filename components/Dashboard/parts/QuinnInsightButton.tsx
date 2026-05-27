@@ -96,8 +96,8 @@ export default function QuinnInsightButton({
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        aria-label="Quinn insight"
-        title="Quinn insight"
+        aria-label="Edify insight"
+        title="Edify insight"
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -116,7 +116,7 @@ export default function QuinnInsightButton({
         }}
       >
         <EdifyMark size={12} strokeWidth={2.2} />
-        Quinn
+        Edify
       </button>
 
       <AnimatePresence>
@@ -152,7 +152,7 @@ export default function QuinnInsightButton({
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <EdifyMark size={13} color="var(--color-accent-deep)" strokeWidth={2.2} />
                 <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
-                  Quinn · What I&rsquo;m seeing
+                  Edify · What I&rsquo;m seeing
                 </span>
               </div>
               <button

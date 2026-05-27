@@ -576,7 +576,7 @@ export function aggregateForwardSignals(siteId: SiteId, date: string): Aggregate
 export function narrateForwardWhy(siteId: SiteId, date: string): string {
   const signals = aggregateForwardSignals(siteId, date);
   if (signals.length === 0) {
-    return `Quinn used the ${dayOfWeek(date).toLowerCase()} baseline for this site \u2014 no extra signals firing today.`;
+    return `Using the ${dayOfWeek(date).toLowerCase()} baseline for this site \u2014 no extra signals firing today.`;
   }
   const top = signals.slice(0, 2);
   const parts = top.map(
@@ -636,14 +636,26 @@ export function narrateMiss(siteId: SiteId, date: string): MissNarrative {
   const signals = aggregateForwardSignals(siteId, date);
   const cause = signals[0];
 
-  const dayPrefix = cmp.isPartial ? `By ${DEMO_NOW_HHMM} ${dayOfWeek(date).toLowerCase()}, Quinn` : `Quinn`;
-  const tenseSuffix = cmp.isPartial ? ' so far' : '';
+  // Avoid naming the forecasting model in the narrative — the operator
+  // reads the sentence as "what happened in the shop", not "what the
+  // AI did". Subject is always "sales" (the thing that happened);
+  // partial days use present-progressive ("are running"), settled days
+  // use past tense.
+  const dayPrefix = cmp.isPartial
+    ? `By ${DEMO_NOW_HHMM} ${dayOfWeek(date).toLowerCase()}, sales`
+    : `Sales`;
   const direction =
     variance > 0
-      ? `${dayPrefix} sold more than forecast${tenseSuffix}`
+      ? cmp.isPartial
+        ? `${dayPrefix} are running ahead of forecast`
+        : `${dayPrefix} ran ahead of forecast`
       : variance < 0
-        ? `${dayPrefix} sold less than forecast${tenseSuffix}`
-        : `${dayPrefix} matched forecast${tenseSuffix}`;
+        ? cmp.isPartial
+          ? `${dayPrefix} are running behind forecast`
+          : `${dayPrefix} ran behind forecast`
+        : cmp.isPartial
+          ? `${dayPrefix} are tracking forecast`
+          : `${dayPrefix} tracked forecast`;
   const phaseText = worstPhase ? `, mostly in the ${PHASE_LABEL[worstPhase].toLowerCase()}` : '';
   const causeText = cause
     ? variance > 0

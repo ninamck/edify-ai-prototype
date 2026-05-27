@@ -28,7 +28,6 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Plus, X, Check, Lock, Pencil, Copy, MoreHorizontal,
 } from 'lucide-react';
@@ -42,6 +41,8 @@ import {
   type IngredientRef,
 } from '@/components/Ingredients/catalogue';
 import { IngredientRefPicker } from './IngredientRefPicker';
+import { IngredientSourceBadge } from './IngredientSourceBadge';
+import { HelpTip } from './RecipeFormParts';
 import { useModifierGroups } from '@/components/Modifiers/store';
 import type { ModifierGroup } from '@/components/Modifiers/types';
 import { GroupEditorDrawer } from '@/components/Modifiers/GroupEditorDrawer';
@@ -317,7 +318,7 @@ export function VariantsSection({
           style={{
             padding: '16px 18px', borderRadius: 10,
             background: 'var(--color-bg-hover)',
-            fontSize: 12.5, color: 'var(--color-text-secondary)',
+            fontSize: 13.5, color: 'var(--color-text-secondary)',
             lineHeight: 1.55,
           }}
         >
@@ -375,8 +376,8 @@ export function VariantsSection({
         {/* top-left empty cell — anchors the row-label column */}
         <div style={{ background: '#fff', padding: '10px 12px' }}>
           <div style={subLabelStyle}>Variants</div>
-          <div style={{ fontSize: 11, color: 'var(--color-text-muted)', lineHeight: 1.4 }}>
-            Each column is one full alternative composition.
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.4 }}>
+            One column per size / format.
           </div>
         </div>
         {variants.map((v) => (
@@ -422,6 +423,7 @@ export function VariantsSection({
             <MatrixRow
               key={`ing-${rowIdx}`}
               label={labelRef ? refName(labelRef) : '(unknown)'}
+              sourceRef={labelRef}
               gridTemplate={gridTemplate}
               varies={varies}
               onRemoveRow={() => removeIngredientRow(rowIdx)}
@@ -468,6 +470,7 @@ export function VariantsSection({
             <MatrixRow
               key={`pkg-${rowIdx}`}
               label={labelRef ? refName(labelRef) : '(unknown)'}
+              sourceRef={labelRef}
               gridTemplate={gridTemplate}
               varies={varies}
               onRemoveRow={() => removePackagingRow(rowIdx)}
@@ -549,7 +552,7 @@ function VariantHeaderCell({
             flex: 1, minWidth: 0,
             border: 'none', outline: 'none', padding: 0, margin: 0,
             background: 'transparent',
-            fontSize: 13.5, fontWeight: 600, color: 'var(--color-text-primary)',
+            fontSize: 14.5, fontWeight: 600, color: 'var(--color-text-primary)',
             fontFamily: 'var(--font-primary)',
           }}
         />
@@ -560,12 +563,12 @@ function VariantHeaderCell({
           aria-label="More"
           style={iconBtn}
         >
-          <MoreHorizontal size={12} />
+          <MoreHorizontal size={13} />
         </button>
       </div>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 6,
-        fontSize: 11.5, color: 'var(--color-text-muted)', fontWeight: 500,
+        fontSize: 12.5, color: 'var(--color-text-muted)', fontWeight: 500,
         minHeight: 18,
       }}>
         {variant.isDefault && (
@@ -644,11 +647,11 @@ function VariantSettingsPopover({
         onClick={onSetDefault}
         disabled={variant.isDefault}
         style={{
-          padding: '7px 10px', borderRadius: 7,
+          padding: '8px 11px', borderRadius: 7,
           border: '1px solid ' + (variant.isDefault ? 'transparent' : 'var(--color-border-subtle)'),
           background: variant.isDefault ? 'rgba(3,28,89,0.08)' : '#fff',
           color: variant.isDefault ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
-          fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-primary)',
+          fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-primary)',
           cursor: variant.isDefault ? 'default' : 'pointer',
           display: 'inline-flex', alignItems: 'center', gap: 5,
         }}
@@ -714,6 +717,9 @@ function MatrixSection({
   children,
 }: {
   title: string;
+  /** Help text — shown as a click-to-open `?` tooltip next to the
+   *  title rather than an inline subtitle, so the matrix stays scannable
+   *  once the user knows what each section does. */
   hint: string;
   gridTemplate: string;
   emptyCopy: string;
@@ -725,13 +731,11 @@ function MatrixSection({
   const [pickerOpen, setPickerOpen] = useState(false);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)' }}>
           {title}
-        </div>
-        <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', lineHeight: 1.4, marginTop: 2 }}>
-          {hint}
-        </div>
+        </span>
+        <HelpTip label={`About ${title}`}>{hint}</HelpTip>
       </div>
       <div
         style={{
@@ -750,7 +754,7 @@ function MatrixSection({
         ) : (
           <div style={{
             padding: '14px 16px', background: '#fff',
-            fontSize: 12, color: 'var(--color-text-muted)',
+            fontSize: 13, color: 'var(--color-text-muted)',
           }}>
             {emptyCopy}
           </div>
@@ -799,14 +803,20 @@ function MatrixSection({
 }
 
 function MatrixRow({
-  label, gridTemplate, varies, onRemoveRow, children,
+  label, sourceRef, gridTemplate, varies, onRemoveRow, children,
 }: {
   label: string;
+  /** Optional ingredient ref for the row's source badge (Master /
+   *  Sub-recipe / Made @ X / Supplier). Pass undefined for non-
+   *  ingredient rows (e.g. modifier groups). NB: NOT named `ref`
+   *  because React reserves that prop name on function components. */
+  sourceRef?: IngredientRef;
   gridTemplate: string;
   varies: boolean;
   onRemoveRow: () => void;
   children: React.ReactNode;
 }) {
+  void gridTemplate;
   // Render label + variant cells as contents of the parent grid so
   // they align with the variant headers. We can't grid inside the row
   // because we already have a single parent grid; instead we emit
@@ -825,13 +835,14 @@ function MatrixRow({
         <span
           title={label}
           style={{
-            flex: 1, fontSize: 12.5, fontWeight: 600,
+            flex: 1, fontSize: 13.5, fontWeight: 600,
             color: 'var(--color-text-primary)',
             minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}
         >
           {label}
         </span>
+        {sourceRef && <IngredientSourceBadge ingredientRef={sourceRef} size="xs" />}
         <button
           type="button"
           onClick={onRemoveRow}
@@ -876,7 +887,7 @@ function QtyCell({
             border: '1px dashed var(--color-border)',
             background: 'transparent', cursor: 'pointer',
             color: 'var(--color-text-muted)',
-            fontSize: 11.5, fontFamily: 'var(--font-primary)',
+            fontSize: 12.5, fontFamily: 'var(--font-primary)',
           }}
         >
           —
@@ -930,7 +941,7 @@ function PackagingCell({
         background: highlight ? 'rgba(143,92,199,0.10)' : '#fff',
         padding: '6px 8px',
         display: 'flex', alignItems: 'center',
-        color: 'var(--color-text-muted)', fontSize: 11.5,
+        color: 'var(--color-text-muted)', fontSize: 12.5,
       }}>
         —
       </div>
@@ -957,7 +968,7 @@ function PackagingCell({
           style={{
             background: 'transparent', border: 'none', padding: 0, margin: 0,
             cursor: 'pointer', textAlign: 'left',
-            fontSize: 11.5, fontWeight: 600, color: 'var(--color-text-primary)',
+            fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-primary)',
             minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             fontFamily: 'var(--font-primary)',
           }}
@@ -1005,10 +1016,16 @@ function ModifiersMatrixSection({
   onRemoveRow: (groupId: string) => void;
   onAddRow: (groupId: string) => void;
 }) {
-  const router = useRouter();
   const allGroups = useModifierGroups();
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [editGroup, setEditGroup] = useState<ModifierGroup | null>(null);
+  // Discriminated drawer state — edit hosts an existing group, create
+  // opens a blank one. Single state keeps the two flows mutually
+  // exclusive (you can't be editing and creating simultaneously).
+  const [drawer, setDrawer] = useState<
+    | { mode: 'closed' }
+    | { mode: 'create' }
+    | { mode: 'edit'; group: ModifierGroup }
+  >({ mode: 'closed' });
 
   const attachedGroups = useMemo(
     () => attachedGroupIds
@@ -1023,13 +1040,15 @@ function ModifiersMatrixSection({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)' }}>
           Modifiers
-        </div>
-        <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', lineHeight: 1.4, marginTop: 2 }}>
-          Modifier groups attached to each variant. Toggle a cell to attach / detach for a single variant.
-        </div>
+        </span>
+        <HelpTip label="About Modifiers">
+          Modifier groups attached to each variant. Toggle a cell to attach or
+          detach a group for a single variant. POS mapping for each group
+          lives on the group itself.
+        </HelpTip>
       </div>
       <div
         style={{
@@ -1060,19 +1079,19 @@ function ModifiersMatrixSection({
                     <span
                       title={g.name}
                       style={{
-                        flex: 1, fontSize: 12.5, fontWeight: 600,
+                        flex: 1, fontSize: 13.5, fontWeight: 600,
                         color: 'var(--color-text-primary)',
                         minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}
                     >
                       {g.name}
                     </span>
-                    <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)', fontWeight: 500 }}>
+                    <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)', fontWeight: 500 }}>
                       {g.selection === 'one' ? '1' : 'n'} · {g.options.length}
                     </span>
                     <button
                       type="button"
-                      onClick={() => setEditGroup(g)}
+                      onClick={() => setDrawer({ mode: 'edit', group: g })}
                       title="Edit in library"
                       aria-label="Edit group"
                       style={{ ...iconBtn, opacity: 0.6 }}
@@ -1128,7 +1147,7 @@ function ModifiersMatrixSection({
         ) : (
           <div style={{
             padding: '14px 16px', background: '#fff',
-            fontSize: 12, color: 'var(--color-text-muted)',
+            fontSize: 13, color: 'var(--color-text-muted)',
           }}>
             No modifier groups attached to any variant.
           </div>
@@ -1146,32 +1165,39 @@ function ModifiersMatrixSection({
               unattached={unattachedGroups}
               onPick={(id) => { onAddRow(id); setPickerOpen(false); }}
               onClose={() => setPickerOpen(false)}
-              onGoToLibrary={() => router.push('/modifier-groups')}
+              onCreate={() => { setPickerOpen(false); setDrawer({ mode: 'create' }); }}
             />
           ) : (
             <button
               type="button"
               onClick={() => unattachedGroups.length > 0
                 ? setPickerOpen(true)
-                : router.push('/modifier-groups')
+                : setDrawer({ mode: 'create' })
               }
               style={addRowBtnStyle}
             >
               <Plus size={12} strokeWidth={2.4} />
-              {unattachedGroups.length > 0 ? 'Attach modifier group' : 'Create in library'}
+              {unattachedGroups.length > 0 ? 'Attach modifier group' : 'Create modifier group'}
             </button>
           )}
         </div>
       </div>
 
       <GroupEditorDrawer
-        open={editGroup !== null}
-        mode="edit"
-        initial={editGroup}
-        onClose={() => setEditGroup(null)}
-        onSaved={() => { /* catalogue already updated via upsertGroup */ }}
+        open={drawer.mode !== 'closed'}
+        mode={drawer.mode === 'edit' ? 'edit' : 'create'}
+        initial={drawer.mode === 'edit' ? drawer.group : null}
+        onClose={() => setDrawer({ mode: 'closed' })}
+        onSaved={(group) => {
+          // In create mode, auto-attach the new group as a matrix row so
+          // the user can immediately tick which variants it applies to.
+          if (drawer.mode === 'create' && !attachedGroupIds.includes(group.id)) {
+            onAddRow(group.id);
+          }
+          setDrawer({ mode: 'closed' });
+        }}
         onDeleted={(id) => {
-          setEditGroup(null);
+          setDrawer({ mode: 'closed' });
           onRemoveRow(id);
         }}
       />
@@ -1180,12 +1206,14 @@ function ModifiersMatrixSection({
 }
 
 function ModifierPicker({
-  unattached, onPick, onClose, onGoToLibrary,
+  unattached, onPick, onClose, onCreate,
 }: {
   unattached: ModifierGroup[];
   onPick: (id: string) => void;
   onClose: () => void;
-  onGoToLibrary: () => void;
+  /** Opens the modifier-group editor drawer in create mode so the user
+   *  can build a brand-new group without leaving the recipe. */
+  onCreate: () => void;
 }) {
   return (
     <div
@@ -1212,7 +1240,7 @@ function ModifierPicker({
         </button>
       </div>
       {unattached.length === 0 ? (
-        <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)' }}>
+        <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
           Every group in the library is already attached.
         </div>
       ) : (
@@ -1224,16 +1252,16 @@ function ModifierPicker({
               onClick={() => onPick(g.id)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10,
-                padding: '7px 9px', borderRadius: 7,
+                padding: '8px 10px', borderRadius: 7,
                 border: '1px solid var(--color-border-subtle)',
                 background: '#fff', cursor: 'pointer',
                 textAlign: 'left', fontFamily: 'var(--font-primary)',
               }}
             >
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-primary)', flex: 1 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-text-primary)', flex: 1 }}>
                 {g.name}
               </span>
-              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
                 {g.selection === 'one' ? 'pick one' : 'pick many'} · {g.options.length}
               </span>
             </button>
@@ -1241,11 +1269,11 @@ function ModifierPicker({
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 4 }}>
-        <span style={{ fontSize: 11, color: 'var(--color-text-muted)', flex: 1 }}>
+        <span style={{ fontSize: 12, color: 'var(--color-text-muted)', flex: 1 }}>
           Need a new group?
         </span>
-        <button type="button" onClick={onGoToLibrary} style={addRowBtnStyle}>
-          Open library
+        <button type="button" onClick={onCreate} style={addRowBtnStyle}>
+          <Plus size={12} strokeWidth={2.4} /> New group
         </button>
       </div>
     </div>
@@ -1265,7 +1293,7 @@ function PriceField({
 }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-secondary)' }}>{label}</span>
+      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)' }}>{label}</span>
       <input
         type="number"
         step="0.01"
@@ -1293,27 +1321,27 @@ function SubSoft({ children }: { children: React.ReactNode }) {
 // Styles
 
 const subLabelStyle: React.CSSProperties = {
-  fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em',
+  fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em',
   textTransform: 'uppercase', color: 'var(--color-text-muted)',
   marginBottom: 4,
 };
 
 const textInputStyle: React.CSSProperties = {
   width: '100%',
-  padding: '6px 9px', borderRadius: 6,
+  padding: '7px 10px', borderRadius: 6,
   border: '1px solid var(--color-border-subtle)',
   background: '#fff',
-  fontSize: 12.5, fontFamily: 'var(--font-primary)',
+  fontSize: 13.5, fontFamily: 'var(--font-primary)',
   color: 'var(--color-text-primary)',
   outline: 'none',
 };
 
 const cellQtyInputStyle: React.CSSProperties = {
-  width: 0, flex: 1, minWidth: 40,
-  padding: '4px 6px', borderRadius: 5,
+  width: 0, flex: 1, minWidth: 44,
+  padding: '5px 7px', borderRadius: 5,
   border: '1px solid var(--color-border-subtle)',
   background: '#fff',
-  fontSize: 12, fontFamily: 'var(--font-primary)',
+  fontSize: 13, fontFamily: 'var(--font-primary)',
   color: 'var(--color-text-primary)',
   outline: 'none',
   textAlign: 'right',
@@ -1321,18 +1349,18 @@ const cellQtyInputStyle: React.CSSProperties = {
 };
 
 const cellUnitSelectStyle: React.CSSProperties = {
-  width: 50,
-  padding: '4px 4px', borderRadius: 5,
+  width: 54,
+  padding: '5px 5px', borderRadius: 5,
   border: '1px solid var(--color-border-subtle)',
   background: '#fff',
-  fontSize: 11.5, fontFamily: 'var(--font-primary)',
+  fontSize: 12.5, fontFamily: 'var(--font-primary)',
   color: 'var(--color-text-secondary)',
   outline: 'none',
 };
 
 const iconBtn: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  width: 22, height: 22, borderRadius: 5,
+  width: 24, height: 24, borderRadius: 5,
   border: '1px solid var(--color-border-subtle)',
   background: '#fff', color: 'var(--color-text-secondary)',
   cursor: 'pointer',
@@ -1340,39 +1368,39 @@ const iconBtn: React.CSSProperties = {
 
 const secondaryBtn: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-  padding: '6px 9px', borderRadius: 7,
+  padding: '7px 10px', borderRadius: 7,
   border: '1px solid var(--color-border-subtle)',
   background: '#fff', color: 'var(--color-text-secondary)',
-  fontSize: 12, fontWeight: 600, cursor: 'pointer',
+  fontSize: 13, fontWeight: 600, cursor: 'pointer',
   fontFamily: 'var(--font-primary)',
 };
 
 const addBtnStyle: React.CSSProperties = {
   alignSelf: 'flex-start',
   display: 'inline-flex', alignItems: 'center', gap: 6,
-  padding: '7px 12px', borderRadius: 8,
+  padding: '8px 13px', borderRadius: 8,
   border: '1px dashed var(--color-border)',
   background: '#fff',
   color: 'var(--color-text-secondary)',
-  fontSize: 12.5, fontWeight: 600,
+  fontSize: 13.5, fontWeight: 600,
   cursor: 'pointer',
   fontFamily: 'var(--font-primary)',
 };
 
 const addRowBtnStyle: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 5,
-  padding: '6px 11px', borderRadius: 100,
+  padding: '7px 12px', borderRadius: 100,
   border: '1px dashed var(--color-border)', background: '#fff',
   color: 'var(--color-text-secondary)',
-  fontSize: 12, fontWeight: 600, cursor: 'pointer',
+  fontSize: 13, fontWeight: 600, cursor: 'pointer',
   fontFamily: 'var(--font-primary)',
 };
 
 const defaultPillStyle: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 3,
-  padding: '2px 7px', borderRadius: 100,
+  padding: '3px 8px', borderRadius: 100,
   background: 'rgba(3,28,89,0.08)', color: 'var(--color-accent-active)',
-  fontSize: 10, fontWeight: 700, letterSpacing: '0.02em',
+  fontSize: 11, fontWeight: 700, letterSpacing: '0.02em',
 };
 
 const variesDotStyle: React.CSSProperties = {

@@ -176,8 +176,8 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
         position: 'fixed', inset: 0,
         background: 'rgba(0, 28, 53, 0.22)',
         zIndex: 1100,
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-        paddingTop: '10vh',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '24px',
         fontFamily: 'var(--font-primary)',
       }}
     >

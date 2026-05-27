@@ -541,7 +541,7 @@ function describeOrigin(instance: TableInstance): string | null {
   if (instance.origin.kind === 'preset') return `From: ${instance.origin.questionText}`;
   if (instance.origin.kind === 'quinn') {
     const trimmed = instance.origin.prompt.trim();
-    return trimmed ? `Asked Quinn: ${trimmed}` : 'Built with Quinn';
+    return trimmed ? `Asked Edify: ${trimmed}` : 'Built with Edify';
   }
   return null;
 }
@@ -558,7 +558,7 @@ function ChartCard({
   const cfg = ANALYTICS_CONFIG[instance.chartId];
   const title = instance.title?.trim() || cfg?.label || 'Chart';
   const originLabel = instance.origin?.kind === 'quinn' && instance.origin.prompt.trim()
-    ? `Asked Quinn: ${instance.origin.prompt.trim()}`
+    ? `Asked Edify: ${instance.origin.prompt.trim()}`
     : null;
   return (
     <div
@@ -714,7 +714,7 @@ function EmptyState({
           <ChoiceCard
             icon={<Database size={16} strokeWidth={2.2} color="var(--color-text-secondary)" />}
             title="Build from scratch"
-            description="Quinn opens with a starter table you can refine in chat."
+            description="Edify opens with a starter table you can refine in chat."
             onClick={onOpenBuilder}
           />
         )}

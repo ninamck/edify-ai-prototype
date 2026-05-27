@@ -51,6 +51,7 @@ import {
   getLinkedRecipes,
   getStockStatus,
   getVarianceFraction,
+  rollupCounts,
 } from './status';
 import { ctaConfigFor } from './actions';
 
@@ -130,11 +131,13 @@ function DrawerBody({
 
   // Quick-count panel state. Off by default; clicking "Run mid-week
   // count" flips it on (instead of routing away to /stock?tab=...).
-  // The counts map is keyed by unit so the operator can type into any
-  // alternate unit while thinking, but only the value entered in the
-  // item's primary stockUnit commits on Save — that's the canonical
-  // measurement and the only one with a known conversion to the
-  // stored `currentStock` figure.
+  // The counts map is keyed by unit so the operator can record the
+  // count using whichever unit they're physically holding — loose kg,
+  // a bag, a case, a tray — and every cell rolls up into a single
+  // quantity in the item's primary stockUnit on save. The rollup uses
+  // `rollupCounts` (same helper the full Stocktake flow uses), which
+  // applies mass/volume defaults automatically and item-specific
+  // pack-size factors for the count-shaped alternates.
   const [counting, setCounting] = useState(false);
   const [unitCounts, setUnitCounts] = useState<Record<string, string>>({});
   const [justSaved, setJustSaved] = useState(false);
@@ -143,10 +146,9 @@ function DrawerBody({
     item.stockUnit,
     ...item.alternateUnits.filter(u => u !== item.stockUnit),
   ];
-  const primaryDraft = (unitCounts[item.stockUnit] ?? '').trim();
-  const primaryParsed = Number.parseFloat(primaryDraft);
-  const canSaveCount =
-    primaryDraft !== '' && Number.isFinite(primaryParsed) && primaryParsed >= 0;
+
+  const draftRollup = rollupCounts(item, unitCounts);
+  const canSaveCount = draftRollup.hasInput && draftRollup.total >= 0;
 
   function startCounting() {
     setUnitCounts({});
@@ -156,7 +158,9 @@ function DrawerBody({
 
   function handleSaveCount() {
     if (!canSaveCount) return;
-    onItemEdit(item.id, { currentStock: primaryParsed });
+    onItemEdit(item.id, {
+      currentStock: Number(draftRollup.total.toFixed(3)),
+    });
     setCounting(false);
     setJustSaved(true);
     // Auto-clear the "Saved" flag after a beat so it doesn't linger
@@ -379,9 +383,11 @@ function DrawerBody({
                 "Run mid-week count" from one of the CTAs above
                 instead of routing them off to /stock?tab=stocktake.
                 Same UnitInput control as the full Stocktake flow so
-                the mental model is consistent. Only the value entered
-                in the item's primary stockUnit gets persisted (other
-                unit boxes are scratchpad). */}
+                the mental model is consistent. Every cell rolls up
+                into a single quantity in the item's primary
+                stockUnit on save, so a mid-week count can mix loose
+                weight + bags / cases / trays and still commit a
+                clean number. */}
             {counting && (
               <div
                 style={{
@@ -392,7 +398,7 @@ function DrawerBody({
                   borderRadius: 'var(--radius-card)',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 10,
+                  gap: 12,
                 }}
               >
                 <div
@@ -439,10 +445,55 @@ function DrawerBody({
                       onChange={next =>
                         setUnitCounts(prev => ({ ...prev, [unit]: next }))
                       }
-                      inputWidth={70}
-                      tagMinWidth={48}
+                      inputWidth={84}
+                      tagMinWidth={52}
+                      inputFontSize={16}
                     />
                   ))}
+                </div>
+
+                {/* Live total. Sits between the input strip and the
+                    action row so the operator can see what they're
+                    about to commit before hitting Save. Reads "—"
+                    until at least one cell has a parseable value. */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'baseline',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                    padding: '8px 12px',
+                    background: '#fff',
+                    border: '1px solid var(--color-border-subtle)',
+                    borderRadius: 'var(--radius-item)',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color: draftRollup.hasInput
+                        ? 'var(--color-success)'
+                        : 'var(--color-text-secondary)',
+                    }}
+                  >
+                    {draftRollup.unitsEntered > 1 ? 'Total counted' : 'Counted'}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 700,
+                      color: draftRollup.hasInput
+                        ? 'var(--color-text-primary)'
+                        : 'var(--color-text-secondary)',
+                    }}
+                  >
+                    {draftRollup.hasInput
+                      ? formatStock(draftRollup.total, item.stockUnit)
+                      : '—'}
+                  </span>
                 </div>
 
                 <div
@@ -460,8 +511,12 @@ function DrawerBody({
                       color: 'var(--color-text-secondary)',
                     }}
                   >
-                    Saves the value entered in {item.stockUnit}
-                    {allUnits.length > 1 && ' · others are scratchpad'}
+                    {allUnits.length > 1
+                      ? `Every unit you fill in rolls up into ${item.stockUnit}`
+                      : `Saves as ${item.stockUnit}`}
+                    {draftRollup.hasUnconvertible
+                      ? ' · one entry not convertible — skipped'
+                      : ''}
                   </span>
                   <div style={{ display: 'inline-flex', gap: 8 }}>
                     <button

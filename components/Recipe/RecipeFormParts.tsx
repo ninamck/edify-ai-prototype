@@ -6,11 +6,12 @@
 // Keeping these in one place keeps the two pages visually identical and lets
 // us extend the form once.
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus, X, Check, ChevronDown, ChevronRight, AlertTriangle,
-  ArrowUp, ArrowDown,
+  Plus, X, Check, ChevronDown, ChevronLeft, ChevronRight, AlertTriangle,
+  ArrowUp, ArrowDown, HelpCircle, PoundSterling,
 } from 'lucide-react';
 import type {
   ComponentRow,
@@ -161,8 +162,8 @@ export function CollapsibleCard({
         }}
       >
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{label}</span>
-        {hint && <span style={{ flex: 1, fontSize: '12.5px', color: 'var(--color-text-muted)' }}>{hint}</span>}
+        <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{label}</span>
+        {hint && <span style={{ flex: 1, fontSize: '13px', color: 'var(--color-text-muted)' }}>{hint}</span>}
       </button>
       <AnimatePresence initial={false}>
         {open && (
@@ -181,27 +182,206 @@ export function CollapsibleCard({
   );
 }
 
-export function SectionHeader({ title, hint }: { title: string; hint?: string }) {
+/**
+ * HelpTip — a small "?" icon button that opens a click-to-show popover with
+ * help text. Use for occasional-clarification fields where the label is
+ * self-evident but a power user might still want one-tap detail. Not for
+ * conceptually loaded content — that should stay inline next to the field
+ * so users discover it without hunting.
+ *
+ * Click (not hover) keeps it accessible to keyboard + touch users and
+ * avoids the classic "tooltip vanishes when you mouse over it" bug.
+ *
+ * Positioning: rendered into a portal at `document.body` with `fixed`
+ * coords measured from the icon's bounding rect. The tooltip is centered
+ * horizontally on the icon, clamped to the viewport (with 8px padding),
+ * and flipped above the icon if there isn't room below. Closes on any
+ * scroll / resize / outside click / ESC so it never desyncs from its
+ * anchor.
+ */
+const HELP_TIP_WIDTH = 280;
+const HELP_TIP_PADDING = 8;
+const HELP_TIP_GAP = 6;
+
+export function HelpTip({
+  children, label,
+}: {
+  children: React.ReactNode;
+  label?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ left: number; top: number; placement: 'below' | 'above' } | null>(null);
+  const iconRef = useRef<HTMLButtonElement | null>(null);
+  const tipRef = useRef<HTMLDivElement | null>(null);
+
+  const computePosition = useCallback(() => {
+    if (!iconRef.current) return;
+    const icon = iconRef.current.getBoundingClientRect();
+    const tipWidth = tipRef.current?.offsetWidth ?? HELP_TIP_WIDTH;
+    const tipHeight = tipRef.current?.offsetHeight ?? 60;
+
+    let left = icon.left + icon.width / 2 - tipWidth / 2;
+    left = Math.max(
+      HELP_TIP_PADDING,
+      Math.min(left, window.innerWidth - HELP_TIP_PADDING - tipWidth),
+    );
+
+    let top = icon.bottom + HELP_TIP_GAP;
+    let placement: 'below' | 'above' = 'below';
+    if (top + tipHeight > window.innerHeight - HELP_TIP_PADDING) {
+      const aboveTop = icon.top - HELP_TIP_GAP - tipHeight;
+      if (aboveTop >= HELP_TIP_PADDING) {
+        top = aboveTop;
+        placement = 'above';
+      }
+    }
+
+    setPos({ left, top, placement });
+  }, []);
+
+  // First measurement uses the icon rect only (tooltip isn't in the DOM
+  // yet). The follow-up effect re-measures once the tooltip mounts so
+  // the actual rendered width/height drives the final placement.
+  useLayoutEffect(() => {
+    if (!open) return;
+    computePosition();
+  }, [open, computePosition]);
+
+  useEffect(() => {
+    if (!open || !tipRef.current) return;
+    computePosition();
+  }, [open, computePosition]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: MouseEvent) {
+      if (iconRef.current?.contains(e.target as Node)) return;
+      if (tipRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    function onScrollOrResize() {
+      setOpen(false);
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
+    };
+  }, [open]);
+
+  const tooltip = open && typeof document !== 'undefined' ? createPortal(
+    <AnimatePresence>
+      <motion.div
+        ref={tipRef}
+        key="helptip"
+        initial={{ opacity: 0, y: pos?.placement === 'above' ? 3 : -3 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.12 }}
+        role="tooltip"
+        style={{
+          position: 'fixed',
+          // Off-screen on first paint until we measure; the layout effect
+          // sets real coords synchronously before paint anyway.
+          left: pos?.left ?? -9999,
+          top: pos?.top ?? -9999,
+          zIndex: 1000,
+          width: HELP_TIP_WIDTH,
+          padding: '10px 12px', borderRadius: 8,
+          background: 'var(--color-text-primary, #0F172A)',
+          color: '#fff',
+          fontSize: 13, lineHeight: 1.5,
+          fontWeight: 400, textTransform: 'none', letterSpacing: 0,
+          boxShadow: '0 6px 22px rgba(15,23,42,0.2)',
+          fontFamily: 'var(--font-primary)',
+          pointerEvents: 'auto',
+        }}
+      >
+        {children}
+      </motion.div>
+    </AnimatePresence>,
+    document.body,
+  ) : null;
+
+  return (
+    <>
+      <button
+        ref={iconRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label={label ?? 'More info'}
+        aria-expanded={open}
+        title={label ?? 'More info'}
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 14, height: 14, padding: 0, marginLeft: 4,
+          border: 'none', background: 'transparent',
+          color: 'var(--color-text-muted)', cursor: 'pointer',
+          borderRadius: '50%',
+          verticalAlign: 'middle',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+      >
+        <HelpCircle size={13} strokeWidth={1.8} />
+      </button>
+      {tooltip}
+    </>
+  );
+}
+
+export function SectionHeader({
+  title, hint, help,
+}: {
+  title: string;
+  /** Always-visible muted hint text below the title. Use for conceptually
+   *  loaded sections (variants, modifiers) where users need the context
+   *  before they can act correctly. */
+  hint?: string;
+  /** Click-to-open help text via a small "?" icon next to the title. Use
+   *  for occasional clarification where the title alone is enough most of
+   *  the time. */
+  help?: React.ReactNode;
+}) {
   return (
     <div style={{ marginBottom: '10px' }}>
-      <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: '2px' }}>
-        {title}
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '2px' }}>
+        <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+          {title}
+        </span>
+        {help && <HelpTip label={`About ${title.toLowerCase()}`}>{help}</HelpTip>}
       </div>
-      {hint && <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{hint}</div>}
+      {hint && <div style={{ fontSize: '13px', color: 'var(--color-text-muted)', lineHeight: 1.45 }}>{hint}</div>}
     </div>
   );
 }
 
-export function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+export function FieldLabel({
+  children, required, help,
+}: {
+  children: React.ReactNode;
+  required?: boolean;
+  /** Click-to-open help text via a small "?" icon next to the label. */
+  help?: React.ReactNode;
+}) {
   return (
     <div
       style={{
-        fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+        fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
         color: 'var(--color-text-muted)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px',
       }}
     >
       {children}
       {required && <span style={{ color: 'var(--color-error)' }}>*</span>}
+      {help && <HelpTip>{help}</HelpTip>}
     </div>
   );
 }
@@ -229,10 +409,10 @@ export function PillMulti({
   selectAll?: { allLabel: string; clearLabel: string };
 }) {
   const isSmall = size === 'sm';
-  const padding = isSmall ? '4px 10px' : '6px 12px';
-  const fontSize = isSmall ? '11.5px' : '12px';
+  const padding = isSmall ? '5px 11px' : '7px 13px';
+  const fontSize = isSmall ? '12.5px' : '13px';
   const gap = isSmall ? '5px' : '6px';
-  const iconSize = isSmall ? 10 : 11;
+  const iconSize = isSmall ? 11 : 12;
 
   const allOn = options.length > 0 && options.every((o) => selected.includes(o));
 
@@ -301,17 +481,17 @@ export function PillSingle({
             key={opt}
             onClick={() => onChange(allowClear && on ? '' : opt)}
             style={{
-              padding: '6px 12px',
+              padding: '7px 13px',
               borderRadius: '100px',
               border: on ? '1px solid transparent' : '1px solid var(--color-border-subtle)',
               background: on ? 'var(--color-accent-active)' : '#fff',
               color: on ? '#fff' : 'var(--color-text-secondary)',
-              fontSize: '12px', fontWeight: 600,
+              fontSize: '13px', fontWeight: 600,
               cursor: 'pointer', fontFamily: 'var(--font-primary)',
               display: 'inline-flex', alignItems: 'center', gap: '5px',
             }}
           >
-            {on && <Check size={11} strokeWidth={2.6} />}
+            {on && <Check size={12} strokeWidth={2.6} />}
             {opt}
           </button>
         );
@@ -342,11 +522,11 @@ export function TagInput({
         <span
           key={t}
           style={{
-            padding: '3px 8px 3px 10px',
+            padding: '4px 9px 4px 11px',
             borderRadius: '100px',
             background: 'var(--color-bg-hover)',
             color: 'var(--color-text-primary)',
-            fontSize: '12px', fontWeight: 600,
+            fontSize: '13px', fontWeight: 600,
             display: 'inline-flex', alignItems: 'center', gap: '6px',
           }}
         >
@@ -356,7 +536,7 @@ export function TagInput({
             aria-label={`Remove ${t}`}
             style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 0, color: 'var(--color-text-muted)' }}
           >
-            <X size={11} />
+            <X size={12} />
           </button>
         </span>
       ))}
@@ -368,7 +548,7 @@ export function TagInput({
         placeholder={placeholder}
         style={{
           border: 'none', outline: 'none', background: 'transparent',
-          flex: 1, minWidth: '120px', fontSize: '13px',
+          flex: 1, minWidth: '120px', fontSize: '14px',
           fontFamily: 'var(--font-primary)', color: 'var(--color-text-primary)',
           padding: '4px 4px',
         }}
@@ -378,35 +558,49 @@ export function TagInput({
 }
 
 export function CheckRow({
-  label, checked, onChange,
+  label, checked, onChange, help,
 }: {
-  label: string; checked: boolean; onChange: (v: boolean) => void;
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  /** Click-to-open help text via a small "?" icon rendered as a sibling
+   *  to the row (kept outside the button to avoid nested-button HTML). */
+  help?: React.ReactNode;
 }) {
-  return (
+  const button = (
     <button
+      type="button"
       onClick={() => onChange(!checked)}
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: '7px',
-        padding: '7px 12px', borderRadius: '8px',
+        display: 'inline-flex', alignItems: 'center', gap: '8px',
+        padding: '8px 13px', borderRadius: '8px',
         border: '1px solid ' + (checked ? 'transparent' : 'var(--color-border-subtle)'),
         background: checked ? 'var(--color-accent-active)' : '#fff',
         color: checked ? '#fff' : 'var(--color-text-secondary)',
-        fontSize: '12.5px', fontWeight: 600, cursor: 'pointer',
+        fontSize: '13.5px', fontWeight: 600, cursor: 'pointer',
         fontFamily: 'var(--font-primary)',
       }}
     >
       <span
         style={{
-          width: '14px', height: '14px', borderRadius: '4px',
+          width: '15px', height: '15px', borderRadius: '4px',
           border: '1.5px solid ' + (checked ? '#fff' : 'var(--color-border)'),
           background: checked ? 'transparent' : '#fff',
           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}
       >
-        {checked && <Check size={10} color="#fff" strokeWidth={3} />}
+        {checked && <Check size={11} color="#fff" strokeWidth={3} />}
       </span>
       {label}
     </button>
+  );
+
+  if (!help) return button;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+      {button}
+      <HelpTip label={`About ${label.toLowerCase()}`}>{help}</HelpTip>
+    </span>
   );
 }
 
@@ -1513,6 +1707,157 @@ export function PackagingTable({
   );
 }
 
+// ── Collapsible right-column sidebar ────────────────────────────────────────
+//
+// Wraps the right column on the recipe edit & manual-intake pages so the
+// user can collapse it into a thin rail and give the form back ~300px of
+// horizontal real estate. The parent page is responsible for animating its
+// grid-template-columns; this component only renders one of two states.
+
+/** localStorage-backed boolean used by the sidebar collapse state. */
+export function usePersistedBoolean(key: string, defaultValue: boolean) {
+  const [value, setValue] = useState<boolean>(defaultValue);
+  const hydrated = useRef(false);
+
+  // Hydrate on first mount only. We don't read localStorage during the
+  // initial useState so the server-rendered markup stays deterministic;
+  // any persisted value is applied on the client after hydration.
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(key);
+      if (stored != null) setValue(stored === 'true');
+    } catch { /* localStorage unavailable — fall back to defaultValue */ }
+    hydrated.current = true;
+  }, [key]);
+
+  useEffect(() => {
+    if (!hydrated.current) return;
+    try { window.localStorage.setItem(key, String(value)); } catch { /* ignore */ }
+  }, [key, value]);
+
+  return [value, setValue] as const;
+}
+
+export function CollapsibleSidebar({
+  collapsed,
+  onToggle,
+  label = 'Pricing',
+  top = 80,
+  icon,
+  children,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+  /** Vertical label shown on the rail when collapsed. Keep it short. */
+  label?: string;
+  /** Sticky top offset, in px. */
+  top?: number;
+  /** Optional decorative icon shown in the collapsed rail. Defaults to
+   *  a £ glyph since the only current consumer is the pricing
+   *  sidebar; pass any lucide icon (16–18px) for other panels. */
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  if (collapsed) {
+    // The whole rail is a single button — bigger tap target than a
+    // tiny chevron, and clearly reads as "click to expand". Inside,
+    // the chevron / icon / label are decorative and stacked top-down
+    // for vertical hierarchy.
+    return (
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={`Expand ${label}`}
+        title={`Expand ${label}`}
+        style={{
+          position: 'sticky', top,
+          width: 44,
+          padding: '14px 0 18px',
+          borderRadius: 12,
+          border: '1px solid var(--color-border-subtle)',
+          background: '#fff',
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          gap: 12,
+          boxShadow: '0 1px 2px rgba(15,23,42,0.04)',
+          cursor: 'pointer',
+          fontFamily: 'var(--font-primary)',
+          transition: 'background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'var(--color-bg-hover)';
+          e.currentTarget.style.borderColor = 'var(--color-border)';
+          e.currentTarget.style.boxShadow = '0 2px 6px rgba(15,23,42,0.06)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = '#fff';
+          e.currentTarget.style.borderColor = 'var(--color-border-subtle)';
+          e.currentTarget.style.boxShadow = '0 1px 2px rgba(15,23,42,0.04)';
+        }}
+      >
+        <ChevronLeft
+          size={14}
+          strokeWidth={2.2}
+          color="var(--color-text-muted)"
+        />
+        <span
+          style={{
+            width: 28, height: 28, borderRadius: '50%',
+            background: 'rgba(3,28,89,0.08)',
+            color: 'var(--color-accent-active)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          {icon ?? <PoundSterling size={14} strokeWidth={2.4} />}
+        </span>
+        <span
+          style={{
+            writingMode: 'vertical-rl',
+            transform: 'rotate(180deg)',
+            fontSize: 12.5, fontWeight: 800,
+            letterSpacing: '0.16em', textTransform: 'uppercase',
+            color: 'var(--color-text-secondary)',
+            userSelect: 'none',
+          }}
+        >
+          {label}
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        position: 'sticky', top,
+        display: 'flex', flexDirection: 'column', gap: 16,
+      }}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={`Collapse ${label}`}
+        title={`Collapse ${label}`}
+        style={{
+          position: 'absolute',
+          top: 8, right: 8,
+          zIndex: 2,
+          width: 26, height: 26,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          border: '1px solid var(--color-border-subtle)', borderRadius: 6,
+          background: '#fff', cursor: 'pointer',
+          color: 'var(--color-text-secondary)',
+          fontFamily: 'var(--font-primary)',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
+      >
+        <ChevronRight size={14} strokeWidth={2.2} />
+      </button>
+      {children}
+    </div>
+  );
+}
+
 // ── Price card (right column) ────────────────────────────────────────────────
 
 export function PriceCard({
@@ -1545,7 +1890,7 @@ export function PriceCard({
     >
       <div
         style={{
-          fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em',
+          fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em',
           textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: '12px',
         }}
       >
@@ -1614,7 +1959,7 @@ export function PriceCard({
         commission={deliveryCommission} onCommission={onDeliveryCommission}
       />
 
-      <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--color-border-subtle)', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+      <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--color-border-subtle)', fontSize: '13px', color: 'var(--color-text-muted)', lineHeight: 1.45 }}>
         Totals auto-compute from ingredients + packaging. Enter an SRP, or leave blank to set from desired margin.
       </div>
     </div>
@@ -1637,51 +1982,51 @@ function PriceChannel({
         display: 'flex', flexDirection: 'column', gap: '8px',
       }}
     >
-      <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{label}</div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+      <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{label}</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--color-text-secondary)' }}>
         <span>Ingredient cost</span>
         <strong style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>£{ingCost.toFixed(2)}</strong>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--color-text-secondary)' }}>
         <span>Packaging cost</span>
         <strong style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>£{pkgCost.toFixed(2)}</strong>
       </div>
       {onCommission && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
-          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', flex: 1 }}>Commission</span>
-          <div style={{ ...inputSuffixWrap, width: '80px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', flex: 1 }}>Commission</span>
+          <div style={{ ...inputSuffixWrap, width: '88px' }}>
             <input
               type="number"
               value={commission}
               onChange={(e) => onCommission(e.target.value === '' ? '' : Number(e.target.value))}
-              style={{ ...inputStyle, paddingRight: '24px', padding: '5px 24px 5px 8px', fontSize: '12px' }}
+              style={{ ...inputStyle, paddingRight: '24px', padding: '6px 24px 6px 9px', fontSize: '13px' }}
               placeholder="0"
             />
-            <span style={{ ...inputSuffix, right: '8px', fontSize: '11px' }}>%</span>
+            <span style={{ ...inputSuffix, right: '8px', fontSize: '12px' }}>%</span>
           </div>
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', flex: 1 }}>SRP ex VAT</span>
-        <div style={{ ...inputSuffixWrap, width: '96px' }}>
-          <span style={{ ...inputSuffix, left: '8px', right: 'auto', fontSize: '11px' }}>£</span>
+        <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', flex: 1 }}>SRP ex VAT</span>
+        <div style={{ ...inputSuffixWrap, width: '104px' }}>
+          <span style={{ ...inputSuffix, left: '8px', right: 'auto', fontSize: '12px' }}>£</span>
           <input
             type="number"
             min={0}
             step="0.01"
             value={srpEx}
             onChange={(e) => onSrp(e.target.value === '' ? '' : Number(e.target.value))}
-            style={{ ...inputStyle, padding: '5px 8px 5px 22px', fontSize: '12px' }}
+            style={{ ...inputStyle, padding: '6px 8px 6px 24px', fontSize: '13px' }}
           />
         </div>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
         <span style={{ color: 'var(--color-text-secondary)' }}>SRP inc VAT</span>
         <strong style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
           {srpInc == null ? '—' : `£${srpInc.toFixed(2)}`}
         </strong>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
         <span style={{ color: 'var(--color-text-secondary)' }}>Margin</span>
         <strong
           style={{
@@ -1700,12 +2045,18 @@ function PriceChannel({
 
 // ── Shared inline styles ─────────────────────────────────────────────────────
 
+// Type scale notes:
+//   The recipe forms use a coordinated scale that's about 1pt larger
+//   than what we used to ship. Real users found the old scale too
+//   dense — bumping by ~1pt across body / inputs / buttons / pills /
+//   labels makes the form noticeably more readable without breaking
+//   any of the dense matrix layouts.
 export const inputStyle: React.CSSProperties = {
   width: '100%',
-  padding: '8px 10px',
+  padding: '9px 11px',
   borderRadius: '8px',
   border: '1px solid var(--color-border)',
-  fontSize: '13px',
+  fontSize: '14px',
   fontFamily: 'var(--font-primary)',
   color: 'var(--color-text-primary)',
   background: '#fff',
@@ -1715,9 +2066,9 @@ export const inputStyle: React.CSSProperties = {
 
 export const nameInputStyle: React.CSSProperties = {
   ...inputStyle,
-  fontSize: '16px',
+  fontSize: '17px',
   fontWeight: 600,
-  padding: '11px 12px',
+  padding: '12px 13px',
 };
 
 export const selectStyle: React.CSSProperties = { ...inputStyle };
@@ -1734,7 +2085,7 @@ export const cellInput: React.CSSProperties = {
   padding: '6px 8px',
   borderRadius: '6px',
   border: '1px solid var(--color-border-subtle)',
-  fontSize: '12.5px',
+  fontSize: '13px',
   fontFamily: 'var(--font-primary)',
   color: 'var(--color-text-primary)',
   background: '#fff',
@@ -1749,7 +2100,7 @@ export const primaryBtnStyle: React.CSSProperties = {
   borderRadius: '10px',
   border: 'none',
   background: 'var(--color-accent-active)',
-  fontSize: '13px',
+  fontSize: '14px',
   fontWeight: 600,
   color: '#fff',
   fontFamily: 'var(--font-primary)',
@@ -1757,11 +2108,11 @@ export const primaryBtnStyle: React.CSSProperties = {
 };
 
 export const primaryBtnStyleSm: React.CSSProperties = {
-  padding: '6px 12px',
+  padding: '7px 13px',
   borderRadius: '8px',
   border: 'none',
   background: 'var(--color-accent-active)',
-  fontSize: '12px',
+  fontSize: '13px',
   fontWeight: 600,
   color: '#fff',
   fontFamily: 'var(--font-primary)',
@@ -1774,7 +2125,7 @@ export const secondaryBtnStyle: React.CSSProperties = {
   borderRadius: '10px',
   border: '1px solid var(--color-border)',
   background: '#fff',
-  fontSize: '13px',
+  fontSize: '14px',
   fontWeight: 600,
   color: 'var(--color-text-primary)',
   fontFamily: 'var(--font-primary)',
@@ -1782,11 +2133,11 @@ export const secondaryBtnStyle: React.CSSProperties = {
 };
 
 export const dismissBtnStyle: React.CSSProperties = {
-  padding: '6px 10px',
+  padding: '7px 11px',
   borderRadius: '8px',
   border: '1px solid var(--color-border-subtle)',
   background: 'transparent',
-  fontSize: '12px',
+  fontSize: '13px',
   fontWeight: 600,
   color: 'var(--color-text-secondary)',
   fontFamily: 'var(--font-primary)',
@@ -1820,12 +2171,12 @@ export const inputSuffix: React.CSSProperties = {
 export function smallToggleStyle(active: boolean): React.CSSProperties {
   return {
     flex: 1,
-    padding: '7px 10px',
+    padding: '8px 11px',
     borderRadius: '8px',
     border: active ? '1px solid transparent' : '1px solid var(--color-border-subtle)',
     background: active ? 'var(--color-accent-active)' : '#fff',
     color: active ? '#fff' : 'var(--color-text-secondary)',
-    fontSize: '12px',
+    fontSize: '13px',
     fontWeight: 600,
     cursor: 'pointer',
     fontFamily: 'var(--font-primary)',

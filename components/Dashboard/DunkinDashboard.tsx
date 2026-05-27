@@ -164,7 +164,7 @@ export default function DunkinDashboard({
                   lineHeight: 1.4,
                 }}
               >
-                Live chain view of your Dunkin&rsquo; flash report — ask Quinn anything to add a chart.
+                Live chain view of your Dunkin&rsquo; flash report — ask Edify anything to add a chart.
               </p>
             </>
           ) : (
@@ -190,7 +190,7 @@ export default function DunkinDashboard({
                   color: 'var(--color-text-muted)',
                 }}
               >
-                Powered by your weekly flash report · ask Quinn anything to add a chart
+                Powered by your weekly flash report · ask Edify anything to add a chart
               </p>
             </>
           )}
@@ -230,7 +230,7 @@ export default function DunkinDashboard({
               Pinned insights
             </h2>
             <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)' }}>
-              Charts you&apos;ve pinned from Quinn appear here.
+              Charts you&apos;ve pinned from Edify appear here.
             </span>
           </div>
 

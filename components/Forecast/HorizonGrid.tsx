@@ -55,14 +55,29 @@ type Props = {
   siteId: SiteId;
   rows: ForecastRow[];
   dates: string[];
-  /** Manager-applied overrides, keyed via `overrideKey`. */
+  /** Manager-applied per-SKU overrides, keyed via `overrideKey`. */
   overrides: Record<string, number>;
   overrideKey: (skuId: string, date: string) => string;
+  /**
+   * Total-level multipliers (one per date). The page lets the operator
+   * nudge the whole-day forecast at the headline level; that nudge
+   * cascades into every SKU's base value here, so SKU rows reflect the
+   * updated baseline even before the operator interacts with this
+   * grid. Per-SKU overrides still take precedence.
+   */
+  totalMultipliers: Record<string, number>;
   selection: Selection | null;
   /** Click on a specific date cell — sets the focused day for the adjuster. */
   onSelect: (skuId: string, date: string) => void;
-  /** Click on the row header (chevron / recipe name) — toggles whole row open / closed. */
+  /** Click on the chevron — toggles the inline AdjustmentRow open / closed. */
   onToggleRow: (skuId: string) => void;
+  /**
+   * Click on the recipe-label area of a row — opens the hourly-breakdown
+   * drawer for that SKU on the page's currently active date. The drawer
+   * is the answer to "when in the day does this thing sell?", separate
+   * from the inline adjuster (which is "how much should we make of it?").
+   */
+  onOpenHourly: (skuId: string) => void;
   /** Open the right-side WhyPanel for a given (skuId, date). */
   onOpenWhy: (skuId: string, date: string) => void;
   onOverride: (skuId: string, date: string, qty: number | null) => void;
@@ -74,9 +89,11 @@ export default function HorizonGrid({
   dates,
   overrides,
   overrideKey,
+  totalMultipliers,
   selection,
   onSelect,
   onToggleRow,
+  onOpenHourly,
   onOpenWhy,
   onOverride,
 }: Props) {
@@ -116,7 +133,7 @@ export default function HorizonGrid({
         <h2
           style={{
             margin: 0,
-            fontSize: 13,
+            fontSize: 14,
             fontWeight: 700,
             color: 'var(--color-text-primary)',
             letterSpacing: '0.01em',
@@ -148,7 +165,7 @@ export default function HorizonGrid({
                   padding: '6px 14px',
                   borderRadius: 100,
                   border: 'none',
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: 600,
                   fontFamily: 'var(--font-primary)',
                   cursor: 'pointer',
@@ -167,7 +184,7 @@ export default function HorizonGrid({
                     height: 16,
                     padding: '0 5px',
                     borderRadius: 100,
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: 700,
                     background: active ? 'rgba(255,255,255,0.25)' : 'var(--color-border-subtle)',
                     color: active ? '#ffffff' : 'var(--color-text-secondary)',
@@ -182,8 +199,8 @@ export default function HorizonGrid({
             );
           })}
         </div>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-muted)' }}>
-          Click a row to adjust · pick a day to focus
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--color-text-muted)' }}>
+          Click a recipe to see its hourly shape · use the chevron to adjust inline
         </span>
       </div>
 
@@ -235,7 +252,7 @@ export default function HorizonGrid({
                   style={{
                     padding: '24px 16px',
                     textAlign: 'center',
-                    fontSize: 12,
+                    fontSize: 13,
                     color: 'var(--color-text-muted)',
                   }}
                 >
@@ -253,10 +270,12 @@ export default function HorizonGrid({
                   dates={dates}
                   overrides={overrides}
                   overrideKey={overrideKey}
+                  totalMultipliers={totalMultipliers}
                   isRowSelected={isRowSelected}
                   selectedDate={selectedDate}
                   onSelect={onSelect}
                   onToggleRow={onToggleRow}
+                  onOpenHourly={onOpenHourly}
                   onOpenWhy={onOpenWhy}
                   onOverride={onOverride}
                   siteId={siteId}
@@ -275,10 +294,12 @@ function RowGroup({
   dates,
   overrides,
   overrideKey,
+  totalMultipliers,
   isRowSelected,
   selectedDate,
   onSelect,
   onToggleRow,
+  onOpenHourly,
   onOpenWhy,
   onOverride,
   siteId,
@@ -287,14 +308,22 @@ function RowGroup({
   dates: string[];
   overrides: Record<string, number>;
   overrideKey: (skuId: string, date: string) => string;
+  totalMultipliers: Record<string, number>;
   isRowSelected: boolean;
   selectedDate: string | null;
   onSelect: (skuId: string, date: string) => void;
   onToggleRow: (skuId: string) => void;
+  onOpenHourly: (skuId: string) => void;
   onOpenWhy: (skuId: string, date: string) => void;
   onOverride: (skuId: string, date: string, qty: number | null) => void;
   siteId: SiteId;
 }) {
+  /** Apply the date-level total multiplier to a SKU's base projected units. */
+  const scaledBaseFor = (date: string, projected: number): number => {
+    const m = totalMultipliers[date];
+    if (!m || !Number.isFinite(m) || m <= 0) return projected;
+    return Math.round(projected * m);
+  };
   return (
     <>
       <tr
@@ -304,21 +333,35 @@ function RowGroup({
       >
         <td
           style={bodyCell({ left: true, sticky: true, selected: isRowSelected, clickable: true })}
-          onClick={() => onToggleRow(row.skuId)}
+          onClick={() => onOpenHourly(row.skuId)}
           role="button"
-          aria-expanded={isRowSelected}
-          aria-label={`${isRowSelected ? 'Collapse' : 'Expand'} ${row.recipe.name}`}
+          aria-label={`Open hourly forecast for ${row.recipe.name}`}
+          title={`Open hourly forecast for ${row.recipe.name}`}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            {isRowSelected ? (
-              <ChevronDown size={14} color="var(--color-text-secondary)" />
-            ) : (
-              <ChevronRight size={14} color="var(--color-text-secondary)" />
-            )}
+            {/* Chevron stays as the inline-expand affordance — stopPropagation
+                so it doesn't also fire the drawer-open above. */}
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                onToggleRow(row.skuId);
+              }}
+              aria-expanded={isRowSelected}
+              aria-label={`${isRowSelected ? 'Collapse' : 'Expand'} adjuster for ${row.recipe.name}`}
+              title={`${isRowSelected ? 'Hide' : 'Show'} the inline adjuster`}
+              style={chevronButton}
+            >
+              {isRowSelected ? (
+                <ChevronDown size={15} color="var(--color-text-secondary)" />
+              ) : (
+                <ChevronRight size={15} color="var(--color-text-secondary)" />
+              )}
+            </button>
             <span style={modeBadge}>{MODE_LABEL[row.recipe.defaultMode] ?? row.recipe.defaultMode.toUpperCase()}</span>
             <span
               style={{
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: 600,
                 color: 'var(--color-text-primary)',
                 overflow: 'hidden',
@@ -331,7 +374,7 @@ function RowGroup({
             </span>
             <span
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 color: 'var(--color-text-muted)',
                 marginLeft: 'auto',
                 paddingLeft: 8,
@@ -346,8 +389,11 @@ function RowGroup({
           const isToday = date === DEMO_TODAY;
           const isCellSelected = isRowSelected && selectedDate === date;
           const override = overrides[overrideKey(row.skuId, date)];
-          const value = override ?? forecast?.projectedUnits ?? 0;
+          const scaledBase = scaledBaseFor(date, forecast?.projectedUnits ?? 0);
+          const value = override ?? scaledBase;
           const isOverridden = override !== undefined;
+          const isCascaded =
+            !isOverridden && scaledBase !== (forecast?.projectedUnits ?? 0);
           return (
             <td
               key={date}
@@ -355,7 +401,7 @@ function RowGroup({
               onClick={() => onSelect(row.skuId, date)}
               title={
                 forecast
-                  ? buildCellTooltip(forecast, override)
+                  ? buildCellTooltip(forecast, override, isCascaded ? scaledBase : undefined)
                   : 'No forecast for this date.'
               }
             >
@@ -363,6 +409,7 @@ function RowGroup({
                 value={value}
                 isDraft={forecast?.status === 'draft'}
                 isOverridden={isOverridden}
+                isCascaded={isCascaded}
                 isMuted={!forecast || (forecast.projectedUnits === 0 && override == null)}
               />
             </td>
@@ -371,7 +418,7 @@ function RowGroup({
         <td style={bodyCell({ right: true, selected: isRowSelected })}>
           <span
             style={{
-              fontSize: 13,
+              fontSize: 14,
               fontWeight: 700,
               color: 'var(--color-text-primary)',
               fontVariantNumeric: 'tabular-nums',
@@ -397,12 +444,15 @@ function RowGroup({
               date={selectedDate}
               currentValue={
                 overrides[overrideKey(row.skuId, selectedDate)] ??
-                row.byDate.find(b => b.date === selectedDate)?.forecast?.projectedUnits ??
-                0
+                scaledBaseFor(
+                  selectedDate,
+                  row.byDate.find(b => b.date === selectedDate)?.forecast?.projectedUnits ?? 0,
+                )
               }
-              baseValue={
-                row.byDate.find(b => b.date === selectedDate)?.forecast?.projectedUnits ?? 0
-              }
+              baseValue={scaledBaseFor(
+                selectedDate,
+                row.byDate.find(b => b.date === selectedDate)?.forecast?.projectedUnits ?? 0,
+              )}
               onOverride={qty => onOverride(row.skuId, selectedDate, qty)}
               onOpenWhy={() => onOpenWhy(row.skuId, selectedDate)}
             />
@@ -417,11 +467,15 @@ function CellNumber({
   value,
   isDraft,
   isOverridden,
+  isCascaded,
   isMuted,
 }: {
   value: number;
   isDraft?: boolean;
   isOverridden?: boolean;
+  /** True when the cell value differs from Quinn's baseline solely
+   *  because of a total-level edit (no per-SKU override). */
+  isCascaded?: boolean;
   isMuted?: boolean;
 }) {
   return (
@@ -438,15 +492,18 @@ function CellNumber({
     >
       <span
         style={{
-          fontSize: 13,
+          fontSize: 14,
           fontWeight: 700,
           color: isMuted
             ? 'var(--color-text-muted)'
             : isOverridden
               ? 'var(--color-accent-active)'
-              : 'var(--color-text-primary)',
+              : isCascaded
+                ? 'var(--color-accent-active)'
+                : 'var(--color-text-primary)',
           textDecoration: isOverridden ? 'underline dotted' : 'none',
           textUnderlineOffset: 3,
+          fontStyle: isCascaded && !isOverridden ? 'italic' : 'normal',
         }}
       >
         {value.toLocaleString()}
@@ -454,7 +511,7 @@ function CellNumber({
       {isDraft && (
         <span
           aria-label="Draft"
-          title="Quinn is still firming up this forecast."
+          title="This forecast is still firming up."
           style={{
             width: 6,
             height: 6,
@@ -471,9 +528,11 @@ function CellNumber({
 function buildCellTooltip(
   forecast: { projectedUnits: number; byPhase?: { morning: number; midday: number; afternoon: number }; status: 'draft' | 'confirmed' },
   override: number | undefined,
+  cascadedBase?: number,
 ): string {
   const lines: string[] = [];
-  lines.push(`Quinn: ${forecast.projectedUnits} ${forecast.status === 'draft' ? '(draft)' : '(confirmed)'}`);
+  lines.push(`Forecast: ${forecast.projectedUnits} ${forecast.status === 'draft' ? '(draft)' : '(confirmed)'}`);
+  if (cascadedBase != null) lines.push(`Total-edit cascade: ${cascadedBase}`);
   if (override != null) lines.push(`Override: ${override}`);
   if (forecast.byPhase) {
     lines.push(`Phases — morning ${forecast.byPhase.morning} · midday ${forecast.byPhase.midday} · afternoon ${forecast.byPhase.afternoon}`);
@@ -484,7 +543,7 @@ function buildCellTooltip(
 // ─── Cell style helpers ──────────────────────────────────────────────────────
 
 const headLabel: React.CSSProperties = {
-  fontSize: 9,
+  fontSize: 10,
   fontWeight: 700,
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
@@ -492,13 +551,28 @@ const headLabel: React.CSSProperties = {
 };
 
 const modeBadge: React.CSSProperties = {
-  fontSize: 8,
+  fontSize: 9,
   fontWeight: 700,
   padding: '2px 6px',
   borderRadius: 4,
   background: 'var(--color-bg-hover)',
   color: 'var(--color-text-secondary)',
   letterSpacing: '0.04em',
+  flexShrink: 0,
+};
+
+const chevronButton: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 22,
+  height: 22,
+  padding: 0,
+  border: 'none',
+  background: 'transparent',
+  color: 'var(--color-text-secondary)',
+  borderRadius: 4,
+  cursor: 'pointer',
   flexShrink: 0,
 };
 

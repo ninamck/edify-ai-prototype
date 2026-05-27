@@ -41,6 +41,15 @@ import type {
   SupplierField,
 } from './parsers';
 import type { Recipe } from '@/components/Recipe/libraryFixtures';
+import {
+  startTask,
+  completeTask,
+  cancelTask,
+  markTaskUndone,
+  setTaskSnapshot,
+  type TaskKind,
+  type StoredChatMessage,
+} from '@/components/Feed/taskHistoryStore';
 
 // We import the parent's ChatMsg shape indirectly — Feed.tsx defines
 // it locally. The runner only needs a structural subset, so we duck-
@@ -58,6 +67,16 @@ interface RunnerChatMsg {
   /** Echoes the command id so the renderer knows which switch arm to
    *  pick. */
   cmdId?: string;
+  /** Optional baked-in state + receipt data — populated when a thread
+   *  is restored from a history snapshot. Live messages leave these
+   *  undefined and rely on the runner's state map / receipts ref. */
+  cmdState?: 'pending' | 'confirmed' | 'cancelled';
+  cmdReceiptData?: {
+    headline: string;
+    detail?: string;
+    href?: string;
+    hrefLabel?: string;
+  };
 }
 
 export type CardState = 'pending' | 'confirmed' | 'cancelled';
@@ -96,6 +115,63 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     receiptsRef.current[id] = r;
   }
 
+  // Task-history wiring. Every `runCommand` call opens a Task in the
+  // persisted history store; confirm handlers complete it, cancel
+  // marks it cancelled, undo marks it undone. We track:
+  //   • activeTaskIdRef  — the in-flight task for the current chat
+  //   • receiptToTaskRef — receipt msgId → task id, so undo can find
+  //     the right history entry to flip.
+  //   • cmdStatesRef     — mirror of cmdStates so we can read sync
+  //     during a setMessages updater (state setters can't).
+  const activeTaskIdRef = useRef<string | null>(null);
+  const receiptToTaskRef = useRef<Record<string, string>>({});
+  const cmdStatesRef = useRef<Record<string, CardState>>({});
+
+  /** Single-source-of-truth setter for cmdStates so the mirror ref
+   *  always matches React state. Use this instead of calling
+   *  `setCmdStates` directly. */
+  const writeCmdState = useCallback((msgId: string, state: CardState) => {
+    cmdStatesRef.current = { ...cmdStatesRef.current, [msgId]: state };
+    setCmdStates(cmdStatesRef.current);
+  }, []);
+
+  /** Bake the runtime card states + receipts into a plain message
+   *  array, so a snapshot is self-contained (no runtime ref lookups
+   *  needed when it's restored later). */
+  const bakeMessagesForSnapshot = useCallback((msgs: RunnerChatMsg[]): StoredChatMessage[] => {
+    return msgs.map((m) => {
+      const baked: StoredChatMessage = {
+        id: m.id,
+        role: m.role,
+        text: m.text,
+        msgType: m.msgType,
+        cmdId: m.cmdId,
+        cmdArgsJson: m.cmdArgsJson,
+        cmdChoicesJson: m.cmdChoicesJson,
+        cmdState: cmdStatesRef.current[m.id] ?? m.cmdState,
+      };
+      const r = receiptsRef.current[m.id];
+      if (r) {
+        baked.cmdReceiptData = {
+          headline: r.headline,
+          detail: r.detail,
+          href: r.href,
+          hrefLabel: r.hrefLabel,
+        };
+      } else if (m.cmdReceiptData) {
+        baked.cmdReceiptData = m.cmdReceiptData;
+      }
+      return baked;
+    });
+  }, []);
+
+  const snapshotIntoTask = useCallback(
+    (taskId: string, msgs: RunnerChatMsg[]) => {
+      setTaskSnapshot(taskId, bakeMessagesForSnapshot(msgs));
+    },
+    [bakeMessagesForSnapshot],
+  );
+
   // ── Helpers ──────────────────────────────────────────────────────
 
   const pushQuinn = useCallback(
@@ -121,7 +197,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           cmdArgsJson: JSON.stringify(args),
         },
       ]);
-      setCmdStates((prev) => ({ ...prev, [id]: 'pending' }));
+      writeCmdState(id, 'pending');
       return id;
     },
     [setMessages],
@@ -141,7 +217,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           cmdChoicesJson: JSON.stringify(choices),
         },
       ]);
-      setCmdStates((prev) => ({ ...prev, [id]: 'pending' }));
+      writeCmdState(id, 'pending');
       return id;
     },
     [setMessages],
@@ -151,19 +227,50 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     (receipt: CommandReceipt, sourceCardId: string) => {
       const id = `q-rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       setReceipt(id, receipt);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id,
-          role: 'quinn',
-          text: receipt.headline,
-          msgType: 'cmd-receipt',
-          cmdId: sourceCardId,
+      const taskId = activeTaskIdRef.current;
+      const receiptMsg: RunnerChatMsg = {
+        id,
+        role: 'quinn',
+        text: receipt.headline,
+        msgType: 'cmd-receipt',
+        cmdId: sourceCardId,
+        // Bake the receipt onto the message itself so a restored
+        // snapshot can render without re-populating receiptsRef.
+        cmdReceiptData: {
+          headline: receipt.headline,
+          detail: receipt.detail,
+          href: receipt.href,
+          hrefLabel: receipt.hrefLabel,
         },
-      ]);
+      };
+      setMessages((prev) => {
+        const next = [...prev, receiptMsg];
+        // Snapshot the full thread (including the just-added receipt)
+        // into the active task. Done inside the updater so we capture
+        // the final messages array atomically.
+        if (taskId) snapshotIntoTask(taskId, next);
+        return next;
+      });
+      // Upgrade the active task in the history store: title becomes
+      // the receipt headline (more descriptive than the launch title),
+      // status flips to completed, auto-pinned. Also remember the
+      // receipt→task mapping so undo can flip the right entry later.
+      if (taskId) {
+        completeTask(taskId, {
+          title: receipt.headline,
+          subtitle: receipt.detail,
+          receipt: {
+            headline: receipt.headline,
+            detail: receipt.detail,
+            href: receipt.href,
+            hrefLabel: receipt.hrefLabel,
+          },
+        });
+        receiptToTaskRef.current[id] = taskId;
+      }
       return id;
     },
-    [setMessages],
+    [setMessages, snapshotIntoTask],
   );
 
   const pushUserEcho = useCallback(
@@ -188,10 +295,21 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       // freshTask: false.
       if (opts.freshTask !== false) {
         setMessages([]);
+        cmdStatesRef.current = {};
         setCmdStates({});
         setCmdUndone({});
         receiptsRef.current = {};
+        receiptToTaskRef.current = {};
         onFreshTask?.();
+
+        // Open a new history entry. Title is the command label + the
+        // most descriptive arg we have so far (recipe name, supplier
+        // name, etc.). The title is upgraded to the receipt headline
+        // on completion, but the pending entry still reads sensibly
+        // if the user bails halfway.
+        const { title, subtitle } = describeTask(intent);
+        const t = startTask({ kind: cmd.id as TaskKind, title, subtitle });
+        activeTaskIdRef.current = t.id;
       }
 
       if (opts.userText) pushUserEcho(opts.userText);
@@ -301,7 +419,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
 
   const pickRecipeForEdit = useCallback(
     (msgId: string, recipeId: string, recipeName: string) => {
-      setCmdStates((prev) => ({ ...prev, [msgId]: 'confirmed' }));
+      writeCmdState(msgId, 'confirmed');
       pushUserEcho(recipeName);
       pushQuinn(`Got it — ${recipeName}. What do you want to change?`);
       pushCard('recipe-edit', 'cmd-recipe-pick-action', { recipeId, recipeName });
@@ -311,7 +429,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
 
   const pickRecipeActionForEdit = useCallback(
     (msgId: string, args: { recipeId: string; recipeName: string }, kind: RecipeEditKind) => {
-      setCmdStates((prev) => ({ ...prev, [msgId]: 'confirmed' }));
+      writeCmdState(msgId, 'confirmed');
       const verb = kind === 'swap' ? 'Swap an ingredient' : kind === 'add' ? 'Add an ingredient' : 'Remove an ingredient';
       pushUserEcho(verb);
       if (kind === 'add') {
@@ -331,7 +449,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       args: { recipeId: string; recipeName: string; kind: RecipeEditKind },
       ingredientName: string,
     ) => {
-      setCmdStates((prev) => ({ ...prev, [msgId]: 'confirmed' }));
+      writeCmdState(msgId, 'confirmed');
       pushUserEcho(ingredientName);
       if (args.kind === 'remove') {
         pushQuinn(`Remove ${ingredientName} from ${args.recipeName} — ready to apply?`);
@@ -350,7 +468,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       args: { recipeId: string; recipeName: string; kind: RecipeEditKind; fromName?: string },
       input: { name: string; qty?: number; uom?: string },
     ) => {
-      setCmdStates((prev) => ({ ...prev, [msgId]: 'confirmed' }));
+      writeCmdState(msgId, 'confirmed');
       const echo = input.qty != null ? `${input.name} (${input.qty}${input.uom ?? ''})` : input.name;
       pushUserEcho(echo);
       pushQuinn('Here\u2019s the change — review and confirm.');
@@ -367,8 +485,21 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
   // ── Cancel ───────────────────────────────────────────────────────
 
   const cancelCard = useCallback((msgId: string) => {
-    setCmdStates((prev) => ({ ...prev, [msgId]: 'cancelled' }));
-  }, []);
+    writeCmdState(msgId, 'cancelled');
+    // Any cancel in the wizard collapses the whole task. The user's
+    // intent was "bail" — the history list should reflect that rather
+    // than a half-done pending entry.
+    const taskId = activeTaskIdRef.current;
+    if (taskId) {
+      cancelTask(taskId);
+      // Snapshot the thread (with the just-cancelled state baked
+      // in) by peeking at messages inside a no-op setMessages updater.
+      setMessages((prev) => {
+        snapshotIntoTask(taskId, prev);
+        return prev;
+      });
+    }
+  }, [setMessages, snapshotIntoTask, writeCmdState]);
 
   // ── Confirm handlers, one per command ────────────────────────────
   // Each commits the mutation and pushes a receipt.
@@ -397,7 +528,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           removeWasteEntry(entry.id);
         },
       };
-      setCmdStates((prev) => ({ ...prev, [msgId]: 'confirmed' }));
+      writeCmdState(msgId, 'confirmed');
       pushReceipt(receipt, msgId);
     },
     [pushReceipt],
@@ -439,7 +570,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           removeCount(entry.id);
         },
       };
-      setCmdStates((prev) => ({ ...prev, [msgId]: 'confirmed' }));
+      writeCmdState(msgId, 'confirmed');
       pushReceipt(receipt, msgId);
     },
     [pushReceipt],
@@ -504,7 +635,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           updateRecipe(before);
         },
       };
-      setCmdStates((prev) => ({ ...prev, [msgId]: 'confirmed' }));
+      writeCmdState(msgId, 'confirmed');
       pushReceipt(receipt, msgId);
     },
     [pushReceipt],
@@ -593,7 +724,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           updateRecipe(before);
         },
       };
-      setCmdStates((prev) => ({ ...prev, [msgId]: 'confirmed' }));
+      writeCmdState(msgId, 'confirmed');
       pushReceipt(receipt, msgId);
     },
     [pushReceipt],
@@ -663,7 +794,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           updateRecipe(before);
         },
       };
-      setCmdStates((prev) => ({ ...prev, [msgId]: 'confirmed' }));
+      writeCmdState(msgId, 'confirmed');
       pushReceipt(receipt, msgId);
     },
     [pushReceipt],
@@ -717,7 +848,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           upsertSupplier(before);
         },
       };
-      setCmdStates((prev) => ({ ...prev, [msgId]: 'confirmed' }));
+      writeCmdState(msgId, 'confirmed');
       pushReceipt(receipt, msgId);
     },
     [pushReceipt],
@@ -727,7 +858,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
 
   const pickAmbiguity = useCallback(
     (msgId: string, commandId: string, choice: AmbiguityChoice) => {
-      setCmdStates((prev) => ({ ...prev, [msgId]: 'confirmed' }));
+      writeCmdState(msgId, 'confirmed');
       const cmd = getCommand(commandId);
       if (!cmd) return;
       // Continuation — keep the existing thread (the disambiguation
@@ -743,7 +874,53 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     const r = getReceipt(receiptMsgId);
     r?.undo?.();
     setCmdUndone((prev) => ({ ...prev, [receiptMsgId]: true }));
+    const taskId = receiptToTaskRef.current[receiptMsgId];
+    if (taskId) markTaskUndone(taskId);
   }, []);
+
+  // ── Restore + arbitrary-task snapshotting ───────────────────────
+
+  /** Replace the live chat thread with a snapshot from history. All
+   *  runtime maps (cmdStates, receiptsRef, receiptToTaskRef) are
+   *  cleared since the restored cards carry baked-in state. Calling
+   *  this also drops `activeTaskIdRef` — any subsequent action starts
+   *  a fresh task rather than mutating the historical one. */
+  const restoreMessages = useCallback(
+    (snapshot: StoredChatMessage[]) => {
+      cmdStatesRef.current = {};
+      // Rehydrate the live cmdStates map from the baked-in states so
+      // the renderer still picks up the right pill (Done / Cancelled)
+      // even while the runner's map is technically "live".
+      const liveStates: Record<string, CardState> = {};
+      for (const m of snapshot) {
+        if (m.cmdState) liveStates[m.id] = m.cmdState;
+      }
+      cmdStatesRef.current = liveStates;
+      setCmdStates(liveStates);
+      setCmdUndone({});
+      receiptsRef.current = {};
+      receiptToTaskRef.current = {};
+      activeTaskIdRef.current = null;
+      setMessages(snapshot as RunnerChatMsg[]);
+      setChatStarted(true);
+      setChatMinimized(false);
+    },
+    [setChatMinimized, setChatStarted, setMessages],
+  );
+
+  /** Public hook for Feed.tsx to flush its current thread into an
+   *  arbitrary task. Used by the analytics + free-chat sendMessage
+   *  paths (their tasks are logged externally via the store's
+   *  `logEntry`, not by the runner). */
+  const snapshotTask = useCallback(
+    (taskId: string) => {
+      setMessages((prev) => {
+        snapshotIntoTask(taskId, prev);
+        return prev;
+      });
+    },
+    [setMessages, snapshotIntoTask],
+  );
 
   return {
     cmdStates,
@@ -763,5 +940,26 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     pickRecipeIngredientForEdit,
     submitRecipeNewIngredient,
     undoReceipt,
+    restoreMessages,
+    snapshotTask,
   };
+}
+
+/** Pick a sensible initial title + subtitle for a freshly opened task
+ *  given just the parsed intent. The title is the command label;
+ *  subtitle gets the first identifiable target arg (recipe / supplier
+ *  / item / product name). Completion later upgrades the title to the
+ *  receipt headline, which is more specific. */
+function describeTask(intent: CommandIntent): { title: string; subtitle?: string } {
+  const cmd = getCommand(intent.commandId);
+  const label = cmd?.chipLabel ?? 'Task';
+  const args = intent.args as Record<string, unknown>;
+  const candidates: (string | undefined)[] = [
+    args.recipeName as string | undefined,
+    args.supplierName as string | undefined,
+    args.itemName as string | undefined,
+    args.productName as string | undefined,
+  ];
+  const target = candidates.find((c): c is string => typeof c === 'string' && c.length > 0);
+  return target ? { title: label, subtitle: target } : { title: label };
 }

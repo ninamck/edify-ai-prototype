@@ -68,7 +68,7 @@ export default function AdjustmentRow({
   // off baseline, which is the state the row mounts in.
   const narrative = (() => {
     if (!hasDelta) {
-      return `Quinn proposes ${baseValue} ${row.recipe.name.toLowerCase()} for ${dow}. Use −/+ to test alternatives — the cascade will show here.`;
+      return `Baseline forecast is ${baseValue} ${row.recipe.name.toLowerCase()} for ${dow}. Use −/+ to test alternatives — the cascade will show here.`;
     }
     if (impact.isEmpty) {
       return `${signed(delta)} on ${dow}'s ${row.recipe.name.toLowerCase()} — no ingredient or hub-spoke cascade modelled for this recipe yet.`;
@@ -124,9 +124,9 @@ export default function AdjustmentRow({
             type="button"
             onClick={() => onOverride(null)}
             style={resetBtn}
-            title="Reset this day's forecast to Quinn's proposal."
+            title="Reset this day's forecast to the baseline."
           >
-            <RotateCcw size={11} />
+            <RotateCcw size={12} />
             Reset to {baseValue}
           </button>
         )}
@@ -136,17 +136,17 @@ export default function AdjustmentRow({
           style={whyBtn}
           title="Open the signals + phase split that drove this number."
         >
-          <HelpCircle size={12} />
+          <HelpCircle size={13} />
           Why this number?
         </button>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--color-text-muted)' }}>
-          <ArrowRight size={12} />
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-muted)' }}>
+          <ArrowRight size={13} />
           <span>Cascade preview</span>
         </div>
         <p
           style={{
             margin: 0,
-            fontSize: 12,
+            fontSize: 13,
             lineHeight: 1.5,
             color: 'var(--color-text-primary)',
             flex: 1,
@@ -201,14 +201,14 @@ export default function AdjustmentRow({
         <p
           style={{
             margin: 0,
-            fontSize: 10,
+            fontSize: 11,
             color: 'var(--color-text-muted)',
             lineHeight: 1.5,
           }}
         >
           Pending — sits on this page only. To commit, the manager confirms on{' '}
-          <span style={{ fontWeight: 600 }}>Plan production</span>; this preview is the cascade Quinn
-          would apply downstream.
+          <span style={{ fontWeight: 600 }}>Plan production</span>; this preview is the cascade
+          that would flow downstream.
         </p>
       )}
     </div>
@@ -240,14 +240,14 @@ function Stepper({
       }}
     >
       <button type="button" onClick={minus} style={stepperBtn} aria-label="Decrease forecast">
-        <Minus size={14} />
+        <Minus size={15} />
       </button>
       <div
         style={{
           minWidth: 70,
           textAlign: 'center',
           padding: '6px 10px',
-          fontSize: 16,
+          fontSize: 18,
           fontWeight: 700,
           fontFamily: 'var(--font-primary)',
           fontVariantNumeric: 'tabular-nums',
@@ -259,7 +259,7 @@ function Stepper({
         {value}
       </div>
       <button type="button" onClick={plus} style={stepperBtn} aria-label="Increase forecast">
-        <Plus size={14} />
+        <Plus size={15} />
       </button>
     </div>
   );
@@ -307,7 +307,7 @@ function Chip({
         background: p.bg,
         border: `1px solid ${p.border}`,
         borderRadius: 999,
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: 600,
         color: p.color,
         fontVariantNumeric: 'tabular-nums',
@@ -339,7 +339,7 @@ const resetBtn: React.CSSProperties = {
   background: '#ffffff',
   border: '1px solid var(--color-border)',
   borderRadius: 8,
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 600,
   color: 'var(--color-text-secondary)',
   cursor: 'pointer',
@@ -354,7 +354,7 @@ const whyBtn: React.CSSProperties = {
   background: '#ffffff',
   border: '1px solid var(--color-border)',
   borderRadius: 8,
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 600,
   color: 'var(--color-accent-active)',
   cursor: 'pointer',

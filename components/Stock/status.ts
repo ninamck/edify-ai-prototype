@@ -179,6 +179,19 @@ export interface StockItem {
   /** Alternate units the operator can convert to (e.g. "kg" with
    *  alternates "g", "lb"). Used by the unit-of-measure editor. */
   alternateUnits: string[];
+  /** Optional explicit conversions from each alternate unit into the
+   *  primary `stockUnit`. Value = how many `stockUnit`s one of that
+   *  alternate unit equals (e.g. for sourdough with `stockUnit: 'units'`
+   *  and an alternate 'loaves' of 1 unit each, `{ loaves: 1 }`; for
+   *  eggs in trays of 30, `{ trays: 30 }`).
+   *
+   *  Used by the stocktake / quick-count flows to roll multi-UOM
+   *  entries into a single quantity in the primary unit so the £-value
+   *  + variance line up regardless of which unit the operator counted
+   *  in. Mass + volume conversions (g↔kg, mL↔L, etc.) are inferred
+   *  automatically so only the pack-style alternates (cases, bags,
+   *  packs, trays, …) need seeding here. */
+  unitConversions?: Record<string, number>;
   currentStock: number;
   parLevel: number | null;
   parConfirmed: boolean;
@@ -279,6 +292,121 @@ export const STATUS_CONFIG: Record<StockStatus, StatusConfig> = {
     severity: 5,
   },
 };
+
+// ─── Unit conversion ─────────────────────────────────────────────────────────
+// A stocktake row often has the operator counting in more than one
+// unit on the same item ("3 loose bottles + 1 case", "0.5 kg loose +
+// 2 bags"). To make those rolling up into a single total in the
+// item's primary `stockUnit`, we resolve every entered value via:
+//
+//   1. Identity, when the entered unit *is* the primary stockUnit.
+//   2. Per-item explicit factor in `item.unitConversions`. Seeded in
+//      fixtures for pack-style alternates the system can't infer
+//      (cases, bags, trays, sleeves, jars …).
+//   3. Default mass / volume table (kg↔g↔mg↔lb↔oz, L↔mL↔cl). Inferred
+//      automatically when both sides are the same kind of measure,
+//      so e.g. items with `stockUnit: 'kg'` and alts `'g'` just work.
+//
+// Anything outside these three buckets returns null and the caller
+// decides whether to skip or surface the unconvertible entry.
+
+interface DefaultUnitMeta {
+  kind: 'mass' | 'volume';
+  /** Value in the base unit (kg for mass, L for volume). */
+  toBase: number;
+}
+
+const DEFAULT_UNIT_FACTORS: Record<string, DefaultUnitMeta> = {
+  // mass — base kg
+  kg:    { kind: 'mass', toBase: 1 },
+  kilo:  { kind: 'mass', toBase: 1 },
+  kilos: { kind: 'mass', toBase: 1 },
+  g:     { kind: 'mass', toBase: 0.001 },
+  gram:  { kind: 'mass', toBase: 0.001 },
+  grams: { kind: 'mass', toBase: 0.001 },
+  mg:    { kind: 'mass', toBase: 0.000001 },
+  lb:    { kind: 'mass', toBase: 0.453592 },
+  lbs:   { kind: 'mass', toBase: 0.453592 },
+  oz:    { kind: 'mass', toBase: 0.0283495 },
+  // volume — base L
+  l:      { kind: 'volume', toBase: 1 },
+  litre:  { kind: 'volume', toBase: 1 },
+  litres: { kind: 'volume', toBase: 1 },
+  liter:  { kind: 'volume', toBase: 1 },
+  liters: { kind: 'volume', toBase: 1 },
+  ml:     { kind: 'volume', toBase: 0.001 },
+  cl:     { kind: 'volume', toBase: 0.01 },
+};
+
+/** Convert `value` of `fromUnit` into the item's primary `stockUnit`.
+ *  Returns null when no conversion is available — caller decides
+ *  whether to skip, partial-sum, or flag the entry. */
+export function convertToPrimary(
+  item: StockItem,
+  value: number,
+  fromUnit: string,
+): number | null {
+  if (!Number.isFinite(value)) return null;
+  if (fromUnit === item.stockUnit) return value;
+
+  const explicit = item.unitConversions?.[fromUnit];
+  if (explicit !== undefined && Number.isFinite(explicit)) {
+    return value * explicit;
+  }
+
+  const fromMeta = DEFAULT_UNIT_FACTORS[fromUnit.toLowerCase()];
+  const toMeta = DEFAULT_UNIT_FACTORS[item.stockUnit.toLowerCase()];
+  if (fromMeta && toMeta && fromMeta.kind === toMeta.kind) {
+    return value * (fromMeta.toBase / toMeta.toBase);
+  }
+
+  return null;
+}
+
+export interface CountRollup {
+  /** Sum of every convertible entry, expressed in the item's primary
+   *  `stockUnit`. Zero when nothing has been entered. */
+  total: number;
+  /** True when at least one cell on the row was parseable. */
+  hasInput: boolean;
+  /** True when at least one entered cell couldn't be converted into
+   *  the primary unit (caller may want to surface a warning). */
+  hasUnconvertible: boolean;
+  /** Distinct unit cells the operator entered into. Useful for
+   *  deciding whether to render a "totalled across N units" hint. */
+  unitsEntered: number;
+}
+
+/** Roll a multi-UOM input map into a single quantity in the item's
+ *  primary stockUnit. Empty / invalid cells are ignored; an empty
+ *  map returns `{ total: 0, hasInput: false, … }`. */
+export function rollupCounts(
+  item: StockItem,
+  rawByUnit: Record<string, string | number | undefined | null>,
+): CountRollup {
+  let total = 0;
+  let hasInput = false;
+  let hasUnconvertible = false;
+  let unitsEntered = 0;
+
+  for (const [unit, raw] of Object.entries(rawByUnit)) {
+    if (raw === undefined || raw === null) continue;
+    const str = typeof raw === 'string' ? raw.trim() : String(raw);
+    if (str === '') continue;
+    const num = typeof raw === 'number' ? raw : Number.parseFloat(str);
+    if (!Number.isFinite(num) || num < 0) continue;
+    hasInput = true;
+    unitsEntered += 1;
+    const converted = convertToPrimary(item, num, unit);
+    if (converted === null) {
+      hasUnconvertible = true;
+    } else {
+      total += converted;
+    }
+  }
+
+  return { total, hasInput, hasUnconvertible, unitsEntered };
+}
 
 // ─── Derivation helpers ───────────────────────────────────────────────────────
 
@@ -466,6 +594,54 @@ export interface StocktakeRecord {
    *  for site-scoped reads since the site is already known from the
    *  surrounding context. */
   siteName?: string;
+  /** Per-line counts captured during the session. Optional — only
+   *  populated for records the prototype surfaces via the variance-
+   *  review flow. Summary cards keep using `itemsCounted` +
+   *  `variancesFound` directly, so absence here is fine for older
+   *  records. */
+  lines?: StocktakeLine[];
+}
+
+// ─── Stocktake lines (review surface) ────────────────────────────────────────
+// A line is "what the counter recorded for one item". Lines are
+// denormalised — the line captures the item's name / unit / unit
+// price at the moment of count, so a reviewer can close out a count
+// even after the item catalogue has shifted underneath it (renamed,
+// archived, repriced). The original multi-UOM input map lives on
+// `counts` so the review surface can render the same UOM pills the
+// counter used. `countedQty` is the pre-rolled-up total in the
+// item's primary `stockUnit` so the review view doesn't have to
+// re-run `rollupCounts` to render the headline number.
+
+export interface StocktakeLine {
+  /** Stable id within the record (e.g. "st-fe-3-l1"). */
+  id: string;
+  /** Item this line counted. Used by the review submit handler to
+   *  apply per-line stock overrides via the page's `onItemEdit`. */
+  itemId: string;
+  /** Denormalised so the review surface renders without re-resolving
+   *  against the live catalogue. */
+  itemName: string;
+  itemVariant?: string;
+  category: StockCategory;
+  stockUnit: string;
+  unitPrice: number | null;
+  /** Counts entered per unit during the original session — mirrors
+   *  the shape StocktakeView holds in state, so the review surface
+   *  can re-render the breakdown ("4 punnets + 0.5 kg") that drove
+   *  the rolled-up total. */
+  counts: Record<string, number>;
+  /** Roll-up of `counts` in `stockUnit`. Pre-computed at fixture-
+   *  build time so the review view doesn't need item-level
+   *  conversion factors to render the headline. */
+  countedQty: number;
+  /** Theoretical at the moment of count — captured here rather than
+   *  read from the live item because the live figure drifts with
+   *  POS depletion over time and a stocktake review should compare
+   *  against the picture the counter saw. */
+  theoreticalAtCount: number;
+  /** Counter's note from the original session (optional). */
+  note?: string;
 }
 
 export const STOCKTAKE_STATUS_LABEL: Record<StocktakeStatus, string> = {

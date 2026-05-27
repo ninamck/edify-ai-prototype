@@ -348,23 +348,64 @@ function HeroStrip({ role, phase }: { role: BriefingRole; phase: BriefingPhase }
   );
 }
 
-// ── EveningVoiceSync ───────────────────────────────────────────────────────────
-// End-of-day capture for things integrations can't see (fridge breakdown,
-// weather pulled customers, team stress, customer incident). Mocked recording
-// state for the prototype — click to "record", click again to "stop", which
-// reveals a transcript + Quinn's cascade reply.
+// ── NoteForEdify ───────────────────────────────────────────────────────────────
+// Daily voice/text capture for things integrations can't see — the shape
+// of the moment the operator is in. Mocked recording state for the
+// prototype: tap to "record", tap again to "stop" which reveals a
+// transcript + Edify's cascade reply.
+//
+// Phase-aware: the prompt, the canned transcript, and Edify's reply all
+// shift between morning / midday / afternoon / evening so the card reads
+// as the right ask at the right time. The label stays "Note for Edify"
+// across phases so the operator learns one place, not four. The full
+// running log of past notes lives at /notebook (sidebar → Performance
+// → Notebook), reachable from the link at the foot of this card.
 
 const VOICE_TAGS = ['Equipment', 'Weather', 'Team', 'Customer', 'Supplier'] as const;
 
-const MOCK_VOICE_TRANSCRIPT =
-  "Fridge 2 was down from about 9:30 to 2. Lost the sandwich display through lunch. Team felt it — Tom was firefighting prep all morning.";
+interface NoteForEdifyCopy {
+  prompt: string;
+  transcript: string;
+  reply: string;
+}
 
-const MOCK_VOICE_REPLY =
-  "Got it. Logged fridge 2 down 09:30–14:00 against today's −6% lunch and the ham & cheese sell-out at 13:45. I'll watch call-outs and waste over the next 2 days and flag if it clusters — Kallie's pattern.";
+const NOTE_COPY: Record<BriefingPhase, NoteForEdifyCopy> = {
+  morning: {
+    prompt: "Anything Edify should know going into today?",
+    transcript:
+      "Tom's on light duties today — back issue from yesterday. Probably can't carry the milk crates or do the bin run.",
+    reply:
+      "Got it. Logged Tom on light duties for today and held the heavy-lift assignments off his task list. I'll surface it on whoever runs the morning brief next and flag if back-issue call-outs cluster on his shifts.",
+  },
+  midday: {
+    prompt: "Mid-service — anything happened the numbers won't show?",
+    transcript:
+      "Fridge 2 made the noise again around 11. Stayed cold but this is the third time this month. Engineer's been twice and said it's fine.",
+    reply:
+      "Logged Fridge 2 anomaly mid-shift. Temps still inside safe range so this is below my auto-escalate threshold — but I've added it to the maintenance pattern (third callout this month) and drafted a query to your account manager. Ready for review.",
+  },
+  afternoon: {
+    prompt: "Wrap-up — anything happened the numbers won't show?",
+    transcript:
+      "Bidvest driver was 90 mins late again. Lost the ham & cheese through lunch. He said the depot was short on vans.",
+    reply:
+      "Logged Bidvest delay against today's ham & cheese sell-out at 13:40. Second delay in 30 days — I've drafted a query to your account manager and added Bidvest to the supplier-risk watchlist. Sits in Cheryl's review queue when she's next in.",
+  },
+  evening: {
+    prompt: "End-of-day — how did today actually go?",
+    transcript:
+      "Fridge 2 was down from about 9:30 to 2. Lost the sandwich display through lunch. Team felt it — Tom was firefighting prep all morning.",
+    reply:
+      "Got it. Logged fridge 2 down 09:30–14:00 against today's −6% lunch and the ham & cheese sell-out at 13:45. I'll watch call-outs and waste over the next 2 days and flag if it clusters — Kallie's pattern.",
+  },
+};
 
-function EveningVoiceSync() {
+function NoteForEdify({ phase }: { phase: BriefingPhase }) {
+  const router = useRouter();
   const [state, setState] = useState<'idle' | 'recording' | 'done'>('idle');
   const [tag, setTag] = useState<string | null>(null);
+
+  const copy = NOTE_COPY[phase];
 
   function toggle() {
     if (state === 'idle') setState('recording');
@@ -402,7 +443,7 @@ function EveningVoiceSync() {
             color: 'var(--color-accent-active)',
           }}
         >
-          End-of-day sync
+          Note for Edify
         </span>
       </div>
 
@@ -415,7 +456,7 @@ function EveningVoiceSync() {
           lineHeight: 1.45,
         }}
       >
-        What happened in the shop today that the numbers won't show?
+        {copy.prompt}
       </p>
 
       {state !== 'done' && (
@@ -499,7 +540,7 @@ function EveningVoiceSync() {
             >
               You · {tag ?? 'Untagged'}
             </div>
-            {MOCK_VOICE_TRANSCRIPT}
+            {copy.transcript}
           </div>
           <div
             style={{
@@ -525,9 +566,9 @@ function EveningVoiceSync() {
                 marginBottom: '3px',
               }}
             >
-              <CheckCircle2 size={10} strokeWidth={2.4} /> Quinn
+              <CheckCircle2 size={10} strokeWidth={2.4} /> Edify
             </div>
-            {MOCK_VOICE_REPLY}
+            {copy.reply}
           </div>
           <button
             type="button"
@@ -545,6 +586,38 @@ function EveningVoiceSync() {
           </button>
         </div>
       )}
+
+      <div
+        style={{
+          marginTop: '10px',
+          paddingTop: '10px',
+          borderTop: '1px solid var(--color-border-subtle)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <span style={{ fontSize: '10.5px', color: 'var(--color-text-muted)' }}>
+          Threads into your notebook.
+        </span>
+        <button
+          type="button"
+          onClick={() => router.push('/notebook')}
+          style={{
+            all: 'unset',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '3px',
+            fontSize: '11px',
+            fontWeight: 700,
+            color: 'var(--color-accent-active)',
+          }}
+        >
+          Open notebook
+          <ChevronRight size={11} strokeWidth={2.4} />
+        </button>
+      </div>
     </motion.div>
   );
 }
@@ -583,7 +656,7 @@ const CATEGORY = {
     dot: '#001C35',
   },
   'handled': {
-    label: "Quinn's handled this",
+    label: 'Edify handled this',
     color: '#1a5c3a',
     bg: 'rgba(26,92,58,0.055)',
     borderColor: 'rgba(26,92,58,0.22)',
@@ -1041,7 +1114,7 @@ function FocusModeSequence({
         >
           <CheckCircle2 size={16} strokeWidth={2.2} color="#1a5c3a" />
           <span style={{ fontSize: '12px', fontWeight: 600, color: '#1a5c3a' }}>
-            All cleared. Quinn's got the rest.
+            All cleared. Edify's got the rest.
           </span>
         </div>
       )}
@@ -1352,7 +1425,7 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'ed-d-h-2',
           headline: 'Reorder point triggered on tomatoes · Bidfood basket updated +2 trays',
           detail:
-            'Morning sales pulled tomato cover below the safety threshold. Quinn added 2 trays to tomorrow\'s Bidfood basket. No decision needed.',
+            'Morning sales pulled tomato cover below the safety threshold. Edify added 2 trays to tomorrow\'s Bidfood basket. No decision needed.',
         },
         {
           id: 'ed-d-h-3',
@@ -1557,7 +1630,7 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'ed-e-w-2',
           headline: 'Weekend weather: warm Saturday (22°), cooler Sunday (16°)',
           detail:
-            'Quinn has already adjusted Saturday\'s prep forecast up 8%, Sunday down 4%. Basket for Saturday will reflect the lift tomorrow.',
+            'Edify has already adjusted Saturday\'s prep forecast up 8%, Sunday down 4%. Basket for Saturday will reflect the lift tomorrow.',
         },
         {
           id: 'ed-e-w-3',
@@ -1624,7 +1697,7 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'gm-m-h-2',
           headline: 'Priya and Tom shift reminders sent 6am',
           detail:
-            'Priya (opening) and Tom (mid) both confirmed. Evening cover still open — Quinn will nudge at 10am if no one\'s picked up.',
+            'Priya (opening) and Tom (mid) both confirmed. Evening cover still open — Edify will nudge at 10am if no one\'s picked up.',
         },
       ],
     },
@@ -1788,7 +1861,7 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
         },
         {
           id: 'gm-a-h-3',
-          headline: 'Cold drinks pushed to the front counter as Quinn suggested',
+          headline: 'Cold drinks pushed to the front counter as Edify suggested',
           detail:
             'Board spec is up, barista brief done. Track the 3–4pm uplift on the afternoon dashboard if you want to see the effect.',
         },
@@ -1875,7 +1948,7 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'gm-e-h-4',
           headline: 'Staff briefing email sent · 6 of 9 acknowledged so far',
           detail:
-            'Weekend cover notes + cold-drinks push instructions. Quinn will nudge the three pending at 8am tomorrow.',
+            'Weekend cover notes + cold-drinks push instructions. Edify will nudge the three pending at 8am tomorrow.',
         },
       ],
     },
@@ -1915,7 +1988,7 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'cheryl-m-n-1',
           headline: '3 PO mismatches ready to clear — Bidfood (2) and Metro (1)',
           detail:
-            'Quinn has pre-filled queries and write-off tolerances for all three. Approve as-is or send the supplier queries — either way it\'s one pass, not three.',
+            'Edify has pre-filled queries and write-off tolerances for all three. Approve as-is or send the supplier queries — either way it\'s one pass, not three.',
           actionLabel: 'Approve or send queries',
           actionSecondary: 'Defer to tomorrow',
         },
@@ -1930,7 +2003,7 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'cheryl-m-n-3',
           headline: 'Flour variance linked to contract — dispute or accept',
           detail:
-            'Quinn has matched the invoice to the contract and flagged the 12% gap. Your call: accept for this delivery or raise it formally before the invoice ages.',
+            'Edify has matched the invoice to the contract and flagged the 12% gap. Your call: accept for this delivery or raise it formally before the invoice ages.',
           actionLabel: 'Raise dispute',
           actionSecondary: 'Accept variance',
         },
@@ -2025,7 +2098,7 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'cheryl-d-n-4',
           headline: 'Period forecast 2% above plan — action?',
           detail:
-            'Driven mostly by the flour variance. Options: absorb within contingency, flag to ops, or prep a re-forecast. Quinn has drafts for each.',
+            'Driven mostly by the flour variance. Options: absorb within contingency, flag to ops, or prep a re-forecast. Edify has drafts for each.',
           actionLabel: 'Open options',
           actionSecondary: 'Defer to close',
         },
@@ -2088,7 +2161,7 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'cheryl-a-n-1',
           headline: 'Period close prep — approve today\'s accruals by 4pm',
           detail:
-            'Quinn has drafted accruals for Urban Fresh, Lacto, and the Metro credit. Scan and approve, or adjust individual lines.',
+            'Edify has drafted accruals for Urban Fresh, Lacto, and the Metro credit. Scan and approve, or adjust individual lines.',
           actionLabel: 'Approve all',
           actionSecondary: 'Review each',
         },
@@ -2104,14 +2177,14 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'cheryl-a-n-3',
           headline: 'Weekend cost forecast — any anomalies to flag?',
           detail:
-            'Quinn\'s forecast looks clean for Saturday, slightly under-indexed for Sunday (cooler). Worth a 30-second scan before ops teams cut next week\'s plan.',
+            'Edify\'s forecast looks clean for Saturday, slightly under-indexed for Sunday (cooler). Worth a 30-second scan before ops teams cut next week\'s plan.',
           actionLabel: 'Scan & approve',
         },
         {
           id: 'cheryl-a-n-4',
           headline: 'Tomorrow\'s cost pack distribution list — confirm',
           detail:
-            '7 recipients as standard + 2 new (ops leads). Quinn has the draft ready to send at 7am.',
+            '7 recipients as standard + 2 new (ops leads). Edify has the draft ready to send at 7am.',
           actionLabel: 'Confirm',
           actionSecondary: 'Edit list',
         },
@@ -2189,7 +2262,7 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'cheryl-e-n-3',
           headline: 'Pending variance queue — 2 unresolved, defer or escalate?',
           detail:
-            'Both are small (£42 + £18). Quinn can auto-write-off if you authorise, or escalate to the supplier for one more pass.',
+            'Both are small (£42 + £18). Edify can auto-write-off if you authorise, or escalate to the supplier for one more pass.',
           actionLabel: 'Auto write-off',
           actionSecondary: 'Escalate both',
         },
@@ -2209,7 +2282,7 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'cheryl-e-h-2',
           headline: 'Today\'s invoices posted · £4,820 total · 3 flagged for tomorrow',
           detail:
-            'The three holdouts are low-priority variance checks. Quinn has them queued as your first task tomorrow.',
+            'The three holdouts are low-priority variance checks. Edify has them queued as your first task tomorrow.',
         },
         {
           id: 'cheryl-e-h-3',
@@ -2233,7 +2306,7 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'cheryl-e-w-2',
           headline: 'Flour supplier will credit the 12% variance on next delivery',
           detail:
-            'Agreed via afternoon reply. Quinn has logged the commitment against the open variance for auto-close on receipt.',
+            'Agreed via afternoon reply. Edify has logged the commitment against the open variance for auto-close on receipt.',
         },
         {
           id: 'cheryl-e-w-3',
@@ -2271,8 +2344,13 @@ function InsightFeed({ groups, role, phase }: { groups: InsightGroup[]; role: Br
 
   // Close-of-day reconciliation nudge: operators only (ed + gm), evening phase.
   const showCloseNudge = phase === 'evening' && (role === 'ed' || role === 'gm');
-  // Evening voice sync: same audience — capture what integrations can't see.
-  const showVoiceSync = phase === 'evening' && (role === 'ed' || role === 'gm');
+  // Note for Edify: operators only (ed + gm) across every phase. The
+  // card was previously gated to the evening as "End-of-day sync", but
+  // capturing things integrations can't see is a need that arrives any
+  // time of day — the prompt/transcript/reply just reshape themselves
+  // for the moment. The full running log lives at /notebook (Sidebar
+  // → Performance → Notebook).
+  const showNoteForEdify = role === 'ed' || role === 'gm';
 
   // Split out needs-call so it renders through FocusModeSequence;
   // remaining groups (handled, worth-knowing) keep the existing collapsed shell.
@@ -2282,7 +2360,7 @@ function InsightFeed({ groups, role, phase }: { groups: InsightGroup[]; role: Br
   return (
     <div style={{ padding: '2px 0 24px' }}>
       <HeroStrip role={role} phase={phase} />
-      {showVoiceSync && <EveningVoiceSync />}
+      {showNoteForEdify && <NoteForEdify phase={phase} />}
       <PinnedSection items={pinnedList} pinnedIds={pinnedIds} onTogglePin={togglePin} />
       {showCloseNudge && <CloseReconciliationCard phase={phase} />}
       {needsCallGroup && (
@@ -2321,7 +2399,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-m-n-1',
           headline: 'Manchester occupancy fell 9 pts week-on-week — biggest drop in the chain',
           detail:
-            'Drop concentrated in Tue, Wed, Thu evening slots. Forward 14d pipeline is tracking 22% under typical at this lead time. Quinn has drafted an off-peak weeknight discount and a recall to the 312 Manchester lapsed players — needs your sign-off before it goes out.',
+            'Drop concentrated in Tue, Wed, Thu evening slots. Forward 14d pipeline is tracking 22% under typical at this lead time. Edify has drafted an off-peak weeknight discount and a recall to the 312 Manchester lapsed players — needs your sign-off before it goes out.',
           actionLabel: 'Review campaign',
           actionSecondary: 'Hold for now',
         },
@@ -2329,7 +2407,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-m-n-2',
           headline: 'Stockport coach Diego off sick today — 3 classes affected',
           detail:
-            'Beginners 10am, Junior 4pm, Adult drill 6pm. 28 players impacted. Quinn has Marco free for two of the three slots and a partner coach for the third. Approve the swap and Quinn will message all 28 players with the new line-up.',
+            'Beginners 10am, Junior 4pm, Adult drill 6pm. 28 players impacted. Edify has Marco free for two of the three slots and a partner coach for the third. Approve the swap and Edify will message all 28 players with the new line-up.',
           actionLabel: 'Approve swaps',
           actionSecondary: 'Cancel and refund',
         },
@@ -2337,7 +2415,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-m-n-3',
           headline: 'Cafe basket for the weekend needs your go-ahead — £1,860',
           detail:
-            'Weekend forecast is sun + tournament at North Leeds, so Quinn has bumped soft drinks +18% and pastries +12% across the 7 sites. Cut-off with the supplier is 11am.',
+            'Weekend forecast is sun + tournament at North Leeds, so Edify has bumped soft drinks +18% and pastries +12% across the 7 sites. Cut-off with the supplier is 11am.',
           actionLabel: 'Review and send',
           actionSecondary: 'Adjust quantities',
         },
@@ -2357,13 +2435,13 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-m-h-2',
           headline: 'Saturday tournament fixture published to 1,420 members',
           detail:
-            '32-team draw with court allocations across Manchester, Stockport and North Leeds. Confirmation rate already at 78%. Quinn will send a chase to the unconfirmed 22% at 10am.',
+            '32-team draw with court allocations across Manchester, Stockport and North Leeds. Confirmation rate already at 78%. Edify will send a chase to the unconfirmed 22% at 10am.',
         },
         {
           id: 'play-m-h-3',
           headline: 'iOS push to lapsed players sent — open rate 41% in the first hour',
           detail:
-            '312 lapsed Manchester players targeted with a 2-for-1 weeknight slot. 27 already rebooked overnight. Quinn will roll the same playbook to Lightwater on Friday if it converts.',
+            '312 lapsed Manchester players targeted with a 2-for-1 weeknight slot. 27 already rebooked overnight. Edify will roll the same playbook to Lightwater on Friday if it converts.',
         },
       ],
     },
@@ -2375,7 +2453,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-m-w-1',
           headline: 'Forward 14d pipeline tracking 22% under typical at Manchester',
           detail:
-            'Mostly Tue/Thu evenings. Same pattern as last quarter — that recovered after a £/hr cut. Quinn has the pricing test ready if you want to run it again.',
+            'Mostly Tue/Thu evenings. Same pattern as last quarter — that recovered after a £/hr cut. Edify has the pricing test ready if you want to run it again.',
         },
         {
           id: 'play-m-w-2',
@@ -2400,7 +2478,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-d-n-1',
           headline: 'Off-peak weeknight discount needs final approval before 2pm',
           detail:
-            'Manchester Tue/Wed/Thu 5–7pm at £18/hr instead of £24/hr. Quinn projects 38% additional fill, +£2,840 weekly net of the discount. Goes live at 6pm if approved.',
+            'Manchester Tue/Wed/Thu 5–7pm at £18/hr instead of £24/hr. Edify projects 38% additional fill, +£2,840 weekly net of the discount. Goes live at 6pm if approved.',
           actionLabel: 'Approve discount',
           actionSecondary: 'Skip this week',
         },
@@ -2408,7 +2486,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-d-n-2',
           headline: 'North Leeds running 84% occupancy — price test ready',
           detail:
-            'You are leaving money on the table. Quinn proposes lifting peak £/hr from £31 to £34 (+10%) at North Leeds and watching for two weeks. Conservative model says +£1,210/week, no expected fill drop.',
+            'You are leaving money on the table. Edify proposes lifting peak £/hr from £31 to £34 (+10%) at North Leeds and watching for two weeks. Conservative model says +£1,210/week, no expected fill drop.',
           actionLabel: 'Run the test',
           actionSecondary: 'Hold',
         },
@@ -2428,7 +2506,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-d-h-2',
           headline: 'Welcome sequence sent to this week\'s 198 new members',
           detail:
-            'Includes a free coached class voucher to lift 90-day retention. Quinn will track conversion vs the control cohort and report next Wednesday.',
+            'Includes a free coached class voucher to lift 90-day retention. Edify will track conversion vs the control cohort and report next Wednesday.',
         },
       ],
     },
@@ -2459,7 +2537,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-a-n-1',
           headline: 'Saturday tournament dry-run at 5pm — Manchester ops sign-off',
           detail:
-            'Court allocations, scoreboards and cafe staffing tested. Quinn will compile the checklist into a single sign-off — usually takes 90 seconds.',
+            'Court allocations, scoreboards and cafe staffing tested. Edify will compile the checklist into a single sign-off — usually takes 90 seconds.',
           actionLabel: 'Open checklist',
           actionSecondary: 'Defer 30 min',
         },
@@ -2467,7 +2545,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-a-n-2',
           headline: 'Tomorrow\'s rain — pre-empt cancellations with proactive rebook?',
           detail:
-            '78 outdoor-court bookings tomorrow at 6am–10am could be impacted. Quinn can offer 1-tap rebook to Stockport / Alderley Park indoor courts at the same time. Saves an estimated £1,420.',
+            '78 outdoor-court bookings tomorrow at 6am–10am could be impacted. Edify can offer 1-tap rebook to Stockport / Alderley Park indoor courts at the same time. Saves an estimated £1,420.',
           actionLabel: 'Send rebook offer',
           actionSecondary: 'Wait and see',
         },
@@ -2499,13 +2577,13 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-a-w-1',
           headline: 'Manchester forward pipeline still 22% under typical for next week',
           detail:
-            'The off-peak discount lands tonight — Quinn will measure the lift in the morning briefing. If it works, the same play rolls out to Lightwater.',
+            'The off-peak discount lands tonight — Edify will measure the lift in the morning briefing. If it works, the same play rolls out to Lightwater.',
         },
         {
           id: 'play-a-w-2',
           headline: '9 of 312 lapsed Manchester players also play at Stockport (12 min away)',
           detail:
-            'Cross-site retention is a strong signal. Quinn can offer them a free guest pass at Manchester to pull them back — say the word and it goes out as a personalised email.',
+            'Cross-site retention is a strong signal. Edify can offer them a free guest pass at Manchester to pull them back — say the word and it goes out as a personalised email.',
         },
       ],
     },
@@ -2518,7 +2596,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-e-n-1',
           headline: 'Tomorrow\'s 7am opening — Manchester roof leak check',
           detail:
-            'Maintenance flagged a slow leak above court 3 yesterday. Quinn has booked the contractor for the 6:30am slot before opening. Confirm or reschedule.',
+            'Maintenance flagged a slow leak above court 3 yesterday. Edify has booked the contractor for the 6:30am slot before opening. Confirm or reschedule.',
           actionLabel: 'Confirm visit',
           actionSecondary: 'Reschedule',
         },
@@ -2538,7 +2616,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-e-h-2',
           headline: 'Player ratings collected from today\'s 218 sessions',
           detail:
-            'Average 4.7 / 5. Two flagged sessions (one at Manchester, one at Lightwater) — both about court lighting. Quinn has logged a maintenance ticket.',
+            'Average 4.7 / 5. Two flagged sessions (one at Manchester, one at Lightwater) — both about court lighting. Edify has logged a maintenance ticket.',
         },
       ],
     },
@@ -2556,7 +2634,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-e-w-2',
           headline: '5 top-spend players visited today — one is at risk of lapsing',
           detail:
-            'Sofia Almeida (£312, 14 bookings · 90d) hasn\'t booked in the last 12 days. Worth a personal note from a coach. Quinn has drafted one if you want it.',
+            'Sofia Almeida (£312, 14 bookings · 90d) hasn\'t booked in the last 12 days. Worth a personal note from a coach. Edify has drafted one if you want it.',
         },
       ],
     },

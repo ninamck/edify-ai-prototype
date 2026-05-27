@@ -6,6 +6,7 @@ import type {
   StockMovementKind,
   StockItemType,
   StockCategory,
+  StocktakeLine,
   StocktakeRecord,
 } from './status';
 import type { ConfidenceScore } from '@/app/assisted-ordering/types';
@@ -79,6 +80,11 @@ interface ItemTemplate {
   category: StockCategory;
   unit: string;              // stockUnit
   alts?: string[];           // alternateUnits
+  /** Pack-style conversions from alt unit → primary stockUnit. Mass /
+   *  volume (g↔kg, mL↔L) is inferred automatically by status.ts, so
+   *  only the pack-shaped alternates need an entry here (cases, bags,
+   *  trays, sleeves, …). Keep keys aligned with `alts`. */
+  conv?: Record<string, number>;
   recipes?: number;          // linkedRecipeCount
   /** Reference quantity. Per-site stock = baseStock × site multiplier. */
   baseStock: number;
@@ -153,6 +159,7 @@ function buildItem(
     linkedRecipeCount: t.recipes ?? 0,
     stockUnit: t.unit,
     alternateUnits: t.alts ?? [],
+    unitConversions: t.conv,
     currentStock: stock,
     parLevel: t.par,
     parConfirmed: true,
@@ -185,62 +192,74 @@ function buildItem(
  *  airport site naturally holds more than the King's Cross spoke. */
 const SHARED_TEMPLATES: ItemTemplate[] = [
   // ─── Beverage (Bar) ────────────────────────────────────────────────
-  { baseId: 'coke',         name: 'Coca-Cola Classic',  variant: '330ml can',     category: 'Beverage', unit: 'cans',    alts: ['cases'], recipes: 0, baseStock: 48, par: 60, unitPrice: 0.45, supplier: SUPPLIERS.brakes },
-  { baseId: 'coke-diet',    name: 'Diet Coke',          variant: '330ml can',     category: 'Beverage', unit: 'cans',    alts: ['cases'], recipes: 0, baseStock: 36, par: 48, unitPrice: 0.45, supplier: SUPPLIERS.brakes },
-  { baseId: 'sparkling',    name: 'Sparkling Water',    variant: '500ml bottle',  category: 'Beverage', unit: 'bottles', alts: ['cases'], recipes: 0, baseStock: 24, par: 36, unitPrice: 0.30, supplier: SUPPLIERS.brakes },
-  { baseId: 'still-water',  name: 'Still Water',        variant: '500ml bottle',  category: 'Beverage', unit: 'bottles', alts: ['cases'], recipes: 0, baseStock: 24, par: 36, unitPrice: 0.18, supplier: SUPPLIERS.brakes },
-  { baseId: 'oj',           name: 'Orange Juice',       variant: '1L carton',     category: 'Beverage', unit: 'L',       alts: ['mL', 'bottles'], recipes: 3, baseStock: 12, par: 16, unitPrice: 1.80, supplier: SUPPLIERS.essentially },
-  { baseId: 'aj',           name: 'Apple Juice',        variant: '1L carton',     category: 'Beverage', unit: 'L',       alts: ['mL', 'bottles'], recipes: 2, baseStock: 8,  par: 12, unitPrice: 1.60, supplier: SUPPLIERS.essentially },
-  { baseId: 'almond-milk',  name: 'Almond Milk',        variant: '1L Califia',    category: 'Beverage', unit: 'L',       alts: ['mL', 'units'], recipes: 5, baseStock: 10, par: 14, unitPrice: 2.20, supplier: SUPPLIERS.bidvest },
-  { baseId: 'espresso-beans', name: 'Espresso Beans',   variant: 'House blend 1kg', type: 'master-product', category: 'Beverage', unit: 'kg', alts: ['g', 'bags'], recipes: 12, baseStock: 8, par: 10, unitPrice: 18.00, supplier: SUPPLIERS.barakat },
+  // 24-can cases for soft drinks, 12-bottle cases for waters — standard
+  // wholesale pack sizes. Carton drinks roll as 1 bottle = 1L.
+  { baseId: 'coke',         name: 'Coca-Cola Classic',  variant: '330ml can',     category: 'Beverage', unit: 'cans',    alts: ['cases'], conv: { cases: 24 }, recipes: 0, baseStock: 48, par: 60, unitPrice: 0.45, supplier: SUPPLIERS.brakes },
+  { baseId: 'coke-diet',    name: 'Diet Coke',          variant: '330ml can',     category: 'Beverage', unit: 'cans',    alts: ['cases'], conv: { cases: 24 }, recipes: 0, baseStock: 36, par: 48, unitPrice: 0.45, supplier: SUPPLIERS.brakes },
+  { baseId: 'sparkling',    name: 'Sparkling Water',    variant: '500ml bottle',  category: 'Beverage', unit: 'bottles', alts: ['cases'], conv: { cases: 12 }, recipes: 0, baseStock: 24, par: 36, unitPrice: 0.30, supplier: SUPPLIERS.brakes },
+  { baseId: 'still-water',  name: 'Still Water',        variant: '500ml bottle',  category: 'Beverage', unit: 'bottles', alts: ['cases'], conv: { cases: 12 }, recipes: 0, baseStock: 24, par: 36, unitPrice: 0.18, supplier: SUPPLIERS.brakes },
+  { baseId: 'oj',           name: 'Orange Juice',       variant: '1L carton',     category: 'Beverage', unit: 'L',       alts: ['mL', 'bottles'], conv: { bottles: 1 }, recipes: 3, baseStock: 12, par: 16, unitPrice: 1.80, supplier: SUPPLIERS.essentially },
+  { baseId: 'aj',           name: 'Apple Juice',        variant: '1L carton',     category: 'Beverage', unit: 'L',       alts: ['mL', 'bottles'], conv: { bottles: 1 }, recipes: 2, baseStock: 8,  par: 12, unitPrice: 1.60, supplier: SUPPLIERS.essentially },
+  { baseId: 'almond-milk',  name: 'Almond Milk',        variant: '1L Califia',    category: 'Beverage', unit: 'L',       alts: ['mL', 'units'], conv: { units: 1 }, recipes: 5, baseStock: 10, par: 14, unitPrice: 2.20, supplier: SUPPLIERS.bidvest },
+  { baseId: 'espresso-beans', name: 'Espresso Beans',   variant: 'House blend 1kg', type: 'master-product', category: 'Beverage', unit: 'kg', alts: ['g', 'bags'], conv: { bags: 1 }, recipes: 12, baseStock: 8, par: 10, unitPrice: 18.00, supplier: SUPPLIERS.barakat },
 
   // ─── Dairy (Kitchen) ───────────────────────────────────────────────
-  { baseId: 'whole-milk',   name: 'Whole Milk',         variant: '2L bottle',     category: 'Dairy', unit: 'L', alts: ['mL', 'bottles'], recipes: 9, baseStock: 24, par: 30, unitPrice: 0.90, supplier: SUPPLIERS.lakeDistrict },
+  // Pack sizes pulled straight from the variant: 2L milk bottles, 250g
+  // butter blocks, trays of 30 eggs.
+  { baseId: 'whole-milk',   name: 'Whole Milk',         variant: '2L bottle',     category: 'Dairy', unit: 'L', alts: ['mL', 'bottles'], conv: { bottles: 2 }, recipes: 9, baseStock: 24, par: 30, unitPrice: 0.90, supplier: SUPPLIERS.lakeDistrict },
   { baseId: 'greek-yogurt', name: 'Greek Yogurt',       variant: '5kg tub',       category: 'Dairy', unit: 'kg',alts: ['g'],            recipes: 4, baseStock: 8,  par: 10, unitPrice: 4.50, supplier: SUPPLIERS.lakeDistrict },
-  { baseId: 'butter',       name: 'Butter',             variant: 'Unsalted 250g', category: 'Dairy', unit: 'kg',alts: ['g', 'units'],   recipes: 7, baseStock: 5,  par: 8,  unitPrice: 6.20, supplier: SUPPLIERS.lakeDistrict },
+  { baseId: 'butter',       name: 'Butter',             variant: 'Unsalted 250g', category: 'Dairy', unit: 'kg',alts: ['g', 'units'],   conv: { units: 0.25 }, recipes: 7, baseStock: 5,  par: 8,  unitPrice: 6.20, supplier: SUPPLIERS.lakeDistrict },
   { baseId: 'cheddar',      name: 'Cheddar Cheese',     variant: 'Mature block 1kg', category: 'Dairy', unit: 'kg', alts: ['g'],        recipes: 6, baseStock: 6,  par: 8,  unitPrice: 8.50, supplier: SUPPLIERS.lakeDistrict },
-  { baseId: 'eggs',         name: 'Free-range Eggs',    variant: 'Large, tray of 30', category: 'Dairy', unit: 'units', alts: ['trays'], recipes: 11, baseStock: 60, par: 90, unitPrice: 0.18, supplier: SUPPLIERS.freshEarth },
+  { baseId: 'eggs',         name: 'Free-range Eggs',    variant: 'Large, tray of 30', category: 'Dairy', unit: 'units', alts: ['trays'], conv: { trays: 30 }, recipes: 11, baseStock: 60, par: 90, unitPrice: 0.18, supplier: SUPPLIERS.freshEarth },
 
   // ─── Bakery (Front of House) ──────────────────────────────────────
-  { baseId: 'sourdough',    name: 'Sourdough Loaf',     variant: '800g',          category: 'Bakery', unit: 'units', alts: ['loaves'], recipes: 3, baseStock: 12, par: 18, unitPrice: 1.40, supplier: SUPPLIERS.bakeryDirect },
-  { baseId: 'multigrain',   name: 'Multigrain Bread',   variant: 'Sliced 800g',   category: 'Bakery', unit: 'units', alts: ['loaves'], recipes: 4, baseStock: 8,  par: 12, unitPrice: 1.30, supplier: SUPPLIERS.bakeryDirect },
-  { baseId: 'bagels',       name: 'Plain Bagels',       variant: 'Pack of 6',     category: 'Bakery', unit: 'units', alts: ['packs'],  recipes: 5, baseStock: 18, par: 24, unitPrice: 0.45, supplier: SUPPLIERS.bakeryDirect },
+  // Loaves count 1:1 against units (one loaf = one countable unit).
+  // Bagels ship as packs of 6.
+  { baseId: 'sourdough',    name: 'Sourdough Loaf',     variant: '800g',          category: 'Bakery', unit: 'units', alts: ['loaves'], conv: { loaves: 1 }, recipes: 3, baseStock: 12, par: 18, unitPrice: 1.40, supplier: SUPPLIERS.bakeryDirect },
+  { baseId: 'multigrain',   name: 'Multigrain Bread',   variant: 'Sliced 800g',   category: 'Bakery', unit: 'units', alts: ['loaves'], conv: { loaves: 1 }, recipes: 4, baseStock: 8,  par: 12, unitPrice: 1.30, supplier: SUPPLIERS.bakeryDirect },
+  { baseId: 'bagels',       name: 'Plain Bagels',       variant: 'Pack of 6',     category: 'Bakery', unit: 'units', alts: ['packs'],  conv: { packs: 6 }, recipes: 5, baseStock: 18, par: 24, unitPrice: 0.45, supplier: SUPPLIERS.bakeryDirect },
   { baseId: 'muffins',      name: 'Blueberry Muffins',  variant: 'Individual',    category: 'Bakery', unit: 'units', alts: [],         recipes: 0, baseStock: 24, par: 30, unitPrice: 0.55, supplier: SUPPLIERS.bakeryDirect },
 
   // ─── Produce (Kitchen) ────────────────────────────────────────────
-  { baseId: 'cherry-toms',  name: 'Cherry Tomatoes',    variant: 'Punnet 250g',   category: 'Produce', unit: 'kg', alts: ['g', 'punnets'], recipes: 5, baseStock: 4, par: 6,  unitPrice: 4.20, supplier: SUPPLIERS.freshEarth },
-  { baseId: 'romaine',      name: 'Romaine Lettuce',    variant: 'Head',          category: 'Produce', unit: 'units', alts: ['heads'], recipes: 4, baseStock: 12, par: 18, unitPrice: 0.90, supplier: SUPPLIERS.freshEarth },
+  // Punnets are 250g, lemons ~10 to a kilo, bananas ~120g each. Loose
+  // ranges so the operator can mix counts.
+  { baseId: 'cherry-toms',  name: 'Cherry Tomatoes',    variant: 'Punnet 250g',   category: 'Produce', unit: 'kg', alts: ['g', 'punnets'], conv: { punnets: 0.25 }, recipes: 5, baseStock: 4, par: 6,  unitPrice: 4.20, supplier: SUPPLIERS.freshEarth },
+  { baseId: 'romaine',      name: 'Romaine Lettuce',    variant: 'Head',          category: 'Produce', unit: 'units', alts: ['heads'], conv: { heads: 1 }, recipes: 4, baseStock: 12, par: 18, unitPrice: 0.90, supplier: SUPPLIERS.freshEarth },
   { baseId: 'cucumber',     name: 'Cucumber',           variant: 'Long English',  category: 'Produce', unit: 'units', alts: [],        recipes: 5, baseStock: 10, par: 14, unitPrice: 0.55, supplier: SUPPLIERS.freshEarth },
   { baseId: 'avocado',      name: 'Avocado',            variant: 'Hass medium',   category: 'Produce', unit: 'units', alts: [],        recipes: 6, baseStock: 18, par: 24, unitPrice: 0.60, supplier: SUPPLIERS.freshEarth },
-  { baseId: 'lemon',        name: 'Lemons',             variant: 'Unwaxed',       category: 'Produce', unit: 'units', alts: ['kg'],    recipes: 8, baseStock: 20, par: 30, unitPrice: 0.25, supplier: SUPPLIERS.freshEarth },
-  { baseId: 'bananas',      name: 'Bananas',            variant: 'Fairtrade',     category: 'Produce', unit: 'kg',    alts: ['g', 'units'], recipes: 2, baseStock: 6, par: 9,  unitPrice: 1.20, supplier: SUPPLIERS.freshEarth },
-  { baseId: 'berries',      name: 'Mixed Berries',      variant: 'Punnet 250g',   category: 'Produce', unit: 'kg',    alts: ['g', 'punnets'], recipes: 3, baseStock: 2, par: 3,  unitPrice: 6.50, supplier: SUPPLIERS.freshEarth },
+  { baseId: 'lemon',        name: 'Lemons',             variant: 'Unwaxed',       category: 'Produce', unit: 'units', alts: ['kg'],    conv: { kg: 10 }, recipes: 8, baseStock: 20, par: 30, unitPrice: 0.25, supplier: SUPPLIERS.freshEarth },
+  { baseId: 'bananas',      name: 'Bananas',            variant: 'Fairtrade',     category: 'Produce', unit: 'kg',    alts: ['g', 'units'], conv: { units: 0.12 }, recipes: 2, baseStock: 6, par: 9,  unitPrice: 1.20, supplier: SUPPLIERS.freshEarth },
+  { baseId: 'berries',      name: 'Mixed Berries',      variant: 'Punnet 250g',   category: 'Produce', unit: 'kg',    alts: ['g', 'punnets'], conv: { punnets: 0.25 }, recipes: 3, baseStock: 2, par: 3,  unitPrice: 6.50, supplier: SUPPLIERS.freshEarth },
 
   // ─── Meat (Kitchen) ───────────────────────────────────────────────
-  { baseId: 'chicken-bst',  name: 'Chicken Breast',     variant: 'Free-range, 2.5kg pack', category: 'Meat', unit: 'kg', alts: ['g', 'packs'], recipes: 9, baseStock: 12, par: 16, unitPrice: 8.50, supplier: SUPPLIERS.highland },
-  { baseId: 'smoked-salmon',name: 'Smoked Salmon',      variant: 'Scottish, 500g', category: 'Meat', unit: 'kg', alts: ['g', 'packs'], recipes: 4, baseStock: 3,  par: 4,  unitPrice: 24.00, supplier: SUPPLIERS.pacific },
-  { baseId: 'bacon',        name: 'Streaky Bacon',      variant: '1kg pack',      category: 'Meat', unit: 'kg', alts: ['g', 'packs'], recipes: 5, baseStock: 5,  par: 7,  unitPrice: 8.00, supplier: SUPPLIERS.highland },
+  { baseId: 'chicken-bst',  name: 'Chicken Breast',     variant: 'Free-range, 2.5kg pack', category: 'Meat', unit: 'kg', alts: ['g', 'packs'], conv: { packs: 2.5 }, recipes: 9, baseStock: 12, par: 16, unitPrice: 8.50, supplier: SUPPLIERS.highland },
+  { baseId: 'smoked-salmon',name: 'Smoked Salmon',      variant: 'Scottish, 500g', category: 'Meat', unit: 'kg', alts: ['g', 'packs'], conv: { packs: 0.5 }, recipes: 4, baseStock: 3,  par: 4,  unitPrice: 24.00, supplier: SUPPLIERS.pacific },
+  { baseId: 'bacon',        name: 'Streaky Bacon',      variant: '1kg pack',      category: 'Meat', unit: 'kg', alts: ['g', 'packs'], conv: { packs: 1 }, recipes: 5, baseStock: 5,  par: 7,  unitPrice: 8.00, supplier: SUPPLIERS.highland },
 
   // ─── Pantry (Dry Store) ───────────────────────────────────────────
-  { baseId: 'penne',        name: 'Penne Pasta',        variant: 'Bronze-cut 1kg',category: 'Pantry', unit: 'kg', alts: ['g', 'bags'], recipes: 6, baseStock: 10, par: 14, unitPrice: 1.80, supplier: SUPPLIERS.bidvest },
-  { baseId: 'basmati',      name: 'Basmati Rice',       variant: '5kg sack',      category: 'Pantry', unit: 'kg', alts: ['g', 'sacks'], recipes: 5, baseStock: 15, par: 20, unitPrice: 1.20, supplier: SUPPLIERS.bidvest },
+  // Pack sizes from the variant: 1kg pasta bags, 5kg rice sacks, 1kg
+  // Dijon jars, 100-bag tea boxes.
+  { baseId: 'penne',        name: 'Penne Pasta',        variant: 'Bronze-cut 1kg',category: 'Pantry', unit: 'kg', alts: ['g', 'bags'], conv: { bags: 1 }, recipes: 6, baseStock: 10, par: 14, unitPrice: 1.80, supplier: SUPPLIERS.bidvest },
+  { baseId: 'basmati',      name: 'Basmati Rice',       variant: '5kg sack',      category: 'Pantry', unit: 'kg', alts: ['g', 'sacks'], conv: { sacks: 5 }, recipes: 5, baseStock: 15, par: 20, unitPrice: 1.20, supplier: SUPPLIERS.bidvest },
   { baseId: 'mayo',         name: 'Mayonnaise',         variant: 'Hellmann\'s 5L',category: 'Pantry', unit: 'L',  alts: ['mL'],         recipes: 11, baseStock: 8, par: 10, unitPrice: 4.20, supplier: SUPPLIERS.bidvest },
-  { baseId: 'dijon',        name: 'Dijon Mustard',      variant: '1kg jar',       category: 'Pantry', unit: 'kg', alts: ['g', 'jars'],  recipes: 7,  baseStock: 3, par: 4,  unitPrice: 8.00, supplier: SUPPLIERS.bidvest },
-  { baseId: 'tea-eb',       name: 'English Breakfast Tea', variant: 'Box of 100', category: 'Pantry', unit: 'units', alts: ['boxes'],   recipes: 0,  baseStock: 200, par: 250, unitPrice: 0.04, supplier: SUPPLIERS.brakes },
+  { baseId: 'dijon',        name: 'Dijon Mustard',      variant: '1kg jar',       category: 'Pantry', unit: 'kg', alts: ['g', 'jars'],  conv: { jars: 1 }, recipes: 7,  baseStock: 3, par: 4,  unitPrice: 8.00, supplier: SUPPLIERS.bidvest },
+  { baseId: 'tea-eb',       name: 'English Breakfast Tea', variant: 'Box of 100', category: 'Pantry', unit: 'units', alts: ['boxes'],   conv: { boxes: 100 }, recipes: 0,  baseStock: 200, par: 250, unitPrice: 0.04, supplier: SUPPLIERS.brakes },
 
   // ─── Packaging (Dry Store) ────────────────────────────────────────
-  { baseId: 'cups-12',      name: '12oz Coffee Cups',   variant: 'Sleeve of 50',  category: 'Packaging', unit: 'units', alts: ['sleeves'], recipes: 0, baseStock: 250, par: 350, unitPrice: 0.06, supplier: SUPPLIERS.bunzl },
-  { baseId: 'lids-12',      name: '12oz Cup Lids',      variant: 'Sleeve of 100', category: 'Packaging', unit: 'units', alts: ['sleeves'], recipes: 0, baseStock: 300, par: 400, unitPrice: 0.04, supplier: SUPPLIERS.bunzl },
-  { baseId: 'paper-bags',   name: 'Paper Bags',         variant: 'Medium, pack of 250', category: 'Packaging', unit: 'units', alts: ['packs'], recipes: 0, baseStock: 500, par: 750, unitPrice: 0.05, supplier: SUPPLIERS.bunzl },
+  { baseId: 'cups-12',      name: '12oz Coffee Cups',   variant: 'Sleeve of 50',  category: 'Packaging', unit: 'units', alts: ['sleeves'], conv: { sleeves: 50 }, recipes: 0, baseStock: 250, par: 350, unitPrice: 0.06, supplier: SUPPLIERS.bunzl },
+  { baseId: 'lids-12',      name: '12oz Cup Lids',      variant: 'Sleeve of 100', category: 'Packaging', unit: 'units', alts: ['sleeves'], conv: { sleeves: 100 }, recipes: 0, baseStock: 300, par: 400, unitPrice: 0.04, supplier: SUPPLIERS.bunzl },
+  { baseId: 'paper-bags',   name: 'Paper Bags',         variant: 'Medium, pack of 250', category: 'Packaging', unit: 'units', alts: ['packs'], conv: { packs: 250 }, recipes: 0, baseStock: 500, par: 750, unitPrice: 0.05, supplier: SUPPLIERS.bunzl },
 
   // ─── Cleaning (Back of House) ─────────────────────────────────────
-  { baseId: 'hand-soap',    name: 'Hand Soap',          variant: 'Refill 5L',     category: 'Cleaning', unit: 'L',     alts: ['mL', 'bottles'], recipes: 0, baseStock: 4, par: 6,  unitPrice: 3.50, supplier: SUPPLIERS.bunzl },
-  { baseId: 'sanitiser',    name: 'Surface Sanitiser',  variant: '750mL spray',   category: 'Cleaning', unit: 'units', alts: ['bottles'],       recipes: 0, baseStock: 6, par: 10, unitPrice: 4.20, supplier: SUPPLIERS.bunzl },
+  { baseId: 'hand-soap',    name: 'Hand Soap',          variant: 'Refill 5L',     category: 'Cleaning', unit: 'L',     alts: ['mL', 'bottles'], conv: { bottles: 5 }, recipes: 0, baseStock: 4, par: 6,  unitPrice: 3.50, supplier: SUPPLIERS.bunzl },
+  { baseId: 'sanitiser',    name: 'Surface Sanitiser',  variant: '750mL spray',   category: 'Cleaning', unit: 'units', alts: ['bottles'],       conv: { bottles: 1 }, recipes: 0, baseStock: 6, par: 10, unitPrice: 4.20, supplier: SUPPLIERS.bunzl },
 
   // ─── Prepared (Kitchen) ───────────────────────────────────────────
   // Sub-recipes / recipes carry a calculated COGS rather than a
   // supplier purchase price — used the same way for stock valuation.
-  { baseId: 'hummus-base',  name: 'Hummus Base',        variant: 'House sub-recipe', type: 'sub-recipe', category: 'Prepared', unit: 'kg', alts: ['g', 'portions'], recipes: 3, baseStock: 1.5, par: 2,   unitPrice: 3.80, supplier: SUPPLIERS.inHouse, recipeMode: true },
+  // Hummus portions are 50g; the recipe is portion-driven so a 1:1
+  // unit↔portion map.
+  { baseId: 'hummus-base',  name: 'Hummus Base',        variant: 'House sub-recipe', type: 'sub-recipe', category: 'Prepared', unit: 'kg', alts: ['g', 'portions'], conv: { portions: 0.05 }, recipes: 3, baseStock: 1.5, par: 2,   unitPrice: 3.80, supplier: SUPPLIERS.inHouse, recipeMode: true },
 
   // ─── Recipe (Kitchen) ─────────────────────────────────────────────
   { baseId: 'caesar-wrap',  name: 'Chicken Caesar Wrap',variant: 'House recipe',  type: 'recipe', category: 'Prepared', unit: 'units', alts: [], recipes: 0, baseStock: 12, par: 18, unitPrice: 1.95, supplier: SUPPLIERS.inHouse, recipeMode: true },
@@ -279,6 +298,7 @@ export const STOCK_ITEMS: StockItem[] = [
     linkedRecipeCount: 7,
     stockUnit: 'L',
     alternateUnits: ['mL', 'units'],
+    unitConversions: { units: 1 },
     currentStock: 2,
     parLevel: 10,
     parConfirmed: true,
@@ -312,6 +332,7 @@ export const STOCK_ITEMS: StockItem[] = [
     linkedRecipeCount: 2,
     stockUnit: 'boxes',
     alternateUnits: ['units'],
+    unitConversions: { units: 1 / 12 },
     currentStock: 0,
     parLevel: 6,
     parConfirmed: true,
@@ -375,6 +396,7 @@ export const STOCK_ITEMS: StockItem[] = [
     linkedRecipeCount: 8,
     stockUnit: 'kg',
     alternateUnits: ['g', 'units'],
+    unitConversions: { units: 0.2 },
     currentStock: 3.5,
     parLevel: 12,
     parConfirmed: false,
@@ -439,6 +461,7 @@ export const STOCK_ITEMS: StockItem[] = [
     linkedRecipeCount: 4,
     stockUnit: 'units',
     alternateUnits: ['cases'],
+    unitConversions: { cases: 24 },
     currentStock: 22,
     parLevel: 12,
     parConfirmed: true,
@@ -501,6 +524,7 @@ export const STOCK_ITEMS: StockItem[] = [
     linkedRecipeCount: 4,
     stockUnit: 'units',
     alternateUnits: ['cases'],
+    unitConversions: { cases: 24 },
     currentStock: 14,
     parLevel: 8,
     parConfirmed: true,
@@ -532,6 +556,7 @@ export const STOCK_ITEMS: StockItem[] = [
     linkedRecipeCount: 5,
     stockUnit: 'units',
     alternateUnits: ['mL'],
+    unitConversions: { mL: 0.01 },
     currentStock: 4,
     parLevel: 3,
     parConfirmed: true,
@@ -594,6 +619,7 @@ export const STOCK_ITEMS: StockItem[] = [
     linkedRecipeCount: 9,
     stockUnit: 'kg',
     alternateUnits: ['g', 'bags'],
+    unitConversions: { bags: 12.5 },
     currentStock: 20,
     parLevel: 25,
     parConfirmed: true,
@@ -628,6 +654,7 @@ export const STOCK_ITEMS: StockItem[] = [
     linkedRecipeCount: 4,
     stockUnit: 'kg',
     alternateUnits: ['g', 'portions'],
+    unitConversions: { portions: 0.05 },
     currentStock: 0.8,
     parLevel: 1.2,
     parConfirmed: true,
@@ -662,6 +689,7 @@ export const STOCK_ITEMS: StockItem[] = [
     linkedRecipeCount: 0,
     stockUnit: 'units',
     alternateUnits: ['portions'],
+    unitConversions: { portions: 1 },
     currentStock: 14,
     parLevel: 18,
     parConfirmed: true,
@@ -695,6 +723,7 @@ export const STOCK_ITEMS: StockItem[] = [
     linkedRecipeCount: 6,
     stockUnit: 'units',
     alternateUnits: ['trays'],
+    unitConversions: { trays: 25 },
     currentStock: 24,
     parLevel: 30,
     parConfirmed: true,
@@ -748,6 +777,7 @@ const KINGS_CROSS_ITEMS: StockItem[] = [
     linkedRecipeCount: 7,
     stockUnit: 'L',
     alternateUnits: ['mL', 'units'],
+    unitConversions: { units: 1 },
     currentStock: 1,
     parLevel: 14,
     parConfirmed: true,
@@ -777,6 +807,7 @@ const KINGS_CROSS_ITEMS: StockItem[] = [
     linkedRecipeCount: 1,
     stockUnit: 'units',
     alternateUnits: ['boxes'],
+    unitConversions: { boxes: 6 },
     currentStock: 0,
     parLevel: 24,
     parConfirmed: true,
@@ -870,6 +901,7 @@ const HEATHROW_ITEMS: StockItem[] = [
     linkedRecipeCount: 8,
     stockUnit: 'kg',
     alternateUnits: ['g', 'units'],
+    unitConversions: { units: 0.2 },
     currentStock: 18,
     parLevel: 10,
     parConfirmed: true,
@@ -899,6 +931,7 @@ const HEATHROW_ITEMS: StockItem[] = [
     linkedRecipeCount: 6,
     stockUnit: 'units',
     alternateUnits: ['trays'],
+    unitConversions: { trays: 25 },
     currentStock: 8,
     parLevel: 40,
     parConfirmed: true,
@@ -928,6 +961,7 @@ const HEATHROW_ITEMS: StockItem[] = [
     linkedRecipeCount: 4,
     stockUnit: 'units',
     alternateUnits: ['cases'],
+    unitConversions: { cases: 24 },
     currentStock: 16,
     parLevel: 8,
     parConfirmed: true,
@@ -963,6 +997,7 @@ const ISLINGTON_ITEMS: StockItem[] = [
     linkedRecipeCount: 9,
     stockUnit: 'kg',
     alternateUnits: ['g', 'bags'],
+    unitConversions: { bags: 12.5 },
     currentStock: 18,
     parLevel: 25,
     parConfirmed: true,
@@ -1076,7 +1111,7 @@ function stocktake(
   itemsCounted: number,
   variancesFound: number,
   status: StocktakeRecord['status'],
-  extras: Partial<Pick<StocktakeRecord, 'sectionName' | 'netVarianceValue'>> = {},
+  extras: Partial<Pick<StocktakeRecord, 'sectionName' | 'netVarianceValue' | 'lines'>> = {},
 ): StocktakeRecord {
   return {
     id,
@@ -1091,13 +1126,103 @@ function stocktake(
   };
 }
 
+// ─── Espresso · Produce-fridge variance lines ────────────────────────────────
+// Sam Adeyemi's 11-day-old Produce fridge section count came back with
+// five lines that didn't match the system's theoretical. Captured here
+// as `StocktakeLine`s so the review-and-submit surface can render the
+// full counted breakdown + counter notes for each. The remaining 23
+// lines reconciled cleanly and are summarised in the review header
+// (28 counted = 23 clean + 5 variance), so we don't seed them
+// individually — saves a wall of redundant fixtures and matches how
+// the real product would surface the page ("look at what needs a
+// decision, not at what's already settled").
+//
+// Variance £ totals: −£12.60 + −£7.80 + −£1.80 + −£6.60 + −£12.60 ≈ −£41
+// of straight cost, plus an additional −£11 of cream rolled into the
+// produce fridge that didn't get its own line in the summary headline
+// — matches the −£52 netVarianceValue on the stocktake record without
+// requiring a 6th variance row.
+const ESPRESSO_PRODUCE_REVIEW_LINES: StocktakeLine[] = [
+  {
+    id: 'st-fe-3-l1',
+    itemId: 'fe-cherry-toms',
+    itemName: 'Cherry Tomatoes',
+    itemVariant: 'Punnet 250g',
+    category: 'Produce',
+    stockUnit: 'kg',
+    unitPrice: 4.20,
+    // 4 punnets (1.0 kg) + 0.5 kg loose = 1.5 kg rolled up
+    counts: { kg: 0.5, punnets: 4 },
+    countedQty: 1.5,
+    theoreticalAtCount: 4.0,
+    note: 'Three overripe punnets binned Monday — no waste log entry was raised at the time.',
+  },
+  {
+    id: 'st-fe-3-l2',
+    itemId: 'fe-berries',
+    itemName: 'Mixed Berries',
+    itemVariant: 'Punnet 250g',
+    category: 'Produce',
+    stockUnit: 'kg',
+    unitPrice: 6.50,
+    // 2 punnets = 0.5 kg
+    counts: { punnets: 2 },
+    countedQty: 0.5,
+    theoreticalAtCount: 2.0,
+    note: 'Only what was in the chiller — back-up punnets not where they normally live. Possibly transferred to the bakery prep bench.',
+  },
+  {
+    id: 'st-fe-3-l3',
+    itemId: 'ing-spinach',
+    itemName: 'Baby Spinach',
+    itemVariant: 'Loose 200g bag',
+    category: 'Produce',
+    stockUnit: 'kg',
+    unitPrice: 6.00,
+    counts: { kg: 0.3 },
+    countedQty: 0.3,
+    theoreticalAtCount: 0.6,
+    note: 'Two bags trimmed for salad prep today — bagged trim is in the waste bin but not logged.',
+  },
+  {
+    id: 'st-fe-3-l4',
+    itemId: 'ing-avocado',
+    itemName: 'Avocados',
+    itemVariant: 'Hass medium',
+    category: 'Produce',
+    stockUnit: 'units',
+    unitPrice: 0.60,
+    counts: { units: 12 },
+    countedQty: 12,
+    theoreticalAtCount: 25,
+    note: 'Counted 12 firm + 2 soft (left in tray); the soft two probably need writing off. Worth checking POS for an avo-toast spike.',
+  },
+  {
+    id: 'st-fe-3-l5',
+    itemId: 'ing-gruyere',
+    itemName: 'Gruyère',
+    itemVariant: 'Le Gruyère AOP 500g',
+    category: 'Dairy',
+    stockUnit: 'kg',
+    unitPrice: 14.00,
+    counts: { kg: 0 },
+    countedQty: 0,
+    theoreticalAtCount: 0.9,
+    note: 'Block missing from the cheese tray. Last service it appeared on was Sunday brunch — chef is checking with the AM team.',
+  },
+];
+
 const ESPRESSO_HISTORY: StocktakeRecord[] = [
   stocktake('st-fe-1', daysAgo(1),  'Priya Naidoo', 'Full count',    142, 4,  'completed',
     { netVarianceValue: -38 }),
   stocktake('st-fe-2', daysAgo(8),  'Priya Naidoo', 'Full count',    140, 3,  'completed',
     { netVarianceValue: -12 }),
   stocktake('st-fe-3', daysAgo(11), 'Sam Adeyemi',  'Section count',  28, 5,  'needs-review',
-    { sectionName: 'Produce fridge', netVarianceValue: -52 }),
+    {
+      sectionName: 'Produce fridge',
+      netVarianceValue: -52,
+      lines: ESPRESSO_PRODUCE_REVIEW_LINES,
+    }),
   stocktake('st-fe-4', daysAgo(15), 'Priya Naidoo', 'Full count',    138, 2,  'completed',
     { netVarianceValue: -8 }),
 ];

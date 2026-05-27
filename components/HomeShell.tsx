@@ -298,6 +298,7 @@ export default function HomeShell() {
             .map((e) => pinnedChartIdOf(e.id))
             .filter((id): id is AnalyticsChartId => id !== null),
         )}
+        layout="side-sheet"
       />
 
     </div>

@@ -59,7 +59,7 @@ export default function StockCountCommandCard({ initialArgs, state, onConfirm, o
       confirmDisabled={!canConfirm}
       warning={
         showWarning && variance !== null
-          ? `Variance ${variance > 0 ? '+' : '−'}${Math.abs(variance)} ${uom} vs expected — Quinn will flag this for review.`
+          ? `Variance ${variance > 0 ? '+' : '−'}${Math.abs(variance)} ${uom} vs expected — Edify will flag this for review.`
           : undefined
       }
       onConfirm={

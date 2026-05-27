@@ -22,6 +22,7 @@ import {
   ThumbsDown,
   RotateCw,
   MessageSquare,
+  Clock,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import EdifyMarkThinking from '@/components/EdifyMark/EdifyMarkThinking';
@@ -42,6 +43,9 @@ import { parseCommand } from '@/components/Feed/commands/parsers';
 import { COMMAND_REGISTRY, getCommand } from '@/components/Feed/commands/registry';
 import { useCommandRunner } from '@/components/Feed/commands/useCommandRunner';
 import SlashMenu from '@/components/Feed/commands/SlashMenu';
+import TaskHistoryList from '@/components/Feed/TaskHistoryList';
+import TaskHistoryDrawer from '@/components/Feed/TaskHistoryDrawer';
+import { logEntry as logHistoryEntry } from '@/components/Feed/taskHistoryStore';
 import WasteCommandCard from '@/components/Feed/commands/cards/WasteCommandCard';
 import StockCountCommandCard from '@/components/Feed/commands/cards/StockCountCommandCard';
 import RecipePickerCard from '@/components/Feed/commands/cards/RecipePickerCard';
@@ -160,6 +164,64 @@ const PROMPT_CHIPS: {
 // duplicating it in chat would be noisy.
 const HIDDEN_FROM_MENU_COMMAND_IDS = new Set<string>(['waste']);
 
+// User-facing verb for each task kind. Used when synthesising a stub
+// thread for history entries that pre-date the snapshot feature.
+const KIND_VERB: Record<string, string> = {
+  waste: 'Logged waste',
+  stock: 'Added to stock count',
+  'recipe-edit': 'Updated a recipe',
+  production: 'Updated production settings',
+  menu: 'Updated a menu',
+  supplier: 'Updated a supplier',
+  question: 'Asked Edify a question',
+  chat: 'Chatted with Edify',
+};
+
+/**
+ * Build a minimal chat thread from a task's stored metadata, for
+ * entries that don't carry a full snapshot. The synthesised thread
+ * is intentionally lightweight — a user echo and either the
+ * receipt card (for command tasks) or a brief note (for questions
+ * and chats). Lets older history entries still "open" instead of
+ * being dead clicks.
+ */
+function synthesiseThreadFromTask(
+  task: import('@/components/Feed/taskHistoryStore').Task,
+): import('@/components/Feed/taskHistoryStore').StoredChatMessage[] {
+  const verb = KIND_VERB[task.kind] ?? 'Worked on this';
+  const stamp = task.completedAt ?? task.startedAt;
+  const userMsg: import('@/components/Feed/taskHistoryStore').StoredChatMessage = {
+    id: `synth-user-${task.id}`,
+    role: 'user',
+    text: task.kind === 'question' || task.kind === 'chat' ? task.title : verb,
+  };
+  if (task.receipt) {
+    return [
+      userMsg,
+      {
+        id: `synth-rcpt-${task.id}`,
+        role: 'quinn',
+        text: task.receipt.headline,
+        msgType: 'cmd-receipt',
+        cmdId: `synth-${task.id}`,
+        cmdReceiptData: { ...task.receipt },
+      },
+    ];
+  }
+  const noteSuffix = task.subtitle ? ` (${task.subtitle})` : '';
+  return [
+    userMsg,
+    {
+      id: `synth-note-${task.id}`,
+      role: 'quinn',
+      text:
+        task.kind === 'question'
+          ? `I answered this on ${new Date(stamp).toLocaleString()}${noteSuffix}. Ask again to see fresh data.`
+          : `Logged from your history on ${new Date(stamp).toLocaleString()}${noteSuffix}.`,
+    },
+  ];
+}
+
 // Quick-actions row — one chip per chat command. Click opens an empty
 // confirmation card and Quinn prompts for the missing detail.
 const QUICK_ACTION_CHIPS: {
@@ -214,6 +276,19 @@ type ChatMsg = {
   cmdChoicesJson?: string;
   /** Which command this message belongs to (for command cards / receipts). */
   cmdId?: string;
+  /** Frozen card state baked into the message — used when a snapshot
+   *  is restored from history and the runtime cmdStates map is empty.
+   *  Live messages don't need this; the runner's state map wins. */
+  cmdState?: 'pending' | 'confirmed' | 'cancelled';
+  /** Frozen receipt payload (no undo closure) used the same way as
+   *  `cmdState` — the receipt renderer falls back to this when the
+   *  runtime ref doesn't have an entry. */
+  cmdReceiptData?: {
+    headline: string;
+    detail?: string;
+    href?: string;
+    hrefLabel?: string;
+  };
 };
 
 type RecipeIngredient = { name: string; qty: string; unit: string };
@@ -917,25 +992,71 @@ function ProductionSummaryCard({ settings }: { settings: ProdSettings }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ActionButton({ label, onClick }: { label: string; onClick: () => void }) {
+  // Confirmation buttons at the end of a long chat flow — operators
+  // routinely miss them when they're styled as small pills. The card
+  // wrapper, larger hit-area, check icon, and explicit "next step"
+  // label make this read unambiguously as the primary action.
   return (
-    <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
+    <div
+      style={{
+        marginBottom: '14px',
+        marginTop: '4px',
+        padding: '12px',
+        borderRadius: '14px',
+        background: 'rgba(40,175,201,0.06)',
+        border: '1.5px dashed rgba(40,175,201,0.45)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        alignItems: 'flex-start',
+      }}
+    >
+      <span
+        style={{
+          fontSize: '11px',
+          fontWeight: 700,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          color: 'var(--color-text-muted)',
+        }}
+      >
+        Next step
+      </span>
       <button
         type="button"
         onClick={onClick}
         style={{
-          padding: '9px 18px',
-          borderRadius: '100px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '12px 22px',
+          borderRadius: '12px',
           border: 'none',
           background: 'var(--color-accent-active)',
           color: '#fff',
-          fontSize: '13px',
-          fontWeight: 600,
+          fontSize: '14px',
+          fontWeight: 700,
+          letterSpacing: '0.01em',
           fontFamily: 'var(--font-primary)',
           cursor: 'pointer',
-          boxShadow: '0 2px 8px rgba(34,68,68,0.25)',
-          transition: 'opacity 0.12s ease',
+          boxShadow:
+            '0 4px 14px rgba(0,28,53,0.28), 0 0 0 3px rgba(40,175,201,0.18)',
+          transition: 'transform 0.12s ease, box-shadow 0.12s ease',
+        }}
+        onMouseEnter={(e) => {
+          const el = e.currentTarget;
+          el.style.transform = 'translateY(-1px)';
+          el.style.boxShadow =
+            '0 6px 18px rgba(0,28,53,0.32), 0 0 0 4px rgba(40,175,201,0.24)';
+        }}
+        onMouseLeave={(e) => {
+          const el = e.currentTarget;
+          el.style.transform = 'translateY(0)';
+          el.style.boxShadow =
+            '0 4px 14px rgba(0,28,53,0.28), 0 0 0 3px rgba(40,175,201,0.18)';
         }}
       >
+        <CheckCircle2 size={16} strokeWidth={2.4} />
         {label}
       </button>
     </div>
@@ -2452,7 +2573,7 @@ export default function Feed({
   const [productionFlow, setProductionFlow] = useState(0);
   const [prodSettings, setProdSettings] = useState<ProdSettings>({ ...DEFAULT_PROD_SETTINGS });
   const [chatMinimized, setChatMinimized] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(true);
+  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Eval-harness feedback state — keyed by message id, kept separate from
@@ -2492,6 +2613,11 @@ export default function Feed({
   };
   const [analyticsType, setAnalyticsType] = useState<AnalyticsChartId | null>(null);
   const [analyticsStep, setAnalyticsStep] = useState(0);
+  /** Task id to snapshot once the multi-step analytics flow lands its
+   *  final reasoning card. The chart card takes ~11s to appear so we
+   *  can't time the snapshot from sendMessage — we hook off the
+   *  step→3 transition instead. */
+  const pendingAnalyticsTaskRef = useRef<string | null>(null);
   const [pinnedChartIds, setPinnedChartIds] = useState<Set<AnalyticsChartId>>(
     () => new Set(alreadyPinned ?? []),
   );
@@ -2526,6 +2652,29 @@ export default function Feed({
     const cmd = getCommand(commandId);
     if (!cmd) return;
     commandRunner.runCommand({ commandId: cmd.id, args: {}, confidence: 1 });
+  };
+
+  // Re-open a task's saved conversation in the chat surface. Used by
+  // the inline history list and the drawer. Also unwinds any
+  // in-flight non-command flows (recipe wizard, production setup,
+  // analytics step) so the replayed thread isn't fighting them for
+  // visual real estate.
+  const openTaskInChat = (task: import('@/components/Feed/taskHistoryStore').Task) => {
+    setRecipeFlow(0);
+    setProductionFlow(0);
+    setAnalyticsType(null);
+    setAnalyticsStep(0);
+    setInput('');
+    // Tasks recorded after the snapshot feature shipped carry a full
+    // thread. Older entries (or any task that never got snapshotted)
+    // fall back to a synthesised stub built from the metadata so the
+    // operator always sees something.
+    const snapshot =
+      task.snapshotMessages && task.snapshotMessages.length > 0
+        ? task.snapshotMessages
+        : synthesiseThreadFromTask(task);
+    commandRunner.restoreMessages(snapshot);
+    setHistoryDrawerOpen(false);
   };
 
   const greeting = timeAwareGreeting(briefingRole);
@@ -2756,6 +2905,19 @@ export default function Feed({
     }
   }, [analyticsType, analyticsStep]);
 
+  // Once the analytics flow has finished (chart + reasoning both in
+  // the thread), snapshot the conversation into the question task so
+  // clicking it from history later replays the whole exchange.
+  useEffect(() => {
+    if (analyticsStep !== 3) return;
+    const taskId = pendingAnalyticsTaskRef.current;
+    if (!taskId) return;
+    pendingAnalyticsTaskRef.current = null;
+    // setTimeout 0 lets the step-3 setMessages flush first.
+    const t = window.setTimeout(() => commandRunner.snapshotTask(taskId), 0);
+    return () => window.clearTimeout(t);
+  }, [analyticsStep, commandRunner]);
+
   /**
    * Pin a chart to a specific target. In multi-target mode (MVP1) we keep the
    * legacy `pinnedChartIds` Set in sync so that the conversation-history
@@ -2964,6 +3126,14 @@ export default function Feed({
 
     // Table flow takes precedence when an explicit table query was provided.
     if (tableOpts) {
+      // Record this in history as a question. We don't have a stable
+      // deep-link for ad-hoc tables, so the entry surfaces the text
+      // the user asked plus the table's title as the subtitle.
+      const tableTask = logHistoryEntry({
+        kind: 'question',
+        title: text,
+        subtitle: tableOpts.tableTitle ? `Table · ${tableOpts.tableTitle}` : 'Table',
+      });
       const thinkingId = `q-table-thinking-${Date.now()}`;
       setMessages((prev) => [
         ...prev,
@@ -3000,6 +3170,9 @@ export default function Feed({
             text: insightForTableQuery(tableOpts.tableQuery),
           },
         ]);
+        // The thread is now complete — snapshot it into the question
+        // task so clicking it from history replays the exchange.
+        commandRunner.snapshotTask(tableTask.id);
       }, 1500);
       return;
     }
@@ -3056,6 +3229,13 @@ export default function Feed({
     }
 
     if (detected) {
+      // Persist the question to history. The chart id is the most
+      // stable description we have for the subtitle.
+      const chartTask = logHistoryEntry({
+        kind: 'question',
+        title: text,
+        subtitle: `Chart · ${detected}`,
+      });
       setMessages(prev => [...prev, userMsg, {
         id: `q-thinking-${Date.now()}`,
         role: 'quinn' as const,
@@ -3064,8 +3244,18 @@ export default function Feed({
       }]);
       setAnalyticsType(detected);
       setAnalyticsStep(1);
+      // The chart + insight land asynchronously across two timeouts;
+      // see the effect on `analyticsStep === 3` which finalises the
+      // snapshot for this task.
+      pendingAnalyticsTaskRef.current = chartTask.id;
     } else {
-      // No canned chart — Quinn responds with a brief text answer after a short beat.
+      // No canned chart — Quinn responds with a brief text answer
+      // after a short beat. File the exchange under "chat" so the
+      // history still picks it up.
+      const chatTask = logHistoryEntry({
+        kind: 'chat',
+        title: text,
+      });
       setMessages(prev => [...prev, userMsg, {
         id: `q-thinking-text-${Date.now()}`,
         role: 'quinn' as const,
@@ -3086,6 +3276,8 @@ export default function Feed({
             },
           ];
         });
+        // Thread complete — snapshot for history replay.
+        commandRunner.snapshotTask(chatTask.id);
       }, 900);
     }
   }
@@ -3094,10 +3286,10 @@ export default function Feed({
   const composerDisabled = (recipeFlow > 0 && recipeFlow < 16) || (productionFlow > 0 && productionFlow < 10) || analyticsActive;
   const composerPlaceholder = composerDisabled
     ? (productionFlow > 0
-        ? 'Quinn is setting up your production plan\u2026'
+        ? 'Edify is setting up your production plan\u2026'
         : analyticsActive
-          ? 'Quinn is analysing your data\u2026'
-          : 'Quinn is working on your recipe\u2026')
+          ? 'Edify is analysing your data\u2026'
+          : 'Edify is working on your recipe\u2026')
     : PLACEHOLDER;
   const composerMinH = chatStarted ? 40 : 72;
 
@@ -3143,6 +3335,26 @@ export default function Feed({
               </div>
             )}
           </div>
+          <button
+            type="button"
+            onClick={() => setHistoryDrawerOpen(true)}
+            title="Open history"
+            aria-label="Open history"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              border: '1px solid var(--color-border-subtle)',
+              background: '#fff',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            <Clock size={16} color="var(--color-text-secondary)" strokeWidth={2} />
+          </button>
           {chatStarted && (
             <button
               type="button"
@@ -3169,8 +3381,8 @@ export default function Feed({
             <button
               type="button"
               onClick={onToggleQuinnExpand}
-              title={quinnExpanded ? 'Exit full screen' : 'Expand Quinn to full screen'}
-              aria-label={quinnExpanded ? 'Exit full screen' : 'Expand Quinn to full screen'}
+              title={quinnExpanded ? 'Exit full screen' : 'Expand Edify to full screen'}
+              aria-label={quinnExpanded ? 'Exit full screen' : 'Expand Edify to full screen'}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -3197,8 +3409,8 @@ export default function Feed({
           <button
             type="button"
             onClick={onToggleQuinnExpand}
-            title="Expand Quinn to full screen"
-            aria-label="Expand Quinn to full screen"
+            title="Expand Edify to full screen"
+            aria-label="Expand Edify to full screen"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -3341,110 +3553,81 @@ export default function Feed({
               </div>
 
 
-              {/* Chat history — shown only when minimised and there are messages */}
+              {/* Resume-chat banner — only shown when the chat is
+                  minimised and there's an in-flight thread. Replaces
+                  the role the old single "Chat History" entry played
+                  (a way back into the live conversation). */}
               {chatMinimized && messages.length > 0 && (
-                <div style={{ marginTop: '32px' }}>
-                  {/* Section header */}
-                  <button
-                    type="button"
-                    onClick={() => setHistoryOpen(prev => !prev)}
+                <button
+                  type="button"
+                  onClick={() => setChatMinimized(false)}
+                  style={{
+                    display: 'flex',
+                    width: '100%',
+                    alignItems: 'center',
+                    gap: '10px',
+                    marginTop: '24px',
+                    padding: '12px 14px',
+                    borderRadius: '12px',
+                    border: '1px solid var(--color-accent-active, #001C35)',
+                    background: 'rgba(40,175,201,0.06)',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-primary)',
+                    textAlign: 'left',
+                  }}
+                >
+                  <div
                     style={{
-                      display: 'flex',
-                      width: '100%',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '12px 0',
-                      border: 'none',
-                      borderTop: '1px solid var(--color-border-subtle)',
-                      background: 'none',
-                      cursor: 'pointer',
-                      fontFamily: 'var(--font-primary)',
+                      width: 32, height: 32, borderRadius: '10px',
+                      background: '#fff', display: 'flex',
+                      alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
                     }}
                   >
-                    <span style={{
-                      fontSize: '12px',
-                      fontWeight: 700,
+                    <EdifyMark size={14} color="var(--color-accent-quinn)" strokeWidth={2} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: '12px', fontWeight: 700,
                       color: 'var(--color-text-secondary)',
                       letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
                     }}>
-                      Chat History
-                    </span>
-                    <ChevronDown
-                      size={14}
-                      color="var(--color-text-muted)"
-                      strokeWidth={2.5}
-                      style={{
-                        transform: historyOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                        transition: 'transform 0.18s ease',
-                      }}
-                    />
-                  </button>
-
-                  {historyOpen && (
-                    <div>
-                      {/* Single conversation entry — clicking restores the chat */}
-                      <button
-                        type="button"
-                        onClick={() => setChatMinimized(false)}
-                        style={{
-                          display: 'flex',
-                          width: '100%',
-                          alignItems: 'center',
-                          gap: '12px',
-                          padding: '12px 0',
-                          border: 'none',
-                          borderTop: '1px solid var(--color-border-subtle)',
-                          background: 'none',
-                          cursor: 'pointer',
-                          fontFamily: 'var(--font-primary)',
-                          textAlign: 'left',
-                        }}
-                      >
-                        <div style={{
-                          width: 30, height: 30, borderRadius: '8px',
-                          background: 'var(--color-quinn-bg)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          flexShrink: 0,
-                        }}>
-                          <EdifyMark size={14} color="var(--color-accent-quinn)" strokeWidth={2} />
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{
-                            fontSize: '13px', fontWeight: 600,
-                            color: 'var(--color-text-primary)',
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          }}>
-                            {(() => {
-                              const t = messages.find(m => m.role === 'user')?.text ?? 'Conversation';
-                              return t.length > 52 ? t.slice(0, 52) + '…' : t;
-                            })()}
-                          </div>
-                          <div style={{
-                            fontSize: '12px', fontWeight: 500,
-                            color: 'var(--color-text-muted)',
-                            marginTop: '2px',
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          }}>
-                            {(() => {
-                              const t = messages.find(m => m.role === 'quinn')?.text.replace(/\*\*/g, '') ?? '';
-                              return t.length > 64 ? t.slice(0, 64) + '…' : t;
-                            })()}
-                          </div>
-                        </div>
-                        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                          just now
-                        </span>
-                        <ChevronDown
-                          size={14}
-                          color="var(--color-text-muted)"
-                          strokeWidth={2}
-                          style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}
-                        />
-                      </button>
+                      Current chat
                     </div>
-                  )}
-                </div>
+                    <div style={{
+                      fontSize: '13px', fontWeight: 600,
+                      color: 'var(--color-text-primary)',
+                      marginTop: '2px',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {(() => {
+                        const t = messages.find(m => m.role === 'user')?.text ?? 'Conversation in progress';
+                        return t.length > 56 ? t.slice(0, 56) + '…' : t;
+                      })()}
+                    </div>
+                  </div>
+                  <span style={{
+                    fontSize: '12px', fontWeight: 600,
+                    color: 'var(--color-accent-active, #001C35)',
+                    flexShrink: 0,
+                  }}>
+                    Resume →
+                  </span>
+                </button>
               )}
+
+              {/* Task history — persisted across sessions. Always
+                  visible on the start surface so operators can pick
+                  up where they left off; defaultExpanded when the
+                  chat is minimised so they can see more at a glance.
+                  The "View all" trigger opens the side drawer.
+                  Clicking a row replays the saved conversation. */}
+              <TaskHistoryList
+                defaultExpanded={chatMinimized}
+                onExpand={() => setHistoryDrawerOpen(true)}
+                onOpenTask={openTaskInChat}
+              />
             </div>
           </div>
         ) : (
@@ -3632,7 +3815,7 @@ export default function Feed({
                         {m.msgType === 'cmd-waste-card' && (
                           <WasteCommandCard
                             initialArgs={m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : {}}
-                            state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                            state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                             onConfirm={(final) => commandRunner.confirmWaste(m.id, final)}
                             onCancel={() => commandRunner.cancelCard(m.id)}
                           />
@@ -3640,14 +3823,14 @@ export default function Feed({
                         {m.msgType === 'cmd-stock-card' && (
                           <StockCountCommandCard
                             initialArgs={m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : {}}
-                            state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                            state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                             onConfirm={(final) => commandRunner.confirmStock(m.id, final)}
                             onCancel={() => commandRunner.cancelCard(m.id)}
                           />
                         )}
                         {m.msgType === 'cmd-recipe-pick-recipe' && (
                           <RecipePickerCard
-                            state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                            state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                             onPick={(recipeId, recipeName) =>
                               commandRunner.pickRecipeForEdit(m.id, recipeId, recipeName)
                             }
@@ -3662,7 +3845,7 @@ export default function Feed({
                           return (
                             <RecipeActionPickerCard
                               recipeName={args.recipeName}
-                              state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                               onPick={(kind) => commandRunner.pickRecipeActionForEdit(m.id, args, kind)}
                               onCancel={() => commandRunner.cancelCard(m.id)}
                             />
@@ -3679,7 +3862,7 @@ export default function Feed({
                               recipeId={args.recipeId}
                               recipeName={args.recipeName}
                               action={args.kind}
-                              state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                               onPick={(name) => commandRunner.pickRecipeIngredientForEdit(m.id, args, name)}
                               onCancel={() => commandRunner.cancelCard(m.id)}
                             />
@@ -3696,7 +3879,7 @@ export default function Feed({
                             <RecipeNewIngredientCard
                               recipeName={args.recipeName}
                               swapFrom={args.kind === 'swap' ? args.fromName : undefined}
-                              state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                               onSubmit={(input) => commandRunner.submitRecipeNewIngredient(m.id, args, input)}
                               onCancel={() => commandRunner.cancelCard(m.id)}
                             />
@@ -3721,7 +3904,7 @@ export default function Feed({
                               toName={args.toName}
                               qty={args.qty}
                               uom={args.uom}
-                              state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                               onConfirm={(final) => commandRunner.confirmRecipeEdit(m.id, final)}
                               onCancel={() => commandRunner.cancelCard(m.id)}
                             />
@@ -3730,7 +3913,7 @@ export default function Feed({
                         {m.msgType === 'cmd-prod-card' && (
                           <ProductionFieldCard
                             initialArgs={m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : {}}
-                            state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                            state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                             onConfirm={(final) => commandRunner.confirmProduction(m.id, final)}
                             onCancel={() => commandRunner.cancelCard(m.id)}
                           />
@@ -3738,7 +3921,7 @@ export default function Feed({
                         {m.msgType === 'cmd-menu-card' && (
                           <MenuActionCard
                             initialArgs={m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : {}}
-                            state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                            state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                             onConfirm={(final) => commandRunner.confirmMenu(m.id, final)}
                             onCancel={() => commandRunner.cancelCard(m.id)}
                           />
@@ -3746,7 +3929,7 @@ export default function Feed({
                         {m.msgType === 'cmd-supplier-card' && (
                           <SupplierFieldCard
                             initialArgs={m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : {}}
-                            state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                            state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                             onConfirm={(final) => commandRunner.confirmSupplier(m.id, final)}
                             onCancel={() => commandRunner.cancelCard(m.id)}
                           />
@@ -3755,19 +3938,26 @@ export default function Feed({
                           <AmbiguityPicker
                             prompt={m.text}
                             choices={JSON.parse(m.cmdChoicesJson) as AmbiguityChoice[]}
-                            state={commandRunner.cmdStates[m.id] ?? 'pending'}
+                            state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                             onPick={(choice) => commandRunner.pickAmbiguity(m.id, m.cmdId!, choice)}
                             onCancel={() => commandRunner.cancelCard(m.id)}
                           />
                         )}
                         {m.msgType === 'cmd-receipt' && (() => {
-                          const receipt = commandRunner.getReceipt(m.id);
+                          // Prefer the live receipt (carries the undo
+                          // closure); fall back to the baked-in copy
+                          // for restored snapshots.
+                          const live = commandRunner.getReceipt(m.id);
+                          const receipt = live ?? m.cmdReceiptData;
                           if (!receipt) return null;
                           return (
                             <ReceiptCard
                               receipt={receipt}
                               undone={!!commandRunner.cmdUndone[m.id]}
-                              onUndo={() => commandRunner.undoReceipt(m.id)}
+                              // Restored receipts have no undo closure
+                              // — hide the undo affordance rather than
+                              // pretending it still works.
+                              onUndo={live ? () => commandRunner.undoReceipt(m.id) : undefined}
                             />
                           );
                         })()}
@@ -3859,6 +4049,15 @@ export default function Feed({
           </div>
         )}
       </div>
+
+      {/* Task history drawer — portalled, always available. Triggered
+          from the inline list "View all" pill, the chat-header clock
+          icon, or the resume-chat banner. Slides over everything. */}
+      <TaskHistoryDrawer
+        open={historyDrawerOpen}
+        onClose={() => setHistoryDrawerOpen(false)}
+        onOpenTask={openTaskInChat}
+      />
 
     </div>
   );

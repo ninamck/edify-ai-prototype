@@ -172,7 +172,7 @@ export default function PlaytomicDashboard({
                   lineHeight: 1.4,
                 }}
               >
-                7 open clubs across the chain · ask Quinn anything to add a chart
+                7 open clubs across the chain · ask Edify anything to add a chart
               </p>
             </>
           ) : (
@@ -181,7 +181,7 @@ export default function PlaytomicDashboard({
                 Playtomic <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>· chain dashboard</span>
               </h1>
               <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)' }}>
-                Dummy data · 7 open clubs · ask Quinn anything to add a chart
+                Dummy data · 7 open clubs · ask Edify anything to add a chart
               </p>
             </>
           )}
@@ -274,7 +274,7 @@ export default function PlaytomicDashboard({
               Pinned insights
             </h2>
             <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)' }}>
-              Charts you&apos;ve pinned from Quinn appear here.
+              Charts you&apos;ve pinned from Edify appear here.
             </span>
           </div>
 

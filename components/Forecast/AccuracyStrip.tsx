@@ -91,7 +91,7 @@ export default function AccuracyStrip({ siteId, backtestDates }: Props) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flex: '1 1 320px' }}>
         <span
           style={{
-            fontSize: 9,
+            fontSize: 10,
             fontWeight: 700,
             letterSpacing: '0.08em',
             textTransform: 'uppercase',
@@ -103,8 +103,8 @@ export default function AccuracyStrip({ siteId, backtestDates }: Props) {
         <p
           style={{
             margin: 0,
-            fontSize: 13,
-            lineHeight: 1.45,
+            fontSize: 14,
+            lineHeight: 1.5,
             color: 'var(--color-text-primary)',
             fontWeight: 500,
           }}
@@ -152,7 +152,7 @@ function Figure({ label, value }: { label: string; value: string }) {
     >
       <span
         style={{
-          fontSize: 9,
+          fontSize: 10,
           fontWeight: 700,
           letterSpacing: '0.08em',
           textTransform: 'uppercase',
@@ -163,7 +163,7 @@ function Figure({ label, value }: { label: string; value: string }) {
       </span>
       <span
         style={{
-          fontSize: 18,
+          fontSize: 20,
           fontWeight: 700,
           color: 'var(--color-text-primary)',
           fontVariantNumeric: 'tabular-nums',

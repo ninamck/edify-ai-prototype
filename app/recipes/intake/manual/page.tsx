@@ -15,24 +15,30 @@
  *   • Progressive disclosure: Production settings + Advanced collapsed by default.
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
   Check,
-  Image as ImageIcon,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import QuinnOrb from '@/components/Sidebar/QuinnOrb';
-import { useRecipes } from '@/components/Recipe/recipeStore';
-import { type ComponentRow, type ItemComponent } from '@/components/Recipe/libraryFixtures';
+import {
+  type Recipe,
+  type RecipeVariant,
+  type RecipeIngredient,
+  makeRecipeIngredient,
+} from '@/components/Recipe/libraryFixtures';
+import { createMasterProductFromName } from '@/components/Ingredients/catalogue';
+import { RecipeCompositionSection } from '@/components/Recipe/RecipeCompositionSection';
+import StyledSelect from '@/components/ui/StyledSelect';
+import { useWorkflows, cloneWorkflow } from '@/components/Recipe/recipeStore';
+import { type ProductionWorkflow } from '@/components/Production/fixtures';
+import { WorkflowEditor } from '@/components/Recipe/RecipeEditors';
 import {
   type FormCategory as Category,
-  type VariableRow,
-  type PackagingRow,
-  ALLERGENS,
-  PRODUCT_CLASSES,
+  FORM_CATEGORIES,
   STATUSES,
   YIELD_UOMS,
   SHELF_LIFE_UNITS,
@@ -40,35 +46,27 @@ import {
   PRODUCTION_VIS,
   SITES,
   CATEGORY_DEFAULTS,
-  newId,
-  emptyVariable,
-  emptyPackaging,
   Card,
   CollapsibleCard,
   SectionHeader,
   FieldLabel,
   Soft,
+  HelpTip,
   PillMulti,
   PillSingle,
   TagInput,
   CheckRow,
-  ComponentTable,
-  VariableTable,
-  PackagingTable,
   PriceCard,
+  CollapsibleSidebar,
+  usePersistedBoolean,
   inputStyle,
   nameInputStyle,
   selectStyle,
-  textareaStyle,
   primaryBtnStyle,
   primaryBtnStyleSm,
   secondaryBtnStyle,
   dismissBtnStyle,
 } from '@/components/Recipe/RecipeFormParts';
-
-// "Build recipe manually" only displays a subset of categories — keep the
-// original 7 here so the UI doesn't grow Pret-only categories on this page.
-const CATEGORIES: Category[] = ['Coffee', 'Tea', 'Pastry', 'Food', 'Wine', 'Spirits', 'Kids'];
 
 // Quinn pattern-match → pre-fill suggestion
 type NameSuggestion = {
@@ -175,26 +173,34 @@ function findNameSuggestion(name: string): NameSuggestion | null {
 export default function ManualRecipePage() {
   const router = useRouter();
 
+  // Right-column collapse — shares its persisted key with the edit page so
+  // a user's preference carries across the create → edit flow. Defaults to
+  // collapsed so a fresh recipe opens with the wide form. Key is `.v2` to
+  // discard the earlier `false` default that some sessions may have
+  // already persisted.
+  const [priceCollapsed, setPriceCollapsed] = usePersistedBoolean('recipe.priceSidebar.collapsed.v2', true);
+
   // Core fields
   const [name, setName] = useState('');
   const [category, setCategory] = useState<Category | ''>('');
   const [yieldQty, setYieldQty] = useState<number | ''>(1);
   const [yieldUom, setYieldUom] = useState('serving');
   const [sites, setSites] = useState<string[]>(['Fitzroy Espresso']);
+  const [kind, setKind] = useState<Recipe['kind']>('standalone');
+  const [countInStockTake, setCountInStockTake] = useState(false);
+  const [excludeFromCogs, setExcludeFromCogs] = useState(false);
 
-  // Details
+  // Composition
+  const [ingredientsV2, setIngredientsV2] = useState<RecipeIngredient[]>([]);
+  const [packagingV2, setPackagingV2] = useState<RecipeIngredient[]>([]);
+  const [variants, setVariants] = useState<RecipeVariant[]>([]);
+  const [modifierGroupIds, setModifierGroupIds] = useState<string[]>([]);
+  const [modeQuestionDismissed, setModeQuestionDismissed] = useState(false);
+
+  // Describe
   const [instruction, setInstruction] = useState('');
   const [allergens, setAllergens] = useState<string[]>([]);
   const [photoName, setPhotoName] = useState<string | null>(null);
-
-  // Components (ingredients + sub-recipes — unified)
-  const allLibraryRecipes = useRecipes();
-  const recipesById = useMemo(() => new Map(allLibraryRecipes.map((r) => [r.id, r])), [allLibraryRecipes]);
-  const [components, setComponents] = useState<ComponentRow[]>([]);
-  const [showVariable, setShowVariable] = useState(false);
-  const [variables, setVariables] = useState<VariableRow[]>([]);
-  const [showPackaging, setShowPackaging] = useState(false);
-  const [packaging, setPackaging] = useState<PackagingRow[]>([]);
 
   // Pricing
   const [desiredMargin, setDesiredMargin] = useState<number | ''>(70);
@@ -206,6 +212,16 @@ export default function ManualRecipePage() {
   const [srpDeliveryEx, setSrpDeliveryEx] = useState<number | ''>('');
   const [deliveryCommission, setDeliveryCommission] = useState<number | ''>('');
 
+  // Lifecycle / stocking — Status sits at the top of Basics; the rest are
+  // inside the Production settings collapsible.
+  const [status, setStatus] = useState('Draft');
+  const [subRecipe, setSubRecipe] = useState(false);
+  const [shelfLifeValue, setShelfLifeValue] = useState<number | ''>('');
+  const [shelfLifeUnit, setShelfLifeUnit] = useState('minutes');
+  const [closingRange, setClosingRange] = useState('');
+  const [allowCarryOver, setAllowCarryOver] = useState(false);
+  const [enablePcr, setEnablePcr] = useState(false);
+
   // Production settings (collapsed by default)
   const [showProduction, setShowProduction] = useState(false);
   const [productionVis, setProductionVis] = useState<string[]>([]);
@@ -213,25 +229,16 @@ export default function ManualRecipePage() {
   const [productionRef, setProductionRef] = useState('');
   const [keyIngredients, setKeyIngredients] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
-  const [tagDraft, setTagDraft] = useState('');
   const [minBatch, setMinBatch] = useState<number | ''>(1);
   const [maxBatch, setMaxBatch] = useState<number | '' | 'unlimited'>('unlimited');
   const [batchMultiple, setBatchMultiple] = useState<number | ''>(1);
-
-  // Advanced (collapsed by default)
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [status, setStatus] = useState('Draft');
-  const [productClass, setProductClass] = useState('');
-  const [subRecipe, setSubRecipe] = useState(false);
-  const [countInStockTake, setCountInStockTake] = useState(false);
-  const [excludeFromCogs, setExcludeFromCogs] = useState(false);
-  const [shelfLifeValue, setShelfLifeValue] = useState<number | ''>('');
-  const [shelfLifeUnit, setShelfLifeUnit] = useState('minutes');
-  const [closingRange, setClosingRange] = useState('');
   const [bakeryHot, setBakeryHot] = useState('None');
-  const [allowCarryOver, setAllowCarryOver] = useState(false);
-  const [enablePcr, setEnablePcr] = useState(false);
   const [usedFor, setUsedFor] = useState<string[]>([]);
+
+  // Production flow (collapsed by default — workflow attach + stages)
+  const [showWorkflowSections, setShowWorkflowSections] = useState(false);
+  const [draftWorkflow, setDraftWorkflow] = useState<ProductionWorkflow | null>(null);
+  const allWorkflows = useWorkflows();
 
   // Quinn pre-fill suggestion
   const [suggestion, setSuggestion] = useState<NameSuggestion | null>(null);
@@ -252,20 +259,16 @@ export default function ManualRecipePage() {
     if (!suggestion) return;
     setCategory(suggestion.category);
     setAllergens(Array.from(new Set([...allergens, ...suggestion.allergens])));
-    // pre-fill components as item rows (append, don't clobber manual entries)
-    const newRows: ItemComponent[] = suggestion.ingredients.map((i) => ({
-      id: newId(),
-      kind: 'item',
-      name: i.name,
-      supplier: i.supplier,
-      qty: i.qty,
-      uom: i.uom,
-      unitCostP: i.unitCostP,
-    }));
-    setComponents((prev) => [
-      ...prev.filter((p) => p.kind !== 'item' || (p as ItemComponent).name.trim()),
-      ...newRows,
-    ]);
+    // Pre-fill ingredients by creating / finding master products for each
+    // suggestion item, then building RecipeIngredient rows.
+    const newRows: RecipeIngredient[] = suggestion.ingredients.map((i) => {
+      const mp = createMasterProductFromName({ name: i.name, unit: i.uom });
+      return makeRecipeIngredient(
+        { kind: 'master', masterProductId: mp.id },
+        { value: i.qty, unit: i.uom },
+      );
+    });
+    setIngredientsV2((prev) => [...prev, ...newRows]);
     applyCategoryDefaults(suggestion.category);
     setSuggestionApplied(true);
     setSuggestion(null);
@@ -283,24 +286,12 @@ export default function ManualRecipePage() {
     }
   }
 
-  // Computed totals — sum item-row cost (qty × unitCostP/100) + sub-recipe cost (qty × that recipe's ingredientCost)
-  const ingredientCost = useMemo(() => {
-    return components.reduce((sum, r) => {
-      const q = typeof r.qty === 'number' ? r.qty : 0;
-      if (r.kind === 'item') return sum + (q * r.unitCostP) / 100;
-      const sub = recipesById.get(r.recipeId);
-      return sum + q * (sub?.ingredientCost ?? 0);
-    }, 0);
-  }, [components, recipesById]);
-
-  const packagingCost = useMemo(() => {
-    return packaging.reduce((sum, r) => {
-      const q = typeof r.qty === 'number' ? r.qty : 0;
-      return sum + (q * r.unitCostP) / 100;
-    }, 0);
-  }, [packaging]);
-
-  const totalCost = ingredientCost + packagingCost;
+  // Cost is resolved from the ingredient catalogue. For brand-new
+  // ingredients not yet in the catalogue the cost will show as 0 —
+  // this is expected on a fresh intake form.
+  const ingredientCost = 0;
+  const packagingCost = 0;
+  const totalCost = 0;
 
   function marginPct(srpEx: number | '', commissionPct: number = 0): number | null {
     if (srpEx === '' || srpEx <= 0) return null;
@@ -313,13 +304,7 @@ export default function ManualRecipePage() {
     return Math.round(Number(srpEx) * (1 + vatPct / 100) * 100) / 100;
   }
 
-  function addTag() {
-    const t = tagDraft.trim();
-    if (t && !tags.includes(t)) setTags((prev) => [...prev, t]);
-    setTagDraft('');
-  }
-
-  const canPublish = name.trim() && category && components.some((r) => r.kind === 'recipe' || (r.kind === 'item' && r.name.trim()));
+  const canPublish = name.trim() && category && (ingredientsV2.length > 0 || variants.length > 0);
 
   return (
     <div style={{ padding: '20px 24px 120px', maxWidth: '1260px', margin: '0 auto', fontFamily: 'var(--font-primary)' }}>
@@ -329,37 +314,59 @@ export default function ManualRecipePage() {
         style={{
           display: 'inline-flex', alignItems: 'center', gap: '6px',
           background: 'transparent', border: 'none', color: 'var(--color-text-muted)',
-          fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: '6px 0',
+          fontSize: '14px', fontWeight: 600, cursor: 'pointer', padding: '6px 0',
           marginBottom: '14px', fontFamily: 'var(--font-primary)',
         }}
       >
-        <ArrowLeft size={14} strokeWidth={2} /> Back to Add recipes
+        <ArrowLeft size={15} strokeWidth={2} /> Back to Add recipes
       </button>
 
       {/* Header */}
-      <h1 style={{ fontSize: '22px', fontWeight: 700, margin: '0 0 4px', color: 'var(--color-text-primary)' }}>
+      <h1 style={{ fontSize: '24px', fontWeight: 700, margin: '0 0 4px', color: 'var(--color-text-primary)' }}>
         Build recipe manually
       </h1>
-      <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', margin: '0 0 16px', lineHeight: 1.45 }}>
+      <p style={{ fontSize: '14px', color: 'var(--color-text-muted)', margin: '0 0 16px', lineHeight: 1.5 }}>
         Quinn has pre-filled sensible defaults. Only the name is required to save a draft.
       </p>
 
       {/* Two-column layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'start' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: priceCollapsed ? '1fr 44px' : '1fr 340px',
+          gap: '24px', alignItems: 'start',
+          transition: 'grid-template-columns 0.22s ease',
+        }}
+      >
 
         {/* ── LEFT COLUMN ─────────────────────────────────────────────────── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}>
 
           {/* Core card */}
           <Card>
-            {/* Name */}
-            <FieldLabel required>Recipe name</FieldLabel>
-            <input
-              value={name}
-              onChange={(e) => { setName(e.target.value); setSuggestionApplied(false); }}
-              placeholder="e.g. Flat white (8oz)"
-              style={nameInputStyle}
-            />
+            {/* Name + Status — Status is lifecycle metadata and benefits
+                from top-level visibility, so it sits next to the name. */}
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '240px' }}>
+                <FieldLabel required>Recipe name</FieldLabel>
+                <input
+                  value={name}
+                  onChange={(e) => { setName(e.target.value); setSuggestionApplied(false); }}
+                  placeholder="e.g. Flat white (8oz)"
+                  style={nameInputStyle}
+                />
+              </div>
+              <div style={{ minWidth: '180px' }}>
+                <FieldLabel>Status</FieldLabel>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  style={{ ...selectStyle, width: '180px' }}
+                >
+                  {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
 
             {/* Quinn suggestion chip */}
             <AnimatePresence>
@@ -378,7 +385,7 @@ export default function ManualRecipePage() {
                   }}
                 >
                   <QuinnOrb state="ready" size={22} />
-                  <div style={{ flex: 1, fontSize: '13px', color: 'var(--color-text-primary)' }}>
+                  <div style={{ flex: 1, fontSize: '14px', color: 'var(--color-text-primary)', lineHeight: 1.45 }}>
                     Looks like a <strong>{suggestion.display}</strong>. Want me to pre-fill category, allergens, and {suggestion.ingredients.length} ingredients?
                   </div>
                   <button
@@ -404,27 +411,30 @@ export default function ManualRecipePage() {
                     borderRadius: '8px',
                     background: 'var(--color-success-light)',
                     display: 'flex', alignItems: 'center', gap: '8px',
-                    fontSize: '12.5px', color: 'var(--color-success)', fontWeight: 600,
+                    fontSize: '13.5px', color: 'var(--color-success)', fontWeight: 600,
                   }}
                 >
-                  <Check size={13} strokeWidth={2.5} />
+                  <Check size={14} strokeWidth={2.5} />
                   Pre-filled. Tweak anything below.
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* Category (pills) */}
+            {/* Product class */}
             <div style={{ marginTop: '16px' }}>
-              <FieldLabel>Category</FieldLabel>
-              <PillSingle
-                options={CATEGORIES}
-                selected={category}
-                onChange={(v) => {
+              <FieldLabel>Product class</FieldLabel>
+              <StyledSelect
+                width={260}
+                value={category}
+                onChange={(e) => {
+                  const v = e.target.value;
                   setCategory(v as Category | '');
                   if (v) applyCategoryDefaults(v as Category);
                 }}
-                allowClear
-              />
+              >
+                <option value="">— None —</option>
+                {FORM_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </StyledSelect>
             </div>
 
             {/* Yield */}
@@ -438,114 +448,179 @@ export default function ManualRecipePage() {
                   onChange={(e) => setYieldQty(e.target.value === '' ? '' : Number(e.target.value))}
                   style={{ ...inputStyle, width: '80px', flexShrink: 0 }}
                 />
-                <PillSingle options={YIELD_UOMS} selected={yieldUom} onChange={setYieldUom} />
+                <StyledSelect
+                  width={140}
+                  value={yieldUom}
+                  onChange={(e) => setYieldUom(e.target.value)}
+                >
+                  {YIELD_UOMS.map((u) => <option key={u} value={u}>{u}</option>)}
+                </StyledSelect>
               </div>
             </div>
 
             {/* Sites */}
             <div style={{ marginTop: '16px' }}>
               <FieldLabel>Sites</FieldLabel>
-              <PillMulti options={SITES} selected={sites} onChange={setSites} />
-            </div>
-          </Card>
-
-          {/* Recipe components — unified ingredients + sub-recipes */}
-          <Card>
-            <SectionHeader
-              title="Recipe components"
-              hint="Add raw ingredients or pull in another recipe as a sub-recipe. Build order = top to bottom."
-            />
-            <ComponentTable
-              rows={components}
-              recipesById={recipesById}
-              onChange={setComponents}
-            />
-          </Card>
-
-          {/* Variable ingredients (collapsible) */}
-          <CollapsibleCard
-            label="Variable ingredients"
-            hint={variables.length ? `${variables.length} row${variables.length === 1 ? '' : 's'}` : 'e.g. alt milks, size variations — usually better done as a shared modifier group'}
-            open={showVariable}
-            onToggle={() => setShowVariable((v) => !v)}
-          >
-            <VariableTable
-              rows={variables}
-              onChange={(id, patch) => setVariables((rs) => rs.map((r) => r.id === id ? { ...r, ...patch } : r))}
-              onRemove={(id) => setVariables((rs) => rs.filter((r) => r.id !== id))}
-              onAdd={() => setVariables((rs) => [...rs, emptyVariable()])}
-            />
-          </CollapsibleCard>
-
-          {/* Packaging (collapsible) */}
-          <CollapsibleCard
-            label="Packaging"
-            hint={packaging.length ? `${packaging.length} row${packaging.length === 1 ? '' : 's'}` : 'Cups, lids, boxes — cost rolls into takeaway / delivery pricing'}
-            open={showPackaging}
-            onToggle={() => setShowPackaging((v) => !v)}
-          >
-            <PackagingTable
-              rows={packaging}
-              onChange={(id, patch) => setPackaging((rs) => rs.map((r) => r.id === id ? { ...r, ...patch } : r))}
-              onRemove={(id) => setPackaging((rs) => rs.filter((r) => r.id !== id))}
-              onAdd={() => setPackaging((rs) => [...rs, emptyPackaging()])}
-            />
-          </CollapsibleCard>
-
-          {/* Instruction */}
-          <Card>
-            <FieldLabel>Instructions <Soft>(optional)</Soft></FieldLabel>
-            <textarea
-              value={instruction}
-              onChange={(e) => setInstruction(e.target.value)}
-              placeholder="How the team should make this — prep, build, finish."
-              rows={3}
-              style={textareaStyle}
-            />
-          </Card>
-
-          {/* Allergens */}
-          <Card>
-            <FieldLabel>Allergens <Soft>(optional)</Soft></FieldLabel>
-            <PillMulti options={ALLERGENS} selected={allergens} onChange={setAllergens} />
-          </Card>
-
-          {/* Photo */}
-          <Card>
-            <FieldLabel>Photo <Soft>(optional)</Soft></FieldLabel>
-            <label
-              style={{
-                display: 'flex', alignItems: 'center', gap: '10px',
-                padding: '14px 16px', borderRadius: '10px',
-                border: '1.5px dashed var(--color-border)',
-                cursor: 'pointer',
-                background: photoName ? 'var(--color-success-light)' : 'var(--color-bg-hover)',
-              }}
-            >
-              <ImageIcon size={18} color={photoName ? 'var(--color-success)' : 'var(--color-text-muted)'} strokeWidth={1.8} />
-              <span style={{ fontSize: '13px', color: photoName ? 'var(--color-success)' : 'var(--color-text-secondary)', flex: 1 }}>
-                {photoName ?? 'Drop an image or click to upload'}
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                style={{ display: 'none' }}
-                onChange={(e) => setPhotoName(e.target.files?.[0]?.name ?? null)}
+              <PillMulti
+                options={SITES}
+                selected={sites}
+                onChange={setSites}
+                size="sm"
+                selectAll={{ allLabel: 'All sites', clearLabel: 'Clear all' }}
               />
-            </label>
+            </div>
+
+            {/* Type — Stand-alone / Component / Assembly. Assembly requires
+                sub-recipes which a fresh recipe doesn't have yet, so it's
+                disabled here until the user adds one. */}
+            <div style={{ marginTop: '16px' }}>
+              <FieldLabel
+                help={
+                  <>
+                    <strong>Stand-alone</strong>: sold on its own (most recipes).{' '}
+                    <strong>Component</strong>: used inside other recipes (e.g. a sauce, a base mix).{' '}
+                    <strong>Assembly</strong>: built from sub-recipes (e.g. a sandwich whose bread + filling are their own recipes).
+                  </>
+                }
+              >
+                Type
+              </FieldLabel>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {(['standalone', 'component', 'assembly'] as Recipe['kind'][]).map((k) => {
+                  const on = kind === k;
+                  const disabled = k === 'assembly';
+                  const label = k === 'standalone' ? 'Stand-alone' : k === 'component' ? 'Component' : 'Assembly';
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => !disabled && setKind(k)}
+                      disabled={disabled}
+                      title={disabled ? 'Add a sub-recipe first to make this an assembly' : undefined}
+                      style={{
+                        padding: '7px 13px',
+                        borderRadius: '100px',
+                        border: on ? '1px solid transparent' : '1px solid var(--color-border-subtle)',
+                        background: on ? 'var(--color-accent-active)' : '#fff',
+                        color: on ? '#fff' : 'var(--color-text-secondary)',
+                        fontSize: '13px', fontWeight: 600,
+                        cursor: disabled ? 'not-allowed' : 'pointer',
+                        fontFamily: 'var(--font-primary)',
+                        opacity: disabled ? 0.5 : 1,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Inventory & costing */}
+            <div style={{ marginTop: '16px' }}>
+              <FieldLabel
+                help={
+                  <>
+                    <strong>Count in stock take</strong>: include when counting physical inventory.{' '}
+                    <strong>Exclude from COGs</strong>: skip in cost-of-goods calculations (e.g. comps, parent-rolled items).
+                  </>
+                }
+              >
+                Inventory &amp; costing
+              </FieldLabel>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {[
+                  {
+                    key: 'countInStockTake' as const,
+                    label: 'Count in stock take',
+                    on: countInStockTake,
+                    setter: setCountInStockTake,
+                    hint: 'Include this recipe when counting physical inventory at stock take.',
+                  },
+                  {
+                    key: 'excludeFromCogs' as const,
+                    label: 'Exclude from COGs',
+                    on: excludeFromCogs,
+                    setter: setExcludeFromCogs,
+                    hint: 'Skip this recipe in cost-of-goods calculations (e.g. comps, parent-rolled items).',
+                  },
+                ].map(({ key, label, on, setter, hint }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setter(!on)}
+                    title={hint}
+                    style={{
+                      padding: '7px 13px',
+                      borderRadius: '100px',
+                      border: on ? '1px solid transparent' : '1px solid var(--color-border-subtle)',
+                      background: on ? 'var(--color-accent-active)' : '#fff',
+                      color: on ? '#fff' : 'var(--color-text-secondary)',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-primary)',
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
           </Card>
 
-          {/* Production settings (collapsible) */}
+          {/* Composition — variants / ingredients / packaging / modifiers /
+              allergens / instructions / photo.  Mode question appears first
+              for brand-new recipes so the user declares their intent. */}
+          <RecipeCompositionSection
+            showModeQuestion={!modeQuestionDismissed}
+            onModeQuestionDismissed={() => setModeQuestionDismissed(true)}
+            ingredients={ingredientsV2}
+            packaging={packagingV2}
+            modifierGroupIds={modifierGroupIds}
+            variants={variants}
+            basePrices={{
+              dineIn: typeof srpDineInEx === 'number' ? srpDineInEx : 0,
+              takeaway: typeof srpTakeawayEx === 'number' ? srpTakeawayEx : 0,
+              delivery: typeof srpDeliveryEx === 'number' ? srpDeliveryEx : 0,
+            }}
+            allergens={allergens}
+            instructions={instruction}
+            photoName={photoName}
+            sites={sites}
+            onIngredientsChange={setIngredientsV2}
+            onPackagingChange={setPackagingV2}
+            onModifierGroupsChange={setModifierGroupIds}
+            onVariantsChange={setVariants}
+            onAllergensChange={setAllergens}
+            onInstructionsChange={setInstruction}
+            onPhotoChange={setPhotoName}
+          />
+
+          {/* Production settings — everything operational: visibility,
+              bakery/hot, prep time, key ingredients, tags, batch sizes,
+              sub-recipe flag, shelf life, closing range, carry-over, PCR,
+              used-for. Status (lifecycle) lives at the top of Basics. */}
           <CollapsibleCard
             label="Production settings"
-            hint="Visibility, prep time, key ingredients, batch sizes"
+            hint="Visibility, prep time, batch sizes, shelf life, stocking & production flags"
             open={showProduction}
             onToggle={() => setShowProduction((v) => !v)}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <FieldLabel>Production visibility</FieldLabel>
+                <FieldLabel help="Where this recipe shows up in production — Bar (drinks), Kitchen (food), Pastry, or Variable (assigned at order time).">
+                  Production visibility
+                </FieldLabel>
                 <PillMulti options={PRODUCTION_VIS} selected={productionVis} onChange={setProductionVis} />
+              </div>
+
+              <div>
+                <FieldLabel help="Does this recipe come from the bakery, from hot production, both, or neither? Drives production routing and KDS workflows.">
+                  Bakery / hot production
+                </FieldLabel>
+                <PillSingle options={BAKERY_HOT_PRODUCTION} selected={bakeryHot} onChange={setBakeryHot} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
@@ -559,7 +634,9 @@ export default function ManualRecipePage() {
                   />
                 </div>
                 <div>
-                  <FieldLabel>Production reference</FieldLabel>
+                  <FieldLabel help="Optional code used to cross-reference this recipe in upstream production systems or printed prep sheets.">
+                    Production reference
+                  </FieldLabel>
                   <input
                     type="text"
                     value={productionRef}
@@ -586,7 +663,9 @@ export default function ManualRecipePage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
                 <div>
-                  <FieldLabel>Min batch size</FieldLabel>
+                  <FieldLabel help="The smallest run size production will accept. Useful when a recipe must be made in at least N units (e.g. minimum dough mix).">
+                    Min batch size
+                  </FieldLabel>
                   <input
                     type="number"
                     value={minBatch}
@@ -595,7 +674,9 @@ export default function ManualRecipePage() {
                   />
                 </div>
                 <div>
-                  <FieldLabel>Max batch size</FieldLabel>
+                  <FieldLabel help='The largest run production will accept in a single batch. Type "unlimited" to remove the cap.'>
+                    Max batch size
+                  </FieldLabel>
                   <input
                     type="text"
                     value={maxBatch === 'unlimited' ? 'unlimited' : String(maxBatch)}
@@ -608,7 +689,9 @@ export default function ManualRecipePage() {
                   />
                 </div>
                 <div>
-                  <FieldLabel>Batch multiple</FieldLabel>
+                  <FieldLabel help="Quantities are rounded to multiples of this number. e.g. 6 means batches always come in lots of 6.">
+                    Batch multiple
+                  </FieldLabel>
                   <input
                     type="number"
                     value={batchMultiple}
@@ -616,33 +699,6 @@ export default function ManualRecipePage() {
                     style={inputStyle}
                   />
                 </div>
-              </div>
-            </div>
-          </CollapsibleCard>
-
-          {/* Advanced (collapsible) */}
-          <CollapsibleCard
-            label="Advanced"
-            hint="Status, stock-take, shelf life, bakery/hot production, carry-over, PCR, used-for"
-            open={showAdvanced}
-            onToggle={() => setShowAdvanced((v) => !v)}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <FieldLabel>Status</FieldLabel>
-                <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ ...selectStyle, maxWidth: '220px' }}>
-                  {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div>
-                <FieldLabel>Product class</FieldLabel>
-                <PillSingle options={PRODUCT_CLASSES} selected={productClass} onChange={setProductClass} allowClear />
-              </div>
-
-              <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
-                <CheckRow label="Sub-recipe" checked={subRecipe} onChange={setSubRecipe} />
-                <CheckRow label="Count in stock-take" checked={countInStockTake} onChange={setCountInStockTake} />
-                <CheckRow label="Exclude from COGS" checked={excludeFromCogs} onChange={setExcludeFromCogs} />
               </div>
 
               <div>
@@ -659,7 +715,9 @@ export default function ManualRecipePage() {
               </div>
 
               <div>
-                <FieldLabel>Closing range</FieldLabel>
+                <FieldLabel help='Day-of-week range when this item must be closed out / counted down at end of day. Format is "1–5" (Mon–Fri).'>
+                  Closing range
+                </FieldLabel>
                 <input
                   type="text"
                   value={closingRange}
@@ -669,14 +727,25 @@ export default function ManualRecipePage() {
                 />
               </div>
 
-              <div>
-                <FieldLabel>Bakery / hot production</FieldLabel>
-                <PillSingle options={BAKERY_HOT_PRODUCTION} selected={bakeryHot} onChange={setBakeryHot} />
-              </div>
-
               <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
-                <CheckRow label="Allow carry-over" checked={allowCarryOver} onChange={setAllowCarryOver} />
-                <CheckRow label="Enable preparation PCR" checked={enablePcr} onChange={setEnablePcr} />
+                <CheckRow
+                  label="Sub-recipe"
+                  checked={subRecipe}
+                  onChange={setSubRecipe}
+                  help="Flag this recipe as something used inside other recipes (e.g. a sauce, a base). Distinct from the Type pill in Basics — that one's about how this recipe is sold."
+                />
+                <CheckRow
+                  label="Allow carry-over"
+                  checked={allowCarryOver}
+                  onChange={setAllowCarryOver}
+                  help="Leftover stock from one day can be sold the next. Off means anything unsold at close must be wasted."
+                />
+                <CheckRow
+                  label="Enable preparation PCR"
+                  checked={enablePcr}
+                  onChange={setEnablePcr}
+                  help="Production Cost Reconciliation — require staff to log actual ingredient usage against the recipe so variance is tracked."
+                />
               </div>
 
               <div>
@@ -685,10 +754,75 @@ export default function ManualRecipePage() {
               </div>
             </div>
           </CollapsibleCard>
+
+          {/* Production flow — optional workflow attachment + stage editor.
+              For a brand-new recipe there's nothing to draw until you attach
+              a workflow; once you do, the stages editor appears. The diagram
+              is omitted here because there's no saved recipe to render yet. */}
+          <CollapsibleCard
+            label="Production flow"
+            hint={
+              draftWorkflow
+                ? `Workflow ${draftWorkflow.id} · ${draftWorkflow.stages.length} stage${draftWorkflow.stages.length === 1 ? '' : 's'} across D-2 / D-1 / D0`
+                : 'Optional. Attach a workflow to define D-2 / D-1 / D0 stages.'
+            }
+            open={showWorkflowSections}
+            onToggle={() => setShowWorkflowSections((v) => !v)}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+              <FieldLabel>Workflow <Soft>(optional)</Soft></FieldLabel>
+              <select
+                value={draftWorkflow?.id ?? ''}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  if (!id) {
+                    setDraftWorkflow(null);
+                  } else if (allWorkflows[id]) {
+                    setDraftWorkflow(cloneWorkflow(allWorkflows[id]));
+                  }
+                }}
+                style={{ ...selectStyle, width: 280 }}
+              >
+                <option value="">— None —</option>
+                {Object.values(allWorkflows).map((wf) => (
+                  <option key={wf.id} value={wf.id}>
+                    {wf.id} ({wf.stages.length} stage{wf.stages.length === 1 ? '' : 's'})
+                  </option>
+                ))}
+              </select>
+              {draftWorkflow && (
+                <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                  Edits apply to every recipe sharing this workflow.
+                </span>
+              )}
+            </div>
+
+            {!draftWorkflow ? (
+              <div style={{ padding: '12px', fontSize: 12, color: 'var(--color-text-muted)', background: 'var(--color-bg-hover)', borderRadius: 8 }}>
+                No workflow attached. Pick one above to add D-2 / D-1 / D0 stages — or leave blank and add later from the recipe page.
+              </div>
+            ) : (
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--color-border-subtle)' }}>
+                <SectionHeader
+                  title="Stages"
+                  hint="Reorder, rename, or add stages. Stages on a shared workflow affect every recipe using it."
+                />
+                <WorkflowEditor
+                  workflow={draftWorkflow}
+                  onChange={(updater) => setDraftWorkflow((wf) => (wf ? updater(wf) : wf))}
+                />
+              </div>
+            )}
+          </CollapsibleCard>
         </div>
 
         {/* ── RIGHT COLUMN (pricing) ─────────────────────────────────────── */}
-        <div style={{ position: 'sticky', top: 16 }}>
+        <CollapsibleSidebar
+          collapsed={priceCollapsed}
+          onToggle={() => setPriceCollapsed((v) => !v)}
+          label="Pricing"
+          top={16}
+        >
           <PriceCard
             totalCost={totalCost}
             ingredientCost={ingredientCost}
@@ -714,7 +848,7 @@ export default function ManualRecipePage() {
             marginDelivery={marginPct(srpDeliveryEx, Number(deliveryCommission) || 0)}
             srpIncDelivery={srpInc(srpDeliveryEx)}
           />
-        </div>
+        </CollapsibleSidebar>
       </div>
 
       {/* Sticky bottom bar */}
@@ -730,7 +864,7 @@ export default function ManualRecipePage() {
         }}
       >
         <div style={{ maxWidth: '1260px', width: '100%', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ flex: 1, fontSize: '12.5px', color: 'var(--color-text-muted)' }}>
+          <div style={{ flex: 1, fontSize: '13.5px', color: 'var(--color-text-muted)' }}>
             {canPublish
               ? <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>Ready to publish</span>
               : 'Add a name, category, and at least one ingredient to publish.'}

@@ -34,6 +34,9 @@ import AccuracyStrip from '@/components/Forecast/AccuracyStrip';
 import HorizonGrid from '@/components/Forecast/HorizonGrid';
 import WhyPanel from '@/components/Forecast/WhyPanel';
 import BacktestStrip from '@/components/Forecast/BacktestStrip';
+import ForecastTrendChart from '@/components/Forecast/ForecastTrendChart';
+import HourlyBreakdownDrawer from '@/components/Forecast/HourlyBreakdownDrawer';
+import { multiplierFor, type TotalMultipliers } from '@/components/Forecast/TotalEditor';
 import { buildForecastRows, type ForecastRow } from '@/components/Forecast/accuracy';
 
 const HORIZON_DAYS = 5;
@@ -104,8 +107,30 @@ export default function ForecastPage() {
   );
 
   const [overrides, setOverrides] = useState<Record<string, number>>({});
+  // Per-date total multipliers. The KPI tiles on either hero card let
+  // the operator nudge the whole-day forecast at the headline level;
+  // the same multiplier cascades into HorizonGrid so SKU rows reflect
+  // the updated baseline. Per-SKU overrides (above) still win on top.
+  const [totalMultipliers, setTotalMultipliers] = useState<TotalMultipliers>({});
+  const setMultiplierForActiveDate = useCallback(
+    (m: number | null) => {
+      setTotalMultipliers(prev => {
+        if (m == null) {
+          const { [activeDate]: _, ...rest } = prev;
+          return rest;
+        }
+        return { ...prev, [activeDate]: m };
+      });
+    },
+    [activeDate],
+  );
+  const activeMultiplier = multiplierFor(totalMultipliers, activeDate);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [whyTarget, setWhyTarget] = useState<Selection | null>(null);
+  // SKU currently shown in the hourly-breakdown drawer. The drawer follows
+  // the page's activeDate so changing the day picker re-renders the chart
+  // for the same SKU on the new date — no need to remember a date here.
+  const [hourlySku, setHourlySku] = useState<string | null>(null);
 
   const overrideKey = useCallback(
     (skuId: string, date: string) => `${skuId}|${date}`,
@@ -136,6 +161,8 @@ export default function ForecastPage() {
     setWhyTarget({ skuId, date });
   }, []);
   const handleCloseWhy = useCallback(() => setWhyTarget(null), []);
+  const handleOpenHourly = useCallback((skuId: string) => setHourlySku(skuId), []);
+  const handleCloseHourly = useCallback(() => setHourlySku(null), []);
   const whyRow = useMemo(
     () => (whyTarget ? rows.find(r => r.skuId === whyTarget.skuId) ?? null : null),
     [whyTarget, rows],
@@ -164,7 +191,7 @@ export default function ForecastPage() {
         <h1
           style={{
             margin: 0,
-            fontSize: 18,
+            fontSize: 20,
             fontWeight: 700,
             color: 'var(--color-text-primary)',
             fontFamily: 'var(--font-primary)',
@@ -196,14 +223,29 @@ export default function ForecastPage() {
           siteId={siteId}
           date={activeDate}
           dateLabel={activeDateLabel}
+          multiplier={activeMultiplier}
+          onMultiplierChange={setMultiplierForActiveDate}
         />
       ) : (
         <ResultCard
           siteId={siteId}
           date={activeDate}
           dateLabel={activeDateLabel}
+          multiplier={activeMultiplier}
+          onMultiplierChange={setMultiplierForActiveDate}
         />
       )}
+
+      {/* Trend chart — 7-day forecast vs actual, with future region on
+          the Forecast tab so the operator sees where the model expects
+          the next few days to land. */}
+      <ForecastTrendChart
+        siteId={siteId}
+        highlightDate={activeDate}
+        multipliers={totalMultipliers}
+        pastDays={7}
+        futureDays={scope === 'forecast' ? 3 : 0}
+      />
 
       {/* Item drill-down — collapsed by default */}
       <section
@@ -239,16 +281,16 @@ export default function ForecastPage() {
           )}
           <span
             style={{
-              fontSize: 13.5,
+              fontSize: 14.5,
               fontWeight: 700,
               color: 'var(--color-text-primary)',
             }}
           >
             View by menu item
           </span>
-          <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>
-            Adjust an individual SKU and see how it cascades through ingredients,
-            spokes, and the bench.
+          <span style={{ fontSize: 12.5, color: 'var(--color-text-muted)' }}>
+            Adjust an individual SKU on top of any total-level edit · cascades
+            through ingredients, spokes, and the bench.
           </span>
         </button>
 
@@ -271,9 +313,11 @@ export default function ForecastPage() {
               dates={horizonDates}
               overrides={overrides}
               overrideKey={overrideKey}
+              totalMultipliers={totalMultipliers}
               selection={selection}
               onSelect={handleSelect}
               onToggleRow={handleToggleRow}
+              onOpenHourly={handleOpenHourly}
               onOpenWhy={handleOpenWhy}
               onOverride={setOverride}
             />
@@ -293,6 +337,16 @@ export default function ForecastPage() {
         date={whyTarget?.date ?? null}
         onClose={handleCloseWhy}
       />
+
+      <HourlyBreakdownDrawer
+        siteId={siteId}
+        skuId={hourlySku}
+        date={activeDate}
+        dateLabel={activeDateLabel}
+        multiplier={activeMultiplier}
+        mode={scope}
+        onClose={handleCloseHourly}
+      />
     </div>
   );
 }
@@ -301,6 +355,11 @@ export default function ForecastPage() {
 // Local pills + tab primitives
 // ────────────────────────────────────────────────────────────────────────────
 
+// Pill/capsule switcher matching the platform-wide tab pattern used in
+// Plan view, Sales filter, BacktestStrip sort, etc.: rounded-pill track
+// with the active tab filled in the accent colour. Consistency with the
+// rest of the product matters more than this one component being
+// visually unique.
 function Tabs({
   options,
   value,
@@ -314,12 +373,11 @@ function Tabs({
     <div
       role="tablist"
       style={{
-        display: 'inline-flex',
-        padding: 3,
+        display: 'flex',
         background: 'var(--color-bg-hover)',
-        border: '1px solid var(--color-border-subtle)',
-        borderRadius: 10,
-        gap: 2,
+        borderRadius: 100,
+        padding: 3,
+        width: 'fit-content',
       }}
     >
       {options.map(o => {
@@ -332,16 +390,17 @@ function Tabs({
             aria-selected={active}
             onClick={() => onChange(o.id)}
             style={{
-              padding: '6px 14px',
+              padding: '7px 16px',
               border: 'none',
-              borderRadius: 8,
-              fontSize: 12,
+              borderRadius: 100,
+              fontSize: 13,
               fontWeight: 600,
               cursor: 'pointer',
               fontFamily: 'var(--font-primary)',
-              background: active ? '#ffffff' : 'transparent',
-              color: active ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-              boxShadow: active ? '0 1px 2px rgba(0,0,0,0.04)' : 'none',
+              background: active ? 'var(--color-accent-active)' : 'transparent',
+              color: active ? '#ffffff' : 'var(--color-text-secondary)',
+              transition: 'background 0.15s, color 0.15s',
+              whiteSpace: 'nowrap',
             }}
           >
             {o.label}
@@ -462,7 +521,7 @@ function DatePickerPill({
           active ? `Selected date: ${activeLabel}. Click to change.` : 'Pick a date'
         }
       >
-        <Calendar size={11} />
+        <Calendar size={12} />
         {active ? activeLabel : fallbackLabel}
       </button>
       {open && (
@@ -498,7 +557,7 @@ function pillStyle(active: boolean): React.CSSProperties {
       ? 'var(--color-accent-active)'
       : 'var(--color-text-secondary)',
     borderRadius: 999,
-    fontSize: 11.5,
+    fontSize: 12.5,
     fontWeight: 600,
     cursor: 'pointer',
     fontFamily: 'var(--font-primary)',

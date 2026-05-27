@@ -1,28 +1,75 @@
 'use client';
 
+/**
+ * Configure settings — shared chrome for the four sub-surfaces that
+ * sit under the sidebar's "Configure settings" entry:
+ *
+ *   • Context       — free-form prose Edify reads on every recommendation
+ *   • Sites         — the estate's locations (recreates Edify Company Info → Sites)
+ *   • Users         — the team list (recreates Edify Company Info → Users)
+ *   • Company info  — the company profile + supplier policy
+ *
+ * Uses the same sticky-tab pattern as `/recipes` and `/production` so
+ * every "managed" area of the app reads as one system. The structured
+ * per-site editor (cutoffs, benches, windows, range-tiers, night-shift)
+ * still lives at /production/settings — this surface is the company /
+ * estate level, not the day-to-day production overlay.
+ */
+
 import Sidebar from '@/components/Sidebar/Sidebar';
 import SiteSwitcher from '@/components/Sidebar/SiteSwitcher';
 import DemoControls from '@/components/DemoControls/DemoControls';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
+import {
+  TOP_NAV_BAR_PADDING,
+  TOP_NAV_PILL_ACTIVE,
+  TOP_NAV_PILL_BASE,
+  TOP_NAV_PILL_GAP,
+  TOP_NAV_PILL_IDLE_TRANSPARENT,
+} from '@/components/Production/topNavStyles';
 
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
+
+type Tab = { id: string; label: string; href: string };
+
+const SETTINGS_TABS: Tab[] = [
+  { id: 'context',      label: 'Context',      href: '/settings/context' },
+  { id: 'sites',        label: 'Sites',        href: '/settings/sites' },
+  { id: 'users',        label: 'Users',        href: '/settings/users' },
+  { id: 'company',      label: 'Company info', href: '/settings/company' },
+  { id: 'integrations', label: 'Integrations', href: '/settings/integrations' },
+];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
   const router = useRouter();
+  const pathname = usePathname() ?? '';
 
   return (
     <div
       style={{
         display: 'flex',
         flexDirection: 'row',
-        height: '100vh',
+        minHeight: '100vh',
         background: 'var(--color-bg-surface)',
         fontFamily: 'var(--font-primary)',
+        alignItems: 'flex-start',
       }}
     >
-      {!isMobile && <Sidebar />}
+      {!isMobile && (
+        <div
+          style={{
+            position: 'sticky',
+            top: 0,
+            height: '100vh',
+            flexShrink: 0,
+            zIndex: 100,
+          }}
+        >
+          <Sidebar />
+        </div>
+      )}
 
       <div
         style={{
@@ -30,8 +77,6 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
           display: 'flex',
           flexDirection: 'column',
           minWidth: 0,
-          minHeight: 0,
-          overflow: 'hidden',
         }}
       >
         <header
@@ -86,12 +131,45 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
           </div>
         </header>
 
+        {/* Sticky sub-tabs — Context / Sites / Users / Company info.
+            Matches the Manage menu + Production tab strips 1:1 so every
+            managed surface of the app reads as one system. */}
+        <nav
+          style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 150,
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            gap: TOP_NAV_PILL_GAP,
+            padding: TOP_NAV_BAR_PADDING,
+            borderBottom: '1px solid var(--color-border-subtle)',
+            background: '#ffffff',
+            overflowX: 'auto',
+          }}
+        >
+          {SETTINGS_TABS.map((tab) => {
+            const active = pathname === tab.href || pathname.startsWith(tab.href + '/');
+            return (
+              <button
+                key={tab.id}
+                onClick={() => router.push(tab.href)}
+                style={{
+                  ...TOP_NAV_PILL_BASE,
+                  ...(active ? TOP_NAV_PILL_ACTIVE : TOP_NAV_PILL_IDLE_TRANSPARENT),
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
+
         <div
           style={{
             flex: 1,
             minWidth: 0,
-            minHeight: 0,
-            overflow: 'auto',
             background: 'var(--color-bg-surface)',
             position: 'relative',
             zIndex: 1,

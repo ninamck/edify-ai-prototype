@@ -28,6 +28,7 @@ import {
 } from '@/components/Recipe/libraryFixtures';
 import { IngredientsV2Section } from '@/components/Recipe/IngredientsV2Section';
 import { VariantsSection } from '@/components/Recipe/VariantsSection';
+import { RecipeCompositionSection } from '@/components/Recipe/RecipeCompositionSection';
 import StyledSelect from '@/components/ui/StyledSelect';
 import { useModifierGroups } from '@/components/Modifiers/store';
 import type { ModifierGroup } from '@/components/Modifiers/types';
@@ -64,6 +65,7 @@ import {
   YIELD_UOMS,
   SHELF_LIFE_UNITS,
   type ShelfLifeUnit,
+  BAKERY_HOT_PRODUCTION,
   PRODUCTION_VIS,
   SITES,
   newId,
@@ -74,6 +76,7 @@ import {
   SectionHeader,
   FieldLabel,
   Soft,
+  HelpTip,
   PillMulti,
   PillSingle,
   TagInput,
@@ -82,6 +85,8 @@ import {
   VariableTable,
   PackagingTable,
   PriceCard,
+  CollapsibleSidebar,
+  usePersistedBoolean,
   inputStyle,
   nameInputStyle,
   selectStyle,
@@ -534,7 +539,6 @@ function EditRecipeForm({
 
   const [draft, setDraft] = useState<FormDraft>(() => recipeToDraft(original));
   const [draftKind, setDraftKind] = useState<Recipe['kind']>(original.kind);
-  const [draftIsPrep, setDraftIsPrep] = useState<boolean>(original.isPrep ?? false);
   const [draftWorkflow, setDraftWorkflow] = useState<ProductionWorkflow | null>(
     () => (original.workflowId && allWorkflows[original.workflowId]
       ? cloneWorkflow(allWorkflows[original.workflowId])
@@ -543,6 +547,15 @@ function EditRecipeForm({
   const [showWorkflowSections, setShowWorkflowSections] = useState<boolean>(
     !!(original.subRecipes?.length || original.workflowId),
   );
+
+  // Right-column collapse — persisted across sessions so power users who
+  // prefer the wide form don't have to re-collapse every visit. Shared key
+  // with the manual-intake page so the preference carries between flows.
+  // Default = collapsed: most of the time users are editing composition,
+  // not tweaking margins, so the wide form is the better starting state.
+  // Key is `.v2` to discard the earlier `false` default that some sessions
+  // may have already persisted.
+  const [priceCollapsed, setPriceCollapsed] = usePersistedBoolean('recipe.priceSidebar.collapsed.v2', true);
 
   // Sub-recipes are derived from BOTH (a) the legacy unified component
   // list (preserves seed-data order) and (b) any rows in the new
@@ -651,7 +664,6 @@ function EditRecipeForm({
     // splitComponents in draftToRecipe already populated subRecipes; just fix the
     // explicit fields the user controls separately.
     updated.kind = draftKind;
-    updated.isPrep = draftIsPrep;
     // Persist the workflow attachment (or detachment). The previous
     // editor assumed workflowId was fixed; now the user can flip
     // attach/detach via the Production flow dropdown.
@@ -665,7 +677,6 @@ function EditRecipeForm({
   const isDirty =
     JSON.stringify(draft) !== JSON.stringify(recipeToDraft(original)) ||
     draftKind !== original.kind ||
-    draftIsPrep !== (original.isPrep ?? false) ||
     (draftWorkflow && original.workflowId
       ? JSON.stringify(draftWorkflow) !== JSON.stringify(allWorkflows[original.workflowId])
       : false);
@@ -697,29 +708,29 @@ function EditRecipeForm({
           gap: '14px',
         }}
       >
-        <button onClick={handleCancel} style={{ ...secondaryBtnStyle, padding: '7px 12px', fontSize: '12.5px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-          <ArrowLeft size={14} /> Back
+        <button onClick={handleCancel} style={{ ...secondaryBtnStyle, padding: '8px 13px', fontSize: '13.5px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+          <ArrowLeft size={15} /> Back
         </button>
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
+            <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
               Editing recipe
             </span>
-            <KindPill kind={draftKind} isPrep={draftIsPrep} />
+            <KindPill kind={draftKind} isPrep={original.isPrep} />
             {isDirty && (
               <span
                 style={{
-                  padding: '2px 8px', borderRadius: '100px',
+                  padding: '3px 9px', borderRadius: '100px',
                   background: 'rgba(241,180,52,0.18)', color: 'var(--color-warning)',
-                  fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em',
+                  fontSize: '12px', fontWeight: 700, letterSpacing: '0.04em',
                 }}
               >
                 Unsaved changes
               </span>
             )}
           </div>
-          <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: '17px', fontWeight: 700, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {draft.name || <span style={{ color: 'var(--color-text-muted)' }}>Untitled recipe</span>}
           </div>
         </div>
@@ -734,29 +745,53 @@ function EditRecipeForm({
             opacity: saveDisabled ? 0.5 : 1, cursor: saveDisabled ? 'not-allowed' : 'pointer',
           }}
         >
-          <Save size={13} strokeWidth={2.4} /> Save changes
+          <Save size={14} strokeWidth={2.4} /> Save changes
         </button>
       </div>
 
-      <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', margin: '0 0 16px', lineHeight: 1.45 }}>
+      <p style={{ fontSize: '14px', color: 'var(--color-text-muted)', margin: '0 0 16px', lineHeight: 1.5 }}>
         Edit any field below. Workflow and sub-recipe sections appear if this recipe drives a production workflow or is built from components.
       </p>
 
-      {/* Two-column layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'start' }}>
+      {/* Two-column layout. The right column collapses to a 44px rail so
+          users can reclaim ~300px of form width when they don't need the
+          pricing panel. Grid-template-columns animates between the two
+          widths for a smooth transition. */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: priceCollapsed ? '1fr 44px' : '1fr 340px',
+          gap: '24px', alignItems: 'start',
+          transition: 'grid-template-columns 0.22s ease',
+        }}
+      >
 
         {/* ── LEFT COLUMN ─────────────────────────────────────────────── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}>
 
           {/* Core */}
           <Card>
-            <FieldLabel required>Recipe name</FieldLabel>
-            <input
-              value={draft.name}
-              onChange={(e) => patch('name', e.target.value)}
-              placeholder="e.g. Flat white (8oz)"
-              style={nameInputStyle}
-            />
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '240px' }}>
+                <FieldLabel required>Recipe name</FieldLabel>
+                <input
+                  value={draft.name}
+                  onChange={(e) => patch('name', e.target.value)}
+                  placeholder="e.g. Flat white (8oz)"
+                  style={nameInputStyle}
+                />
+              </div>
+              <div style={{ minWidth: '180px' }}>
+                <FieldLabel>Status</FieldLabel>
+                <select
+                  value={draft.status}
+                  onChange={(e) => patch('status', e.target.value)}
+                  style={{ ...selectStyle, width: '180px' }}
+                >
+                  {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
 
             <div style={{ marginTop: '16px' }}>
               <FieldLabel>Product class</FieldLabel>
@@ -806,7 +841,17 @@ function EditRecipeForm({
             </div>
 
             <div style={{ marginTop: '16px' }}>
-              <FieldLabel>Type</FieldLabel>
+              <FieldLabel
+                help={
+                  <>
+                    <strong>Stand-alone</strong>: sold on its own (most recipes).{' '}
+                    <strong>Component</strong>: used inside other recipes (e.g. a sauce, a base mix).{' '}
+                    <strong>Assembly</strong>: built from sub-recipes (e.g. a sandwich whose bread + filling are their own recipes).
+                  </>
+                }
+              >
+                Type
+              </FieldLabel>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                 {(['standalone', 'component', 'assembly'] as Recipe['kind'][]).map((k) => {
                   const on = draftKind === k;
@@ -819,12 +864,12 @@ function EditRecipeForm({
                       disabled={disabled}
                       title={disabled ? 'Add a sub-recipe first to make this an assembly' : undefined}
                       style={{
-                        padding: '6px 12px',
+                        padding: '7px 13px',
                         borderRadius: '100px',
                         border: on ? '1px solid transparent' : '1px solid var(--color-border-subtle)',
                         background: on ? 'var(--color-accent-active)' : '#fff',
                         color: on ? '#fff' : 'var(--color-text-secondary)',
-                        fontSize: '12px', fontWeight: 600,
+                        fontSize: '13px', fontWeight: 600,
                         cursor: disabled ? 'not-allowed' : 'pointer',
                         fontFamily: 'var(--font-primary)',
                         opacity: disabled ? 0.5 : 1,
@@ -834,12 +879,20 @@ function EditRecipeForm({
                     </button>
                   );
                 })}
-                <CheckRow label="Day-end prep" checked={draftIsPrep} onChange={setDraftIsPrep} />
               </div>
             </div>
 
             <div style={{ marginTop: '16px' }}>
-              <FieldLabel>Inventory &amp; costing</FieldLabel>
+              <FieldLabel
+                help={
+                  <>
+                    <strong>Count in stock take</strong>: include when counting physical inventory.{' '}
+                    <strong>Exclude from COGs</strong>: skip in cost-of-goods calculations (e.g. comps, parent-rolled items).
+                  </>
+                }
+              >
+                Inventory &amp; costing
+              </FieldLabel>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                 {[
                   {
@@ -861,12 +914,12 @@ function EditRecipeForm({
                     onClick={() => patch(key, !on)}
                     title={hint}
                     style={{
-                      padding: '6px 12px',
+                      padding: '7px 13px',
                       borderRadius: '100px',
                       border: on ? '1px solid transparent' : '1px solid var(--color-border-subtle)',
                       background: on ? 'var(--color-accent-active)' : '#fff',
                       color: on ? '#fff' : 'var(--color-text-secondary)',
-                      fontSize: '12px',
+                      fontSize: '13px',
                       fontWeight: 600,
                       cursor: 'pointer',
                       fontFamily: 'var(--font-primary)',
@@ -877,98 +930,66 @@ function EditRecipeForm({
                 ))}
               </div>
             </div>
+
           </Card>
 
-          {/* Ingredients & Packaging & POS-modifiers cards — only shown
-              when the recipe has NO variants. Once variants exist, the
-              composition lives inside the Variants matrix instead so we
-              don't end up with two surfaces editing the same data. */}
-          {draft.variants.length === 0 && (
-            <>
-              <Card>
-                <SectionHeader
-                  title="Ingredients"
-                  hint="Search across master products, supplier SKUs, and your own sub-recipes / components in one place — pick whichever you recognise and Edify resolves the rest. Build order is top → bottom (use the row arrows to reorder). Use the Site qty button to set per-site quantities (e.g. 16g at Site A, 18g at Site B)."
-                />
-                <IngredientsV2Section
-                  rows={draft.ingredientsV2}
-                  sites={draft.sites.length > 0 ? draft.sites : SITES}
-                  onChange={(next) => patch('ingredientsV2', next)}
-                />
-              </Card>
+          {/* Composition — ingredients / packaging / modifiers / variants /
+              allergens / instructions / photo.  All composition concerns
+              live here; settings (type, costing, production) follow. */}
+          <RecipeCompositionSection
+            ingredients={draft.ingredientsV2}
+            packaging={draft.packagingV2}
+            modifierGroupIds={draft.modifierGroupIds}
+            variants={draft.variants}
+            basePrices={{
+              dineIn: typeof draft.srpDineInEx === 'number' ? draft.srpDineInEx : 0,
+              takeaway: typeof draft.srpTakeawayEx === 'number' ? draft.srpTakeawayEx : 0,
+              delivery: typeof draft.srpDeliveryEx === 'number' ? draft.srpDeliveryEx : 0,
+            }}
+            allergens={draft.allergens}
+            instructions={draft.instructions}
+            photoName={draft.photoName}
+            sites={draft.sites}
+            onIngredientsChange={(next) => patch('ingredientsV2', next)}
+            onPackagingChange={(next) => patch('packagingV2', next)}
+            onModifierGroupsChange={(next) => patch('modifierGroupIds', next)}
+            onVariantsChange={(next) => {
+              // Keep the live preview pointed at a still-existing variant.
+              if (next.length > 0 && !next.some((v) => v.id === draft.previewVariantId)) {
+                const fallback = next.find((v) => v.isDefault)?.id ?? next[0].id;
+                setDraft((d) => ({ ...d, variants: next, previewVariantId: fallback }));
+                return;
+              }
+              if (next.length === 0 && draft.previewVariantId) {
+                setDraft((d) => ({ ...d, variants: next, previewVariantId: '' }));
+                return;
+              }
+              patch('variants', next);
+            }}
+            onAllergensChange={(next) => patch('allergens', next)}
+            onInstructionsChange={(v) => patch('instructions', v)}
+            onPhotoChange={(name) => patch('photoName', name)}
+          />
 
-              <Card>
-                <SectionHeader
-                  title="Packaging"
-                  hint="Cups, lids, bags, labels — anything physical the order consumes. Listed here so modifiers can swap or add packaging (e.g. Large coffee → 12oz cup) without you maintaining a separate matching table."
-                />
-                <IngredientsV2Section
-                  rows={draft.packagingV2}
-                  sites={draft.sites.length > 0 ? draft.sites : SITES}
-                  onChange={(next) => patch('packagingV2', next)}
-                  itemLabel="packaging"
-                />
-              </Card>
-            </>
+          {/* Legacy free-text packaging — only shown for recipes that were
+              saved before the packagingV2 model existed and have never
+              been through the new editor. Hidden once packagingV2 or
+              variants are in use. */}
+          {draft.packaging.length > 0 && draft.packagingV2.length === 0 && draft.variants.length === 0 && (
+            <CollapsibleCard
+              label="Packaging (legacy)"
+              hint={`${draft.packaging.length} row${draft.packaging.length === 1 ? '' : 's'} — migrate to the Packaging card above to use the new model`}
+              open={draft.showPackaging}
+              onToggle={() => patch('showPackaging', !draft.showPackaging)}
+            >
+              <PackagingTable
+                rows={draft.packaging}
+                onChange={(rid, p) => patch('packaging', draft.packaging.map((r) => r.id === rid ? { ...r, ...p } : r))}
+                onRemove={(rid) => patch('packaging', draft.packaging.filter((r) => r.id !== rid))}
+                onAdd={() => patch('packaging', [...draft.packaging, emptyPackaging()])}
+              />
+            </CollapsibleCard>
           )}
-
-          {/* Variants — alternative full compositions of the recipe,
-              rendered as a matrix. When this section has rows, the base
-              Ingredients / Packaging / POS-modifiers cards above are
-              hidden so there's only one place to think about what fires
-              per variant. */}
-          <Card>
-            <SectionHeader
-              title="Variants"
-              hint="Alternative versions of this recipe — Small / Medium / Large, Hot / Iced, etc. Each variant is a column in the matrix below; cells that differ across variants are highlighted. When no variants exist, the recipe uses the base Ingredients / Packaging / Modifiers cards."
-            />
-            <VariantsSection
-              variants={draft.variants}
-              baseIngredients={draft.ingredientsV2}
-              basePackaging={draft.packagingV2}
-              baseModifierGroupIds={draft.modifierGroupIds}
-              basePrices={{
-                dineIn: typeof draft.srpDineInEx === 'number' ? draft.srpDineInEx : 0,
-                takeaway: typeof draft.srpTakeawayEx === 'number' ? draft.srpTakeawayEx : 0,
-                delivery: typeof draft.srpDeliveryEx === 'number' ? draft.srpDeliveryEx : 0,
-              }}
-              onChange={(next) => {
-                // Keep the live preview pointed at a still-existing variant.
-                if (next.length > 0 && !next.some((v) => v.id === draft.previewVariantId)) {
-                  const fallback = next.find((v) => v.isDefault)?.id ?? next[0].id;
-                  setDraft((d) => ({ ...d, variants: next, previewVariantId: fallback }));
-                  return;
-                }
-                if (next.length === 0 && draft.previewVariantId) {
-                  setDraft((d) => ({ ...d, variants: next, previewVariantId: '' }));
-                  return;
-                }
-                patch('variants', next);
-              }}
-            />
-          </Card>
-
-          {/* POS & modifiers — sellability is always shown; base modifier
-              attachments only when the recipe has no variants (variants
-              own their own modifier groups via the matrix). */}
-          <Card>
-            <SectionHeader
-              title="POS & modifiers"
-              hint={draft.variants.length > 0
-                ? 'Sellability for this recipe. Modifier groups are attached per-variant in the matrix above.'
-                : 'Sellability + attached modifier groups. Toggle POS-linked once this recipe is ready to fire from the till. Modifier groups are created in the library; attach existing ones here.'}
-            />
-            <PosAndModifiersSection
-              posLinked={draft.posLinked}
-              posSourceId={draft.posSourceId}
-              modifierGroupIds={draft.modifierGroupIds}
-              allGroups={allGroups}
-              showModifierGroups={draft.variants.length === 0}
-              onPatchPosLinked={(v) => patch('posLinked', v)}
-              onPatchPosSourceId={(v) => patch('posSourceId', v)}
-              onPatchGroups={(v) => patch('modifierGroupIds', v)}
-            />
-          </Card>
 
           {/* Slot-driven (advanced) section is hidden from the editor for
               now — the concept of named slots driving shared modifier
@@ -982,69 +1003,164 @@ function EditRecipeForm({
                   <CollapsibleCard label="Slot-driven (advanced)"…> back
                   here and the wiring still works.  */}
 
-          {/* Packaging */}
+          {/* Production settings — everything operational: visibility,
+              bakery/hot, prep time, key ingredients, tags, batch sizes,
+              sub-recipe flag, shelf life, closing range, carry-over, PCR,
+              used-for. Status (lifecycle) lives at the top of Basics; the
+              former "Status & stocking" card is gone. */}
           <CollapsibleCard
-            label="Packaging"
-            hint={draft.packaging.length ? `${draft.packaging.length} row${draft.packaging.length === 1 ? '' : 's'}` : 'Cups, lids, boxes — cost rolls into takeaway / delivery pricing'}
-            open={draft.showPackaging}
-            onToggle={() => patch('showPackaging', !draft.showPackaging)}
+            label="Production settings"
+            hint="Visibility, prep time, batch sizes, shelf life, stocking & production flags"
+            open={draft.showProduction}
+            onToggle={() => patch('showProduction', !draft.showProduction)}
           >
-            <PackagingTable
-              rows={draft.packaging}
-              onChange={(rid, p) => patch('packaging', draft.packaging.map((r) => r.id === rid ? { ...r, ...p } : r))}
-              onRemove={(rid) => patch('packaging', draft.packaging.filter((r) => r.id !== rid))}
-              onAdd={() => patch('packaging', [...draft.packaging, emptyPackaging()])}
-            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <FieldLabel help="Where this recipe shows up in production — Bar (drinks), Kitchen (food), Pastry, or Variable (assigned at order time).">
+                  Production visibility
+                </FieldLabel>
+                <PillMulti options={PRODUCTION_VIS} selected={draft.productionVis} onChange={(v) => patch('productionVis', v)} />
+              </div>
+
+              <div>
+                <FieldLabel help="Does this recipe come from the bakery, from hot production, both, or neither? Drives production routing and KDS workflows.">
+                  Bakery / hot production
+                </FieldLabel>
+                <PillSingle options={BAKERY_HOT_PRODUCTION} selected={draft.bakeryHot} onChange={(v) => patch('bakeryHot', v)} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div>
+                  <FieldLabel>Preparation time (seconds)</FieldLabel>
+                  <input
+                    type="number"
+                    value={draft.prepSec}
+                    onChange={(e) => patch('prepSec', e.target.value === '' ? '' : Number(e.target.value))}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <FieldLabel help="Optional code used to cross-reference this recipe in upstream production systems or printed prep sheets.">
+                    Production reference
+                  </FieldLabel>
+                  <input
+                    type="text"
+                    value={draft.productionRef}
+                    onChange={(e) => patch('productionRef', e.target.value)}
+                    placeholder="e.g. PR-FW-8OZ"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <FieldLabel>Key ingredients <Soft>(used for menu filtering)</Soft></FieldLabel>
+                <TagInput value={draft.keyIngredients} onChange={(v) => patch('keyIngredients', v)} placeholder="Type and press Enter" />
+              </div>
+
+              <div>
+                <FieldLabel>Recipe tags</FieldLabel>
+                <TagInput value={draft.tags} onChange={(v) => patch('tags', v)} placeholder="Type and press Enter" />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
+                <div>
+                  <FieldLabel help="The smallest run size production will accept. Useful when a recipe must be made in at least N units (e.g. minimum dough mix).">
+                    Min batch size
+                  </FieldLabel>
+                  <input
+                    type="number"
+                    value={draft.minBatch}
+                    onChange={(e) => patch('minBatch', e.target.value === '' ? '' : Number(e.target.value))}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <FieldLabel help='The largest run production will accept in a single batch. Type "unlimited" to remove the cap.'>
+                    Max batch size
+                  </FieldLabel>
+                  <input
+                    type="text"
+                    value={draft.maxBatch === 'unlimited' ? 'unlimited' : String(draft.maxBatch)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '' || v === 'unlimited') patch('maxBatch', v as '' | 'unlimited');
+                      else if (!isNaN(Number(v))) patch('maxBatch', Number(v));
+                    }}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <FieldLabel help="Quantities are rounded to multiples of this number. e.g. 6 means batches always come in lots of 6.">
+                    Batch multiple
+                  </FieldLabel>
+                  <input
+                    type="number"
+                    value={draft.batchMultiple}
+                    onChange={(e) => patch('batchMultiple', e.target.value === '' ? '' : Number(e.target.value))}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <FieldLabel>Shelf life</FieldLabel>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <input
+                    type="number"
+                    value={draft.shelfLifeValue}
+                    onChange={(e) => patch('shelfLifeValue', e.target.value === '' ? '' : Number(e.target.value))}
+                    style={{ ...inputStyle, width: '100px', flexShrink: 0 }}
+                  />
+                  <PillSingle options={SHELF_LIFE_UNITS} selected={draft.shelfLifeUnit} onChange={(v) => patch('shelfLifeUnit', v as ShelfLifeUnit)} />
+                </div>
+              </div>
+
+              <div>
+                <FieldLabel help='Day-of-week range when this item must be closed out / counted down at end of day. Format is "1–5" (Mon–Fri).'>
+                  Closing range
+                </FieldLabel>
+                <input
+                  type="text"
+                  value={draft.closingRange}
+                  onChange={(e) => patch('closingRange', e.target.value)}
+                  placeholder="e.g. 1–5"
+                  style={{ ...inputStyle, maxWidth: '220px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
+                <CheckRow
+                  label="Sub-recipe"
+                  checked={draft.isSubRecipe}
+                  onChange={(v) => patch('isSubRecipe', v)}
+                  help="Flag this recipe as something used inside other recipes (e.g. a sauce, a base). Distinct from the Type pill in Basics — that one's about how this recipe is sold."
+                />
+                <CheckRow
+                  label="Allow carry-over"
+                  checked={draft.allowCarryOver}
+                  onChange={(v) => patch('allowCarryOver', v)}
+                  help="Leftover stock from one day can be sold the next. Off means anything unsold at close must be wasted."
+                />
+                <CheckRow
+                  label="Enable preparation PCR"
+                  checked={draft.enablePcr}
+                  onChange={(v) => patch('enablePcr', v)}
+                  help="Production Cost Reconciliation — require staff to log actual ingredient usage against the recipe so variance is tracked."
+                />
+              </div>
+
+              <div>
+                <FieldLabel>Used for <Soft>(assembly names — which meals/combos use this)</Soft></FieldLabel>
+                <TagInput value={draft.usedFor} onChange={(v) => patch('usedFor', v)} placeholder="Add assembly name and press Enter" />
+              </div>
+            </div>
           </CollapsibleCard>
 
-          {/* Instructions */}
-          <Card>
-            <FieldLabel>Instructions <Soft>(optional)</Soft></FieldLabel>
-            <textarea
-              value={draft.instructions}
-              onChange={(e) => patch('instructions', e.target.value)}
-              placeholder="How the team should make this — prep, build, finish."
-              rows={3}
-              style={textareaStyle}
-            />
-          </Card>
-
-          {/* Allergens */}
-          <Card>
-            <FieldLabel>Allergens <Soft>(optional)</Soft></FieldLabel>
-            <PillMulti options={ALLERGENS} selected={draft.allergens} onChange={(v) => patch('allergens', v)} />
-          </Card>
-
-          {/* Photo */}
-          <Card>
-            <FieldLabel>Photo <Soft>(optional)</Soft></FieldLabel>
-            <label
-              style={{
-                display: 'flex', alignItems: 'center', gap: '10px',
-                padding: '14px 16px', borderRadius: '10px',
-                border: '1.5px dashed var(--color-border)',
-                cursor: 'pointer',
-                background: draft.photoName ? 'var(--color-success-light)' : 'var(--color-bg-hover)',
-              }}
-            >
-              <ImageIcon size={18} color={draft.photoName ? 'var(--color-success)' : 'var(--color-text-muted)'} strokeWidth={1.8} />
-              <span style={{ fontSize: '13px', color: draft.photoName ? 'var(--color-success)' : 'var(--color-text-secondary)', flex: 1 }}>
-                {draft.photoName ?? 'Drop an image or click to upload'}
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                style={{ display: 'none' }}
-                onChange={(e) => patch('photoName', e.target.files?.[0]?.name ?? null)}
-              />
-            </label>
-          </Card>
-
           {/* Production flow — combined card for workflow attachment +
-              diagram + stage editor. Was previously two separate cards
-              ("Workflow stages" + "Production flow") which were
-              conceptually the same area; the dropdown makes the
-              workflow itself optional on a recipe. */}
+              diagram + stage editor. Sits at the bottom because the
+              workflow attaches recipe-level metadata that's most useful
+              after composition + settings are dialled in. */}
           <CollapsibleCard
             label="Production flow"
             hint={
@@ -1057,8 +1173,6 @@ function EditRecipeForm({
             open={showWorkflowSections}
             onToggle={() => setShowWorkflowSections((v) => !v)}
           >
-            {/* Workflow attach dropdown — None or any catalogue workflow.
-                Edits to a workflow affect every recipe sharing it. */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
               <FieldLabel>Workflow <Soft>(optional)</Soft></FieldLabel>
               <select
@@ -1087,8 +1201,6 @@ function EditRecipeForm({
               )}
             </div>
 
-            {/* Diagram — visible whenever there's something to draw
-                (workflow attached OR sub-recipes present). */}
             {((draftSubRecipes?.length ?? 0) > 0 || draftWorkflow) ? (
               <>
                 <WorkflowDiagram
@@ -1100,20 +1212,19 @@ function EditRecipeForm({
                       : workflows
                   }
                 />
-                <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--color-text-muted)' }}>
-                  {kindToModeLabel({ ...original, kind: draftKind, isPrep: draftIsPrep })}
+                <div style={{ marginTop: '10px', fontSize: '13px', color: 'var(--color-text-muted)' }}>
+                  {kindToModeLabel({ ...original, kind: draftKind, isPrep: original.isPrep })}
                   {draft.shelfLifeValue !== '' && (
                     <> · Shelf life {formatShelfLife(shelfLifeToMinutes(draft.shelfLifeValue, draft.shelfLifeUnit) ?? 0)}</>
                   )}
                 </div>
               </>
             ) : (
-              <div style={{ padding: '12px', fontSize: 12, color: 'var(--color-text-muted)', background: 'var(--color-bg-hover)', borderRadius: 8 }}>
+              <div style={{ padding: '12px', fontSize: 13, color: 'var(--color-text-muted)', background: 'var(--color-bg-hover)', borderRadius: 8 }}>
                 No workflow attached and no sub-recipes in this recipe yet. Pick a workflow above to add stages, or add a sub-recipe in the Ingredients section.
               </div>
             )}
 
-            {/* Stage editor — only when a workflow is attached. */}
             {draftWorkflow && (
               <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--color-border-subtle)' }}>
                 <SectionHeader
@@ -1127,155 +1238,15 @@ function EditRecipeForm({
               </div>
             )}
           </CollapsibleCard>
-
-          {/* Production settings */}
-          <CollapsibleCard
-            label="Production settings"
-            hint="Visibility, prep time, key ingredients, batch sizes"
-            open={draft.showProduction}
-            onToggle={() => patch('showProduction', !draft.showProduction)}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <FieldLabel>Production visibility</FieldLabel>
-                <PillMulti options={PRODUCTION_VIS} selected={draft.productionVis} onChange={(v) => patch('productionVis', v)} />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div>
-                  <FieldLabel>Preparation time (seconds)</FieldLabel>
-                  <input
-                    type="number"
-                    value={draft.prepSec}
-                    onChange={(e) => patch('prepSec', e.target.value === '' ? '' : Number(e.target.value))}
-                    style={inputStyle}
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Production reference</FieldLabel>
-                  <input
-                    type="text"
-                    value={draft.productionRef}
-                    onChange={(e) => patch('productionRef', e.target.value)}
-                    placeholder="e.g. PR-FW-8OZ"
-                    style={inputStyle}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <FieldLabel>Key ingredients <Soft>(used for menu filtering)</Soft></FieldLabel>
-                <TagInput value={draft.keyIngredients} onChange={(v) => patch('keyIngredients', v)} placeholder="Type and press Enter" />
-              </div>
-
-              <div>
-                <FieldLabel>Recipe tags</FieldLabel>
-                <TagInput value={draft.tags} onChange={(v) => patch('tags', v)} placeholder="Type and press Enter" />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
-                <div>
-                  <FieldLabel>Min batch size</FieldLabel>
-                  <input
-                    type="number"
-                    value={draft.minBatch}
-                    onChange={(e) => patch('minBatch', e.target.value === '' ? '' : Number(e.target.value))}
-                    style={inputStyle}
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Max batch size</FieldLabel>
-                  <input
-                    type="text"
-                    value={draft.maxBatch === 'unlimited' ? 'unlimited' : String(draft.maxBatch)}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === '' || v === 'unlimited') patch('maxBatch', v as '' | 'unlimited');
-                      else if (!isNaN(Number(v))) patch('maxBatch', Number(v));
-                    }}
-                    style={inputStyle}
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Batch multiple</FieldLabel>
-                  <input
-                    type="number"
-                    value={draft.batchMultiple}
-                    onChange={(e) => patch('batchMultiple', e.target.value === '' ? '' : Number(e.target.value))}
-                    style={inputStyle}
-                  />
-                </div>
-              </div>
-            </div>
-          </CollapsibleCard>
-
-          {/* Advanced */}
-          <CollapsibleCard
-            label="Advanced"
-            hint="Status, shelf life, bakery/hot production, carry-over, PCR, used-for"
-            open={draft.showAdvanced}
-            onToggle={() => patch('showAdvanced', !draft.showAdvanced)}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <FieldLabel>Status</FieldLabel>
-                <select
-                  value={draft.status}
-                  onChange={(e) => patch('status', e.target.value)}
-                  style={{ ...selectStyle, maxWidth: '220px' }}
-                >
-                  {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              {/* Product class moved to Core (now labelled "Product
-                  class", backed by the same `draft.category` field).
-                  The legacy `draft.productClass` value is still
-                  round-tripped through the form draft so existing
-                  fixtures keep their value on save. */}
-
-              <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
-                <CheckRow label="Sub-recipe" checked={draft.isSubRecipe} onChange={(v) => patch('isSubRecipe', v)} />
-              </div>
-
-              <div>
-                <FieldLabel>Shelf life</FieldLabel>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                  <input
-                    type="number"
-                    value={draft.shelfLifeValue}
-                    onChange={(e) => patch('shelfLifeValue', e.target.value === '' ? '' : Number(e.target.value))}
-                    style={{ ...inputStyle, width: '100px', flexShrink: 0 }}
-                  />
-                  <PillSingle options={SHELF_LIFE_UNITS} selected={draft.shelfLifeUnit} onChange={(v) => patch('shelfLifeUnit', v as ShelfLifeUnit)} />
-                </div>
-              </div>
-
-              <div>
-                <FieldLabel>Closing range</FieldLabel>
-                <input
-                  type="text"
-                  value={draft.closingRange}
-                  onChange={(e) => patch('closingRange', e.target.value)}
-                  placeholder="e.g. 1–5"
-                  style={{ ...inputStyle, maxWidth: '220px' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
-                <CheckRow label="Allow carry-over" checked={draft.allowCarryOver} onChange={(v) => patch('allowCarryOver', v)} />
-                <CheckRow label="Enable preparation PCR" checked={draft.enablePcr} onChange={(v) => patch('enablePcr', v)} />
-              </div>
-
-              <div>
-                <FieldLabel>Used for <Soft>(assembly names — which meals/combos use this)</Soft></FieldLabel>
-                <TagInput value={draft.usedFor} onChange={(v) => patch('usedFor', v)} placeholder="Add assembly name and press Enter" />
-              </div>
-            </div>
-          </CollapsibleCard>
         </div>
 
         {/* ── RIGHT COLUMN ────────────────────────────────────────────── */}
-        <div style={{ position: 'sticky', top: 80, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <CollapsibleSidebar
+          collapsed={priceCollapsed}
+          onToggle={() => setPriceCollapsed((v) => !v)}
+          label="Pricing"
+          top={80}
+        >
           <PriceCard
             totalCost={totalCost}
             ingredientCost={ingredientCost}
@@ -1325,7 +1296,7 @@ function EditRecipeForm({
             >
               <div
                 style={{
-                  fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em',
+                  fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em',
                   textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: '12px',
                 }}
               >
@@ -1341,7 +1312,7 @@ function EditRecipeForm({
                       onClick={() => router.push(`/recipes/${parentId}/edit`)}
                       style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px',
-                        padding: '7px 11px', borderRadius: '8px',
+                        padding: '8px 12px', borderRadius: '8px',
                         border: '1px solid var(--color-border-subtle)',
                         background: '#fff', cursor: 'pointer',
                         fontFamily: 'var(--font-primary)',
@@ -1349,7 +1320,7 @@ function EditRecipeForm({
                       onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
                     >
-                      <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{parent.name}</span>
+                      <span style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{parent.name}</span>
                       <KindPill kind={parent.kind} isPrep={parent.isPrep} />
                     </button>
                   );
@@ -1358,7 +1329,7 @@ function EditRecipeForm({
             </div>
           )}
 
-        </div>
+        </CollapsibleSidebar>
       </div>
 
       {/* Sticky bottom bar */}
@@ -1374,7 +1345,7 @@ function EditRecipeForm({
         }}
       >
         <div style={{ maxWidth: '1260px', width: '100%', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ flex: 1, fontSize: '12.5px', color: 'var(--color-text-muted)' }}>
+          <div style={{ flex: 1, fontSize: '13.5px', color: 'var(--color-text-muted)' }}>
             {canPublish
               ? <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>Ready to save</span>
               : 'Add a name, category, and at least one ingredient.'}
@@ -1389,7 +1360,7 @@ function EditRecipeForm({
               opacity: saveDisabled ? 0.5 : 1, cursor: saveDisabled ? 'not-allowed' : 'pointer',
             }}
           >
-            <Save size={13} strokeWidth={2.4} /> Save changes
+            <Save size={14} strokeWidth={2.4} /> Save changes
           </button>
         </div>
       </div>
@@ -1416,13 +1387,16 @@ function PosAndModifiersSection({
   onPatchPosSourceId: (v: string) => void;
   onPatchGroups: (v: string[]) => void;
 }) {
-  const router = useRouter();
-  // The drawer stays in edit-only mode. Inline creation was removed
-  // deliberately: groups are catalogue-level, and inline-create leads
-  // to duplicate near-identical groups across recipes — defeats the
-  // whole point of a library. Creation now happens only from
-  // /modifier-groups.
-  const [editGroup, setEditGroup] = useState<ModifierGroup | null>(null);
+  // Drawer state — edit hosts an existing group, create opens a blank
+  // one. Inline create is fine here: the drawer saves to the catalogue
+  // via `upsertGroup` (same as the standalone /modifier-groups editor),
+  // so groups stay library-level, and on save we auto-attach the new
+  // group to this recipe.
+  const [drawer, setDrawer] = useState<
+    | { mode: 'closed' }
+    | { mode: 'create' }
+    | { mode: 'edit'; group: ModifierGroup }
+  >({ mode: 'closed' });
   // Whether the "Attach existing" picker is open. Shows unattached
   // groups only — attached ones live in the chip strip above.
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -1482,15 +1456,15 @@ function PosAndModifiersSection({
       {showModifierGroups && (
       <div>
         <FieldLabel>
-          Modifier groups <Soft>({attached.length} attached · create new ones in the library)</Soft>
+          Modifier groups <Soft>({attached.length} attached)</Soft>
         </FieldLabel>
         {attached.length === 0 ? (
           <div
             style={{
               display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-              padding: '10px 12px', borderRadius: 8,
+              padding: '11px 13px', borderRadius: 8,
               background: 'var(--color-bg-hover)',
-              fontSize: 12.5, color: 'var(--color-text-muted)',
+              fontSize: 13.5, color: 'var(--color-text-muted)',
             }}
           >
             <span>No modifier groups attached.</span>
@@ -1501,10 +1475,10 @@ function PosAndModifiersSection({
             ) : (
               <button
                 type="button"
-                onClick={() => router.push('/modifier-groups')}
+                onClick={() => setDrawer({ mode: 'create' })}
                 style={attachChip}
               >
-                <Plus size={12} strokeWidth={2.4} /> Create in library
+                <Plus size={12} strokeWidth={2.4} /> Create modifier group
               </button>
             )}
           </div>
@@ -1515,7 +1489,7 @@ function PosAndModifiersSection({
                 key={g.id}
                 group={g}
                 onDetach={() => detach(g.id)}
-                onEdit={() => setEditGroup(g)}
+                onEdit={() => setDrawer({ mode: 'edit', group: g })}
               />
             ))}
             {unattached.length > 0 && (
@@ -1533,16 +1507,24 @@ function PosAndModifiersSection({
           unattached={unattached}
           onPick={(id) => attach(id)}
           onClose={() => setPickerOpen(false)}
-          onGoToLibrary={() => router.push('/modifier-groups')}
+          onCreate={() => { setPickerOpen(false); setDrawer({ mode: 'create' }); }}
         />
       )}
 
       <GroupEditorDrawer
-        open={editGroup !== null}
-        mode="edit"
-        initial={editGroup}
-        onClose={() => setEditGroup(null)}
-        onSaved={() => { /* catalogue already updated via upsertGroup */ }}
+        open={drawer.mode !== 'closed'}
+        mode={drawer.mode === 'edit' ? 'edit' : 'create'}
+        initial={drawer.mode === 'edit' ? drawer.group : null}
+        onClose={() => setDrawer({ mode: 'closed' })}
+        onSaved={(group) => {
+          // In create mode the new group lands in the catalogue via
+          // upsertGroup; auto-attach it so the user doesn't have to
+          // re-open the picker to find their just-created group.
+          if (drawer.mode === 'create' && !modifierGroupIds.includes(group.id)) {
+            onPatchGroups([...modifierGroupIds, group.id]);
+          }
+          setDrawer({ mode: 'closed' });
+        }}
         onDeleted={handleDeleted}
       />
     </div>
@@ -1568,9 +1550,9 @@ function AttachedGroupChip({
       <span
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
-          padding: '6px 11px',
+          padding: '7px 12px',
           color: 'var(--color-accent-active)',
-          fontSize: 12.5, fontWeight: 600,
+          fontSize: 13.5, fontWeight: 600,
           fontFamily: 'var(--font-primary)',
         }}
       >
@@ -1586,13 +1568,13 @@ function AttachedGroupChip({
         aria-label={`Edit ${group.name}`}
         style={{
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          padding: '0 9px', border: 'none',
+          padding: '0 10px', border: 'none',
           borderLeft: '1px solid rgba(3,28,89,0.20)',
           background: 'transparent', color: 'var(--color-text-muted)',
           cursor: 'pointer',
         }}
       >
-        <Pencil size={11} />
+        <Pencil size={12} />
       </button>
       <button
         type="button"
@@ -1614,12 +1596,14 @@ function AttachedGroupChip({
 }
 
 function AttachGroupPicker({
-  unattached, onPick, onClose, onGoToLibrary,
+  unattached, onPick, onClose, onCreate,
 }: {
   unattached: ModifierGroup[];
   onPick: (id: string) => void;
   onClose: () => void;
-  onGoToLibrary: () => void;
+  /** Opens the modifier-group editor drawer in create mode so the user
+   *  can build a brand-new group without leaving the recipe. */
+  onCreate: () => void;
 }) {
   return (
     <div
@@ -1631,7 +1615,7 @@ function AttachGroupPicker({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
           Attach existing modifier group
         </span>
         <span style={{ flex: 1 }} />
@@ -1643,13 +1627,12 @@ function AttachGroupPicker({
             padding: 4, color: 'var(--color-text-muted)',
           }}
         >
-          <X size={14} />
+          <X size={15} />
         </button>
       </div>
       {unattached.length === 0 ? (
-        <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)' }}>
-          Every group in the library is already attached. Create a new one in
-          the modifier-group library.
+        <div style={{ fontSize: 13.5, color: 'var(--color-text-muted)' }}>
+          Every group in the library is already attached. Create a new one below.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1660,16 +1643,16 @@ function AttachGroupPicker({
               onClick={() => onPick(g.id)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10,
-                padding: '8px 10px', borderRadius: 8,
+                padding: '9px 11px', borderRadius: 8,
                 border: '1px solid var(--color-border-subtle)',
                 background: '#fff', cursor: 'pointer',
                 textAlign: 'left', fontFamily: 'var(--font-primary)',
               }}
             >
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-primary)', flex: 1 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-text-primary)', flex: 1 }}>
                 {g.name}
               </span>
-              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
                 {g.selection === 'one' ? 'pick one' : 'pick many'} · {g.options.length} options
               </span>
             </button>
@@ -1677,15 +1660,15 @@ function AttachGroupPicker({
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 4 }}>
-        <span style={{ fontSize: 11, color: 'var(--color-text-muted)', flex: 1 }}>
+        <span style={{ fontSize: 12, color: 'var(--color-text-muted)', flex: 1 }}>
           Need a new group?
         </span>
         <button
           type="button"
-          onClick={onGoToLibrary}
+          onClick={onCreate}
           style={attachChip}
         >
-          Open library
+          <Plus size={13} strokeWidth={2.4} /> New group
         </button>
       </div>
     </div>
@@ -1694,10 +1677,10 @@ function AttachGroupPicker({
 
 const attachChip: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 5,
-  padding: '6px 11px', borderRadius: 100,
+  padding: '7px 12px', borderRadius: 100,
   border: '1px dashed var(--color-border)', background: '#fff',
   color: 'var(--color-text-secondary)',
-  fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+  fontSize: 13.5, fontWeight: 600, cursor: 'pointer',
   fontFamily: 'var(--font-primary)',
 };
 
@@ -1724,7 +1707,7 @@ function SlotsSection({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.4 }}>
+      <div style={{ fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.45 }}>
         Slots are ingredient placeholders that <code>set-slot</code> modifier effects can target.
         Use this for the spirit (one Spirit measure group targets every spirit recipe), wine (no
         default pour size), or sized-portion patterns.
@@ -1912,7 +1895,7 @@ function WhatGetsSoldPreview({
     >
       <div
         style={{
-          fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em',
+          fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em',
           textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: '8px',
           display: 'flex', alignItems: 'center', gap: 6,
         }}
@@ -1924,7 +1907,7 @@ function WhatGetsSoldPreview({
       </div>
 
       {!draft.posLinked && (
-        <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginBottom: 10 }}>
+        <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginBottom: 10 }}>
           Not POS-linked — modifier groups won&apos;t fire on the till. Toggle POS link in the
           &ldquo;POS &amp; modifiers&rdquo; section to enable.
         </div>
@@ -1932,7 +1915,7 @@ function WhatGetsSoldPreview({
 
       {draft.variants.length > 0 && (
         <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 4, display: 'inline-flex', gap: 6 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 4, display: 'inline-flex', gap: 6 }}>
             Variant
             <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>
               · pick one (mandatory)

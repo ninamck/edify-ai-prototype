@@ -256,6 +256,12 @@ export type RecipeVariant = {
    *  id). Stored on the variant itself rather than a separate mapping
    *  table. */
   posSourceId?: string;
+  /** Allergens that apply specifically to this variant, in addition to
+   *  or instead of the recipe's base allergen set. When set, the UI
+   *  shows the base set with per-variant additions/removals highlighted.
+   *  Optional — when absent the variant inherits the recipe's base
+   *  allergens with no changes. */
+  allergens?: string[];
 };
 
 /**

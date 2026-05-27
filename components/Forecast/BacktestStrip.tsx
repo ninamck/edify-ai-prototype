@@ -67,8 +67,8 @@ export default function BacktestStrip({ siteId, dates, onPick }: Props) {
           flexWrap: 'wrap',
         }}
       >
-        <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-          How accurate has Quinn been? · last {dates.length} days
+        <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+          Forecast accuracy · last {dates.length} days
         </h2>
         <div
           role="tablist"
@@ -100,7 +100,7 @@ export default function BacktestStrip({ siteId, dates, onPick }: Props) {
                   padding: '5px 12px',
                   borderRadius: 100,
                   border: 'none',
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 600,
                   fontFamily: 'var(--font-primary)',
                   cursor: 'pointer',
@@ -147,7 +147,7 @@ export default function BacktestStrip({ siteId, dates, onPick }: Props) {
           <tbody>
             {recipes.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ padding: '24px 16px', textAlign: 'center', fontSize: 12, color: 'var(--color-text-muted)' }}>
+                <td colSpan={5} style={{ padding: '24px 16px', textAlign: 'center', fontSize: 13, color: 'var(--color-text-muted)' }}>
                   Not enough volume to score — backtest needs at least {MIN_FORECAST_VOLUME} forecast units per recipe.
                 </td>
               </tr>
@@ -170,7 +170,7 @@ export default function BacktestStrip({ siteId, dates, onPick }: Props) {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
                       <span
                         style={{
-                          fontSize: 12,
+                          fontSize: 13,
                           fontWeight: 600,
                           color: 'var(--color-text-primary)',
                           overflow: 'hidden',
@@ -181,7 +181,7 @@ export default function BacktestStrip({ siteId, dates, onPick }: Props) {
                       >
                         {r.recipe.name}
                       </span>
-                      <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
+                      <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
                         {r.category} · seen on {r.daysSeen} {r.daysSeen === 1 ? 'day' : 'days'}
                       </span>
                     </div>
@@ -239,12 +239,12 @@ function TendencyChip({ tendency }: { tendency: 'overshoot' | 'undershoot' | 'on
         background: c.bg,
         color: c.color,
         borderRadius: 999,
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: 600,
         whiteSpace: 'nowrap',
       }}
     >
-      <Icon size={11} />
+      <Icon size={12} />
       {c.label}
     </span>
   );
@@ -259,7 +259,7 @@ function formatSignedPct(p: number): string {
 // ─── Cell style helpers ──────────────────────────────────────────────────────
 
 const headLabel: React.CSSProperties = {
-  fontSize: 9,
+  fontSize: 11,
   fontWeight: 700,
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
@@ -267,7 +267,7 @@ const headLabel: React.CSSProperties = {
 };
 
 const numberCell: React.CSSProperties = {
-  fontSize: 13,
+  fontSize: 14,
   fontWeight: 700,
   color: 'var(--color-text-primary)',
   fontVariantNumeric: 'tabular-nums',

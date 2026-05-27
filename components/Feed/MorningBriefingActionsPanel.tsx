@@ -38,7 +38,7 @@ function getOtherActions(role: BriefingRole): OtherActionItem[] {
         {
           id: 'o1',
           title: 'Weekend brunch recipe card',
-          detail: 'Review when Quinn finishes costing.',
+          detail: 'Review when Edify finishes costing.',
           href: '/?open=recipe-costing',
         },
         {

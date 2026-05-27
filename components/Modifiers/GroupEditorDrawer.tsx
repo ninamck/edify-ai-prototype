@@ -2,7 +2,7 @@
 
 /**
  * Slide-out drawer that hosts the full `GroupEditor` body. Used by the
- * recipe editor's "POS & modifiers" card so a user can create a new
+ * recipe editor's "POS & modifiers" section so a user can create a new
  * modifier group (or tweak an existing attached one) without
  * navigating away from the recipe they're editing.
  *

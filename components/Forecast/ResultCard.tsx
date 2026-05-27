@@ -20,7 +20,7 @@
  */
 
 import { useMemo } from 'react';
-import { Coins, ShoppingBag, Users, Info, ArrowDownRight, ArrowUpRight, Clock } from 'lucide-react';
+import { Coins, ShoppingBag, Users, Info, Clock } from 'lucide-react';
 import {
   dayOfWeek,
   DEMO_TODAY,
@@ -35,27 +35,58 @@ import {
   formatPct,
   narrateMiss,
   PHASE_LABEL,
+  type DayTotals,
   type Phase,
   type PhaseStatus,
 } from './economics';
 import { DEMO_NOW_HHMM } from '@/components/Production/PlanStore';
+import EditableKpiTile, {
+  multiplierForNewValue,
+  parseCountInput,
+  parseCurrencyInput,
+} from './TotalEditor';
 
 type Props = {
   siteId: SiteId;
   date: string;
   /** Pre-formatted label like "Today" or "Yesterday · Wed 22 Apr". */
   dateLabel: string;
+  /** Operator-applied total-level multiplier (1.0 = Quinn's baseline). */
+  multiplier: number;
+  /** Update the multiplier from a new target value on one of the tiles. */
+  onMultiplierChange: (multiplier: number | null) => void;
 };
 
-export default function ResultCard({ siteId, date, dateLabel }: Props) {
+export default function ResultCard({
+  siteId,
+  date,
+  dateLabel,
+  multiplier,
+  onMultiplierChange,
+}: Props) {
   const cmp = useMemo(() => compareDay(siteId, date), [siteId, date]);
   const miss = useMemo(() => narrateMiss(siteId, date), [siteId, date]);
   const mix = useMemo(() => channelMixFor(siteId, date), [siteId, date]);
 
-  const forecast = cmp.soFar.forecast; // so-far for today, full for past
+  // Scale forecast numbers by the operator's multiplier; actuals are
+  // untouched (they're what actually rang through the till).
+  const forecastBaseline = cmp.soFar.forecast;
+  const fullDayBaseline = cmp.fullDayForecast;
+  const forecast = useMemo(
+    () => scaleTotals(forecastBaseline, multiplier),
+    [forecastBaseline, multiplier],
+  );
+  const fullDay = useMemo(
+    () => scaleTotals(fullDayBaseline, multiplier),
+    [fullDayBaseline, multiplier],
+  );
   const actual = cmp.soFar.actual;
-  const fullDay = cmp.fullDayForecast;
   const isPartial = cmp.isPartial;
+  const isOverridden = Math.abs(multiplier - 1) > 0.005;
+  // Past Result days are read-only — editing a forecast after the day
+  // has finished is more confusing than useful. Today (live) stays
+  // editable so the operator can update the rest-of-day plan.
+  const editable = isPartial;
   const phases: Phase[] = ['morning', 'midday', 'afternoon'];
 
   // Bar scale uses the day's full-day forecast (the canonical "what we
@@ -86,10 +117,10 @@ export default function ResultCard({ siteId, date, dateLabel }: Props) {
     >
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--color-text-primary)' }}>
           What was forecasted
         </h2>
-        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+        <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
           {dateLabel} · {dayOfWeek(date)}
         </span>
         {isPartial && (
@@ -99,7 +130,7 @@ export default function ResultCard({ siteId, date, dateLabel }: Props) {
               alignItems: 'center',
               gap: 4,
               padding: '2px 8px',
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: 600,
               color: 'var(--color-text-secondary)',
               background: 'var(--color-bg-hover)',
@@ -109,15 +140,16 @@ export default function ResultCard({ siteId, date, dateLabel }: Props) {
               letterSpacing: '0.04em',
             }}
           >
-            <Clock size={10} />
+            <Clock size={11} />
             Live · as of {DEMO_NOW_HHMM}
           </span>
         )}
       </div>
 
-      {/* KPI trio — forecast-so-far vs actual-so-far. Each tile also shows
-          the full-day forecast as a calm sub-line so the operator never
-          loses sight of where the day is meant to land. */}
+      {/* KPI trio — forecast-so-far vs actual-so-far, with inline
+          side-by-side bars and a forecast/actual delta. Tiles are
+          editable while the day is live (re-baseline the rest of the
+          day); past days lock to read-only. */}
       <div
         style={{
           display: 'grid',
@@ -125,32 +157,101 @@ export default function ResultCard({ siteId, date, dateLabel }: Props) {
           gap: 12,
         }}
       >
-        <CompareTile
-          icon={<Coins size={14} />}
+        <EditableKpiTile
+          icon={<Coins size={15} />}
           label="Revenue"
-          forecast={formatCurrency(forecast.revenue)}
-          actual={formatCurrency(actual.revenue)}
-          deltaPct={pctDelta(actual.revenue, forecast.revenue)}
-          deltaAbs={formatCurrency(Math.abs(actual.revenue - forecast.revenue))}
-          fullDay={isPartial ? formatCurrency(fullDay.revenue) : undefined}
+          value={actual.revenue}
+          display={formatCurrency(actual.revenue)}
+          baseline={forecastBaseline.revenue || 1}
+          isOverridden={isOverridden}
+          multiplier={multiplier}
+          editable={editable}
+          parse={parseCurrencyInput}
+          onCommit={v =>
+            onMultiplierChange(
+              v == null
+                ? null
+                : multiplierForNewValue(fullDayBaseline.revenue, v),
+            )
+          }
+          subline={
+            <ForecastSubline
+              label={isPartial ? 'Forecast so far' : 'Forecast'}
+              value={formatCurrency(forecast.revenue)}
+              fullDay={isPartial ? formatCurrency(fullDay.revenue) : undefined}
+            />
+          }
+          compareVisual={
+            <CompareBars
+              forecast={forecast.revenue}
+              actual={actual.revenue}
+              format={formatCurrency}
+            />
+          }
         />
-        <CompareTile
-          icon={<ShoppingBag size={14} />}
+        <EditableKpiTile
+          icon={<ShoppingBag size={15} />}
           label="Items"
-          forecast={formatCount(forecast.items)}
-          actual={formatCount(actual.items)}
-          deltaPct={pctDelta(actual.items, forecast.items)}
-          deltaAbs={formatCount(Math.abs(actual.items - forecast.items))}
-          fullDay={isPartial ? formatCount(fullDay.items) : undefined}
+          value={actual.items}
+          display={formatCount(actual.items)}
+          baseline={forecastBaseline.items || 1}
+          isOverridden={isOverridden}
+          multiplier={multiplier}
+          editable={editable}
+          parse={parseCountInput}
+          onCommit={v =>
+            onMultiplierChange(
+              v == null
+                ? null
+                : multiplierForNewValue(fullDayBaseline.items, v),
+            )
+          }
+          subline={
+            <ForecastSubline
+              label={isPartial ? 'Forecast so far' : 'Forecast'}
+              value={formatCount(forecast.items)}
+              fullDay={isPartial ? formatCount(fullDay.items) : undefined}
+            />
+          }
+          compareVisual={
+            <CompareBars
+              forecast={forecast.items}
+              actual={actual.items}
+              format={formatCount}
+            />
+          }
         />
-        <CompareTile
-          icon={<Users size={14} />}
+        <EditableKpiTile
+          icon={<Users size={15} />}
           label="Transactions"
-          forecast={formatCount(forecast.transactions)}
-          actual={formatCount(actual.transactions)}
-          deltaPct={pctDelta(actual.transactions, forecast.transactions)}
-          deltaAbs={formatCount(Math.abs(actual.transactions - forecast.transactions))}
-          fullDay={isPartial ? formatCount(fullDay.transactions) : undefined}
+          value={actual.transactions}
+          display={formatCount(actual.transactions)}
+          baseline={forecastBaseline.transactions || 1}
+          isOverridden={isOverridden}
+          multiplier={multiplier}
+          editable={editable}
+          parse={parseCountInput}
+          onCommit={v =>
+            onMultiplierChange(
+              v == null
+                ? null
+                : multiplierForNewValue(fullDayBaseline.transactions, v),
+            )
+          }
+          subline={
+            <ForecastSubline
+              label={isPartial ? 'Forecast so far' : 'Forecast'}
+              value={formatCount(forecast.transactions)}
+              fullDay={isPartial ? formatCount(fullDay.transactions) : undefined}
+            />
+          }
+          compareVisual={
+            <CompareBars
+              forecast={forecast.transactions}
+              actual={actual.transactions}
+              format={formatCount}
+            />
+          }
         />
       </div>
 
@@ -166,11 +267,11 @@ export default function ResultCard({ siteId, date, dateLabel }: Props) {
           borderRadius: 10,
         }}
       >
-        <Info size={14} color="var(--color-text-secondary)" style={{ marginTop: 1, flexShrink: 0 }} />
+        <Info size={15} color="var(--color-text-secondary)" style={{ marginTop: 1, flexShrink: 0 }} />
         <p
           style={{
             margin: 0,
-            fontSize: 12.5,
+            fontSize: 13.5,
             lineHeight: 1.5,
             color: 'var(--color-text-primary)',
           }}
@@ -226,7 +327,7 @@ export default function ResultCard({ siteId, date, dateLabel }: Props) {
                 >
                   <span
                     style={{
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: 600,
                       color: 'var(--color-text-secondary)',
                       textTransform: 'uppercase',
@@ -249,7 +350,7 @@ export default function ResultCard({ siteId, date, dateLabel }: Props) {
                       widthPct={expectedWidth}
                       value={formatCurrency(fullF.revenue)}
                     />
-                    <div style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>
+                    <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>
                       Phase hasn’t opened yet · {phaseHours(p)}
                     </div>
                   </div>
@@ -343,112 +444,194 @@ export default function ResultCard({ siteId, date, dateLabel }: Props) {
 // Sub-pieces
 // ────────────────────────────────────────────────────────────────────────────
 
-function CompareTile({
-  icon,
+/**
+ * Scale a `DayTotals` by the operator's multiplier (applied to the
+ * forecast side only; actuals are sacred).
+ */
+function scaleTotals(t: DayTotals, m: number): DayTotals {
+  if (Math.abs(m - 1) < 1e-4) return t;
+  const sc = (v: number) => Math.round(v * m);
+  return {
+    ...t,
+    revenue: sc(t.revenue),
+    items: sc(t.items),
+    transactions: sc(t.transactions),
+    byPhase: {
+      morning: {
+        revenue: sc(t.byPhase.morning.revenue),
+        items: sc(t.byPhase.morning.items),
+        transactions: sc(t.byPhase.morning.transactions),
+      },
+      midday: {
+        revenue: sc(t.byPhase.midday.revenue),
+        items: sc(t.byPhase.midday.items),
+        transactions: sc(t.byPhase.midday.transactions),
+      },
+      afternoon: {
+        revenue: sc(t.byPhase.afternoon.revenue),
+        items: sc(t.byPhase.afternoon.items),
+        transactions: sc(t.byPhase.afternoon.transactions),
+      },
+    },
+  };
+}
+
+/**
+ * Forecast sub-line — shown beneath the big "Actual / Sold so far"
+ * number in each KPI tile. Pairs the forecast value with an optional
+ * full-day forecast on a quiet second line.
+ */
+function ForecastSubline({
   label,
-  forecast,
-  actual,
-  deltaPct,
-  deltaAbs,
+  value,
   fullDay,
 }: {
-  icon: React.ReactNode;
   label: string;
-  forecast: string;
-  actual: string;
-  deltaPct: number;
-  deltaAbs: string;
-  /** Optional sub-line shown only when the day is partial — keeps the
-   *  full-day forecast in view so the so-far reading has context. */
+  value: string;
   fullDay?: string;
 }) {
   return (
-    <div
-      style={{
-        padding: '14px 14px 12px',
-        background: 'var(--color-bg-hover)',
-        border: '1px solid var(--color-border-subtle)',
-        borderRadius: 10,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          fontSize: 11,
-          color: 'var(--color-text-secondary)',
-          fontWeight: 600,
-          textTransform: 'uppercase',
-          letterSpacing: '0.04em',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          fontSize: 12,
+          color: 'var(--color-text-muted)',
         }}
       >
-        {icon}
-        {label}
+        <span>{label}</span>
+        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{value}</span>
       </div>
-
-      {/* Forecast → actual stacked rows. Labels read as "so-far" when
-          the parent passed a fullDay value, so the operator never thinks
-          they're seeing a verdict on the whole day. */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'baseline',
-            fontSize: 11,
-            color: 'var(--color-text-muted)',
-          }}
-        >
-          <span>{fullDay ? 'Forecast so far' : 'Forecast'}</span>
-          <span style={{ fontVariantNumeric: 'tabular-nums' }}>{forecast}</span>
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'baseline',
-          }}
-        >
-          <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-            {fullDay ? 'Sold so far' : 'Actual'}
-          </span>
-          <span
-            style={{
-              fontSize: 22,
-              fontWeight: 700,
-              fontVariantNumeric: 'tabular-nums',
-              color: 'var(--color-text-primary)',
-              lineHeight: 1.1,
-            }}
-          >
-            {actual}
-          </span>
-        </div>
-      </div>
-
-      <DeltaRow pct={deltaPct} abs={deltaAbs} />
-
       {fullDay && (
         <div
           style={{
-            paddingTop: 6,
-            borderTop: '1px dashed var(--color-border-subtle)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'baseline',
-            fontSize: 10.5,
+            fontSize: 11.5,
             color: 'var(--color-text-muted)',
             fontVariantNumeric: 'tabular-nums',
           }}
         >
-          <span>Full day forecast</span>
+          <span>Full day</span>
           <span>{fullDay}</span>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Side-by-side bars + a tone-coloured delta pill. The pill replaces
+ * the old "DeltaRow" treatment so a positive delta reads obviously
+ * green and a negative one obviously red.
+ */
+function CompareBars({
+  forecast,
+  actual,
+  format,
+}: {
+  forecast: number;
+  actual: number;
+  format: (n: number) => string;
+}) {
+  const max = Math.max(forecast, actual, 1);
+  const fcWidth = (forecast / max) * 100;
+  const acWidth = (actual / max) * 100;
+  const deltaPct = pctDelta(actual, forecast);
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        paddingTop: 6,
+        borderTop: '1px dashed var(--color-border-subtle)',
+      }}
+    >
+      <CompareBar
+        label="Forecast"
+        color="var(--color-text-muted)"
+        widthPct={fcWidth}
+        text={format(Math.round(forecast))}
+      />
+      <CompareBar
+        label="Actual"
+        color="var(--color-accent-active)"
+        widthPct={acWidth}
+        text={format(Math.round(actual))}
+        bold
+      />
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <DeltaPill pct={deltaPct} />
+      </div>
+    </div>
+  );
+}
+
+function CompareBar({
+  label,
+  color,
+  widthPct,
+  text,
+  bold,
+}: {
+  label: string;
+  color: string;
+  widthPct: number;
+  text: string;
+  bold?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '64px 1fr auto',
+        gap: 6,
+        alignItems: 'center',
+      }}
+    >
+      <span
+        style={{
+          fontSize: 11,
+          color: 'var(--color-text-muted)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
+          fontWeight: 600,
+        }}
+      >
+        {label}
+      </span>
+      <div
+        style={{
+          height: 6,
+          background: 'var(--color-border-subtle)',
+          borderRadius: 999,
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            height: '100%',
+            width: `${Math.max(2, Math.min(100, widthPct))}%`,
+            background: color,
+            borderRadius: 999,
+          }}
+        />
+      </div>
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: bold ? 700 : 600,
+          fontVariantNumeric: 'tabular-nums',
+          color: 'var(--color-text-primary)',
+          textAlign: 'right',
+        }}
+      >
+        {text}
+      </span>
     </div>
   );
 }
@@ -466,13 +649,13 @@ function PhaseStatusPill({ status, dPct }: { status: PhaseStatus; dPct: number }
           color: 'var(--color-text-muted)',
           border: '1px solid var(--color-border-subtle)',
           borderRadius: 999,
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           textTransform: 'uppercase',
           letterSpacing: '0.04em',
         }}
       >
-        <Clock size={10} />
+        <Clock size={11} />
         Not yet
       </span>
     );
@@ -495,7 +678,7 @@ function PhaseStatusPill({ status, dPct }: { status: PhaseStatus; dPct: number }
             color: 'var(--color-accent-active)',
             border: '1px solid color-mix(in srgb, var(--color-accent-active) 30%, white)',
             borderRadius: 999,
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 700,
             textTransform: 'uppercase',
             letterSpacing: '0.04em',
@@ -517,7 +700,7 @@ function PendingLine({ label, value }: { label: string; value: string }) {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'baseline',
-        fontSize: 11,
+        fontSize: 12,
         color: 'var(--color-text-muted)',
       }}
     >
@@ -533,42 +716,6 @@ function phaseHours(p: Phase): string {
   if (p === 'morning') return '06–11';
   if (p === 'midday') return '11–15';
   return '15–19';
-}
-
-function DeltaRow({ pct, abs }: { pct: number; abs: string }) {
-  const tone =
-    Math.abs(pct) < 1
-      ? 'neutral'
-      : pct > 0
-        ? 'up'
-        : 'down';
-  const color =
-    tone === 'neutral'
-      ? 'var(--color-text-muted)'
-      : tone === 'up'
-        ? 'var(--color-success)'
-        : 'var(--color-error)';
-  return (
-    <div
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 4,
-        fontSize: 11,
-        fontWeight: 600,
-        color,
-        fontVariantNumeric: 'tabular-nums',
-      }}
-    >
-      {tone === 'up' ? (
-        <ArrowUpRight size={12} />
-      ) : tone === 'down' ? (
-        <ArrowDownRight size={12} />
-      ) : null}
-      <span>{formatPct(pct, { sign: true })}</span>
-      <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>· {abs}</span>
-    </div>
-  );
 }
 
 function DeltaPill({ pct }: { pct: number }) {
@@ -606,7 +753,7 @@ function DeltaPill({ pct }: { pct: number }) {
         color: p.color,
         border: `1px solid ${p.border}`,
         borderRadius: 999,
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: 700,
         fontVariantNumeric: 'tabular-nums',
       }}
@@ -643,7 +790,7 @@ function DualBar({
       >
         <span
           style={{
-            fontSize: 10,
+            fontSize: 11,
             color: 'var(--color-text-muted)',
             textTransform: 'uppercase',
             letterSpacing: '0.04em',
@@ -654,7 +801,7 @@ function DualBar({
         </span>
         <span
           style={{
-            fontSize: 11.5,
+            fontSize: 12.5,
             fontWeight: 600,
             fontVariantNumeric: 'tabular-nums',
             color: 'var(--color-text-primary)',
@@ -700,7 +847,7 @@ function PhaseLine({
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'baseline',
-        fontSize: 11,
+        fontSize: 12,
         color: 'var(--color-text-muted)',
       }}
     >
@@ -728,15 +875,15 @@ function ChannelLegend({
 }) {
   const delta = pctDelta(actual, forecast);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 140 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 150 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{ width: 8, height: 8, background: color, borderRadius: 999 }} />
-        <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+        <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-primary)' }}>
           {label}
         </span>
         <span
           style={{
-            fontSize: 11,
+            fontSize: 12,
             color: 'var(--color-text-muted)',
             fontVariantNumeric: 'tabular-nums',
           }}
@@ -746,20 +893,22 @@ function ChannelLegend({
       </div>
       <div
         style={{
-          fontSize: 11,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          fontSize: 12,
           color: 'var(--color-text-secondary)',
           fontVariantNumeric: 'tabular-nums',
           paddingLeft: 14,
+          flexWrap: 'wrap',
         }}
       >
-        {formatCurrency(Math.round(forecast))}{' '}
-        <span style={{ color: 'var(--color-text-muted)' }}>→</span>{' '}
+        <span>{formatCurrency(Math.round(forecast))}</span>
+        <span style={{ color: 'var(--color-text-muted)' }}>→</span>
         <span style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
           {formatCurrency(Math.round(actual))}
-        </span>{' '}
-        <span style={{ color: delta >= 0 ? 'var(--color-success)' : 'var(--color-error)' }}>
-          ({formatPct(delta, { sign: true })})
         </span>
+        <DeltaPill pct={delta} />
       </div>
     </div>
   );
@@ -772,7 +921,7 @@ function pctDelta(actual: number, forecast: number): number {
 
 const subheading: React.CSSProperties = {
   margin: 0,
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 600,
   textTransform: 'uppercase',
   letterSpacing: '0.06em',

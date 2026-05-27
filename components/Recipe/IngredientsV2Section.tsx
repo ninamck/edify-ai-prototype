@@ -95,7 +95,7 @@ export function IngredientsV2Section({
       </div>
 
       {rows.length === 0 && (
-        <div style={{ padding: '16px 8px', textAlign: 'center', fontSize: 12.5, color: 'var(--color-text-muted)' }}>
+        <div style={{ padding: '16px 8px', textAlign: 'center', fontSize: 13.5, color: 'var(--color-text-muted)' }}>
           No {labelPluralLower} yet. Search and add one below.
         </div>
       )}
@@ -162,10 +162,10 @@ function IngredientV2Row({
 
   return (
     <div style={tableRowStyle}>
-      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textAlign: 'center' }}>
+      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)', textAlign: 'center' }}>
         {index + 1}
       </span>
-      <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {resolved?.name ?? '(missing)'}
       </span>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -221,7 +221,7 @@ function KindChip({ ref, resolved }: { ref: IngredientRef; resolved: ReturnType<
       <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 1 }}>
         <Chip tone="green">Sub-recipe</Chip>
         {resolved?.subRecipe?.category && (
-          <span style={{ fontSize: 9.5, color: 'var(--color-text-muted)' }}>
+          <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>
             {resolved.subRecipe.category}
           </span>
         )}
@@ -233,7 +233,7 @@ function KindChip({ ref, resolved }: { ref: IngredientRef; resolved: ReturnType<
       <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 1 }}>
         <Chip tone="warm">Made</Chip>
         {resolved.product?.madeAtSite && (
-          <span style={{ fontSize: 9.5, color: 'var(--color-text-muted)' }}>
+          <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>
             @ {resolved.product.madeAtSite.replace('PRET ', '')}
           </span>
         )}
@@ -244,7 +244,7 @@ function KindChip({ ref, resolved }: { ref: IngredientRef; resolved: ReturnType<
     <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 1 }}>
       <Chip tone="soft">{resolved?.product?.supplierId ? abbrevSupplier(resolved.product.supplierId) : 'Supplier'}</Chip>
       {resolved?.masterProductId && (
-        <span style={{ fontSize: 9.5, color: 'var(--color-text-muted)' }}>
+        <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>
           → also in Master
         </span>
       )}
@@ -266,9 +266,9 @@ function Chip({ children, tone }: { children: React.ReactNode; tone: 'navy' | 's
   const t = tones[tone];
   return (
     <span style={{
-      padding: '2px 7px', borderRadius: 100,
+      padding: '3px 8px', borderRadius: 100,
       background: t.bg, color: t.color,
-      fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+      fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
     }}>{children}</span>
   );
 }
@@ -322,10 +322,10 @@ function SiteQtyPopover({
           border: '1px solid ' + (overrideCount > 0 ? 'var(--color-accent-active)' : 'var(--color-border-subtle)'),
           background: overrideCount > 0 ? 'rgba(3,28,89,0.05)' : '#fff',
           color: overrideCount > 0 ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
-          fontFamily: 'var(--font-primary)', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+          fontFamily: 'var(--font-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
         }}
       >
-        <MapPin size={11} />
+        <MapPin size={12} />
         {overrideCount === 0 ? 'All sites' : `${overrideCount} site${overrideCount === 1 ? '' : 's'}`}
       </button>
       {open && (
@@ -340,18 +340,18 @@ function SiteQtyPopover({
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             Per-site quantities
           </div>
-          <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginBottom: 4 }}>
+          <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginBottom: 4 }}>
             Default: <strong style={{ color: 'var(--color-text-primary)' }}>{baseQty.value}{baseQty.unit}</strong>. Set a value below to override at that site.
           </div>
           {sites.map((site) => {
             const ov = overrides?.[site];
             const val = ov?.value ?? '';
             return (
-              <div key={site} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 36px', gap: 8, alignItems: 'center' }}>
-                <span style={{ fontSize: 12, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site}</span>
+              <div key={site} style={{ display: 'grid', gridTemplateColumns: '1fr 84px 36px', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site}</span>
                 <input
                   type="number" step="any"
                   value={val}
@@ -361,13 +361,13 @@ function SiteQtyPopover({
                     setOverride(site, v === '' ? '' : Number(v));
                   }}
                   style={{
-                    padding: '5px 8px', borderRadius: 6,
+                    padding: '6px 9px', borderRadius: 6,
                     border: '1px solid var(--color-border-subtle)', background: '#fff',
-                    fontFamily: 'var(--font-primary)', fontSize: 12, color: 'var(--color-text-primary)',
+                    fontFamily: 'var(--font-primary)', fontSize: 13, color: 'var(--color-text-primary)',
                     textAlign: 'right',
                   }}
                 />
-                <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{baseQty.unit}</span>
+                <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{baseQty.unit}</span>
               </div>
             );
           })}
@@ -378,7 +378,7 @@ function SiteQtyPopover({
                 marginTop: 4, padding: '6px 10px', borderRadius: 6,
                 border: '1px solid var(--color-border-subtle)', background: '#fff',
                 color: 'var(--color-text-secondary)',
-                fontSize: 11.5, fontWeight: 600, fontFamily: 'var(--font-primary)', cursor: 'pointer',
+                fontSize: 12.5, fontWeight: 600, fontFamily: 'var(--font-primary)', cursor: 'pointer',
                 alignSelf: 'flex-start',
               }}
             >
@@ -433,24 +433,24 @@ function UnifiedAddIngredient({
           onClick={() => setOpen(true)}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 7,
-            padding: '8px 14px', borderRadius: 9,
+            padding: '9px 15px', borderRadius: 9,
             border: '1px dashed var(--color-border)', background: '#fff',
             color: 'var(--color-text-secondary)',
-            fontSize: 12.5, fontWeight: 600, fontFamily: 'var(--font-primary)', cursor: 'pointer',
+            fontSize: 13.5, fontWeight: 600, fontFamily: 'var(--font-primary)', cursor: 'pointer',
           }}
         >
-          <Plus size={13} strokeWidth={2.2} /> {buttonLabel}
+          <Plus size={14} strokeWidth={2.2} /> {buttonLabel}
         </button>
       ) : (
         <div
           style={{
             background: '#fff', border: '1px solid var(--color-border)', borderRadius: 10,
             boxShadow: '0 12px 32px rgba(3,15,58,0.12)', overflow: 'hidden',
-            maxWidth: 520,
+            maxWidth: 560,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: '1px solid var(--color-border-subtle)' }}>
-            <Search size={14} color="var(--color-text-muted)" />
+            <Search size={15} color="var(--color-text-muted)" />
             <input
               autoFocus
               value={q}
@@ -458,7 +458,7 @@ function UnifiedAddIngredient({
               placeholder={placeholder}
               style={{
                 flex: 1, border: 'none', outline: 'none', background: 'transparent',
-                fontFamily: 'var(--font-primary)', fontSize: 13,
+                fontFamily: 'var(--font-primary)', fontSize: 14,
               }}
             />
             <button
@@ -489,12 +489,12 @@ function UnifiedAddIngredient({
                     opacity: picked ? 0.5 : 1,
                   }}
                 >
-                  <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>
                       {row.label}
-                      {picked && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)' }}>· already added</span>}
+                      {picked && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)' }}>· already added</span>}
                     </span>
-                    <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                    <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
                       {row.sublabel}
                       {row.kind === 'supplier' && row.hasMaster && (
                         <span style={{ marginLeft: 6, color: 'var(--color-text-muted)' }}>· → also in Master</span>
@@ -506,7 +506,7 @@ function UnifiedAddIngredient({
               );
             })}
             {results.length === 0 && !showCreate && (
-              <div style={{ padding: 14, fontSize: 12, color: 'var(--color-text-muted)', textAlign: 'center' }}>
+              <div style={{ padding: 14, fontSize: 13, color: 'var(--color-text-muted)', textAlign: 'center' }}>
                 No matches. Type to search.
               </div>
             )}
@@ -519,14 +519,14 @@ function UnifiedAddIngredient({
                   setOpen(false); setQ('');
                 }}
                 style={{
-                  width: '100%', padding: '11px 12px', border: 'none',
+                  width: '100%', padding: '12px 13px', border: 'none',
                   borderTop: results.length > 0 ? '1px solid var(--color-border-subtle)' : 'none',
                   background: 'rgba(3,28,89,0.04)', cursor: 'pointer', textAlign: 'left',
                   display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-primary)',
-                  color: 'var(--color-accent-active)', fontWeight: 700, fontSize: 12.5,
+                  color: 'var(--color-accent-active)', fontWeight: 700, fontSize: 13.5,
                 }}
               >
-                <Sparkles size={13} />
+                <Sparkles size={14} />
                 Create new master product: <span style={{ fontWeight: 700 }}>"{q.trim()}"</span>
               </button>
             )}
@@ -546,9 +546,9 @@ function pickerKindChip(kind: 'master' | 'supplier' | 'made' | 'subrecipe'): Rea
   } as const;
   const t = tones[kind];
   return {
-    padding: '2px 8px', borderRadius: 100,
+    padding: '3px 9px', borderRadius: 100,
     background: t.bg, color: t.color,
-    fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+    fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
     whiteSpace: 'nowrap',
   };
 }
@@ -556,14 +556,14 @@ function pickerKindChip(kind: 'master' | 'supplier' | 'made' | 'subrecipe'): Rea
 // ────────────────────────────────────────────────────────────────────────────
 // Layout primitives matching the existing ComponentTable
 
-const cols = ['28px', '2fr', '1.4fr', '70px', '70px', '120px', '76px'];
+const cols = ['28px', '2fr', '1.5fr', '78px', '78px', '128px', '82px'];
 
 const tableHeaderStyle: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: cols.join(' '),
   gap: 10,
   padding: '8px 12px',
-  fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+  fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
   color: 'var(--color-text-muted)',
 };
 const tableRowStyle: React.CSSProperties = {
@@ -571,18 +571,18 @@ const tableRowStyle: React.CSSProperties = {
   gridTemplateColumns: cols.join(' '),
   gap: 10,
   alignItems: 'center',
-  padding: '8px 12px',
+  padding: '9px 12px',
   borderTop: '1px solid var(--color-border-subtle)',
 };
 const cellInput: React.CSSProperties = {
-  width: '100%', padding: '6px 8px', borderRadius: 6,
+  width: '100%', padding: '7px 9px', borderRadius: 6,
   border: '1px solid var(--color-border-subtle)', background: '#fff',
-  fontFamily: 'var(--font-primary)', fontSize: 12.5, color: 'var(--color-text-primary)',
+  fontFamily: 'var(--font-primary)', fontSize: 13.5, color: 'var(--color-text-primary)',
 };
 const cellSelect: React.CSSProperties = { ...cellInput };
 function miniBtn(disabled: boolean): React.CSSProperties {
   return {
-    width: 22, height: 22, padding: 0,
+    width: 24, height: 24, padding: 0,
     borderRadius: 6, border: '1px solid var(--color-border-subtle)',
     background: '#fff', color: 'var(--color-text-secondary)',
     cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1,
