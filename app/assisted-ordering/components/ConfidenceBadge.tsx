@@ -88,7 +88,7 @@ export default function ConfidenceBadge({ score, factors }: Props) {
             background: 'var(--color-bg-surface)',
             border: '1px solid var(--color-border-subtle)',
             borderRadius: 'var(--radius-card)',
-            boxShadow: '0 4px 20px rgba(58,48,40,0.14)',
+            boxShadow: '0 4px 20px rgba(0, 28, 53,0.14)',
             padding: '10px 14px',
             minWidth: '220px',
             display: 'flex',

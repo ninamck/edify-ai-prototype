@@ -116,7 +116,7 @@ export default function MobileBottomNav({
         background: '#fff',
         borderTop: '1px solid var(--color-border-subtle)',
         paddingBottom: 'env(safe-area-inset-bottom)',
-        boxShadow: '0 -4px 16px rgba(58,48,40,0.08)',
+        boxShadow: '0 -4px 16px rgba(0, 28, 53,0.08)',
         fontFamily: 'var(--font-primary)',
       }}
       aria-label="Main navigation"

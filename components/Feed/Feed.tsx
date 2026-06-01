@@ -11,7 +11,6 @@ import {
   ChevronDown,
   ChefHat,
   BarChart3,
-  ClipboardList,
   ShieldCheck,
   CheckCircle2,
   AlertCircle,
@@ -23,6 +22,7 @@ import {
   RotateCw,
   MessageSquare,
   Clock,
+  Truck,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import EdifyMarkThinking from '@/components/EdifyMark/EdifyMarkThinking';
@@ -45,7 +45,8 @@ import { useCommandRunner } from '@/components/Feed/commands/useCommandRunner';
 import SlashMenu from '@/components/Feed/commands/SlashMenu';
 import TaskHistoryList from '@/components/Feed/TaskHistoryList';
 import TaskHistoryDrawer from '@/components/Feed/TaskHistoryDrawer';
-import { logEntry as logHistoryEntry } from '@/components/Feed/taskHistoryStore';
+import { logEntry as logHistoryEntry, getTasks as getHistoryTasks, updateTask as updateHistoryTask } from '@/components/Feed/taskHistoryStore';
+import { ACTIVITY_REPLAY_KEY, type ActivityReplayIntent } from '@/components/Activity/ActivityPage';
 import WasteCommandCard from '@/components/Feed/commands/cards/WasteCommandCard';
 import StockCountCommandCard from '@/components/Feed/commands/cards/StockCountCommandCard';
 import RecipePickerCard from '@/components/Feed/commands/cards/RecipePickerCard';
@@ -56,6 +57,13 @@ import RecipeEditSummaryCard from '@/components/Feed/commands/cards/RecipeEditSu
 import ProductionFieldCard from '@/components/Feed/commands/cards/ProductionFieldCard';
 import MenuActionCard from '@/components/Feed/commands/cards/MenuActionCard';
 import SupplierFieldCard from '@/components/Feed/commands/cards/SupplierFieldCard';
+import ProductPurposeCard from '@/components/Feed/commands/cards/ProductPurposeCard';
+import ProductNewInfoCard from '@/components/Feed/commands/cards/ProductNewInfoCard';
+import ProductNewSupplierCard from '@/components/Feed/commands/cards/ProductNewSupplierCard';
+import ProductPickReplacedCard from '@/components/Feed/commands/cards/ProductPickReplacedCard';
+import ProductPackDetailsCard from '@/components/Feed/commands/cards/ProductPackDetailsCard';
+import ProductPickRecipesCard from '@/components/Feed/commands/cards/ProductPickRecipesCard';
+import ProductSwapSummaryCard from '@/components/Feed/commands/cards/ProductSwapSummaryCard';
 import AmbiguityPicker from '@/components/Feed/commands/cards/AmbiguityPicker';
 import ReceiptCard from '@/components/Feed/commands/cards/ReceiptCard';
 import type { AmbiguityChoice } from '@/components/Feed/commands/types';
@@ -131,7 +139,14 @@ const PROMPT_CHIPS: {
   label: string;
   icon: typeof ChefHat;
   text: string;
+  /** Bespoke flows that don't route through the chat-command runner —
+   *  the recipe builder wizard and the data-integrity audit each have
+   *  their own dedicated start function. */
   action?: 'recipe' | 'integrity';
+  /** Chat-command id (see `components/Feed/commands/registry.ts`).
+   *  When set, the chip launches that command's wizard via the runner,
+   *  same path as the slash menu and `+` popover. */
+  commandId?: string;
 }[] = [
   {
     label: 'New recipe',
@@ -140,14 +155,21 @@ const PROMPT_CHIPS: {
     action: 'recipe',
   },
   {
+    label: 'Update recipe',
+    icon: ChefHat,
+    text: '',
+    commandId: 'recipe-edit',
+  },
+  {
+    label: 'Update suppliers',
+    icon: Truck,
+    text: '',
+    commandId: 'supplier',
+  },
+  {
     label: 'Food cost',
     icon: BarChart3,
     text: 'Help me understand our food cost % vs target for this week.',
-  },
-  {
-    label: 'Floor priority',
-    icon: ClipboardList,
-    text: 'What should the floor team prioritise this morning?',
   },
   {
     label: 'Check data integrity',
@@ -173,6 +195,7 @@ const KIND_VERB: Record<string, string> = {
   production: 'Updated production settings',
   menu: 'Updated a menu',
   supplier: 'Updated a supplier',
+  'product-swap': 'Replaced a product across recipes',
   question: 'Asked Edify a question',
   chat: 'Chatted with Edify',
 };
@@ -276,6 +299,11 @@ type ChatMsg = {
   cmdChoicesJson?: string;
   /** Which command this message belongs to (for command cards / receipts). */
   cmdId?: string;
+  /** When true, the Quinn text is revealed character-by-character on
+   *  mount, with a blinking caret. Lets the bridge text between
+   *  wizard steps feel like a real-time AI response rather than an
+   *  instant insert. Self-completing — no further state to manage. */
+  streaming?: boolean;
   /** Frozen card state baked into the message — used when a snapshot
    *  is restored from history and the runtime cmdStates map is empty.
    *  Live messages don't need this; the runner's state map wins. */
@@ -530,7 +558,7 @@ function CostBreakdownCard() {
       ))}
 
       {/* Total food cost */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid var(--color-border-subtle)', background: 'rgba(58,48,40,0.02)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid var(--color-border-subtle)', background: 'rgba(0, 28, 53,0.02)' }}>
         <span style={{ flex: 1, fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Food Cost</span>
         <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>£{TOTAL_FOOD_COST.toFixed(2)}</span>
       </div>
@@ -543,7 +571,7 @@ function CostBreakdownCard() {
           <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Takeaway</div>
         </div>
         {pricingRows.map((row, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 82px 82px', gap: '2px', padding: '4px 0', borderTop: i === 0 ? 'none' : '1px solid rgba(58,48,40,0.05)' }}>
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 82px 82px', gap: '2px', padding: '4px 0', borderTop: i === 0 ? 'none' : '1px solid rgba(0, 28, 53,0.05)' }}>
             <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{row.label}</span>
             <span style={{ fontSize: '12px', fontWeight: row.bold ? 700 : 500, color: row.bold ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', textAlign: 'center' }}>{row.dineIn}</span>
             <span style={{ fontSize: '12px', fontWeight: row.bold ? 700 : 500, color: row.bold ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', textAlign: 'center' }}>{row.takeaway}</span>
@@ -1063,8 +1091,52 @@ function ActionButton({ label, onClick }: { label: string; onClick: () => void }
   );
 }
 
-function QuinnMessageBody({ text }: { text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+// Per-character reveal speed for the streaming bridge text. Tuned so a
+// 60-char Quinn sentence takes ~1.1s — long enough to feel like the
+// AI is composing the response, short enough that the wizard doesn't
+// drag. The caret blinks once or twice during this window.
+const STREAM_CHAR_MS = 18;
+
+function useTypewriter(text: string, enabled: boolean): { visible: string; done: boolean } {
+  const [count, setCount] = useState(enabled ? 0 : text.length);
+  useEffect(() => {
+    if (!enabled) {
+      setCount(text.length);
+      return;
+    }
+    setCount(0);
+    let i = 0;
+    const t = setInterval(() => {
+      i += 1;
+      setCount(i);
+      if (i >= text.length) clearInterval(t);
+    }, STREAM_CHAR_MS);
+    return () => clearInterval(t);
+  }, [text, enabled]);
+  return { visible: text.slice(0, count), done: count >= text.length };
+}
+
+function StreamingCaret() {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        display: 'inline-block',
+        width: '2px',
+        height: '1em',
+        marginLeft: '2px',
+        verticalAlign: '-0.15em',
+        background: 'var(--color-accent-active)',
+        animation: 'edify-caret-blink 1s steps(2, start) infinite',
+        opacity: 0.85,
+      }}
+    />
+  );
+}
+
+function QuinnMessageBody({ text, streaming = false }: { text: string; streaming?: boolean }) {
+  const { visible, done } = useTypewriter(text, streaming);
+  const parts = visible.split(/(\*\*[^*]+\*\*)/g);
   return (
     <>
       {parts.map((seg, i) => {
@@ -1072,6 +1144,7 @@ function QuinnMessageBody({ text }: { text: string }) {
         if (bold) return <Hi key={i}>{bold[1]}</Hi>;
         return <span key={i}>{seg}</span>;
       })}
+      {streaming && !done && <StreamingCaret />}
     </>
   );
 }
@@ -1244,7 +1317,7 @@ function ResponseControls({
             border: '1px solid var(--color-border-subtle)',
             borderRadius: '12px',
             padding: '14px 16px',
-            boxShadow: '0 2px 8px rgba(58,48,40,0.04)',
+            boxShadow: '0 2px 8px rgba(0, 28, 53,0.04)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
@@ -1388,13 +1461,18 @@ function ChatBubble({
   const showControls =
     !isUser &&
     msg.msgType !== 'analytics-thinking' &&
+    msg.msgType !== 'cmd-thinking' &&
     !!onRate &&
     !!onRetry &&
     !!onToggleComment &&
     !!onCommentChange;
   // Only the most recent Quinn response gets the signature, and never the
   // thinking placeholder (which already shows the animated mark inline).
-  const showQuinnSignature = !isUser && msg.msgType !== 'analytics-thinking' && showSignature;
+  const showQuinnSignature =
+    !isUser &&
+    msg.msgType !== 'analytics-thinking' &&
+    msg.msgType !== 'cmd-thinking' &&
+    showSignature;
   return (
     <div style={{
       display: 'flex',
@@ -1408,7 +1486,7 @@ function ChatBubble({
         borderRadius: isUser ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
         background: isUser ? '#F5F4F2' : '#fff',
         border: '1px solid var(--color-border-subtle)',
-        boxShadow: isUser ? 'none' : '0 2px 8px rgba(58,48,40,0.08), 0 0 0 1px rgba(58,48,40,0.03)',
+        boxShadow: isUser ? 'none' : '0 2px 8px rgba(0, 28, 53,0.08), 0 0 0 1px rgba(0, 28, 53,0.03)',
         fontSize: '13.5px',
         lineHeight: 1.6,
         color: 'var(--color-text-secondary)',
@@ -1419,7 +1497,7 @@ function ChatBubble({
             EDIFY
           </div>
         )}
-        {isUser ? msg.text : <QuinnMessageBody text={msg.text} />}
+        {isUser ? msg.text : <QuinnMessageBody text={msg.text} streaming={msg.streaming} />}
         {children}
       </div>
       {showControls && onRate && onRetry && onToggleComment && onCommentChange && (
@@ -1542,7 +1620,7 @@ function ClaudeComposer({
       background: '#fff',
       borderRadius: '20px',
       border: ghost ? '1.5px solid var(--color-accent-mid, rgba(34,68,68,0.35))' : '1.5px solid rgba(0, 28, 53, 1)',
-      boxShadow: '0 4px 20px rgba(58,48,40,0.09)',
+      boxShadow: '0 4px 20px rgba(0, 28, 53,0.09)',
       overflow: 'hidden',
       transition: 'border-color 0.15s ease',
       }}
@@ -1573,7 +1651,7 @@ function ClaudeComposer({
             }}
           >
             <span style={{ color: 'transparent' }}>{value}</span>
-            <span style={{ color: 'rgba(58,48,40,0.3)', fontStyle: 'normal' }}>{ghost}</span>
+            <span style={{ color: 'rgba(0, 28, 53,0.3)', fontStyle: 'normal' }}>{ghost}</span>
           </div>
         )}
         <textarea
@@ -1692,25 +1770,33 @@ function ClaudeComposer({
                 background: '#fff',
                 borderRadius: '14px',
                 border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.12))',
-                boxShadow: '0 12px 28px rgba(58,48,40,0.18)',
+                boxShadow: '0 12px 28px rgba(0, 28, 53,0.18)',
                 overflow: 'hidden',
                 fontFamily: 'var(--font-primary)',
               }}
             >
+              {/* Header label matches the "SUGGESTED" / "RECENT
+                  CHATS" treatment used in the command-centre two-
+                  column block. */}
               <div
                 style={{
-                  padding: '8px 12px',
-                  fontSize: '11px',
+                  padding: '10px 10px 6px',
+                  fontSize: '12px',
                   fontWeight: 700,
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase',
                   color: 'var(--color-text-secondary)',
-                  borderBottom: '1px solid var(--color-border-subtle, rgba(0,28,53,0.08))',
                 }}
               >
                 Quick actions
               </div>
-              <div>
+              {/* Rows mirror the Suggested column row treatment:
+                  bare 15px muted icon, no chip behind it, a 13px /
+                  500-weight label, and a neutral hover wash. The
+                  popover stays roomier than the inline list with a
+                  6px horizontal inset so it feels like its own card,
+                  not a list squeezed into a tooltip. */}
+              <div style={{ padding: '0 6px 8px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {QUICK_ACTION_CHIPS.map((chip) => {
                   const Icon = chip.icon;
                   return (
@@ -1727,35 +1813,29 @@ function ClaudeComposer({
                         width: '100%',
                         alignItems: 'center',
                         gap: '10px',
-                        padding: '10px 12px',
+                        padding: '6px 8px',
                         border: 'none',
+                        borderRadius: '6px',
                         background: 'transparent',
                         cursor: 'pointer',
                         textAlign: 'left',
                         fontFamily: 'var(--font-primary)',
+                        transition: 'background 0.12s ease',
                       }}
                       onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLElement).style.background = 'rgba(40,175,201,0.08)';
+                        (e.currentTarget as HTMLElement).style.background = 'rgba(0,28,53,0.04)';
                       }}
                       onMouseLeave={(e) => {
                         (e.currentTarget as HTMLElement).style.background = 'transparent';
                       }}
                     >
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: '28px',
-                          height: '28px',
-                          borderRadius: '8px',
-                          background: 'var(--color-quinn-bg, rgba(40,175,201,0.12))',
-                          flexShrink: 0,
-                        }}
-                      >
-                        <Icon size={13} color="var(--color-accent-mid, #28AFC9)" strokeWidth={2.2} />
-                      </span>
-                      <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                      <Icon
+                        size={15}
+                        strokeWidth={1.8}
+                        color="var(--color-text-muted)"
+                        style={{ flexShrink: 0 }}
+                      />
+                      <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
                         {chip.label}
                       </span>
                     </button>
@@ -1972,21 +2052,31 @@ function DataIntegrityCard({ onFixWithQuinn }: { onFixWithQuinn: () => void }) {
 
 // ─── Analytics thinking bubble ───────────────────────────────────────────────
 
-const THINKING_PHRASES = [
+const THINKING_PHRASES_ANALYTICS = [
   'Pulling your data\u2026',
   'Crunching numbers\u2026',
   'Building your chart\u2026',
 ];
 
-function QuinnThinkingContent() {
+// Used between wizard/command steps. Same animated mark, but the
+// copy reads as "I'm preparing your next question" rather than
+// "I'm running an analytical query".
+const THINKING_PHRASES_STEP = [
+  'Setting up the next step\u2026',
+  'Lining up your next question\u2026',
+];
+
+function QuinnThinkingContent({ variant = 'analytics' }: { variant?: 'analytics' | 'step' }) {
+  const phrases =
+    variant === 'step' ? THINKING_PHRASES_STEP : THINKING_PHRASES_ANALYTICS;
   const [phraseIdx, setPhraseIdx] = useState(0);
 
   useEffect(() => {
     const t = setInterval(() => {
-      setPhraseIdx(i => (i + 1) % THINKING_PHRASES.length);
+      setPhraseIdx(i => (i + 1) % phrases.length);
     }, 2400);
     return () => clearInterval(t);
-  }, []);
+  }, [phrases.length]);
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 0 2px' }}>
@@ -2006,7 +2096,7 @@ function QuinnThinkingContent() {
               fontFamily: 'var(--font-primary)',
             }}
           >
-            {THINKING_PHRASES[phraseIdx]}
+            {phrases[phraseIdx]}
           </motion.span>
         </AnimatePresence>
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
@@ -2154,7 +2244,7 @@ function AnalyticsChartContent({
                 background: '#fff',
                 border: '1px solid var(--color-border-subtle)',
                 borderRadius: 10,
-                boxShadow: '0 10px 30px rgba(3,28,89,0.12)',
+                boxShadow: '0 10px 30px rgba(0, 28, 53,0.12)',
                 padding: 4,
                 minWidth: 200,
                 fontFamily: 'var(--font-primary)',
@@ -2564,6 +2654,13 @@ export default function Feed({
       : [],
   );
   const [input, setInput] = useState('');
+  // Anchors for the slash-command typeahead. Two wrappers exist —
+  // one in the empty/initial state (above the briefing) and one in
+  // the active chat state (the bottom composer dock). Each rendering
+  // gets its own ref; SlashMenu portals out of the parent's
+  // `overflow: auto` boundary and uses the anchor to position itself.
+  const initialComposerWrapperRef = useRef<HTMLDivElement>(null);
+  const dockComposerWrapperRef = useRef<HTMLDivElement>(null);
   const [recipeFlow, setRecipeFlow] = useState(0);
   const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>(INITIAL_RECIPE_INGREDIENTS);
   const [selectedPackaging, setSelectedPackaging] = useState<Set<string>>(new Set());
@@ -2674,6 +2771,12 @@ export default function Feed({
         ? task.snapshotMessages
         : synthesiseThreadFromTask(task);
     commandRunner.restoreMessages(snapshot);
+    // Bump the task's recency so it sorts to the top of the
+    // Recent chats column the next time the operator returns to
+    // the command centre. The list sorts by completedAt ?? startedAt,
+    // so updating completedAt is the right knob — it tracks "most
+    // recently touched" which is exactly what the user expects.
+    updateHistoryTask(task.id, { completedAt: Date.now() });
     setHistoryDrawerOpen(false);
   };
 
@@ -2718,6 +2821,40 @@ export default function Feed({
     else if (autoStartFlow === 'integrity') startIntegrityCheck();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStartFlow]);
+
+  // Activity-page Revert / Edit handoff. The Activity page writes an
+  // intent into localStorage and routes the user back to home; we read
+  // it once on mount and replay the original command through the
+  // runner. The intent is deleted after the read so a hard refresh
+  // doesn't keep re-firing it. Stale intents (> 60s) are dropped — by
+  // that point the user has moved on and a surprise replay would be
+  // worse than a no-op.
+  const didConsumeReplayRef = useRef(false);
+  useEffect(() => {
+    if (didConsumeReplayRef.current) return;
+    if (typeof window === 'undefined') return;
+    didConsumeReplayRef.current = true;
+    let raw: string | null = null;
+    try {
+      raw = window.localStorage.getItem(ACTIVITY_REPLAY_KEY);
+      if (raw) window.localStorage.removeItem(ACTIVITY_REPLAY_KEY);
+    } catch {
+      return;
+    }
+    if (!raw) return;
+    let intent: ActivityReplayIntent | null = null;
+    try {
+      intent = JSON.parse(raw) as ActivityReplayIntent;
+    } catch {
+      return;
+    }
+    if (!intent || Date.now() - intent.requestedAt > 60_000) return;
+    const task = getHistoryTasks().find((t) => t.id === intent!.taskId);
+    if (!task) return;
+    if (intent.mode === 'revert') commandRunner.revertTask(task);
+    else commandRunner.editTask(task);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (recipeFlow === 1) {
@@ -3421,7 +3558,7 @@ export default function Feed({
               border: '1px solid var(--color-border-subtle)',
               background: '#fff',
               cursor: 'pointer',
-              boxShadow: '0 2px 6px rgba(58,48,40,0.08)',
+              boxShadow: '0 2px 6px rgba(0, 28, 53,0.08)',
             }}
           >
             <Maximize2 size={17} color="var(--color-text-secondary)" strokeWidth={2} />
@@ -3444,24 +3581,28 @@ export default function Feed({
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: chatMinimized ? 'flex-start' : 'center',
-            padding: chatMinimized ? '28px 16px 0' : '20px 16px 24px',
+            // Extra top padding so the logo sits clear of the
+            // "On the floor" tasks strip above. The old 20/28px
+            // values made the logo crowd the floor-action panel —
+            // a comfortable 48px gives the brand mark room to
+            // breathe on both the start screen and the minimised
+            // command-centre view.
+            padding: chatMinimized ? '48px 16px 0' : '48px 16px 24px',
             boxSizing: 'border-box',
             background: 'transparent',
           }}>
             <div style={{ width: '100%', maxWidth: '560px' }}>
               <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-                <span
+                <img
+                  src="/edify-logo.png"
+                  alt="Edify"
                   style={{
                     display: 'inline-block',
-                    fontSize: '72px',
-                    fontWeight: 900,
-                    letterSpacing: '-0.03em',
-                    color: 'rgba(0, 28, 53, 1)',
-                    textTransform: 'uppercase',
+                    height: '72px',
+                    width: 'auto',
+                    verticalAlign: 'middle',
                   }}
-                >
-                  Edify
-                </span>
+                />
                 <div style={{
                   marginTop: '20px',
                   display: 'flex',
@@ -3485,10 +3626,11 @@ export default function Feed({
                 </div>
               </div>
 
-              <div style={{ position: 'relative' }}>
+              <div ref={initialComposerWrapperRef} style={{ position: 'relative' }}>
                 <SlashMenu
                   value={input}
                   visible={input.trimStart().startsWith('/')}
+                  anchorEl={initialComposerWrapperRef.current}
                   onPick={(slash) => setInput(slash)}
                   onClose={() => setInput('')}
                 />
@@ -3504,130 +3646,128 @@ export default function Feed({
                 />
               </div>
 
+              {/* The "Current chat | Resume →" banner used to live
+                  here. Removed: it duplicates the top entry in the
+                  Recent chats column (since opening a chat now bumps
+                  its timestamp), and the user didn't want a second
+                  affordance pointing at the active conversation. */}
+
+              {/* Command-centre two-column block — Notion-style.
+                  Left column = what the operator did recently
+                  (persisted across sessions); right column =
+                  suggested next moves. Both columns share the same
+                  bare-icon row treatment so the eye reads them as
+                  one quiet surface instead of competing widgets.
+                  The "View all" trigger on the left opens the side
+                  drawer; clicking a left-side row replays the
+                  saved conversation. */}
               <div style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '8px',
-                justifyContent: 'center',
-                marginTop: '20px',
+                marginTop: '28px',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '32px',
+                alignItems: 'start',
               }}>
-                {PROMPT_CHIPS.map((chip, i) => {
-                  const Icon = chip.icon;
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => {
-                        if (chip.action === 'recipe') {
-                          startRecipeFlow();
-                        } else if (chip.action === 'integrity') {
-                          startIntegrityCheck();
-                        } else {
-                          sendMessage(chip.text);
-                        }
-                      }}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '8px 14px',
-                        borderRadius: '100px',
-                        border: '1px solid var(--color-border-subtle)',
-                        background: '#fff',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        color: 'var(--color-text-secondary)',
-                        cursor: 'pointer',
-                        fontFamily: 'var(--font-primary)',
-                      }}
-                    >
-                      <Icon
-                        size={15}
-                        strokeWidth={2}
-                        color="var(--color-text-muted)"
-                      />
-                      {chip.label}
-                    </button>
-                  );
-                })}
-              </div>
+                {/* Wrap the left list so we can pin `min-width: 0`
+                    on the grid item itself. Grid items default to
+                    `min-width: auto`, which lets long titles push
+                    the column past its `1fr` share — that's what
+                    was making the two columns unequal. With both
+                    cells at min-width 0, 1fr 1fr actually wins. */}
+                <div style={{ minWidth: 0 }}>
+                  {/* defaultExpanded stays false here regardless of
+                      chatMinimized — the user wants the same calm
+                      compact list in both states. The drawer is the
+                      only place that opts into the expanded view
+                      (filters + pinned section). */}
+                  <TaskHistoryList
+                    defaultExpanded={false}
+                    onExpand={() => setHistoryDrawerOpen(true)}
+                    onOpenTask={openTaskInChat}
+                    sectionLabel="Recent chats"
+                  />
+                </div>
 
-
-              {/* Resume-chat banner — only shown when the chat is
-                  minimised and there's an in-flight thread. Replaces
-                  the role the old single "Chat History" entry played
-                  (a way back into the live conversation). */}
-              {chatMinimized && messages.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setChatMinimized(false)}
-                  style={{
+                <div style={{ minWidth: 0 }}>
+                  <div style={{
                     display: 'flex',
-                    width: '100%',
                     alignItems: 'center',
-                    gap: '10px',
-                    marginTop: '24px',
-                    padding: '12px 14px',
-                    borderRadius: '12px',
-                    border: '1px solid var(--color-accent-active, #001C35)',
-                    background: 'rgba(40,175,201,0.06)',
-                    cursor: 'pointer',
-                    fontFamily: 'var(--font-primary)',
-                    textAlign: 'left',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 32, height: 32, borderRadius: '10px',
-                      background: '#fff', display: 'flex',
-                      alignItems: 'center', justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <EdifyMark size={14} color="var(--color-accent-quinn)" strokeWidth={2} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      fontSize: '12px', fontWeight: 700,
+                    justifyContent: 'space-between',
+                    gap: 10,
+                  }}>
+                    <span style={{
+                      fontSize: '12px',
+                      fontWeight: 700,
                       color: 'var(--color-text-secondary)',
                       letterSpacing: '0.04em',
                       textTransform: 'uppercase',
                     }}>
-                      Current chat
-                    </div>
-                    <div style={{
-                      fontSize: '13px', fontWeight: 600,
-                      color: 'var(--color-text-primary)',
-                      marginTop: '2px',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {(() => {
-                        const t = messages.find(m => m.role === 'user')?.text ?? 'Conversation in progress';
-                        return t.length > 56 ? t.slice(0, 56) + '…' : t;
-                      })()}
-                    </div>
+                      Suggested
+                    </span>
                   </div>
-                  <span style={{
-                    fontSize: '12px', fontWeight: 600,
-                    color: 'var(--color-accent-active, #001C35)',
-                    flexShrink: 0,
+                  <div style={{
+                    marginTop: '8px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '2px',
                   }}>
-                    Resume →
-                  </span>
-                </button>
-              )}
-
-              {/* Task history — persisted across sessions. Always
-                  visible on the start surface so operators can pick
-                  up where they left off; defaultExpanded when the
-                  chat is minimised so they can see more at a glance.
-                  The "View all" trigger opens the side drawer.
-                  Clicking a row replays the saved conversation. */}
-              <TaskHistoryList
-                defaultExpanded={chatMinimized}
-                onExpand={() => setHistoryDrawerOpen(true)}
-                onOpenTask={openTaskInChat}
-              />
+                    {PROMPT_CHIPS.map((chip, i) => {
+                      const Icon = chip.icon;
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            if (chip.action === 'recipe') {
+                              startRecipeFlow();
+                            } else if (chip.action === 'integrity') {
+                              startIntegrityCheck();
+                            } else if (chip.commandId) {
+                              handleQuickAction(chip.commandId);
+                            } else {
+                              sendMessage(chip.text);
+                            }
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '6px 8px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            background: 'transparent',
+                            width: '100%',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            fontFamily: 'var(--font-primary)',
+                            transition: 'background 0.12s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLElement).style.background = 'rgba(0,28,53,0.04)';
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLElement).style.background = 'transparent';
+                          }}
+                        >
+                          <Icon
+                            size={15}
+                            strokeWidth={1.8}
+                            color="var(--color-text-muted)"
+                            style={{ flexShrink: 0 }}
+                          />
+                          <span style={{
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            color: 'var(--color-text-primary)',
+                          }}>
+                            {chip.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         ) : (
@@ -3657,7 +3797,11 @@ export default function Feed({
                       let lastQuinnSignatureId: string | null = null;
                       for (let i = messages.length - 1; i >= 0; i--) {
                         const cand = messages[i];
-                        if (cand.role === 'quinn' && cand.msgType !== 'analytics-thinking') {
+                        if (
+                          cand.role === 'quinn' &&
+                          cand.msgType !== 'analytics-thinking' &&
+                          cand.msgType !== 'cmd-thinking'
+                        ) {
                           lastQuinnSignatureId = cand.id;
                           break;
                         }
@@ -3682,6 +3826,9 @@ export default function Feed({
                       >
                         {m.msgType === 'analytics-thinking' && (
                           <QuinnThinkingContent />
+                        )}
+                        {m.msgType === 'cmd-thinking' && (
+                          <QuinnThinkingContent variant="step" />
                         )}
                         {m.msgType === 'recipe-card' && (
                           <RecipeCardEditor
@@ -3934,6 +4081,182 @@ export default function Feed({
                             onCancel={() => commandRunner.cancelCard(m.id)}
                           />
                         )}
+                        {/* ── Product wizard (add or replace) ─────────── */}
+                        {m.msgType === 'cmd-product-purpose' && (() => {
+                          const args = m.cmdArgsJson ? (JSON.parse(m.cmdArgsJson) as {
+                            mode?: 'add' | 'replace';
+                          }) : {};
+                          return (
+                            <ProductPurposeCard
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              initialMode={args.mode}
+                              onPick={(input) => commandRunner.submitProductPurpose(m.id, args, input)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-product-new-info' && (() => {
+                          const args = m.cmdArgsJson ? (JSON.parse(m.cmdArgsJson) as {
+                            mode?: 'add' | 'replace';
+                            newProductName?: string;
+                            supplierId?: string;
+                            supplierName?: string;
+                          }) : {};
+                          return (
+                            <ProductNewInfoCard
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              initialName={args.newProductName}
+                              initialSupplierId={args.supplierId}
+                              initialSupplierName={args.supplierName}
+                              onSubmit={(input) => commandRunner.submitProductNewInfo(m.id, args, input)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-product-new-supplier' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            supplierName: string;
+                            email?: string;
+                            leadTimeDays?: number;
+                          };
+                          return (
+                            <ProductNewSupplierCard
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              supplierName={args.supplierName}
+                              initialEmail={args.email}
+                              initialLeadTimeDays={args.leadTimeDays}
+                              onSubmit={(input) => commandRunner.submitProductNewSupplier(m.id, args, input)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-product-pick-replaced' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            newProductName: string;
+                            oldProductHint?: string;
+                          };
+                          return (
+                            <ProductPickReplacedCard
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              newProductName={args.newProductName}
+                              initialQuery={args.oldProductHint}
+                              onPick={(input) => commandRunner.pickProductReplaced(m.id, args, input)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-product-pack-details' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            mode?: 'add' | 'replace';
+                            newProductName: string;
+                            supplierName: string;
+                            defaultPackType?: 'Pack' | 'Single';
+                            defaultPackQty?: number;
+                            defaultPackCost?: number;
+                            defaultUnitType?: 'Each' | 'kg' | 'L' | 'g' | 'ml';
+                            packType?: 'Pack' | 'Single';
+                            packQty?: number;
+                            packCost?: number;
+                            unitType?: 'Each' | 'kg' | 'L' | 'g' | 'ml';
+                            photoDataUrl?: string;
+                          };
+                          return (
+                            <ProductPackDetailsCard
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              mode={args.mode}
+                              newProductName={args.newProductName}
+                              supplierName={args.supplierName}
+                              initialPackType={args.packType ?? args.defaultPackType}
+                              initialPackQty={args.packQty ?? args.defaultPackQty}
+                              initialPackCost={args.packCost ?? args.defaultPackCost}
+                              initialUnitType={args.unitType ?? args.defaultUnitType}
+                              initialPhotoDataUrl={args.photoDataUrl}
+                              onSubmit={(input) => commandRunner.submitProductPackDetails(m.id, args, input)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-product-pick-recipes' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            mode?: 'add' | 'replace';
+                            oldProductId?: string;
+                            oldProductName?: string;
+                            newProductName: string;
+                            unitType?: 'Each' | 'kg' | 'L' | 'g' | 'ml';
+                            recipeIds?: string[];
+                            addQty?: number;
+                            addUom?: string;
+                          };
+                          return (
+                            <ProductPickRecipesCard
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              mode={args.mode}
+                              oldProductId={args.oldProductId}
+                              oldProductName={args.oldProductName}
+                              newProductName={args.newProductName}
+                              newProductUnitType={args.unitType}
+                              initialSelectedIds={args.recipeIds}
+                              initialAddQty={args.addQty}
+                              initialAddUom={args.addUom}
+                              onConfirm={(input) => commandRunner.submitProductPickRecipes(m.id, args, input)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-product-swap-summary' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            mode?: 'add' | 'replace';
+                            newProductName: string;
+                            supplierMode: 'existing' | 'new';
+                            supplierId?: string;
+                            supplierName: string;
+                            email?: string;
+                            leadTimeDays?: number;
+                            oldProductId?: string;
+                            oldProductName?: string;
+                            oldCategory?: string;
+                            packType?: 'Pack' | 'Single';
+                            packQty?: number;
+                            packCost?: number;
+                            unitType?: 'Each' | 'kg' | 'L' | 'g' | 'ml';
+                            photoDataUrl?: string;
+                            skipped?: boolean;
+                            recipeIds: string[];
+                            totalMatched?: number;
+                            addQty?: number;
+                            addUom?: string;
+                            sampleRecipeNames?: string[];
+                          };
+                          return (
+                            <ProductSwapSummaryCard
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              mode={args.mode}
+                              newProductName={args.newProductName}
+                              supplierMode={args.supplierMode}
+                              supplierName={args.supplierName}
+                              packType={args.packType}
+                              packQty={args.packQty}
+                              packCost={args.packCost}
+                              unitType={args.unitType}
+                              photoAttached={!!args.photoDataUrl}
+                              oldProductId={args.oldProductId}
+                              oldProductName={args.oldProductName}
+                              selectedRecipeIds={args.recipeIds}
+                              totalMatched={args.totalMatched ?? 0}
+                              addQty={args.addQty}
+                              addUom={args.addUom}
+                              sampleRecipeNames={args.sampleRecipeNames}
+                              onConfirm={(final) =>
+                                commandRunner.confirmProductSwap(m.id, {
+                                  ...args,
+                                  ...final,
+                                  totalMatched: args.totalMatched ?? 0,
+                                })
+                              }
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                            />
+                          );
+                        })()}
                         {m.msgType === 'cmd-ambiguity' && m.cmdChoicesJson && m.cmdId && (
                           <AmbiguityPicker
                             prompt={m.text}
@@ -4022,15 +4345,19 @@ export default function Feed({
               opacity: composerDisabled ? 0.55 : 1,
               pointerEvents: composerDisabled ? 'none' : 'auto',
             }}>
-              <div style={{
-                width: '100%',
-                maxWidth: '680px',
-                padding: '12px 24px 8px',
-                position: 'relative',
-              }}>
+              <div
+                ref={dockComposerWrapperRef}
+                style={{
+                  width: '100%',
+                  maxWidth: '680px',
+                  padding: '12px 24px 8px',
+                  position: 'relative',
+                }}
+              >
                 <SlashMenu
                   value={input}
                   visible={!composerDisabled && input.trimStart().startsWith('/')}
+                  anchorEl={dockComposerWrapperRef.current}
                   onPick={(slash) => setInput(slash)}
                   onClose={() => setInput('')}
                 />

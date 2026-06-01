@@ -20,10 +20,11 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Search, ExternalLink, AlertTriangle, Check, Link2,
-  Package, Boxes, Eye, EyeOff, MoreHorizontal, ChevronDown, Sparkles,
+  Package, Boxes, Eye, EyeOff, MoreHorizontal, ChevronDown,
 } from 'lucide-react';
 import { useRecipes } from '@/components/Recipe/recipeStore';
 import { useProducts, useMasterProducts } from '@/components/Suppliers/store';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { FITZROY_POS_INTAKE } from '@/components/Recipe/intakeFixtures';
 import {
   useMatchOverrides,
@@ -186,7 +187,7 @@ export default function ItemMatchingPage() {
             boxShadow: '0 1px 0 rgba(0, 28, 53, 0.08)',
           }}
         >
-          <Sparkles size={14} />
+          <EdifyMark size={14} />
           Sync & match
         </button>
       </div>

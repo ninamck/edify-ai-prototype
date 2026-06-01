@@ -319,7 +319,7 @@ function QuestionCard({
         border: isFollowUp
           ? '1px solid #FDE68A'
           : '1px solid var(--color-border-subtle)',
-        boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
+        boxShadow: '0 1px 4px rgba(0, 28, 53,0.06)',
         overflow: 'hidden',
         marginLeft: isFollowUp ? '20px' : '0',
         borderLeft: isFollowUp ? '3px solid #F59E0B' : undefined,
@@ -888,7 +888,7 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
         justifyContent: 'flex-end',
         gap: '10px',
         zIndex: 100,
-        boxShadow: '0 -4px 12px rgba(58,48,40,0.08)',
+        boxShadow: '0 -4px 12px rgba(0, 28, 53,0.08)',
       }}>
         <button
           type="button"
@@ -935,5 +935,5 @@ const sectionStyle: React.CSSProperties = {
   border: '1px solid var(--color-border-subtle)',
   padding: '20px',
   marginBottom: '16px',
-  boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
+  boxShadow: '0 1px 4px rgba(0, 28, 53,0.06)',
 };

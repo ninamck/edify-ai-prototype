@@ -696,6 +696,108 @@ export function parseSupplier(text: string): CommandIntent | null {
   };
 }
 
+// ─── product-swap ───────────────────────────────────────────────────────────
+
+/**
+ * Parser for the product wizard ("add a new product and optionally
+ * replace another across many recipes"). The wizard walks the
+ * operator through everything, so we don't need to extract a lot up
+ * front — we just recognise the intent, infer the `mode` (add vs
+ * replace) where the phrasing makes it clear, and capture an
+ * `oldProductName` / `newProductName` when the operator named them.
+ * The rest is collected card-by-card.
+ *
+ * Patterns we want to catch:
+ *   • "replace X with Y across (all) recipes"       → mode=replace
+ *   • "swap X for Y across (all) recipes"           → mode=replace
+ *   • "switch coffee bean from X to Y"              → mode=replace
+ *   • "add a new product"                           → mode=add (when "to X recipes")
+ *   • "add oat milk to all coffees"                 → mode=add
+ *   • "add a new product from a new supplier"       → mode=add
+ *   • bare "swap product" / "/add-product"          → mode=unknown (show purpose card)
+ */
+const PRODUCT_SWAP_VERBS =
+  /^\s*(\/swap-product\b|\/replace-product\b|\/add-product\b|replace\s+a?\s*product\b|swap\s+a?\s*product\b|add\s+a?\s*(?:new\s+)?product\b|switch\s+suppliers?\b|add\s+\S.*?\s+to\s+(?:all\s+|every\s+|my\s+|the\s+)?[a-z]+|(?:replace|swap|switch)\s+.+?\s+(?:with|for|to)\s+.+?\s+across\b)/i;
+
+// Common conversational preambles the operator might prepend
+// ("I want to add a new product..."). Stripped before matching.
+const PRODUCT_SWAP_PREAMBLE =
+  /^\s*(?:i\s+(?:want|need|would\s+like|'?d\s+like)\s+to\s+|can\s+you\s+|please\s+|let'?s\s+)/i;
+
+export function parseProductSwap(text: string): CommandIntent | null {
+  const stripped = text.replace(PRODUCT_SWAP_PREAMBLE, '');
+  if (!PRODUCT_SWAP_VERBS.test(stripped)) return null;
+  // Use the stripped text for further extraction so phrasings like
+  // "I want to replace whole milk with oat milk across all drinks"
+  // still surface the named products.
+  text = stripped;
+  const lower = text.toLowerCase();
+
+  // Infer mode from the verb. We only set `mode` when the phrasing
+  // is unambiguous; otherwise the wizard renders the purpose card
+  // and asks the operator to choose.
+  let mode: 'add' | 'replace' | undefined;
+  if (/\b(?:replace|swap|switch)\b.*?\b(?:with|for|to|from)\b/i.test(text)) {
+    mode = 'replace';
+  } else if (/^\/replace-product\b|^\/swap-product\b|^replace\s+a\b|^swap\s+a\b/i.test(text)) {
+    // Bare slash / "replace a product" → operator explicitly chose
+    // replace even without a target. Honour it.
+    mode = 'replace';
+  } else if (
+    /\badd\b.*?\bto\s+(?:all|every|my|the)?\s*\w+/i.test(text) ||
+    /^\/add-product\b/i.test(text) ||
+    /^add\s+a?\s*(?:new\s+)?product\b/i.test(text)
+  ) {
+    mode = 'add';
+  }
+
+  // Try to pull the old + new product names from common phrasings.
+  // We don't need to fuzzy-resolve them here — the wizard's picker
+  // will handle that. Passing the names as hints lets the wizard
+  // pre-select / pre-fill where possible.
+  let oldProductName: string | undefined;
+  let newProductName: string | undefined;
+  // "replace X with Y" or "swap X for Y" (must come before "across" if present)
+  const acrossSplit = text.split(/\bacross\b/i)[0];
+  const swap = acrossSplit.match(/\b(?:replace|swap|switch)\s+(.+?)\s+(?:with|for|to)\s+(.+?)\s*$/i);
+  if (swap) {
+    oldProductName = swap[1].trim().replace(/^the\s+/i, '').replace(/^our\s+/i, '');
+    newProductName = swap[2].trim();
+  } else {
+    // "from X to Y" pattern ("switch coffee bean from house blend to fair-trade")
+    const fromTo = acrossSplit.match(/\bfrom\s+(.+?)\s+to\s+(.+?)\s*$/i);
+    if (fromTo) {
+      oldProductName = fromTo[1].trim();
+      newProductName = fromTo[2].trim();
+    } else if (mode === 'add') {
+      // "add oat milk to all coffees" — the noun between "add" and
+      // "to" is the new product name; the rest names the target
+      // recipe category (handled in the picker, not here).
+      const addMatch = lower.match(/\badd\s+(?!a\b|an\b|the\b)(.+?)\s+to\b/);
+      if (addMatch) {
+        newProductName = addMatch[1].trim();
+      }
+    }
+  }
+
+  // Confidence: just enough to clear the 0.6 threshold when the verb
+  // matches. Bump it up if we extracted named products / mode.
+  let confidence = 0.6;
+  if (mode) confidence += 0.1;
+  if (oldProductName) confidence += 0.15;
+  if (newProductName) confidence += 0.1;
+
+  return {
+    commandId: 'product-swap',
+    args: {
+      ...(mode ? { mode } : {}),
+      ...(oldProductName ? { oldProductName } : {}),
+      ...(newProductName ? { newProductName } : {}),
+    },
+    confidence,
+  };
+}
+
 // ─── Top-level multiplexer ──────────────────────────────────────────────────
 
 /** Run every parser, return the highest-confidence match. Returns null
@@ -715,6 +817,7 @@ export function parseCommand(text: string): CommandIntent | null {
     if (/^\/(production|prod)\b/i.test(trimmed)) return parseProduction(trimmed) ?? { commandId: 'production', args: {}, confidence: 1 };
     if (/^\/menu\b/i.test(trimmed))         return parseMenu(trimmed) ?? { commandId: 'menu', args: {}, confidence: 1 };
     if (/^\/supplier\b/i.test(trimmed))     return parseSupplier(trimmed) ?? { commandId: 'supplier', args: {}, confidence: 1 };
+    if (/^\/(swap|replace|add)-product\b/i.test(trimmed)) return parseProductSwap(trimmed) ?? { commandId: 'product-swap', args: {}, confidence: 1 };
   }
 
   const candidates: (CommandIntent | null)[] = [
@@ -724,6 +827,7 @@ export function parseCommand(text: string): CommandIntent | null {
     parseProduction(trimmed),
     parseMenu(trimmed),
     parseSupplier(trimmed),
+    parseProductSwap(trimmed),
   ];
   const hits = candidates.filter((c): c is CommandIntent => c !== null);
   if (hits.length === 0) return null;

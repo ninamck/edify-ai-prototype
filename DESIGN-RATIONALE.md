@@ -247,6 +247,236 @@ each one's value obvious.
 
 ---
 
+## Product wizard (add or replace)
+
+**Decision.** A dedicated multi-step command (`product-swap`) that
+lets an operator bring in a new product (from either an existing or
+a new supplier) and either **add** it across many recipes or
+**replace** an existing product with it, in a single conversational
+flow. Surfaced in the `+` popover (chip "Add a product"), the `/`
+slash menu (`/add-product`, with `/swap-product` / `/replace-product`
+as aliases), and natural language ("add oat milk to all coffees",
+"replace whole milk with oat milk across drinks").
+
+**Reasoning.** This is one of the highest-impact, lowest-frequency
+workflows we've seen. Two canonical examples:
+
+- **Add** — a coffee shop launching an oat-milk option needs to add
+  Oat Milk to every coffee recipe on the menu.
+- **Replace** — the same shop changing bean roasters needs to swap
+  House Blend (Roaster A) for House Blend (Roaster B) across every
+  coffee.
+
+Doing either job without chat is a multi-page, multi-tab slog:
+create supplier, create product, then open every affected recipe
+one by one. The chat wizard collapses it to "type / paste / tap"
+and lets the agent do the matching legwork.
+
+**Why "add or replace" lives in one wizard.** The data captured is
+80% identical — new product name, new supplier, pack details, a set
+of target recipes. Forking into two separate commands would
+duplicate the cards (and the fixes when we change them). Branching
+inside a single wizard, with the path made explicit up front, keeps
+the surface area small.
+
+**Flow** — up to seven steps; two branch on choice, two are
+skippable:
+
+1. **Purpose** — "Adding it to recipes" vs "Replacing another
+   product". _Skipped_ when the NL parser can already infer mode
+   from the phrasing (e.g. "replace whole milk with oat milk" →
+   replace; "add oat milk to all coffees" → add). Asked up front
+   when the operator launched from a slash / chip without context.
+2. **New product details** — name + supplier (typeahead against
+   existing suppliers, with "+ Add as new supplier" for unmatched
+   typed names).
+3. **New supplier basics** — _only if_ Step 2's supplier was new.
+   Email + lead time; everything else defaults. "Skip for now" is
+   always available.
+4. **Pick the replaced product** — _replace mode only._ Searchable
+   catalogue, single pick. Unlocks the agent's matching pass.
+5. **Pack details** — pack type, qty, cost, UoM. Pre-filled from
+   the replaced product in replace mode; minimal defaults in add
+   mode. **Skippable**, and includes a photo-upload affordance.
+6. **Pick recipes** — multi-select:
+   - _Replace mode_ — list scoped to recipes that use the old
+     product, pre-selected, with confidence pills (Linked / Same
+     item / Via name).
+   - _Add mode_ — list spans every recipe with category filter
+     chips. Recipes in categories naturally associated with the new
+     product (e.g. milk-like ingredients → Coffee + Tea) are
+     pre-selected. The card also collects a per-recipe quantity +
+     UoM, since there's no replaced row to inherit one from.
+7. **Summary + confirm** — diff card, scope toggle (all sites / one
+   site). Replace mode also surfaces a "Treat as the same item"
+   checkbox to link both products under one master product; add
+   mode hides it (nothing to link against).
+
+**On confirm**, a single transaction:
+
+- _Both modes_ — `upsertSupplier` (if new) → `upsertProduct`
+  (defaults inherited from the replaced product in replace mode, or
+  safe-empty defaults in add mode).
+- _Replace mode_ — `upsertMasterProduct` and link both products (if
+  opt-in) → loop `updateRecipe` swapping refs in `ingredientsV2[]`
+  and renaming in legacy `ingredients[]`.
+- _Add mode_ — loop `updateRecipe` appending a new typed
+  `RecipeIngredient` row and a matching legacy row.
+
+An atomic Undo snapshots both stores beforehand and restores them
+together if the operator hits Undo on the receipt.
+
+**Trade-offs / open questions.**
+
+- The mode choice is binary, but real workflows are sometimes
+  "both" — _add_ the new SKU to every coffee, _and_ replace the old
+  SKU in the few recipes that still use it. We don't model that
+  yet. Likely answer: run the add flow first (it nets the new SKU
+  into the catalogue), then offer a "Also replace anywhere it's
+  used?" follow-up on the receipt.
+- Add-mode pre-selection uses a keyword heuristic (milk → coffee +
+  tea, syrup → coffee + tea, …). Good enough for the prototype but
+  brittle. Once we have a real product taxonomy, route this through
+  it instead of a regex table.
+- The matching pass (replace mode) currently uses three signals
+  (product link → master link → name substring). Name-only matches
+  are pre-selected but flagged so the operator can review. We may
+  want to demote name matches to "suggested, unchecked" once we
+  test it with operators — pre-selecting noisy matches risks
+  accidental swaps.
+- The summary's master-product opt-in is off by default. That's
+  the conservative answer ("these are different items"), but it
+  means operators switching roasters need to actively tick it. If
+  testing shows it's the common case, default it on.
+- We currently keep the old product around after a replace — it's
+  just no longer referenced. Should we offer to archive it?
+  Probably yes, as a follow-up affordance on the receipt, but not
+  automatically (operators sometimes keep the old SKU for legacy
+  reasons).
+
+**Status.** prototyped
+**Last updated.** 2026-05-28
+
+---
+
+## Asking "which job?" up front (the mode-choice pattern)
+
+**Decision.** When a wizard supports materially different jobs (the
+product wizard's "add" vs "replace" being the canonical case), ask
+the operator which one up front — before collecting any data. We
+skip the question when the natural-language phrasing already
+disambiguates ("replace whole milk with oat milk" is clearly
+replace; "add oat milk to all coffees" is clearly add); otherwise
+the first card is the choice.
+
+**Reasoning.** The earlier version of the product wizard always
+asked "which existing product is this replacing?" mid-flow. That
+worked for replacement but felt wrong for additions — operators
+were being asked to name a product they weren't actually replacing.
+Front-loading the choice fixes that and has a few side benefits:
+
+- Subsequent cards get to make stronger assumptions (no need to
+  defensively check "is this an add or a replace?" in copy or
+  defaults).
+- The mental model the operator builds matches the data shape:
+  "this is an add-flow / replace-flow" maps cleanly onto the
+  mutation we'll commit on confirm.
+- It surfaces the wizard's two paths visibly — operators can
+  discover what the command does without having to run it.
+
+**Generalising the pattern.** Any chat command that has more than
+one mode (current candidates: stock count "full count" vs
+"variance-only check", menu "84 it" vs "raise price") should
+consider the same structure. We're not converting all commands to
+this shape yet — for single-job wizards the up-front card is just
+ceremony.
+
+**Trade-offs / open questions.**
+
+- One extra tap for users who knew exactly what they wanted but
+  didn't phrase it in a way the parser caught. We mitigate by
+  inferring mode from common phrasings, but we'll need to monitor
+  what slips through.
+- The card's tap-targets are big and described with concrete
+  examples — important because the choice is the first thing the
+  operator sees. Don't be tempted to compress this into a
+  segmented control; it makes the decision feel like a UI toggle
+  instead of "what job are we doing?".
+
+**Status.** live
+**Last updated.** 2026-05-28
+
+---
+
+## Pre-selection vs ask-everything (the "agent picks, you tweak" pattern)
+
+**Decision.** Whenever the wizard can reasonably guess what the
+operator wants, default to that guess and let them tweak — instead
+of asking. Two examples in the product wizard:
+
+- _Replace mode_ — all matched recipes (rows actually using the old
+  product) are pre-selected and labelled with how we matched them,
+  rather than rendered as an empty list the operator has to fill in.
+- _Add mode_ — recipes in categories naturally associated with the
+  new product are pre-selected (e.g. an oat-milk SKU pre-selects
+  every Coffee + Tea recipe on the menu). Driven by a keyword →
+  category map for now; should move to a real product taxonomy.
+
+**Reasoning.** The operator already gave us the signal we needed
+(the product being replaced). Forcing them to redo the work the
+system can do is friction without value. Pre-selecting also
+reframes the interaction from "do my job for me" to "check my work"
+— which is the right mental model for an AI-augmented workflow.
+
+**Trade-offs / open questions.**
+
+- Pre-selection risks silent mistakes. Mitigation: show _why_ each
+  row was matched, and use distinct visual treatments for
+  high-confidence vs name-only matches.
+- We don't yet log "user accepted the agent's pick" vs "user changed
+  it" — that signal would be useful for tuning the matching logic
+  but isn't tracked.
+
+**Status.** live
+**Last updated.** 2026-05-28
+
+---
+
+## Photo capture for data entry
+
+**Decision.** Forms that ask the operator for product-pack data
+(pack qty, cost, UoM) include a "Take a photo / Upload image"
+affordance. The photo is attached to the product as a reference
+image; production will route it through OCR to auto-fill the
+fields.
+
+**Reasoning.** The data the operator needs is usually right in
+front of them on a phone — a supplier email screenshot, a pack
+label, a price list. Asking them to retype it is exactly the kind
+of friction that makes operators ignore the catalogue and lets it
+rot. Letting them snap a picture means the data lands somewhere
+even when they don't have time to transcribe it.
+
+**Trade-offs / open questions.**
+
+- Photo data lives in the message args as a data URL for the
+  prototype. Fine for testing, won't scale — production needs a
+  proper upload pipeline.
+- OCR is not wired up yet. Listed as a "future" in copy so we don't
+  over-promise during testing. When we hook it up, the UX should
+  shift to "Extracted: 6 per pack · DH 24.50 — edit if I got it
+  wrong", framing the system's read as a draft the operator
+  confirms.
+- Should this affordance exist on every data-capture card, or just
+  the product one? My instinct is yes-everywhere (waste counts,
+  stock counts, supplier docs) but we'll judge per surface based on
+  whether the data is genuinely photographable.
+
+**Status.** prototyped (capture only — OCR pending)
+**Last updated.** 2026-05-28
+
+---
+
 ## Open questions
 
 These don't have a decision yet. Promote to a full section once we
@@ -287,3 +517,27 @@ Possible refinements:
 - Auto-pin only for N hours, then demote unless the user pinned it.
 - Show pinned + recent as one merged list with a small pin glyph,
   rather than two sections.
+
+### Post-swap "archive the old product?" follow-up
+
+After a product-swap that touches many recipes, the old product is
+usually orphaned. Worth offering a one-tap "Archive {oldProduct}"
+chip on the receipt — but only when the swap covered the whole
+matched set, not a partial subset (operators sometimes keep a
+backup SKU around). Open question: where does that chip live in
+the receipt card without crowding the existing Undo + Open
+affordances?
+
+### Photo capture → OCR auto-fill UX
+
+Once OCR is wired, the cleanest hand-off is probably:
+
+- Snap photo → loading state on the field group ("Reading the
+  label…")
+- Auto-fill, mark fields as "extracted" with a subtle accent
+- Operator edits as normal; an "Got it wrong?" feedback link
+  trains the OCR model
+
+Open questions: which fields are confident enough to autofill vs
+just suggest; what to do when extraction is partial; whether the
+photo should also be searchable later on the product page.

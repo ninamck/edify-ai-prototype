@@ -346,7 +346,7 @@ function QuestionCard({
           ? '1px solid #FDE68A'
           : '1px solid var(--color-border-subtle)',
         background: missing ? '#FFF5F5' : '#fff',
-        boxShadow: answered ? 'none' : '0 2px 8px rgba(58,48,40,0.07)',
+        boxShadow: answered ? 'none' : '0 2px 8px rgba(0, 28, 53,0.07)',
         marginLeft: isFollowUp ? '12px' : '0',
         borderLeft: isFollowUp ? '3px solid #F59E0B' : undefined,
         transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
@@ -702,7 +702,7 @@ export function CompletionFlowClient({ instanceId }: { instanceId: string }) {
         padding: '12px 16px',
         background: '#fff',
         borderTop: '1px solid var(--color-border-subtle)',
-        boxShadow: '0 -4px 16px rgba(58,48,40,0.1)',
+        boxShadow: '0 -4px 16px rgba(0, 28, 53,0.1)',
         zIndex: 100,
         display: 'flex',
         flexDirection: 'column',

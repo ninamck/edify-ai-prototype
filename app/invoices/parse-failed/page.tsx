@@ -137,7 +137,7 @@ function ParseFailedContent() {
                   padding: '12px 14px',
                   borderRadius: '10px',
                   border: selected ? '1.5px solid var(--color-accent-active)' : '1px solid var(--color-border)',
-                  background: selected ? 'rgba(3,28,89,0.06)' : '#fff',
+                  background: selected ? 'rgba(0, 28, 53,0.06)' : '#fff',
                   fontFamily: 'var(--font-primary)',
                   cursor: 'pointer',
                   textAlign: 'left',

@@ -12,15 +12,28 @@
  * forward `state`.
  */
 
-import type { ReactNode } from 'react';
-import type { LucideIcon } from 'lucide-react';
+import type { ComponentType, ReactNode, SVGProps } from 'react';
 import { Check, X } from 'lucide-react';
 import type React from 'react';
 
 export type CardState = 'pending' | 'confirmed' | 'cancelled';
 
+/**
+ * Common shape between lucide icons and our own `EdifyMark` glyph —
+ * both accept `size`, `color`, `strokeWidth`, plus pass-through SVG
+ * props. Typed loose enough that either works without ts gymnastics
+ * at the call site.
+ */
+export type CardIcon = ComponentType<
+  Omit<SVGProps<SVGSVGElement>, 'width' | 'height' | 'color'> & {
+    size?: number | string;
+    color?: string;
+    strokeWidth?: number | string;
+  }
+>;
+
 interface CardShellProps {
-  icon: LucideIcon;
+  icon: CardIcon;
   title: string;
   subtitle?: string;
   state: CardState;
@@ -52,7 +65,7 @@ export default function CardShell({
     borderRadius: '14px',
     background: '#fff',
     border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.12))',
-    boxShadow: '0 4px 16px rgba(58,48,40,0.08)',
+    boxShadow: '0 4px 16px rgba(0, 28, 53,0.08)',
     overflow: 'hidden',
     opacity: state === 'cancelled' ? 0.55 : 1,
     fontFamily: 'var(--font-primary)',
@@ -60,39 +73,33 @@ export default function CardShell({
 
   return (
     <div style={style}>
-      {/* Header */}
+      {/* Header — bare outline icon (no chip behind it), matching the
+          command-centre / task-history list pattern. The reduced
+          padding pulls the card height down by ~8px overall. */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
-          padding: '12px 14px',
+          gap: '8px',
+          padding: '9px 12px',
           borderBottom: '1px solid var(--color-border-subtle, rgba(0,28,53,0.08))',
         }}
       >
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '28px',
-            height: '28px',
-            borderRadius: '8px',
-            background: 'var(--color-quinn-bg, rgba(40,175,201,0.12))',
-            flexShrink: 0,
-          }}
-        >
-          <Icon size={14} color="var(--color-accent-mid, #28AFC9)" strokeWidth={2.2} />
-        </span>
+        <Icon
+          size={15}
+          color="var(--color-text-muted)"
+          strokeWidth={1.9}
+          style={{ flexShrink: 0 }}
+        />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{title}</div>
           {subtitle && (
             <div
               style={{
-                fontSize: '12px',
+                fontSize: '11.5px',
                 fontWeight: 500,
                 color: 'var(--color-text-muted)',
-                marginTop: '2px',
+                marginTop: '1px',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
@@ -129,7 +136,7 @@ export default function CardShell({
               gap: '4px',
               padding: '3px 8px',
               borderRadius: '100px',
-              background: 'rgba(58,48,40,0.06)',
+              background: 'rgba(0, 28, 53,0.06)',
               color: 'var(--color-text-muted)',
               fontSize: '11px',
               fontWeight: 700,
@@ -142,12 +149,12 @@ export default function CardShell({
         )}
       </div>
 
-      <div style={{ padding: '14px' }}>{children}</div>
+      <div style={{ padding: '12px' }}>{children}</div>
 
       {warning && state === 'pending' && (
         <div
           style={{
-            padding: '8px 14px',
+            padding: '7px 12px',
             background: '#FEF9F3',
             borderTop: '1px solid #F5E6D3',
             color: '#7A3800',
@@ -165,7 +172,7 @@ export default function CardShell({
             display: 'flex',
             justifyContent: 'flex-end',
             gap: '8px',
-            padding: '10px 14px',
+            padding: '8px 12px',
             borderTop: '1px solid var(--color-border-subtle, rgba(0,28,53,0.08))',
             background: 'rgba(0,28,53,0.015)',
           }}

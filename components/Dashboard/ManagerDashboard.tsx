@@ -49,7 +49,7 @@ function ChartCard({
         borderRadius: '12px 0 12px 12px',
         border: '1px solid #001C35',
         background: '#fff',
-        boxShadow: '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.03)',
+        boxShadow: '0 2px 12px rgba(0, 28, 53,0.1), 0 0 0 1px rgba(0, 28, 53,0.03)',
         minHeight: 0,
       }}
     >
@@ -129,7 +129,7 @@ export default function ManagerDashboard({
             borderRadius: 12,
             border: '1px solid #001C35',
             background: '#fff',
-            boxShadow: '0 2px 12px rgba(58,48,40,0.07)',
+            boxShadow: '0 2px 12px rgba(0, 28, 53,0.07)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>

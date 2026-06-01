@@ -21,7 +21,12 @@ export type CommandId =
   | 'recipe-edit'
   | 'production'
   | 'menu'
-  | 'supplier';
+  | 'supplier'
+  /** Add a new product (optionally from a new supplier) and replace
+   *  an existing product with it across a selected set of recipes.
+   *  Implemented as a multi-step wizard — see useCommandRunner's
+   *  startProductSwapWizard for the flow. */
+  | 'product-swap';
 
 /** A single resolved invocation of a command. Args are command-specific
  *  — each command exports its own arg shape. We use `unknown` here to
@@ -70,6 +75,11 @@ export interface CommandReceipt {
 export interface ChatCommand {
   id: CommandId;
   slash: string;
+  /** Extra slash names that should also trigger this command. Useful
+   *  when the same wizard has multiple natural-feeling synonyms
+   *  (e.g. `/add-product` and `/swap-product` both fire the product
+   *  wizard). The slash menu still surfaces just `slash`. */
+  slashAliases?: string[];
   chipLabel: string;
   chipIcon: LucideIcon;
   /** One-line description shown in the slash menu popover. */

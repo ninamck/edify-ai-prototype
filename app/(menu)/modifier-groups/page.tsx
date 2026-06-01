@@ -198,7 +198,7 @@ function Pill({ children, tone }: { children: React.ReactNode; tone: 'navy' | 's
       <span
         style={{
           padding: '2px 8px', borderRadius: 100,
-          background: 'rgba(3,28,89,0.08)', color: 'var(--color-accent-active)',
+          background: 'rgba(0, 28, 53,0.08)', color: 'var(--color-accent-active)',
           fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em',
         }}
       >

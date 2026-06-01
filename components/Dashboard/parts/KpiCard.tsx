@@ -10,7 +10,7 @@ export default function KpiCard({ label, value, delta, deltaLabel, positive }: K
         borderRadius: '10px',
         border: '1px solid #001C35',
         background: '#fff',
-        boxShadow: '0 2px 8px rgba(58,48,40,0.08), 0 0 0 1px rgba(58,48,40,0.03)',
+        boxShadow: '0 2px 8px rgba(0, 28, 53,0.08), 0 0 0 1px rgba(0, 28, 53,0.03)',
       }}
     >
       <div

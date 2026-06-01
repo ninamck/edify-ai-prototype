@@ -33,6 +33,8 @@ export type TaskKind =
   | 'production'
   | 'menu'
   | 'supplier'
+  /** Add a new product + replace an existing one across recipes. */
+  | 'product-swap'
   /** Data questions the operator asked Edify (analytics, table
    *  queries — anything that produced an answer rather than a
    *  mutation). */
@@ -46,6 +48,80 @@ export interface TaskReceipt {
   href?: string;
   hrefLabel?: string;
 }
+
+/**
+ * A single field-level change captured against a Task.
+ *
+ * The store keeps these JSON-serialisable so they survive a localStorage
+ * round-trip. `before` / `after` are typed as `unknown` deliberately — every
+ * command differ knows the shape of the value it's writing; the renderer
+ * (`ChangeDiff`) is the only consumer that has to guess at runtime.
+ *
+ * `valueKind` is a hint to the renderer for how to format scalar diffs.
+ * Defaults to `text` when omitted. Array / object diffs are detected by
+ * `Array.isArray(before)` and rendered as a row count summary rather than
+ * field-by-field reconciliation (full structural diffing is a v2 problem).
+ */
+export interface ChangeRecord {
+  entityType:
+    | 'recipe'
+    | 'recipe-variant'
+    | 'modifier-group'
+    | 'product'
+    | 'master-product'
+    | 'supplier'
+    | 'par'
+    | 'production-setting'
+    | 'waste-entry'
+    | 'stock-count';
+  entityId: string;
+  /** Human label used in the diff renderer. e.g. "Egg mayo sandwich · Large". */
+  entityLabel: string;
+  /** Dotted path into the entity — useful when one entity has multiple
+   *  fields touched on the same Task (e.g. price + availability). */
+  fieldPath: string;
+  /** Human label for the field. e.g. "Dine-in price", "Oat milk qty". */
+  fieldLabel: string;
+  before: unknown;
+  after: unknown;
+  /** Optional unit suffix for scalar values ("g", "£", "%"). */
+  unit?: string;
+  /** Hint to the renderer. */
+  valueKind?: 'number' | 'currency' | 'text' | 'boolean' | 'array';
+}
+
+/**
+ * A single line of computed blast radius — what a Task changed downstream
+ * of the direct edits. e.g. "Croissant: GP 64% → 61% (-3pp)". Sorted by
+ * |delta| in the renderer so the worst hits are at the top.
+ */
+export interface BlastRadiusLine {
+  metric: 'gp_pct' | 'cogs_daily' | 'allergen_exposure' | 'sites_affected' | 'recipes_affected';
+  /** What the metric is computed against — usually a recipe name, sometimes
+   *  "All sites" for an aggregate. */
+  entityLabel: string;
+  before: number | string;
+  after: number | string;
+  /** Signed delta. Lets the renderer sort by impact and colour
+   *  positive / negative consistently. */
+  delta?: number;
+  /** Optional unit suffix. */
+  unit?: string;
+}
+
+/** Who-and-how a Task came to exist. Sets the chip label on each row. */
+export type TaskActor = { userId: string; userName: string };
+export type TaskProvenance =
+  /** Quinn proposed the change; a human confirmed. The default for every
+   *  command going through useCommandRunner today. */
+  | 'ai-suggested-human-approved'
+  /** Quinn applied the change on its own (no confirm step). Reserved for
+   *  low-stakes auto-actions; not used in the prototype yet. */
+  | 'ai-autonomous'
+  /** A human made the change through a normal form, no AI involved.
+   *  Not captured in the prototype yet — schema is ready for when manual
+   *  instrumentation lands. */
+  | 'human';
 
 /**
  * Self-contained, JSON-serialisable copy of a chat message. Used for
@@ -93,6 +169,45 @@ export interface Task {
    *  present, clicking the history row replays this thread instead of
    *  jumping to the receipt's deep-link. */
   snapshotMessages?: StoredChatMessage[];
+  /** Who-and-how the Task came to exist. Optional on older persisted
+   *  entries — the renderer falls back to "Quinn" when missing. */
+  actor?: TaskActor;
+  provenance?: TaskProvenance;
+  /** Structured per-field diff captured at confirm time. Optional —
+   *  pre-upgrade entries and commands without a differ wired up leave
+   *  this undefined; the activity page shows a "No detail captured"
+   *  placeholder in that case. */
+  changes?: ChangeRecord[];
+  /** Computed downstream impact (GP%, COGs, etc.) of the Task. */
+  blastRadius?: BlastRadiusLine[];
+  /** For commands re-run from the Activity page. Append-only history —
+   *  see `recordChanges` + `markSuperseded` for the invariants. */
+  supersedes?: string;
+  supersededBy?: string;
+  revertOf?: string;
+  revertedBy?: string;
+  /** Frozen snapshot of the args that drove the original command —
+   *  written so Revert / Edit can reconstruct the intent without
+   *  walking the chat thread. JSON-serialisable. */
+  commandIntent?: {
+    commandId: string;
+    cardMsgType: string;
+    args: Record<string, unknown>;
+  };
+  /** Batch grouping — set when a single operator action fans out into
+   *  multiple Tasks so the audit log can show per-target rows but
+   *  still tell the user they're part of one intent.
+   *
+   *  Set on both the parent ("Replaced whole milk with oat milk in 11
+   *  recipes — created supplier + product") and on each child ("Added
+   *  oat milk to Egg mayo sandwich"). Same `groupId` on parent and all
+   *  children; `groupRole` distinguishes them.
+   *
+   *  Used today by the product-swap command. Reverting a child only
+   *  rolls that one target back — the parent's atomic snapshot undo
+   *  is still available for batch rollback. */
+  groupId?: string;
+  groupRole?: 'parent' | 'child';
 }
 
 // ── State + persistence ─────────────────────────────────────────────
@@ -219,6 +334,63 @@ export function setTaskSnapshot(id: string, snapshotMessages: StoredChatMessage[
   updateTask(id, { snapshotMessages });
 }
 
+// ── Audit-log mutators ──────────────────────────────────────────────
+//
+// Each Quinn command calls `recordChanges` immediately before its
+// `pushReceipt` step so the receipt headline and the structured diff
+// land in the same persisted entry. Pre-upgrade Tasks (and any command
+// without a differ wired up) leave `changes` undefined; the Activity
+// page handles both cases.
+
+export interface RecordChangesInput {
+  changes: ChangeRecord[];
+  blastRadius?: BlastRadiusLine[];
+  actor?: TaskActor;
+  provenance?: TaskProvenance;
+}
+
+export function recordChanges(id: string, input: RecordChangesInput): void {
+  updateTask(id, {
+    changes: input.changes,
+    blastRadius: input.blastRadius,
+    actor: input.actor ?? DEFAULT_ACTOR,
+    provenance: input.provenance ?? 'ai-suggested-human-approved',
+  });
+}
+
+/** Stash the original command intent against a Task. Used by Revert /
+ *  Edit on the Activity page to reconstruct the wizard without walking
+ *  the chat thread. */
+export function setCommandIntent(
+  id: string,
+  intent: { commandId: string; cardMsgType: string; args: Record<string, unknown> },
+): void {
+  updateTask(id, { commandIntent: intent });
+}
+
+/**
+ * Link a successor Task back to its predecessor. Both rows survive so
+ * history reads as a chain (append-only). The predecessor's status
+ * stays `completed` — it really happened, it just got refined.
+ */
+export function markSuperseded(originalTaskId: string, newTaskId: string): void {
+  updateTask(originalTaskId, { supersededBy: newTaskId });
+  updateTask(newTaskId, { supersedes: originalTaskId });
+}
+
+/**
+ * Link a revert Task back to the one it undoes. Flips the original's
+ * status to `undone` (matching what `undoReceipt` already does for the
+ * in-session toast path) so the row reads consistently.
+ */
+export function markReverted(originalTaskId: string, newTaskId: string): void {
+  updateTask(originalTaskId, { revertedBy: newTaskId, status: 'undone' });
+  updateTask(newTaskId, { revertOf: originalTaskId });
+}
+
+/** Single-user prototype — stub actor used until proper auth is wired. */
+const DEFAULT_ACTOR: TaskActor = { userId: 'demo', userName: 'You' };
+
 export function togglePin(id: string): void {
   hydrate();
   const t = TASKS.find((x) => x.id === id);
@@ -278,6 +450,80 @@ export function logEntry(input: LogEntryInput): Task {
   return task;
 }
 
+// ── Child-task logger (batch fan-out) ───────────────────────────────
+//
+// Used when one operator action touches many targets and we want each
+// target to be its own row in the audit log so it can be reverted
+// independently. The parent Task captures the aggregate (receipt,
+// supplier/product creation, atomic batch undo); each child captures
+// one target's diff + a focused commandIntent the revert path can
+// replay.
+//
+// Children are written already-completed because the underlying
+// mutation happened atomically as part of the parent's confirm step
+// — there's no separate pending → confirmed lifecycle for each.
+// They're not auto-pinned (the parent is); pinning every child of an
+// 11-recipe swap would drown the pinned section.
+
+export interface LogChildTaskInput {
+  kind: TaskKind;
+  title: string;
+  subtitle?: string;
+  receipt?: TaskReceipt;
+  changes?: ChangeRecord[];
+  blastRadius?: BlastRadiusLine[];
+  commandIntent?: {
+    commandId: string;
+    cardMsgType: string;
+    args: Record<string, unknown>;
+  };
+  groupId: string;
+  actor?: TaskActor;
+  provenance?: TaskProvenance;
+}
+
+export function logChildTask(input: LogChildTaskInput): Task {
+  hydrate();
+  const id = `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const now = Date.now();
+  const task: Task = {
+    id,
+    kind: input.kind,
+    title: input.title,
+    subtitle: input.subtitle,
+    status: 'completed',
+    pinned: false,
+    startedAt: now,
+    completedAt: now,
+    receipt: input.receipt,
+    changes: input.changes,
+    blastRadius: input.blastRadius,
+    commandIntent: input.commandIntent,
+    groupId: input.groupId,
+    groupRole: 'child',
+    actor: input.actor ?? DEFAULT_ACTOR,
+    provenance: input.provenance ?? 'ai-suggested-human-approved',
+  };
+  TASKS = [task, ...TASKS].slice(0, MAX_ENTRIES);
+  persist();
+  notify();
+  return task;
+}
+
+/** Mark an existing Task as the parent of a batch. The id is reused
+ *  as the groupId so children only need to know the parent's id. */
+export function markGroupParent(parentId: string): void {
+  updateTask(parentId, { groupId: parentId, groupRole: 'parent' });
+}
+
+/** Read all children of a parent task, ordered by recency (most
+ *  recent first — matches the Activity page's overall sort). */
+export function getGroupChildren(parentId: string, all: Task[]): Task[] {
+  return all
+    .filter((t) => t.groupRole === 'child' && t.groupId === parentId)
+    .sort((a, b) => (b.completedAt ?? b.startedAt) - (a.completedAt ?? a.startedAt));
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────
 
 /** Re-derive the title from a fresh receipt — used when a task is
@@ -285,6 +531,209 @@ export function logEntry(input: LogEntryInput): Task {
  *  the most descriptive thing we've got. */
 export function titleFromReceipt(receipt: TaskReceipt): string {
   return receipt.headline;
+}
+
+// ── Demo seeding (prototype only) ────────────────────────────────────
+//
+// Helps reviewers see the "Added Oat Milk → 11 recipes" batch surface
+// without re-running a product-swap from chat (which would skip recipes
+// that already carry the new product). The shape mirrors what
+// `useCommandRunner` writes on a real confirm: one parent + N children,
+// linked by `groupId`, with each child carrying a `recipe-edit` revert
+// intent so the per-recipe Revert button on the Activity row works.
+//
+// Note: this only seeds the activity log. The underlying recipes /
+// products / suppliers stores are NOT mutated — clicking Revert on a
+// seeded child will replay through chat and produce a no-op or a "field
+// already in expected state" outcome, which is fine for a UX demo.
+
+export interface SeedActivityDemoInput {
+  /** When `true`, clears any existing tasks before seeding so the
+   *  demo batch sits on top of an empty log. Defaults to `true`. */
+  clear?: boolean;
+}
+
+export function seedActivityDemo(input: SeedActivityDemoInput = {}): void {
+  hydrate();
+  if (input.clear !== false) {
+    TASKS = [];
+  }
+
+  const supplierName = 'Plant Pantry';
+  const newProductName = 'Oat Milk';
+  const oldProductName = 'Whole Milk';
+
+  // Eleven recipes drawn from libraryFixtures so the names ring true
+  // even though we don't deep-link to them here. Each child gets a
+  // plausible GP delta clustered around -2pp (oat milk being a bit
+  // more expensive than dairy in the demo's pricing).
+  const recipes: { id: string; name: string; gpDelta: number }[] = [
+    { id: 'rec-flat-white',  name: 'Flat white',     gpDelta: -2.4 },
+    { id: 'rec-cappuccino',  name: 'Cappuccino',     gpDelta: -2.1 },
+    { id: 'rec-latte',       name: 'Latte',          gpDelta: -2.8 },
+    { id: 'rec-mocha',       name: 'Mocha',          gpDelta: -1.9 },
+    { id: 'rec-cortado',     name: 'Cortado',        gpDelta: -1.6 },
+    { id: 'rec-macchiato',   name: 'Macchiato',      gpDelta: -1.4 },
+    { id: 'rec-iced-latte',  name: 'Iced latte',     gpDelta: -2.6 },
+    { id: 'rec-babyccino',   name: 'Kids babyccino', gpDelta: -1.2 },
+    { id: 'rec-chai-latte',  name: 'Chai latte',     gpDelta: -2.3 },
+    { id: 'rec-hot-choc',    name: 'Hot chocolate',  gpDelta: -1.8 },
+    { id: 'rec-matcha',      name: 'Matcha latte',   gpDelta: -2.0 },
+  ];
+
+  const now = Date.now();
+  const parentTs = now - 1000 * 60 * 60 * 2; // 2h ago
+  const parentId = `task-demo-parent-${Math.random().toString(36).slice(2, 6)}`;
+  const productId = `prd-demo-oat-${Math.random().toString(36).slice(2, 6)}`;
+  const supplierId = `sup-demo-plant-${Math.random().toString(36).slice(2, 6)}`;
+  const headline = `Added ${newProductName} · added to ${recipes.length} recipes`;
+
+  // Aggregate GP delta = simple mean of child deltas (matches what the
+  // existing diff helpers do today).
+  const aggDelta =
+    Math.round(
+      (recipes.reduce((s, r) => s + r.gpDelta, 0) / recipes.length) * 10,
+    ) / 10;
+
+  const parent: Task = {
+    id: parentId,
+    kind: 'product-swap',
+    title: headline,
+    subtitle: supplierName,
+    status: 'completed',
+    pinned: true,
+    startedAt: parentTs,
+    completedAt: parentTs,
+    receipt: {
+      headline,
+      detail: `new supplier · ${supplierName} · Saved to all sites`,
+      href: `/suppliers/products/${productId}`,
+      hrefLabel: 'Open product',
+    },
+    actor: DEFAULT_ACTOR,
+    provenance: 'ai-suggested-human-approved',
+    changes: [
+      {
+        entityType: 'supplier',
+        entityId: supplierId,
+        entityLabel: supplierName,
+        fieldPath: '__created__',
+        fieldLabel: 'New supplier added',
+        before: null,
+        after: supplierName,
+        valueKind: 'text',
+      },
+      {
+        entityType: 'product',
+        entityId: productId,
+        entityLabel: newProductName,
+        fieldPath: '__created__',
+        fieldLabel: 'New product added',
+        before: null,
+        after: newProductName,
+        valueKind: 'text',
+      },
+    ],
+    blastRadius: [
+      {
+        metric: 'gp_pct',
+        entityLabel: `All ${recipes.length} recipes (mean)`,
+        before: 68.2,
+        after: +(68.2 + aggDelta).toFixed(1),
+        delta: aggDelta,
+        unit: 'pp',
+      },
+      {
+        metric: 'recipes_affected',
+        entityLabel: 'Across menu',
+        before: 0,
+        after: recipes.length,
+        delta: recipes.length,
+      },
+    ],
+    commandIntent: {
+      commandId: 'product-swap',
+      cardMsgType: 'cmd-product-swap-summary',
+      args: {
+        mode: 'add',
+        newProductName,
+        supplierName,
+        supplierMode: 'new',
+        recipeIds: recipes.map((r) => r.id),
+        scope: 'all',
+        addQty: 200,
+        addUom: 'ml',
+      },
+    },
+    groupId: parentId,
+    groupRole: 'parent',
+  };
+
+  const children: Task[] = recipes.map((r, idx) => {
+    const childTs = parentTs + idx * 50; // children land microseconds after parent
+    const childId = `task-demo-child-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+    return {
+      id: childId,
+      kind: 'product-swap',
+      title: `Added ${newProductName} · ${r.name}`,
+      subtitle: supplierName,
+      status: 'completed',
+      pinned: false,
+      startedAt: childTs,
+      completedAt: childTs,
+      receipt: {
+        headline: `Added ${newProductName} · ${r.name}`,
+        detail: `Part of "${headline}"`,
+        href: `/recipes/${r.id}/edit`,
+        hrefLabel: 'Open recipe',
+      },
+      actor: DEFAULT_ACTOR,
+      provenance: 'ai-suggested-human-approved',
+      changes: [
+        {
+          entityType: 'recipe',
+          entityId: r.id,
+          entityLabel: r.name,
+          fieldPath: 'ingredients',
+          fieldLabel: `Added ${newProductName}`,
+          before: [{ name: oldProductName, qty: '180ml' }],
+          after: [
+            { name: oldProductName, qty: '180ml' },
+            { name: newProductName, qty: '200ml' },
+          ],
+          valueKind: 'array',
+        },
+      ],
+      blastRadius: [
+        {
+          metric: 'gp_pct',
+          entityLabel: r.name,
+          before: 68.2,
+          after: +(68.2 + r.gpDelta).toFixed(1),
+          delta: r.gpDelta,
+          unit: 'pp',
+        },
+      ],
+      commandIntent: {
+        commandId: 'recipe-edit',
+        cardMsgType: 'cmd-recipe-summary',
+        args: {
+          recipeId: r.id,
+          recipeName: r.name,
+          kind: 'add',
+          toName: newProductName,
+          scope: 'all',
+        },
+      },
+      groupId: parentId,
+      groupRole: 'child',
+    };
+  });
+
+  // Most-recent-first inside the store; the activity page re-sorts anyway.
+  TASKS = [parent, ...children, ...TASKS].slice(0, MAX_ENTRIES);
+  persist();
+  notify();
 }
 
 /** Human-friendly relative time. Local to this file so the list and

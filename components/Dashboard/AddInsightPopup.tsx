@@ -9,6 +9,7 @@ import QuestionLibraryPicker, {
   type SegmentKey,
   type ShapeFilter,
 } from '@/components/Dashboard/QuestionLibraryPicker';
+import RecentChatsView from '@/components/Dashboard/RecentChatsView';
 import {
   QUESTION_LIBRARY,
   getQuestionTableQuery,
@@ -35,6 +36,19 @@ function resolveChartId(text: string, role?: BriefingRole): AnalyticsChartId | n
 function isLibraryQuestion(text: string): boolean {
   return QUESTION_LIBRARY.some((q) => q.text === text);
 }
+
+/** Width of the sibling Recent chats drawer when it pushes the dashboard
+ *  side-sheet leftward (Cursor agent-drawer style). Matches the command-
+ *  centre `TaskHistoryDrawer` width so both surfaces feel like the same
+ *  drawer pattern. */
+const RECENT_DRAWER_WIDTH = 420;
+
+/** Shared minimum height for the side-sheet header and the Recent chats
+ *  drawer header so their bottom borders meet at the same y. The taller of
+ *  the two — the dashboard header with its stacked title + subtitle — sets
+ *  the floor; the minimal Notion-style chat-history header pads up to
+ *  match. Keeps the two surfaces visually rhyming when both are open. */
+const SIDESHEET_HEADER_MIN_HEIGHT = 72;
 
 export default function AddInsightPopup({
   open,
@@ -97,6 +111,11 @@ export default function AddInsightPopup({
   };
 }) {
   const [mode, setMode] = useState<'browse' | 'chat'>('browse');
+  // When true, a sibling "Recent chats" drawer slides in from the right and
+  // pushes the dashboard side-sheet leftward — Cursor agent-drawer style.
+  // Independent from `mode` so the user can flip it on top of either browse
+  // or chat (although the trigger pill only renders on browse today).
+  const [recentOpen, setRecentOpen] = useState(false);
   const [segment, setSegment] = useState<SegmentKey>('all');
   const [subsegment, setSubsegment] = useState<ProductionSubsegment | null>(null);
   const [shape, setShape] = useState<ShapeFilter>(defaultShape);
@@ -197,6 +216,7 @@ export default function AddInsightPopup({
     setChatUserMessageCount(0);
     setChatPinnedCount(0);
     setPendingShapeChoice(null);
+    setRecentOpen(false);
   }, [open, commitChatToHistory, defaultShape]);
 
   function exitChatToBrowse() {
@@ -210,12 +230,14 @@ export default function AddInsightPopup({
     setChatPinnedCount(0);
   }
 
-  // Esc: chat → back to library; library → close
+  // Esc precedence: recent drawer → chat → close popup.
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
       if (e.key !== 'Escape') return;
-      if (mode === 'chat') {
+      if (recentOpen) {
+        setRecentOpen(false);
+      } else if (mode === 'chat') {
         exitChatToBrowse();
       } else {
         onClose();
@@ -225,7 +247,7 @@ export default function AddInsightPopup({
     return () => window.removeEventListener('keydown', onKey);
     // exitChatToBrowse is a stable closure over latest state via refs/setters; safe to omit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mode, onClose]);
+  }, [open, mode, recentOpen, onClose]);
 
   function enterChat(text: string, explicitChart?: AnalyticsChartId | null) {
     // Commit the previous chat (if any) before starting a new one.
@@ -261,6 +283,8 @@ export default function AddInsightPopup({
   }
 
   function handleResumeFromHistory(entry: ConversationEntry) {
+    // Tucking the recents drawer away keeps focus on the resumed chat.
+    setRecentOpen(false);
     if (entry.tableQuery) {
       enterChatWithTable(entry.question, entry.tableQuery, entry.tableTitle ?? entry.question);
       return;
@@ -277,13 +301,13 @@ export default function AddInsightPopup({
         position: 'fixed',
         inset: 0,
         zIndex: 1200,
-        background: 'rgba(3, 28, 89, 0.08)',
+        background: 'rgba(0, 28, 53, 0.08)',
       }
     : {
         position: 'fixed',
         inset: 0,
         zIndex: 1200,
-        background: 'rgba(3, 28, 89, 0.25)',
+        background: 'rgba(0, 28, 53, 0.25)',
         backdropFilter: 'blur(2px)',
       };
 
@@ -318,10 +342,16 @@ export default function AddInsightPopup({
         borderRadius: '16px 0 0 16px',
         background: '#fff',
         borderLeft: '1px solid var(--color-border-subtle)',
-        boxShadow: '-12px 0 40px rgba(3,28,89,0.18), 0 0 0 1px rgba(58,48,40,0.04)',
+        boxShadow: '-12px 0 40px rgba(0, 28, 53,0.18), 0 0 0 1px rgba(0, 28, 53,0.04)',
         fontFamily: 'var(--font-primary)',
         overflow: 'hidden',
         position: 'relative',
+        // The Recent chats drawer pushes the main side-sheet leftward by
+        // reserving margin on the right. CSS transition runs in parallel
+        // with framer-motion's transform-based entry/exit (different
+        // properties, no conflict).
+        marginRight: recentOpen ? RECENT_DRAWER_WIDTH : 0,
+        transition: 'margin-right 0.26s cubic-bezier(0.4, 0, 0.2, 1)',
       }
     : {
         pointerEvents: 'auto',
@@ -332,7 +362,7 @@ export default function AddInsightPopup({
         borderRadius: 16,
         background: '#fff',
         border: '1px solid var(--color-border-subtle)',
-        boxShadow: '0 12px 40px rgba(3,28,89,0.18), 0 0 0 1px rgba(58,48,40,0.04)',
+        boxShadow: '0 12px 40px rgba(0, 28, 53,0.18), 0 0 0 1px rgba(0, 28, 53,0.04)',
         fontFamily: 'var(--font-primary)',
         overflow: 'hidden',
         position: 'relative',
@@ -380,6 +410,8 @@ export default function AddInsightPopup({
                   padding: '14px 18px',
                   borderBottom: '1px solid var(--color-border-subtle)',
                   flexShrink: 0,
+                  minHeight: SIDESHEET_HEADER_MIN_HEIGHT,
+                  boxSizing: 'border-box',
                 }}
               >
                 {mode === 'chat' && (
@@ -502,10 +534,12 @@ export default function AddInsightPopup({
                     // 4. Fall back to chart/text chat.
                     enterChat(entry.text, resolveSuggestedChartId(entry, briefingRole));
                   }}
-                  recentConversations={history}
-                  onResumeConversation={handleResumeFromHistory}
-                  onRemoveConversation={removeConversation}
-                  onClearConversations={clearHistory}
+                  recentCount={history.length}
+                  // The push-aside drawer only fits the side-sheet layout
+                  // (centred modal can't realistically host a sibling
+                  // panel). Hide the pill in modal layout by leaving
+                  // `onShowRecent` undefined.
+                  onShowRecent={isSideSheet ? () => setRecentOpen(true) : undefined}
                 />
               ) : (
                 <div
@@ -600,6 +634,115 @@ export default function AddInsightPopup({
               </AnimatePresence>
             </motion.div>
           </div>
+
+          {/* Recent chats drawer — slides in from the right and pushes the
+              dashboard side-sheet leftward. Mirrors the Cursor agent-drawer
+              pattern (both panels visible at once, never replaces). Visual
+              treatment matches `TaskHistoryDrawer` so the two history
+              surfaces feel like the same drawer; no side shadow per
+              spec. */}
+          <AnimatePresence>
+            {recentOpen && isSideSheet && (
+              <motion.aside
+                key="add-insight-recent-drawer"
+                role="dialog"
+                aria-label="Chat history"
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ duration: 0.26, ease: [0.4, 0, 0.2, 1] }}
+                style={{
+                  pointerEvents: 'auto',
+                  position: 'fixed',
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  width: `min(92vw, ${RECENT_DRAWER_WIDTH}px)`,
+                  zIndex: 1202,
+                  background: '#fff',
+                  borderLeft: '1px solid var(--color-border-subtle, rgba(0,28,53,0.08))',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  fontFamily: 'var(--font-primary)',
+                }}
+              >
+                {/* Header — Notion-style. Just the title in muted-bold
+                    uppercase and a close button. Mirrors TaskHistoryDrawer
+                    exactly so the two history surfaces share a header
+                    rhythm. `minHeight` is bumped to the side-sheet header
+                    height so the two bottom borders meet at the same y when
+                    both panels are open side-by-side. */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '14px 18px',
+                    borderBottom: '1px solid var(--color-border-subtle, rgba(0,28,53,0.08))',
+                    flexShrink: 0,
+                    minHeight: SIDESHEET_HEADER_MIN_HEIGHT,
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                      Chat history
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)' }}>
+                      Past conversations with Edify.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Close chat history"
+                    onClick={() => setRecentOpen(false)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 28,
+                      height: 28,
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      padding: 0,
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = 'rgba(0,28,53,0.06)';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = 'transparent';
+                    }}
+                  >
+                    <X size={15} color="var(--color-text-secondary)" strokeWidth={2} />
+                  </button>
+                </div>
+
+                {/* Scrollable body — same outer padding as TaskHistoryDrawer
+                    so column alignment reads consistently across the two
+                    drawers. */}
+                <div
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    overflowY: 'auto',
+                    padding: '0 18px 24px',
+                  }}
+                >
+                  <div style={{ marginTop: '12px' }}>
+                    <RecentChatsView
+                      entries={history}
+                      onResume={handleResumeFromHistory}
+                      onRemove={removeConversation}
+                      onClear={clearHistory}
+                    />
+                  </div>
+                </div>
+              </motion.aside>
+            )}
+          </AnimatePresence>
         </>
       )}
     </AnimatePresence>,

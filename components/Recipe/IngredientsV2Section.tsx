@@ -258,7 +258,7 @@ function abbrevSupplier(id: string): string {
 
 function Chip({ children, tone }: { children: React.ReactNode; tone: 'navy' | 'soft' | 'warm' | 'green' }) {
   const tones = {
-    navy:  { bg: 'rgba(3,28,89,0.08)',   color: 'var(--color-accent-active)' },
+    navy:  { bg: 'rgba(0, 28, 53,0.08)',   color: 'var(--color-accent-active)' },
     soft:  { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' },
     warm:  { bg: 'rgba(241,180,52,0.18)', color: 'var(--color-warning)' },
     green: { bg: 'rgba(82,170,150,0.18)', color: 'var(--color-success, #347262)' },
@@ -320,7 +320,7 @@ function SiteQtyPopover({
           display: 'inline-flex', alignItems: 'center', gap: 5,
           padding: '4px 9px', borderRadius: 100,
           border: '1px solid ' + (overrideCount > 0 ? 'var(--color-accent-active)' : 'var(--color-border-subtle)'),
-          background: overrideCount > 0 ? 'rgba(3,28,89,0.05)' : '#fff',
+          background: overrideCount > 0 ? 'rgba(0, 28, 53,0.05)' : '#fff',
           color: overrideCount > 0 ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
           fontFamily: 'var(--font-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
         }}
@@ -521,7 +521,7 @@ function UnifiedAddIngredient({
                 style={{
                   width: '100%', padding: '12px 13px', border: 'none',
                   borderTop: results.length > 0 ? '1px solid var(--color-border-subtle)' : 'none',
-                  background: 'rgba(3,28,89,0.04)', cursor: 'pointer', textAlign: 'left',
+                  background: 'rgba(0, 28, 53,0.04)', cursor: 'pointer', textAlign: 'left',
                   display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-primary)',
                   color: 'var(--color-accent-active)', fontWeight: 700, fontSize: 13.5,
                 }}
@@ -539,7 +539,7 @@ function UnifiedAddIngredient({
 
 function pickerKindChip(kind: 'master' | 'supplier' | 'made' | 'subrecipe'): React.CSSProperties {
   const tones = {
-    master:    { bg: 'rgba(3,28,89,0.08)',   color: 'var(--color-accent-active)' },
+    master:    { bg: 'rgba(0, 28, 53,0.08)',   color: 'var(--color-accent-active)' },
     supplier:  { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' },
     made:      { bg: 'rgba(241,180,52,0.16)', color: 'var(--color-warning)' },
     subrecipe: { bg: 'rgba(82,170,150,0.18)', color: 'var(--color-success, #347262)' },

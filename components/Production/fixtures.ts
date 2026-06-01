@@ -164,13 +164,13 @@ export const WORK_TYPE_COLORS: Record<WorkType, { bg: string; color: string }> =
   // Pre-shift — warm yellows/ambers, the "before service" tone.
   'weigh-up':  { bg: 'rgba(241,180,52,0.16)', color: 'var(--color-warning)' },
   'thaw':      { bg: 'rgba(3,105,161,0.10)',  color: 'var(--color-info)' },
-  'mise':      { bg: 'rgba(3,28,89,0.07)',    color: 'var(--color-accent-active)' },
+  'mise':      { bg: 'rgba(0, 28, 53,0.07)',    color: 'var(--color-accent-active)' },
   // Cold prep — cool blues/teals.
   'wash':      { bg: 'rgba(3,105,161,0.10)',  color: 'var(--color-info)' },
   'sanitise':  { bg: 'rgba(74,108,181,0.14)', color: 'var(--color-accent-mid)' },
   'slice':     { bg: 'rgba(74,108,181,0.14)', color: 'var(--color-accent-mid)' },
   // Mix / shape — accent navy.
-  'mix':       { bg: 'rgba(3,28,89,0.07)',    color: 'var(--color-accent-active)' },
+  'mix':       { bg: 'rgba(0, 28, 53,0.07)',    color: 'var(--color-accent-active)' },
   'proof':     { bg: 'rgba(241,180,52,0.16)', color: 'var(--color-warning)' },
   // Hot work — reds.
   'bake':      { bg: 'rgba(220,38,38,0.10)',  color: 'var(--color-error)' },

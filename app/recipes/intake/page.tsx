@@ -24,7 +24,7 @@ export default function IntakeLauncherPage() {
     {
       id: 'pos',
       icon: Zap,
-      iconBg: 'rgba(3,28,89,0.08)',
+      iconBg: 'rgba(0, 28, 53,0.08)',
       iconColor: 'var(--color-accent-active)',
       title: 'From your POS',
       description: 'We’ll pull your menu items and modifiers and draft recipes for each.',
@@ -35,7 +35,7 @@ export default function IntakeLauncherPage() {
     {
       id: 'sheet',
       icon: FileSpreadsheet,
-      iconBg: 'rgba(3,28,89,0.08)',
+      iconBg: 'rgba(0, 28, 53,0.08)',
       iconColor: 'var(--color-accent-active)',
       title: 'Upload a costing sheet',
       description: 'CSV or Excel. Quinn maps columns and drafts recipes row by row.',
@@ -44,7 +44,7 @@ export default function IntakeLauncherPage() {
     {
       id: 'photo',
       icon: Camera,
-      iconBg: 'rgba(3,28,89,0.08)',
+      iconBg: 'rgba(0, 28, 53,0.08)',
       iconColor: 'var(--color-accent-active)',
       title: 'Photo of a recipe sheet',
       description: 'Snap a handwritten card. Quinn OCRs it and you confirm. Mobile-friendly.',
@@ -53,7 +53,7 @@ export default function IntakeLauncherPage() {
     {
       id: 'chat',
       icon: MessageSquare,
-      iconBg: 'rgba(3,28,89,0.08)',
+      iconBg: 'rgba(0, 28, 53,0.08)',
       iconColor: 'var(--color-accent-active)',
       title: 'Ask Edify',
       description: 'Type, paste, or dictate a recipe. Quinn walks you through it in chat.',
@@ -62,7 +62,7 @@ export default function IntakeLauncherPage() {
     {
       id: 'manual',
       icon: PenSquare,
-      iconBg: 'rgba(3,28,89,0.08)',
+      iconBg: 'rgba(0, 28, 53,0.08)',
       iconColor: 'var(--color-accent-active)',
       title: 'Build manually',
       description: 'All fields on one page. Quinn pre-fills from the name; advanced settings hide until you need them.',

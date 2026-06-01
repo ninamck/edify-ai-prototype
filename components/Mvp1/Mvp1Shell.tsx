@@ -898,7 +898,7 @@ class TabErrorBoundary extends Component<TabErrorBoundaryProps, TabErrorBoundary
           border: '1px solid var(--color-border-subtle)',
           borderRadius: 14,
           background: '#fff',
-          boxShadow: '0 2px 8px rgba(58, 48, 40, 0.06)',
+          boxShadow: '0 2px 8px rgba(0, 28, 53, 0.06)',
           display: 'flex',
           flexDirection: 'column',
           gap: 10,

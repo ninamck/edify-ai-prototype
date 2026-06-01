@@ -87,7 +87,7 @@ export default function CloseReconciliationCard({ phase }: { phase: BriefingPhas
               borderRadius: '8px',
               background: '#fff',
               border: '1px solid var(--color-border-subtle)',
-              boxShadow: '0 1px 3px rgba(58,48,40,0.06)',
+              boxShadow: '0 1px 3px rgba(0, 28, 53,0.06)',
             }}
           >
             <div

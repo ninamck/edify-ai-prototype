@@ -29,6 +29,8 @@ export function MatchPicker({
   currentTarget,
   onClose,
   align = 'left',
+  mode = 'popover',
+  onPick,
 }: {
   posItemId: string;
   /** Reserved — keep for parity with the previous modal API. */
@@ -37,6 +39,16 @@ export function MatchPicker({
   onClose: () => void;
   /** Which edge of the dropdown aligns to the trigger. */
   align?: 'left' | 'right';
+  /**
+   * `popover` (default) absolutely-positions under the trigger; `inline` renders
+   * as a normal block so the caller can place it inside arbitrary layout.
+   */
+  mode?: 'popover' | 'inline';
+  /**
+   * Optional notifier fired after the override store is updated so callers
+   * can record the chosen target (name + type) in their own UI state.
+   */
+  onPick?: (picked: { type: MatchTargetType; id: string; name: string }) => void;
 }) {
   const recipes = useRecipes();
   const products = useProducts();
@@ -47,31 +59,38 @@ export function MatchPicker({
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Focus search on open; close on Escape; close on outside click
+  // Focus search on open; close on Escape. In `popover` mode, also close on
+  // outside click; in `inline` mode the parent controls dismissal.
   useEffect(() => {
     inputRef.current?.focus();
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose();
     }
-    function onPointerDown(e: MouseEvent) {
-      const panel = panelRef.current;
-      if (!panel) return;
-      if (panel.contains(e.target as Node)) return;
-      // Allow clicks on the original trigger to toggle (Row handles that);
-      // for any other outside click, close.
-      onClose();
-    }
     window.addEventListener('keydown', onKey);
-    // Defer pointer-down listener so the click that opened us doesn't close us.
-    const t = window.setTimeout(() => {
-      window.addEventListener('mousedown', onPointerDown);
-    }, 0);
+    let pointerCleanup: (() => void) | null = null;
+    if (mode === 'popover') {
+      function onPointerDown(e: MouseEvent) {
+        const panel = panelRef.current;
+        if (!panel) return;
+        if (panel.contains(e.target as Node)) return;
+        // Allow clicks on the original trigger to toggle (Row handles that);
+        // for any other outside click, close.
+        onClose();
+      }
+      // Defer pointer-down listener so the click that opened us doesn't close us.
+      const t = window.setTimeout(() => {
+        window.addEventListener('mousedown', onPointerDown);
+      }, 0);
+      pointerCleanup = () => {
+        window.clearTimeout(t);
+        window.removeEventListener('mousedown', onPointerDown);
+      };
+    }
     return () => {
       window.removeEventListener('keydown', onKey);
-      window.clearTimeout(t);
-      window.removeEventListener('mousedown', onPointerDown);
+      pointerCleanup?.();
     };
-  }, [onClose]);
+  }, [onClose, mode]);
 
   const supplierName = useMemo(() => {
     const m = new Map<string, string>();
@@ -121,27 +140,37 @@ export function MatchPicker({
 
   function commit(row: Row) {
     setMatchTarget(posItemId, { type: row.type, id: row.id });
+    onPick?.({ type: row.type, id: row.id, name: row.name });
     onClose();
   }
+
+  const popoverStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: 'calc(100% + 6px)',
+    ...(align === 'right' ? { right: 0 } : { left: 0 }),
+    width: 'min(420px, 92vw)',
+    boxShadow: '0 16px 32px -12px rgba(0, 28, 53, 0.28)',
+    maxHeight: 360,
+    zIndex: 200,
+  };
+  const inlineStyle: React.CSSProperties = {
+    position: 'relative',
+    width: '100%',
+    maxHeight: 260,
+  };
 
   return (
     <div
       ref={panelRef}
       onMouseDown={(e) => e.stopPropagation()}
       style={{
-        position: 'absolute',
-        top: 'calc(100% + 6px)',
-        ...(align === 'right' ? { right: 0 } : { left: 0 }),
-        width: 'min(420px, 92vw)',
         background: '#fff',
         border: '1px solid var(--color-border-subtle)',
         borderRadius: 12,
-        boxShadow: '0 16px 32px -12px rgba(0, 28, 53, 0.28)',
         overflow: 'hidden',
         display: 'flex', flexDirection: 'column',
-        maxHeight: 360,
-        zIndex: 200,
         fontFamily: 'var(--font-primary)',
+        ...(mode === 'inline' ? inlineStyle : popoverStyle),
       }}
     >
       <div style={{

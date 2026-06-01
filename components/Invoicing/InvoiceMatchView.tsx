@@ -559,7 +559,7 @@ function MatchContextBar({ chips, initialExpandedId }: {
   const [expandedId, setExpandedId] = useState<string | null>(initialExpandedId);
   type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'error';
   const palette: Record<Tone, { bg: string; bgActive: string; color: string; border: string }> = {
-    neutral: { bg: 'var(--color-bg-hover)', bgActive: 'rgba(58,48,40,0.08)', color: 'var(--color-text-primary)', border: 'var(--color-border-subtle)' },
+    neutral: { bg: 'var(--color-bg-hover)', bgActive: 'rgba(0, 28, 53,0.08)', color: 'var(--color-text-primary)', border: 'var(--color-border-subtle)' },
     info: { bg: 'rgba(3,105,161,0.06)', bgActive: 'rgba(3,105,161,0.14)', color: 'var(--color-info)', border: 'rgba(3,105,161,0.3)' },
     success: { bg: 'rgba(21,128,61,0.06)', bgActive: 'rgba(21,128,61,0.14)', color: 'var(--color-success)', border: 'var(--color-success-border)' },
     warning: { bg: 'rgba(217,119,6,0.08)', bgActive: 'rgba(217,119,6,0.18)', color: 'var(--color-warning)', border: 'var(--color-warning-border)' },
@@ -683,7 +683,7 @@ function AutoAppliedChip({ varianceId }: { varianceId?: string }) {
             padding: '10px 14px',
             borderRadius: '8px',
             border: '1px solid var(--color-border-subtle)',
-            boxShadow: '0 8px 24px rgba(58,48,40,0.12)',
+            boxShadow: '0 8px 24px rgba(0, 28, 53,0.12)',
             whiteSpace: 'normal',
             width: '260px',
             textAlign: 'left',

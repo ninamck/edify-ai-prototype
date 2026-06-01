@@ -9,6 +9,7 @@ import type { ShellViewMode } from '@/components/ShellTopBar';
 import EstateDashboard from '@/components/Dashboard/EstateDashboard';
 import ManagerDashboard from '@/components/Dashboard/ManagerDashboard';
 import PlaytomicDashboard from '@/components/Dashboard/PlaytomicDashboard';
+import CulinaryCollectiveDashboard from '@/components/Dashboard/CulinaryCollective/CulinaryCollectiveDashboard';
 import MorningBriefingTimeline from '@/components/Feed/MorningBriefingTimeline';
 import RightPanelSheetOverlay from '@/components/RightPanel/RightPanelSheetOverlay';
 import MobileInsightsBar from '@/components/MobileInsightsBar';
@@ -244,7 +245,16 @@ export default function HomeShell() {
               background: 'var(--color-bg-surface)',
             }}
           >
-            {briefingRole === 'playtomic' ? (
+            {briefingRole === 'culinary' ? (
+              <CulinaryCollectiveDashboard
+                layout={currentLayout}
+                editing={editingDashboard}
+                onLayoutChange={updateCurrentLayout}
+                onToggleEdit={() => setEditingDashboard((v) => !v)}
+                onAddInsight={() => setAddInsightOpen(true)}
+                onRemovePinned={removePinnedChart}
+              />
+            ) : briefingRole === 'playtomic' ? (
               <PlaytomicDashboard
                 layout={currentLayout}
                 editing={editingDashboard}

@@ -79,7 +79,7 @@ export function KindPill({ kind, isPrep }: { kind: RecipeKind; isPrep?: boolean 
   const cfg: Record<RecipeKind, { label: string; bg: string; color: string }> = {
     standalone: { label: 'Stand-alone', bg: 'var(--color-bg-hover)',  color: 'var(--color-text-secondary)' },
     component:  { label: 'Component',   bg: 'rgba(241,180,52,0.16)',  color: 'var(--color-warning)' },
-    assembly:   { label: 'Assembly',    bg: 'rgba(3,28,89,0.07)',     color: 'var(--color-accent-active)' },
+    assembly:   { label: 'Assembly',    bg: 'rgba(0, 28, 53,0.07)',     color: 'var(--color-accent-active)' },
   };
   const { label, bg, color } = cfg[kind];
   return (
@@ -304,8 +304,8 @@ function StageChip({
         display: 'inline-flex', flexDirection: 'column',
         padding: '5px 9px 6px',
         borderRadius: '6px',
-        background: accent ? 'rgba(3,28,89,0.08)' : 'var(--color-bg-hover)',
-        border: '1px solid ' + (accent ? 'rgba(3,28,89,0.18)' : 'var(--color-border-subtle)'),
+        background: accent ? 'rgba(0, 28, 53,0.08)' : 'var(--color-bg-hover)',
+        border: '1px solid ' + (accent ? 'rgba(0, 28, 53,0.18)' : 'var(--color-border-subtle)'),
         fontSize: '11.5px',
         lineHeight: 1.25,
         minWidth: 0,

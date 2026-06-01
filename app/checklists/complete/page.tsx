@@ -52,7 +52,7 @@ function InstanceCard({ instance, onClick }: { instance: ChecklistInstance; onCl
         borderRadius: '12px',
         border: '1px solid var(--color-border-subtle)',
         background: isComplete ? 'var(--color-bg-surface)' : '#fff',
-        boxShadow: isComplete ? 'none' : '0 1px 4px rgba(58,48,40,0.07)',
+        boxShadow: isComplete ? 'none' : '0 1px 4px rgba(0, 28, 53,0.07)',
         cursor: 'pointer',
         fontFamily: 'var(--font-primary)',
         opacity: isComplete ? 0.85 : 1,

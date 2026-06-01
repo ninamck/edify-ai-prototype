@@ -530,7 +530,7 @@ function RecurringOrderSection({
         border: '1px solid rgba(34,68,68,0.20)',
         background: 'var(--color-bg-surface)',
         overflow: 'hidden',
-        boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
+        boxShadow: '0 1px 4px rgba(0, 28, 53,0.06)',
       }}
     >
       {/* Section header */}
@@ -1623,7 +1623,7 @@ export default function OrderReview({
           justifyContent: 'space-between',
           gap: '12px',
           zIndex: 10,
-          boxShadow: '0 -2px 12px rgba(58,48,40,0.08)',
+          boxShadow: '0 -2px 12px rgba(0, 28, 53,0.08)',
         }}
       >
         <div

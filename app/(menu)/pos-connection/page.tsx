@@ -190,7 +190,7 @@ function ConnectionCard({
         <div
           style={{
             width: 44, height: 44, borderRadius: 10,
-            background: 'rgba(3,28,89,0.06)',
+            background: 'rgba(0, 28, 53,0.06)',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             color: 'var(--color-accent-active)', fontWeight: 700, fontSize: 14,
             flexShrink: 0,

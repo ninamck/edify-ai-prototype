@@ -132,7 +132,7 @@ export default function MobileChartFullscreen({
             borderRadius: 12,
             border: '1px solid var(--color-border-subtle)',
             background: '#fff',
-            boxShadow: '0 2px 12px rgba(58,48,40,0.1)',
+            boxShadow: '0 2px 12px rgba(0, 28, 53,0.1)',
           }}
         >
           {children}

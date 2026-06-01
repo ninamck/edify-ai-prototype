@@ -174,6 +174,7 @@ type FormDraft = {
   excludeFromCogs: boolean;
   shelfLifeValue: number | '';
   shelfLifeUnit: ShelfLifeUnit;
+  expiryDate: string;
   closingRange: string;
   bakeryHot: string;
   allowCarryOver: boolean;
@@ -389,6 +390,7 @@ function recipeToDraft(r: Recipe): FormDraft {
     excludeFromCogs: fx.advanced?.excludeFromCogs ?? false,
     shelfLifeValue: fx.advanced?.shelfLifeValue ?? sl.value,
     shelfLifeUnit: fx.advanced?.shelfLifeUnit ?? sl.unit,
+    expiryDate: fx.advanced?.expiryDate ?? r.production.expiryDate ?? '',
     closingRange: fx.advanced?.closingRange ?? '',
     bakeryHot: fx.advanced?.bakeryHot ?? 'None',
     allowCarryOver: fx.advanced?.allowCarryOver ?? false,
@@ -442,6 +444,7 @@ function draftToRecipe(
       visibility: productionVisibility,
       shelfLifeMinutes,
       prepTimeSeconds: typeof draft.prepSec === 'number' ? draft.prepSec : null,
+      expiryDate: draft.expiryDate || null,
     },
     formExtras: {
       yieldQty: draft.yieldQty,
@@ -470,6 +473,7 @@ function draftToRecipe(
         excludeFromCogs: draft.excludeFromCogs,
         shelfLifeValue: draft.shelfLifeValue,
         shelfLifeUnit: draft.shelfLifeUnit,
+        expiryDate: draft.expiryDate,
         closingRange: draft.closingRange,
         bakeryHot: draft.bakeryHot,
         allowCarryOver: draft.allowCarryOver,
@@ -1103,16 +1107,29 @@ function EditRecipeForm({
                 </div>
               </div>
 
-              <div>
-                <FieldLabel>Shelf life</FieldLabel>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', alignItems: 'start' }}>
+                <div>
+                  <FieldLabel>Shelf life</FieldLabel>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <input
+                      type="number"
+                      value={draft.shelfLifeValue}
+                      onChange={(e) => patch('shelfLifeValue', e.target.value === '' ? '' : Number(e.target.value))}
+                      style={{ ...inputStyle, width: '100px', flexShrink: 0 }}
+                    />
+                    <PillSingle options={SHELF_LIFE_UNITS} selected={draft.shelfLifeUnit} onChange={(v) => patch('shelfLifeUnit', v as ShelfLifeUnit)} />
+                  </div>
+                </div>
+                <div>
+                  <FieldLabel help="When this recipe retires from production. After this date the recipe is no longer available to produce — items already made keep their normal shelf life. Leave blank if there's no scheduled retirement.">
+                    Expiry date <Soft>(optional)</Soft>
+                  </FieldLabel>
                   <input
-                    type="number"
-                    value={draft.shelfLifeValue}
-                    onChange={(e) => patch('shelfLifeValue', e.target.value === '' ? '' : Number(e.target.value))}
-                    style={{ ...inputStyle, width: '100px', flexShrink: 0 }}
+                    type="date"
+                    value={draft.expiryDate}
+                    onChange={(e) => patch('expiryDate', e.target.value)}
+                    style={{ ...inputStyle, maxWidth: '220px' }}
                   />
-                  <PillSingle options={SHELF_LIFE_UNITS} selected={draft.shelfLifeUnit} onChange={(v) => patch('shelfLifeUnit', v as ShelfLifeUnit)} />
                 </div>
               </div>
 
@@ -1426,7 +1443,7 @@ function PosAndModifiersSection({
               display: 'inline-flex', alignItems: 'center', gap: 8,
               padding: '8px 12px', borderRadius: 8,
               border: '1px solid var(--color-border-subtle)',
-              background: posLinked ? 'rgba(3,28,89,0.05)' : '#fff',
+              background: posLinked ? 'rgba(0, 28, 53,0.05)' : '#fff',
               cursor: 'pointer', fontFamily: 'var(--font-primary)', fontSize: 13,
               color: posLinked ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
               fontWeight: 600,
@@ -1544,7 +1561,7 @@ function AttachedGroupChip({
         display: 'inline-flex', alignItems: 'stretch',
         borderRadius: 100, overflow: 'hidden',
         border: '1px solid var(--color-accent-active)',
-        background: 'rgba(3,28,89,0.06)',
+        background: 'rgba(0, 28, 53,0.06)',
       }}
     >
       <span
@@ -1569,7 +1586,7 @@ function AttachedGroupChip({
         style={{
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           padding: '0 10px', border: 'none',
-          borderLeft: '1px solid rgba(3,28,89,0.20)',
+          borderLeft: '1px solid rgba(0, 28, 53,0.20)',
           background: 'transparent', color: 'var(--color-text-muted)',
           cursor: 'pointer',
         }}
@@ -1584,7 +1601,7 @@ function AttachedGroupChip({
         style={{
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           padding: '0 9px', border: 'none',
-          borderLeft: '1px solid rgba(3,28,89,0.20)',
+          borderLeft: '1px solid rgba(0, 28, 53,0.20)',
           background: 'transparent', color: 'var(--color-text-muted)',
           cursor: 'pointer',
         }}
@@ -1934,7 +1951,7 @@ function WhatGetsSoldPreview({
                     border: on
                       ? '1px solid var(--color-accent-active)'
                       : '1px solid var(--color-border-subtle)',
-                    background: on ? 'rgba(3,28,89,0.06)' : '#fff',
+                    background: on ? 'rgba(0, 28, 53,0.06)' : '#fff',
                     color: on ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
                     fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
                     fontFamily: 'var(--font-primary)',
@@ -1952,8 +1969,8 @@ function WhatGetsSoldPreview({
         <div
           style={{
             marginBottom: 12, padding: '8px 10px', borderRadius: 8,
-            background: 'rgba(3,28,89,0.05)',
-            border: '1px solid rgba(3,28,89,0.12)',
+            background: 'rgba(0, 28, 53,0.05)',
+            border: '1px solid rgba(0, 28, 53,0.12)',
             fontSize: 11.5, color: 'var(--color-accent-active)',
           }}
         >
@@ -2001,7 +2018,7 @@ function WhatGetsSoldPreview({
                           border: on
                             ? '1px solid var(--color-accent-active)'
                             : '1px solid var(--color-border-subtle)',
-                          background: on ? 'rgba(3,28,89,0.06)' : '#fff',
+                          background: on ? 'rgba(0, 28, 53,0.06)' : '#fff',
                           color: on ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
                           fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
                           fontFamily: 'var(--font-primary)',
@@ -2075,7 +2092,7 @@ function PreviewLine({
     pkg:     { background: 'rgba(82,170,150,0.16)', color: 'var(--color-success, #347262)' },
     variant: { background: 'rgba(143,92,199,0.16)', color: '#6F3FB0' },
     slot:    { background: 'rgba(241,180,52,0.16)', color: 'var(--color-warning)' },
-    mod:     { background: 'rgba(3,28,89,0.08)', color: 'var(--color-accent-active)' },
+    mod:     { background: 'rgba(0, 28, 53,0.08)', color: 'var(--color-accent-active)' },
   };
   const label =
     source.kind === 'recipe-base'

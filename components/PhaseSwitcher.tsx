@@ -86,7 +86,7 @@ export default function PhaseSwitcher({
             background: '#fff',
             border: '1px solid var(--color-border-subtle)',
             borderRadius: '8px',
-            boxShadow: '0 4px 16px rgba(58,48,40,0.12), 0 0 0 1px rgba(58,48,40,0.04)',
+            boxShadow: '0 4px 16px rgba(0, 28, 53,0.12), 0 0 0 1px rgba(0, 28, 53,0.04)',
             padding: '4px',
             display: 'flex',
             flexDirection: 'column',

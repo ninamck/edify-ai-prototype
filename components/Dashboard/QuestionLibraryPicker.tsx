@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { ChevronRight, ArrowUp, MessageSquare, X as XIcon, BarChart3, Table2 } from 'lucide-react';
+import { ChevronRight, ArrowUp, BarChart3, Table2, Clock } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import {
   QUESTION_LIBRARY,
@@ -19,7 +19,6 @@ import {
   type ProductionSubsegment,
 } from '@/components/Dashboard/data/questionLibrary';
 import type { BriefingRole } from '@/components/briefing';
-import type { ConversationEntry } from '@/hooks/useConversationHistory';
 
 const ACCENT = 'var(--color-accent-deep)';
 
@@ -38,10 +37,8 @@ export default function QuestionLibraryPicker({
   onSubsegmentChange,
   briefingRole,
   onPick,
-  recentConversations,
-  onResumeConversation,
-  onRemoveConversation,
-  onClearConversations,
+  recentCount = 0,
+  onShowRecent,
 }: {
   query: string;
   onQueryChange: (next: string) => void;
@@ -59,11 +56,13 @@ export default function QuestionLibraryPicker({
   briefingRole?: BriefingRole;
   /** Fires when the user clicks a library question. */
   onPick: (entry: QuestionEntry) => void;
-  /** Optional list of past conversations to show at the bottom of the rail. */
-  recentConversations?: ConversationEntry[];
-  onResumeConversation?: (entry: ConversationEntry) => void;
-  onRemoveConversation?: (id: string) => void;
-  onClearConversations?: () => void;
+  /** Number of saved past conversations — drives the count badge on the
+   *  "Recent chats" pill. The pill is hidden when this is 0 (or when no
+   *  `onShowRecent` callback is provided). */
+  recentCount?: number;
+  /** Fires when the user clicks the "Recent chats" pill. The parent swaps
+   *  the side-sheet body to a full-panel recents view (no nested drawer). */
+  onShowRecent?: () => void;
 }) {
   const segCounts = useMemo(
     () => countsBySegment(briefingRole === 'dunkin' ? DUNKIN_WIRED_QUESTION_IDS : undefined),
@@ -89,6 +88,7 @@ export default function QuestionLibraryPicker({
   }, [query, segment, subsegment, shape, briefingRole]);
 
   const canSend = query.trim().length > 0;
+  const showRecentPill = !!onShowRecent && recentCount > 0;
 
   return (
     <div
@@ -138,16 +138,16 @@ export default function QuestionLibraryPicker({
             borderRadius: 14,
             border: '1.5px solid var(--color-border-subtle)',
             background: '#fff',
-            boxShadow: '0 2px 10px rgba(58,48,40,0.06)',
+            boxShadow: '0 2px 10px rgba(0, 28, 53,0.06)',
             transition: 'border-color 0.15s, box-shadow 0.15s',
           }}
           onFocus={(e) => {
             (e.currentTarget as HTMLFormElement).style.borderColor = ACCENT as string;
-            (e.currentTarget as HTMLFormElement).style.boxShadow = '0 2px 14px rgba(3,28,89,0.12)';
+            (e.currentTarget as HTMLFormElement).style.boxShadow = '0 2px 14px rgba(0, 28, 53,0.12)';
           }}
           onBlur={(e) => {
             (e.currentTarget as HTMLFormElement).style.borderColor = 'var(--color-border-subtle)';
-            (e.currentTarget as HTMLFormElement).style.boxShadow = '0 2px 10px rgba(58,48,40,0.06)';
+            (e.currentTarget as HTMLFormElement).style.boxShadow = '0 2px 10px rgba(0, 28, 53,0.06)';
           }}
         >
           <EdifyMark size={16} color={ACCENT} strokeWidth={2.2} />
@@ -187,6 +187,60 @@ export default function QuestionLibraryPicker({
             <ArrowUp size={16} strokeWidth={2.4} />
           </button>
         </form>
+
+        {showRecentPill && (
+          <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-start' }}>
+            <button
+              type="button"
+              onClick={onShowRecent}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 11px 6px 10px',
+                borderRadius: 999,
+                border: '1px solid var(--color-border-subtle)',
+                background: '#fff',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-primary)',
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--color-text-secondary)',
+                transition: 'background 0.12s, border-color 0.12s',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-bg-hover)';
+                (e.currentTarget as HTMLButtonElement).style.borderColor =
+                  'var(--color-accent-deep)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = '#fff';
+                (e.currentTarget as HTMLButtonElement).style.borderColor =
+                  'var(--color-border-subtle)';
+              }}
+            >
+              <Clock size={12} strokeWidth={2.2} />
+              Recent chats
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minWidth: 18,
+                  height: 18,
+                  padding: '0 6px',
+                  borderRadius: 999,
+                  background: 'var(--color-bg-hover)',
+                  color: 'var(--color-text-muted)',
+                  fontSize: 10,
+                  fontWeight: 700,
+                }}
+              >
+                {recentCount}
+              </span>
+            </button>
+          </div>
+        )}
 
         <div
           aria-hidden="true"
@@ -310,15 +364,6 @@ export default function QuestionLibraryPicker({
               )}
             </div>
           ))}
-
-          {recentConversations && recentConversations.length > 0 && (
-            <RailRecentList
-              entries={recentConversations}
-              onResume={(e) => onResumeConversation?.(e)}
-              onRemove={(id) => onRemoveConversation?.(id)}
-              onClear={onClearConversations}
-            />
-          )}
         </div>
 
         <div
@@ -614,172 +659,3 @@ function EmptyState({ query, onAsk }: { query: string; onAsk: () => void }) {
   );
 }
 
-function RailRecentList({
-  entries,
-  onResume,
-  onRemove,
-  onClear,
-}: {
-  entries: ConversationEntry[];
-  onResume: (entry: ConversationEntry) => void;
-  onRemove: (id: string) => void;
-  onClear?: () => void;
-}) {
-  return (
-    <div
-      style={{
-        marginTop: 12,
-        paddingTop: 10,
-        borderTop: '1px solid var(--color-border-subtle)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 1,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '4px 10px 6px',
-        }}
-      >
-        <span
-          style={{
-            flex: 1,
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            color: 'var(--color-text-muted)',
-          }}
-        >
-          Recent
-        </span>
-        {onClear && entries.length > 0 && (
-          <button
-            type="button"
-            onClick={onClear}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              cursor: 'pointer',
-              fontSize: 10,
-              fontWeight: 600,
-              color: 'var(--color-text-muted)',
-              padding: '2px 4px',
-              fontFamily: 'var(--font-primary)',
-            }}
-          >
-            Clear
-          </button>
-        )}
-      </div>
-
-      {entries.map((entry) => (
-        <RailRecentRow
-          key={entry.id}
-          entry={entry}
-          onResume={() => onResume(entry)}
-          onRemove={() => onRemove(entry.id)}
-        />
-      ))}
-    </div>
-  );
-}
-
-function RailRecentRow({
-  entry,
-  onResume,
-  onRemove,
-}: {
-  entry: ConversationEntry;
-  onResume: () => void;
-  onRemove: () => void;
-}) {
-  return (
-    <div
-      style={{
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        borderRadius: 8,
-        transition: 'background 0.1s',
-      }}
-      className="rail-recent-row"
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background = 'var(--color-bg-hover)';
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background = 'transparent';
-      }}
-    >
-      <button
-        type="button"
-        onClick={onResume}
-        title={entry.question}
-        style={{
-          all: 'unset',
-          flex: 1,
-          minWidth: 0,
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '7px 30px 7px 10px',
-        }}
-      >
-        <MessageSquare
-          size={12}
-          strokeWidth={2.2}
-          color="var(--color-text-muted)"
-          style={{ flexShrink: 0 }}
-        />
-        <span
-          style={{
-            flex: 1,
-            minWidth: 0,
-            fontSize: 12,
-            fontWeight: 500,
-            color: 'var(--color-text-secondary)',
-            fontFamily: 'var(--font-primary)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {entry.question}
-        </span>
-      </button>
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label="Remove conversation"
-        style={{
-          position: 'absolute',
-          right: 4,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          width: 22,
-          height: 22,
-          borderRadius: 6,
-          border: 'none',
-          background: 'transparent',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--color-text-muted)',
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.background = 'rgba(58,48,40,0.08)';
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-        }}
-      >
-        <XIcon size={11} strokeWidth={2.2} />
-      </button>
-    </div>
-  );
-}

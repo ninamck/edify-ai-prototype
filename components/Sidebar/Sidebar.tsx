@@ -18,11 +18,11 @@ import {
   Layers,
   Star,
   MapPin,
-  User,
   Settings,
   NotebookPen,
   PanelLeftOpen,
   PanelLeftClose,
+  Activity as ActivityIcon,
 } from 'lucide-react';
 
 import NavGroup from './NavGroup';
@@ -280,6 +280,16 @@ export default function Sidebar() {
             active={is('/notebook')}
             onClick={() => router.push('/notebook')}
           />
+          {/* Activity sits in Performance so the audit log is grouped
+              with the other "look back at what happened" surfaces
+              (forecast accuracy, notebook reflections). */}
+          <NavItem
+            label="Activity"
+            icon={ActivityIcon}
+            compact={compact}
+            active={is('/activity')}
+            onClick={() => router.push('/activity')}
+          />
           <NavItem label="Compare sites" icon={Layers} compact={compact} active={is('/compare')} />
         </NavGroup>
 
@@ -293,7 +303,8 @@ export default function Sidebar() {
             onClick={() => router.push('/recipes')}
           />
           <NavItem label="Manage suppliers" icon={MapPin} compact={compact} active={is('/suppliers')} onClick={() => router.push('/suppliers')} />
-          <NavItem label="Manage users" icon={User} compact={compact} active={is('/users')} />
+          {/* "Manage users" lives under Settings now — there's no
+              point hosting two paths into the same screen. */}
           <NavItem label="Manage checklists" icon={ClipboardList} compact={compact} active={is('/checklists')} onClick={() => router.push('/checklists')} />
           <NavItem label="Configure settings" icon={Settings} compact={compact} active={is('/settings')} onClick={() => router.push('/settings')} />
         </NavGroup>

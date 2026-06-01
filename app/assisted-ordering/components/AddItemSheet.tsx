@@ -90,7 +90,7 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
         borderRadius: 'var(--radius-card)',
         border: '1.5px solid var(--color-accent-active)',
         background: 'var(--color-bg-surface)',
-        boxShadow: '0 4px 20px rgba(58,48,40,0.10)',
+        boxShadow: '0 4px 20px rgba(0, 28, 53,0.10)',
         overflow: 'hidden',
       }}
     >

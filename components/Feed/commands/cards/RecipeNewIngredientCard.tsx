@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { Plus, Search, Sparkles, Check } from 'lucide-react';
+import { Plus, Search, Check } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { useProducts } from '@/components/Suppliers/store';
 import type { Product } from '@/components/Suppliers/fixtures';
 import CardShell, { PillRow, type CardState } from './CardShell';
@@ -156,7 +157,7 @@ export default function RecipeNewIngredientCard({
                   {selection.kind === 'picked' ? (
                     <Check size={12} color="var(--color-accent-mid, #28AFC9)" strokeWidth={2.5} />
                   ) : (
-                    <Sparkles size={12} color="var(--color-accent-mid, #28AFC9)" strokeWidth={2.2} />
+                    <EdifyMark size={12} color="var(--color-accent-mid, #28AFC9)" />
                   )}
                 </span>
                 <div style={{ minWidth: 0 }}>
@@ -358,7 +359,7 @@ export default function RecipeNewIngredientCard({
                   fontFamily: 'var(--font-primary)',
                 }}
               >
-                <Sparkles size={14} color="var(--color-accent-mid, #28AFC9)" strokeWidth={2.2} />
+                <EdifyMark size={14} color="var(--color-accent-mid, #28AFC9)" />
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
                   Use &ldquo;{query.trim()}&rdquo; as a new ingredient
                 </span>

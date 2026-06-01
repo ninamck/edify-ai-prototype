@@ -21,7 +21,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Clock } from 'lucide-react';
+import { X } from 'lucide-react';
 import TaskHistoryList from './TaskHistoryList';
 import type { Task } from './taskHistoryStore';
 
@@ -125,51 +125,32 @@ export default function TaskHistoryDrawer({ open, onClose, onOpenTask }: TaskHis
           transition: 'transform 220ms cubic-bezier(0.32, 0.72, 0, 1)',
         }}
       >
-        {/* Header */}
+        {/* Header — Notion-style. Just the title in muted-bold and a
+            close button. No coloured chip, no subtitle clutter; the
+            drawer's whole purpose is "your history", spelling that
+            out a second time in a tagline doesn't earn its weight. */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
-            padding: '16px 18px',
+            padding: '14px 18px',
             borderBottom: '1px solid var(--color-border-subtle, rgba(0,28,53,0.08))',
             flexShrink: 0,
           }}
         >
-          <span
+          <div
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 32,
-              height: 32,
-              borderRadius: '10px',
-              background: 'var(--color-quinn-bg, rgba(40,175,201,0.12))',
-              flexShrink: 0,
+              flex: 1,
+              minWidth: 0,
+              fontSize: '13px',
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              color: 'var(--color-text-secondary)',
             }}
           >
-            <Clock size={15} color="var(--color-accent-mid, #28AFC9)" strokeWidth={2.2} />
-          </span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: '15px',
-                fontWeight: 700,
-                color: 'var(--color-text-primary)',
-              }}
-            >
-              History
-            </div>
-            <div
-              style={{
-                fontSize: '12px',
-                fontWeight: 500,
-                color: 'var(--color-text-muted)',
-                marginTop: '2px',
-              }}
-            >
-              Questions, tasks, and changes
-            </div>
+            History
           </div>
           <button
             type="button"
@@ -179,14 +160,20 @@ export default function TaskHistoryDrawer({ open, onClose, onOpenTask }: TaskHis
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: 32,
-              height: 32,
-              borderRadius: '10px',
-              border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.10))',
-              background: '#fff',
+              width: 28,
+              height: 28,
+              borderRadius: '8px',
+              border: 'none',
+              background: 'transparent',
               cursor: 'pointer',
               flexShrink: 0,
               padding: 0,
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background = 'rgba(0,28,53,0.06)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = 'transparent';
             }}
           >
             <X size={15} color="var(--color-text-secondary)" strokeWidth={2} />
@@ -202,9 +189,7 @@ export default function TaskHistoryDrawer({ open, onClose, onOpenTask }: TaskHis
             padding: '0 18px 24px',
           }}
         >
-          {/* Subtract the inline list's own top margin so the body
-              starts at a comfortable distance from the header. */}
-          <div style={{ marginTop: '-12px' }}>
+          <div style={{ marginTop: '12px' }}>
             <TaskHistoryList
               defaultExpanded
               onCloseAfterNavigate={onClose}

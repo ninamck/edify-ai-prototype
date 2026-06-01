@@ -508,7 +508,7 @@ function SaveBar({
         padding: '12px 16px',
         background: '#ffffff',
         borderTop: '1px solid var(--color-border)',
-        boxShadow: '0 -8px 24px rgba(58,48,40,0.08)',
+        boxShadow: '0 -8px 24px rgba(0, 28, 53,0.08)',
         display: 'flex',
         alignItems: 'center',
         gap: 10,

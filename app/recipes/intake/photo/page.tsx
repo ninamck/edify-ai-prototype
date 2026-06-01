@@ -241,12 +241,12 @@ function ReviewStage({
       >
         {/* Fake "handwritten lines" */}
         <div style={{ padding: '18px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div style={{ height: '12px', background: 'rgba(58,48,40,0.18)', borderRadius: '2px', width: '70%' }} />
-          <div style={{ height: '2px', background: 'rgba(58,48,40,0.1)', width: '100%' }} />
+          <div style={{ height: '12px', background: 'rgba(0, 28, 53,0.18)', borderRadius: '2px', width: '70%' }} />
+          <div style={{ height: '2px', background: 'rgba(0, 28, 53,0.1)', width: '100%' }} />
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} style={{ height: '2px', background: 'rgba(58,48,40,0.1)', width: `${60 + (i * 4) % 30}%` }} />
+            <div key={i} style={{ height: '2px', background: 'rgba(0, 28, 53,0.1)', width: `${60 + (i * 4) % 30}%` }} />
           ))}
-          <div style={{ marginTop: '12px', height: '2px', background: 'rgba(58,48,40,0.1)', width: '100%' }} />
+          <div style={{ marginTop: '12px', height: '2px', background: 'rgba(0, 28, 53,0.1)', width: '100%' }} />
         </div>
         <div
           style={{

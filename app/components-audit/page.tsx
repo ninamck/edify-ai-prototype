@@ -1477,11 +1477,11 @@ function CardsSection() {
         specs={[
           ['radius',     '12px'],
           ['border',     '1px solid --color-border-subtle'],
-          ['box-shadow', '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.03)'],
+          ['box-shadow', '0 2px 12px rgba(0, 28, 53,0.1), 0 0 0 1px rgba(0, 28, 53,0.03)'],
         ]}
         previewBg="var(--color-bg-hover)"
         preview={
-          <div style={{ width: 220, padding: 14, borderRadius: 12, border: '1px solid var(--color-border-subtle)', background: '#fff', boxShadow: '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.03)' }}>
+          <div style={{ width: 220, padding: 14, borderRadius: 12, border: '1px solid var(--color-border-subtle)', background: '#fff', boxShadow: '0 2px 12px rgba(0, 28, 53,0.1), 0 0 0 1px rgba(0, 28, 53,0.03)' }}>
             <div style={{ fontSize: 13, fontWeight: 700 }}>Master products</div>
             <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 4 }}>1,248 items · 12 categories</div>
           </div>
@@ -1979,14 +1979,14 @@ function ModalsSection() {
         source="components/Suppliers/QuinnSheet.tsx"
         note="Backdrop is a different rgba (58,48,40,0.18) and the close button is 30×30 ghost, not 32×32 tinted."
         specs={[
-          ['backdrop',  'rgba(58,48,40,0.18)'],
+          ['backdrop',  'rgba(0, 28, 53,0.18)'],
           ['z-index',   '800'],
           ['scroll pad','14px 16px'],
         ]}
-        previewBg="rgba(58,48,40,0.18)"
+        previewBg="rgba(0, 28, 53,0.18)"
         previewPadding="24px"
         preview={
-          <div style={{ width: 280, height: 200, background: '#fff', borderRadius: 12, boxShadow: '0 24px 64px rgba(58,48,40,0.25)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ width: 280, height: 200, background: '#fff', borderRadius: 12, boxShadow: '0 24px 64px rgba(0, 28, 53,0.25)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px' }}>
               <div style={{ fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <Sparkles size={14} color="var(--color-accent-active)" /> Quinn
@@ -2010,11 +2010,11 @@ function ModalsSection() {
           ['width',      '320'],
           ['padding',    '14px 16px'],
           ['radius',     '12px'],
-          ['box-shadow', '0 12px 36px rgba(3,28,89,0.18)'],
+          ['box-shadow', '0 12px 36px rgba(0, 28, 53,0.18)'],
         ]}
         previewBg="var(--color-bg-hover)"
         preview={
-          <div style={{ width: 280, padding: '14px 16px', borderRadius: 12, background: '#fff', boxShadow: '0 12px 36px rgba(3,28,89,0.18)' }}>
+          <div style={{ width: 280, padding: '14px 16px', borderRadius: 12, background: '#fff', boxShadow: '0 12px 36px rgba(0, 28, 53,0.18)' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Quinn says</div>
             <div style={{ fontSize: 13, marginTop: 6, lineHeight: 1.5 }}>
               Yesterday&apos;s revenue was up 8.2% — driven by drinks not food.
@@ -2030,11 +2030,11 @@ function ModalsSection() {
         specs={[
           ['radius',     '8px'],
           ['padding',    '4px'],
-          ['box-shadow', '0 4px 16px rgba(58,48,40,0.12), 0 0 0 1px rgba(58,48,40,0.04)'],
+          ['box-shadow', '0 4px 16px rgba(0, 28, 53,0.12), 0 0 0 1px rgba(0, 28, 53,0.04)'],
         ]}
         previewBg="var(--color-bg-hover)"
         preview={
-          <div style={{ width: 200, padding: 4, borderRadius: 8, background: '#fff', boxShadow: '0 4px 16px rgba(58,48,40,0.12), 0 0 0 1px rgba(58,48,40,0.04)' }}>
+          <div style={{ width: 200, padding: 4, borderRadius: 8, background: '#fff', boxShadow: '0 4px 16px rgba(0, 28, 53,0.12), 0 0 0 1px rgba(0, 28, 53,0.04)' }}>
             {['All', 'Morning', 'Afternoon', 'Evening'].map((l, i) => (
               <button key={l} style={{
                 width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 6,
@@ -2077,14 +2077,14 @@ function TopbarsSection() {
           ['min-height',    '52px'],
           ['padding',       '10px 16px 10px 12px'],
           ['border-bottom', '2px solid rgba(217,215,212,1)'],
-          ['box-shadow',    '0 1px 0 rgba(58,48,40,0.08)'],
+          ['box-shadow',    '0 1px 0 rgba(0, 28, 53,0.08)'],
         ]}
         previewPadding="0"
         preview={
           <div style={{
             minHeight: 52, padding: '10px 16px 10px 12px',
             borderBottom: '2px solid rgba(217,215,212,1)',
-            boxShadow: '0 1px 0 rgba(58,48,40,0.08)',
+            boxShadow: '0 1px 0 rgba(0, 28, 53,0.08)',
             background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
           }}>
             <div style={{ fontSize: 14, fontWeight: 700 }}>Soho</div>
@@ -2227,7 +2227,7 @@ function NavItemsSection() {
         specs={[
           ['padding',    '11px 14px'],
           ['radius',     '--radius-card (10px)'],
-          ['background', '--color-quinn-bg (#031c59)'],
+          ['background', '--color-quinn-bg (#001C35)'],
           ['color',      '--color-quinn-label (#fff)'],
         ]}
         previewBg="var(--color-bg-nav)"
@@ -2271,7 +2271,7 @@ function ToastsSection() {
         source="app/(menu)/recipes/page.tsx → UndoToastView"
         specs={[
           ['radius',     '100px'],
-          ['background', '--color-accent-deep (#020f3a)'],
+          ['background', '--color-accent-deep (#001C35)'],
           ['color',      '#fff'],
           ['padding',    '10px 14px'],
           ['box-shadow', '0 10px 30px rgba(3,15,58,0.25)'],

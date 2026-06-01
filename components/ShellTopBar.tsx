@@ -35,7 +35,7 @@ export default function ShellTopBar({
         padding: '10px 16px 10px 12px',
         borderBottom: '1px solid var(--color-shell-topbar-border, rgba(217, 215, 212, 1))',
         background: '#ffffff',
-        boxShadow: '0 1px 0 rgba(58,48,40,0.08)',
+        boxShadow: '0 1px 0 rgba(0, 28, 53,0.08)',
         fontFamily: 'var(--font-primary)',
       }}
     >

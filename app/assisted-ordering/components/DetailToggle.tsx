@@ -53,7 +53,7 @@ export default function DetailToggle({ value, onChange }: Props) {
             height: '14px',
             borderRadius: '50%',
             background: '#fff',
-            boxShadow: '0 1px 4px rgba(58,48,40,0.18)',
+            boxShadow: '0 1px 4px rgba(0, 28, 53,0.18)',
             transition: 'left 0.2s ease',
           }}
         />

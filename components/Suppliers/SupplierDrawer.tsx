@@ -65,7 +65,7 @@ export default function SupplierDrawer({
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         transition={{ duration: 0.15 }}
         onClick={onClose}
-        style={{ position: 'fixed', inset: 0, background: 'rgba(58,48,40,0.18)', zIndex: 700 }}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(0, 28, 53,0.18)', zIndex: 700 }}
       />
       <motion.aside
         initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
@@ -76,7 +76,7 @@ export default function SupplierDrawer({
           position: 'fixed', top: 0, right: 0, bottom: 0,
           width: 'min(540px, 100vw)',
           background: '#fff',
-          boxShadow: '-20px 0 60px rgba(58,48,40,0.16)',
+          boxShadow: '-20px 0 60px rgba(0, 28, 53,0.16)',
           zIndex: 701,
           display: 'flex', flexDirection: 'column',
           fontFamily: 'var(--font-primary)',

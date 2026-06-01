@@ -176,7 +176,7 @@ export default function WasteLogCard({
           background: '#fff',
           borderRadius: '14px',
           border: '1px solid var(--color-border-subtle)',
-          boxShadow: '0 2px 10px rgba(58,48,40,0.08)',
+          boxShadow: '0 2px 10px rgba(0, 28, 53,0.08)',
           padding: '20px',
           display: 'flex',
           flexDirection: 'column',
@@ -389,7 +389,7 @@ export default function WasteLogCard({
               style={{
                 position: 'fixed',
                 inset: 0,
-                background: 'rgba(3,28,89,0.22)',
+                background: 'rgba(0, 28, 53,0.22)',
                 backdropFilter: 'blur(1px)',
                 zIndex: 299,
               }}
@@ -677,7 +677,7 @@ function DatePickerModal({
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'rgba(3,28,89,0.25)',
+          background: 'rgba(0, 28, 53,0.25)',
           backdropFilter: 'blur(2px)',
           animation: 'dpFadeIn 0.2s ease-out',
         }}
@@ -693,7 +693,7 @@ function DatePickerModal({
           borderRadius: 16,
           background: '#fff',
           border: '1px solid var(--color-border-subtle)',
-          boxShadow: '0 16px 48px rgba(3,28,89,0.22)',
+          boxShadow: '0 16px 48px rgba(0, 28, 53,0.22)',
           fontFamily: 'var(--font-primary)',
           display: 'flex',
           flexDirection: 'column',
@@ -966,7 +966,7 @@ function ConfirmLogModal({
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'rgba(3,28,89,0.25)',
+          background: 'rgba(0, 28, 53,0.25)',
           backdropFilter: 'blur(2px)',
           animation: 'dpFadeIn 0.2s ease-out',
         }}
@@ -983,7 +983,7 @@ function ConfirmLogModal({
           borderRadius: 16,
           background: '#fff',
           border: '1px solid var(--color-border-subtle)',
-          boxShadow: '0 16px 48px rgba(3,28,89,0.22)',
+          boxShadow: '0 16px 48px rgba(0, 28, 53,0.22)',
           fontFamily: 'var(--font-primary)',
           display: 'flex',
           flexDirection: 'column',

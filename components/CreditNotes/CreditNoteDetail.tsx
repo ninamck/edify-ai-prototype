@@ -147,7 +147,7 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
         width: 'min(480px, 100vw)',
         height: '100vh',
         background: '#fff',
-        boxShadow: '-8px 0 40px rgba(58,48,40,0.14)',
+        boxShadow: '-8px 0 40px rgba(0, 28, 53,0.14)',
         display: 'flex',
         flexDirection: 'column',
         zIndex: 200,

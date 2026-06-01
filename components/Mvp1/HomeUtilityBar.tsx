@@ -39,7 +39,7 @@ export default function HomeUtilityBar({
         background: '#fff',
         border: '2px solid var(--color-border)',
         boxShadow:
-          '0 6px 20px rgba(58,48,40,0.12), 0 2px 6px rgba(58,48,40,0.08), 0 0 0 1px rgba(58,48,40,0.03)',
+          '0 6px 20px rgba(0, 28, 53,0.12), 0 2px 6px rgba(0, 28, 53,0.08), 0 0 0 1px rgba(0, 28, 53,0.03)',
         fontFamily: 'var(--font-primary)',
         boxSizing: 'border-box',
       }}

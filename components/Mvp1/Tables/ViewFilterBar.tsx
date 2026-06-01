@@ -217,7 +217,7 @@ export default function ViewFilterBar({
               background: '#fff',
               border: '1px solid var(--color-border-subtle)',
               borderRadius: 8,
-              boxShadow: '0 6px 24px rgba(58,48,40,0.16)',
+              boxShadow: '0 6px 24px rgba(0, 28, 53,0.16)',
               padding: 4,
               fontFamily: 'var(--font-primary)',
             }}
@@ -447,7 +447,7 @@ function FilterValuePicker({
         background: '#fff',
         border: '1px solid var(--color-border-subtle)',
         borderRadius: 10,
-        boxShadow: '0 8px 28px rgba(58,48,40,0.16)',
+        boxShadow: '0 8px 28px rgba(0, 28, 53,0.16)',
         display: 'flex',
         flexDirection: 'column',
         fontFamily: 'var(--font-primary)',

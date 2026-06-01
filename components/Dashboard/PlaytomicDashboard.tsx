@@ -110,7 +110,7 @@ export default function PlaytomicDashboard({
           borderRadius: 12,
           border: '1px solid var(--color-border-subtle)',
           background: '#fff',
-          boxShadow: '0 2px 12px rgba(58,48,40,0.07)',
+          boxShadow: '0 2px 12px rgba(0, 28, 53,0.07)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>

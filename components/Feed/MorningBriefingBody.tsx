@@ -20,7 +20,7 @@ function ConfidenceMeterBar({ label, valuePct, caption }: { label: string; value
       </div>
       <div style={{
         height: '8px', borderRadius: '100px',
-        background: 'rgba(58,48,40,0.08)',
+        background: 'rgba(0, 28, 53,0.08)',
         overflow: 'hidden',
         marginBottom: '5px',
       }}>
@@ -52,7 +52,7 @@ function InvoiceMatchBar() {
       </div>
       <div style={{
         height: '8px', borderRadius: '100px',
-        background: 'rgba(58,48,40,0.08)',
+        background: 'rgba(0, 28, 53,0.08)',
         overflow: 'hidden',
         display: 'flex',
         marginBottom: '6px',
@@ -337,7 +337,7 @@ function HeroStrip({ role, phase }: { role: BriefingRole; phase: BriefingPhase }
         borderRadius: '10px',
         background: '#fff',
         border: '1px solid var(--color-border-subtle)',
-        boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
+        boxShadow: '0 1px 4px rgba(0, 28, 53,0.06)',
         marginBottom: '10px',
       }}
     >
@@ -422,7 +422,7 @@ function NoteForEdify({ phase }: { phase: BriefingPhase }) {
         borderRadius: '10px',
         background: '#fff',
         border: '1px solid var(--color-border-subtle)',
-        boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
+        boxShadow: '0 1px 4px rgba(0, 28, 53,0.06)',
         marginBottom: '10px',
       }}
     >
@@ -707,8 +707,8 @@ function InsightCard({
         background: '#fff',
         border: isPinned ? `1px solid ${accentColor}` : '1px solid var(--color-border-subtle)',
         boxShadow: isPinned
-          ? `0 1px 4px rgba(58,48,40,0.06), 0 0 0 1px ${accentColor}22`
-          : '0 1px 4px rgba(58,48,40,0.06)',
+          ? `0 1px 4px rgba(0, 28, 53,0.06), 0 0 0 1px ${accentColor}22`
+          : '0 1px 4px rgba(0, 28, 53,0.06)',
         position: 'relative',
       }}
     >

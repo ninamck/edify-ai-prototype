@@ -58,7 +58,7 @@ export default function MobileTopBar({
         paddingRight: '12px',
         borderBottom: '1px solid var(--color-border-subtle)',
         background: 'var(--color-bg-nav)',
-        boxShadow: '0 1px 0 rgba(58,48,40,0.08)',
+        boxShadow: '0 1px 0 rgba(0, 28, 53,0.08)',
         fontFamily: 'var(--font-primary)',
         zIndex: 100,
         position: 'relative',
@@ -146,7 +146,7 @@ export default function MobileTopBar({
               borderRadius: '12px',
               background: '#FFFFFF',
               border: '1px solid var(--color-border-subtle)',
-              boxShadow: '0 8px 24px rgba(3,28,89,0.18)',
+              boxShadow: '0 8px 24px rgba(0, 28, 53,0.18)',
               zIndex: 150,
             }}
           >

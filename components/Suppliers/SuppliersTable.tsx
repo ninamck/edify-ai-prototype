@@ -507,7 +507,7 @@ function FilterPopover<T extends string>({
         background: '#fff',
         border: '1px solid var(--color-border-subtle)',
         borderRadius: 10,
-        boxShadow: '0 10px 30px rgba(58,48,40,0.14)',
+        boxShadow: '0 10px 30px rgba(0, 28, 53,0.14)',
         zIndex: 600,
         padding: 6,
         fontFamily: 'var(--font-primary)',

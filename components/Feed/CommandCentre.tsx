@@ -100,7 +100,7 @@ function ConfidenceMeter({ label, valuePct, caption }: { label: string; valuePct
       </div>
       <div style={{
         height: '10px', borderRadius: '100px',
-        background: 'rgba(58,48,40,0.08)',
+        background: 'rgba(0, 28, 53,0.08)',
         overflow: 'hidden',
         marginBottom: '8px',
       }}>
@@ -174,7 +174,7 @@ export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso',
         borderRadius: '12px',
         background: '#fff',
         border: '1px solid var(--color-border-subtle)',
-        boxShadow: '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.03)',
+        boxShadow: '0 2px 12px rgba(0, 28, 53,0.1), 0 0 0 1px rgba(0, 28, 53,0.03)',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
@@ -257,7 +257,7 @@ export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso',
           </div>
           <div style={{
             height: '10px', borderRadius: '100px',
-            background: 'rgba(58,48,40,0.08)',
+            background: 'rgba(0, 28, 53,0.08)',
             overflow: 'hidden',
             display: 'flex',
           }}>

@@ -188,7 +188,7 @@ export default function DataTable<TRow extends Row>({
         header: col.header,
         size: col.width ?? 130,
         filterFn: pickFilterFn(col.type) as ColumnDef<TRow>['filterFn'],
-        cell: (info) => formatCell(info.getValue(), col.type),
+        cell: (info) => formatCell(info.getValue(), col.type, { currency: col.currency }),
         sortingFn: col.type === 'string' || col.type === 'date' ? 'alphanumeric' : 'basic',
         sortUndefined: 'last',
       };
@@ -331,7 +331,7 @@ export default function DataTable<TRow extends Row>({
         borderRadius: 12,
         overflow: 'hidden',
         fontFamily: 'var(--font-primary)',
-        boxShadow: '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.03)',
+        boxShadow: '0 2px 12px rgba(0, 28, 53,0.1), 0 0 0 1px rgba(0, 28, 53,0.03)',
       }}
     >
       {header && (
@@ -445,7 +445,7 @@ export default function DataTable<TRow extends Row>({
                   background: '#fff',
                   border: '1px solid var(--color-border-subtle)',
                   borderRadius: 8,
-                  boxShadow: '0 4px 16px rgba(58,48,40,0.12), 0 0 0 1px rgba(58,48,40,0.04)',
+                  boxShadow: '0 4px 16px rgba(0, 28, 53,0.12), 0 0 0 1px rgba(0, 28, 53,0.04)',
                   padding: 6,
                   display: 'flex',
                   flexDirection: 'column',
@@ -707,7 +707,7 @@ export default function DataTable<TRow extends Row>({
                   // cells (which need an opaque background to occlude scrolling
                   // content beneath them) match the row colour exactly.
                   const isOdd = idx % 2 !== 0;
-                  const rowBg = isOdd ? '#fff' : 'rgba(58,48,40,0.018)';
+                  const rowBg = isOdd ? '#fff' : 'rgba(0, 28, 53,0.018)';
                   const pinnedCellBg = isOdd ? '#fff' : 'rgb(251,250,250)';
                   return (
                     <tr key={row.id} style={{ background: rowBg }}>
@@ -742,7 +742,7 @@ export default function DataTable<TRow extends Row>({
                             }}
                             style={{
                               padding: isEditing ? '2px 4px' : '7px 10px',
-                              borderBottom: '1px solid var(--color-border-faint, rgba(58,48,40,0.06))',
+                              borderBottom: '1px solid var(--color-border-faint, rgba(0, 28, 53,0.06))',
                               color: 'var(--color-text-primary)',
                               textAlign: align,
                               whiteSpace: 'nowrap',
@@ -969,7 +969,7 @@ const FilterPopover = forwardRef<HTMLDivElement, FilterPopoverProps>(function Fi
         background: '#fff',
         border: '1px solid var(--color-border-subtle)',
         borderRadius: 10,
-        boxShadow: '0 10px 32px rgba(58,48,40,0.14), 0 0 0 1px rgba(58,48,40,0.04)',
+        boxShadow: '0 10px 32px rgba(0, 28, 53,0.14), 0 0 0 1px rgba(0, 28, 53,0.04)',
         padding: 12,
         display: 'flex',
         flexDirection: 'column',

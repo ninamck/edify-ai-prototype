@@ -649,7 +649,7 @@ function VariantSettingsPopover({
         style={{
           padding: '8px 11px', borderRadius: 7,
           border: '1px solid ' + (variant.isDefault ? 'transparent' : 'var(--color-border-subtle)'),
-          background: variant.isDefault ? 'rgba(3,28,89,0.08)' : '#fff',
+          background: variant.isDefault ? 'rgba(0, 28, 53,0.08)' : '#fff',
           color: variant.isDefault ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
           fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-primary)',
           cursor: variant.isDefault ? 'default' : 'pointer',
@@ -1399,7 +1399,7 @@ const addRowBtnStyle: React.CSSProperties = {
 const defaultPillStyle: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 3,
   padding: '3px 8px', borderRadius: 100,
-  background: 'rgba(3,28,89,0.08)', color: 'var(--color-accent-active)',
+  background: 'rgba(0, 28, 53,0.08)', color: 'var(--color-accent-active)',
   fontSize: 11, fontWeight: 700, letterSpacing: '0.02em',
 };
 

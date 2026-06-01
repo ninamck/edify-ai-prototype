@@ -45,7 +45,7 @@ export default function SupplierSection({
         border: '1px solid var(--color-border-subtle)',
         background: 'var(--color-bg-surface)',
         overflow: 'hidden',
-        boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
+        boxShadow: '0 1px 4px rgba(0, 28, 53,0.06)',
       }}
     >
       {/* Section header */}

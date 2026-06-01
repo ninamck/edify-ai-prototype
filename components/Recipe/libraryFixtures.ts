@@ -404,6 +404,10 @@ export type RecipeFormExtras = {
     excludeFromCogs?: boolean;
     shelfLifeValue?: number | '';
     shelfLifeUnit?: 'minutes' | 'hours' | 'days';
+    /** Mirror of `Recipe.production.expiryDate` (ISO `YYYY-MM-DD`).
+     *  Kept on `formExtras.advanced` so the form's draft state
+     *  round-trips cleanly. Empty string represents "not set". */
+    expiryDate?: string;
     closingRange?: string;
     bakeryHot?: string;
     allowCarryOver?: boolean;
@@ -517,6 +521,12 @@ export type Recipe = {
     visibility: 'Bar' | 'Kitchen' | 'Both' | null;
     shelfLifeMinutes: number | null;
     prepTimeSeconds: number | null;
+    /** Optional retirement date for this recipe — ISO `YYYY-MM-DD`.
+     *  When set, this recipe stops being available for new production
+     *  on that date. Distinct from `shelfLifeMinutes` (which governs
+     *  how long each produced unit stays sellable). Null means the
+     *  recipe has no scheduled retirement. */
+    expiryDate?: string | null;
   };
   /** Stand-alone / component / assembly. Drives the Type pill and Components filter. */
   kind: RecipeKind;

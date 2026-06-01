@@ -61,7 +61,7 @@ function ChartCard({
         borderRadius: 12,
         border: '1px solid var(--color-border-subtle)',
         background: '#fff',
-        boxShadow: '0 2px 12px rgba(58,48,40,0.06)',
+        boxShadow: '0 2px 12px rgba(0, 28, 53,0.06)',
         fontFamily: 'var(--font-primary)',
       }}
     >
@@ -272,7 +272,7 @@ export default function PlaytomicOverview() {
           borderRadius: 12,
           border: '1px solid var(--color-border-subtle)',
           background: '#fff',
-          boxShadow: '0 2px 12px rgba(58,48,40,0.06)',
+          boxShadow: '0 2px 12px rgba(0, 28, 53,0.06)',
           fontFamily: 'var(--font-primary)',
         }}
       >

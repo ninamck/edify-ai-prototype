@@ -1,0 +1,73 @@
+---
+description: The AI assistant is "Edify", never "Quinn". Use the EdifyMark logo, not Sparkles.
+alwaysApply: true
+---
+
+# AI naming and brand mark
+
+The AI assistant in this product is called **Edify**. Never use the name **Quinn**
+in any user-facing copy, prop names, component names, ARIA labels, or comments
+on new code.
+
+This decision overrides any legacy naming you find in the codebase. Existing
+`Quinn*` components and references will be renamed in a separate sweep — do
+not introduce new ones, and when you touch an old surface for an unrelated
+change, prefer "Edify" in any user-facing string you touch.
+
+## Logo / mark
+
+Anywhere the AI shows up — provenance chip, avatar, "the AI is thinking"
+affordance, **a value or row the AI suggested, selected, or pre-filled**,
+"agent picked these" callouts, AI-pulled imports, etc. — use the existing
+`EdifyMark` component. Never the lucide `Sparkles` icon.
+
+Rule of thumb: **if the icon is signalling "the AI did this", it must be
+`EdifyMark`.** Reach for `Sparkles` only for non-AI ornament (e.g. a generic
+"new" sparkle on a marketing surface), and even then prefer something else.
+
+```tsx
+// ❌ BAD — Sparkles icon + "Quinn" copy
+import { Sparkles } from 'lucide-react';
+
+<span style={{ color: 'var(--color-accent-quinn)' }}>
+  <Sparkles size={12} /> Quinn
+</span>
+
+// ✅ GOOD — EdifyMark + "Edify" copy
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
+
+<span style={{ color: 'var(--color-text-secondary)' }}>
+  <EdifyMark size={12} /> Edify
+</span>
+
+// ✅ GOOD — AI pre-selected a value
+<EdifyMark size={14} color="var(--color-accent-mid, #28AFC9)" />
+I pre-selected the 12 coffee recipes on your menu.
+```
+
+`EdifyMark` is a drop-in lucide-shaped component — same `size`, `color`, and
+pass-through SVG props, so you can swap it for `Sparkles` without touching
+the surrounding markup.
+
+## User-facing copy
+
+| ❌ Don't write              | ✅ Write instead             |
+|----------------------------|------------------------------|
+| "Ask Quinn"                | "Ask Edify"                  |
+| "Quinn updated this"       | "Edify updated this"         |
+| "Quinn is thinking…"       | "Edify is thinking…"         |
+| `aria-label="Quinn"`        | `aria-label="Edify"`          |
+
+## Comments and identifiers
+
+For new files: name components, props, IDs, and CSS variables `edify*` /
+`Edify*` — not `quinn*` / `Quinn*`. In existing files where renaming the
+symbol would cascade widely, leave the identifier alone but match the
+surrounding code's voice in comments (use "Edify" in new sentences).
+
+## When you can keep "Quinn"
+
+- Historical references in `DESIGN-RATIONALE.md`, transcripts, or other
+  artefacts that capture a past state of the product.
+- Identifiers in deep legacy modules where a localised rename would touch
+  dozens of unrelated files (do not introduce new ones).

@@ -234,6 +234,25 @@ export const SEED_SUPPLIERS: Supplier[] = [
     cutOffTime: '13:00',
     leadTimeDays: 2,
   },
+  // Plant-based dairy supplier — added so the product-swap wizard
+  // has a credible existing-supplier path for the canonical oat-milk
+  // demo (operator picks Oatly UAE from the typeahead rather than
+  // typing it as a new supplier). Carries no products in the seed —
+  // adding the first SKU is exactly what the wizard demos.
+  {
+    id: 'sup-oatly',
+    name: 'OATLY UAE TRADING LLC',
+    shortCode: 'Oatly UAE',
+    categories: ['Dairy', 'Beverage'],
+    sites: ALL_AGILITY_SITES.slice(0, 6),
+    status: 'Available',
+    email: 'orders@oatly.ae',
+    phone: '+971 4 555 0218',
+    cutOffTime: '11:00',
+    leadTimeDays: 2,
+    minimumOrderValue: 180,
+    deliveryDays: ['Mon', 'Wed', 'Fri'],
+  },
   {
     id: 'sup-bakemart',
     name: 'BAKEMART LLC',

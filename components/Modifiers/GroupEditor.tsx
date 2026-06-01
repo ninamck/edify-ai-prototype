@@ -163,7 +163,7 @@ function OptionEditor({
   onMoveDown: () => void;
 }) {
   return (
-    <div style={{ border: '1px solid var(--color-border-subtle)', borderRadius: 10, padding: 12, background: 'var(--color-bg-hover)' }}>
+    <div style={{ border: '1px solid var(--color-border-subtle)', borderRadius: 10, padding: 12 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 110px 110px auto', gap: 10, alignItems: 'center' }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textAlign: 'center' }}>{index + 1}</span>
         <input

@@ -69,7 +69,7 @@ function HistoryCard({ instance, onClick }: { instance: ChecklistInstance; onCli
         borderRadius: '12px',
         border: flagged ? '1px solid #FDE68A' : '1px solid var(--color-border-subtle)',
         background: flagged ? '#FFFBEB' : '#fff',
-        boxShadow: '0 1px 3px rgba(58,48,40,0.06)',
+        boxShadow: '0 1px 3px rgba(0, 28, 53,0.06)',
         cursor: 'pointer',
         fontFamily: 'var(--font-primary)',
         transition: 'box-shadow 0.15s ease',

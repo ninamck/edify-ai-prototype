@@ -6,13 +6,15 @@
  * inserts its slash form (e.g. `/waste `) so the user can keep typing
  * the args; Tab also accepts.
  *
- * Lives in the composer's positioning context. The caller is
- * responsible for measuring + positioning the popover relative to
- * the textarea — we render with `position: absolute, bottom: 100%`
- * so we float above the composer regardless of where it sits.
+ * Rendered via `createPortal` to `document.body` so the popover can
+ * escape ancestor `overflow: hidden | auto` clipping — same approach
+ * as the `+` popover. Position is computed from a caller-provided
+ * `anchorEl` (the composer wrapper) on every open + resize + scroll
+ * so the menu stays glued to the composer.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { COMMAND_REGISTRY } from './registry';
 
 // Commands hidden from the slash menu (same set as the `+` popover).
@@ -23,20 +25,23 @@ const HIDDEN_FROM_MENU = new Set<string>(['waste']);
 interface SlashMenuProps {
   value: string;
   visible: boolean;
+  /** Element the popover should sit on top of. The popover renders in
+   *  a portal, so without this we'd have no positioning context. */
+  anchorEl: HTMLElement | null;
   onPick: (slash: string) => void;
   onClose: () => void;
 }
 
-export default function SlashMenu({ value, visible, onPick, onClose }: SlashMenuProps) {
+export default function SlashMenu({ value, visible, anchorEl, onPick, onClose }: SlashMenuProps) {
   const query = useMemo(() => {
     const m = value.match(/^\s*\/(\S*)/);
     return m ? m[1].toLowerCase() : '';
   }, [value]);
 
   const filtered = useMemo(() => {
-    const visible = COMMAND_REGISTRY.filter((c) => !HIDDEN_FROM_MENU.has(c.id));
-    if (!query) return visible;
-    return visible.filter(
+    const list = COMMAND_REGISTRY.filter((c) => !HIDDEN_FROM_MENU.has(c.id));
+    if (!query) return list;
+    return list.filter(
       (c) =>
         c.slash.slice(1).startsWith(query) ||
         c.chipLabel.toLowerCase().includes(query) ||
@@ -60,6 +65,36 @@ export default function SlashMenu({ value, visible, onPick, onClose }: SlashMenu
     },
     [query],
   );
+
+  // Popover position — mirrors the `+` popover's approach. The
+  // `bottom` value is measured from the viewport bottom so the menu
+  // sits flush with the top of the anchor + 8px gap; `left` aligns
+  // with the anchor's left edge; `width` matches the anchor so the
+  // typeahead has a predictable footprint.
+  const [pos, setPos] = useState<{ left: number; bottom: number; width: number } | null>(null);
+
+  useEffect(() => {
+    if (!visible || !anchorEl) {
+      setPos(null);
+      return;
+    }
+    function recompute() {
+      if (!anchorEl) return;
+      const r = anchorEl.getBoundingClientRect();
+      setPos({
+        left: r.left,
+        bottom: window.innerHeight - r.top + 8,
+        width: r.width,
+      });
+    }
+    recompute();
+    window.addEventListener('resize', recompute);
+    window.addEventListener('scroll', recompute, true);
+    return () => {
+      window.removeEventListener('resize', recompute);
+      window.removeEventListener('scroll', recompute, true);
+    };
+  }, [visible, anchorEl]);
 
   useEffect(() => {
     if (!visible) return;
@@ -86,21 +121,23 @@ export default function SlashMenu({ value, visible, onPick, onClose }: SlashMenu
     return () => window.removeEventListener('keydown', handler);
   }, [visible, filtered, hover, onClose, onPick, value, query, setHover]);
 
-  if (!visible || filtered.length === 0) return null;
+  if (!visible || filtered.length === 0 || !pos || typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <div
       style={{
-        position: 'absolute',
-        bottom: 'calc(100% + 8px)',
-        left: 0,
-        right: 0,
+        position: 'fixed',
+        left: pos.left,
+        bottom: pos.bottom,
+        width: pos.width,
         maxWidth: '420px',
-        zIndex: 30,
+        // Above the floor-actions box and any other in-page panels.
+        // Below modal overlays (which typically live in the 1000+ band).
+        zIndex: 80,
         background: '#fff',
         borderRadius: '14px',
         border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.12))',
-        boxShadow: '0 12px 28px rgba(58,48,40,0.18)',
+        boxShadow: '0 12px 28px rgba(0, 28, 53,0.18)',
         overflow: 'hidden',
         fontFamily: 'var(--font-primary)',
       }}
@@ -201,6 +238,7 @@ export default function SlashMenu({ value, visible, onPick, onClose }: SlashMenu
       >
         ↑↓ to navigate · Tab to insert · Esc to dismiss
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

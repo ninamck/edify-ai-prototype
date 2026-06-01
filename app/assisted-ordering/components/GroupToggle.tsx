@@ -45,7 +45,7 @@ export default function GroupToggle({ value, onChange }: Props) {
               fontWeight: active ? 600 : 400,
               fontFamily: 'var(--font-primary)',
               cursor: 'pointer',
-              boxShadow: active ? '0 1px 4px rgba(58,48,40,0.12)' : 'none',
+              boxShadow: active ? '0 1px 4px rgba(0, 28, 53,0.12)' : 'none',
               transition: 'all 0.15s ease',
               whiteSpace: 'nowrap',
             }}

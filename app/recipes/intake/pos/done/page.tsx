@@ -123,7 +123,7 @@ function DonePage() {
                   <span
                     style={{
                       width: '30px', height: '30px', borderRadius: '8px',
-                      background: 'rgba(3,28,89,0.08)',
+                      background: 'rgba(0, 28, 53,0.08)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                     }}
                   >

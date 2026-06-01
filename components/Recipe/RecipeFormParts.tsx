@@ -832,7 +832,7 @@ function ComponentRowEdit({
           style={{
             display: 'inline-flex', alignItems: 'center',
             padding: '3px 9px', borderRadius: '100px',
-            background: 'rgba(3,28,89,0.07)',
+            background: 'rgba(0, 28, 53,0.07)',
             color: 'var(--color-accent-active)',
             fontSize: '11px', fontWeight: 700, letterSpacing: '0.02em',
             alignSelf: 'flex-start',
@@ -1802,7 +1802,7 @@ export function CollapsibleSidebar({
         <span
           style={{
             width: 28, height: 28, borderRadius: '50%',
-            background: 'rgba(3,28,89,0.08)',
+            background: 'rgba(0, 28, 53,0.08)',
             color: 'var(--color-accent-active)',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           }}

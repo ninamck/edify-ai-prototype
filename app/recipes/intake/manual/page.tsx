@@ -218,6 +218,7 @@ export default function ManualRecipePage() {
   const [subRecipe, setSubRecipe] = useState(false);
   const [shelfLifeValue, setShelfLifeValue] = useState<number | ''>('');
   const [shelfLifeUnit, setShelfLifeUnit] = useState('minutes');
+  const [expiryDate, setExpiryDate] = useState('');
   const [closingRange, setClosingRange] = useState('');
   const [allowCarryOver, setAllowCarryOver] = useState(false);
   const [enablePcr, setEnablePcr] = useState(false);
@@ -701,16 +702,29 @@ export default function ManualRecipePage() {
                 </div>
               </div>
 
-              <div>
-                <FieldLabel>Shelf life</FieldLabel>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', alignItems: 'start' }}>
+                <div>
+                  <FieldLabel>Shelf life</FieldLabel>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <input
+                      type="number"
+                      value={shelfLifeValue}
+                      onChange={(e) => setShelfLifeValue(e.target.value === '' ? '' : Number(e.target.value))}
+                      style={{ ...inputStyle, width: '100px', flexShrink: 0 }}
+                    />
+                    <PillSingle options={SHELF_LIFE_UNITS} selected={shelfLifeUnit} onChange={setShelfLifeUnit} />
+                  </div>
+                </div>
+                <div>
+                  <FieldLabel help="When this recipe retires from production. After this date the recipe is no longer available to produce — items already made keep their normal shelf life. Leave blank if there's no scheduled retirement.">
+                    Expiry date <Soft>(optional)</Soft>
+                  </FieldLabel>
                   <input
-                    type="number"
-                    value={shelfLifeValue}
-                    onChange={(e) => setShelfLifeValue(e.target.value === '' ? '' : Number(e.target.value))}
-                    style={{ ...inputStyle, width: '100px', flexShrink: 0 }}
+                    type="date"
+                    value={expiryDate}
+                    onChange={(e) => setExpiryDate(e.target.value)}
+                    style={{ ...inputStyle, maxWidth: '220px' }}
                   />
-                  <PillSingle options={SHELF_LIFE_UNITS} selected={shelfLifeUnit} onChange={setShelfLifeUnit} />
                 </div>
               </div>
 

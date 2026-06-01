@@ -61,7 +61,7 @@ function TemplateCard({ template, onEdit }: { template: ChecklistTemplate; onEdi
         background: '#fff',
         borderRadius: '10px',
         border: '1px solid var(--color-border-subtle)',
-        boxShadow: '0 1px 4px rgba(58,48,40,0.07)',
+        boxShadow: '0 1px 4px rgba(0, 28, 53,0.07)',
         padding: '16px',
         display: 'flex',
         flexDirection: 'column',
@@ -305,7 +305,7 @@ export default function ManageChecklistsPage() {
               color: activeFilter === f ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
               cursor: 'pointer',
               fontFamily: 'var(--font-primary)',
-              boxShadow: activeFilter === f ? '0 1px 3px rgba(58,48,40,0.1)' : 'none',
+              boxShadow: activeFilter === f ? '0 1px 3px rgba(0, 28, 53,0.1)' : 'none',
               transition: 'all 0.15s ease',
             }}
           >

@@ -12,9 +12,9 @@
  * setCmdStates). The registry is purely descriptive.
  */
 
-import { Trash2, Boxes, ChefHat, Settings2, Utensils, Truck } from 'lucide-react';
+import { Trash2, Boxes, ChefHat, Settings2, Utensils, Truck, ArrowLeftRight } from 'lucide-react';
 import type { ChatCommand } from './types';
-import { parseWaste, parseStock, parseRecipeEdit, parseProduction, parseMenu, parseSupplier } from './parsers';
+import { parseWaste, parseStock, parseRecipeEdit, parseProduction, parseMenu, parseSupplier, parseProductSwap } from './parsers';
 
 export const COMMAND_REGISTRY: ChatCommand[] = [
   {
@@ -120,6 +120,40 @@ export const COMMAND_REGISTRY: ChatCommand[] = [
     promptFor: (arg) => {
       if (arg === 'recipeId') return 'Which menu item?';
       if (arg === 'action')   return 'What do you want to do — 84 it, put it back on, or change the price?';
+      return 'I need a bit more info.';
+    },
+  },
+  {
+    id: 'product-swap',
+    // Primary slash is /add-product — the wizard's most common job
+    // is "bring in a new product and put it into recipes". Replace
+    // is one of the paths within, not the headline action.
+    slash: '/add-product',
+    slashAliases: ['/swap-product', '/replace-product'],
+    chipLabel: 'Add a product',
+    chipIcon: ArrowLeftRight,
+    description: 'Bring in a new product and add or replace it across recipes.',
+    examples: [
+      'add oat milk to all coffees',
+      'replace whole milk with oat milk across drinks',
+      'switch coffee bean from house blend to fair-trade',
+    ],
+    parse: parseProductSwap,
+    // Multi-step wizard. The runner emits step-specific msgTypes
+    // (`cmd-product-purpose`, `cmd-product-new-info`, `…-new-supplier`,
+    // `…-pick-replaced`, `…-pack-details`, `…-pick-recipes`,
+    // `…-swap-summary`) rather than this single placeholder; this
+    // field is set to the final summary step for downstream code
+    // that inspects it.
+    cardMsgType: 'cmd-product-swap-summary',
+    // The wizard launches even with no args — it walks the user
+    // through everything — so we don't gate on required args here.
+    requiredArgs: [],
+    promptFor: (arg) => {
+      if (arg === 'mode')           return 'Adding it to recipes, or replacing another product?';
+      if (arg === 'newProductName') return "What's the new product called?";
+      if (arg === 'supplier')       return 'Which supplier — existing or new?';
+      if (arg === 'oldProductId')   return "Which product is this replacing?";
       return 'I need a bit more info.';
     },
   },

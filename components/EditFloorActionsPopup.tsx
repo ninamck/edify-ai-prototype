@@ -137,6 +137,7 @@ export const DEFAULT_FLOOR_ACTIONS_BY_ROLE: Record<BriefingRole, FloorAction[]> 
   playtomic: DEFAULT_FLOOR_ACTIONS,
   dunkin: DEFAULT_FLOOR_ACTIONS,
   pilot: DEFAULT_FLOOR_ACTIONS,
+  culinary: DEFAULT_FLOOR_ACTIONS,
 };
 
 /* ── Icon picker mini-popup ── */
@@ -171,7 +172,7 @@ function IconPicker({
         background: '#fff',
         borderRadius: 12,
         border: '1px solid var(--color-border-subtle)',
-        boxShadow: '0 8px 24px rgba(58,48,40,0.15)',
+        boxShadow: '0 8px 24px rgba(0, 28, 53,0.15)',
         display: 'grid',
         gridTemplateColumns: 'repeat(5, 1fr)',
         gap: 4,
@@ -238,7 +239,7 @@ function ActionRow({
         listStyle: 'none',
       }}
       whileDrag={{
-        boxShadow: '0 4px 16px rgba(58,48,40,0.13)',
+        boxShadow: '0 4px 16px rgba(0, 28, 53,0.13)',
         scale: 1.02,
         cursor: 'grabbing',
       }}
@@ -590,7 +591,7 @@ export default function EditFloorActionsPopup({
               position: 'fixed',
               inset: 0,
               zIndex: 1200,
-              background: 'rgba(3, 28, 89, 0.25)',
+              background: 'rgba(0, 28, 53, 0.25)',
               backdropFilter: 'blur(2px)',
             }}
           />
@@ -625,7 +626,7 @@ export default function EditFloorActionsPopup({
               borderRadius: 16,
               background: '#fff',
               border: '1px solid var(--color-border-subtle)',
-              boxShadow: '0 12px 40px rgba(3,28,89,0.18), 0 0 0 1px rgba(58,48,40,0.04)',
+              boxShadow: '0 12px 40px rgba(0, 28, 53,0.18), 0 0 0 1px rgba(0, 28, 53,0.04)',
               fontFamily: 'var(--font-primary)',
               overflow: 'hidden',
             }}

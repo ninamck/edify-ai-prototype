@@ -57,12 +57,12 @@ export default function HourlyCombo({ data }: { data: HourlyTradingRow[] }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
       <ComposedChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-        <CartesianGrid stroke="rgba(58,48,40,0.08)" vertical={false} />
+        <CartesianGrid stroke="rgba(0, 28, 53,0.08)" vertical={false} />
         <XAxis
           dataKey="hour"
           tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
           tickLine={false}
-          axisLine={{ stroke: 'rgba(58,48,40,0.15)' }}
+          axisLine={{ stroke: 'rgba(0, 28, 53,0.15)' }}
         />
         <YAxis
           yAxisId="left"

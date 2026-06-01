@@ -21,9 +21,28 @@
  */
 
 import { useCallback, useRef, useState } from 'react';
-import { findRecipe, updateRecipe } from '@/components/Recipe/recipeStore';
-import { findSupplier, upsertSupplier } from '@/components/Suppliers/store';
-import type { Supplier, DayOfWeek } from '@/components/Suppliers/fixtures';
+import {
+  findRecipe,
+  updateRecipe,
+  snapshotRecipes,
+  setRecipes,
+} from '@/components/Recipe/recipeStore';
+import {
+  findSupplier,
+  upsertSupplier,
+  findProduct,
+  upsertProduct,
+  upsertMasterProduct,
+  snapshot as snapshotSuppliersStore,
+  restore as restoreSuppliersStore,
+  genId,
+} from '@/components/Suppliers/store';
+import type {
+  Supplier,
+  Product,
+  DayOfWeek,
+  ProductCategory,
+} from '@/components/Suppliers/fixtures';
 import {
   appendWasteEntry,
   removeWasteEntry,
@@ -40,16 +59,35 @@ import type {
   MenuAction,
   SupplierField,
 } from './parsers';
-import type { Recipe } from '@/components/Recipe/libraryFixtures';
+import type { Recipe, RecipeIngredient } from '@/components/Recipe/libraryFixtures';
+import { makeRecipeIngredient } from '@/components/Recipe/libraryFixtures';
 import {
   startTask,
   completeTask,
   cancelTask,
   markTaskUndone,
   setTaskSnapshot,
+  recordChanges,
+  setCommandIntent,
+  markReverted,
+  markSuperseded,
+  logChildTask,
+  markGroupParent,
   type TaskKind,
   type StoredChatMessage,
+  type ChangeRecord,
+  type BlastRadiusLine,
 } from '@/components/Feed/taskHistoryStore';
+import {
+  diffRecipeEdit,
+  diffProduction,
+  diffMenu,
+  diffSupplier,
+  diffProductSwap,
+  splitProductSwapPerRecipe,
+  diffWaste,
+  diffStock,
+} from '@/components/Feed/commands/diffs';
 
 // We import the parent's ChatMsg shape indirectly — Feed.tsx defines
 // it locally. The runner only needs a structural subset, so we duck-
@@ -77,6 +115,10 @@ interface RunnerChatMsg {
     href?: string;
     hrefLabel?: string;
   };
+  /** When true, the renderer reveals the text character-by-character
+   *  on mount with a blinking caret — used for wizard bridge text so
+   *  the AI feels like it's composing the response live. */
+  streaming?: boolean;
 }
 
 export type CardState = 'pending' | 'confirmed' | 'cancelled';
@@ -123,9 +165,40 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
   //     the right history entry to flip.
   //   • cmdStatesRef     — mirror of cmdStates so we can read sync
   //     during a setMessages updater (state setters can't).
+  //   • pendingLinkRef   — when the next task completes, link it back
+  //     to a prior one (Revert / Edit replay). Consumed inside
+  //     pushReceipt and cleared so it only fires once per replay.
   const activeTaskIdRef = useRef<string | null>(null);
   const receiptToTaskRef = useRef<Record<string, string>>({});
   const cmdStatesRef = useRef<Record<string, CardState>>({});
+  const pendingLinkRef = useRef<
+    | { kind: 'revert'; originalTaskId: string }
+    | { kind: 'supersede'; originalTaskId: string }
+    | null
+  >(null);
+
+  /** Centralised wrapper around recordChanges. Reads activeTaskIdRef
+   *  so each confirm function doesn't have to. No-ops when there's no
+   *  active task (e.g. a confirm fired without a prior runCommand,
+   *  which shouldn't happen but isn't fatal if it does). */
+  const recordTaskChanges = useCallback(
+    (input: {
+      changes: ChangeRecord[];
+      blastRadius?: BlastRadiusLine[];
+      commandIntent?: { commandId: string; cardMsgType: string; args: Record<string, unknown> };
+    }) => {
+      const taskId = activeTaskIdRef.current;
+      if (!taskId) return;
+      recordChanges(taskId, {
+        changes: input.changes,
+        blastRadius: input.blastRadius,
+      });
+      if (input.commandIntent) {
+        setCommandIntent(taskId, input.commandIntent);
+      }
+    },
+    [],
+  );
 
   /** Single-source-of-truth setter for cmdStates so the mirror ref
    *  always matches React state. Use this instead of calling
@@ -137,9 +210,11 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
 
   /** Bake the runtime card states + receipts into a plain message
    *  array, so a snapshot is self-contained (no runtime ref lookups
-   *  needed when it's restored later). */
+   *  needed when it's restored later). Transient "thinking" bubbles
+   *  are stripped — they're step-transition decoration, not part of
+   *  the replayable thread. */
   const bakeMessagesForSnapshot = useCallback((msgs: RunnerChatMsg[]): StoredChatMessage[] => {
-    return msgs.map((m) => {
+    return msgs.filter((m) => m.msgType !== 'cmd-thinking').map((m) => {
       const baked: StoredChatMessage = {
         id: m.id,
         role: m.role,
@@ -201,6 +276,141 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       return id;
     },
     [setMessages],
+  );
+
+  /**
+   * Push a short "thinking" bubble, then replace it with a real card.
+   * Used between wizard steps so the user gets a beat of breathing
+   * room — and a visible "Edify is preparing the next question"
+   * signal — instead of the next card popping in instantly. Mirrors
+   * the `analytics-thinking` pattern used on chart/text answers.
+   *
+   * We capture the active task id at push time and only emit the next
+   * card if the task is still that same task — protects against the
+   * user cancelling the wizard while a thinking bubble is in flight.
+   */
+  const pushThinkingThenCard = useCallback(
+    (
+      commandId: string,
+      msgType: string,
+      args: Record<string, unknown>,
+      delayMs: number = 650,
+    ) => {
+      const thinkingId = `q-thinking-${commandId}-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 6)}`;
+      setMessages((prev) => [
+        ...prev,
+        { id: thinkingId, role: 'quinn', text: '', msgType: 'cmd-thinking' },
+      ]);
+      const cardId = `q-card-${commandId}-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 6)}`;
+      const taskAtPush = activeTaskIdRef.current;
+      window.setTimeout(() => {
+        if (activeTaskIdRef.current !== taskAtPush) {
+          // Task changed (cancelled, or a new command started) — drop
+          // the now-irrelevant thinking bubble and skip the card.
+          setMessages((prev) => prev.filter((m) => m.id !== thinkingId));
+          return;
+        }
+        setMessages((prev) => [
+          ...prev.filter((m) => m.id !== thinkingId),
+          {
+            id: cardId,
+            role: 'quinn',
+            text: '',
+            msgType,
+            cmdId: commandId,
+            cmdArgsJson: JSON.stringify(args),
+          },
+        ]);
+        writeCmdState(cardId, 'pending');
+      }, delayMs);
+      return cardId;
+    },
+    [setMessages, writeCmdState],
+  );
+
+  /**
+   * Full wizard transition: thinking bubble → streaming bridge text →
+   * next card. Replaces the old `pushQuinn(text); pushThinkingThenCard(...)`
+   * pair so the AI feels like it's composing a response in real time.
+   *
+   * Timing (rough):
+   *   • THINKING_MS         (~900ms)  thinking dots appear
+   *   • text streams in     (~text.length * 18ms, clamped)
+   *   • POST_STREAM_MS      (~350ms)  brief beat after the text settles
+   *   • next card appears
+   *
+   * Same task-id gating as `pushThinkingThenCard` so a cancelled
+   * wizard doesn't drop in stale text or a phantom card.
+   */
+  const pushResponseFlow = useCallback(
+    (opts: {
+      text: string;
+      commandId: string;
+      cardMsgType: string;
+      cardArgs: Record<string, unknown>;
+    }) => {
+      const THINKING_MS = 900;
+      const POST_STREAM_MS = 350;
+      const PER_CHAR_MS = 18;
+      const STREAM_MIN_MS = 700;
+      const STREAM_MAX_MS = 2200;
+      const streamMs = Math.min(
+        STREAM_MAX_MS,
+        Math.max(STREAM_MIN_MS, opts.text.length * PER_CHAR_MS),
+      );
+
+      const thinkingId = `q-thinking-${opts.commandId}-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 6)}`;
+      const textId = `q-text-${opts.commandId}-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 6)}`;
+      const cardId = `q-card-${opts.commandId}-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 6)}`;
+      const taskAtPush = activeTaskIdRef.current;
+
+      setMessages((prev) => [
+        ...prev,
+        { id: thinkingId, role: 'quinn', text: '', msgType: 'cmd-thinking' },
+      ]);
+
+      // Step 1 → swap thinking bubble for streaming text.
+      window.setTimeout(() => {
+        if (activeTaskIdRef.current !== taskAtPush) {
+          setMessages((prev) => prev.filter((m) => m.id !== thinkingId));
+          return;
+        }
+        setMessages((prev) => [
+          ...prev.filter((m) => m.id !== thinkingId),
+          { id: textId, role: 'quinn', text: opts.text, streaming: true },
+        ]);
+      }, THINKING_MS);
+
+      // Step 2 → after text has streamed in, append the next card.
+      window.setTimeout(() => {
+        if (activeTaskIdRef.current !== taskAtPush) return;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: cardId,
+            role: 'quinn',
+            text: '',
+            msgType: opts.cardMsgType,
+            cmdId: opts.commandId,
+            cmdArgsJson: JSON.stringify(opts.cardArgs),
+          },
+        ]);
+        writeCmdState(cardId, 'pending');
+      }, THINKING_MS + streamMs + POST_STREAM_MS);
+
+      return cardId;
+    },
+    [setMessages, writeCmdState],
   );
 
   const pushAmbiguity = useCallback(
@@ -267,6 +477,16 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           },
         });
         receiptToTaskRef.current[id] = taskId;
+        // Consume any pending revert/supersede link. The Activity
+        // page sets these before pushing the replay card; we don't
+        // want them to leak across into the next unrelated task, so
+        // clear once consumed.
+        const pending = pendingLinkRef.current;
+        if (pending) {
+          if (pending.kind === 'revert') markReverted(pending.originalTaskId, taskId);
+          else markSuperseded(pending.originalTaskId, taskId);
+          pendingLinkRef.current = null;
+        }
       }
       return id;
     },
@@ -343,6 +563,14 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         startRecipeEditWizard(intent.args);
         return;
       }
+      // Product-swap is also a wizard. The launcher walks the
+      // operator through new product + supplier + replacement target
+      // + recipe selection + summary, skipping any step whose args
+      // the parser already populated.
+      if (intent.commandId === 'product-swap') {
+        startProductSwapWizard(intent.args);
+        return;
+      }
 
       // Single. Ask for missing requireds first if there are any "hard
       // miss" args (e.g. command was launched from a slash with no
@@ -391,40 +619,67 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       const toName = args.toName as string | undefined;
 
       if (!recipeId) {
-        pushQuinn('Sure — which recipe would you like to update?');
-        pushCard('recipe-edit', 'cmd-recipe-pick-recipe', {});
+        pushResponseFlow({
+          text: 'Sure — which recipe would you like to update?',
+          commandId: 'recipe-edit',
+          cardMsgType: 'cmd-recipe-pick-recipe',
+          cardArgs: {},
+        });
         return;
       }
       if (!kind) {
-        pushQuinn(`Got it — ${recipeName ?? 'that recipe'}. What do you want to change?`);
-        pushCard('recipe-edit', 'cmd-recipe-pick-action', { recipeId, recipeName });
+        pushResponseFlow({
+          text: `Got it — ${recipeName ?? 'that recipe'}. What do you want to change?`,
+          commandId: 'recipe-edit',
+          cardMsgType: 'cmd-recipe-pick-action',
+          cardArgs: { recipeId, recipeName },
+        });
         return;
       }
       if ((kind === 'swap' || kind === 'remove') && !fromName) {
-        pushQuinn(kind === 'swap' ? 'Which ingredient do you want to swap?' : 'Which ingredient do you want to remove?');
-        pushCard('recipe-edit', 'cmd-recipe-pick-ingredient', { recipeId, recipeName, kind });
+        pushResponseFlow({
+          text:
+            kind === 'swap'
+              ? 'Which ingredient do you want to swap?'
+              : 'Which ingredient do you want to remove?',
+          commandId: 'recipe-edit',
+          cardMsgType: 'cmd-recipe-pick-ingredient',
+          cardArgs: { recipeId, recipeName, kind },
+        });
         return;
       }
       if ((kind === 'add' || kind === 'swap') && !toName) {
-        pushQuinn(kind === 'swap' ? `Swap ${fromName} for what?` : 'What would you like to add?');
-        pushCard('recipe-edit', 'cmd-recipe-new-ingredient', { recipeId, recipeName, kind, fromName });
+        pushResponseFlow({
+          text: kind === 'swap' ? `Swap ${fromName} for what?` : 'What would you like to add?',
+          commandId: 'recipe-edit',
+          cardMsgType: 'cmd-recipe-new-ingredient',
+          cardArgs: { recipeId, recipeName, kind, fromName },
+        });
         return;
       }
       // Everything filled in — jump straight to the summary.
-      pushQuinn('Here\u2019s what I\u2019ll do — review and confirm.');
-      pushCard('recipe-edit', 'cmd-recipe-summary', { recipeId, recipeName, kind, fromName, toName, qty: args.qty, uom: args.uom });
+      pushResponseFlow({
+        text: 'Here\u2019s what I\u2019ll do — review and confirm.',
+        commandId: 'recipe-edit',
+        cardMsgType: 'cmd-recipe-summary',
+        cardArgs: { recipeId, recipeName, kind, fromName, toName, qty: args.qty, uom: args.uom },
+      });
     },
-    [pushCard, pushQuinn],
+    [pushResponseFlow],
   );
 
   const pickRecipeForEdit = useCallback(
     (msgId: string, recipeId: string, recipeName: string) => {
       writeCmdState(msgId, 'confirmed');
       pushUserEcho(recipeName);
-      pushQuinn(`Got it — ${recipeName}. What do you want to change?`);
-      pushCard('recipe-edit', 'cmd-recipe-pick-action', { recipeId, recipeName });
+      pushResponseFlow({
+        text: `Got it — ${recipeName}. What do you want to change?`,
+        commandId: 'recipe-edit',
+        cardMsgType: 'cmd-recipe-pick-action',
+        cardArgs: { recipeId, recipeName },
+      });
     },
-    [pushCard, pushQuinn, pushUserEcho],
+    [pushResponseFlow, pushUserEcho],
   );
 
   const pickRecipeActionForEdit = useCallback(
@@ -433,14 +688,25 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       const verb = kind === 'swap' ? 'Swap an ingredient' : kind === 'add' ? 'Add an ingredient' : 'Remove an ingredient';
       pushUserEcho(verb);
       if (kind === 'add') {
-        pushQuinn('What would you like to add?');
-        pushCard('recipe-edit', 'cmd-recipe-new-ingredient', { ...args, kind });
+        pushResponseFlow({
+          text: 'What would you like to add?',
+          commandId: 'recipe-edit',
+          cardMsgType: 'cmd-recipe-new-ingredient',
+          cardArgs: { ...args, kind },
+        });
       } else {
-        pushQuinn(kind === 'swap' ? 'Which ingredient do you want to swap?' : 'Which ingredient do you want to remove?');
-        pushCard('recipe-edit', 'cmd-recipe-pick-ingredient', { ...args, kind });
+        pushResponseFlow({
+          text:
+            kind === 'swap'
+              ? 'Which ingredient do you want to swap?'
+              : 'Which ingredient do you want to remove?',
+          commandId: 'recipe-edit',
+          cardMsgType: 'cmd-recipe-pick-ingredient',
+          cardArgs: { ...args, kind },
+        });
       }
     },
-    [pushCard, pushQuinn, pushUserEcho],
+    [pushResponseFlow, pushUserEcho],
   );
 
   const pickRecipeIngredientForEdit = useCallback(
@@ -452,14 +718,22 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       writeCmdState(msgId, 'confirmed');
       pushUserEcho(ingredientName);
       if (args.kind === 'remove') {
-        pushQuinn(`Remove ${ingredientName} from ${args.recipeName} — ready to apply?`);
-        pushCard('recipe-edit', 'cmd-recipe-summary', { ...args, fromName: ingredientName });
+        pushResponseFlow({
+          text: `Remove ${ingredientName} from ${args.recipeName} — ready to apply?`,
+          commandId: 'recipe-edit',
+          cardMsgType: 'cmd-recipe-summary',
+          cardArgs: { ...args, fromName: ingredientName },
+        });
       } else {
-        pushQuinn(`Swap ${ingredientName} for what?`);
-        pushCard('recipe-edit', 'cmd-recipe-new-ingredient', { ...args, fromName: ingredientName });
+        pushResponseFlow({
+          text: `Swap ${ingredientName} for what?`,
+          commandId: 'recipe-edit',
+          cardMsgType: 'cmd-recipe-new-ingredient',
+          cardArgs: { ...args, fromName: ingredientName },
+        });
       }
     },
-    [pushCard, pushQuinn, pushUserEcho],
+    [pushResponseFlow, pushUserEcho],
   );
 
   const submitRecipeNewIngredient = useCallback(
@@ -471,15 +745,375 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       writeCmdState(msgId, 'confirmed');
       const echo = input.qty != null ? `${input.name} (${input.qty}${input.uom ?? ''})` : input.name;
       pushUserEcho(echo);
-      pushQuinn('Here\u2019s the change — review and confirm.');
-      pushCard('recipe-edit', 'cmd-recipe-summary', {
-        ...args,
-        toName: input.name,
-        qty: input.qty,
-        uom: input.uom,
+      pushResponseFlow({
+        text: 'Here\u2019s the change — review and confirm.',
+        commandId: 'recipe-edit',
+        cardMsgType: 'cmd-recipe-summary',
+        cardArgs: {
+          ...args,
+          toName: input.name,
+          qty: input.qty,
+          uom: input.uom,
+        },
       });
     },
-    [pushCard, pushQuinn, pushUserEcho],
+    [pushResponseFlow, pushUserEcho],
+  );
+
+  // ── Product wizard (add or replace) ──────────────────────────────
+  //
+  // Up-to-seven-step flow. Each step's confirm pushes the next step's
+  // card with the accumulated args. The launcher routes the first
+  // step based on what the NL parser already filled in:
+  //
+  //   • If the parser inferred mode (e.g. "add oat milk to all
+  //     coffees" → add, "replace whole milk with oat milk" →
+  //     replace), we skip the purpose card and go straight to the
+  //     product-info step with the mode baked in.
+  //   • Otherwise we ask up front via the purpose card. Branching
+  //     here — rather than in the middle of the flow — keeps the
+  //     mental model simple: "which job is this?" then "fill the
+  //     details".
+  //
+  // The two paths share most cards. The differences:
+  //
+  //   • Replace path includes a pick-replaced step (which existing
+  //     product is going away?) and pre-fills pack details from it.
+  //   • Add path skips pick-replaced and the recipe-picker collects a
+  //     per-recipe quantity instead.
+
+  const startProductSwapWizard = useCallback(
+    (args: Record<string, unknown>) => {
+      const mode = args.mode as 'add' | 'replace' | undefined;
+      if (mode) {
+        // Mode already inferred — skip the purpose card.
+        const opener =
+          mode === 'add'
+            ? "Let's add a new product to your recipes. First — what's it called, and who's the supplier?"
+            : "Let's replace a product across your recipes. First — what's the new one called, and who's the supplier?";
+        pushResponseFlow({
+          text: opener,
+          commandId: 'product-swap',
+          cardMsgType: 'cmd-product-new-info',
+          cardArgs: {
+            mode,
+            ...(args.newProductName ? { newProductName: args.newProductName } : {}),
+            ...(args.oldProductName ? { oldProductHint: args.oldProductName } : {}),
+          },
+        });
+        return;
+      }
+      // Ambiguous launch (bare slash, generic chip click). Ask the
+      // operator to choose before we collect anything else.
+      pushResponseFlow({
+        text: "Happy to help. Are we adding a new product to recipes, or replacing an existing one?",
+        commandId: 'product-swap',
+        cardMsgType: 'cmd-product-purpose',
+        cardArgs: {
+          ...(args.newProductName ? { newProductName: args.newProductName } : {}),
+          ...(args.oldProductName ? { oldProductHint: args.oldProductName } : {}),
+        },
+      });
+    },
+    [pushResponseFlow],
+  );
+
+  const submitProductPurpose = useCallback(
+    (
+      msgId: string,
+      args: Record<string, unknown>,
+      input: { mode: 'add' | 'replace' },
+    ) => {
+      writeCmdState(msgId, 'confirmed');
+      pushUserEcho(
+        input.mode === 'add' ? 'Adding it to recipes' : 'Replacing another product',
+      );
+      pushResponseFlow({
+        text:
+          input.mode === 'add'
+            ? "Great — what's the new product called, and who's the supplier?"
+            : "OK — what's the new product called, and who's the supplier?",
+        commandId: 'product-swap',
+        cardMsgType: 'cmd-product-new-info',
+        cardArgs: { ...args, ...input },
+      });
+    },
+    [pushResponseFlow, pushUserEcho],
+  );
+
+  const submitProductNewInfo = useCallback(
+    (
+      msgId: string,
+      args: Record<string, unknown>,
+      input: {
+        newProductName: string;
+        supplierMode: 'existing' | 'new';
+        supplierId?: string;
+        supplierName: string;
+        importedFromSource?: 'sheet' | 'email' | 'document';
+        importedPackDetails?: {
+          packType: 'Pack' | 'Single';
+          packQty: number;
+          packCost: number;
+          unitType: 'Each' | 'kg' | 'L' | 'g' | 'ml';
+        };
+      },
+    ) => {
+      writeCmdState(msgId, 'confirmed');
+      pushUserEcho(`${input.newProductName} · from ${input.supplierName}`);
+      const merged = { ...args, ...input };
+      const mode = (args.mode as 'add' | 'replace' | undefined) ?? 'replace';
+      if (input.supplierMode === 'new') {
+        pushResponseFlow({
+          text: `Got it — ${input.newProductName}, and I'll set up ${input.supplierName} as a new supplier.`,
+          commandId: 'product-swap',
+          cardMsgType: 'cmd-product-new-supplier',
+          cardArgs: merged,
+        });
+        return;
+      }
+      // Existing supplier — branch on mode. If the operator imported
+      // from a sheet / email / document we already have the pack
+      // details, so we skip that step rather than ask again. The
+      // imported fields are baked into the args for the next card so
+      // downstream steps (pick-recipes → summary) read them the same
+      // way they would after a normal pack-details submit.
+      const imported = input.importedPackDetails;
+      const sourceLabel =
+        input.importedFromSource === 'email'
+          ? 'the supplier email'
+          : input.importedFromSource === 'document'
+            ? 'the document'
+            : input.importedFromSource === 'sheet'
+              ? 'your supplier sheet'
+              : null;
+      if (mode === 'add') {
+        if (imported && sourceLabel) {
+          const mergedWithPack = {
+            ...merged,
+            packType: imported.packType,
+            packQty: imported.packQty,
+            packCost: imported.packCost,
+            unitType: imported.unitType,
+            skipped: false,
+          };
+          pushResponseFlow({
+            text: `Got it — ${input.newProductName} from ${input.supplierName}. I picked up the pack details from ${sourceLabel} (${imported.packQty}${imported.unitType} · DH ${imported.packCost.toFixed(2)}). Now — which recipes should I add it to?`,
+            commandId: 'product-swap',
+            cardMsgType: 'cmd-product-pick-recipes',
+            cardArgs: mergedWithPack,
+          });
+          return;
+        }
+        pushResponseFlow({
+          text: `Got it — ${input.newProductName} from ${input.supplierName}. Quick pack details so it's orderable — feel free to skip and finish later.`,
+          commandId: 'product-swap',
+          cardMsgType: 'cmd-product-pack-details',
+          cardArgs: merged,
+        });
+      } else {
+        // Replace mode — we still need pick-replaced even with an
+        // import, because the operator has to tell us which existing
+        // product is going away. The pack-details skip happens one
+        // step later, in `pickProductReplaced`.
+        pushResponseFlow({
+          text: `Got it — ${input.newProductName} from ${input.supplierName}. Which product is this replacing?`,
+          commandId: 'product-swap',
+          cardMsgType: 'cmd-product-pick-replaced',
+          cardArgs: merged,
+        });
+      }
+    },
+    [pushResponseFlow, pushUserEcho],
+  );
+
+  const submitProductNewSupplier = useCallback(
+    (
+      msgId: string,
+      args: Record<string, unknown>,
+      input: { supplierName: string; email?: string; leadTimeDays?: number },
+    ) => {
+      writeCmdState(msgId, 'confirmed');
+      const echoBits: string[] = [];
+      if (input.email) echoBits.push(input.email);
+      if (input.leadTimeDays != null) echoBits.push(`${input.leadTimeDays}d lead`);
+      pushUserEcho(echoBits.length > 0 ? echoBits.join(' · ') : 'Skipped for now');
+      const mode = (args.mode as 'add' | 'replace' | undefined) ?? 'replace';
+      const merged = { ...args, ...input };
+      if (mode === 'add') {
+        pushResponseFlow({
+          text: `Great — ${input.supplierName} is queued. Quick pack details for ${(args.newProductName as string) ?? 'the new product'} — skip if you want to finish them later.`,
+          commandId: 'product-swap',
+          cardMsgType: 'cmd-product-pack-details',
+          cardArgs: merged,
+        });
+      } else {
+        pushResponseFlow({
+          text: `Great — ${input.supplierName} is queued. Which existing product is ${(args.newProductName as string) ?? 'the new one'} replacing?`,
+          commandId: 'product-swap',
+          cardMsgType: 'cmd-product-pick-replaced',
+          cardArgs: merged,
+        });
+      }
+    },
+    [pushResponseFlow, pushUserEcho],
+  );
+
+  const pickProductReplaced = useCallback(
+    (
+      msgId: string,
+      args: Record<string, unknown>,
+      input: {
+        oldProductId: string;
+        oldProductName: string;
+        oldCategory: string;
+        oldPackType: 'Pack' | 'Single';
+        oldUnitType: Product['singleUnitType'];
+      },
+    ) => {
+      writeCmdState(msgId, 'confirmed');
+      pushUserEcho(input.oldProductName);
+      // Imported-from-source short-circuit: if the operator uploaded a
+      // sheet / email / document earlier we already have pack details
+      // and can skip straight to the recipe picker.
+      const importedSource = args.importedFromSource as
+        | 'sheet'
+        | 'email'
+        | 'document'
+        | undefined;
+      const importedPack = args.importedPackDetails as
+        | {
+            packType: 'Pack' | 'Single';
+            packQty: number;
+            packCost: number;
+            unitType: 'Each' | 'kg' | 'L' | 'g' | 'ml';
+          }
+        | undefined;
+      if (importedSource && importedPack) {
+        const sourceLabel =
+          importedSource === 'email'
+            ? 'the supplier email'
+            : importedSource === 'document'
+              ? 'the document'
+              : 'your supplier sheet';
+        const newName = (args.newProductName as string) ?? 'the new product';
+        const merged = {
+          ...args,
+          ...input,
+          packType: importedPack.packType,
+          packQty: importedPack.packQty,
+          packCost: importedPack.packCost,
+          unitType: importedPack.unitType,
+          skipped: false,
+        };
+        pushResponseFlow({
+          text: `OK — replacing ${input.oldProductName}. I picked up the pack details from ${sourceLabel} (${importedPack.packQty}${importedPack.unitType} · DH ${importedPack.packCost.toFixed(2)}). Now — which recipes should I swap ${input.oldProductName} for ${newName} in?`,
+          commandId: 'product-swap',
+          cardMsgType: 'cmd-product-pick-recipes',
+          cardArgs: merged,
+        });
+        return;
+      }
+      // Pull defaults from the replaced product so the pack-details
+      // step starts pre-filled — most operators just confirm.
+      const replaced = findProduct(input.oldProductId);
+      const merged = {
+        ...args,
+        ...input,
+        defaultPackType: replaced?.packType,
+        defaultPackQty: replaced?.packQty,
+        defaultPackCost: replaced?.packCost,
+        defaultUnitType: replaced?.singleUnitType,
+      };
+      pushResponseFlow({
+        text: `OK — replacing ${input.oldProductName}. Quick pack details for the new one — I've pre-filled what I know.`,
+        commandId: 'product-swap',
+        cardMsgType: 'cmd-product-pack-details',
+        cardArgs: merged,
+      });
+    },
+    [pushResponseFlow, pushUserEcho],
+  );
+
+  const submitProductPackDetails = useCallback(
+    (
+      msgId: string,
+      args: Record<string, unknown>,
+      input: {
+        packType: 'Pack' | 'Single';
+        packQty: number;
+        packCost: number;
+        unitType: Product['singleUnitType'];
+        photoDataUrl?: string;
+        skipped: boolean;
+      },
+    ) => {
+      writeCmdState(msgId, 'confirmed');
+      pushUserEcho(
+        input.skipped
+          ? 'Skipped pack details'
+          : `${input.packQty}${input.unitType} · DH ${input.packCost.toFixed(2)}${input.photoDataUrl ? ' · photo' : ''}`,
+      );
+      const mode = (args.mode as 'add' | 'replace' | undefined) ?? 'replace';
+      const newName = (args.newProductName as string) ?? 'the new product';
+      pushResponseFlow({
+        text:
+          mode === 'add'
+            ? `Now the important bit — which recipes should I add ${newName} to?`
+            : `Now the important bit — which recipes should I swap ${(args.oldProductName as string) ?? 'the old product'} for ${newName} in?`,
+        commandId: 'product-swap',
+        cardMsgType: 'cmd-product-pick-recipes',
+        cardArgs: { ...args, ...input },
+      });
+    },
+    [pushResponseFlow, pushUserEcho],
+  );
+
+  const submitProductPickRecipes = useCallback(
+    (
+      msgId: string,
+      args: Record<string, unknown>,
+      input: {
+        recipeIds: string[];
+        totalMatched: number;
+        addQty?: number;
+        addUom?: string;
+      },
+    ) => {
+      writeCmdState(msgId, 'confirmed');
+      const mode = (args.mode as 'add' | 'replace' | undefined) ?? 'replace';
+      const n = input.recipeIds.length;
+      let echo: string;
+      if (mode === 'add') {
+        echo =
+          n === 0
+            ? 'No recipes selected'
+            : `${n} recipe${n === 1 ? '' : 's'}${input.addQty != null ? ` · ${input.addQty}${input.addUom ?? ''} each` : ''}`;
+      } else {
+        echo =
+          input.totalMatched === 0
+            ? 'No recipes to update'
+            : `${n} of ${input.totalMatched} recipe${input.totalMatched === 1 ? '' : 's'}`;
+      }
+      pushUserEcho(echo);
+      // Hydrate a few sample recipe names for the summary so the
+      // operator can sanity-check at a glance without scrolling back.
+      const sampleNames = input.recipeIds
+        .slice(0, 4)
+        .map((id) => findRecipe(id)?.name)
+        .filter((s): s is string => Boolean(s));
+      pushResponseFlow({
+        text: "Here\u2019s the plan — review and apply.",
+        commandId: 'product-swap',
+        cardMsgType: 'cmd-product-swap-summary',
+        cardArgs: {
+          ...args,
+          ...input,
+          sampleRecipeNames: sampleNames,
+        },
+      });
+    },
+    [pushResponseFlow, pushUserEcho],
   );
 
   // ── Cancel ───────────────────────────────────────────────────────
@@ -498,6 +1132,10 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         snapshotIntoTask(taskId, prev);
         return prev;
       });
+      // Clearing the active task id stops any in-flight thinking-bubble
+      // timeouts from pushing their delayed card into the cancelled
+      // thread (see `pushThinkingThenCard`).
+      activeTaskIdRef.current = null;
     }
   }, [setMessages, snapshotIntoTask, writeCmdState]);
 
@@ -529,9 +1167,25 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         },
       };
       writeCmdState(msgId, 'confirmed');
+      recordTaskChanges({
+        changes: diffWaste({
+          entryId: entry.id,
+          productName: product.name,
+          qty: final.qty,
+          uom: final.uom,
+          reasonId: final.reasonId,
+          reasonLabel: reason?.label,
+          value: +value,
+        }),
+        commandIntent: {
+          commandId: 'waste',
+          cardMsgType: 'cmd-waste',
+          args: { ...final },
+        },
+      });
       pushReceipt(receipt, msgId);
     },
-    [pushReceipt],
+    [pushReceipt, recordTaskChanges],
   );
 
   const confirmStock = useCallback(
@@ -571,9 +1225,24 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         },
       };
       writeCmdState(msgId, 'confirmed');
+      recordTaskChanges({
+        changes: diffStock({
+          entryId: entry.id,
+          itemName: final.itemName,
+          qty: final.qty,
+          uom: final.uom,
+          expectedQty: final.expectedQty,
+          location: final.location,
+        }),
+        commandIntent: {
+          commandId: 'stock',
+          cardMsgType: 'cmd-stock',
+          args: { ...final },
+        },
+      });
       pushReceipt(receipt, msgId);
     },
-    [pushReceipt],
+    [pushReceipt, recordTaskChanges],
   );
 
   const confirmRecipeEdit = useCallback(
@@ -636,9 +1305,17 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         },
       };
       writeCmdState(msgId, 'confirmed');
+      recordTaskChanges({
+        changes: diffRecipeEdit({ before, after: next, final }),
+        commandIntent: {
+          commandId: 'recipe-edit',
+          cardMsgType: 'cmd-recipe-summary',
+          args: { ...final },
+        },
+      });
       pushReceipt(receipt, msgId);
     },
-    [pushReceipt],
+    [pushReceipt, recordTaskChanges],
   );
 
   const confirmProduction = useCallback(
@@ -725,9 +1402,17 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         },
       };
       writeCmdState(msgId, 'confirmed');
+      recordTaskChanges({
+        changes: diffProduction({ final }),
+        commandIntent: {
+          commandId: 'production',
+          cardMsgType: 'cmd-production-field',
+          args: { ...final },
+        },
+      });
       pushReceipt(receipt, msgId);
     },
-    [pushReceipt],
+    [pushReceipt, recordTaskChanges],
   );
 
   const confirmMenu = useCallback(
@@ -795,9 +1480,17 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         },
       };
       writeCmdState(msgId, 'confirmed');
+      recordTaskChanges({
+        changes: diffMenu({ before, after: next, final }),
+        commandIntent: {
+          commandId: 'menu',
+          cardMsgType: 'cmd-menu-action',
+          args: { ...final },
+        },
+      });
       pushReceipt(receipt, msgId);
     },
-    [pushReceipt],
+    [pushReceipt, recordTaskChanges],
   );
 
   const confirmSupplier = useCallback(
@@ -849,9 +1542,329 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         },
       };
       writeCmdState(msgId, 'confirmed');
+      recordTaskChanges({
+        changes: diffSupplier({ final }),
+        commandIntent: {
+          commandId: 'supplier',
+          cardMsgType: 'cmd-supplier-field',
+          args: { ...final },
+        },
+      });
       pushReceipt(receipt, msgId);
     },
-    [pushReceipt],
+    [pushReceipt, recordTaskChanges],
+  );
+
+  const confirmProductSwap = useCallback(
+    (
+      msgId: string,
+      final: {
+        // Mode — drives the whole branch
+        mode?: 'add' | 'replace';
+        // Step 1
+        newProductName: string;
+        supplierMode: 'existing' | 'new';
+        supplierId?: string;
+        supplierName: string;
+        // Step 2 (optional)
+        email?: string;
+        leadTimeDays?: number;
+        // Step 3 (replace path only)
+        oldProductId?: string;
+        oldProductName?: string;
+        oldCategory?: string;
+        // Step 4 (skippable)
+        packType?: 'Pack' | 'Single';
+        packQty?: number;
+        packCost?: number;
+        unitType?: Product['singleUnitType'];
+        photoDataUrl?: string;
+        skipped?: boolean;
+        // Step 5
+        recipeIds: string[];
+        totalMatched?: number;
+        addQty?: number;
+        addUom?: string;
+        // Step 6 (summary)
+        scope: 'all' | 'site';
+        siteLabel?: string;
+        linkMaster?: boolean;
+      },
+    ) => {
+      const mode = final.mode ?? 'replace';
+      // Snapshot both stores so Undo can roll the whole transaction
+      // back atomically — adding the product + (maybe) supplier +
+      // (maybe) master + N recipe edits is a single logical change.
+      const suppliersBefore = snapshotSuppliersStore();
+      const recipesBefore = snapshotRecipes().map((r) => ({ ...r }));
+
+      const replaced =
+        mode === 'replace' && final.oldProductId ? findProduct(final.oldProductId) : undefined;
+      // 1. Supplier — upsert when new. Defaults pulled from the
+      //    replaced product's categories + sites so the new SKU
+      //    inherits a sensible footprint.
+      let supplierId = final.supplierId;
+      if (final.supplierMode === 'new' || !supplierId) {
+        supplierId = genId('sup');
+        const newSupplier: Supplier = {
+          id: supplierId,
+          name: final.supplierName,
+          shortCode: final.supplierName.split(/\s+/).slice(0, 2).join(' '),
+          categories: replaced
+            ? [replaced.category]
+            : (['Other'] as ProductCategory[]),
+          sites: replaced?.sites ?? [],
+          status: 'Available',
+          email: final.email,
+          leadTimeDays: final.leadTimeDays,
+        };
+        upsertSupplier(newSupplier);
+      }
+
+      // 2. Product — defaults from replaced (replace mode) or
+      //    safe-empty defaults (add mode), with pack-details overrides
+      //    applied when the operator filled them in.
+      const newProductId = genId('prd');
+      const newProduct: Product = {
+        id: newProductId,
+        name: final.newProductName,
+        source: 'supplier',
+        supplierId: supplierId,
+        supplierCode: '',
+        productClass: replaced?.productClass ?? 'General',
+        category: (replaced?.category ?? 'Other') as ProductCategory,
+        tags: replaced?.tags ?? [],
+        packType: final.packType ?? replaced?.packType ?? 'Single',
+        packQty: final.packQty ?? replaced?.packQty ?? 1,
+        packCost: final.packCost ?? replaced?.packCost ?? 0,
+        taxRatePct: replaced?.taxRatePct ?? 0,
+        singleUnitType: final.unitType ?? replaced?.singleUnitType ?? 'Each',
+        singleUnitVolumeOrWeight: replaced?.singleUnitVolumeOrWeight,
+        unitOfMeasure: replaced?.unitOfMeasure,
+        altUoms: replaced?.altUoms ?? [],
+        allergensContains: replaced?.allergensContains ?? [],
+        allergensTraces: replaced?.allergensTraces ?? [],
+        nutrition: replaced?.nutrition ?? {},
+        sites: replaced?.sites ?? [],
+        status: 'Available',
+      };
+
+      // 3. Master-product linking (opt-in, replace path only). If the
+      //    operator chose "treat as the same item", point both old
+      //    and new products at the same master. Reuse the old
+      //    product's master when set; otherwise mint one from the old
+      //    product's name. Doesn't apply in add mode — there's
+      //    nothing to link.
+      if (mode === 'replace' && final.linkMaster && final.oldProductId && final.oldProductName) {
+        let masterId = replaced?.masterProductId;
+        if (!masterId) {
+          masterId = genId('mp');
+          upsertMasterProduct({
+            id: masterId,
+            name: final.oldProductName,
+            category: (replaced?.category ?? 'Other') as ProductCategory,
+            unit: replaced?.unitOfMeasure ?? '',
+            slug: final.oldProductName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          });
+          if (replaced) {
+            upsertProduct({ ...replaced, masterProductId: masterId });
+          }
+        }
+        newProduct.masterProductId = masterId;
+      }
+      upsertProduct(newProduct);
+
+      // 4. Recipe sweep — different mutation per mode.
+      const selectedSet = new Set(final.recipeIds);
+      let recipesTouched = 0;
+      if (mode === 'replace' && final.oldProductId && final.oldProductName) {
+        // Replace path — swap typed v2 refs and legacy free-text rows
+        // for the selected recipes.
+        const oldNameLower = final.oldProductName.toLowerCase();
+        const oldProductId = final.oldProductId;
+        const newSupplierName = final.supplierName;
+        const newProductName = final.newProductName;
+        for (const recipeId of selectedSet) {
+          const recipe = findRecipe(recipeId);
+          if (!recipe) continue;
+          const nextIngredientsV2 = (recipe.ingredientsV2 ?? []).map((row) => {
+            if (row.ref.kind === 'product' && row.ref.productId === oldProductId) {
+              return { ...row, ref: { kind: 'product' as const, productId: newProductId } };
+            }
+            // Master-linked rows are intentionally left alone: if the
+            // operator linked under a master, the row already
+            // resolves to either SKU, and rewiring it to the new
+            // product would narrow the recipe rather than widen it.
+            return row;
+          });
+          const nextLegacy = (recipe.ingredients ?? []).map((ing) => {
+            if (ing.name.toLowerCase().includes(oldNameLower)) {
+              return { ...ing, name: newProductName, supplier: newSupplierName };
+            }
+            return ing;
+          });
+          updateRecipe({
+            ...recipe,
+            ingredients: nextLegacy,
+            ingredientsV2: recipe.ingredientsV2 ? nextIngredientsV2 : undefined,
+          });
+          recipesTouched += 1;
+        }
+      } else {
+        // Add path — append a brand-new ingredient row to every
+        // selected recipe. Quantity comes from the picker; UoM
+        // defaults to the new product's unit type when the picker
+        // didn't capture one.
+        const addQty = final.addQty ?? 1;
+        const addUom = final.addUom ?? final.unitType ?? 'each';
+        const newRow = (): RecipeIngredient =>
+          makeRecipeIngredient(
+            { kind: 'product', productId: newProductId },
+            { value: addQty, unit: addUom },
+          );
+        for (const recipeId of selectedSet) {
+          const recipe = findRecipe(recipeId);
+          if (!recipe) continue;
+          // Skip recipes that already include the new product to
+          // avoid double-adding on repeat runs.
+          const alreadyHasV2 = (recipe.ingredientsV2 ?? []).some(
+            (row) => row.ref.kind === 'product' && row.ref.productId === newProductId,
+          );
+          if (alreadyHasV2) continue;
+          const nextLegacy = [
+            ...(recipe.ingredients ?? []),
+            {
+              name: final.newProductName,
+              qty: `${addQty}${addUom}`,
+              supplier: final.supplierName,
+            },
+          ];
+          const nextIngredientsV2 = recipe.ingredientsV2
+            ? [...recipe.ingredientsV2, newRow()]
+            : undefined;
+          updateRecipe({
+            ...recipe,
+            ingredients: nextLegacy,
+            ingredientsV2: nextIngredientsV2,
+          });
+          recipesTouched += 1;
+        }
+      }
+
+      // 5. Receipt.
+      const scopeLabel = final.scope === 'all' ? 'all sites' : `just ${final.siteLabel}`;
+      const headlineBits: string[] = [`Added ${final.newProductName}`];
+      if (recipesTouched > 0) {
+        if (mode === 'replace' && final.oldProductName) {
+          headlineBits.push(
+            `replaced ${final.oldProductName} in ${recipesTouched} recipe${recipesTouched === 1 ? '' : 's'}`,
+          );
+        } else {
+          headlineBits.push(
+            `added to ${recipesTouched} recipe${recipesTouched === 1 ? '' : 's'}`,
+          );
+        }
+      }
+      const detailBits: string[] = [];
+      if (final.supplierMode === 'new') detailBits.push(`new supplier · ${final.supplierName}`);
+      if (mode === 'replace' && final.linkMaster) detailBits.push('linked as same item');
+      detailBits.push(`Saved to ${scopeLabel}`);
+
+      const receipt: CommandReceipt = {
+        headline: headlineBits.join(' · '),
+        detail: detailBits.join(' · '),
+        href: `/suppliers/products/${newProductId}`,
+        hrefLabel: 'Open product',
+        undo: () => {
+          // Atomic rollback — both stores back to pre-mutation state.
+          restoreSuppliersStore(suppliersBefore);
+          setRecipes(recipesBefore);
+        },
+      };
+
+      writeCmdState(msgId, 'confirmed');
+      // Capture diff + blast radius before pushing the receipt so the
+      // Activity row renders with full detail from the first paint.
+      const recipesAfter = snapshotRecipes().map((r) => ({ ...r }));
+      const affectedIds = Array.from(selectedSet).filter((id) =>
+        recipesAfter.some((r) => r.id === id),
+      );
+      const oldProductSnapshot =
+        mode === 'replace' && final.oldProductId ? findProduct(final.oldProductId) : undefined;
+
+      // PARENT — global effects only (supplier + product creation +
+      // aggregate GP impact). The per-recipe rows live on the children
+      // we spawn below, which is what makes them independently
+      // revertible from the Activity log.
+      const parentDiff = diffProductSwap({
+        mode,
+        newProduct,
+        oldProduct: oldProductSnapshot,
+        newProductName: final.newProductName,
+        oldProductName: final.oldProductName,
+        supplierName: final.supplierName,
+        supplierCreated: final.supplierMode === 'new',
+        recipesBefore,
+        recipesAfter,
+        affectedRecipeIds: affectedIds,
+      });
+      recordTaskChanges({
+        changes: parentDiff.changes,
+        blastRadius: parentDiff.blastRadius,
+        commandIntent: {
+          commandId: 'product-swap',
+          cardMsgType: 'cmd-product-swap-summary',
+          args: { ...final },
+        },
+      });
+
+      // pushReceipt completes the parent Task and stamps it with the
+      // receipt. We capture the parent id (before pushReceipt clears
+      // activeTaskIdRef on the next runCommand) so we can mark the
+      // grouping and stitch children onto it.
+      const parentTaskId = activeTaskIdRef.current;
+      pushReceipt(receipt, msgId);
+
+      // CHILDREN — one Task per affected recipe. Each child carries
+      // just that recipe's diff + blast radius, and a recipe-edit-
+      // shaped commandIntent so the existing Activity revert path can
+      // invert it through buildRevertArgs. Children are written
+      // already-completed because the mutations all landed atomically
+      // in the parent's confirm step above.
+      if (parentTaskId && affectedIds.length > 0) {
+        markGroupParent(parentTaskId);
+        const slices = splitProductSwapPerRecipe({
+          mode,
+          newProduct,
+          oldProduct: oldProductSnapshot,
+          newProductName: final.newProductName,
+          oldProductName: final.oldProductName,
+          recipesBefore,
+          recipesAfter,
+          affectedRecipeIds: affectedIds,
+          scope: final.scope,
+          siteLabel: final.siteLabel,
+        });
+        for (const slice of slices) {
+          logChildTask({
+            kind: 'product-swap',
+            title: slice.title,
+            subtitle: final.supplierName,
+            receipt: {
+              headline: slice.title,
+              detail: `Part of "${receipt.headline}"`,
+              href: `/recipes/${slice.recipeId}/edit`,
+              hrefLabel: 'Open recipe',
+            },
+            changes: slice.changes,
+            blastRadius: slice.blastRadius,
+            commandIntent: slice.revertIntent,
+            groupId: parentTaskId,
+          });
+        }
+      }
+    },
+    [pushReceipt, recordTaskChanges],
   );
 
   // ── Ambiguity pick → re-emit the command with the chosen args ───
@@ -922,6 +1935,160 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     [setMessages, snapshotIntoTask],
   );
 
+  // ── Activity-log Revert + Edit replay ───────────────────────────
+  //
+  // Both replay the original command's summary card into the chat so
+  // the operator confirms in the same surface where they first
+  // approved the change. The pendingLinkRef tells pushReceipt to
+  // stitch the new Task back to its predecessor via
+  // markReverted / markSuperseded once confirmation lands.
+  //
+  // Note: not every command can be cleanly reverted (e.g. a
+  // product-swap that created a brand-new supplier shouldn't
+  // "delete" that supplier just because we reverted the recipe
+  // changes). For v1 we surface a guidance message in the chat
+  // before the card so the operator knows what's about to happen.
+
+  /** Build the inverted args needed to roll a Task back to its
+   *  pre-mutation state. Returns null when the command type can't be
+   *  cleanly inverted (the caller falls back to opening the original
+   *  receipt's deep-link). */
+  function buildRevertArgs(
+    commandId: string,
+    args: Record<string, unknown>,
+  ): Record<string, unknown> | null {
+    if (commandId === 'production') {
+      const prev = args.previousValue;
+      if (typeof prev === 'number') {
+        return { ...args, value: prev, previousValue: args.value, boolValue: undefined };
+      }
+      if (typeof prev === 'boolean') {
+        return { ...args, boolValue: prev, value: undefined };
+      }
+      return null;
+    }
+    if (commandId === 'menu') {
+      const action = args.action as string | undefined;
+      if (action === 'availability-off') {
+        return { ...args, action: 'availability-on', previousAvailable: false };
+      }
+      if (action === 'availability-on') {
+        return { ...args, action: 'availability-off', previousAvailable: true };
+      }
+      if (action === 'price-set' && typeof args.previousPrice === 'number') {
+        return {
+          ...args,
+          action: 'price-set',
+          price: args.previousPrice,
+          previousPrice: args.price,
+        };
+      }
+      if (action === 'price-delta' && typeof args.priceDelta === 'number') {
+        return {
+          ...args,
+          priceDelta: -(args.priceDelta as number),
+          previousPrice:
+            typeof args.previousPrice === 'number'
+              ? args.previousPrice + (args.priceDelta as number)
+              : args.previousPrice,
+        };
+      }
+      return null;
+    }
+    if (commandId === 'supplier') {
+      const prev = args.previousValue;
+      if (prev === undefined || prev === null) return null;
+      return {
+        ...args,
+        valueNormalised: prev,
+        valueRaw: String(prev),
+        previousValue: args.valueNormalised,
+      };
+    }
+    if (commandId === 'recipe-edit') {
+      const kind = args.kind as string | undefined;
+      if (kind === 'add') {
+        return { ...args, kind: 'remove', fromName: args.toName, toName: undefined };
+      }
+      if (kind === 'remove') {
+        return { ...args, kind: 'add', toName: args.fromName, fromName: undefined };
+      }
+      if (kind === 'swap') {
+        return { ...args, fromName: args.toName, toName: args.fromName };
+      }
+      return null;
+    }
+    // product-swap, waste, stock — not safely invertible from args
+    // alone in the prototype. Caller surfaces a notice in the chat.
+    return null;
+  }
+
+  const replayTaskCommand = useCallback(
+    (
+      task: { commandIntent?: { commandId: string; cardMsgType: string; args: Record<string, unknown> } },
+      mode: 'revert' | 'edit',
+      originalTaskId: string,
+    ): boolean => {
+      const ci = task.commandIntent;
+      if (!ci) return false;
+      const cmd = getCommand(ci.commandId as CommandIntent['commandId']);
+      if (!cmd) return false;
+      const replayArgs =
+        mode === 'edit' ? ci.args : buildRevertArgs(ci.commandId, ci.args);
+      if (!replayArgs) return false;
+
+      setChatStarted(true);
+      setChatMinimized(false);
+      // Fresh thread so the replay isn't tangled in whatever else is
+      // on screen. Mirrors `runCommand({ freshTask: true })`.
+      setMessages([]);
+      cmdStatesRef.current = {};
+      setCmdStates({});
+      setCmdUndone({});
+      receiptsRef.current = {};
+      receiptToTaskRef.current = {};
+      onFreshTask?.();
+
+      const { title, subtitle } = describeTask({
+        commandId: cmd.id,
+        args: replayArgs,
+        confidence: 1,
+      });
+      const t = startTask({
+        kind: cmd.id as TaskKind,
+        title: mode === 'revert' ? `Revert · ${title}` : `Edit · ${title}`,
+        subtitle,
+      });
+      activeTaskIdRef.current = t.id;
+      pendingLinkRef.current = { kind: mode === 'revert' ? 'revert' : 'supersede', originalTaskId };
+
+      pushQuinn(
+        mode === 'revert'
+          ? "Here's the reverse of the change — confirm to roll it back."
+          : "Reopened — adjust and confirm.",
+      );
+      pushCard(cmd.id, ci.cardMsgType, replayArgs);
+      return true;
+    },
+    [onFreshTask, pushCard, pushQuinn, setChatMinimized, setChatStarted, setMessages],
+  );
+
+  const revertTask = useCallback(
+    (task: {
+      id: string;
+      commandIntent?: { commandId: string; cardMsgType: string; args: Record<string, unknown> };
+    }): boolean => replayTaskCommand(task, 'revert', task.id),
+    [replayTaskCommand],
+  );
+
+  const editTask = useCallback(
+    (task: {
+      id: string;
+      commandIntent?: { commandId: string; cardMsgType: string; args: Record<string, unknown> };
+    }): boolean => replayTaskCommand(task, 'edit', task.id),
+    [replayTaskCommand],
+  );
+
   return {
     cmdStates,
     cmdUndone,
@@ -939,9 +2106,19 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     pickRecipeActionForEdit,
     pickRecipeIngredientForEdit,
     submitRecipeNewIngredient,
+    // Product wizard (add or replace) handlers
+    submitProductPurpose,
+    submitProductNewInfo,
+    submitProductNewSupplier,
+    pickProductReplaced,
+    submitProductPackDetails,
+    submitProductPickRecipes,
+    confirmProductSwap,
     undoReceipt,
     restoreMessages,
     snapshotTask,
+    revertTask,
+    editTask,
   };
 }
 
@@ -959,6 +2136,8 @@ function describeTask(intent: CommandIntent): { title: string; subtitle?: string
     args.supplierName as string | undefined,
     args.itemName as string | undefined,
     args.productName as string | undefined,
+    args.newProductName as string | undefined,
+    args.oldProductName as string | undefined,
   ];
   const target = candidates.find((c): c is string => typeof c === 'string' && c.length > 0);
   return target ? { title: label, subtitle: target } : { title: label };

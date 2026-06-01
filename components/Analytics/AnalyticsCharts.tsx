@@ -391,7 +391,7 @@ const TOOLTIP_STYLE = {
   fontFamily: 'var(--font-primary)',
   border: '1px solid var(--color-border-subtle)',
   borderRadius: 8,
-  boxShadow: '0 2px 8px rgba(58,48,40,0.12)',
+  boxShadow: '0 2px 8px rgba(0, 28, 53,0.12)',
 };
 
 export function SalesChart() {
@@ -945,7 +945,7 @@ export function WasteHeatmapChart() {
     const t = v / max;
     // Blend white → accent-deep navy; keep at least 8% alpha so zero-ish cells aren't invisible.
     const alpha = 0.08 + 0.82 * t;
-    return `rgba(3, 28, 89, ${alpha.toFixed(3)})`;
+    return `rgba(0, 28, 53, ${alpha.toFixed(3)})`;
   }
   return (
     <div style={{ width: '100%', overflowX: 'auto' }}>
@@ -1185,8 +1185,8 @@ const LEAF_CATEGORY: Record<string, 'Food' | 'Drink' | 'Packaging'> = {
   Cups: 'Packaging', Containers: 'Packaging',
 };
 const CATEGORY_FILL: Record<string, string> = {
-  Food: 'rgba(3, 28, 89, 0.92)',
-  Drink: 'rgba(3, 28, 89, 0.68)',
+  Food: 'rgba(0, 28, 53, 0.92)',
+  Drink: 'rgba(0, 28, 53, 0.68)',
   Packaging: 'rgba(180, 83, 9, 0.82)',
 };
 const TREEMAP_TOTAL = WASTE_TREEMAP.children.reduce(

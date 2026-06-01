@@ -65,7 +65,7 @@ export default function WasteCard({ rows }: { rows: WasteRow[] }) {
         borderRadius: '12px 0 12px 12px',
         border: '1px solid #001C35',
         background: '#fff',
-        boxShadow: '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.03)',
+        boxShadow: '0 2px 12px rgba(0, 28, 53,0.1), 0 0 0 1px rgba(0, 28, 53,0.03)',
         display: 'flex',
         flexDirection: 'column',
         gap: 14,
@@ -90,7 +90,7 @@ export default function WasteCard({ rows }: { rows: WasteRow[] }) {
           display: 'flex', alignItems: 'baseline', gap: 6,
           padding: '6px 12px',
           borderRadius: 100,
-          background: overall === 'flag' ? 'rgba(180,83,9,0.12)' : overall === 'watch' ? 'rgba(58,48,40,0.06)' : 'rgba(22,101,52,0.12)',
+          background: overall === 'flag' ? 'rgba(180,83,9,0.12)' : overall === 'watch' ? 'rgba(0, 28, 53,0.06)' : 'rgba(22,101,52,0.12)',
         }}>
           <span style={{
             fontSize: 14, fontWeight: 700,
@@ -117,7 +117,7 @@ export default function WasteCard({ rows }: { rows: WasteRow[] }) {
               type="number"
               tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
               tickLine={false}
-              axisLine={{ stroke: 'rgba(58,48,40,0.15)' }}
+              axisLine={{ stroke: 'rgba(0, 28, 53,0.15)' }}
               tickFormatter={(v) => `£${v}`}
             />
             <YAxis
@@ -136,7 +136,7 @@ export default function WasteCard({ rows }: { rows: WasteRow[] }) {
                 return [`£${value}`, label];
               }}
             />
-            <Bar dataKey="typical" name="typical" fill="rgba(58,48,40,0.12)" radius={[3, 3, 3, 3]} maxBarSize={10} />
+            <Bar dataKey="typical" name="typical" fill="rgba(0, 28, 53,0.12)" radius={[3, 3, 3, 3]} maxBarSize={10} />
             <Bar dataKey="today" name="today" radius={[3, 3, 3, 3]} maxBarSize={10}>
               {chartData.map((d) => (
                 <Cell key={d.product} fill={colourFor(d.sev)} />

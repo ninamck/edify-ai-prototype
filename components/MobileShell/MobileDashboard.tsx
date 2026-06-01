@@ -174,7 +174,7 @@ export default function MobileDashboard({
             borderRadius: 12,
             border: '1px solid var(--color-border-subtle)',
             background: '#fff',
-            boxShadow: '0 2px 8px rgba(58,48,40,0.06)',
+            boxShadow: '0 2px 8px rgba(0, 28, 53,0.06)',
           }}
         >
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: 8 }}>
@@ -381,7 +381,7 @@ export default function MobileDashboard({
               borderRadius: 12,
               border: '1px solid var(--color-border-subtle)',
               background: '#fff',
-              boxShadow: '0 2px 8px rgba(58,48,40,0.06)',
+              boxShadow: '0 2px 8px rgba(0, 28, 53,0.06)',
             }}
           >
             <div

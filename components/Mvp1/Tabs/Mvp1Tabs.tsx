@@ -115,7 +115,7 @@ export default function Mvp1Tabs({
               background: '#fff',
               border: '1px solid var(--color-border-subtle)',
               borderRadius: 8,
-              boxShadow: '0 4px 16px rgba(58,48,40,0.12), 0 0 0 1px rgba(58,48,40,0.04)',
+              boxShadow: '0 4px 16px rgba(0, 28, 53,0.12), 0 0 0 1px rgba(0, 28, 53,0.04)',
               padding: 4,
               fontFamily: 'var(--font-primary)',
             }}
@@ -303,7 +303,7 @@ function Tab({
           onMouseEnter={(e) => {
             (e.currentTarget as HTMLButtonElement).style.background = active
               ? 'rgba(255,255,255,0.18)'
-              : 'rgba(58,48,40,0.08)';
+              : 'rgba(0, 28, 53,0.08)';
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLButtonElement).style.background = 'transparent';

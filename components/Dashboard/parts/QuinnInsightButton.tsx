@@ -136,7 +136,7 @@ export default function QuinnInsightButton({
               borderRadius: 12,
               background: '#fff',
               border: '1px solid var(--color-border-subtle)',
-              boxShadow: '0 12px 36px rgba(3,28,89,0.18)',
+              boxShadow: '0 12px 36px rgba(0, 28, 53,0.18)',
               fontFamily: 'var(--font-primary)',
               ...popoverStyle,
             }}

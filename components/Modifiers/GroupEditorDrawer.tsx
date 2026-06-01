@@ -248,7 +248,7 @@ export function GroupEditorDrawer({
             <div
               style={{
                 marginBottom: 14, padding: '10px 12px', borderRadius: 8,
-                background: 'rgba(3,28,89,0.05)',
+                background: 'rgba(0, 28, 53,0.05)',
                 color: 'var(--color-accent-active)',
                 fontSize: 12.5,
               }}

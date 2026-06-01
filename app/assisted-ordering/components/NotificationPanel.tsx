@@ -91,7 +91,7 @@ export default function NotificationPanel({
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '8px',
-                boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
+                boxShadow: '0 1px 4px rgba(0, 28, 53,0.06)',
               }}
             >
               {/* Card header */}
@@ -212,7 +212,7 @@ export default function NotificationPanel({
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '10px',
-                  boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
+                  boxShadow: '0 1px 4px rgba(0, 28, 53,0.06)',
                 }}
               >
                 <div

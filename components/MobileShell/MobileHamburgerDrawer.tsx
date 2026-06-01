@@ -18,7 +18,6 @@ import {
   Layers,
   Star,
   MapPin,
-  User,
   Settings,
 } from 'lucide-react';
 import SiteSwitcher from '@/components/Sidebar/SiteSwitcher';
@@ -255,7 +254,7 @@ export default function MobileHamburgerDrawer({
             <div style={{ padding: '0 8px' }}>
               <DrawerNavItem icon={Star} label="Manage recipes" onClick={() => go('/')} />
               <DrawerNavItem icon={MapPin} label="Manage suppliers" onClick={() => go('/')} />
-              <DrawerNavItem icon={User} label="Manage users" onClick={() => go('/')} />
+              {/* "Manage users" lives under Settings now. */}
               <DrawerNavItem icon={Settings} label="Configure settings" onClick={() => go('/')} />
             </div>
           </motion.div>

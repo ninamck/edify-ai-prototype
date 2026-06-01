@@ -10,6 +10,10 @@ export type Column = {
    *  scroll horizontally beneath it. The DataTable handles z-index, opaque
    *  cell backgrounds, and a right divider automatically. */
   pinned?: 'left';
+  /** ISO 4217 code used when type === 'currency'. Defaults to USD so the
+   *  Dunkin / NDCP datasets keep rendering as $. The FIS / Culinary
+   *  Collective demo opts into 'GBP' on its columns. */
+  currency?: 'USD' | 'GBP' | 'EUR';
 };
 
 export type DataSourceId =
@@ -38,15 +42,21 @@ export type DataSource<TRow extends Record<string, unknown> = Record<string, unk
   joinKey?: { site?: string; date?: string };
 };
 
-export function formatCell(value: unknown, type: ColumnType): string {
+export function formatCell(
+  value: unknown,
+  type: ColumnType,
+  opts?: { currency?: 'USD' | 'GBP' | 'EUR' },
+): string {
   if (value === null || value === undefined || value === '') return '—';
   if (type === 'string' || type === 'date') return String(value);
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
   if (type === 'integer') return value.toLocaleString('en-US', { maximumFractionDigits: 0 });
   if (type === 'currency') {
-    return value.toLocaleString('en-US', {
+    const currency = opts?.currency ?? 'USD';
+    const locale = currency === 'GBP' ? 'en-GB' : 'en-US';
+    return value.toLocaleString(locale, {
       style: 'currency',
-      currency: 'USD',
+      currency,
       maximumFractionDigits: 2,
     });
   }

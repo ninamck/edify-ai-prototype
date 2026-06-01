@@ -356,7 +356,7 @@ function CentralHeader({
         padding: '14px 16px',
         borderRadius: 'var(--radius-card)',
         background:
-          'linear-gradient(135deg, rgba(58,48,40,0.06) 0%, var(--color-bg-hover) 100%)',
+          'linear-gradient(135deg, rgba(0, 28, 53,0.06) 0%, var(--color-bg-hover) 100%)',
         border: '1px solid var(--color-border-subtle)',
         display: 'flex',
         alignItems: 'flex-start',
@@ -781,7 +781,7 @@ function CommitBar({
         background: '#ffffff',
         border: '1px solid var(--color-border-subtle)',
         borderRadius: 'var(--radius-card)',
-        boxShadow: '0 -8px 24px rgba(58,48,40,0.04)',
+        boxShadow: '0 -8px 24px rgba(0, 28, 53,0.04)',
         display: 'flex',
         alignItems: 'center',
         gap: 10,

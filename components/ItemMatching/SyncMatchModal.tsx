@@ -14,11 +14,22 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Loader2, RefreshCw, Sparkles, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Check, Loader2, RefreshCw, Search, X } from 'lucide-react';
 import { useRecipes } from '@/components/Recipe/recipeStore';
 import { useProducts, useMasterProducts } from '@/components/Suppliers/store';
 import { FITZROY_POS_INTAKE } from '@/components/Recipe/intakeFixtures';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { setMatchTarget, useMatchOverrides, type MatchTargetType } from './overrideStore';
+import { MatchPicker } from './MatchPicker';
+
+// Chrome dimensions of the (menu) layout — sidebar + top bar + sub-tab nav.
+// Used to inset the modal so it centers in the *available content area*
+// rather than dead-center of the viewport (the latter visually overlaps
+// the sidebar even though the dim overlay is on top of it).
+const SIDEBAR_WIDTH = 240;
+const TOP_CHROME_HEIGHT = 124;
+const MOBILE_BREAKPOINT = '(max-width: 640px)';
 
 type Stage = {
   id: string;
@@ -42,8 +53,33 @@ type MatchResult = {
   type: MatchTargetType;
   targetId: string;
   targetName: string;
-  confidence: 'high' | 'medium';
+  confidence: 'high' | 'uncertain';
+  /** Why we flagged this as uncertain — shown to the operator. */
+  reason?: string;
 };
+
+/**
+ * Demo-time injections that force a couple of "needs your call" rows even
+ * when the natural matcher is very confident. The eventual background agent
+ * will surface its own uncertainty signals; until then we hardcode a couple
+ * of realistic edge cases so the UX has something to confirm.
+ */
+const UNCERTAIN_INJECTIONS: Array<{
+  posItemId: string;
+  preferredTargetName: string;
+  reason: string;
+}> = [
+  {
+    posItemId: 'mi-almond-croissant',
+    preferredTargetName: 'Croissant',
+    reason: '"Almond" might be a modifier on the base croissant — or its own recipe.',
+  },
+  {
+    posItemId: 'mi-babyccino',
+    preferredTargetName: 'Cappuccino',
+    reason: 'Kids drink — could be a scaled cappuccino, or a separate recipe.',
+  },
+];
 
 function normalize(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9 ]+/g, '').replace(/\s+/g, ' ').trim();
@@ -69,12 +105,26 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
   const products = useProducts();
   const masters = useMasterProducts();
   const overrides = useMatchOverrides();
+  const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
+
+  // Portal target — `document` is unavailable during SSR, so we mount it
+  // after first paint and guard the render below.
+  const [portalReady, setPortalReady] = useState(false);
+  useEffect(() => { setPortalReady(true); }, []);
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [stageIdx, setStageIdx] = useState(0);
   // Results computed once at the start of the run so the count is stable.
   const [results, setResults] = useState<MatchResult[]>([]);
   const [scanned, setScanned] = useState(0);
+  // For uncertain rows we record what the operator did with each one. A
+  // `confirmed` decision carries the *actual* target the user landed on,
+  // which may differ from the AI's original suggestion when they picked
+  // something else.
+  const [uncertainDecisions, setUncertainDecisions] = useState<
+    Map<string, { kind: 'confirmed'; targetName: string } | { kind: 'skipped' }>
+  >(new Map());
+  const [pickerOpenFor, setPickerOpenFor] = useState<string | null>(null);
   const appliedRef = useRef(false);
 
   // Compute candidates lazily so we have the freshest data when the user clicks Run.
@@ -107,15 +157,35 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
         const s = score(pos.name, c.name);
         if (!best || s > best.s) best = { c, s };
       }
-      if (!best || best.s < 0.5) continue;
+      if (!best || best.s < 0.8) continue;
       out.push({
         posItemId: pos.id,
         posItemName: pos.name,
         type: best.c.type,
         targetId: best.c.id,
         targetName: best.c.name,
-        confidence: best.s >= 0.8 ? 'high' : 'medium',
+        confidence: 'high',
       });
+    }
+
+    for (const inj of UNCERTAIN_INJECTIONS) {
+      const posItem = FITZROY_POS_INTAKE.menuItems.find((m) => m.id === inj.posItemId);
+      if (!posItem) continue;
+      if (alreadyMatchedPosIds.has(posItem.id)) continue;
+      const target = candidates.find((c) => c.name === inj.preferredTargetName);
+      if (!target) continue;
+      const replacement: MatchResult = {
+        posItemId: posItem.id,
+        posItemName: posItem.name,
+        type: target.type,
+        targetId: target.id,
+        targetName: target.name,
+        confidence: 'uncertain',
+        reason: inj.reason,
+      };
+      const existingIdx = out.findIndex((r) => r.posItemId === posItem.id);
+      if (existingIdx >= 0) out[existingIdx] = replacement;
+      else out.push(replacement);
     }
     return out;
   }
@@ -162,14 +232,45 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
     setResults(fresh);
     setScanned(0);
     setStageIdx(0);
+    setUncertainDecisions(new Map());
+    setPickerOpenFor(null);
     appliedRef.current = false;
     setPhase('running');
   }
 
-  const highConfidence = results.filter((r) => r.confidence === 'high');
-  const review = results.filter((r) => r.confidence === 'medium');
+  function confirmUncertain(r: MatchResult): void {
+    setMatchTarget(r.posItemId, { type: r.type, id: r.targetId });
+    setUncertainDecisions((prev) => {
+      const next = new Map(prev);
+      next.set(r.posItemId, { kind: 'confirmed', targetName: r.targetName });
+      return next;
+    });
+  }
 
-  return (
+  function skipUncertain(posItemId: string): void {
+    setUncertainDecisions((prev) => {
+      const next = new Map(prev);
+      next.set(posItemId, { kind: 'skipped' });
+      return next;
+    });
+  }
+
+  function recordPicked(posItemId: string, picked: { name: string }): void {
+    setUncertainDecisions((prev) => {
+      const next = new Map(prev);
+      next.set(posItemId, { kind: 'confirmed', targetName: picked.name });
+      return next;
+    });
+    setPickerOpenFor(null);
+  }
+
+  const highConfidence = results.filter((r) => r.confidence === 'high');
+  const uncertain = results.filter((r) => r.confidence === 'uncertain');
+  const pendingUncertain = uncertain.filter((r) => !uncertainDecisions.has(r.posItemId));
+
+  if (!portalReady) return null;
+
+  return createPortal(
     <div
       onClick={(e) => { if (e.target === e.currentTarget && phase !== 'running') onClose(); }}
       style={{
@@ -177,7 +278,12 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
         background: 'rgba(0, 28, 53, 0.22)',
         zIndex: 1100,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '24px',
+        // Inset the centering area to the available content space so the
+        // panel reads as centered relative to the page, not the chrome.
+        paddingTop: TOP_CHROME_HEIGHT + 24,
+        paddingBottom: 24,
+        paddingLeft: (isMobile ? 0 : SIDEBAR_WIDTH) + 24,
+        paddingRight: 24,
         fontFamily: 'var(--font-primary)',
       }}
     >
@@ -190,7 +296,9 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
           boxShadow: '0 24px 48px -16px rgba(0, 28, 53, 0.35)',
           overflow: 'hidden',
           display: 'flex', flexDirection: 'column',
-          maxHeight: '80vh',
+          // Cap to whatever vertical space the centering area actually has,
+          // so internal scroll engages instead of pushing past the chrome.
+          maxHeight: `calc(100vh - ${TOP_CHROME_HEIGHT + 64}px)`,
         }}
       >
         {/* Header */}
@@ -202,10 +310,27 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
           <div style={{
             width: 28, height: 28, borderRadius: 8,
             background: 'rgba(40, 175, 201, 0.15)',
-            color: 'var(--color-accent-mid, #28AFC9)',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <Sparkles size={15} />
+            {/* Edify brand mark — same mask-image trick the sidebar uses
+                so it picks up the accent color cleanly. */}
+            <span
+              role="img"
+              aria-label="Edify"
+              style={{
+                display: 'block',
+                width: 16, height: 16,
+                backgroundColor: 'var(--color-accent-mid, #28AFC9)',
+                WebkitMaskImage: 'url(/edify-logo.svg)',
+                maskImage: 'url(/edify-logo.svg)',
+                WebkitMaskRepeat: 'no-repeat',
+                maskRepeat: 'no-repeat',
+                WebkitMaskPosition: 'center',
+                maskPosition: 'center',
+                WebkitMaskSize: 'contain',
+                maskSize: 'contain',
+              }}
+            />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--color-text-primary)' }}>
@@ -216,7 +341,9 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
                 ? 'Pulls fresh POS data and links anything we can match with high confidence.'
                 : phase === 'running'
                   ? 'Working — this normally takes a few seconds.'
-                  : 'Done. The background agent will do this on its own once it ships.'}
+                  : pendingUncertain.length > 0
+                    ? `${pendingUncertain.length} ${pendingUncertain.length === 1 ? 'match needs' : 'matches need'} your call before closing.`
+                    : 'Done. The background agent will do this on its own once it ships.'}
             </div>
           </div>
           <button
@@ -307,8 +434,8 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
                   accent="var(--color-success, #15803D)"
                 />
                 <SummaryStat
-                  label="Needs review"
-                  value={review.length}
+                  label="Needs your call"
+                  value={uncertain.length}
                   accent="var(--color-warning, #EA580C)"
                 />
                 <SummaryStat
@@ -317,7 +444,7 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
                     0,
                     FITZROY_POS_INTAKE.menuItems.length
                       - highConfidence.length
-                      - review.length,
+                      - uncertain.length,
                   )}
                   accent="var(--color-text-primary)"
                 />
@@ -374,6 +501,154 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
                   Nothing new to auto-link. The remaining unmatched buttons need a human eye — open the dropdown on each row.
                 </div>
               )}
+
+              {uncertain.length > 0 && (
+                <div>
+                  <div style={{
+                    fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+                    textTransform: 'uppercase', color: 'var(--color-text-muted)',
+                    margin: '12px 0 6px',
+                  }}>
+                    Needs your call
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {uncertain.map((r) => {
+                      const decision = uncertainDecisions.get(r.posItemId);
+                      const pickerOpen = pickerOpenFor === r.posItemId;
+                      return (
+                        <div key={r.posItemId} style={{
+                          border: '1px solid var(--color-border-subtle)',
+                          borderRadius: 10,
+                          padding: '10px 12px',
+                          background: decision?.kind === 'skipped' ? '#FBFAF8' : '#fff',
+                          display: 'flex', flexDirection: 'column', gap: 8,
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
+                            <span style={{ flex: 1, minWidth: 0, color: 'var(--color-text-primary)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {r.posItemName}
+                            </span>
+                            <span style={{ color: 'var(--color-text-muted)', fontSize: 11 }}>→</span>
+                            <span style={{ flex: 1, minWidth: 0, color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {r.targetName}
+                            </span>
+                            <TypeTag type={r.type} />
+                          </div>
+                          {r.reason && (
+                            <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                              {r.reason}
+                            </div>
+                          )}
+                          {!decision && !pickerOpen && (
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                              <button
+                                onClick={() => confirmUncertain(r)}
+                                style={confirmBtnStyle}
+                              >
+                                <Check size={12} strokeWidth={3} />
+                                Confirm match
+                              </button>
+                              <button
+                                onClick={() => setPickerOpenFor(r.posItemId)}
+                                style={pickDifferentBtnStyle}
+                              >
+                                <Search size={12} />
+                                Pick different…
+                              </button>
+                              <button
+                                onClick={() => skipUncertain(r.posItemId)}
+                                style={skipBtnStyle}
+                              >
+                                Skip
+                              </button>
+                            </div>
+                          )}
+                          {pickerOpen && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              <MatchPicker
+                                posItemId={r.posItemId}
+                                posItemName={r.posItemName}
+                                currentTarget={{ type: r.type, id: r.targetId }}
+                                mode="inline"
+                                onPick={(picked) => recordPicked(r.posItemId, picked)}
+                                onClose={() => setPickerOpenFor(null)}
+                              />
+                              <button
+                                onClick={() => setPickerOpenFor(null)}
+                                style={{
+                                  alignSelf: 'flex-start',
+                                  padding: '4px 8px',
+                                  fontSize: 11.5, fontWeight: 600,
+                                  color: 'var(--color-text-muted)',
+                                  background: 'transparent', border: 'none',
+                                  cursor: 'pointer',
+                                  fontFamily: 'var(--font-primary)',
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          )}
+                          {decision?.kind === 'confirmed' && (
+                            <div style={{
+                              display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                            }}>
+                              <div style={{
+                                fontSize: 11.5, fontWeight: 600,
+                                color: 'var(--color-success, #15803D)',
+                                display: 'inline-flex', alignItems: 'center', gap: 5,
+                              }}>
+                                <Check size={12} strokeWidth={3} />
+                                Linked to {decision.targetName}
+                              </div>
+                              <button
+                                onClick={() => setPickerOpenFor(r.posItemId)}
+                                style={{
+                                  fontSize: 11, fontWeight: 600,
+                                  color: 'var(--color-text-muted)',
+                                  background: 'transparent', border: 'none',
+                                  padding: 0, cursor: 'pointer',
+                                  textDecoration: 'underline',
+                                  fontFamily: 'var(--font-primary)',
+                                }}
+                              >
+                                Change
+                              </button>
+                            </div>
+                          )}
+                          {decision?.kind === 'skipped' && (
+                            <div style={{
+                              display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                            }}>
+                              <div style={{
+                                fontSize: 11.5, color: 'var(--color-text-muted)',
+                              }}>
+                                Left unmatched — finish on the matching page.
+                              </div>
+                              <button
+                                onClick={() => setUncertainDecisions((prev) => {
+                                  const next = new Map(prev);
+                                  next.delete(r.posItemId);
+                                  return next;
+                                })}
+                                style={{
+                                  fontSize: 11, fontWeight: 600,
+                                  color: 'var(--color-text-muted)',
+                                  background: 'transparent', border: 'none',
+                                  padding: 0, cursor: 'pointer',
+                                  textDecoration: 'underline',
+                                  fontFamily: 'var(--font-primary)',
+                                }}
+                              >
+                                Undo
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -407,7 +682,8 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -458,5 +734,30 @@ const ghostBtnStyle: React.CSSProperties = {
   border: '1px solid var(--color-border-subtle)',
   background: '#fff',
   color: 'var(--color-text-secondary)', fontSize: 12.5, fontWeight: 600,
+  fontFamily: 'var(--font-primary)', cursor: 'pointer',
+};
+
+const confirmBtnStyle: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 5,
+  padding: '6px 10px', borderRadius: 7,
+  border: 'none', background: 'var(--color-accent-active)',
+  color: '#fff', fontSize: 11.5, fontWeight: 600,
+  fontFamily: 'var(--font-primary)', cursor: 'pointer',
+};
+
+const skipBtnStyle: React.CSSProperties = {
+  padding: '6px 10px', borderRadius: 7,
+  border: '1px solid var(--color-border-subtle)',
+  background: '#fff',
+  color: 'var(--color-text-secondary)', fontSize: 11.5, fontWeight: 600,
+  fontFamily: 'var(--font-primary)', cursor: 'pointer',
+};
+
+const pickDifferentBtnStyle: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 5,
+  padding: '6px 10px', borderRadius: 7,
+  border: '1px solid var(--color-border-subtle)',
+  background: '#fff',
+  color: 'var(--color-text-primary)', fontSize: 11.5, fontWeight: 600,
   fontFamily: 'var(--font-primary)', cursor: 'pointer',
 };

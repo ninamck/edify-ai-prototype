@@ -159,7 +159,7 @@ export default function WasteLogPicker({ phase }: { phase: BriefingPhase }) {
                 borderRadius: '12px',
                 background: '#fff',
                 border: '1px solid var(--color-border-subtle)',
-                boxShadow: '0 1px 3px rgba(58,48,40,0.06)',
+                boxShadow: '0 1px 3px rgba(0, 28, 53,0.06)',
               }}
             >
               <Search size={16} color="var(--color-text-muted)" strokeWidth={2} />
@@ -195,7 +195,7 @@ export default function WasteLogPicker({ phase }: { phase: BriefingPhase }) {
                 justifyContent: 'center',
                 color: 'var(--color-text-muted)',
                 cursor: 'pointer',
-                boxShadow: '0 1px 3px rgba(58,48,40,0.06)',
+                boxShadow: '0 1px 3px rgba(0, 28, 53,0.06)',
               }}
             >
               <Mic size={16} strokeWidth={2} />
@@ -282,7 +282,7 @@ export default function WasteLogPicker({ phase }: { phase: BriefingPhase }) {
                   fontSize: '14px',
                   fontWeight: 700,
                   cursor: 'pointer',
-                  boxShadow: '0 10px 28px rgba(3,28,89,0.25)',
+                  boxShadow: '0 10px 28px rgba(0, 28, 53,0.25)',
                 }}
               >
                 <span
@@ -354,7 +354,7 @@ export default function WasteLogPicker({ phase }: { phase: BriefingPhase }) {
             fontFamily: 'var(--font-primary)',
             fontSize: '13px',
             fontWeight: 600,
-            boxShadow: '0 10px 28px rgba(3,28,89,0.28)',
+            boxShadow: '0 10px 28px rgba(0, 28, 53,0.28)',
             maxWidth: 'calc(100vw - 32px)',
           }}
         >
@@ -593,7 +593,7 @@ function EntryCard({ children }: { children: React.ReactNode }) {
         background: '#fff',
         borderRadius: '12px',
         border: '1px solid var(--color-border-subtle)',
-        boxShadow: '0 1px 3px rgba(58,48,40,0.06)',
+        boxShadow: '0 1px 3px rgba(0, 28, 53,0.06)',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
@@ -768,7 +768,7 @@ function Section({
           background: '#fff',
           borderRadius: '12px',
           border: '1px solid var(--color-border-subtle)',
-          boxShadow: '0 1px 3px rgba(58,48,40,0.06)',
+          boxShadow: '0 1px 3px rgba(0, 28, 53,0.06)',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
@@ -958,7 +958,7 @@ function ConfirmDeleteModal({
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'rgba(3,28,89,0.25)',
+          background: 'rgba(0, 28, 53,0.25)',
           backdropFilter: 'blur(2px)',
           animation: 'cdFadeIn 0.2s ease-out',
         }}
@@ -975,7 +975,7 @@ function ConfirmDeleteModal({
           borderRadius: 16,
           background: '#fff',
           border: '1px solid var(--color-border-subtle)',
-          boxShadow: '0 16px 48px rgba(3,28,89,0.22)',
+          boxShadow: '0 16px 48px rgba(0, 28, 53,0.22)',
           fontFamily: 'var(--font-primary)',
           display: 'flex',
           flexDirection: 'column',

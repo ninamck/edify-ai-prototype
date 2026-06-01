@@ -26,6 +26,7 @@ const DEFAULT_LAYOUT_BY_ROLE: LayoutByRole = {
   // chose during the dashboard personalisation flow. Mergeable with stored
   // state so subsequent additions of new defaults aren't lost.
   pilot: PILOT_DEFAULT_LAYOUT,
+  culinary: [],
 };
 
 function mergeWithDefaults(
@@ -51,6 +52,7 @@ function loadStored(): LayoutByRole | null {
       playtomic: parsed.playtomic ?? [],
       dunkin: parsed.dunkin ?? [],
       pilot: mergeWithDefaults(parsed.pilot ?? [], PILOT_DEFAULT_LAYOUT),
+      culinary: parsed.culinary ?? [],
     };
   } catch {
     return null;

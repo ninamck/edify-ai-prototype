@@ -55,7 +55,7 @@ export default function DashboardWidget({
         onDragEnd?.({ x: info.point.x, y: info.point.y });
       }}
       whileDrag={{
-        boxShadow: '0 16px 40px rgba(3,28,89,0.22)',
+        boxShadow: '0 16px 40px rgba(0, 28, 53,0.22)',
         scale: 1.015,
         cursor: 'grabbing',
         zIndex: 4,
@@ -88,7 +88,7 @@ export default function DashboardWidget({
               background: '#fff',
               cursor: 'grab',
               touchAction: 'none',
-              boxShadow: '0 2px 6px rgba(58,48,40,0.08)',
+              boxShadow: '0 2px 6px rgba(0, 28, 53,0.08)',
             }}
           >
             <GripVertical size={14} color="var(--color-text-muted)" strokeWidth={2} />
@@ -242,5 +242,5 @@ const editButtonStyle: React.CSSProperties = {
   border: '1px solid var(--color-border-subtle)',
   background: '#fff',
   cursor: 'pointer',
-  boxShadow: '0 2px 6px rgba(58,48,40,0.08)',
+  boxShadow: '0 2px 6px rgba(0, 28, 53,0.08)',
 };

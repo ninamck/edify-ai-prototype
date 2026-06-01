@@ -183,14 +183,14 @@ export function IngredientRefPicker({
             display: 'flex', alignItems: 'center', gap: 8,
             width: '100%', padding: '11px 12px', border: 'none',
             borderTop: results.length > 0 ? '1px solid var(--color-border-subtle)' : 'none',
-            background: noMatches ? 'rgba(3,28,89,0.05)' : '#fff',
+            background: noMatches ? 'rgba(0, 28, 53,0.05)' : '#fff',
             cursor: 'pointer', textAlign: 'left',
             fontFamily: 'var(--font-primary)',
             color: 'var(--color-accent-active)', fontWeight: 700, fontSize: 12.5,
             position: 'sticky', bottom: 0, zIndex: 1,
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(3,28,89,0.08)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = noMatches ? 'rgba(3,28,89,0.05)' : '#fff'; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0, 28, 53,0.08)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = noMatches ? 'rgba(0, 28, 53,0.05)' : '#fff'; }}
         >
           {noMatches ? <Sparkles size={13} /> : <Plus size={13} strokeWidth={2.4} />}
           <span>
@@ -236,7 +236,7 @@ export function IngredientRefPicker({
 
 function pickerKindChip(kind: 'master' | 'supplier' | 'made' | 'subrecipe'): React.CSSProperties {
   const tones: Record<typeof kind, { bg: string; color: string }> = {
-    master:    { bg: 'rgba(3,28,89,0.08)',   color: 'var(--color-accent-active)' },
+    master:    { bg: 'rgba(0, 28, 53,0.08)',   color: 'var(--color-accent-active)' },
     supplier:  { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' },
     made:      { bg: 'rgba(241,180,52,0.16)', color: 'var(--color-warning)' },
     subrecipe: { bg: 'rgba(82,170,150,0.18)', color: 'var(--color-success, #347262)' },

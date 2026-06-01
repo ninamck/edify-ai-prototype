@@ -4,40 +4,43 @@
 // together. Reachable from the sidebar (Performance → Notebook) and
 // from the "Note for Edify" card on the briefing panel.
 //
-// Layout: a two-column document.
+// Layout: a single reading column, ordered by what the operator
+// actually came here to do.
 //
-//   • Main column: today's compose at the top (voice/text + tags +
-//     Edify's cascade reply), followed by a reverse-chronological log
-//     of prior days. Each prior day carries the operator's note, the
-//     tags applied, Edify's response, and the outcome Edify has
-//     learned about since.
-//
-//   • Right rail: two streams Edify is keeping for the operator —
-//       1. "Themes you've mentioned" — recurring topics extracted
+//   1. Today's compose (voice/text + tags + Edify's cascade reply).
+//   2. The focal block — two sections side by side:
+//        • "Themes you've mentioned" — recurring topics extracted
 //          from the notes (Equipment, Weather, Team, etc.) with the
 //          count and a most-recent example. These exist because the
 //          operator told us about them.
-//       2. "What your data is telling us" — pattern callouts the
+//        • "What your data's telling us" — pattern callouts the
 //          system has detected on its own and wants the operator to
-//          weigh in on. Each one has a 1-tap "Add a note" so the
+//          weigh in on. Each has a 1-tap "Add a note" so the
 //          observation flows back into today's compose.
+//   3. A collapsed "Past entries" dropdown — the running log of
+//      prior days. Useful when you specifically want to revisit
+//      something, otherwise out of the way.
 //
 // Together they answer the question Ed kept asking in Kallie's
 // transcript: "how do we capture the stuff integrations can't see?"
 // — by giving the operator a place to put it, and Edify a place to
 // reflect what it's been picking up alongside.
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Mic,
   Square,
   CheckCircle2,
   Pencil,
   Tag,
-  Sparkles,
   ChevronRight,
+  ChevronDown,
   Plus,
   X,
+  BookOpen,
+  Mail,
+  Send,
+  Paperclip,
 } from 'lucide-react';
 
 type EntryTag = 'Equipment' | 'Weather' | 'Team' | 'Customer' | 'Supplier' | 'Compliance';
@@ -119,38 +122,68 @@ const THEMES: { tag: EntryTag; count: number; lastSeen: string; preview: string 
   { tag: 'Customer', count: 5, lastSeen: 'Tue 19 May', preview: 'Two regulars left at the lunch queue' },
 ];
 
+type DataSignalAction =
+  | { kind: 'note'; prompt: string; suggestedTags: EntryTag[] }
+  | {
+      kind: 'email';
+      to: string;
+      toRole: string;
+      subject: string;
+      body: string;
+      attachments: string[];
+      sendCtaLabel: string;
+    };
+
 interface DataSignal {
   id: string;
   headline: string;
   detail: string;
-  prompt: string;
-  suggestedTags: EntryTag[];
+  action: DataSignalAction;
 }
 
 const DATA_SIGNALS: DataSignal[] = [
   {
     id: 's-fridge2',
-    headline: 'Fridge 2 has run 1.5°C warmer on Wednesday closes for 4 weeks',
+    headline: 'Fridge 2 has broken 3 times this month — costing you £820 so far',
     detail:
-      "Still inside safe range but consistent. Not enough to alert on, but you've also mentioned the noise twice. Worth a sentence today?",
-    prompt: "Fridge 2 has been running warmer on Wednesday closes — ",
-    suggestedTags: ['Equipment'],
+      "Three engineer call-outs on 04, 11 and 22 May (£260), spoiled stock from the 22 May warm-period (£420), and 4 hours of lost trading on the rebuild (£140). Each visit closed as 'within tolerance' — but the pattern's getting more expensive. I've drafted the escalation to Cheryl with the cost line and the sensor evidence attached.",
+    action: {
+      kind: 'email',
+      to: 'Cheryl Davies',
+      toRole: 'Area Manager',
+      subject: 'Fridge 2 — third failure this month, escalation request',
+      body:
+        "Hi Cheryl,\n\nFridge 2 at the shop has now failed three times in May (04, 11 and 22) at a combined cost of £820 — £260 in engineer call-outs, £420 in written-off stock from the 22 May warm-period, and £140 of lost trading on the rebuild.\n\nThe closing temp logs on each occasion are attached. The engineer has cleared the unit each time as 'within tolerance' but the pattern is consistent and getting more expensive.\n\nCan we get the unit replaced under the existing service contract before the next failure?\n\nThanks,",
+      attachments: [
+        'Sensor log · 04 May',
+        'Sensor log · 11 May',
+        'Sensor log · 22 May',
+        'Stock write-off · 22 May',
+      ],
+      sendCtaLabel: 'Send to Cheryl',
+    },
   },
   {
     id: 's-tuesday-cover',
     headline: 'Tuesday lunch covers landed +14% above forecast 3 weeks running',
     detail:
       "Your forecast is treating these as outliers. If you've noticed a reason — a regular group, a local event — I can bake it in.",
-    prompt: "Tuesday lunch has been busier than forecast because ",
-    suggestedTags: ['Customer'],
+    action: {
+      kind: 'note',
+      prompt: "Tuesday lunch has been busier than forecast because ",
+      suggestedTags: ['Customer'],
+    },
   },
   {
     id: 's-pastry-3pm',
     headline: 'Pastry waste after 3pm up 40% — same pattern, 3 days running',
     detail:
       "Maps to an over-pull on the morning batch. A note from you on whether this is a one-off ramp or a new normal would help me right-size tomorrow's prep.",
-    prompt: "The pastry waste after 3pm is happening because ",
-    suggestedTags: ['Team', 'Customer'],
+    action: {
+      kind: 'note',
+      prompt: "The pastry waste after 3pm is happening because ",
+      suggestedTags: ['Team', 'Customer'],
+    },
   },
 ];
 
@@ -167,6 +200,9 @@ export default function NotebookPage() {
   } | null>(null);
   const [filterTag, setFilterTag] = useState<EntryTag | null>(null);
   const [dismissedSignals, setDismissedSignals] = useState<Set<string>>(new Set());
+  const [sentEmailSignals, setSentEmailSignals] = useState<Set<string>>(new Set());
+  const [openEmailSignalId, setOpenEmailSignalId] = useState<string | null>(null);
+  const [pastExpanded, setPastExpanded] = useState(false);
 
   const today = useMemo(() => {
     return new Intl.DateTimeFormat('en-GB', {
@@ -175,6 +211,22 @@ export default function NotebookPage() {
       month: 'long',
     }).format(new Date());
   }, []);
+
+  // Auto-open the past-entries section when the operator filters by a
+  // theme — they're explicitly going looking for something.
+  useEffect(() => {
+    if (filterTag) setPastExpanded(true);
+  }, [filterTag]);
+
+  // Close the email-draft modal on ESC.
+  useEffect(() => {
+    if (!openEmailSignalId) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpenEmailSignalId(null);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [openEmailSignalId]);
 
   function toggleTag(t: EntryTag) {
     setActiveTags((prev) => {
@@ -206,10 +258,20 @@ export default function NotebookPage() {
     setSavedToday({ note, tags, reply });
   }
 
-  function loadFromSignal(s: DataSignal) {
-    setTextNote(s.prompt);
-    setActiveTags(new Set(s.suggestedTags));
+  function loadNoteFromSignal(s: DataSignal) {
+    if (s.action.kind !== 'note') return;
+    setTextNote(s.action.prompt);
+    setActiveTags(new Set(s.action.suggestedTags));
     setRecordState('idle');
+  }
+
+  function sendDraftedEmail(id: string) {
+    setSentEmailSignals((prev) => {
+      const n = new Set(prev);
+      n.add(id);
+      return n;
+    });
+    setOpenEmailSignalId(null);
   }
 
   function dismissSignal(id: string) {
@@ -229,336 +291,275 @@ export default function NotebookPage() {
   return (
     <div
       style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) 320px',
-        gap: 24,
-        padding: '24px 28px 64px',
-        maxWidth: 1280,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 28,
+        padding: '32px 32px 80px',
+        maxWidth: 1040,
         margin: '0 auto',
-        alignItems: 'start',
       }}
     >
-      {/* ─── MAIN COLUMN ────────────────────────────────────────────────── */}
-      <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 22,
-              fontWeight: 700,
-              color: 'var(--color-text-primary)',
-              fontFamily: 'var(--font-primary)',
-            }}
-          >
-            Notebook
-          </h1>
-          <p
-            style={{
-              margin: '4px 0 0',
-              fontSize: 13,
-              color: 'var(--color-text-secondary)',
-              lineHeight: 1.5,
-              maxWidth: 560,
-            }}
-          >
-            Tell Edify what happened today that the numbers won&apos;t show. It threads
-            through everything you said before and lines up what the data
-            noticed on its own.
-          </p>
-        </div>
+      {/* ─── HEADER ──────────────────────────────────────────────────────── */}
+      <div>
+        <h1
+          style={{
+            margin: 0,
+            fontSize: 30,
+            fontWeight: 700,
+            letterSpacing: '-0.01em',
+            color: 'var(--color-text-primary)',
+            fontFamily: 'var(--font-primary)',
+          }}
+        >
+          Notebook
+        </h1>
+        <p
+          style={{
+            margin: '6px 0 0',
+            fontSize: 16,
+            color: 'var(--color-text-secondary)',
+            lineHeight: 1.55,
+            maxWidth: 640,
+          }}
+        >
+          Tell Edify what happened today that the numbers won&apos;t show. It threads
+          through everything you said before and lines up what the data
+          noticed on its own.
+        </p>
+      </div>
 
-        {filterTag && (
-          <div
+      {/* ─── TODAY'S COMPOSE ─────────────────────────────────────────────── */}
+      <article
+        style={{
+          padding: 22,
+          borderRadius: 14,
+          background: '#fff',
+          border: '1px solid var(--color-border-subtle)',
+          boxShadow: '0 1px 4px rgba(0, 28, 53,0.06)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 14,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+          <span
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '6px 10px',
-              background: 'rgba(0,28,53,0.05)',
-              border: '1px solid rgba(0,28,53,0.18)',
-              borderRadius: 999,
               fontSize: 12,
-              fontWeight: 600,
+              fontWeight: 700,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
               color: 'var(--color-accent-active)',
-              alignSelf: 'flex-start',
             }}
           >
-            <Tag size={12} strokeWidth={2.2} />
-            Filtered by {filterTag}
+            Today · {today}
+          </span>
+          {savedToday && (
             <button
               type="button"
-              onClick={() => setFilterTag(null)}
-              aria-label="Clear filter"
+              onClick={() => {
+                setSavedToday(null);
+                setRecordState('idle');
+                setTextNote('');
+                setActiveTags(new Set());
+              }}
               style={{
                 all: 'unset',
                 cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: 600,
+                color: 'var(--color-text-muted)',
                 display: 'inline-flex',
-                marginLeft: 2,
-                color: 'var(--color-accent-active)',
+                alignItems: 'center',
+                gap: 4,
               }}
             >
-              <X size={12} strokeWidth={2.4} />
+              <Plus size={13} strokeWidth={2.2} /> Add another
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* ─── Today's compose ──────────────────────────────────────────── */}
-        {!filterTag && (
-          <article
-            style={{
-              padding: 18,
-              borderRadius: 12,
-              background: '#fff',
-              border: '1px solid var(--color-border-subtle)',
-              boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
-              <span
+        {!savedToday && (
+          <>
+            <textarea
+              value={textNote}
+              onChange={(e) => setTextNote(e.target.value)}
+              placeholder="What happened in the shop today the numbers won't show?"
+              rows={5}
+              style={{
+                width: '100%',
+                padding: '14px 16px',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: 10,
+                fontFamily: 'var(--font-primary)',
+                fontSize: 16,
+                lineHeight: 1.55,
+                color: 'var(--color-text-primary)',
+                resize: 'vertical',
+                minHeight: 120,
+                background: '#fff',
+                boxSizing: 'border-box',
+              }}
+            />
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 10,
+              }}
+            >
+              <button
+                type="button"
+                onClick={recordState === 'recording' ? stopRecording : startRecording}
                 style={{
-                  fontSize: 11,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '9px 16px',
+                  borderRadius: 8,
+                  border:
+                    recordState === 'recording'
+                      ? '1px solid var(--color-accent-quinn, #FF0058)'
+                      : '1px solid var(--color-border)',
+                  background:
+                    recordState === 'recording'
+                      ? 'rgba(255,0,88,0.08)'
+                      : '#fff',
+                  color:
+                    recordState === 'recording'
+                      ? 'var(--color-accent-quinn, #FF0058)'
+                      : 'var(--color-text-primary)',
+                  fontSize: 13,
                   fontWeight: 700,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: 'var(--color-accent-active)',
+                  fontFamily: 'var(--font-primary)',
+                  cursor: 'pointer',
                 }}
               >
-                Today · {today}
+                {recordState === 'recording' ? (
+                  <Square size={13} strokeWidth={2.4} fill="currentColor" />
+                ) : (
+                  <Mic size={13} strokeWidth={2.2} />
+                )}
+                {recordState === 'recording' ? 'Stop & transcribe' : 'Record voice'}
+              </button>
+
+              <span
+                style={{
+                  fontSize: 13,
+                  color: 'var(--color-text-muted)',
+                  fontWeight: 500,
+                }}
+              >
+                or type freely above
               </span>
-              {savedToday && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSavedToday(null);
-                    setRecordState('idle');
-                    setTextNote('');
-                    setActiveTags(new Set());
-                  }}
-                  style={{
-                    all: 'unset',
-                    cursor: 'pointer',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: 'var(--color-text-muted)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                  }}
-                >
-                  <Plus size={12} strokeWidth={2.2} /> Add another
-                </button>
-              )}
+
+              <div style={{ flex: 1 }} />
+
+              <button
+                type="button"
+                onClick={saveNote}
+                disabled={!textNote.trim()}
+                style={{
+                  padding: '9px 18px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: textNote.trim()
+                    ? 'var(--color-accent-active)'
+                    : 'var(--color-bg-hover)',
+                  color: textNote.trim() ? '#fff' : 'var(--color-text-muted)',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-primary)',
+                  cursor: textNote.trim() ? 'pointer' : 'not-allowed',
+                }}
+              >
+                Send to Edify
+              </button>
             </div>
 
-            {!savedToday && (
-              <>
-                <textarea
-                  value={textNote}
-                  onChange={(e) => setTextNote(e.target.value)}
-                  placeholder="What happened in the shop today the numbers won't show?"
-                  rows={5}
-                  style={{
-                    width: '100%',
-                    padding: '12px 14px',
-                    border: '1px solid var(--color-border-subtle)',
-                    borderRadius: 10,
-                    fontFamily: 'var(--font-primary)',
-                    fontSize: 14,
-                    lineHeight: 1.55,
-                    color: 'var(--color-text-primary)',
-                    resize: 'vertical',
-                    minHeight: 110,
-                    background: '#fff',
-                    boxSizing: 'border-box',
-                  }}
-                />
-
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    gap: 10,
-                  }}
-                >
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {ALL_TAGS.map((t) => {
+                const active = activeTags.has(t);
+                return (
                   <button
+                    key={t}
                     type="button"
-                    onClick={recordState === 'recording' ? stopRecording : startRecording}
+                    onClick={() => toggleTag(t)}
                     style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '8px 14px',
-                      borderRadius: 8,
-                      border:
-                        recordState === 'recording'
-                          ? '1px solid var(--color-accent-quinn, #FF0058)'
-                          : '1px solid var(--color-border)',
-                      background:
-                        recordState === 'recording'
-                          ? 'rgba(255,0,88,0.08)'
-                          : '#fff',
-                      color:
-                        recordState === 'recording'
-                          ? 'var(--color-accent-quinn, #FF0058)'
-                          : 'var(--color-text-primary)',
-                      fontSize: 12,
-                      fontWeight: 700,
+                      padding: '6px 13px',
+                      borderRadius: 999,
+                      border: active
+                        ? '1px solid var(--color-accent-active)'
+                        : '1px solid var(--color-border-subtle)',
+                      background: active ? 'var(--color-accent-active)' : '#fff',
+                      color: active ? '#fff' : 'var(--color-text-secondary)',
+                      fontSize: 12.5,
+                      fontWeight: 600,
                       fontFamily: 'var(--font-primary)',
                       cursor: 'pointer',
                     }}
                   >
-                    {recordState === 'recording' ? (
-                      <Square size={12} strokeWidth={2.4} fill="currentColor" />
-                    ) : (
-                      <Mic size={12} strokeWidth={2.2} />
-                    )}
-                    {recordState === 'recording' ? 'Stop & transcribe' : 'Record voice'}
+                    {t}
                   </button>
-
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: 'var(--color-text-muted)',
-                      fontWeight: 500,
-                    }}
-                  >
-                    or type freely above
-                  </span>
-
-                  <div style={{ flex: 1 }} />
-
-                  <button
-                    type="button"
-                    onClick={saveNote}
-                    disabled={!textNote.trim()}
-                    style={{
-                      padding: '8px 16px',
-                      borderRadius: 8,
-                      border: 'none',
-                      background: textNote.trim()
-                        ? 'var(--color-accent-active)'
-                        : 'var(--color-bg-hover)',
-                      color: textNote.trim() ? '#fff' : 'var(--color-text-muted)',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      fontFamily: 'var(--font-primary)',
-                      cursor: textNote.trim() ? 'pointer' : 'not-allowed',
-                    }}
-                  >
-                    Send to Edify
-                  </button>
-                </div>
-
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {ALL_TAGS.map((t) => {
-                    const active = activeTags.has(t);
-                    return (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => toggleTag(t)}
-                        style={{
-                          padding: '5px 11px',
-                          borderRadius: 999,
-                          border: active
-                            ? '1px solid var(--color-accent-active)'
-                            : '1px solid var(--color-border-subtle)',
-                          background: active ? 'var(--color-accent-active)' : '#fff',
-                          color: active ? '#fff' : 'var(--color-text-secondary)',
-                          fontSize: 11,
-                          fontWeight: 600,
-                          fontFamily: 'var(--font-primary)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {t}
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-
-            {savedToday && (
-              <SavedToday saved={savedToday} />
-            )}
-          </article>
+                );
+              })}
+            </div>
+          </>
         )}
 
-        {/* ─── Past entries (running document) ──────────────────────────── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {visibleEntries.length === 0 && (
-            <p
-              style={{
-                fontSize: 13,
-                color: 'var(--color-text-muted)',
-                fontStyle: 'italic',
-                padding: '20px 0',
-              }}
-            >
-              No entries tagged {filterTag}.
-            </p>
-          )}
-          {visibleEntries.map((entry) => (
-            <PastEntryBlock key={entry.id} entry={entry} onTagClick={setFilterTag} />
-          ))}
-        </div>
-      </div>
+        {savedToday && <SavedToday saved={savedToday} />}
+      </article>
 
-      {/* ─── RIGHT RAIL ─────────────────────────────────────────────────── */}
-      <aside
+      {/* ─── FOCAL BLOCK: themes + data signals ──────────────────────────── */}
+      <div
         style={{
-          position: 'sticky',
-          top: 24,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 14,
-          minWidth: 0,
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: 20,
+          alignItems: 'start',
         }}
       >
+        {/* ── Themes ─────────────────────────────────────────────────── */}
         <section
           style={{
-            padding: 14,
-            borderRadius: 12,
+            padding: 20,
+            borderRadius: 14,
             background: '#fff',
             border: '1px solid var(--color-border-subtle)',
-            boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
+            boxShadow: '0 1px 4px rgba(0, 28, 53,0.06)',
           }}
         >
           <header
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 7,
-              marginBottom: 10,
+              gap: 8,
+              marginBottom: 4,
             }}
           >
-            <Pencil size={12} strokeWidth={2.2} color="var(--color-text-secondary)" />
-            <span
+            <Pencil size={15} strokeWidth={2.2} color="var(--color-text-secondary)" />
+            <h2
               style={{
-                fontSize: 11,
+                margin: 0,
+                fontSize: 17,
                 fontWeight: 700,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                color: 'var(--color-text-secondary)',
+                color: 'var(--color-text-primary)',
+                letterSpacing: '-0.005em',
               }}
             >
               Themes you&apos;ve mentioned
-            </span>
+            </h2>
           </header>
           <p
             style={{
-              margin: '0 0 12px',
-              fontSize: 11.5,
+              margin: '0 0 16px',
+              fontSize: 13.5,
               color: 'var(--color-text-muted)',
               lineHeight: 1.5,
             }}
           >
-            Pulled from your last 30 days of notes.
+            Pulled from your last 30 days of notes. Tap one to see the entries behind it.
           </p>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {THEMES.map((t) => (
@@ -571,10 +572,10 @@ export default function NotebookPage() {
                     cursor: 'pointer',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 2,
+                    gap: 3,
                     width: '100%',
-                    padding: '8px 10px',
-                    borderRadius: 8,
+                    padding: '11px 13px',
+                    borderRadius: 10,
                     border:
                       filterTag === t.tag
                         ? '1px solid var(--color-accent-active)'
@@ -584,29 +585,21 @@ export default function NotebookPage() {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-text-primary)' }}>
                       {t.tag}
                     </span>
-                    <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600 }}>
-                      {t.count} mentions
+                    <span style={{ fontSize: 12.5, color: 'var(--color-text-muted)', fontWeight: 600 }}>
+                      {t.count} mentions · {t.lastSeen}
                     </span>
                   </div>
                   <span
                     style={{
-                      fontSize: 11.5,
+                      fontSize: 13.5,
                       color: 'var(--color-text-secondary)',
-                      lineHeight: 1.45,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
+                      lineHeight: 1.5,
                     }}
                   >
                     {t.preview}
-                  </span>
-                  <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)', marginTop: 2 }}>
-                    Last · {t.lastSeen}
                   </span>
                 </button>
               </li>
@@ -614,40 +607,59 @@ export default function NotebookPage() {
           </ul>
         </section>
 
+        {/* ── What your data's telling us ────────────────────────────── */}
         <section
           style={{
-            padding: 14,
-            borderRadius: 12,
+            padding: 20,
+            borderRadius: 14,
             background: '#fff',
             border: '1px solid var(--color-border-subtle)',
-            boxShadow: '0 1px 4px rgba(58,48,40,0.06)',
+            boxShadow: '0 1px 4px rgba(0, 28, 53,0.06)',
           }}
         >
           <header
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 7,
-              marginBottom: 10,
+              gap: 8,
+              marginBottom: 4,
             }}
           >
-            <Sparkles size={12} strokeWidth={2.2} color="var(--color-accent-active)" />
             <span
+              role="img"
+              aria-label="Edify"
               style={{
-                fontSize: 11,
+                display: 'inline-block',
+                width: 11,
+                height: 18,
+                flexShrink: 0,
+                backgroundColor: 'var(--color-accent-active)',
+                WebkitMaskImage: 'url(/edify-logo.svg)',
+                maskImage: 'url(/edify-logo.svg)',
+                WebkitMaskRepeat: 'no-repeat',
+                maskRepeat: 'no-repeat',
+                WebkitMaskPosition: 'center',
+                maskPosition: 'center',
+                WebkitMaskSize: 'contain',
+                maskSize: 'contain',
+              }}
+            />
+            <h2
+              style={{
+                margin: 0,
+                fontSize: 17,
                 fontWeight: 700,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                color: 'var(--color-accent-active)',
+                color: 'var(--color-text-primary)',
+                letterSpacing: '-0.005em',
               }}
             >
               What your data&apos;s telling us
-            </span>
+            </h2>
           </header>
           <p
             style={{
-              margin: '0 0 12px',
-              fontSize: 11.5,
+              margin: '0 0 16px',
+              fontSize: 13.5,
               color: 'var(--color-text-muted)',
               lineHeight: 1.5,
             }}
@@ -656,89 +668,152 @@ export default function NotebookPage() {
           </p>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
             {visibleSignals.length === 0 && (
-              <li style={{ fontSize: 11.5, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+              <li style={{ fontSize: 13.5, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
                 Nothing new today. I&apos;ll keep watching.
               </li>
             )}
             {visibleSignals.map((s) => (
-              <li
+              <DataSignalCard
                 key={s.id}
-                style={{
-                  padding: 10,
-                  borderRadius: 8,
-                  border: '1px solid var(--color-border-subtle)',
-                  background: 'var(--color-bg-hover)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 6,
-                }}
-              >
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: 'var(--color-text-primary)',
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {s.headline}
-                </p>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: 11.5,
-                    color: 'var(--color-text-secondary)',
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {s.detail}
-                </p>
-                <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
-                  <button
-                    type="button"
-                    onClick={() => loadFromSignal(s)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 3,
-                      padding: '4px 10px',
-                      borderRadius: 6,
-                      border: 'none',
-                      background: 'var(--color-accent-active)',
-                      color: '#fff',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      fontFamily: 'var(--font-primary)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Add a note
-                    <ChevronRight size={11} strokeWidth={2.4} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => dismissSignal(s.id)}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: 6,
-                      border: '1px solid var(--color-border-subtle)',
-                      background: '#fff',
-                      color: 'var(--color-text-muted)',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      fontFamily: 'var(--font-primary)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Not now
-                  </button>
-                </div>
-              </li>
+                signal={s}
+                sent={sentEmailSignals.has(s.id)}
+                onAddNote={() => loadNoteFromSignal(s)}
+                onOpenEmail={() => setOpenEmailSignalId(s.id)}
+                onDismiss={() => dismissSignal(s.id)}
+              />
             ))}
           </ul>
         </section>
-      </aside>
+      </div>
+
+      {/* ─── PAST ENTRIES (collapsed dropdown) ───────────────────────────── */}
+      <section
+        style={{
+          background: '#fff',
+          border: '1px solid var(--color-border-subtle)',
+          borderRadius: 14,
+          boxShadow: '0 1px 4px rgba(0, 28, 53,0.06)',
+          overflow: 'hidden',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            if (filterTag) {
+              setFilterTag(null);
+              setPastExpanded(false);
+            } else {
+              setPastExpanded((v) => !v);
+            }
+          }}
+          style={{
+            all: 'unset',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            width: '100%',
+            padding: '16px 20px',
+            boxSizing: 'border-box',
+          }}
+        >
+          <BookOpen size={16} strokeWidth={2.2} color="var(--color-text-secondary)" />
+          <span
+            style={{
+              fontSize: 15,
+              fontWeight: 700,
+              color: 'var(--color-text-primary)',
+            }}
+          >
+            Past entries
+          </span>
+          <span
+            style={{
+              fontSize: 13,
+              color: 'var(--color-text-muted)',
+              fontWeight: 500,
+            }}
+          >
+            {filterTag
+              ? `${visibleEntries.length} tagged ${filterTag}`
+              : `${PAST_ENTRIES.length} entries · 13–19 May`}
+          </span>
+          <div style={{ flex: 1 }} />
+          {filterTag ? (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '5px 10px',
+                background: 'rgba(0,28,53,0.05)',
+                border: '1px solid rgba(0,28,53,0.18)',
+                borderRadius: 999,
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--color-accent-active)',
+              }}
+            >
+              <Tag size={11} strokeWidth={2.4} />
+              {filterTag}
+              <X size={11} strokeWidth={2.4} />
+            </span>
+          ) : (
+            <ChevronDown
+              size={18}
+              strokeWidth={2.2}
+              color="var(--color-text-muted)"
+              style={{
+                transform: pastExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 160ms ease',
+              }}
+            />
+          )}
+        </button>
+
+        {(pastExpanded || filterTag) && (
+          <div
+            style={{
+              borderTop: '1px solid var(--color-border-subtle)',
+              padding: 20,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 14,
+              background: 'var(--color-bg-surface)',
+            }}
+          >
+            {visibleEntries.length === 0 && (
+              <p
+                style={{
+                  fontSize: 14,
+                  color: 'var(--color-text-muted)',
+                  fontStyle: 'italic',
+                  margin: 0,
+                  padding: '8px 0',
+                }}
+              >
+                No entries tagged {filterTag}.
+              </p>
+            )}
+            {visibleEntries.map((entry) => (
+              <PastEntryBlock key={entry.id} entry={entry} onTagClick={setFilterTag} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ─── EMAIL DRAFT MODAL ───────────────────────────────────────────── */}
+      {openEmailSignalId && (() => {
+        const sig = DATA_SIGNALS.find((s) => s.id === openEmailSignalId);
+        if (!sig || sig.action.kind !== 'email') return null;
+        return (
+          <EmailDraftModal
+            action={sig.action}
+            onClose={() => setOpenEmailSignalId(null)}
+            onSend={() => sendDraftedEmail(sig.id)}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -754,23 +829,23 @@ function SavedToday({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div
         style={{
-          padding: '10px 12px',
-          borderRadius: 8,
+          padding: '12px 14px',
+          borderRadius: 10,
           background: 'var(--color-bg-hover)',
           border: '1px solid var(--color-border-subtle)',
-          fontSize: 13,
+          fontSize: 15,
           color: 'var(--color-text-primary)',
           lineHeight: 1.55,
         }}
       >
         <div
           style={{
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 700,
             letterSpacing: '0.06em',
             textTransform: 'uppercase',
             color: 'var(--color-text-muted)',
-            marginBottom: 4,
+            marginBottom: 5,
           }}
         >
           You {saved.tags.length > 0 ? `· ${saved.tags.join(' · ')}` : ''}
@@ -779,11 +854,11 @@ function SavedToday({
       </div>
       <div
         style={{
-          padding: '10px 12px',
-          borderRadius: 8,
+          padding: '12px 14px',
+          borderRadius: 10,
           background: 'rgba(0,28,53,0.05)',
           border: '1px solid rgba(0,28,53,0.18)',
-          fontSize: 13,
+          fontSize: 15,
           color: 'var(--color-text-primary)',
           lineHeight: 1.55,
         }}
@@ -793,17 +868,416 @@ function SavedToday({
             display: 'flex',
             alignItems: 'center',
             gap: 5,
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 700,
             letterSpacing: '0.06em',
             textTransform: 'uppercase',
             color: 'var(--color-accent-active)',
-            marginBottom: 4,
+            marginBottom: 5,
           }}
         >
-          <CheckCircle2 size={11} strokeWidth={2.4} /> Edify
+          <CheckCircle2 size={12} strokeWidth={2.4} /> Edify
         </div>
         {saved.reply}
+      </div>
+    </div>
+  );
+}
+
+function DataSignalCard({
+  signal,
+  sent,
+  onAddNote,
+  onOpenEmail,
+  onDismiss,
+}: {
+  signal: DataSignal;
+  sent: boolean;
+  onAddNote: () => void;
+  onOpenEmail: () => void;
+  onDismiss: () => void;
+}) {
+  const isEmail = signal.action.kind === 'email';
+
+  return (
+    <li
+      style={{
+        padding: 14,
+        borderRadius: 10,
+        border: isEmail
+          ? '1px solid rgba(196,30,58,0.45)'
+          : '1px solid var(--color-border-subtle)',
+        background: '#fff',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+      }}
+    >
+      <p
+        style={{
+          margin: 0,
+          fontSize: 14.5,
+          fontWeight: 700,
+          color: 'var(--color-text-primary)',
+          lineHeight: 1.4,
+        }}
+      >
+        {signal.headline}
+      </p>
+      <p
+        style={{
+          margin: 0,
+          fontSize: 13.5,
+          color: 'var(--color-text-secondary)',
+          lineHeight: 1.55,
+        }}
+      >
+        {signal.detail}
+      </p>
+
+      {/* ── Sent confirmation (email action only, after Send) ────────── */}
+      {signal.action.kind === 'email' && sent && (
+        <SentEmailConfirmation action={signal.action} />
+      )}
+
+      {/* ── Actions row ─────────────────────────────────────────────── */}
+      {!sent && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
+          {signal.action.kind === 'email' ? (
+            <button
+              type="button"
+              onClick={onOpenEmail}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 14px',
+                borderRadius: 7,
+                border: 'none',
+                background: 'var(--color-accent-active)',
+                color: '#fff',
+                fontSize: 13,
+                fontWeight: 700,
+                fontFamily: 'var(--font-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              <Mail size={13} strokeWidth={2.4} />
+              Review draft email
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onAddNote}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 3,
+                padding: '6px 12px',
+                borderRadius: 7,
+                border: 'none',
+                background: 'var(--color-accent-active)',
+                color: '#fff',
+                fontSize: 12.5,
+                fontWeight: 700,
+                fontFamily: 'var(--font-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              Add a note
+              <ChevronRight size={12} strokeWidth={2.4} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onDismiss}
+            style={{
+              padding: signal.action.kind === 'email' ? '8px 12px' : '6px 12px',
+              borderRadius: 7,
+              border: '1px solid var(--color-border-subtle)',
+              background: '#fff',
+              color: 'var(--color-text-muted)',
+              fontSize: 12.5,
+              fontWeight: 600,
+              fontFamily: 'var(--font-primary)',
+              cursor: 'pointer',
+            }}
+          >
+            Not now
+          </button>
+        </div>
+      )}
+    </li>
+  );
+}
+
+function EmailDraftModal({
+  action,
+  onClose,
+  onSend,
+}: {
+  action: Extract<DataSignalAction, { kind: 'email' }>;
+  onClose: () => void;
+  onSend: () => void;
+}) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1000,
+        background: 'rgba(15, 18, 25, 0.42)',
+        backdropFilter: 'blur(2px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Drafted email to manager"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: 620,
+          maxHeight: 'calc(100vh - 48px)',
+          background: '#fff',
+          borderRadius: 14,
+          boxShadow: '0 24px 60px rgba(15,18,25,0.32)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '14px 18px',
+            borderBottom: '1px solid var(--color-border-subtle)',
+            background: 'var(--color-bg-hover)',
+          }}
+        >
+          <Mail size={15} strokeWidth={2.4} color="var(--color-text-secondary)" />
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: 'var(--color-text-secondary)',
+            }}
+          >
+            Drafted by Edify · ready to send
+          </span>
+          <div style={{ flex: 1 }} />
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              all: 'unset',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              padding: 4,
+              borderRadius: 6,
+              color: 'var(--color-text-muted)',
+            }}
+          >
+            <X size={16} strokeWidth={2.4} />
+          </button>
+        </div>
+
+        {/* Body — scrollable if content gets long */}
+        <div style={{ overflowY: 'auto', padding: '18px 22px' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'auto 1fr',
+              gap: '8px 14px',
+              fontSize: 14,
+              color: 'var(--color-text-primary)',
+              lineHeight: 1.45,
+              paddingBottom: 14,
+              borderBottom: '1px solid var(--color-border-subtle)',
+            }}
+          >
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              To
+            </span>
+            <span style={{ fontWeight: 600 }}>
+              {action.to}{' '}
+              <span style={{ fontWeight: 500, color: 'var(--color-text-muted)' }}>· {action.toRole}</span>
+            </span>
+
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Subject
+            </span>
+            <span style={{ fontWeight: 600 }}>{action.subject}</span>
+          </div>
+
+          <div
+            style={{
+              padding: '16px 0',
+              fontSize: 14.5,
+              color: 'var(--color-text-primary)',
+              lineHeight: 1.6,
+              whiteSpace: 'pre-wrap',
+            }}
+          >
+            {action.body}
+          </div>
+
+          {action.attachments.length > 0 && (
+            <div
+              style={{
+                paddingTop: 12,
+                borderTop: '1px solid var(--color-border-subtle)',
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  color: 'var(--color-text-muted)',
+                  marginRight: 4,
+                }}
+              >
+                <Paperclip size={12} strokeWidth={2.4} />
+                Attached
+              </span>
+              {action.attachments.map((a) => (
+                <span
+                  key={a}
+                  style={{
+                    padding: '5px 10px',
+                    borderRadius: 999,
+                    border: '1px solid var(--color-border-subtle)',
+                    background: 'var(--color-bg-hover)',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: 'var(--color-text-secondary)',
+                  }}
+                >
+                  {a}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer actions */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 8,
+            padding: '12px 18px',
+            borderTop: '1px solid var(--color-border-subtle)',
+            background: '#fff',
+          }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: '9px 14px',
+              borderRadius: 8,
+              border: '1px solid var(--color-border-subtle)',
+              background: '#fff',
+              color: 'var(--color-text-secondary)',
+              fontSize: 13,
+              fontWeight: 600,
+              fontFamily: 'var(--font-primary)',
+              cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onSend}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 7,
+              padding: '9px 16px',
+              borderRadius: 8,
+              border: 'none',
+              background: 'var(--color-accent-active)',
+              color: '#fff',
+              fontSize: 13,
+              fontWeight: 700,
+              fontFamily: 'var(--font-primary)',
+              cursor: 'pointer',
+            }}
+          >
+            <Send size={13} strokeWidth={2.4} />
+            {action.sendCtaLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SentEmailConfirmation({
+  action,
+}: {
+  action: Extract<DataSignalAction, { kind: 'email' }>;
+}) {
+  return (
+    <div
+      style={{
+        marginTop: 4,
+        padding: '11px 13px',
+        borderRadius: 10,
+        background: 'var(--color-bg-hover)',
+        border: '1px solid var(--color-border-subtle)',
+        display: 'flex',
+        gap: 9,
+        alignItems: 'flex-start',
+      }}
+    >
+      <CheckCircle2
+        size={15}
+        strokeWidth={2.4}
+        color="var(--color-accent-active)"
+        style={{ marginTop: 1, flexShrink: 0 }}
+      />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span
+          style={{
+            fontSize: 13.5,
+            fontWeight: 700,
+            color: 'var(--color-text-primary)',
+          }}
+        >
+          Sent to {action.to} · just now
+        </span>
+        <span
+          style={{
+            fontSize: 13,
+            color: 'var(--color-text-secondary)',
+            lineHeight: 1.5,
+          }}
+        >
+          I&apos;ll watch for her reply and log it against the Fridge 2 thread in your notebook.
+        </span>
       </div>
     </div>
   );
@@ -819,14 +1293,14 @@ function PastEntryBlock({
   return (
     <article
       style={{
-        padding: 16,
+        padding: 18,
         borderRadius: 12,
         background: '#fff',
         border: '1px solid var(--color-border-subtle)',
-        boxShadow: '0 1px 3px rgba(58,48,40,0.04)',
+        boxShadow: '0 1px 3px rgba(0, 28, 53,0.04)',
         display: 'flex',
         flexDirection: 'column',
-        gap: 10,
+        gap: 12,
       }}
     >
       <header
@@ -838,7 +1312,7 @@ function PastEntryBlock({
       >
         <span
           style={{
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: 700,
             letterSpacing: '0.06em',
             textTransform: 'uppercase',
@@ -854,7 +1328,7 @@ function PastEntryBlock({
           margin: 0,
           padding: '8px 0 8px 14px',
           borderLeft: '3px solid var(--color-border-subtle)',
-          fontSize: 14,
+          fontSize: 16,
           lineHeight: 1.6,
           color: 'var(--color-text-primary)',
           fontStyle: 'normal',
@@ -871,12 +1345,12 @@ function PastEntryBlock({
               type="button"
               onClick={() => onTagClick(t)}
               style={{
-                padding: '3px 9px',
+                padding: '4px 11px',
                 borderRadius: 999,
                 border: '1px solid var(--color-border-subtle)',
                 background: '#fff',
                 color: 'var(--color-text-secondary)',
-                fontSize: 10.5,
+                fontSize: 12,
                 fontWeight: 600,
                 fontFamily: 'var(--font-primary)',
                 cursor: 'pointer',
@@ -890,11 +1364,11 @@ function PastEntryBlock({
 
       <div
         style={{
-          padding: '10px 12px',
+          padding: '12px 14px',
           borderRadius: 8,
           background: 'rgba(0,28,53,0.05)',
           border: '1px solid rgba(0,28,53,0.18)',
-          fontSize: 12.5,
+          fontSize: 14,
           color: 'var(--color-text-primary)',
           lineHeight: 1.55,
         }}
@@ -904,15 +1378,15 @@ function PastEntryBlock({
             display: 'flex',
             alignItems: 'center',
             gap: 5,
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 700,
             letterSpacing: '0.06em',
             textTransform: 'uppercase',
             color: 'var(--color-accent-active)',
-            marginBottom: 4,
+            marginBottom: 5,
           }}
         >
-          <CheckCircle2 size={11} strokeWidth={2.4} /> Edify
+          <CheckCircle2 size={12} strokeWidth={2.4} /> Edify
         </div>
         {entry.edifyReply}
       </div>
@@ -920,20 +1394,20 @@ function PastEntryBlock({
       {entry.outcome && (
         <div
           style={{
-            padding: '8px 12px',
+            padding: '10px 14px',
             borderRadius: 8,
             background: 'rgba(26,92,58,0.06)',
             border: '1px solid rgba(26,92,58,0.18)',
-            fontSize: 12,
+            fontSize: 13.5,
             color: 'var(--color-text-primary)',
             lineHeight: 1.5,
             display: 'flex',
-            gap: 6,
+            gap: 8,
           }}
         >
           <span
             style={{
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: 700,
               letterSpacing: '0.06em',
               textTransform: 'uppercase',

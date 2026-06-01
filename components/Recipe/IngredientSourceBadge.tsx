@@ -26,7 +26,7 @@ import { findSupplier } from '@/components/Suppliers/store';
 type Tone = 'master' | 'supplier' | 'made' | 'subrecipe';
 
 const TONES: Record<Tone, { bg: string; color: string }> = {
-  master:    { bg: 'rgba(3,28,89,0.08)',    color: 'var(--color-accent-active)' },
+  master:    { bg: 'rgba(0, 28, 53,0.08)',    color: 'var(--color-accent-active)' },
   supplier:  { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' },
   made:      { bg: 'rgba(241,180,52,0.16)', color: 'var(--color-warning)' },
   subrecipe: { bg: 'rgba(82,170,150,0.18)', color: 'var(--color-success, #347262)' },

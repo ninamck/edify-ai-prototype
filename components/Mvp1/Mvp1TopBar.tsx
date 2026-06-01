@@ -29,7 +29,7 @@ export default function Mvp1TopBar({
         padding: '10px 16px 10px 12px',
         borderBottom: '2px solid rgba(217, 215, 212, 1)',
         background: '#ffffff',
-        boxShadow: '0 1px 0 rgba(58,48,40,0.08)',
+        boxShadow: '0 1px 0 rgba(0, 28, 53,0.08)',
         fontFamily: 'var(--font-primary)',
       }}
     >

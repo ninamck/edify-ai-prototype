@@ -26,35 +26,22 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-  Trash2,
-  Boxes,
-  ChefHat,
-  Settings2,
-  Utensils,
-  Truck,
   MessageSquare,
-  BarChart3,
-  Pin,
-  PinOff,
   X as XIcon,
-  ChevronRight,
-  RotateCcw,
-  Maximize2,
+  ArrowUpRight,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
   getTasks,
   subscribeTasks,
-  togglePin,
   removeTask,
-  formatRelativeTime,
   type Task,
   type TaskKind,
-  type TaskStatus,
 } from './taskHistoryStore';
 
-const TASK_RECENT_LIMIT = 6;
+const TASK_RECENT_LIMIT = 5;
 const TASK_RECENT_EXPANDED_LIMIT = 30;
 
 // ── Filter taxonomy ─────────────────────────────────────────────────
@@ -62,38 +49,25 @@ const TASK_RECENT_EXPANDED_LIMIT = 30;
 type Filter = 'all' | TaskKind;
 
 const FILTERS: { id: Filter; label: string }[] = [
-  { id: 'all',         label: 'All' },
-  { id: 'question',    label: 'Questions' },
-  { id: 'recipe-edit', label: 'Recipes' },
-  { id: 'stock',       label: 'Stock' },
-  { id: 'supplier',    label: 'Suppliers' },
-  { id: 'menu',        label: 'Menu' },
-  { id: 'production',  label: 'Production' },
-  { id: 'waste',       label: 'Waste' },
-  { id: 'chat',        label: 'Chat' },
+  { id: 'all',          label: 'All' },
+  { id: 'question',     label: 'Questions' },
+  { id: 'recipe-edit',  label: 'Recipes' },
+  { id: 'product-swap', label: 'Products' },
+  { id: 'stock',        label: 'Stock' },
+  { id: 'supplier',     label: 'Suppliers' },
+  { id: 'menu',         label: 'Menu' },
+  { id: 'production',   label: 'Production' },
+  { id: 'waste',        label: 'Waste' },
+  { id: 'chat',         label: 'Chat' },
 ];
 
-// ── Per-kind icon + accent ──────────────────────────────────────────
-
-const KIND_VISUALS: Record<TaskKind, { icon: LucideIcon; accent: string; bg: string }> = {
-  'waste':       { icon: Trash2,        accent: '#A8401C', bg: 'rgba(168, 64, 28, 0.10)' },
-  'stock':       { icon: Boxes,         accent: '#1F6B73', bg: 'rgba(31, 107, 115, 0.10)' },
-  'recipe-edit': { icon: ChefHat,       accent: '#2D6A4F', bg: 'rgba(45, 106, 79, 0.10)' },
-  'production':  { icon: Settings2,     accent: '#5A4A8A', bg: 'rgba(90, 74, 138, 0.10)' },
-  'menu':        { icon: Utensils,      accent: '#C16E2C', bg: 'rgba(193, 110, 44, 0.10)' },
-  'supplier':    { icon: Truck,         accent: '#1F4A8A', bg: 'rgba(31, 74, 138, 0.10)' },
-  'question':    { icon: BarChart3,     accent: '#28AFC9', bg: 'rgba(40, 175, 201, 0.10)' },
-  'chat':        { icon: MessageSquare, accent: '#5C6B73', bg: 'rgba(92, 107, 115, 0.10)' },
-};
-
-// ── Status pill copy ────────────────────────────────────────────────
-
-const STATUS_PILL: Record<TaskStatus, { label: string; bg: string; fg: string }> = {
-  pending:   { label: 'In progress', bg: 'rgba(193, 130, 28, 0.14)', fg: '#7C5410' },
-  completed: { label: 'Done',        bg: 'rgba(45, 106, 79, 0.14)',  fg: '#22573F' },
-  cancelled: { label: 'Cancelled',   bg: 'rgba(58, 48, 40, 0.08)',   fg: 'var(--color-text-muted)' },
-  undone:    { label: 'Undone',      bg: 'rgba(58, 48, 40, 0.08)',   fg: 'var(--color-text-muted)' },
-};
+// Every row in this list is, conceptually, a saved chat with the
+// agent. We use a single speech-bubble glyph for all of them — the
+// per-kind differentiation lives in the Suggested column's action
+// icons (ChefHat, BarChart3, etc.) and in the drawer's filter chips.
+// Mixing kind-specific icons here was making the chats column read
+// as "another row of actions" instead of "things I've talked about".
+const CHAT_ICON: LucideIcon = MessageSquare;
 
 // ── Public component ────────────────────────────────────────────────
 
@@ -105,13 +79,20 @@ export interface TaskHistoryListProps {
   /** Container hint — controls the default expanded state. The home
    *  surface keeps it tight; the drawer pre-expands. */
   defaultExpanded?: boolean;
-  /** When set, an "Open full history" link surfaces in the section
-   *  header. Used by the inline list to launch the drawer. */
+  /** When set, the foot "show more" button opens the side drawer
+   *  instead of routing to /activity. The inline command-centre
+   *  list passes this so the user stays in the chat context; the
+   *  drawer itself omits it (you're already in the drawer) and the
+   *  button falls back to launching the full /activity page. */
   onExpand?: () => void;
   /** When set, this fires after a task is navigated to via its href.
    *  The drawer uses this to dismiss itself so the user lands on the
    *  deep-link cleanly without an open overlay. */
   onCloseAfterNavigate?: () => void;
+  /** Override the uppercase section header text. The command-centre
+   *  inline list passes "Recent chats" to match the Notion-style
+   *  two-column treatment; the drawer keeps the default "Recent". */
+  sectionLabel?: string;
 }
 
 export default function TaskHistoryList({
@@ -119,116 +100,118 @@ export default function TaskHistoryList({
   defaultExpanded = false,
   onExpand,
   onCloseAfterNavigate,
+  sectionLabel = 'Recent',
 }: TaskHistoryListProps) {
+  const router = useRouter();
   const tasks = useSubscribedTasks();
   const [filter, setFilter] = useState<Filter>('all');
-  const [showAll, setShowAll] = useState<boolean>(defaultExpanded);
 
-  // Sort & partition by filter + pinned status. Sort by recency
-  // (completedAt > startedAt) so the most recently touched items sit
-  // at the top of each section.
-  const { pinned, recent, allCount, kindCounts } = useMemo(() => {
+  // Inline (command-centre) vs drawer view. The inline list is the
+  // glance view — no filters. The drawer keeps the kind filters
+  // for power-user slicing.
+  const isInline = !defaultExpanded;
+
+  // Sort by recency (completedAt > startedAt) so the most recently
+  // touched items sit at the top. Pinning has been retired — every
+  // task is just "recent", one continuous chronological list.
+  const { recent, allCount, kindCounts } = useMemo(() => {
     const filtered = tasks.filter((t) => filter === 'all' || t.kind === filter);
     const sortKey = (t: Task) => t.completedAt ?? t.startedAt;
     const sorted = [...filtered].sort((a, b) => sortKey(b) - sortKey(a));
-    const pinnedTasks = sorted.filter((t) => t.pinned);
-    const recentTasks = sorted.filter((t) => !t.pinned);
 
     const counts: Partial<Record<TaskKind, number>> = {};
     for (const t of tasks) counts[t.kind] = (counts[t.kind] ?? 0) + 1;
-    return { pinned: pinnedTasks, recent: recentTasks, allCount: tasks.length, kindCounts: counts };
+
+    return { recent: sorted, allCount: tasks.length, kindCounts: counts };
   }, [tasks, filter]);
 
-  const recentVisible = showAll ? recent.slice(0, TASK_RECENT_EXPANDED_LIMIT) : recent.slice(0, TASK_RECENT_LIMIT);
-  const hasMore = recent.length > recentVisible.length;
-
+  // Inline list is the glance view — stays capped at the small limit.
+  // The drawer surface (TaskHistoryDrawer) passes `defaultExpanded` and
+  // we honour that with the larger cap so a single component serves
+  // both surfaces. For depth-of-audit the user goes to /activity.
+  const visibleLimit = defaultExpanded ? TASK_RECENT_EXPANDED_LIMIT : TASK_RECENT_LIMIT;
+  const recentVisible = recent.slice(0, visibleLimit);
   if (allCount === 0) {
     return (
-      <div style={{ marginTop: '24px' }}>
-        <SectionHeader label="Recent" count={0} onExpand={onExpand} />
+      <div>
+        <SectionHeader label={sectionLabel} />
         <EmptyState />
       </div>
     );
   }
 
   return (
-    <div style={{ marginTop: '24px' }}>
-      <SectionHeader label="Recent" count={allCount} onExpand={onExpand} />
+    <div>
+      <SectionHeader label={sectionLabel} />
 
-      {/* Filter chip row */}
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '6px',
-          marginTop: '10px',
-          marginBottom: '12px',
-        }}
-      >
-        {FILTERS.map((f) => {
-          const active = filter === f.id;
-          const c = f.id === 'all' ? allCount : (kindCounts[f.id as TaskKind] ?? 0);
-          if (f.id !== 'all' && c === 0) return null;
-          return (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setFilter(f.id)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '5px 11px',
-                borderRadius: '100px',
-                border: active
-                  ? '1px solid transparent'
-                  : '1px solid var(--color-border-subtle, rgba(0,28,53,0.10))',
-                background: active ? 'var(--color-accent-active, #001C35)' : '#fff',
-                color: active ? '#fff' : 'var(--color-text-secondary)',
-                fontSize: '12px',
-                fontWeight: 600,
-                fontFamily: 'var(--font-primary)',
-                cursor: 'pointer',
-              }}
-            >
-              {f.label}
-              <span
+      {/* Filter chip row — drawer only. On the command-centre glance
+          view the filters add density without helping the operator
+          who is just glancing for "what did I do recently"; the
+          power-user filter UX lives in the drawer and on /activity. */}
+      {!isInline && (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '6px',
+            marginTop: '10px',
+            marginBottom: '12px',
+          }}
+        >
+          {FILTERS.map((f) => {
+            const active = filter === f.id;
+            const c = f.id === 'all' ? allCount : (kindCounts[f.id as TaskKind] ?? 0);
+            if (f.id !== 'all' && c === 0) return null;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFilter(f.id)}
                 style={{
-                  fontSize: '10.5px',
-                  fontWeight: 700,
-                  padding: '1px 6px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '5px 11px',
                   borderRadius: '100px',
-                  background: active ? 'rgba(255,255,255,0.18)' : 'rgba(0,28,53,0.05)',
-                  color: active ? '#fff' : 'var(--color-text-muted)',
-                  minWidth: '16px',
-                  textAlign: 'center',
-                  letterSpacing: 0,
+                  border: active
+                    ? '1px solid transparent'
+                    : '1px solid var(--color-border-subtle, rgba(0,28,53,0.10))',
+                  background: active ? 'var(--color-accent-active, #001C35)' : '#fff',
+                  color: active ? '#fff' : 'var(--color-text-secondary)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  fontFamily: 'var(--font-primary)',
+                  cursor: 'pointer',
                 }}
               >
-                {c}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Pinned section */}
-      {pinned.length > 0 && (
-        <Section title="Pinned" subtle>
-          {pinned.map((t) => (
-            <TaskRow
-              key={t.id}
-              task={t}
-              onOpen={onOpenTask}
-              onCloseAfterNavigate={onCloseAfterNavigate}
-            />
-          ))}
-        </Section>
+                {f.label}
+                <span
+                  style={{
+                    fontSize: '10.5px',
+                    fontWeight: 700,
+                    padding: '1px 6px',
+                    borderRadius: '100px',
+                    background: active ? 'rgba(255,255,255,0.18)' : 'rgba(0,28,53,0.05)',
+                    color: active ? '#fff' : 'var(--color-text-muted)',
+                    minWidth: '16px',
+                    textAlign: 'center',
+                    letterSpacing: 0,
+                  }}
+                >
+                  {c}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       )}
 
-      {/* Recent section */}
+      {/* Single chronological list. The "RECENT" sub-heading that
+          used to surface here when there were pinned items has gone
+          along with the pinning concept itself — one heading at the
+          top of the column (the section label) is enough. */}
       {recentVisible.length > 0 && (
-        <Section title={pinned.length > 0 ? 'Recent' : ''} subtle>
+        <Section title="" subtle>
           {recentVisible.map((t) => (
             <TaskRow
               key={t.id}
@@ -240,48 +223,59 @@ export default function TaskHistoryList({
         </Section>
       )}
 
-      {/* Show all / Show less */}
-      {(hasMore || (showAll && recent.length > TASK_RECENT_LIMIT)) && (
-        <button
-          type="button"
-          onClick={() => setShowAll((v) => !v)}
-          style={{
-            display: 'flex',
-            width: '100%',
-            justifyContent: 'center',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '10px 0',
-            border: 'none',
-            background: 'none',
-            fontFamily: 'var(--font-primary)',
-            fontSize: '12px',
-            fontWeight: 600,
-            color: 'var(--color-text-secondary)',
-            cursor: 'pointer',
-            borderTop: '1px solid var(--color-border-subtle, rgba(0,28,53,0.08))',
-          }}
-        >
-          {showAll ? 'Show less' : `Show all (${recent.length})`}
-        </button>
-      )}
+      {/* Always offer a hook into the full Activity page. The inline
+          list stays a glance view (recents only); deep audit work —
+          field diffs, blast radius, revert, edit — lives at /activity. */}
+      <button
+        type="button"
+        onClick={() => {
+          // Inline list keeps the user in the chat context by
+          // escalating to the side drawer. Only when there's no
+          // drawer hook (e.g. the drawer itself rendering this
+          // component) do we route to the full /activity page.
+          if (onExpand) {
+            onExpand();
+            return;
+          }
+          onCloseAfterNavigate?.();
+          router.push('/activity');
+        }}
+        style={{
+          display: 'flex',
+          width: '100%',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '10px 0 6px',
+          border: 'none',
+          background: 'none',
+          fontFamily: 'var(--font-primary)',
+          fontSize: '12px',
+          fontWeight: 600,
+          color: 'var(--color-text-secondary)',
+          cursor: 'pointer',
+          borderTop: '1px solid var(--color-border-subtle, rgba(0,28,53,0.08))',
+          marginTop: '6px',
+        }}
+      >
+        {onExpand ? 'Show all' : 'Open Activity'}
+        <ArrowUpRight size={12} strokeWidth={2} />
+      </button>
     </div>
   );
 }
 
 // ── Pieces ──────────────────────────────────────────────────────────
 
-function SectionHeader({
-  label,
-  count,
-  onExpand,
-}: {
-  label: string;
-  count: number;
-  onExpand?: () => void;
-}) {
+function SectionHeader({ label }: { label: string }) {
+  // Header is just the uppercase label now. The "X saved" badge
+  // and the legacy onExpand chip were both removed — the count
+  // adds noise to a glance view, and the open-drawer / open-
+  // activity affordance is offered at the foot of the list
+  // instead, so there aren't two competing "see more" entry
+  // points at the top of the column.
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
       <span
         style={{
           fontSize: '12px',
@@ -293,51 +287,16 @@ function SectionHeader({
       >
         {label}
       </span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {count > 0 && (
-          <span
-            style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              color: 'var(--color-text-muted)',
-            }}
-          >
-            {count} saved
-          </span>
-        )}
-        {onExpand && (
-          <button
-            type="button"
-            onClick={onExpand}
-            aria-label="Open full history"
-            title="Open full history"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-              padding: '4px 9px',
-              borderRadius: '100px',
-              border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.10))',
-              background: '#fff',
-              cursor: 'pointer',
-              fontFamily: 'var(--font-primary)',
-              fontSize: '11px',
-              fontWeight: 600,
-              color: 'var(--color-text-secondary)',
-            }}
-          >
-            <Maximize2 size={11} strokeWidth={2.2} color="var(--color-text-muted)" />
-            View all
-          </button>
-        )}
-      </div>
     </div>
   );
 }
 
 function Section({ title, subtle, children }: { title: string; subtle?: boolean; children: React.ReactNode }) {
+  // 8px top margin when there's no sub-title — that matches the gap
+  // the Suggested column on the right uses between its header and
+  // first row, so the two lists line up row-for-row across the grid.
   return (
-    <div style={{ marginTop: title ? '10px' : '0' }}>
+    <div style={{ marginTop: title ? '10px' : '8px' }}>
       {title && (
         <div
           style={{
@@ -374,8 +333,7 @@ function TaskRow({
   onOpen?: (t: Task) => void;
   onCloseAfterNavigate?: () => void;
 }) {
-  const { icon: Icon, accent, bg } = KIND_VISUALS[task.kind];
-  const status = STATUS_PILL[task.status];
+  const Icon = CHAT_ICON;
   const [hovered, setHovered] = useState(false);
 
   const handleClick = () => {
@@ -406,141 +364,69 @@ function TaskRow({
         display: 'flex',
         alignItems: 'center',
         gap: '10px',
-        padding: '10px 8px',
-        borderRadius: '10px',
-        background: hovered ? 'rgba(40,175,201,0.05)' : 'transparent',
+        padding: '6px 8px',
+        borderRadius: '6px',
+        background: hovered ? 'rgba(0,28,53,0.04)' : 'transparent',
         transition: 'background 0.12s ease',
         cursor: clickable ? 'pointer' : 'default',
       }}
       onClick={handleClick}
     >
-      {/* Icon chip */}
-      <div
+      {/* Bare outline icon — Notion-style, no chip behind it. The
+          per-kind glyph (chef hat, truck, chat bubble, etc.) is the
+          only differentiator, all rendered in the same muted colour
+          so the list reads as one quiet surface instead of a colour-
+          coded grid. */}
+      <Icon
+        size={15}
+        color="var(--color-text-muted)"
+        strokeWidth={1.8}
+        style={{ flexShrink: 0 }}
+      />
+
+      {/* Title — fills the row, truncates with an ellipsis. No
+          status pill, no timestamp, no inline icons. The drawer
+          surface offers the full meta when the operator wants it. */}
+      <span
         style={{
-          width: 32,
-          height: 32,
-          borderRadius: '10px',
-          background: bg,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
+          flex: 1,
+          minWidth: 0,
+          fontSize: '13px',
+          fontWeight: 500,
+          color: 'var(--color-text-primary)',
+          fontFamily: 'var(--font-primary)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
         }}
       >
-        <Icon size={15} color={accent} strokeWidth={2.2} />
-      </div>
+        {task.title}
+      </span>
 
-      {/* Title + subtitle */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            minWidth: 0,
+      {/* Remove (×) action — fades in on row hover with reserved
+          width so the title doesn't reflow. The pin/unpin button
+          was here too and has been retired; we only keep × so an
+          operator can tidy up an entry that no longer matters. */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '2px',
+          flexShrink: 0,
+          opacity: hovered ? 1 : 0,
+          transition: 'opacity 0.12s ease',
+          pointerEvents: hovered ? 'auto' : 'none',
+        }}
+      >
+        <IconButton
+          aria-label="Remove task"
+          onClick={(e) => {
+            e.stopPropagation();
+            removeTask(task.id);
           }}
         >
-          <span
-            style={{
-              fontSize: '13px',
-              fontWeight: 600,
-              color: 'var(--color-text-primary)',
-              fontFamily: 'var(--font-primary)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              minWidth: 0,
-              flex: 1,
-            }}
-          >
-            {task.title}
-          </span>
-          {task.status !== 'completed' && (
-            <span
-              style={{
-                fontSize: '10px',
-                fontWeight: 700,
-                padding: '2px 7px',
-                borderRadius: '100px',
-                background: status.bg,
-                color: status.fg,
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-                flexShrink: 0,
-                fontFamily: 'var(--font-primary)',
-              }}
-            >
-              {status.label}
-            </span>
-          )}
-        </div>
-        {task.subtitle && (
-          <div
-            style={{
-              fontSize: '11.5px',
-              fontWeight: 500,
-              color: 'var(--color-text-muted)',
-              fontFamily: 'var(--font-primary)',
-              marginTop: '2px',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {task.subtitle}
-          </div>
-        )}
-      </div>
-
-      {/* Right meta + hover actions */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px',
-          flexShrink: 0,
-        }}
-      >
-        {!hovered ? (
-          <>
-            <span
-              style={{
-                fontSize: '11.5px',
-                fontWeight: 500,
-                color: 'var(--color-text-muted)',
-                fontFamily: 'var(--font-primary)',
-                marginRight: '4px',
-              }}
-            >
-              {formatRelativeTime(task.completedAt ?? task.startedAt)}
-            </span>
-            {task.status === 'undone' && <RotateCcw size={12} color="var(--color-text-muted)" />}
-            {clickable && <ChevronRight size={14} color="var(--color-text-muted)" strokeWidth={2} />}
-          </>
-        ) : (
-          <>
-            <IconButton
-              aria-label={task.pinned ? 'Unpin task' : 'Pin task'}
-              onClick={(e) => {
-                e.stopPropagation();
-                togglePin(task.id);
-              }}
-            >
-              {task.pinned
-                ? <PinOff size={13} color="var(--color-text-muted)" strokeWidth={2} />
-                : <Pin size={13} color="var(--color-text-muted)" strokeWidth={2} />}
-            </IconButton>
-            <IconButton
-              aria-label="Remove task"
-              onClick={(e) => {
-                e.stopPropagation();
-                removeTask(task.id);
-              }}
-            >
-              <XIcon size={13} color="var(--color-text-muted)" strokeWidth={2} />
-            </IconButton>
-          </>
-        )}
+          <XIcon size={12} color="var(--color-text-muted)" strokeWidth={2} />
+        </IconButton>
       </div>
     </div>
   );
@@ -564,13 +450,19 @@ function IconButton({
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        width: 24,
-        height: 24,
-        borderRadius: '8px',
+        width: 22,
+        height: 22,
+        borderRadius: '6px',
         border: 'none',
-        background: 'rgba(0,28,53,0.06)',
+        background: 'transparent',
         cursor: 'pointer',
         padding: 0,
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.background = 'rgba(0,28,53,0.06)';
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.background = 'transparent';
       }}
     >
       {children}

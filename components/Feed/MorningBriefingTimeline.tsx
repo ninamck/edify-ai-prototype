@@ -53,7 +53,7 @@ export default function MorningBriefingTimeline({
         background: 'var(--color-briefing-timeline-bg, #fff)',
         borderRadius: sidebar ? 12 : 0,
         border: sidebar ? '1px solid rgba(0, 28, 53, 1)' : 'none',
-        boxShadow: sidebar ? '0 2px 12px rgba(58,48,40,0.1), 0 0 0 1px rgba(58,48,40,0.03)' : undefined,
+        boxShadow: sidebar ? '0 2px 12px rgba(0, 28, 53,0.1), 0 0 0 1px rgba(0, 28, 53,0.03)' : undefined,
         overflow: 'hidden',
         fontFamily: 'var(--font-primary)',
         boxSizing: 'border-box',

@@ -3,7 +3,7 @@
 /* ── EDIFY DESIGN TOKENS ── */
 :root {
   /* BASE SURFACES */
-  --color-bg-nav:          #031c59;
+  --color-bg-nav:          #001C35;
   --color-bg-surface:      #FFFFFF;
   --color-bg-hover:        #F5F4F2;
 
@@ -12,14 +12,15 @@
   --color-border-subtle:   #E8E6E3;
 
   /* TEXT */
-  --color-text-primary:    #3A3028;
+  --color-text-primary:    #001C35;
   --color-text-secondary:  #6B5E55;
   --color-text-muted:      #6B5E55;
 
   /* BRAND ACCENTS */
   --color-accent-quinn:    #FFFFFF;
-  --color-accent-active:   #031c59;
-  --color-accent-deep:     #020f3a;
+  --color-brand-mark:      #FFFFFF;
+  --color-accent-active:   #001C35;
+  --color-accent-deep:     #001C35;
   --color-accent-mid:      #4a6cb5;
 
   /* ACTIVE STATE TEXT */
@@ -32,7 +33,7 @@
   --color-badge-active-text: #FFC060;
 
   /* QUINN BUTTON */
-  --color-quinn-bg:        #031c59;
+  --color-quinn-bg:        #001C35;
   --color-quinn-label:     #FFFFFF;
 
   /* SEMANTIC — SUCCESS */
@@ -55,7 +56,7 @@
   --color-info-light:      #E0F2FE;
 
   /* NOTIFICATION */
-  --color-dot:             #031c59;
+  --color-dot:             #001C35;
 
   /* TYPOGRAPHY */
   --font-primary: 'Poppins', sans-serif;
@@ -128,4 +129,12 @@ input[type='number'] {
   animation: quinn-skeleton-shimmer 1.4s linear infinite;
   border: 1px solid var(--color-border-subtle);
   box-sizing: border-box;
+}
+
+/* Caret used at the trailing edge of a streaming Quinn message — gives
+   the typewriter reveal a "live typing" feel without requiring a real
+   token stream. */
+@keyframes edify-caret-blink {
+  0%, 49% { opacity: 0.85; }
+  50%, 100% { opacity: 0; }
 }

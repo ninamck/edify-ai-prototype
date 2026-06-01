@@ -935,7 +935,7 @@ function CreateGroupDrawerBody({
         style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(58,48,40,0.18)',
+          background: 'rgba(0, 28, 53,0.18)',
           zIndex: 700,
         }}
       />
@@ -953,7 +953,7 @@ function CreateGroupDrawerBody({
           bottom: 0,
           width: 'min(480px, 100vw)',
           background: '#fff',
-          boxShadow: '-20px 0 60px rgba(58,48,40,0.16)',
+          boxShadow: '-20px 0 60px rgba(0, 28, 53,0.16)',
           zIndex: 701,
           display: 'flex',
           flexDirection: 'column',

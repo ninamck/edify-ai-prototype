@@ -402,7 +402,7 @@ function PatternRow({
           width: '32px',
           height: '32px',
           borderRadius: '8px',
-          background: accepted ? 'var(--color-success-light)' : 'rgba(3,28,89,0.08)',
+          background: accepted ? 'var(--color-success-light)' : 'rgba(0, 28, 53,0.08)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

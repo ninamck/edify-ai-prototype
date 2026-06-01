@@ -81,9 +81,17 @@ function loadStoredActions(): Record<BriefingRole, FloorAction[]> | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Record<BriefingRole, FloorAction[]>;
+    const parsed = JSON.parse(raw) as Partial<Record<BriefingRole, FloorAction[]>>;
     if (!parsed || !parsed.ed || !parsed.cheryl || !parsed.gm) return null;
-    return parsed;
+    // Backfill any roles added since the payload was written so newer
+    // personas (e.g. 'culinary') don't render as undefined and crash the
+    // downstream `.filter` call.
+    const merged = { ...DEFAULT_FLOOR_ACTIONS_BY_ROLE } as Record<BriefingRole, FloorAction[]>;
+    for (const key of Object.keys(merged) as BriefingRole[]) {
+      const stored = parsed[key];
+      if (stored) merged[key] = stored;
+    }
+    return merged;
   } catch {
     return null;
   }
@@ -125,7 +133,9 @@ export function useFloorActions(
     if (stored) setActionsByRole(stored);
   }, []);
 
-  const actions = actionsByRole[role];
+  // Defensive lookup: a stale localStorage payload from before a role was
+  // added would otherwise leave `actions` as undefined and crash `.filter`.
+  const actions = actionsByRole[role] ?? DEFAULT_FLOOR_ACTIONS_BY_ROLE[role] ?? [];
   const visibleActions = actions.filter((a) => a.visible);
 
   function handleActionClick(action: FloorAction) {
