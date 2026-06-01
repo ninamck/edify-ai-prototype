@@ -32,6 +32,18 @@ import {
   type DailyRow,
   type FlashPnLRow,
 } from './fisMockData';
+import {
+  FIS_BAR_INVENTORY,
+  FIS_TRENDS_COGS_MOVEMENTS,
+  FIS_TRENDS_GP_DETAIL,
+  FIS_TRENDS_INDIRECTS,
+  FIS_TRENDS_REVENUE_BY_CATEGORY,
+  FIS_TRENDS_REVENUE_TO_PNL,
+  FIS_TRENDS_WAGE_COST,
+  FIS_YOY_SALES_BY_OUTLET,
+  type BarInventoryRow,
+  type FisTrendRow,
+} from './fisExtendedMockData';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -164,6 +176,14 @@ function flattenPnL(): FisFlashPnLTableRow[] {
       currentSection = row.label;
       continue;
     }
+    // Emphasised totals (Gross Profit, Contribution to Overheads) sit
+    // free-standing in the spreadsheet -- there's no `section` row before
+    // them. Treat them as their own pseudo-section so the row itself plus
+    // any ratio rows that follow (Vs Revenue, Bar GP %, Food GP %) read
+    // correctly when the table is filtered by Section.
+    if (row.kind === 'total' && row.emphasised) {
+      currentSection = row.label;
+    }
     // pct rows (e.g. "Vs Revenue") need their decimals scaled for percent
     // formatting; data/total rows just pass currency values through.
     const isPctRow = row.kind === 'pct';
@@ -227,6 +247,11 @@ export const FIS_FLASH_PNL_RATIO_COLUMNS: Column[] = [
 // ---------------------------------------------------------------------------
 
 export type FisDailyTableRow = {
+  /** Optional sub-section the row belongs to. Mirrors the visual groupings
+   *  in the spreadsheet (e.g. "Drinks" / "Food" / "Adjustments" inside
+   *  Revenue by Category) so the DataTable can be filtered to one group at
+   *  a time. Empty string when the table doesn't have sub-groupings. */
+  section?: string;
   line: string;
   mon: number | null;
   tue: number | null;
@@ -247,11 +272,25 @@ function dailyColumns(opts: {
   labelHeader: string;
   numericType?: 'currency' | 'number' | 'integer';
   showShares?: boolean;
+  /** When true, prepend a pinned-left "Section" column. Set this for tables
+   *  whose underlying spreadsheet layout has visible sub-groupings. */
+  withSection?: boolean;
+  /** Override label for the optional Section column. */
+  sectionHeader?: string;
 }): Column[] {
   const numericType = opts.numericType ?? 'currency';
-  const cols: Column[] = [
-    { key: 'line', header: opts.labelHeader, type: 'string', width: 170, pinned: 'left', defaultVisible: true },
-  ];
+  const cols: Column[] = [];
+  if (opts.withSection) {
+    cols.push({
+      key: 'section',
+      header: opts.sectionHeader ?? 'Group',
+      type: 'string',
+      width: 140,
+      pinned: 'left',
+      defaultVisible: true,
+    });
+  }
+  cols.push({ key: 'line', header: opts.labelHeader, type: 'string', width: 170, pinned: 'left', defaultVisible: true });
   const dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
   dayKeys.forEach((k, i) => {
     cols.push({
@@ -300,8 +339,9 @@ function dailyColumns(opts: {
   return cols;
 }
 
-function flattenDaily(rows: DailyRow[]): FisDailyTableRow[] {
-  return rows.map((r) => ({
+function flattenDaily(rows: DailyRow[], sections?: string[]): FisDailyTableRow[] {
+  return rows.map((r, i) => ({
+    section: sections ? sections[i] ?? '' : undefined,
     line: r.label,
     mon: r.daily[0] ?? null,
     tue: r.daily[1] ?? null,
@@ -317,6 +357,37 @@ function flattenDaily(rows: DailyRow[]): FisDailyTableRow[] {
   }));
 }
 
+// Section labels for the per-table groupings. Each array index lines up
+// with the corresponding row index in the matching `FIS_WEEK_*` source.
+//
+// Revenue by Outlet, AOV, Wage Hours by Department, Revenue per Labour
+// Hour, and Revenue vs LY don't carry sub-groupings in the spreadsheet,
+// so they intentionally don't have a sections array.
+
+const REVENUE_BY_CATEGORY_SECTIONS = [
+  'Drinks', 'Drinks', 'Drinks', 'Drinks', 'Drinks',
+  'Other',
+  'Food', 'Food', 'Food',
+  'Other',
+  'Adjustments',
+  'Total',
+];
+
+const ORDERS_SECTIONS = [
+  'Revenue (£)', 'Revenue (£)', 'Revenue (£)',
+  'Orders (count)', 'Orders (count)', 'Orders (count)',
+];
+
+const SECURITY_AND_PROGRAMMING_SECTIONS = ['Security', 'Security', 'Programming'];
+
+const WAGE_COST_SECTIONS = [
+  'Outlet wages', 'Outlet wages', 'Outlet wages', 'Outlet wages',
+  'Total wages',
+  'On-costs', 'On-costs', 'On-costs',
+  'Total loaded',
+  'Ratio',
+];
+
 export const FIS_REVENUE_BY_OUTLET_COLUMNS = dailyColumns({
   labelHeader: 'Outlet',
   numericType: 'currency',
@@ -326,8 +397,13 @@ export const FIS_REVENUE_BY_OUTLET_ROWS = flattenDaily(FIS_WEEK_REVENUE_BY_OUTLE
 export const FIS_REVENUE_BY_CATEGORY_COLUMNS = dailyColumns({
   labelHeader: 'Category',
   numericType: 'currency',
+  withSection: true,
+  sectionHeader: 'Group',
 });
-export const FIS_REVENUE_BY_CATEGORY_ROWS = flattenDaily(FIS_WEEK_REVENUE_BY_CATEGORY);
+export const FIS_REVENUE_BY_CATEGORY_ROWS = flattenDaily(
+  FIS_WEEK_REVENUE_BY_CATEGORY,
+  REVENUE_BY_CATEGORY_SECTIONS,
+);
 
 export const FIS_REVENUE_VS_LY_COLUMNS: Column[] = (() => {
   const base = dailyColumns({ labelHeader: 'Metric', numericType: 'currency', showShares: false });
@@ -342,8 +418,10 @@ export const FIS_REVENUE_VS_LY_ROWS = flattenDaily(FIS_WEEK_REVENUE_VS_LY);
 export const FIS_ORDERS_COLUMNS: Column[] = dailyColumns({
   labelHeader: 'Metric',
   numericType: 'integer',
+  withSection: true,
+  sectionHeader: 'Group',
 });
-export const FIS_ORDERS_ROWS = flattenDaily(FIS_WEEK_ORDERS);
+export const FIS_ORDERS_ROWS = flattenDaily(FIS_WEEK_ORDERS, ORDERS_SECTIONS);
 
 export const FIS_AOV_COLUMNS: Column[] = dailyColumns({
   labelHeader: 'Service',
@@ -356,9 +434,12 @@ export const FIS_SECURITY_AND_PROGRAMMING_COLUMNS = dailyColumns({
   labelHeader: 'Line',
   numericType: 'integer',
   showShares: false,
+  withSection: true,
+  sectionHeader: 'Group',
 });
 export const FIS_SECURITY_AND_PROGRAMMING_ROWS = flattenDaily(
   FIS_WEEK_SECURITY_AND_PROGRAMMING,
+  SECURITY_AND_PROGRAMMING_SECTIONS,
 );
 
 export const FIS_WAGE_HOURS_COLUMNS = dailyColumns({
@@ -375,11 +456,13 @@ export const FIS_REVENUE_PER_LABOUR_HOUR_COLUMNS = dailyColumns({
 export const FIS_REVENUE_PER_LABOUR_HOUR_ROWS = flattenDaily(FIS_WEEK_REVENUE_PER_LABOUR_HOUR);
 
 export const FIS_WAGE_COST_COLUMNS = dailyColumns({
-  labelHeader: 'Department',
+  labelHeader: 'Line',
   numericType: 'currency',
   showShares: false,
+  withSection: true,
+  sectionHeader: 'Group',
 });
-export const FIS_WAGE_COST_ROWS = flattenDaily(FIS_WEEK_WAGE_COST);
+export const FIS_WAGE_COST_ROWS = flattenDaily(FIS_WEEK_WAGE_COST, WAGE_COST_SECTIONS);
 
 // ---------------------------------------------------------------------------
 // 4. 13-week revenue by outlet (TRENDS sheet) -- 13 rows, one per week
@@ -420,3 +503,222 @@ function buildTrendRows(): FisTrendTableRow[] {
 }
 
 export const FIS_TREND_TABLE_ROWS = buildTrendRows();
+
+// ---------------------------------------------------------------------------
+// 5. 13-week trend detail tables (sub-sections of TRENDS sheet)
+//
+// These all share the same shape: rows are line items, columns are 13 weeks.
+// Because each table mixes units (e.g. Wage Cost has £ rows AND a "Vs Revenue"
+// % row, Indirects has hours + £ + %), we expose a "Unit" column alongside
+// the numeric week columns. % rows are pre-multiplied by 100 so the raw value
+// reads naturally (e.g. 27.3 alongside Unit "%" instead of 0.273).
+// ---------------------------------------------------------------------------
+
+export type TrendUnit = 'GBP' | 'pct' | 'hrs';
+
+export type FisTrendDetailRow = {
+  group: string;
+  line: string;
+  unit: TrendUnit;
+  w1: number | null;
+  w2: number | null;
+  w3: number | null;
+  w4: number | null;
+  w5: number | null;
+  w6: number | null;
+  w7: number | null;
+  w8: number | null;
+  w9: number | null;
+  w10: number | null;
+  w11: number | null;
+  w12: number | null;
+  w13: number | null;
+};
+
+const TREND_WEEK_KEYS = [
+  'w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7',
+  'w8', 'w9', 'w10', 'w11', 'w12', 'w13',
+] as const;
+
+function buildTrendDetailColumns(opts: { lineHeader: string; lineWidth?: number }): Column[] {
+  return [
+    {
+      key: 'group',
+      header: 'Group',
+      type: 'string',
+      width: 140,
+      pinned: 'left',
+      defaultVisible: true,
+    },
+    {
+      key: 'line',
+      header: opts.lineHeader,
+      type: 'string',
+      width: opts.lineWidth ?? 200,
+      pinned: 'left',
+      defaultVisible: true,
+    },
+    { key: 'unit', header: 'Unit', type: 'string', width: 70, defaultVisible: true },
+    ...FIS_TRENDS_WEEKS.map((week, i) => ({
+      key: TREND_WEEK_KEYS[i],
+      header: week,
+      type: 'number' as const,
+      width: 100,
+      defaultVisible: true,
+    })),
+  ];
+}
+
+function flattenTrend(
+  rows: FisTrendRow[],
+  unitOf: (row: FisTrendRow) => TrendUnit,
+): FisTrendDetailRow[] {
+  return rows.map((r) => {
+    const unit = unitOf(r);
+    const scale = unit === 'pct' ? 100 : 1;
+    const round2 = (n: number | null): number | null =>
+      n === null || n === undefined || !Number.isFinite(n)
+        ? null
+        : Math.round(n * scale * 100) / 100;
+    const v = r.values.map(round2);
+    return {
+      group: r.group ?? '',
+      line: r.label,
+      unit,
+      w1: v[0] ?? null, w2: v[1] ?? null, w3: v[2] ?? null,
+      w4: v[3] ?? null, w5: v[4] ?? null, w6: v[5] ?? null,
+      w7: v[6] ?? null, w8: v[7] ?? null, w9: v[8] ?? null,
+      w10: v[9] ?? null, w11: v[10] ?? null, w12: v[11] ?? null, w13: v[12] ?? null,
+    };
+  });
+}
+
+const isPercentLabel = (label: string): boolean =>
+  /( %|%)$/.test(label) || label === 'Vs Revenue' || label === 'Act vs Budget %' ||
+  label === 'Growth %';
+
+// 5a. Revenue by category -- 13 weeks (all currency)
+export const FIS_TRENDS_REVENUE_BY_CATEGORY_COLUMNS = buildTrendDetailColumns({
+  lineHeader: 'Category',
+  lineWidth: 180,
+});
+export const FIS_TRENDS_REVENUE_BY_CATEGORY_ROWS = flattenTrend(
+  FIS_TRENDS_REVENUE_BY_CATEGORY,
+  () => 'GBP',
+);
+
+// 5b. Revenue to P&L -- 13 weeks (currency + % Var)
+export const FIS_TRENDS_REVENUE_TO_PNL_COLUMNS = buildTrendDetailColumns({
+  lineHeader: 'Line',
+  lineWidth: 200,
+});
+export const FIS_TRENDS_REVENUE_TO_PNL_ROWS = flattenTrend(
+  FIS_TRENDS_REVENUE_TO_PNL,
+  (r) => (isPercentLabel(r.label) ? 'pct' : 'GBP'),
+);
+
+// 5c. Cost of Sales movements -- 13 weeks (currency + Vs Revenue %)
+export const FIS_TRENDS_COGS_MOVEMENTS_COLUMNS = buildTrendDetailColumns({
+  lineHeader: 'Line',
+  lineWidth: 220,
+});
+export const FIS_TRENDS_COGS_MOVEMENTS_ROWS = flattenTrend(
+  FIS_TRENDS_COGS_MOVEMENTS,
+  (r) => (r.label === 'Vs Revenue' ? 'pct' : 'GBP'),
+);
+
+// 5d. GP detail (Bar / Food) -- 13 weeks (mostly %)
+export const FIS_TRENDS_GP_DETAIL_COLUMNS = buildTrendDetailColumns({
+  lineHeader: 'Line',
+  lineWidth: 200,
+});
+export const FIS_TRENDS_GP_DETAIL_ROWS = flattenTrend(FIS_TRENDS_GP_DETAIL, (r) => {
+  if (isPercentLabel(r.label)) return 'pct';
+  if (r.label === 'COS %' || r.label.endsWith('GP %')) return 'pct';
+  return 'GBP';
+});
+
+// 5e. Indirects -- 13 weeks (hours + £ + %)
+export const FIS_TRENDS_INDIRECTS_COLUMNS = buildTrendDetailColumns({
+  lineHeader: 'Line',
+  lineWidth: 200,
+});
+export const FIS_TRENDS_INDIRECTS_ROWS = flattenTrend(FIS_TRENDS_INDIRECTS, (r) => {
+  if (r.label === 'Security Hours') return 'hrs';
+  if (isPercentLabel(r.label)) return 'pct';
+  return 'GBP';
+});
+
+// 5f. Wage cost -- 13 weeks (£ + Vs Revenue %)
+export const FIS_TRENDS_WAGE_COST_COLUMNS = buildTrendDetailColumns({
+  lineHeader: 'Line',
+  lineWidth: 180,
+});
+export const FIS_TRENDS_WAGE_COST_ROWS = flattenTrend(
+  FIS_TRENDS_WAGE_COST,
+  (r) => (r.label === 'Vs Revenue' ? 'pct' : 'GBP'),
+);
+
+// 5g. YoY sales by outlet -- 13 weeks (£ + Growth %)
+export const FIS_YOY_SALES_BY_OUTLET_COLUMNS = buildTrendDetailColumns({
+  lineHeader: 'Metric',
+  lineWidth: 150,
+});
+export const FIS_YOY_SALES_BY_OUTLET_ROWS = flattenTrend(
+  FIS_YOY_SALES_BY_OUTLET,
+  (r) => (r.label === 'Growth %' ? 'pct' : 'GBP'),
+);
+
+// ---------------------------------------------------------------------------
+// 6. Bar weekly inventory & COGS (COGS - NORY sheet) -- 13 rows, one per week
+// ---------------------------------------------------------------------------
+
+export type FisBarInventoryTableRow = {
+  week_ending: string;
+  opening: number | null;
+  vs_last_week: number | null;
+  deliveries: number | null;
+  transfers: number | null;
+  closing: number | null;
+  cogs: number | null;
+  actual_food: number | null;
+  actual_beverage: number | null;
+  sb_nil: number | null;
+  theo_food: number | null;
+  bev_theo: number | null;
+  food_sales: number | null;
+};
+
+export const FIS_BAR_INVENTORY_COLUMNS: Column[] = [
+  { key: 'week_ending', header: 'Week ending', type: 'date', width: 130, pinned: 'left', defaultVisible: true },
+  { key: 'opening', header: 'Opening stock', type: 'currency', currency: 'GBP', width: 130, defaultVisible: true },
+  { key: 'vs_last_week', header: 'Vs last week', type: 'currency', currency: 'GBP', width: 120 },
+  { key: 'deliveries', header: 'Deliveries', type: 'currency', currency: 'GBP', width: 120, defaultVisible: true },
+  { key: 'transfers', header: 'Transfers', type: 'currency', currency: 'GBP', width: 110 },
+  { key: 'closing', header: 'Closing stock', type: 'currency', currency: 'GBP', width: 130, defaultVisible: true },
+  { key: 'cogs', header: 'COGS', type: 'currency', currency: 'GBP', width: 120, defaultVisible: true },
+  { key: 'actual_food', header: 'Actual food', type: 'currency', currency: 'GBP', width: 120 },
+  { key: 'actual_beverage', header: 'Actual beverage', type: 'currency', currency: 'GBP', width: 130, defaultVisible: true },
+  { key: 'sb_nil', header: 'S/B nil', type: 'currency', currency: 'GBP', width: 100 },
+  { key: 'theo_food', header: 'Theoretical food', type: 'currency', currency: 'GBP', width: 130 },
+  { key: 'bev_theo', header: 'Theoretical bev.', type: 'currency', currency: 'GBP', width: 130 },
+  { key: 'food_sales', header: 'Food sales', type: 'currency', currency: 'GBP', width: 120, defaultVisible: true },
+];
+
+export const FIS_BAR_INVENTORY_ROWS: FisBarInventoryTableRow[] = FIS_BAR_INVENTORY.map(
+  (r: BarInventoryRow): FisBarInventoryTableRow => ({
+    week_ending: toIsoWeekEnding(r.weekEnding),
+    opening: r.opening,
+    vs_last_week: r.vsLastWeek,
+    deliveries: r.deliveries,
+    transfers: r.transfers,
+    closing: r.closing,
+    cogs: r.cogs,
+    actual_food: r.actualFood,
+    actual_beverage: r.actualBeverage,
+    sb_nil: r.sbNil,
+    theo_food: r.theoFood,
+    bev_theo: r.bevTheo,
+    food_sales: r.foodSales,
+  }),
+);

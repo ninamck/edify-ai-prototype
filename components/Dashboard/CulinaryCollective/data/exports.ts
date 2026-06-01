@@ -34,6 +34,17 @@ import {
   type DailyRow,
   type FlashPnLRow,
 } from './fisMockData';
+import {
+  FIS_BAR_INVENTORY,
+  FIS_TRENDS_COGS_MOVEMENTS,
+  FIS_TRENDS_GP_DETAIL,
+  FIS_TRENDS_INDIRECTS,
+  FIS_TRENDS_REVENUE_BY_CATEGORY,
+  FIS_TRENDS_REVENUE_TO_PNL,
+  FIS_TRENDS_WAGE_COST,
+  FIS_YOY_SALES_BY_OUTLET,
+  type FisTrendRow,
+} from './fisExtendedMockData';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -41,26 +52,58 @@ import {
 
 const DAY_HEADERS = FIS_WEEK_DAY_LABELS.map((d, i) => `${d} (${FIS_WEEK_DAYS[i]})`);
 
-function dailyRowToCsvRow(r: DailyRow): (string | number | null)[] {
-  return [
-    r.label,
-    ...r.daily,
-    r.weekTotal,
-    r.weekShare,
-    r.mtdTotal,
-    r.mtdShare,
-  ];
+function dailyRowToCsvRow(r: DailyRow, section?: string): (string | number | null)[] {
+  const base: (string | number | null)[] = [];
+  if (section !== undefined) base.push(section);
+  base.push(r.label, ...r.daily, r.weekTotal, r.weekShare, r.mtdTotal, r.mtdShare);
+  return base;
 }
 
-function dailySection(label: string, slug: string, rows: DailyRow[], unit: string): CsvSection {
+function dailySection(
+  label: string,
+  slug: string,
+  rows: DailyRow[],
+  unit: string,
+  /** Optional sub-group label per row, mirroring the spreadsheet's
+   *  section structure. When present, exposes a `Group` column so the CSV
+   *  reader can pivot/filter by group. */
+  sections?: string[],
+): CsvSection {
+  const headers = sections
+    ? ['Group', 'Line', ...DAY_HEADERS, 'Week total', 'Week share', 'MTD total', 'MTD share']
+    : ['Line', ...DAY_HEADERS, 'Week total', 'Week share', 'MTD total', 'MTD share'];
   return {
     label,
     filenameSlug: slug,
     note: `Week ending ${FIS_HEADLINE.weekEnding} · ${unit}`,
-    headers: ['Line', ...DAY_HEADERS, 'Week total', 'Week share', 'MTD total', 'MTD share'],
-    rows: rows.map(dailyRowToCsvRow),
+    headers,
+    rows: rows.map((r, i) => dailyRowToCsvRow(r, sections?.[i])),
   };
 }
+
+const REVENUE_BY_CATEGORY_SECTIONS = [
+  'Drinks', 'Drinks', 'Drinks', 'Drinks', 'Drinks',
+  'Other',
+  'Food', 'Food', 'Food',
+  'Other',
+  'Adjustments',
+  'Total',
+];
+
+const ORDERS_SECTIONS = [
+  'Revenue (£)', 'Revenue (£)', 'Revenue (£)',
+  'Orders (count)', 'Orders (count)', 'Orders (count)',
+];
+
+const SECURITY_AND_PROGRAMMING_SECTIONS = ['Security', 'Security', 'Programming'];
+
+const WAGE_COST_SECTIONS = [
+  'Outlet wages', 'Outlet wages', 'Outlet wages', 'Outlet wages',
+  'Total wages',
+  'On-costs', 'On-costs', 'On-costs',
+  'Total loaded',
+  'Ratio',
+];
 
 // ---------------------------------------------------------------------------
 // Shared sections (used by both tabs)
@@ -240,12 +283,14 @@ const REVENUE_BY_CATEGORY_DAILY_SECTION = dailySection(
   'revenue-by-category-daily',
   FIS_WEEK_REVENUE_BY_CATEGORY,
   '£ per day',
+  REVENUE_BY_CATEGORY_SECTIONS,
 );
 const ORDERS_SECTION = dailySection(
   'Service mix & orders',
   'service-mix-orders',
   FIS_WEEK_ORDERS,
   'Quick service vs table service',
+  ORDERS_SECTIONS,
 );
 const AOV_SECTION = dailySection(
   'AOV',
@@ -258,6 +303,7 @@ const SECURITY_PROGRAMMING_SECTION = dailySection(
   'security-programming',
   FIS_WEEK_SECURITY_AND_PROGRAMMING,
   'Hours and £ per day',
+  SECURITY_AND_PROGRAMMING_SECTIONS,
 );
 const WAGE_HOURS_SECTION = dailySection(
   'Wage hours by department',
@@ -276,7 +322,106 @@ const WAGE_COST_SECTION = dailySection(
   'wage-cost',
   FIS_WEEK_WAGE_COST,
   '£ per day; Vs Revenue stores decimals',
+  WAGE_COST_SECTIONS,
 );
+
+// ---------------------------------------------------------------------------
+// Additional TRENDS sheet sections + YOY SALES + COGS - NORY
+// ---------------------------------------------------------------------------
+
+function trendSection(
+  label: string,
+  slug: string,
+  note: string,
+  rows: FisTrendRow[],
+): CsvSection {
+  return {
+    label,
+    filenameSlug: slug,
+    note,
+    headers: ['Group', 'Line', ...FIS_TRENDS_WEEKS],
+    rows: rows.map((r) => [r.group ?? '', r.label, ...r.values]),
+  };
+}
+
+const TRENDS_REVENUE_BY_CATEGORY_SECTION = trendSection(
+  'Trends · revenue by category',
+  'trends-revenue-by-category',
+  '£ per week (rolling 13)',
+  FIS_TRENDS_REVENUE_BY_CATEGORY,
+);
+const TRENDS_REVENUE_TO_PNL_SECTION = trendSection(
+  'Trends · revenue to P&L',
+  'trends-revenue-to-pnl',
+  '£ per week; % Var stores decimals (rolling 13)',
+  FIS_TRENDS_REVENUE_TO_PNL,
+);
+const TRENDS_COGS_MOVEMENTS_SECTION = trendSection(
+  'Trends · cost of sales movements',
+  'trends-cogs-movements',
+  '£ per week; Vs Revenue stores decimals',
+  FIS_TRENDS_COGS_MOVEMENTS,
+);
+const TRENDS_GP_DETAIL_SECTION = trendSection(
+  'Trends · GP detail (Bar & Food)',
+  'trends-gp-detail',
+  'Theoretical/actual COGS in £; GP %, COS % store decimals',
+  FIS_TRENDS_GP_DETAIL,
+);
+const TRENDS_INDIRECTS_SECTION = trendSection(
+  'Trends · indirects & security',
+  'trends-indirects',
+  'Hours, £, decimals depending on row',
+  FIS_TRENDS_INDIRECTS,
+);
+const TRENDS_WAGE_COST_SECTION = trendSection(
+  'Trends · wage cost',
+  'trends-wage-cost',
+  '£ per week; Vs Revenue stores decimals',
+  FIS_TRENDS_WAGE_COST,
+);
+const YOY_SALES_BY_OUTLET_SECTION = trendSection(
+  'Year-on-year sales by outlet',
+  'yoy-sales-by-outlet',
+  '£ for TY/LY/Growth £; Growth % stores decimals',
+  FIS_YOY_SALES_BY_OUTLET,
+);
+
+const BAR_INVENTORY_SECTION: CsvSection = {
+  label: 'Bar inventory & COGS (Nory)',
+  filenameSlug: 'bar-inventory-nory',
+  note: '£ per week · 13-week rolling window',
+  headers: [
+    'Week ending',
+    'Opening stock',
+    'Vs last week',
+    'Deliveries',
+    'Transfers',
+    'Closing stock',
+    'COGS',
+    'Actual food',
+    'Actual beverage',
+    'S/B nil',
+    'Theoretical food',
+    'Theoretical beverage',
+    'Food sales',
+  ],
+  rows: FIS_BAR_INVENTORY.map((r) => [
+    r.weekEnding,
+    r.opening,
+    r.vsLastWeek,
+    r.deliveries,
+    r.transfers,
+    r.closing,
+    r.cogs,
+    r.actualFood,
+    r.actualBeverage,
+    r.sbNil,
+    r.theoFood,
+    r.bevTheo,
+    r.foodSales,
+  ]),
+};
 
 const HEATMAP_FLAT_SECTION: CsvSection = {
   label: 'Variance vs Last Year (heatmap)',
@@ -324,5 +469,13 @@ export const FLASH_EXPORT_SECTIONS: CsvSection[] = [
   REVENUE_PER_LABOUR_HOUR_SECTION,
   WAGE_COST_SECTION,
   REVENUE_BY_OUTLET_TREND_SECTION,
+  TRENDS_REVENUE_BY_CATEGORY_SECTION,
+  TRENDS_REVENUE_TO_PNL_SECTION,
+  TRENDS_COGS_MOVEMENTS_SECTION,
+  TRENDS_GP_DETAIL_SECTION,
+  TRENDS_INDIRECTS_SECTION,
+  TRENDS_WAGE_COST_SECTION,
+  YOY_SALES_BY_OUTLET_SECTION,
+  BAR_INVENTORY_SECTION,
   HEATMAP_FLAT_SECTION,
 ];
