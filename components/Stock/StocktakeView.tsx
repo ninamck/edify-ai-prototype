@@ -26,21 +26,26 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Check, ChevronDown, Mic, Plus } from 'lucide-react';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import UnitInput from './UnitInput';
 import type {
   CountTarget,
   StockItem,
   StockLocation,
+  StockSupplierVariant,
   StocktakeRecord,
 } from './status';
 import {
   STOCK_LOCATION_ORDER,
+  countCellKeys,
+  formatPackSize,
   formatPrice,
   formatStock,
   formatRelativeDate,
   locationForItem,
-  rollupCounts,
+  rollupItemCounts,
   scopeLabel,
+  variantAsItem,
 } from './status';
 
 interface Props {
@@ -63,14 +68,40 @@ interface Props {
   onUseVoice?: () => void;
 }
 
-// Per-cell key in `counts`. We keep counts at (itemId, unit) level so
+// Per-cell key in `counts`. We keep counts at (itemId, cell) level so
 // the user can record a separate quantity per available unit on
-// multi-UOM rows.
+// multi-UOM rows. `suffix` is the unit for simple items, or
+// `${variantId}::${unit}` for a master product's supplier sub-rows.
 type CountKey = `${string}::${string}`;
-const keyFor = (itemId: string, unit: string): CountKey =>
-  `${itemId}::${unit}` as CountKey;
+const keyFor = (itemId: string, suffix: string): CountKey =>
+  `${itemId}::${suffix}` as CountKey;
+
+// Build the suffix→entered-value map a single item's roll-up needs,
+// reading straight from the flat counts state.
+function rawSuffixMap(
+  item: StockItem,
+  counts: Record<CountKey, string>,
+): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const suffix of countCellKeys(item)) {
+    map[suffix] = counts[keyFor(item.id, suffix)] ?? '';
+  }
+  return map;
+}
+
+// Has the operator entered anything against this item (any cell)?
+function itemHasCount(
+  item: StockItem,
+  counts: Record<CountKey, string>,
+): boolean {
+  return countCellKeys(item).some(
+    suffix => (counts[keyFor(item.id, suffix)] ?? '').trim() !== '',
+  );
+}
 
 type SaveState = 'saved' | 'saving';
+
+const MOBILE_BREAKPOINT = '(max-width: 640px)';
 
 export default function StocktakeView({
   items,
@@ -80,6 +111,7 @@ export default function StocktakeView({
   onBack,
   onUseVoice,
 }: Props) {
+  const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
   // Quick / group counts span every location at the venue (the items
   // could be anywhere), so we just render a flat list. Area counts
   // are locked to one location — no tabs needed. Only Full / Continue
@@ -129,8 +161,8 @@ export default function StocktakeView({
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(() => new Date());
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function setCount(itemId: string, unit: string, value: string) {
-    setCounts(prev => ({ ...prev, [keyFor(itemId, unit)]: value }));
+  function setCount(itemId: string, suffix: string, value: string) {
+    setCounts(prev => ({ ...prev, [keyFor(itemId, suffix)]: value }));
     setSaveState('saving');
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
@@ -173,10 +205,7 @@ export default function StocktakeView({
   const countedInSection = useMemo(() => {
     let n = 0;
     for (const item of displayItems) {
-      const anyEntry = [item.stockUnit, ...(item.alternateUnits ?? [])].some(
-        u => (counts[keyFor(item.id, u)] ?? '').trim() !== '',
-      );
-      if (anyEntry) n += 1;
+      if (itemHasCount(item, counts)) n += 1;
     }
     return n;
   }, [displayItems, counts]);
@@ -184,10 +213,7 @@ export default function StocktakeView({
   const totalCounted = useMemo(() => {
     let n = 0;
     for (const item of items) {
-      const anyEntry = [item.stockUnit, ...(item.alternateUnits ?? [])].some(
-        u => (counts[keyFor(item.id, u)] ?? '').trim() !== '',
-      );
-      if (anyEntry) n += 1;
+      if (itemHasCount(item, counts)) n += 1;
     }
     return n;
   }, [items, counts]);
@@ -216,12 +242,7 @@ export default function StocktakeView({
     let total = 0;
     for (const item of items) {
       if (item.unitPrice == null) continue;
-      const allUnits = [item.stockUnit, ...(item.alternateUnits ?? [])];
-      const rawByUnit: Record<string, string> = {};
-      for (const unit of allUnits) {
-        rawByUnit[unit] = counts[keyFor(item.id, unit)] ?? '';
-      }
-      const rollup = rollupCounts(item, rawByUnit);
+      const rollup = rollupItemCounts(item, rawSuffixMap(item, counts));
       if (!rollup.hasInput) continue;
       total += rollup.total * item.unitPrice;
     }
@@ -326,8 +347,25 @@ export default function StocktakeView({
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <SaveIndicator state={saveState} lastSavedAt={lastSavedAt} />
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            flexWrap: 'wrap',
+            width: isMobile ? '100%' : undefined,
+            justifyContent: isMobile ? 'space-between' : undefined,
+          }}
+        >
+          <div
+            style={{
+              // Saved indicator gets its own full-width line on mobile so
+              // the two action buttons can share the row beneath it.
+              flexBasis: isMobile ? '100%' : undefined,
+            }}
+          >
+            <SaveIndicator state={saveState} lastSavedAt={lastSavedAt} />
+          </div>
           {/* Voice modality switch — same scope, different input
               surface. Outlined treatment in the brand accent so it
               reads as a secondary CTA next to Submit, not as a new
@@ -347,8 +385,10 @@ export default function StocktakeView({
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: 6,
-                padding: '8px 14px',
+                flex: isMobile ? 1 : undefined,
+                padding: isMobile ? '12px 14px' : '8px 14px',
                 borderRadius: 'var(--radius-item)',
                 background: '#fff',
                 color: items.length === 0
@@ -372,7 +412,8 @@ export default function StocktakeView({
             type="button"
             onClick={handleSubmit}
             style={{
-              padding: '8px 18px',
+              flex: isMobile ? 1 : undefined,
+              padding: isMobile ? '12px 18px' : '8px 18px',
               borderRadius: 'var(--radius-item)',
               background: 'var(--color-accent-active)',
               color: 'var(--color-text-on-active)',
@@ -542,7 +583,8 @@ export default function StocktakeView({
               key={item.id}
               item={item}
               counts={counts}
-              onChange={(unit, value) => setCount(item.id, unit, value)}
+              isMobile={isMobile}
+              onChange={(suffix, value) => setCount(item.id, suffix, value)}
             />
           ))}
         </div>
@@ -614,25 +656,26 @@ function SaveIndicator({
 function CountRow({
   item,
   counts,
+  isMobile,
   onChange,
 }: {
   item: StockItem;
   counts: Record<CountKey, string>;
-  onChange: (unit: string, value: string) => void;
+  isMobile: boolean;
+  onChange: (suffix: string, value: string) => void;
 }) {
   const alternates = item.alternateUnits ?? [];
   const allUnits = [item.stockUnit, ...alternates];
+  const variants = item.supplierVariants ?? [];
+  const isMaster = item.type === 'master-product';
 
   // Roll every cell on this row into a single quantity expressed in
-  // the item's primary stockUnit. The rollup powers the "Count"
-  // readout, the £-value line, and the variance — so an entry in any
-  // unit (kg, g, bags, packs, loaves, …) influences the totals
-  // exactly the same way the primary cell would.
-  const rawByUnit: Record<string, string> = {};
-  for (const u of allUnits) {
-    rawByUnit[u] = counts[keyFor(item.id, u)] ?? '';
-  }
-  const rollup = rollupCounts(item, rawByUnit);
+  // the item's primary stockUnit. For master products this sums across
+  // every supplier sub-row; for simple items it's the single multi-UOM
+  // strip. The rollup powers the "Count" readout, the £-value line, and
+  // the variance — so an entry in any unit (kg, g, bags, trays, …)
+  // influences the totals exactly the same way the primary cell would.
+  const rollup = rollupItemCounts(item, rawSuffixMap(item, counts));
 
   const theoretical = item.theoreticalStock ?? item.currentStock;
   const variance = rollup.hasInput ? rollup.total - theoretical : null;
@@ -654,10 +697,13 @@ function CountRow({
   return (
     <article
       style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr auto',
-        gap: 14,
-        padding: '14px 16px',
+        // Desktop: title/inputs left, totals right. Mobile: a single
+        // stacked column so the count boxes get the full width.
+        display: isMobile ? 'flex' : 'grid',
+        flexDirection: isMobile ? 'column' : undefined,
+        gridTemplateColumns: isMobile ? undefined : '1fr auto',
+        gap: isMobile ? 12 : 14,
+        padding: 14,
         background: '#fff',
         border: rowCounted
           ? '1px solid var(--color-success)'
@@ -679,11 +725,13 @@ function CountRow({
             }}
           >
             <ChevronDown size={14} color="var(--color-text-secondary)" />
-            {item.name} {item.variant && (
+            {item.name} {item.variant && !isMaster && (
               <span style={{ color: 'var(--color-text-secondary)', fontWeight: 500 }}>
                 {item.variant}
               </span>
             )}
+            {isMaster && <RowBadge label="MP" tone="info" />}
+            {item.noCountingUnit && <RowBadge label="No counting unit" tone="warning" />}
           </div>
           <div
             style={{
@@ -698,29 +746,49 @@ function CountRow({
           </div>
         </div>
 
-        {/* UOM-aware input strip. Each available unit is its own
-            discrete pill (no shared container) so a row with three
-            options reads as three separate decisions. The pill's tone
-            is driven by the *kind* of unit (count / mass / volume) —
-            it lets the operator scan a multi-UOM row and pick the
-            unit they're holding without reading every label. */}
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 8,
-            alignItems: 'stretch',
-          }}
-        >
-          {allUnits.map(unit => (
-            <UnitInput
-              key={unit}
-              unit={unit}
-              value={counts[keyFor(item.id, unit)] ?? ''}
-              onChange={v => onChange(unit, v)}
-            />
-          ))}
-        </div>
+        {/* Input area. Master products with per-supplier packaging break
+            into one sub-row per supplier variant (each holding its own
+            pack pills); everything else renders a single multi-UOM
+            strip. Each unit is its own discrete pill so a row with three
+            options reads as three separate decisions, with the pill tone
+            driven by the unit's kind (count / mass / volume). */}
+        {variants.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 12 : 8 }}>
+            {variants.map(variant => (
+              <VariantRow
+                key={variant.id}
+                item={item}
+                variant={variant}
+                counts={counts}
+                isMobile={isMobile}
+                onChange={onChange}
+              />
+            ))}
+          </div>
+        ) : (
+          <>
+            {item.packNote && <PackNote text={item.packNote} />}
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 8,
+                alignItems: 'stretch',
+              }}
+            >
+              {allUnits.map(unit => (
+                <UnitInput
+                  key={unit}
+                  unit={unit}
+                  value={counts[keyFor(item.id, unit)] ?? ''}
+                  onChange={v => onChange(unit, v)}
+                  packSize={formatPackSize(item, unit) ?? undefined}
+                  grow={isMobile}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Right — category badge sitting above the Count / Theoretical
@@ -736,10 +804,15 @@ function CountRow({
         style={{
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'flex-end',
+          alignItems: isMobile ? 'stretch' : 'flex-end',
           justifyContent: 'space-between',
           gap: 8,
-          minWidth: 140,
+          minWidth: isMobile ? 0 : 140,
+          width: isMobile ? '100%' : undefined,
+          // On mobile the totals sit under the inputs, separated by a
+          // hairline so the card reads top-to-bottom: count it, see it.
+          borderTop: isMobile ? '1px solid var(--color-border-subtle)' : undefined,
+          paddingTop: isMobile ? 10 : 0,
         }}
       >
         <span
@@ -756,7 +829,9 @@ function CountRow({
             display: 'flex',
             gap: 16,
             alignItems: 'flex-start',
-            textAlign: 'right',
+            justifyContent: isMobile ? 'space-between' : 'flex-start',
+            width: isMobile ? '100%' : undefined,
+            textAlign: isMobile ? 'left' : 'right',
           }}
         >
           <div>
@@ -845,6 +920,154 @@ function CountRow({
         </div>
       </div>
     </article>
+  );
+}
+
+// ─── Master-product sub-row ───────────────────────────────────────────────────
+
+// One supplier SKU under a master product. Renders the supplier label
+// plus its own pack-aware UOM pills (a tray of 18 from one supplier, a
+// bag of 12 from another). Cells are keyed `${variantId}::${unit}` so
+// each supplier's count is tracked independently, then summed into the
+// master's headline figure.
+function VariantRow({
+  item,
+  variant,
+  counts,
+  isMobile,
+  onChange,
+}: {
+  item: StockItem;
+  variant: StockSupplierVariant;
+  counts: Record<CountKey, string>;
+  isMobile: boolean;
+  onChange: (suffix: string, value: string) => void;
+}) {
+  const synthetic = variantAsItem(item, variant);
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        paddingLeft: 20,
+        borderLeft: '2px solid var(--color-border-subtle)',
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: 'var(--color-text-secondary)',
+        }}
+      >
+        {variant.label}
+      </div>
+      {variant.noCountingUnit ? (
+        <NoCountHint />
+      ) : (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 8,
+            alignItems: 'stretch',
+          }}
+        >
+          {variant.units.map(unit => (
+            <UnitInput
+              key={unit}
+              unit={unit}
+              value={counts[keyFor(item.id, `${variant.id}::${unit}`)] ?? ''}
+              onChange={v => onChange(`${variant.id}::${unit}`, v)}
+              packSize={
+                variant.packLabels?.[unit] ??
+                formatPackSize(synthetic, unit) ??
+                undefined
+              }
+              grow={isMobile}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Small UI helpers ─────────────────────────────────────────────────────────
+
+// Inline pill next to a row title — "MP" for master products, "No
+// counting unit" for items missing a countable UOM.
+function RowBadge({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: 'info' | 'warning';
+}) {
+  const colour = tone === 'info' ? 'var(--color-info)' : 'var(--color-warning)';
+  const bg =
+    tone === 'info' ? 'var(--color-info-light)' : 'var(--color-warning-light)';
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '1px 6px',
+        borderRadius: 'var(--radius-badge)',
+        background: bg,
+        color: colour,
+        border: `1px solid ${colour}`,
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: '0.03em',
+        textTransform: 'uppercase',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+// Sub-label under a master-product name, e.g. "Same packaging —
+// counting for all" or the add-a-UOM prompt.
+function PackNote({ text }: { text: string }) {
+  return (
+    <div
+      style={{
+        fontSize: 11,
+        fontWeight: 500,
+        color: 'var(--color-text-secondary)',
+        fontStyle: 'italic',
+      }}
+    >
+      {text}
+    </div>
+  );
+}
+
+// Placeholder shown in place of inputs when an item / variant has no
+// countable unit configured yet.
+function NoCountHint() {
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '8px 12px',
+        borderRadius: 'var(--radius-item)',
+        border: '1px dashed var(--color-border)',
+        background: 'var(--color-bg-hover)',
+        color: 'var(--color-text-secondary)',
+        fontSize: 12,
+        fontWeight: 500,
+        width: 'fit-content',
+      }}
+    >
+      Add an alt UOM in supplier settings
+    </div>
   );
 }
 

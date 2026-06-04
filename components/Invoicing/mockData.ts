@@ -301,11 +301,11 @@ export const MOCK_INVOICES: Invoice[] = [
     invoiceNumber: 'INV-4433',
     supplier: 'Bidfood',
     date: '5 Apr 2026',
-    total: 192.00,
+    total: 132.00,
     grnNumbers: ['GRN-1249'],
     status: 'Matched',
     lines: [
-      { id: 'il-23', description: 'Free range eggs 15pk', sku: 'FRE-15', qty: 15, unitPrice: 8.00, lineTotal: 120.00 },
+      { id: 'il-23', description: 'Free range eggs 4pk', sku: 'FRE-4', qty: 15, unitPrice: 4.00, lineTotal: 60.00 },
       { id: 'il-24', description: 'Plain flour 10kg', sku: 'FLR-10', qty: 4, unitPrice: 18.00, lineTotal: 72.00 },
     ],
     variances: [],
@@ -395,6 +395,29 @@ export function getUnmatchedInvoiceLines(invoice: Invoice, extraGRNs: string[] =
   const grnLines = getGRNMatchLines(invoice, extraGRNs);
   const grnSkus = new Set(grnLines.map(gl => gl.sku));
   return invoice.lines.filter(il => !grnSkus.has(il.sku));
+}
+
+export interface DeliveryReconciledSubstitution {
+  grnNumber: string;
+  invoiceLine: InvoiceLine;
+  grnLine: GRN['lines'][number];
+}
+
+export function getDeliveryReconciledSubstitutions(
+  invoice: Invoice,
+  extraGRNs: string[] = [],
+): DeliveryReconciledSubstitution[] {
+  const grns = getGRNsForInvoice(invoice, extraGRNs);
+  const out: DeliveryReconciledSubstitution[] = [];
+  for (const grn of grns) {
+    for (const grnLine of grn.lines) {
+      if (!grnLine.alternativeFor) continue;
+      const invoiceLine = invoice.lines.find(il => il.sku === grnLine.sku);
+      if (!invoiceLine) continue;
+      out.push({ grnNumber: grn.grnNumber, invoiceLine, grnLine });
+    }
+  }
+  return out;
 }
 
 export function invoiceGRNTotal(invoice: Invoice, extraGRNs: string[] = []): number {
@@ -740,6 +763,15 @@ export function getAutoStatusNote(invoice: Invoice): AutoStatusNote | null {
     };
   }
   if (invoice.status === 'Matched') {
+    const substitutions = getDeliveryReconciledSubstitutions(invoice);
+    if (substitutions.length > 0) {
+      const first = substitutions[0];
+      return {
+        text: `Matched — invoice bills ${first.grnLine.name}, while the PO ordered ${first.grnLine.alternativeFor?.poName}. Delivery already reconciled the alternative item and linked it to the master product.`,
+        tone: 'success',
+        reason: 'invoice.status=Matched + delivery alternative reconciled',
+      };
+    }
     return {
       text: `All items matched and ready for approval.`,
       tone: 'success',

@@ -5,6 +5,8 @@ import Stepper from './Stepper';
 import StatusBadge from './StatusBadge';
 import ResponsiveDataList, { Column } from './ResponsiveDataList';
 import { PO, POLine, VarianceResolution, poItemCount, poTotal } from './mockData';
+import AddAlternativeProductModal, { type StagedAlternative } from './AddAlternativeProductModal';
+import { formatPrice } from '@/components/Suppliers/fixtures';
 
 interface ReceivedLine {
   poLineId: string;
@@ -12,9 +14,17 @@ interface ReceivedLine {
   resolution?: VarianceResolution;
 }
 
+/**
+ * A row in the receiving table — either a real PO line or a staged
+ * alternative the supplier sent in place of (or on top of) the order.
+ */
+type DisplayRow =
+  | { kind: 'po'; line: POLine }
+  | { kind: 'alt'; alt: StagedAlternative };
+
 interface ReceivingScreenProps {
   pos: PO[];
-  onConfirm: (data: { invoiceNumber: string; lines: ReceivedLine[] }) => void;
+  onConfirm: (data: { invoiceNumber: string; lines: ReceivedLine[]; alternatives: StagedAlternative[] }) => void;
   onBack: () => void;
   onAddPO: () => void;
   onScanGRN: () => void;
@@ -44,6 +54,37 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO, onSca
   const [resolutionMap, setResolutionMap] = useState<Record<string, VarianceResolution>>({});
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [attachedFile, setAttachedFile] = useState<string | null>(null);
+  const [alternatives, setAlternatives] = useState<StagedAlternative[]>([]);
+  const [altModal, setAltModal] = useState<{ open: boolean; line?: POLine } | null>(null);
+
+  const poForLine = (lineId: string): PO => pos.find(p => p.lines.some(l => l.id === lineId)) ?? pos[0];
+  const modalPO = altModal?.line ? poForLine(altModal.line.id) : pos[0];
+
+  const addAlternative = (alt: StagedAlternative) => {
+    setAlternatives(prev => [...prev, alt]);
+    // When the alternative substitutes an ordered line, that line wasn't
+    // delivered — drop its received qty to 0 (it gets an "Alternative sent"
+    // tag instead of a short-variance flag).
+    if (alt.originPoLineId) {
+      const originId = alt.originPoLineId;
+      setReceivedMap(prev => ({ ...prev, [originId]: 0 }));
+    }
+    setAltModal(null);
+  };
+  const removeAlternative = (id: string) => {
+    const removed = alternatives.find(a => a.id === id);
+    setAlternatives(prev => prev.filter(a => a.id !== id));
+    // Restore the substituted line's expected qty if nothing else replaces it.
+    if (removed?.originPoLineId) {
+      const stillSubstituted = alternatives.some(
+        a => a.id !== id && a.originPoLineId === removed.originPoLineId,
+      );
+      if (!stillSubstituted) {
+        const line = allLines.find(l => l.id === removed.originPoLineId);
+        if (line) setReceivedMap(prev => ({ ...prev, [line.id]: line.expectedQty }));
+      }
+    }
+  };
 
   const setQty = (lineId: string, qty: number) => {
     setReceivedMap(prev => ({ ...prev, [lineId]: qty }));
@@ -53,7 +94,31 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO, onSca
     setResolutionMap(prev => ({ ...prev, [lineId]: res }));
   };
 
-  const varianceLines = allLines.filter(l => receivedMap[l.id] !== l.expectedQty);
+  const substitutedLineIds = useMemo(
+    () => new Set(alternatives.filter(a => a.originPoLineId).map(a => a.originPoLineId!)),
+    [alternatives],
+  );
+
+  // Interleave alternatives directly under the PO line they replace; any
+  // standalone (off-PO) alternatives fall to the bottom of the order.
+  const tableData = useMemo<DisplayRow[]>(() => {
+    const rows: DisplayRow[] = [];
+    for (const line of allLines) {
+      rows.push({ kind: 'po', line });
+      alternatives
+        .filter(a => a.originPoLineId === line.id)
+        .forEach(alt => rows.push({ kind: 'alt', alt }));
+    }
+    alternatives
+      .filter(a => !a.originPoLineId)
+      .forEach(alt => rows.push({ kind: 'alt', alt }));
+    return rows;
+  }, [allLines, alternatives]);
+
+  // Substituted lines are intentionally at 0 — don't treat them as shorts.
+  const varianceLines = allLines.filter(
+    l => !substitutedLineIds.has(l.id) && (receivedMap[l.id] ?? l.expectedQty) !== l.expectedQty,
+  );
   const unresolvedVariances = varianceLines.filter(l => !resolutionMap[l.id]);
   const canConfirm = unresolvedVariances.length === 0;
 
@@ -65,69 +130,117 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO, onSca
         receivedQty: receivedMap[l.id] ?? l.expectedQty,
         resolution: resolutionMap[l.id],
       })),
+      alternatives,
     });
   };
 
-  const columns: Column<POLine>[] = [
+  const columns: Column<DisplayRow>[] = [
     {
       key: 'name',
       header: 'Item',
       mobileRole: 'title',
-      render: (row) => (
-        <div>
-          <div style={{ fontWeight: 600, fontSize: '13px' }}>{row.name}</div>
-          <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{row.sku} · {row.unit}</div>
-        </div>
-      ),
+      render: (row) => {
+        if (row.kind === 'po') {
+          const substituted = substitutedLineIds.has(row.line.id);
+          return (
+            <div>
+              <div style={{ fontWeight: 600, fontSize: '13px', color: substituted ? 'var(--color-text-secondary)' : 'var(--color-text-primary)', textDecoration: substituted ? 'line-through' : 'none' }}>
+                {row.line.name}
+              </div>
+              <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{row.line.sku} · {row.line.unit}</div>
+            </div>
+          );
+        }
+        const { alt } = row;
+        const perUnit = alt.packQty > 0 ? alt.packCost / alt.packQty : 0;
+        const origin = alt.originPoLineId ? allLines.find(l => l.id === alt.originPoLineId) : undefined;
+        return (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              <StatusBadge status="New product" variant="warning" />
+              <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text-primary)' }}>{alt.productName}</span>
+            </div>
+            <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+              → {alt.masterName} · {formatPrice(perUnit)}/{alt.masterUnit}{origin ? ` · for "${origin.name}"` : ' · off-PO'}
+            </div>
+          </div>
+        );
+      },
     },
     {
       key: 'expected',
       header: 'Expected',
       mobileRole: 'subtitle',
       width: '90px',
-      render: (row) => (
-        <span
-          style={{
-            display: 'inline-block',
-            padding: '4px 12px',
-            borderRadius: '100px',
-            background: 'var(--color-bg-hover)',
-            fontSize: '14px',
-            fontWeight: 700,
-            color: 'var(--color-text-primary)',
-          }}
-        >
-          {row.expectedQty}
-        </span>
-      ),
+      render: (row) => {
+        if (row.kind === 'alt') return <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>—</span>;
+        return <span style={expectedPillStyle}>{row.line.expectedQty}</span>;
+      },
     },
     {
       key: 'received',
       header: 'Received',
       width: '160px',
-      render: (row) => (
-        <Stepper
-          value={receivedMap[row.id] ?? row.expectedQty}
-          onChange={(v) => setQty(row.id, v)}
-          label={row.name}
-        />
-      ),
+      render: (row) => {
+        if (row.kind === 'alt') {
+          return (
+            <div style={{ lineHeight: 1.3 }}>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{row.alt.receivedQty}</span>
+              <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}> × {row.alt.packQty} {row.alt.masterUnit}</span>
+            </div>
+          );
+        }
+        if (substitutedLineIds.has(row.line.id)) {
+          return <span style={zeroPillStyle}>0</span>;
+        }
+        return (
+          <Stepper
+            value={receivedMap[row.line.id] ?? row.line.expectedQty}
+            onChange={(v) => setQty(row.line.id, v)}
+            label={row.line.name}
+          />
+        );
+      },
     },
     {
       key: 'price',
       header: 'Unit Price',
       width: '90px',
-      render: (row) => <span>${row.price.toFixed(2)}</span>,
+      render: (row) => row.kind === 'po'
+        ? <span>£{row.line.price.toFixed(2)}</span>
+        : <span>{formatPrice(row.alt.packCost)}</span>,
     },
     {
       key: 'variance',
       header: 'Variance',
       mobileRole: 'badge',
-      width: '120px',
+      width: '150px',
       render: (row) => {
-        const v = getVarianceLabel(row.expectedQty, receivedMap[row.id] ?? row.expectedQty);
+        if (row.kind === 'alt') {
+          return <StatusBadge status={row.alt.originPoLineId ? 'Alternative' : 'Off-PO item'} variant="warning" />;
+        }
+        if (substitutedLineIds.has(row.line.id)) {
+          return <StatusBadge status="Alternative sent" variant="warning" />;
+        }
+        const v = getVarianceLabel(row.line.expectedQty, receivedMap[row.line.id] ?? row.line.expectedQty);
         if (!v) return <StatusBadge status="OK" variant="success" />;
         return <StatusBadge status={v.label} variant={v.variant} />;
+      },
+    },
+    {
+      key: 'actions',
+      header: '',
+      width: '140px',
+      render: (row) => {
+        if (row.kind === 'alt') {
+          return <button onClick={() => removeAlternative(row.alt.id)} style={removeBtnStyle}>Remove</button>;
+        }
+        if (substitutedLineIds.has(row.line.id)) return null;
+        return (
+          <button onClick={() => setAltModal({ open: true, line: row.line })} style={substituteBtnStyle}>
+            Sent different?
+          </button>
+        );
       },
     },
   ];
@@ -148,6 +261,7 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO, onSca
         <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>Receive Items</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={onAddPO} style={secondaryBtnStyle}>+ Add PO</button>
+          <button onClick={() => setAltModal({ open: true })} style={secondaryBtnStyle}>+ Add unexpected item</button>
           <button onClick={onScanGRN} style={secondaryBtnStyle}>Scan GRN</button>
         </div>
       </div>
@@ -163,8 +277,8 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO, onSca
               style={{
                 padding: '16px 18px',
                 borderRadius: '10px',
-                background: 'var(--color-success-light)',
-                border: '1px solid var(--color-success-border)',
+                background: 'var(--color-bg-hover)',
+                border: '1px solid var(--color-border-subtle)',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
@@ -192,8 +306,8 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO, onSca
       <div style={{ border: '1px solid var(--color-border-subtle)', borderRadius: '10px', overflow: 'hidden', background: '#fff' }}>
         <ResponsiveDataList
           columns={columns}
-          data={allLines}
-          getRowKey={(row) => row.id}
+          data={tableData}
+          getRowKey={(row) => row.kind === 'po' ? row.line.id : row.alt.id}
           emptyText="No line items"
         />
       </div>
@@ -375,6 +489,16 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO, onSca
           Confirm Delivery
         </button>
       </div>
+
+      {altModal?.open && (
+        <AddAlternativeProductModal
+          originLine={altModal.line}
+          supplierName={modalPO.supplier}
+          site={modalPO.site}
+          onSave={addAlternative}
+          onClose={() => setAltModal(null)}
+        />
+      )}
     </div>
   );
 }
@@ -389,4 +513,45 @@ const secondaryBtnStyle: React.CSSProperties = {
   fontFamily: 'var(--font-primary)',
   color: 'var(--color-text-primary)',
   cursor: 'pointer',
+};
+
+const substituteBtnStyle: React.CSSProperties = {
+  padding: '6px 10px',
+  borderRadius: '8px',
+  background: '#fff',
+  border: '1px solid var(--color-border)',
+  fontSize: '12px',
+  fontWeight: 600,
+  fontFamily: 'var(--font-primary)',
+  color: 'var(--color-accent-deep)',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+};
+
+const expectedPillStyle: React.CSSProperties = {
+  display: 'inline-block',
+  padding: '4px 12px',
+  borderRadius: '100px',
+  background: 'var(--color-bg-hover)',
+  fontSize: '14px',
+  fontWeight: 700,
+  color: 'var(--color-text-primary)',
+};
+
+const zeroPillStyle: React.CSSProperties = {
+  ...expectedPillStyle,
+  color: 'var(--color-text-muted)',
+};
+
+const removeBtnStyle: React.CSSProperties = {
+  padding: '6px 10px',
+  borderRadius: '8px',
+  background: '#fff',
+  border: '1px solid var(--color-border)',
+  fontSize: '12px',
+  fontWeight: 600,
+  fontFamily: 'var(--font-primary)',
+  color: 'var(--color-text-secondary)',
+  cursor: 'pointer',
+  flexShrink: 0,
 };

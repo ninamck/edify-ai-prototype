@@ -80,7 +80,7 @@ export default function GRNDetail({ id }: { id: string }) {
         <MetaCard label="Site" value={grn.site} />
         <MetaCard label="Items" value={`${grn.lines.length} lines`} />
         {grn.invoiceNumber && <MetaCard label="Invoice" value={grn.invoiceNumber} />}
-        <MetaCard label="Total Received" value={`$${total.toFixed(2)}`} highlight />
+        <MetaCard label="Total Received" value={`£${total.toFixed(2)}`} highlight />
       </div>
 
       {/* Lines table */}
@@ -115,8 +115,8 @@ export default function GRNDetail({ id }: { id: string }) {
                       </span>
                     )}
                   </td>
-                  <td style={{ ...cell }}>${line.price.toFixed(2)}</td>
-                  <td style={{ ...cell, fontWeight: 600 }}>${lineTotal.toFixed(2)}</td>
+                  <td style={{ ...cell }}>£{line.price.toFixed(2)}</td>
+                  <td style={{ ...cell, fontWeight: 600 }}>£{lineTotal.toFixed(2)}</td>
                 </tr>
               );
             })}
@@ -124,7 +124,7 @@ export default function GRNDetail({ id }: { id: string }) {
           <tfoot>
             <tr style={{ borderTop: '2px solid var(--color-border)' }}>
               <td colSpan={6} style={{ ...cell, textAlign: 'right', fontWeight: 600, color: 'var(--color-text-secondary)', borderBottom: 'none' }}>Total received</td>
-              <td style={{ ...cell, fontWeight: 700, fontSize: '14px', borderBottom: 'none' }}>${total.toFixed(2)}</td>
+              <td style={{ ...cell, fontWeight: 700, fontSize: '14px', borderBottom: 'none' }}>£{total.toFixed(2)}</td>
             </tr>
           </tfoot>
         </table>

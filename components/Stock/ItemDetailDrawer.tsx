@@ -44,6 +44,7 @@ import {
   MOVEMENT_KIND_CONFIG,
   formatDaysCover,
   formatMovementQuantity,
+  formatPackSize,
   formatRelativeDate,
   formatStock,
   formatStocktakeAge,
@@ -448,6 +449,7 @@ function DrawerBody({
                       inputWidth={84}
                       tagMinWidth={52}
                       inputFontSize={16}
+                      packSize={formatPackSize(item, unit) ?? undefined}
                     />
                   ))}
                 </div>

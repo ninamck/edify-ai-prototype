@@ -73,10 +73,10 @@ const NEGATIVE = '#B45309';
 function formatCurrency(value: number, opts: { compact?: boolean } = {}): string {
   if (!Number.isFinite(value)) return '—';
   if (opts.compact) {
-    if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-    if (Math.abs(value) >= 1_000) return `$${(value / 1_000).toFixed(1)}k`;
+    if (Math.abs(value) >= 1_000_000) return `£${(value / 1_000_000).toFixed(1)}M`;
+    if (Math.abs(value) >= 1_000) return `£${(value / 1_000).toFixed(1)}k`;
   }
-  return `$${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  return `£${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
 
 function formatPercent(value: number): string {
@@ -448,7 +448,7 @@ function AvgTicketBySiteChart() {
   }, [rows]);
   return (
     <ChartStatus loading={!rows && !error} error={error} empty={data.length === 0}>
-      <HBarChart data={data} valueFormatter={(v) => `$${v.toFixed(2)}`} barColor={ACCENT_MID} />
+      <HBarChart data={data} valueFormatter={(v) => `£${v.toFixed(2)}`} barColor={ACCENT_MID} />
     </ChartStatus>
   );
 }
@@ -553,7 +553,7 @@ function RevenuePerLabourHourChart() {
   }, [rows]);
   return (
     <ChartStatus loading={!rows && !error} error={error} empty={data.length === 0}>
-      <HBarChart data={data} valueFormatter={(v) => `$${v.toFixed(0)}/hr`} />
+      <HBarChart data={data} valueFormatter={(v) => `£${v.toFixed(0)}/hr`} />
     </ChartStatus>
   );
 }
@@ -566,7 +566,7 @@ function BasketSizeBySiteChart() {
   );
   return (
     <ChartStatus loading={!rows && !error} error={error} empty={data.length === 0}>
-      <HBarChart data={data} valueFormatter={(v) => `$${v.toFixed(2)}`} barColor={ACCENT_MID} />
+      <HBarChart data={data} valueFormatter={(v) => `£${v.toFixed(2)}`} barColor={ACCENT_MID} />
     </ChartStatus>
   );
 }
@@ -666,7 +666,7 @@ function AvgTicketTrendChart() {
   const data = useMemo(() => flashReportTrend(rows ?? [], 'average_ticket', 13), [rows]);
   return (
     <ChartStatus loading={!rows && !error} error={error} empty={data.length === 0}>
-      <LinePoints data={data} valueFormatter={(v) => `$${v.toFixed(2)}`} color={ACCENT_MID} />
+      <LinePoints data={data} valueFormatter={(v) => `£${v.toFixed(2)}`} color={ACCENT_MID} />
     </ChartStatus>
   );
 }
@@ -756,7 +756,7 @@ function LabourCostPerTxnChart() {
   }, [rows]);
   return (
     <ChartStatus loading={!rows && !error} error={error} empty={data.length === 0}>
-      <HBarChart data={data} valueFormatter={(v) => `$${v.toFixed(2)}`} barColor={ACCENT_MID} />
+      <HBarChart data={data} valueFormatter={(v) => `£${v.toFixed(2)}`} barColor={ACCENT_MID} />
     </ChartStatus>
   );
 }
@@ -783,7 +783,7 @@ function AvgHourlyLabourCostChart() {
   }, [rows]);
   return (
     <ChartStatus loading={!rows && !error} error={error} empty={data.length === 0}>
-      <HBarChart data={data} valueFormatter={(v) => `$${v.toFixed(2)}/hr`} barColor={ACCENT_MID} />
+      <HBarChart data={data} valueFormatter={(v) => `£${v.toFixed(2)}/hr`} barColor={ACCENT_MID} />
     </ChartStatus>
   );
 }

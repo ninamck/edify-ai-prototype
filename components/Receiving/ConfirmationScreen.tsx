@@ -9,7 +9,10 @@ interface ConfirmationScreenProps {
   poNumbers: string[];
   varianceCount: number;
   receivedBy: string;
+  altCount?: number;
+  masterId?: string;
   onBackToDeliveries: () => void;
+  onViewMaster?: () => void;
 }
 
 export default function ConfirmationScreen({
@@ -18,17 +21,25 @@ export default function ConfirmationScreen({
   poNumbers,
   varianceCount,
   receivedBy,
+  altCount = 0,
   onBackToDeliveries,
+  onViewMaster,
 }: ConfirmationScreenProps) {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const statusLabel = altCount > 0
+    ? 'Alternative product sent'
+    : varianceCount > 0
+      ? 'Variance — Awaiting Resolution'
+      : 'Fully Received';
+  const statusVariant = altCount > 0 ? 'warning' : undefined;
 
   return (
     <div style={{ fontFamily: 'var(--font-primary)' }}>
       {/* Success banner */}
       <div
         style={{
-          background: 'var(--color-success-light)',
-          border: '1px solid var(--color-success-border)',
+          background: 'var(--color-bg-hover)',
+          border: '1px solid var(--color-border-subtle)',
           borderRadius: '12px',
           padding: '24px',
           textAlign: 'center',
@@ -36,7 +47,7 @@ export default function ConfirmationScreen({
         }}
       >
         <div style={{ fontSize: '36px', marginBottom: '8px' }}>✓</div>
-        <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-success)', margin: '0 0 4px' }}>
+        <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>
           Delivery Confirmed
         </h2>
         <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', margin: 0 }}>
@@ -65,10 +76,10 @@ export default function ConfirmationScreen({
           <div>
             <span style={{ color: 'var(--color-text-secondary)' }}>Status</span>
             <div style={{ marginTop: '4px' }}>
-              <StatusBadge status={varianceCount > 0 ? 'Variance — Awaiting Resolution' : 'Fully Received'} />
+              <StatusBadge status={statusLabel} variant={statusVariant} />
             </div>
           </div>
-          {varianceCount > 0 && (
+          {varianceCount > 0 && altCount === 0 && (
             <div>
               <span style={{ color: 'var(--color-text-secondary)' }}>Variances</span>
               <div style={{ marginTop: '4px' }}>
@@ -78,6 +89,43 @@ export default function ConfirmationScreen({
           )}
         </div>
       </div>
+
+      {/* New products / cost update note */}
+      {altCount > 0 && (
+        <div
+          style={{
+            border: '1px solid var(--color-border-subtle)',
+            background: '#fff',
+            borderRadius: '12px',
+            padding: '18px 20px',
+            marginBottom: '24px',
+          }}
+        >
+          <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 6px' }}>
+            {altCount} new supplier product{altCount > 1 ? 's' : ''} created
+          </h3>
+          <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: '0 0 12px', lineHeight: 1.5 }}>
+            The alternative item{altCount > 1 ? 's were' : ' was'} added to the supplier catalogue and linked to the
+            relevant master product. Each master&apos;s weighted-average cost has been updated for this site, so
+            stock takes and COGS use the right figure.
+          </p>
+          {onViewMaster && (
+            <button onClick={onViewMaster} style={{
+              padding: '9px 16px',
+              borderRadius: '8px',
+              background: '#fff',
+              border: '1px solid var(--color-border)',
+              fontSize: '13px',
+              fontWeight: 600,
+              fontFamily: 'var(--font-primary)',
+              color: 'var(--color-accent-deep)',
+              cursor: 'pointer',
+            }}>
+              View master product
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>

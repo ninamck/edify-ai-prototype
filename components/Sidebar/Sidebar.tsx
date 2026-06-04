@@ -23,6 +23,7 @@ import {
   PanelLeftOpen,
   PanelLeftClose,
   Activity as ActivityIcon,
+  BarChart3,
 } from 'lucide-react';
 
 import NavGroup from './NavGroup';
@@ -266,6 +267,16 @@ export default function Sidebar() {
             in the app but are hidden from the sidebar to keep the demo
             focused on these three views. */}
         <NavGroup title="Performance" compact={compact}>
+          {/* COGS — theoretical vs actual cost of goods, with line-level
+              variance and Edify discrepancy insights. Sits in Performance
+              alongside the other retrospective / oversight surfaces. */}
+          <NavItem
+            label="COGS"
+            icon={BarChart3}
+            compact={compact}
+            active={is('/cogs')}
+            onClick={() => router.push('/cogs')}
+          />
           <NavItem
             label="Forecast demand"
             icon={LineChart}

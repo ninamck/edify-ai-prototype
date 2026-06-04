@@ -48,23 +48,20 @@ export const ALL_CATEGORIES: ProductCategory[] = [
 export const ALL_CLASSES: ProductClass[] = ['General', 'Food', 'Beverage', 'Non-food'];
 
 /**
- * The 12 sites used by the Agility supplier in the source screenshots. Real
- * estates would pull this from the org store; for the prototype we keep a
- * single shared list so the multi-select pill UX has something to work with.
+ * The sites the prototype actually runs on — the "Fitzroy" personas from the
+ * top-bar site switcher (see components/ActiveSite/ActiveSiteContext.tsx) and
+ * the production site picker. Kept in sync here so supplier/product/master site
+ * pickers and the master-product cost table show the same estate the rest of
+ * the app does (the receiving flow delivers against these names too).
  */
 export const ALL_SITES: string[] = [
-  'DXB CONCA PRET A MANGER',
-  'DXB CONCD PRET A MANGER',
-  'PRET A MANGER BAY AVENUE',
-  'PRET A MANGER DIFC',
-  'PRET A MANGER INDEX MALL',
-  'PRET AVIATION COLLEGE C LOBBY',
-  'PRET CATERING',
-  'PRET DIC 24',
-  'PRET EMAAR SQUARE',
-  'PRET HUB KITCHEN',
-  'PRET HUB STORE',
-  'PRET ONE ZABEEL',
+  'Fitzroy Espresso',
+  "Fitzroy King's Cross",
+  'Fitzroy Shoreditch',
+  'Fitzroy Notting Hill',
+  'Fitzroy Heathrow',
+  'Fitzroy Gatwick',
+  'Fitzroy Islington',
 ];
 
 export type Supplier = {
@@ -151,6 +148,21 @@ export type Product = {
   flag?: { label: string } | null;
 };
 
+/**
+ * Per-site weighted-average cost for a master product. Held in the master's
+ * reference `unit` (e.g. cost per single egg). A site that has never received
+ * a real purchase is simply absent from the `siteCosts` map and treated as
+ * "Estimated (no purchases)" in the UI.
+ */
+export type MasterSiteCost = {
+  /** Weighted-average cost per master `unit`, in GBP. */
+  wac: number;
+  /** Quantity on hand (in master `unit`s) used to weight the next delivery. */
+  onHandQty: number;
+  /** 'estimated' until a real purchase lands; otherwise a date / GRN string. */
+  lastCalculated: 'estimated' | string;
+};
+
 export type MasterProduct = {
   id: string;
   name: string;
@@ -159,11 +171,41 @@ export type MasterProduct = {
   unit: string;
   /** Comma-free slug used as a stable lookup, e.g. 'whole-milk-1l'. */
   slug: string;
+  /** Optional product class shown in the master detail Basic Information. */
+  productClass?: ProductClass;
+  /** Lifecycle status surfaced on the master detail page. */
+  status?: SupplierStatus;
+  /** Per-site weighted-average cost, keyed by site name. Absent sites are
+   *  treated as "estimated (no purchases)". Updated on delivery. */
+  siteCosts?: Record<string, MasterSiteCost>;
+  /** Linked supplier Product chosen as the default for ordering. */
+  defaultProductId?: string;
 };
 
-export const CURRENCY = 'DH';
+/**
+ * Quantity-weighted average WAC across the sites that have a recorded cost.
+ * Returns null when no site has a real cost yet (so the UI can show a dash /
+ * "estimated" rather than 0). Falls back to a simple mean if on-hand
+ * quantities are all zero but WACs exist.
+ */
+export function masterCompanyAvg(m: MasterProduct): number | null {
+  const entries = Object.values(m.siteCosts ?? {});
+  if (entries.length === 0) return null;
+  let totalQty = 0;
+  let weighted = 0;
+  for (const c of entries) {
+    if (c.onHandQty > 0) {
+      totalQty += c.onHandQty;
+      weighted += c.onHandQty * c.wac;
+    }
+  }
+  if (totalQty > 0) return weighted / totalQty;
+  return entries.reduce((s, c) => s + c.wac, 0) / entries.length;
+}
+
+export const CURRENCY = '£';
 export const formatPrice = (amount: number) =>
-  `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${CURRENCY}`;
+  `${CURRENCY}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Seed data
@@ -334,6 +376,25 @@ export const SEED_MASTER_PRODUCTS: MasterProduct[] = [
   { id: 'mp-lemonade', name: 'Lemonade 200ml mixer', category: 'Beverage', unit: '200ml can', slug: 'lemonade' },
   { id: 'mp-tonic', name: 'Tonic Water 200ml', category: 'Beverage', unit: '200ml can', slug: 'tonic' },
   { id: 'mp-savvy-b', name: 'Marlborough Sauvignon Blanc', category: 'Beverage', unit: '750ml bottle', slug: 'savvy-b' },
+  // Eggs master — reference unit is a single egg so SKUs of different pack
+  // sizes (15pk, 30pk, …) blend into one weighted-average cost. One site
+  // ('Fitzroy Heathrow') already has a real WAC; every other site shows
+  // "Estimated" until a delivery lands there. The receiving flow's
+  // alternative-product demo records a new SKU + WAC against the PO's site
+  // ('Fitzroy Espresso'), flipping that row from estimated to calculated.
+  {
+    id: 'mp-eggs',
+    name: 'Free Range Eggs',
+    category: 'Produce',
+    unit: 'egg',
+    slug: 'free-range-eggs',
+    productClass: 'Food',
+    status: 'Available',
+    defaultProductId: 'prd-barakat-eggs-15',
+    siteCosts: {
+      'Fitzroy Heathrow': { wac: 0.55, onHandQty: 150, lastCalculated: '24 Mar 2026' },
+    },
+  },
 ];
 
 const blankNutrition: Nutrition = {};
@@ -485,6 +546,37 @@ export const SEED_PRODUCTS: Product[] = [
     allergensContains: ['Dairy'],
     flag: { label: 'Cost +8% vs Almarai' },
   }),
+  // Eggs SKUs linked to the mp-eggs master. The 30pk is intentionally NOT
+  // seeded — that's the alternative the supplier "sends" in the receiving
+  // demo, which the user creates on the fly.
+  p({
+    id: 'prd-barakat-eggs-15',
+    name: 'Free Range Eggs 15pk',
+    supplierCode: 'BK-EGG-15',
+    supplierId: 'sup-barakat',
+    masterProductId: 'mp-eggs',
+    productClass: 'Food',
+    category: 'Produce',
+    packType: 'Pack',
+    packQty: 15,
+    packCost: 8.00,
+    singleUnitType: 'Each',
+    allergensContains: ['Eggs'],
+  }),
+  p({
+    id: 'prd-agility-eggs-10',
+    name: 'Free Range Eggs 10pk',
+    supplierCode: 'EGG-10',
+    supplierId: 'sup-agility',
+    masterProductId: 'mp-eggs',
+    productClass: 'Food',
+    category: 'Produce',
+    packType: 'Pack',
+    packQty: 10,
+    packCost: 5.80,
+    singleUnitType: 'Each',
+    allergensContains: ['Eggs'],
+  }),
   p({
     id: 'prd-almarai-skim-milk',
     name: 'Almarai Skimmed Milk 1L',
@@ -510,7 +602,7 @@ export const SEED_PRODUCTS: Product[] = [
     name: 'House Tomato Sauce 500ml (CPU)',
     source: 'made',
     recipeId: 'rec-cpu-tomato-sauce',
-    madeAtSite: 'PRET HUB KITCHEN',
+    madeAtSite: 'Fitzroy Espresso',
     supplierCode: 'CPU-TS-500',
     supplierId: 'sup-cpu',
     masterProductId: 'mp-tomato-sauce',
@@ -527,7 +619,7 @@ export const SEED_PRODUCTS: Product[] = [
     name: 'Sourdough Bagel (CPU bake)',
     source: 'made',
     recipeId: 'rec-cpu-bagel',
-    madeAtSite: 'PRET HUB KITCHEN',
+    madeAtSite: 'Fitzroy Espresso',
     supplierCode: 'CPU-BAG-1',
     supplierId: 'sup-cpu',
     masterProductId: 'mp-bagel',

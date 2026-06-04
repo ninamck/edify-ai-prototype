@@ -116,7 +116,7 @@ export default function ProductSwapSummaryCard({
     const parts: string[] = [];
     if (packType === 'Pack' && packQty) parts.push(`${packQty} per pack`);
     if (packType === 'Single' && packQty) parts.push(`${packQty}${unitType ?? ''}`);
-    if (packCost && packCost > 0) parts.push(`DH ${packCost.toFixed(2)}`);
+    if (packCost && packCost > 0) parts.push(`£${packCost.toFixed(2)}`);
     return parts.length > 0 ? parts.join(' · ') : null;
   })();
 

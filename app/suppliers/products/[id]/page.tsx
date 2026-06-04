@@ -30,7 +30,7 @@ import {
 } from '@/components/Suppliers/store';
 import {
   ALL_ALLERGENS, ALL_CATEGORIES, ALL_CLASSES, ALL_SITES,
-  type Allergen, type Product, type ProductCategory, type ProductClass,
+  type Allergen, type AltUom, type Product, type ProductCategory, type ProductClass,
   type SupplierStatus,
   formatPrice,
 } from '@/components/Suppliers/fixtures';
@@ -92,6 +92,16 @@ export default function ProductEditPage() {
 
   function update<K extends keyof Product>(key: K, value: Product[K]) {
     setDraft((d) => (d ? { ...d, [key]: value } : d));
+  }
+
+  function setAltUom(i: number, patch: Partial<AltUom>) {
+    setDraft((d) => {
+      if (!d) return d;
+      const next = [...d.altUoms];
+      while (next.length <= i) next.push({ type: '', numberOfUnits: 0 });
+      next[i] = { ...next[i], ...patch };
+      return { ...d, altUoms: next };
+    });
   }
 
   function save() {
@@ -271,30 +281,62 @@ export default function ProductEditPage() {
           <Card>
             <SectionHeading>Pack & price</SectionHeading>
             <FieldGrid>
-              <Field label="Pack qty">
+              <Field label="Pack type" span={2}>
+                <PillRadio
+                  options={[{ value: 'Pack', label: 'Pack' }, { value: 'Single', label: 'Single' }]}
+                  value={draft.packType}
+                  onChange={(v) => update('packType', v as Product['packType'])}
+                />
+              </Field>
+              <Field label="Pack quantity">
                 <NumberInput value={draft.packQty} onChange={(v) => update('packQty', v)} />
               </Field>
-              <Field label="Pack cost (DH)">
+              <Field label="Pack cost ex VAT (£)">
                 <NumberInput value={draft.packCost} onChange={(v) => update('packCost', v)} step={0.01} />
               </Field>
               <Field label="Tax rate (%)">
                 <NumberInput value={draft.taxRatePct} onChange={(v) => update('taxRatePct', v)} step={0.5} />
               </Field>
-              <Field label="Volume / weight per unit">
+              <Field label="Single item volume or weight">
                 <NumberInput
                   value={draft.singleUnitVolumeOrWeight ?? 0}
                   onChange={(v) => update('singleUnitVolumeOrWeight', v || undefined)}
                   step={0.01}
                 />
               </Field>
-              <Field label="Single unit type" span={2}>
+              <Field label="Single unit type">
                 <PillRadio
                   options={(['Each', 'kg', 'L', 'g', 'ml'] as const).map((u) => ({ value: u, label: u }))}
                   value={draft.singleUnitType}
                   onChange={(v) => update('singleUnitType', v as Product['singleUnitType'])}
                 />
               </Field>
+              <Field label="Unit of measure">
+                <TextInput value={draft.unitOfMeasure ?? ''} onChange={(v) => update('unitOfMeasure', v || undefined)} />
+              </Field>
             </FieldGrid>
+
+            <FieldBlock label="Alternative units of measure">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {[0, 1].map((i) => (
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'center' }}>
+                    <Select
+                      value={draft.altUoms[i]?.type ?? ''}
+                      onChange={(v) => setAltUom(i, { type: v })}
+                      options={[
+                        { value: '', label: `Alternative ${i + 1} — type` },
+                        ...['Each', 'kg', 'L', 'g', 'ml', 'Box', 'Case', 'Pack'].map((u) => ({ value: u, label: u })),
+                      ]}
+                    />
+                    <NumberInput
+                      value={draft.altUoms[i]?.numberOfUnits ?? 0}
+                      onChange={(v) => setAltUom(i, { numberOfUnits: v })}
+                    />
+                  </div>
+                ))}
+              </div>
+            </FieldBlock>
+
             <div style={{
               marginTop: 14,
               padding: '12px 14px',

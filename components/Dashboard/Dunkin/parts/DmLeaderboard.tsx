@@ -10,7 +10,7 @@ export interface DmLeaderboardRow {
 }
 
 function fmtMoney(v: number): string {
-  return `$${Math.round(v).toLocaleString('en-US')}`;
+  return `£${Math.round(v).toLocaleString('en-US')}`;
 }
 
 function fmtPct(v: number | null): string {

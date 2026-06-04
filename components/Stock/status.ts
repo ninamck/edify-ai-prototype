@@ -163,6 +163,35 @@ export interface StockMovement {
 // supplier lead time, POS availability, theoretical stock for variance,
 // and the confidence factors already used on suggested-order lines).
 
+// ─── Supplier variants (master products) ─────────────────────────────────────
+// A master product ("Avocado", "Coffee Cup Lids") rolls up several
+// supplier-specific SKUs, each of which can arrive in its own
+// packaging. On the stocktake count surface each variant gets its own
+// sub-row so the counter records what they're physically holding for
+// that supplier (a tray of 18 from one, a bag of 12 from another),
+// while the master row aggregates the lot into a single on-hand figure.
+
+export interface StockSupplierVariant {
+  /** Stable id, unique within the parent item (e.g. "v-freshearth"). */
+  id: string;
+  /** Supplier / SKU label rendered on the sub-row. */
+  label: string;
+  /** Countable units in display order. Convention: pack unit(s) first
+   *  (tray / bag / box), the loose base unit last (each / units). */
+  units: string[];
+  /** Pack→base conversions for the pack units in `units` (e.g.
+   *  `{ tray: 18 }` — a tray holds 18 of the master `stockUnit`). */
+  conv?: Record<string, number>;
+  /** Optional display override for a unit's pack-size suffix, for cases
+   *  the numeric `conv` can't express cleanly — e.g. a box that holds
+   *  10 sleeves renders `box/10sl` via `{ box: '10sl' }`. Falls back to
+   *  the numeric pack size from `conv`. */
+  packLabels?: Record<string, string>;
+  /** This SKU has no countable unit configured yet — the sub-row shows
+   *  a prompt to add an alt UOM in supplier settings instead of inputs. */
+  noCountingUnit?: boolean;
+}
+
 export interface StockItem {
   id: string;
   name: string;
@@ -192,6 +221,20 @@ export interface StockItem {
    *  automatically so only the pack-style alternates (cases, bags,
    *  packs, trays, …) need seeding here. */
   unitConversions?: Record<string, number>;
+  /** Master products only: the supplier-specific SKUs rolled under this
+   *  item, each with its own packaging. When present, the stocktake
+   *  count surface renders one sub-row per variant. */
+  supplierVariants?: StockSupplierVariant[];
+  /** Master products where every supplier ships the same packaging, so
+   *  the counter records one figure for the lot rather than per-SKU
+   *  rows. Renders the `packNote` hint + a single count strip. */
+  sharedPackaging?: boolean;
+  /** Short hint shown under a master-product name (e.g.
+   *  "Same packaging — counting for all"). */
+  packNote?: string;
+  /** No countable unit configured for this item yet — the count
+   *  surface flags it and points the operator at supplier settings. */
+  noCountingUnit?: boolean;
   currentStock: number;
   parLevel: number | null;
   parConfirmed: boolean;
@@ -363,6 +406,77 @@ export function convertToPrimary(
   return null;
 }
 
+// Pack-style container units (a "box of N", "bag of N", …) as opposed
+// to loose count units (each / units / portions) or measures (kg / L).
+// Only these get a "pack size" denominator rendered in the count box,
+// since that's the figure the operator actually needs ("how many in a
+// box?") to count whole packs without breaking them open.
+const PACK_CONTAINER_UNITS = new Set([
+  'box', 'boxes', 'bag', 'bags', 'case', 'cases', 'tray', 'trays',
+  'sleeve', 'sleeves', 'pack', 'packs', 'carton', 'cartons',
+  'crate', 'crates', 'punnet', 'punnets',
+]);
+
+function isPackContainerUnit(unit: string): boolean {
+  return PACK_CONTAINER_UNITS.has(unit.trim().toLowerCase());
+}
+
+const LOOSE_COUNT_UNITS = ['unit', 'units', 'each', 'ea', 'piece', 'pieces', 'pcs'];
+
+/** The "what's in one of these?" label for a pack-style count box —
+ *  e.g. a case of 24 units renders as `24`, a bag of 12.5 kg as
+ *  `12.5kg`. Returns null for loose units (each / portions) and for
+ *  measures (kg / g / L), which don't need a pack denominator.
+ *
+ *  Drives the `tray/18`, `bag/12`, `cases/24` style chips on the
+ *  stocktake count boxes so the counter knows the pack quantity
+ *  without leaving the row.
+ *
+ *  Two ways the pack size is found:
+ *    1. The pack unit is an *alternate* with an explicit conversion
+ *       into the base stockUnit (e.g. `{ cases: 24 }` → "24").
+ *    2. The pack unit IS the primary `stockUnit` (e.g. Croissants
+ *       counted in `boxes`, a box of 12, stored inversely as
+ *       `{ units: 1/12 }`). We derive how many of a loose alternate
+ *       fit in one pack from the inverse of that alternate's
+ *       conversion, so a `boxes` cell still reads `boxes/12`. */
+export function formatPackSize(item: StockItem, unit: string): string | null {
+  if (!isPackContainerUnit(unit)) return null;
+
+  let factor = item.unitConversions?.[unit];
+  let baseUnit = item.stockUnit;
+
+  // Case 2 — the pack unit is itself the primary stockUnit, so there's
+  // no direct entry in `unitConversions`. Recover the pack size from a
+  // loose alternate: if 1 alt = `perAlt` packs, then 1 pack holds
+  // `1 / perAlt` of that alt.
+  if (
+    (factor === undefined || !Number.isFinite(factor)) &&
+    unit === item.stockUnit
+  ) {
+    for (const alt of item.alternateUnits ?? []) {
+      if (isPackContainerUnit(alt)) continue; // want a loose unit, not another pack
+      const perAlt = convertToPrimary(item, 1, alt); // packs per 1 alt
+      if (perAlt === null || !Number.isFinite(perAlt) || perAlt <= 0) continue;
+      const perPack = 1 / perAlt; // alts per 1 pack
+      if (!Number.isFinite(perPack) || perPack <= 1) continue;
+      factor = perPack;
+      baseUnit = alt;
+      break;
+    }
+  }
+
+  if (factor === undefined || !Number.isFinite(factor) || factor <= 0) {
+    return null;
+  }
+  const qty = Number.isInteger(factor) ? String(factor) : factor.toFixed(2).replace(/\.?0+$/, '');
+  // Append the base unit only when it's a measure (kg / L / g …); a
+  // pack of loose counts (each / units) reads cleaner bare: "12" not
+  // "12units".
+  const baseIsLooseCount = LOOSE_COUNT_UNITS.includes(baseUnit.trim().toLowerCase());
+  return baseIsLooseCount ? qty : `${qty}${baseUnit}`;
+}
+
 export interface CountRollup {
   /** Sum of every convertible entry, expressed in the item's primary
    *  `stockUnit`. Zero when nothing has been entered. */
@@ -406,6 +520,76 @@ export function rollupCounts(
   }
 
   return { total, hasInput, hasUnconvertible, unitsEntered };
+}
+
+// ─── Master-product count helpers ─────────────────────────────────────────────
+// Master products spread their count across supplier-variant sub-rows.
+// These helpers flatten that structure so the count surface (and the
+// page-level total / £-value rollups) treat simple items and master
+// products through one interface, keyed by a per-item "cell suffix".
+
+/** Resolve the countable units for a single supplier variant, building
+ *  a synthetic item whose conversions map the variant's pack units into
+ *  the master `stockUnit`. Lets us reuse `rollupCounts` /
+ *  `formatPackSize` per variant without special-casing them. */
+export function variantAsItem(
+  item: StockItem,
+  variant: StockSupplierVariant,
+): StockItem {
+  return {
+    ...item,
+    alternateUnits: variant.units.filter(u => u !== item.stockUnit),
+    unitConversions: variant.conv,
+  };
+}
+
+/** The countable-cell key suffixes for an item. Simple items: one per
+ *  unit ("kg", "bags", …). Master products with supplier variants: one
+ *  per (variant, unit) pair, suffixed `${variantId}::${unit}`. The
+ *  count surface combines these with the item id to key its state. */
+export function countCellKeys(item: StockItem): string[] {
+  if (item.supplierVariants?.length) {
+    const keys: string[] = [];
+    for (const v of item.supplierVariants) {
+      if (v.noCountingUnit) continue;
+      for (const u of v.units) keys.push(`${v.id}::${u}`);
+    }
+    return keys;
+  }
+  return [item.stockUnit, ...(item.alternateUnits ?? [])];
+}
+
+/** Master-aware roll-up. `rawBySuffix` maps the suffixes returned by
+ *  `countCellKeys` to the operator's entered values. Sums every cell
+ *  (across variants, for master products) into a single quantity in the
+ *  item's primary `stockUnit`. */
+export function rollupItemCounts(
+  item: StockItem,
+  rawBySuffix: Record<string, string | number | undefined | null>,
+): CountRollup {
+  if (item.supplierVariants?.length) {
+    let total = 0;
+    let hasInput = false;
+    let hasUnconvertible = false;
+    let unitsEntered = 0;
+    for (const v of item.supplierVariants) {
+      if (v.noCountingUnit) continue;
+      const synthetic = variantAsItem(item, v);
+      const rawByUnit: Record<string, string | number | undefined | null> = {};
+      for (const u of v.units) rawByUnit[u] = rawBySuffix[`${v.id}::${u}`];
+      const r = rollupCounts(synthetic, rawByUnit);
+      total += r.total;
+      hasInput = hasInput || r.hasInput;
+      hasUnconvertible = hasUnconvertible || r.hasUnconvertible;
+      unitsEntered += r.unitsEntered;
+    }
+    return { total, hasInput, hasUnconvertible, unitsEntered };
+  }
+  const rawByUnit: Record<string, string | number | undefined | null> = {};
+  for (const u of [item.stockUnit, ...(item.alternateUnits ?? [])]) {
+    rawByUnit[u] = rawBySuffix[u];
+  }
+  return rollupCounts(item, rawByUnit);
 }
 
 // ─── Derivation helpers ───────────────────────────────────────────────────────

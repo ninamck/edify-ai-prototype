@@ -71,6 +71,15 @@ export interface UnitInputProps {
   inputFontSize?: number;
   /** Optional aria-label override. */
   ariaLabel?: string;
+  /** Pack quantity shown after the unit name for pack-style units
+   *  (e.g. "24" → renders "CASES/24", "12.5kg" → "BAGS/12.5kg"). Tells
+   *  the operator what's in one box/bag so they can count whole packs.
+   *  Omit for loose units / measures. */
+  packSize?: string;
+  /** Stretch the pill to fill its container and grow taller for a
+   *  comfortable touch target. Used on mobile, where each pill flexes
+   *  to share the row evenly instead of sitting at a fixed width. */
+  grow?: boolean;
 }
 
 export default function UnitInput({
@@ -81,6 +90,8 @@ export default function UnitInput({
   tagMinWidth = 56,
   inputFontSize = 18,
   ariaLabel,
+  packSize,
+  grow = false,
 }: UnitInputProps) {
   const { tone, tagBg } = UNIT_TONES[unitCategory(unit)];
   const hasValue = value.trim() !== '' && !Number.isNaN(parseFloat(value));
@@ -92,6 +103,9 @@ export default function UnitInput({
     borderRadius: 'var(--radius-item)',
     background: hasValue ? tagBg : '#fff',
     overflow: 'hidden',
+    // On mobile each pill flexes to share the row; min-width 0 lets it
+    // shrink below the input's intrinsic width so two pills always fit.
+    ...(grow ? { flex: '1 1 130px', minWidth: 0 } : {}),
   };
 
   return (
@@ -105,8 +119,11 @@ export default function UnitInput({
         placeholder="0"
         aria-label={ariaLabel ?? `Count in ${unit}`}
         style={{
-          width: inputWidth,
-          padding: '8px 12px',
+          width: grow ? 'auto' : inputWidth,
+          flex: grow ? 1 : undefined,
+          minWidth: grow ? 0 : undefined,
+          // Taller tap target on mobile (~48px) so it's thumb-friendly.
+          padding: grow ? '13px 14px' : '8px 12px',
           border: 'none',
           outline: 'none',
           fontSize: inputFontSize,
@@ -133,9 +150,21 @@ export default function UnitInput({
           borderLeft: `1px solid ${tone}`,
           whiteSpace: 'nowrap',
           minWidth: tagMinWidth,
+          gap: 1,
         }}
       >
         {unit}
+        {packSize && (
+          <span
+            style={{
+              textTransform: 'none',
+              fontWeight: 600,
+              opacity: 0.7,
+            }}
+          >
+            /{packSize}
+          </span>
+        )}
       </span>
     </div>
   );

@@ -98,7 +98,7 @@ let approvals: PendingApproval[] = [
     ],
     triggeredRules: [
       { rule: 'new_user', detail: 'Sam has placed 2 orders so far' },
-      { rule: 'weekly_product_cap', detail: 'Espresso blend 1kg: week-to-date $576 of $400 cap' },
+      { rule: 'weekly_product_cap', detail: 'Espresso blend 1kg: week-to-date £576 of £400 cap' },
     ],
     status: 'pending',
   },
@@ -115,7 +115,7 @@ let approvals: PendingApproval[] = [
     ],
     triggeredRules: [
       { rule: 'new_user', detail: 'Jordan has placed 1 order so far' },
-      { rule: 'mov_short', detail: 'Order is $52 below Cheese Board $200 MOV' },
+      { rule: 'mov_short', detail: 'Order is £52 below Cheese Board £200 MOV' },
     ],
     status: 'pending',
   },
@@ -134,7 +134,7 @@ let approvals: PendingApproval[] = [
       { description: 'Sourdough loaves', sku: 'SDL-WH', qty: 50, unitPrice: 6.00 },
     ],
     triggeredRules: [
-      { rule: 'supplier_limit', detail: 'Fresh Earth Produce: week-to-date $1,640 of $1,500 cap' },
+      { rule: 'supplier_limit', detail: 'Fresh Earth Produce: week-to-date £1,640 of £1,500 cap' },
     ],
     status: 'pending',
   },

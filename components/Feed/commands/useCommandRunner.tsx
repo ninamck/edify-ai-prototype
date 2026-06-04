@@ -898,7 +898,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
             skipped: false,
           };
           pushResponseFlow({
-            text: `Got it — ${input.newProductName} from ${input.supplierName}. I picked up the pack details from ${sourceLabel} (${imported.packQty}${imported.unitType} · DH ${imported.packCost.toFixed(2)}). Now — which recipes should I add it to?`,
+            text: `Got it — ${input.newProductName} from ${input.supplierName}. I picked up the pack details from ${sourceLabel} (${imported.packQty}${imported.unitType} · £${imported.packCost.toFixed(2)}). Now — which recipes should I add it to?`,
             commandId: 'product-swap',
             cardMsgType: 'cmd-product-pick-recipes',
             cardArgs: mergedWithPack,
@@ -1007,7 +1007,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           skipped: false,
         };
         pushResponseFlow({
-          text: `OK — replacing ${input.oldProductName}. I picked up the pack details from ${sourceLabel} (${importedPack.packQty}${importedPack.unitType} · DH ${importedPack.packCost.toFixed(2)}). Now — which recipes should I swap ${input.oldProductName} for ${newName} in?`,
+          text: `OK — replacing ${input.oldProductName}. I picked up the pack details from ${sourceLabel} (${importedPack.packQty}${importedPack.unitType} · £${importedPack.packCost.toFixed(2)}). Now — which recipes should I swap ${input.oldProductName} for ${newName} in?`,
           commandId: 'product-swap',
           cardMsgType: 'cmd-product-pick-recipes',
           cardArgs: merged,
@@ -1052,7 +1052,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       pushUserEcho(
         input.skipped
           ? 'Skipped pack details'
-          : `${input.packQty}${input.unitType} · DH ${input.packCost.toFixed(2)}${input.photoDataUrl ? ' · photo' : ''}`,
+          : `${input.packQty}${input.unitType} · £${input.packCost.toFixed(2)}${input.photoDataUrl ? ' · photo' : ''}`,
       );
       const mode = (args.mode as 'add' | 'replace' | undefined) ?? 'replace';
       const newName = (args.newProductName as string) ?? 'the new product';

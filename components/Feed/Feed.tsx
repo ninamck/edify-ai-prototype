@@ -23,6 +23,7 @@ import {
   MessageSquare,
   Clock,
   Truck,
+  X,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import EdifyMarkThinking from '@/components/EdifyMark/EdifyMarkThinking';
@@ -66,7 +67,26 @@ import ProductPickRecipesCard from '@/components/Feed/commands/cards/ProductPick
 import ProductSwapSummaryCard from '@/components/Feed/commands/cards/ProductSwapSummaryCard';
 import AmbiguityPicker from '@/components/Feed/commands/cards/AmbiguityPicker';
 import ReceiptCard from '@/components/Feed/commands/cards/ReceiptCard';
+import MarginExplorerCard from '@/components/Feed/commands/cards/MarginExplorerCard';
 import type { AmbiguityChoice } from '@/components/Feed/commands/types';
+import {
+  DEFAULT_WIZARD_TEMPLATE,
+  findTemplateByName,
+  penceToPounds,
+  srpExVatForCogs,
+  totalFoodCostP,
+  type PackagingTemplate,
+  type RecipeWizardTemplate,
+  type TemplateIngredient,
+} from '@/components/Feed/recipeWizardTemplates';
+import {
+  useIngredientCatalogue,
+  type IngredientRef,
+  type IngredientCatalogueRow,
+  type ResolvedIngredient,
+} from '@/components/Ingredients/catalogue';
+import { useProducts } from '@/components/Suppliers/store';
+import { masterCompanyAvg, type Product } from '@/components/Suppliers/fixtures';
 
 function QuinnAvatar({
   size = 30,
@@ -151,7 +171,7 @@ const PROMPT_CHIPS: {
   {
     label: 'New recipe',
     icon: ChefHat,
-    text: 'I want to add a new recipe for our weekend brunch menu.',
+    text: "I'm releasing avocado toast on the new menu — target 25% food cost.",
     action: 'recipe',
   },
   {
@@ -319,61 +339,103 @@ type ChatMsg = {
   };
 };
 
-type RecipeIngredient = { name: string; qty: string; unit: string };
+/** Working-state row for the in-Feed wizard. Mirrors
+ *  `TemplateIngredient` but allows qty to be edited as a string
+ *  (so the editor doesn't clamp the user's keystrokes). */
+type RecipeIngredient = {
+  id: string;
+  name: string;
+  qty: string;
+  uom: string;
+  unitCostP: number;
+  source: string;
+  toTaste?: boolean;
+};
 
-const INITIAL_RECIPE_INGREDIENTS: RecipeIngredient[] = [
-  { name: 'Chicken breast (cooked, shredded)', qty: '150', unit: 'g' },
-  { name: 'Mayonnaise', qty: '30', unit: 'g' },
-  { name: 'Dijon mustard', qty: '5', unit: 'g' },
-  { name: 'Baby gem lettuce', qty: '20', unit: 'g' },
-  { name: 'Vine tomato (sliced)', qty: '40', unit: 'g' },
-  { name: 'Brioche bun', qty: '1', unit: 'pc' },
-  { name: 'Salt & pepper', qty: '\u2014', unit: '' },
-];
+/** Empty seed — the actual rows are pushed by `startRecipeFlow`
+ *  once we know which template the user is building. */
+const INITIAL_RECIPE_INGREDIENTS: RecipeIngredient[] = [];
 
-const RECIPE_GREETING = "Hey, happy to add a recipe. What is it of?";
-const RECIPE_CARD_INTRO = "Great choice! Here's a suggested recipe for a **Chicken & Mayo Sandwich**. Adjust the quantities to match your serving size:";
-const RECIPE_LINK_MSG =
-  "I've linked most of these ingredients to your existing Edify catalogue \u2014 chicken, mayo, mustard, lettuce, and tomato are all matched to current suppliers.\n\n" +
-  "However, I noticed you don't have a supplier set up for **brioche buns** yet.\n\n" +
-  "I'd recommend **Artisan Bakehouse** \u2014 I picked them because they're trusted amongst our users for consistently good quality and reliable deliveries. Want me to add them as a supplier for you?";
+/** Compute a per-uom cost (in pence) for an ingredient ref the
+ *  operator picked from the catalogue. Priority order:
+ *    1. Supplier product → packCost ÷ (packQty × singleUnitVolumeOrWeight).
+ *    2. Master product   → the maintained weighted-average cost (WAC) when a
+ *                          delivery has been recorded; otherwise the cheapest
+ *                          linked supplier product.
+ *    3. Sub-recipe       → no cost on file in the prototype; return 0.
+ *  Returns whole-pence (rounded) for parity with TemplateIngredient. */
+function perUomCostP(
+  ref: IngredientRef,
+  resolved: ResolvedIngredient,
+  allProducts: Product[],
+): number {
+  function fromProduct(p: Product): number {
+    const sizePerUnit = p.singleUnitVolumeOrWeight || 1;
+    const totalUnits = p.packQty * sizePerUnit;
+    if (totalUnits <= 0) return 0;
+    return Math.round((p.packCost / totalUnits) * 100);
+  }
+  if (ref.kind === 'product' && resolved.product) {
+    return fromProduct(resolved.product);
+  }
+  if (ref.kind === 'master') {
+    // Prefer the master's blended weighted-average cost once real deliveries
+    // have landed — this is what keeps COGS in step with what was actually paid.
+    const wac = resolved.master ? masterCompanyAvg(resolved.master) : null;
+    if (wac != null && wac > 0) return Math.round(wac * 100);
+    const linked = allProducts.filter((p) => p.masterProductId === ref.masterProductId);
+    if (!linked.length) return 0;
+    const costs = linked.map(fromProduct).filter((c) => c > 0);
+    if (!costs.length) return 0;
+    return Math.min(...costs);
+  }
+  return 0;
+}
+
+/** Short label for the kind-chip in the typeahead dropdown. */
+function kindBadgeLabel(kind: IngredientCatalogueRow['kind']): string {
+  switch (kind) {
+    case 'master': return 'Master';
+    case 'supplier': return 'Supplier';
+    case 'made': return 'Made';
+    case 'subrecipe': return 'Sub-recipe';
+  }
+}
+
+function kindBadgeColor(kind: IngredientCatalogueRow['kind']): { bg: string; fg: string } {
+  switch (kind) {
+    case 'master':
+      return { bg: 'rgba(40,175,201,0.14)', fg: 'var(--color-accent-active)' };
+    case 'supplier':
+      return { bg: 'rgba(0,28,53,0.08)', fg: 'var(--color-text-secondary)' };
+    case 'made':
+      return { bg: 'rgba(34,68,68,0.12)', fg: 'var(--color-text-primary)' };
+    case 'subrecipe':
+      return { bg: 'rgba(231,184,0,0.18)', fg: '#8a6900' };
+  }
+}
+
+const RECIPE_GREETING =
+  "Hey, happy to add this to the menu. What's the dish — and have you got a target food-cost % in mind?";
 const RECIPE_COST_MSG =
-  "Here's the cost and margin breakdown based on your current supplier prices:";
+  "Here's the cost build-up and what the price needs to be to hit your target food cost. Tap a swap to see how the price moves:";
+const RECIPE_COGS_TARGET_MSG =
+  "Before I price it — what's the **target food cost %** you want to aim for? 25% is a typical brunch-item target.";
 
-type IngredientCost = { name: string; qty: string; unit: string; cost: number };
+function buildRecipeCardIntro(template: RecipeWizardTemplate): string {
+  return `Great — here's a starting build for **${template.name}**. Adjust the quantities to match your serve, then I'll price it.`;
+}
 
-const INGREDIENT_COSTS: IngredientCost[] = [
-  { name: 'Chicken breast (cooked, shredded)', qty: '150', unit: 'g', cost: 2.85 },
-  { name: 'Mayonnaise', qty: '30', unit: 'g', cost: 0.22 },
-  { name: 'Dijon mustard', qty: '5', unit: 'g', cost: 0.15 },
-  { name: 'Baby gem lettuce', qty: '20', unit: 'g', cost: 0.18 },
-  { name: 'Vine tomato (sliced)', qty: '40', unit: 'g', cost: 0.28 },
-  { name: 'Brioche bun', qty: '1', unit: 'pc', cost: 1.10 },
-  { name: 'Salt & pepper', qty: '\u2014', unit: '', cost: 0.02 },
-];
+function buildPackagingMsg(template: RecipeWizardTemplate): string {
+  return `Would you like to include any packaging in the recipe cost? Here are common options for ${template.name.toLowerCase()}:`;
+}
 
-const TOTAL_FOOD_COST = INGREDIENT_COSTS.reduce((s, i) => s + i.cost, 0);
-const DESIRED_MARGIN_PCT = 65;
-const VAT_RATE = 0.20;
-const SRP_EX_VAT = parseFloat((TOTAL_FOOD_COST / (1 - DESIRED_MARGIN_PCT / 100)).toFixed(2));
-const DINE_IN_INC_VAT = parseFloat((SRP_EX_VAT * (1 + VAT_RATE)).toFixed(2));
-const TAKEAWAY_PRICE = SRP_EX_VAT; // cold food = 0% VAT in UK
-const FOOD_COST_PCT = Math.round((TOTAL_FOOD_COST / SRP_EX_VAT) * 100);
-const GROSS_PROFIT_EX_VAT = parseFloat((SRP_EX_VAT - TOTAL_FOOD_COST).toFixed(2));
-const TARGET_FOOD_COST_PCT = 35;
-
-const RECIPE_PACKAGING_MSG =
-  "Would you like to include any packaging in the recipe cost? Here are common options for a sandwich:";
-
-type PackagingOption = { id: string; name: string; cost: number; unit: string };
-
-const PACKAGING_OPTIONS: PackagingOption[] = [
-  { id: 'wrap', name: 'Greaseproof wrap', cost: 0.08, unit: 'sheet' },
-  { id: 'bag', name: 'Brown paper bag', cost: 0.06, unit: 'ea' },
-  { id: 'box', name: 'Kraft takeaway box', cost: 0.32, unit: 'ea' },
-  { id: 'sticker', name: 'Branded label/sticker', cost: 0.05, unit: 'ea' },
-  { id: 'napkin', name: 'Napkin', cost: 0.03, unit: 'ea' },
-];
+function buildSitesMsg(template: RecipeWizardTemplate): string {
+  return (
+    `Almost there! I've put this under the **${template.productClass}** product class.\n\n` +
+    `Which sites should this recipe be available at?`
+  );
+}
 
 const RECIPE_ALLERGEN_MSG =
   "I've detected the following allergens based on the ingredients. Please review and confirm — you can add or remove any that apply:";
@@ -382,11 +444,6 @@ const ALL_ALLERGENS = [
   'Mustard', 'Peanuts', 'Crustaceans', 'Fish', 'Nuts', 'Cereals containing gluten',
   'Molluscs', 'Sesame Seeds', 'Celery', 'Lupin', 'Soya', 'Sulphites', 'Eggs', 'Dairy',
 ];
-
-const AUTO_DETECTED_ALLERGENS = new Set(['Mustard', 'Eggs', 'Cereals containing gluten']);
-
-const RECIPE_SITES_MSG =
-  "Almost there! I've put this under the **Food** product class — this looks like a cold eat-in & takeaway item.\n\nWhich sites should this recipe be available at?";
 
 type Site = { id: string; name: string };
 
@@ -398,20 +455,60 @@ const MOCK_SITES: Site[] = [
   { id: 'airport', name: 'Airport Lounge' },
 ];
 
-function buildDoneMsg(siteNames: string[]): string {
+function buildDoneMsg(
+  template: RecipeWizardTemplate,
+  siteNames: string[],
+  pricing: { srpExVat: number; targetCogsPct: number } | null,
+): string {
   const sitesStr = siteNames.length === 1
     ? `**${siteNames[0]}**`
     : siteNames.slice(0, -1).map(s => `**${s}**`).join(', ') + ` and **${siteNames[siteNames.length - 1]}**`;
+  const pricingLine = pricing
+    ? `Locked in at **\u00a3${pricing.srpExVat.toFixed(2)} dine in** — that's a **${pricing.targetCogsPct}% food cost**.\n\n`
+    : '';
   return (
-    `**Done!** Artisan Bakehouse is now set up as a supplier and linked to brioche buns in your recipe.\n\n` +
-    `Your **Chicken & Mayo Sandwich** recipe is live in Edify under the **Food** class, assigned to ${sitesStr}. You'll find it under Recipes \u2192 Food. The recipe is ready to add to any production plan.`
+    `**Done!** ${template.supplierAddedFragment}\n\n` +
+    pricingLine +
+    `Your **${template.name}** recipe is live in Edify under the **${template.productClass}** class, assigned to ${sitesStr}. You'll find it under Recipes \u2192 ${template.productClass}. The recipe is ready to add to any production plan.`
   );
+}
+
+/** Convert a template row to the wizard's mutable working row. */
+function templateRowToRecipeIngredient(t: TemplateIngredient): RecipeIngredient {
+  return {
+    id: t.id,
+    name: t.name,
+    qty: String(t.qty),
+    uom: t.uom,
+    unitCostP: t.unitCostP,
+    source: t.source,
+    toTaste: t.toTaste,
+  };
+}
+
+/** Convert wizard working rows back to the template-shape rows
+ *  the Margin Explorer consumes. Non-numeric qty entries fall
+ *  back to 0 so the cost rollup degrades gracefully. */
+function recipeIngredientsToTemplateRows(rows: RecipeIngredient[]): TemplateIngredient[] {
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    qty: Number(r.qty) || 0,
+    uom: r.uom,
+    unitCostP: r.unitCostP,
+    source: r.source,
+    toTaste: r.toTaste,
+  }));
 }
 
 // ─── Production flow constants ───────────────────────────────────────────────
 
-const PROD_PREP_MSG =
-  "Let's get your **Chicken & Mayo Sandwich** onto a production schedule — I'll ask a few quick questions, with sensible defaults already filled in. First up: what's the prep time per unit?";
+function buildProdPrepMsg(template: RecipeWizardTemplate): string {
+  return (
+    `Let's get your **${template.name}** onto a production schedule \u2014 I'll ask a few quick questions, with sensible defaults already filled in. ` +
+    `First up: what's the prep time per unit?`
+  );
+}
 const PROD_SHELF_MSG =
   "Got it. How long does it stay fresh once made? This sets the shelf life for waste tracking and production cutoffs.";
 const PROD_BATCH_MSG =
@@ -449,15 +546,102 @@ const DEFAULT_PROD_SETTINGS: ProdSettings = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function RecipeCardEditor({
+  recipeName,
+  servesQty,
+  servesUom,
   ingredients,
   onChange,
+  onAdd,
+  onRemove,
+  onStartNewProduct,
 }: {
+  recipeName: string;
+  servesQty: number;
+  servesUom: string;
   ingredients: RecipeIngredient[];
   onChange: (idx: number, qty: string) => void;
+  onAdd: (row: RecipeIngredient) => void;
+  onRemove: (id: string) => void;
+  /** Called when the operator wants to add a product that doesn't yet
+   *  exist in the catalogue. We route them to the existing new-product
+   *  wizard rather than letting them type a name + cost free-form, so
+   *  the new SKU is created against suppliers/MPs properly. */
+  onStartNewProduct: (query: string) => void;
 }) {
+  const { search: searchCatalogue, resolveRef } = useIngredientCatalogue();
+  const allProducts = useProducts();
+
+  const [draftName, setDraftName] = useState('');
+  const [draftQty, setDraftQty] = useState('');
+  /** Set once the user picks a row from the typeahead. Carries the
+   *  resolved name, uom, source kind and (if known) the per-uom cost. */
+  const [pickedRef, setPickedRef] = useState<IngredientRef | null>(null);
+  const [pickedMeta, setPickedMeta] = useState<{
+    name: string;
+    uom: string;
+    unitCostP: number;
+    sourceLabel: string;
+    kindLabel: string;
+  } | null>(null);
+  /** Hide the dropdown after a pick OR after `Escape`; reopens when
+   *  the user edits the search input again. */
+  const [searchFocused, setSearchFocused] = useState(false);
+
+  const trimmedQuery = draftName.trim();
+  const showDropdown = !pickedRef && searchFocused && trimmedQuery.length > 0;
+  const matches = showDropdown ? searchCatalogue(trimmedQuery, { limit: 6 }) : [];
+
+  const canAdd = !!pickedMeta && Number(draftQty) > 0;
+
+  function clearPick() {
+    setPickedRef(null);
+    setPickedMeta(null);
+    setDraftName('');
+  }
+
+  function pickRow(row: IngredientCatalogueRow) {
+    const resolved = resolveRef(row.ref);
+    if (!resolved) return;
+    const cost = perUomCostP(row.ref, resolved, allProducts);
+    const uom = resolved.unit || row.sublabel || 'each';
+    setPickedRef(row.ref);
+    setPickedMeta({
+      name: resolved.name,
+      uom,
+      unitCostP: cost,
+      sourceLabel: row.sourceLabel ?? '',
+      kindLabel: kindBadgeLabel(row.kind),
+    });
+    setDraftName(resolved.name);
+    setSearchFocused(false);
+  }
+
+  function commitAdd() {
+    if (!canAdd || !pickedMeta) return;
+    onAdd({
+      // `user-` prefix so the wizard can distinguish operator-added
+      // rows from template seed rows (e.g. for swap suggestions,
+      // remove affordances, downstream copy).
+      id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name: pickedMeta.name,
+      qty: draftQty,
+      uom: pickedMeta.uom,
+      unitCostP: pickedMeta.unitCostP,
+      source: pickedMeta.sourceLabel || 'Added in chat',
+    });
+    setDraftName('');
+    setDraftQty('');
+    setPickedRef(null);
+    setPickedMeta(null);
+    setSearchFocused(false);
+  }
+
   return (
     <div style={{
       marginTop: '8px',
+      position: 'relative',
+    }}>
+    <div style={{
       borderRadius: '10px',
       border: '1px solid var(--color-border-subtle)',
       overflow: 'hidden',
@@ -472,26 +656,32 @@ function RecipeCardEditor({
       }}>
         <ChefHat size={14} color="var(--color-accent-active)" strokeWidth={2} />
         <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-          Chicken & Mayo Sandwich
+          {recipeName}
         </span>
         <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginLeft: 'auto' }}>
-          Serves 1
+          Serves {servesQty}{servesUom !== 'each' ? ` ${servesUom}` : ''}
         </span>
       </div>
+
       {ingredients.map((ing, i) => (
         <div
-          key={i}
+          key={ing.id}
           style={{
             display: 'flex',
             alignItems: 'center',
             padding: '8px 14px',
-            borderBottom: i < ingredients.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
+            borderBottom: '1px solid var(--color-border-subtle)',
             fontSize: '13px',
             gap: '8px',
           }}
         >
-          <span style={{ flex: 1, color: 'var(--color-text-secondary)' }}>{ing.name}</span>
-          {ing.qty === '\u2014' ? (
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ color: 'var(--color-text-secondary)' }}>{ing.name}</div>
+            <div style={{ fontSize: '10.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
+              {ing.source}
+            </div>
+          </div>
+          {ing.toTaste ? (
             <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', width: '64px', textAlign: 'right' }}>to taste</span>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -513,97 +703,454 @@ function RecipeCardEditor({
                   outline: 'none',
                 }}
               />
-              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', minWidth: '16px' }}>{ing.unit}</span>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', minWidth: '16px' }}>{ing.uom}</span>
             </div>
           )}
+          <button
+            type="button"
+            onClick={() => onRemove(ing.id)}
+            aria-label={`Remove ${ing.name}`}
+            title="Remove"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '22px',
+              height: '22px',
+              borderRadius: '6px',
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--color-text-muted)',
+              cursor: 'pointer',
+              padding: 0,
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background = 'rgba(0,28,53,0.06)';
+              (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = 'transparent';
+              (e.currentTarget as HTMLElement).style.color = 'var(--color-text-muted)';
+            }}
+          >
+            <X size={12} strokeWidth={2} />
+          </button>
         </div>
       ))}
+
+      {/* Add-ingredient row — always visible at the bottom so the
+          operator can extend the template without flipping a mode.
+          Typing here surfaces a typeahead over masters / supplier
+          products / sub-recipes; the cost comes from whichever entity
+          they pick. If nothing matches they fall through to a "+ Add
+          as new product" row that launches the full new-product
+          wizard via the parent's onStartNewProduct callback. */}
+      <div
+        style={{
+          padding: '8px 14px',
+          background: 'rgba(0,28,53,0.02)',
+          fontFamily: 'var(--font-primary)',
+        }}
+      >
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: pickedMeta ? '1fr 60px 56px 28px' : '1fr 60px 28px',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          {pickedMeta ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 8px',
+                borderRadius: '8px',
+                border: '1px solid var(--color-border-subtle)',
+                background: '#fff',
+                minWidth: 0,
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {pickedMeta.name}
+                </div>
+                <div style={{ fontSize: '10.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
+                  {pickedMeta.sourceLabel}
+                  {pickedMeta.unitCostP > 0
+                    ? ` · ${penceToPounds(pickedMeta.unitCostP)}/${pickedMeta.uom}`
+                    : ' · no cost on file'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={clearPick}
+                aria-label="Change ingredient"
+                title="Change"
+                style={{
+                  width: '20px',
+                  height: '20px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--color-text-muted)',
+                  cursor: 'pointer',
+                  padding: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <X size={12} strokeWidth={2} />
+              </button>
+            </div>
+          ) : (
+            <input
+              type="text"
+              value={draftName}
+              onChange={(e) => { setDraftName(e.target.value); setSearchFocused(true); }}
+              onFocus={() => setSearchFocused(true)}
+              // We don't close on blur — clicking a dropdown row would
+              // otherwise race with the blur and the pick would never
+              // fire. Closing is handled by row click / Escape / pick.
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setSearchFocused(false);
+                if (e.key === 'Enter' && matches.length > 0) {
+                  e.preventDefault();
+                  pickRow(matches[0]);
+                }
+              }}
+              placeholder="Add ingredient — search products…"
+              style={{
+                padding: '6px 8px',
+                borderRadius: '6px',
+                border: '1px solid var(--color-border-subtle)',
+                fontSize: '12px',
+                fontWeight: 500,
+                fontFamily: 'var(--font-primary)',
+                color: 'var(--color-text-primary)',
+                background: '#fff',
+                outline: 'none',
+                minWidth: 0,
+              }}
+            />
+          )}
+          <input
+            type="text"
+            inputMode="decimal"
+            value={draftQty}
+            onChange={(e) => setDraftQty(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && canAdd) commitAdd(); }}
+            placeholder="qty"
+            disabled={!pickedMeta}
+            style={{
+              padding: '6px 6px',
+              borderRadius: '6px',
+              border: '1px solid var(--color-border-subtle)',
+              fontSize: '12px',
+              fontWeight: 600,
+              fontFamily: 'var(--font-primary)',
+              color: pickedMeta ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+              background: pickedMeta ? '#fff' : 'rgba(0,28,53,0.03)',
+              outline: 'none',
+              textAlign: 'right',
+            }}
+          />
+          {pickedMeta && (
+            <span
+              style={{
+                fontSize: '11.5px',
+                fontWeight: 500,
+                color: 'var(--color-text-muted)',
+                textAlign: 'center',
+              }}
+            >
+              {pickedMeta.uom}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={commitAdd}
+            disabled={!canAdd}
+            aria-label="Add ingredient"
+            title={canAdd ? `Add ${pickedMeta?.name ?? 'ingredient'}` : 'Pick a product and enter a quantity'}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '26px',
+              height: '26px',
+              borderRadius: '8px',
+              border: 'none',
+              background: canAdd ? 'var(--color-accent-active)' : 'rgba(0,28,53,0.08)',
+              color: canAdd ? '#fff' : 'var(--color-text-muted)',
+              cursor: canAdd ? 'pointer' : 'not-allowed',
+              padding: 0,
+              boxShadow: canAdd ? '0 1px 4px rgba(34,68,68,0.25)' : 'none',
+            }}
+          >
+            <Plus size={14} strokeWidth={2.2} />
+          </button>
+        </div>
+
+      </div>
+    </div>
+    {/* Dropdown sits OUTSIDE the rounded/clipped editor wrapper so it
+        isn't clipped by `overflow: hidden`; it's anchored to the
+        outer relative wrapper and floats below the card. */}
+    {showDropdown && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 'calc(100% - 4px)',
+              left: '14px',
+              right: '14px',
+              background: '#fff',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: '10px',
+              boxShadow: '0 8px 24px rgba(0,28,53,0.12)',
+              zIndex: 10,
+              overflow: 'hidden',
+              maxHeight: '240px',
+              overflowY: 'auto',
+            }}
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            {matches.length === 0 && (
+              <div
+                style={{
+                  padding: '8px 12px',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  color: 'var(--color-text-muted)',
+                }}
+              >
+                No matches in your products.
+              </div>
+            )}
+            {matches.map((row) => {
+              const colors = kindBadgeColor(row.kind);
+              return (
+                <button
+                  key={`${row.kind}-${row.ref.kind === 'master' ? row.ref.masterProductId : row.ref.kind === 'product' ? row.ref.productId : row.ref.recipeId}`}
+                  type="button"
+                  onClick={() => pickRow(row)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    width: '100%',
+                    padding: '7px 12px',
+                    border: 'none',
+                    background: 'transparent',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-primary)',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,28,53,0.04)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                >
+                  <span
+                    style={{
+                      fontSize: '9.5px',
+                      fontWeight: 700,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      background: colors.bg,
+                      color: colors.fg,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {kindBadgeLabel(row.kind)}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: '12.5px',
+                        fontWeight: 600,
+                        color: 'var(--color-text-primary)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {row.label}
+                    </div>
+                    <div style={{ fontSize: '10.5px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
+                      {[row.sourceLabel, row.sublabel].filter(Boolean).join(' · ')}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => {
+                onStartNewProduct(trimmedQuery);
+                setSearchFocused(false);
+                setDraftName('');
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                width: '100%',
+                padding: '8px 12px',
+                border: 'none',
+                borderTop: matches.length > 0 ? '1px solid var(--color-border-subtle)' : 'none',
+                background: 'rgba(40,175,201,0.06)',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-primary)',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(40,175,201,0.12)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(40,175,201,0.06)'; }}
+            >
+              <Plus size={14} strokeWidth={2.2} color="var(--color-accent-active)" />
+              <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--color-accent-active)' }}>
+                Add &ldquo;{trimmedQuery}&rdquo; as a new product
+              </span>
+            </button>
+          </div>
+        )}
     </div>
   );
 }
 
-function CostBreakdownCard() {
-  const withinTarget = FOOD_COST_PCT <= TARGET_FOOD_COST_PCT;
-
-  const pricingRows = [
-    { label: 'Ingredient Cost', dineIn: `£${TOTAL_FOOD_COST.toFixed(2)}`, takeaway: `£${TOTAL_FOOD_COST.toFixed(2)}` },
-    { label: 'Packaging Cost', dineIn: '£0.00', takeaway: '£0.00' },
-    { label: 'Desired Margin', dineIn: `${DESIRED_MARGIN_PCT}%`, takeaway: `${DESIRED_MARGIN_PCT}%` },
-    { label: 'SRP ex VAT', dineIn: `£${SRP_EX_VAT.toFixed(2)}`, takeaway: `£${TAKEAWAY_PRICE.toFixed(2)}` },
-    { label: 'VAT', dineIn: `${Math.round(VAT_RATE * 100)}%`, takeaway: '0%*' },
-    { label: 'SRP inc VAT', dineIn: `£${DINE_IN_INC_VAT.toFixed(2)}`, takeaway: `£${TAKEAWAY_PRICE.toFixed(2)}`, bold: true },
-  ];
-
+/** Quick "what's your target food-cost %?" picker shown before
+ *  the Margin Explorer. Preset pills + a custom input so an
+ *  operator can land on a number they have in mind from the brief. */
+function CogsTargetPicker({
+  value,
+  onChange,
+  onConfirm,
+  disabled,
+}: {
+  value: number;
+  onChange: (pct: number) => void;
+  onConfirm: () => void;
+  disabled: boolean;
+}) {
+  const presets = [20, 25, 30, 35];
   return (
-    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden' }}>
-      {/* Header */}
-      <div style={{ padding: '10px 14px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <BarChart3 size={14} color="var(--color-accent-active)" strokeWidth={2} />
-        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Cost & Margin Breakdown</span>
-        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginLeft: '2px' }}>· Cold · Serves 1</span>
-        <span style={{ marginLeft: 'auto', fontSize: '12px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px', background: withinTarget ? 'rgba(21,128,61,0.1)' : 'rgba(185,28,28,0.1)', color: withinTarget ? '#15803D' : '#B91C1C' }}>
-          {withinTarget ? 'Within target' : 'Above target'}
-        </span>
-      </div>
-
-      {/* Ingredient rows */}
-      {INGREDIENT_COSTS.map((ing, i) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '7px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: '12px', fontWeight: 500, gap: '8px' }}>
-          <span style={{ flex: 1, color: 'var(--color-text-secondary)' }}>{ing.name}</span>
-          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', minWidth: '44px', textAlign: 'right' }}>
-            {ing.qty === '\u2014' ? 'to taste' : `${ing.qty}${ing.unit}`}
+    <div
+      style={{
+        marginTop: '8px',
+        padding: '12px 14px',
+        borderRadius: '10px',
+        border: '1px solid var(--color-border-subtle)',
+        background: '#fff',
+        fontFamily: 'var(--font-primary)',
+      }}
+    >
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+        {presets.map((pct) => {
+          const active = pct === value;
+          return (
+            <button
+              key={pct}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(pct)}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '100px',
+                border: active
+                  ? '1.5px solid var(--color-accent-active)'
+                  : '1.5px solid var(--color-border)',
+                background: active ? 'var(--color-accent-active)' : '#fff',
+                color: active ? '#fff' : 'var(--color-text-secondary)',
+                fontSize: '12.5px',
+                fontWeight: 600,
+                fontFamily: 'var(--font-primary)',
+                cursor: disabled ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {pct}%
+            </button>
+          );
+        })}
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '4px 10px',
+            borderRadius: '100px',
+            border: presets.includes(value)
+              ? '1.5px solid var(--color-border)'
+              : '1.5px solid var(--color-accent-active)',
+            background: '#fff',
+          }}
+        >
+          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+            Custom
           </span>
-          <span style={{ fontWeight: 600, color: 'var(--color-text-primary)', minWidth: '44px', textAlign: 'right' }}>£{ing.cost.toFixed(2)}</span>
+          <input
+            type="number"
+            min={5}
+            max={95}
+            step={1}
+            value={value}
+            disabled={disabled}
+            onChange={(e) => {
+              const next = Number(e.target.value);
+              if (!Number.isFinite(next)) return;
+              onChange(Math.max(5, Math.min(95, Math.round(next))));
+            }}
+            style={{
+              width: '40px',
+              border: 'none',
+              outline: 'none',
+              fontSize: '12px',
+              fontWeight: 700,
+              fontFamily: 'var(--font-primary)',
+              color: 'var(--color-text-primary)',
+              textAlign: 'right',
+              background: 'transparent',
+            }}
+          />
+          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)' }}>%</span>
         </div>
-      ))}
-
-      {/* Total food cost */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid var(--color-border-subtle)', background: 'rgba(0, 28, 53,0.02)' }}>
-        <span style={{ flex: 1, fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Food Cost</span>
-        <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>£{TOTAL_FOOD_COST.toFixed(2)}</span>
       </div>
-
-      {/* Dine In / Takeaway pricing table */}
-      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 82px 82px', gap: '2px', marginBottom: '6px' }}>
-          <div />
-          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Dine In</div>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Takeaway</div>
-        </div>
-        {pricingRows.map((row, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 82px 82px', gap: '2px', padding: '4px 0', borderTop: i === 0 ? 'none' : '1px solid rgba(0, 28, 53,0.05)' }}>
-            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{row.label}</span>
-            <span style={{ fontSize: '12px', fontWeight: row.bold ? 700 : 500, color: row.bold ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', textAlign: 'center' }}>{row.dineIn}</span>
-            <span style={{ fontSize: '12px', fontWeight: row.bold ? 700 : 500, color: row.bold ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', textAlign: 'center' }}>{row.takeaway}</span>
-          </div>
-        ))}
-        <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', margin: '6px 0 0' }}>* Cold takeaway sandwiches are zero-rated for VAT in the UK</p>
-      </div>
-
-      {/* Food cost % + weekly projection */}
-      <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: '8px', background: withinTarget ? 'rgba(21,128,61,0.06)' : 'rgba(185,28,28,0.06)' }}>
-          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>Food cost % (ex VAT)</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '18px', fontWeight: 700, color: withinTarget ? '#15803D' : '#B91C1C' }}>{FOOD_COST_PCT}%</span>
-            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>target {TARGET_FOOD_COST_PCT}%</span>
-          </div>
-        </div>
-        <div style={{ padding: '8px 10px', borderRadius: '8px', background: 'rgba(3,105,161,0.05)', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
-          <span style={{ fontWeight: 700, color: 'var(--color-info)' }}>Projected weekly:</span> At ~25 serves/day, that&apos;s <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>£{(GROSS_PROFIT_EX_VAT * 25 * 7).toFixed(0)}</span> gross profit/week from this item alone.
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onConfirm}
+          style={{
+            padding: '7px 16px',
+            borderRadius: '100px',
+            border: 'none',
+            background: 'var(--color-accent-active)',
+            color: '#fff',
+            fontSize: '12.5px',
+            fontWeight: 600,
+            fontFamily: 'var(--font-primary)',
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            boxShadow: '0 2px 8px rgba(34,68,68,0.22)',
+          }}
+        >
+          Use {value}% target
+        </button>
       </div>
     </div>
   );
 }
 
-function PackagingPicker({ selected, onToggle, onConfirm, onSkip }: {
+function PackagingPicker({ options, selected, onToggle, onConfirm, onSkip }: {
+  options: PackagingTemplate[];
   selected: Set<string>;
   onToggle: (id: string) => void;
   onConfirm: () => void;
   onSkip: () => void;
 }) {
-  const totalPackaging = PACKAGING_OPTIONS
+  const totalPackaging = options
     .filter(p => selected.has(p.id))
     .reduce((s, p) => s + p.cost, 0);
 
@@ -614,7 +1161,7 @@ function PackagingPicker({ selected, onToggle, onConfirm, onSkip }: {
       border: '1px solid var(--color-border-subtle)',
       overflow: 'hidden',
     }}>
-      {PACKAGING_OPTIONS.map((pkg, i) => {
+      {options.map((pkg, i) => {
         const isSelected = selected.has(pkg.id);
         return (
           <button
@@ -627,7 +1174,7 @@ function PackagingPicker({ selected, onToggle, onConfirm, onSkip }: {
               width: '100%',
               padding: '10px 14px',
               gap: '10px',
-              borderBottom: i < PACKAGING_OPTIONS.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
+              borderBottom: i < options.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
               background: isSelected ? 'rgba(34,68,68,0.04)' : '#fff',
               border: 'none',
               borderLeft: isSelected ? '3px solid var(--color-accent-active)' : '3px solid transparent',
@@ -793,18 +1340,23 @@ function SiteSelectionCard({ selected, onToggle, onConfirm }: { selected: Set<st
   );
 }
 
-function AllergenCard({ confirmed, onToggle, onConfirm }: { confirmed: Set<string>; onToggle: (a: string) => void; onConfirm: () => void }) {
+function AllergenCard({ confirmed, detected, onToggle, onConfirm }: {
+  confirmed: Set<string>;
+  detected: Set<string>;
+  onToggle: (a: string) => void;
+  onConfirm: () => void;
+}) {
   return (
     <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden' }}>
       <div style={{ padding: '10px 14px', background: 'var(--color-warning-light)', borderBottom: '1px solid var(--color-warning-border)', display: 'flex', alignItems: 'center', gap: '8px' }}>
         <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-warning)' }}>Allergens</span>
         <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-warning)', marginLeft: 'auto' }}>
-          {confirmed.size} selected · {AUTO_DETECTED_ALLERGENS.size} auto-detected from ingredients
+          {confirmed.size} selected · {detected.size} auto-detected from ingredients
         </span>
       </div>
       <div style={{ padding: '10px 14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px' }}>
         {ALL_ALLERGENS.map(allergen => {
-          const isDetected = AUTO_DETECTED_ALLERGENS.has(allergen);
+          const isDetected = detected.has(allergen);
           const isSelected = confirmed.has(allergen);
           return (
             <button
@@ -2664,9 +3216,28 @@ export default function Feed({
   const [recipeFlow, setRecipeFlow] = useState(0);
   const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>(INITIAL_RECIPE_INGREDIENTS);
   const [selectedPackaging, setSelectedPackaging] = useState<Set<string>>(new Set());
-  const [selectedAllergens, setSelectedAllergens] = useState<Set<string>>(new Set(AUTO_DETECTED_ALLERGENS));
+  const [selectedAllergens, setSelectedAllergens] = useState<Set<string>>(new Set());
   const [selectedSites, setSelectedSites] = useState<Set<string>>(new Set(['fitzroy']));
   const doneSiteNamesRef = useRef<string[]>(['Fitzroy Espresso']);
+  // Recipe wizard: the active template + pricing state. Set on
+  // `startRecipeFlow`; consumed by the recipe-card editor, margin
+  // explorer, packaging picker, sites copy, and done summary.
+  const [activeTemplate, setActiveTemplate] = useState<RecipeWizardTemplate>(DEFAULT_WIZARD_TEMPLATE);
+  const [targetCogsPct, setTargetCogsPct] = useState<number>(DEFAULT_WIZARD_TEMPLATE.defaultTargetCogsPct);
+  const [selectedSwaps, setSelectedSwaps] = useState<Record<string, string>>({});
+  /** Final pricing snapshot taken at the moment the user locks in
+   *  on the Margin Explorer. Used by the done summary so it can
+   *  echo "locked in at £X dine in (Y% food cost)". */
+  const lockedPricingRef = useRef<{ srpExVat: number; targetCogsPct: number } | null>(null);
+  /** Seed text shown as the user's first turn after the greeting.
+   *  Defaults to the template name; can be overridden when the chip
+   *  passes its own copy through `startRecipeFlow(text)`. */
+  const recipeSeedRef = useRef<string>(DEFAULT_WIZARD_TEMPLATE.name);
+  /** Whether `findTemplateByName` resolved a template from the seed
+   *  text. When false, the wizard adds a "starting from avocado
+   *  toast as a baseline" caveat so the operator knows it didn't
+   *  recognise their typed item. */
+  const recipeTemplateMatchedRef = useRef<boolean>(true);
   const [productionFlow, setProductionFlow] = useState(0);
   const [prodSettings, setProdSettings] = useState<ProdSettings>({ ...DEFAULT_PROD_SETTINGS });
   const [chatMinimized, setChatMinimized] = useState(false);
@@ -2857,50 +3428,72 @@ export default function Feed({
   }, []);
 
   useEffect(() => {
+    // ── 1: simulated user echo of the typed item name ──────────
     if (recipeFlow === 1) {
       const t = setTimeout(() => {
-        setMessages(prev => [...prev, { id: `u-recipe-${Date.now()}`, role: 'user', text: 'Chicken and mayo sandwich' }]);
+        setMessages(prev => [...prev, { id: `u-recipe-${Date.now()}`, role: 'user', text: recipeSeedRef.current }]);
         setRecipeFlow(2);
       }, 1500);
       return () => clearTimeout(t);
     }
+    // ── 2: post the recipe-card editor (with a brief caveat if
+    //       we couldn't resolve the typed name into a template) ─
     if (recipeFlow === 2) {
       const t = setTimeout(() => {
+        const intro = recipeTemplateMatchedRef.current
+          ? buildRecipeCardIntro(activeTemplate)
+          : `I don\u2019t have a recipe template for **${recipeSeedRef.current}** yet \u2014 starting from **${activeTemplate.name}** as a baseline you can tweak.`;
         setMessages(prev => [...prev, {
           id: `q-recipe-card-${Date.now()}`,
           role: 'quinn',
-          text: RECIPE_CARD_INTRO,
+          text: intro,
           msgType: 'recipe-card',
         }]);
         setRecipeFlow(3);
       }, 1200);
       return () => clearTimeout(t);
     }
+    // ── 3: ask for the target food-cost % ──────────────────────
     if (recipeFlow === 3) {
       const t = setTimeout(() => {
         setMessages(prev => [...prev, {
-          id: `q-cost-${Date.now()}`,
+          id: `q-cogs-target-${Date.now()}`,
           role: 'quinn',
-          text: RECIPE_COST_MSG,
-          msgType: 'cost-breakdown',
+          text: RECIPE_COGS_TARGET_MSG,
+          msgType: 'cogs-target',
         }]);
         setRecipeFlow(4);
       }, 1000);
       return () => clearTimeout(t);
     }
-    if (recipeFlow === 4) {
+    // ── 5: post the margin explorer once the COGS target is set
+    if (recipeFlow === 5) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: `q-margin-${Date.now()}`,
+          role: 'quinn',
+          text: RECIPE_COST_MSG,
+          msgType: 'margin-explorer',
+        }]);
+        setRecipeFlow(6);
+      }, 1000);
+      return () => clearTimeout(t);
+    }
+    // ── 7: packaging picker ────────────────────────────────────
+    if (recipeFlow === 7) {
       const t = setTimeout(() => {
         setMessages(prev => [...prev, {
           id: `q-packaging-${Date.now()}`,
           role: 'quinn',
-          text: RECIPE_PACKAGING_MSG,
+          text: buildPackagingMsg(activeTemplate),
           msgType: 'packaging-picker',
         }]);
-        setRecipeFlow(5);
+        setRecipeFlow(8);
       }, 900);
       return () => clearTimeout(t);
     }
-    if (recipeFlow === 6) {
+    // ── 9: allergen check ──────────────────────────────────────
+    if (recipeFlow === 9) {
       const t = setTimeout(() => {
         setMessages(prev => [...prev, {
           id: `q-allergen-${Date.now()}`,
@@ -2908,56 +3501,60 @@ export default function Feed({
           text: RECIPE_ALLERGEN_MSG,
           msgType: 'allergen-check',
         }]);
-        setRecipeFlow(7);
+        setRecipeFlow(10);
       }, 800);
       return () => clearTimeout(t);
     }
-    if (recipeFlow === 8) {
+    // ── 11: sites selection ────────────────────────────────────
+    if (recipeFlow === 11) {
       const t = setTimeout(() => {
         setMessages(prev => [...prev, {
           id: `q-sites-${Date.now()}`,
           role: 'quinn',
-          text: RECIPE_SITES_MSG,
+          text: buildSitesMsg(activeTemplate),
           msgType: 'site-selection',
         }]);
-        setRecipeFlow(9);
+        setRecipeFlow(12);
       }, 700);
       return () => clearTimeout(t);
     }
-    if (recipeFlow === 11) {
+    // ── 14: supplier-link offer ────────────────────────────────
+    if (recipeFlow === 14) {
       const t = setTimeout(() => {
         setMessages(prev => [...prev, {
           id: `q-supplier-${Date.now()}`,
           role: 'quinn',
-          text: RECIPE_LINK_MSG,
+          text: activeTemplate.supplierLinkMsg,
         }]);
-        setRecipeFlow(12);
+        setRecipeFlow(15);
       }, 800);
       return () => clearTimeout(t);
     }
-    if (recipeFlow === 13) {
+    // ── 16: done summary ──────────────────────────────────────
+    if (recipeFlow === 16) {
       const t = setTimeout(() => {
         setMessages(prev => [...prev, {
           id: `q-done-${Date.now()}`,
           role: 'quinn',
-          text: buildDoneMsg(doneSiteNamesRef.current),
+          text: buildDoneMsg(activeTemplate, doneSiteNamesRef.current, lockedPricingRef.current),
         }]);
-        setRecipeFlow(14);
+        setRecipeFlow(17);
       }, 800);
       return () => clearTimeout(t);
     }
-    if (recipeFlow === 14) {
+    // ── 17: production setup offer ─────────────────────────────
+    if (recipeFlow === 17) {
       const t = setTimeout(() => {
         setMessages(prev => [...prev, {
           id: `q-prod-offer-${Date.now()}`,
           role: 'quinn',
           text: "Want to add it to a production plan while we're here? I can walk you through the settings in a couple of quick questions.",
         }]);
-        setRecipeFlow(15);
+        setRecipeFlow(18);
       }, 1400);
       return () => clearTimeout(t);
     }
-  }, [recipeFlow]);
+  }, [recipeFlow, activeTemplate]);
 
   useEffect(() => {
     if (productionFlow === 3) {
@@ -3116,11 +3713,73 @@ export default function Feed({
     ]);
   }
 
-  function startRecipeFlow() {
+  function startRecipeFlow(seedText?: string, opts?: { userEcho?: string }) {
     setChatMinimized(false);
     setChatStarted(true);
-    setMessages([{ id: `q-greeting-${Date.now()}`, role: 'quinn', text: RECIPE_GREETING }]);
+    const resolved = seedText ? findTemplateByName(seedText) : null;
+    const template = resolved ?? DEFAULT_WIZARD_TEMPLATE;
+    setActiveTemplate(template);
+    setRecipeIngredients(template.ingredients.map(templateRowToRecipeIngredient));
+    setTargetCogsPct(template.defaultTargetCogsPct);
+    setSelectedSwaps({});
+    setSelectedPackaging(new Set(template.packagingDefaultIds));
+    setSelectedAllergens(new Set(template.autoDetectedAllergens));
+    setSelectedSites(new Set(['fitzroy']));
+    lockedPricingRef.current = null;
+    recipeSeedRef.current = seedText && seedText.trim().length > 0 ? seedText.trim() : template.name;
+    recipeTemplateMatchedRef.current = !!resolved || !seedText;
+    // When the wizard is opened from typed text (rather than a chip
+    // click) we keep the user's original message visible above Quinn's
+    // greeting so the conversation reads naturally.
+    const echo = opts?.userEcho?.trim();
+    const greetingMsg: ChatMsg = {
+      id: `q-greeting-${Date.now()}`,
+      role: 'quinn',
+      text: RECIPE_GREETING,
+    };
+    setMessages(echo
+      ? [{ id: `u-recipe-seed-${Date.now()}`, role: 'user', text: echo }, greetingMsg]
+      : [greetingMsg],
+    );
     setRecipeFlow(1);
+  }
+
+  /** Permissive "did the user just ask for a new recipe?" detector,
+   *  run before parseCommand so phrases like "add an avocado toast",
+   *  "new avocado toast recipe", or even a bare "avocado toast" route
+   *  to the wizard instead of falling through to the generic Quinn
+   *  reply. The heuristic prefers false negatives over false positives:
+   *  if the message looks at all analytical (question marks, "cost
+   *  of", "trend", "% / %s", "vs", "compare", date words), we bail
+   *  and let the analytics path handle it.
+   *
+   *  Returns the seed text (for findTemplateByName) when matched. */
+  function detectNewRecipeIntent(text: string): string | null {
+    const lower = text.toLowerCase().trim();
+    if (!lower) return null;
+    const analyticsSmell =
+      /[?%]/.test(lower) ||
+      /\b(?:cost of|how much|how many|how's|trend|trending|vs\.?|versus|compare|compared|report|by site|by store|per site|per store|this week|last week|this month|last month|today|yesterday|month-on-month|year-on-year|forecast|sales|revenue|covers?)\b/.test(lower);
+    if (analyticsSmell) return null;
+
+    const creationVerb =
+      /\b(?:new|add|create|build|make|design|launch|do|start|set\s*up)\b/.test(lower) ||
+      /^let'?s\b/.test(lower);
+    const recipeKeyword = /\brecipe\b/.test(lower);
+    const templateHit = findTemplateByName(lower);
+
+    // Case 1: explicit "recipe" keyword + creation verb. ("new recipe",
+    // "create a recipe", "build me a recipe", "let's do a recipe")
+    if (creationVerb && recipeKeyword) return text;
+    // Case 2: creation verb + a known template name. ("add avocado
+    // toast", "create chicken mayo sandwich")
+    if (creationVerb && templateHit) return text;
+    // Case 3: bare-ish template phrase, ≤6 words, no analytics smell.
+    // ("avocado toast", "avo toast", "chicken & mayo")
+    if (templateHit && lower.split(/\s+/).length <= 6) return text;
+    // Case 4: just the word "recipe" on its own.
+    if (recipeKeyword && lower.split(/\s+/).length <= 3) return text;
+    return null;
   }
 
   function startIntegrityCheck() {
@@ -3137,16 +3796,52 @@ export default function Feed({
     }, 2000);
   }
 
+  /** State 4 → 5. User picked a target food-cost %. */
+  function confirmCogsTarget() {
+    setMessages(prev => [...prev, {
+      id: `u-cogs-target-${Date.now()}`,
+      role: 'user',
+      text: `Target ${targetCogsPct}% food cost`,
+    }]);
+    setRecipeFlow(5);
+  }
+
+  /** State 6 → 7. User locked in the Margin Explorer price. */
+  function confirmMarginExplorer() {
+    const liveRows = recipeIngredientsToTemplateRows(recipeIngredients);
+    const resolvedRows = liveRows.map((row) => {
+      const swapId = selectedSwaps[row.id];
+      const original = activeTemplate.ingredients.find((i) => i.id === row.id);
+      if (!swapId || !original?.swaps) return row;
+      const swap = original.swaps.find((s) => s.id === swapId);
+      if (!swap) return row;
+      return { ...row, unitCostP: swap.unitCostP, name: swap.name, source: swap.source };
+    });
+    const costP = totalFoodCostP(resolvedRows);
+    const srpEx = srpExVatForCogs(costP, targetCogsPct);
+    lockedPricingRef.current = { srpExVat: srpEx, targetCogsPct };
+    const swapCount = Object.keys(selectedSwaps).length;
+    const swapFragment = swapCount > 0 ? ` (with ${swapCount} swap${swapCount === 1 ? '' : 's'})` : '';
+    setMessages(prev => [...prev, {
+      id: `u-margin-${Date.now()}`,
+      role: 'user',
+      text: `Price it at £${srpEx.toFixed(2)} (${targetCogsPct}% food cost, £${penceToPounds(costP).toFixed(2)} cost)${swapFragment}`,
+    }]);
+    setRecipeFlow(7);
+  }
+
   function confirmPackaging() {
-    const chosen = PACKAGING_OPTIONS.filter(p => selectedPackaging.has(p.id));
+    const chosen = activeTemplate.packaging.filter(p => selectedPackaging.has(p.id));
     const total = chosen.reduce((s, p) => s + p.cost, 0);
     const names = chosen.map(p => p.name).join(', ');
     setMessages(prev => [...prev, {
       id: `u-packaging-${Date.now()}`,
       role: 'user',
-      text: `Add ${names} (+£${total.toFixed(2)}/serve)`,
+      text: chosen.length > 0
+        ? `Add ${names} (+£${total.toFixed(2)}/serve)`
+        : 'No packaging needed',
     }]);
-    setRecipeFlow(6);
+    setRecipeFlow(9);
   }
 
   function skipPackaging() {
@@ -3155,7 +3850,7 @@ export default function Feed({
       role: 'user',
       text: 'No packaging needed',
     }]);
-    setRecipeFlow(6);
+    setRecipeFlow(9);
   }
 
   function confirmAllergens() {
@@ -3163,9 +3858,9 @@ export default function Feed({
     setMessages(prev => [...prev, {
       id: `u-allergens-${Date.now()}`,
       role: 'user',
-      text: `Confirmed — ${list}`,
+      text: list.length > 0 ? `Confirmed — ${list}` : 'Confirmed — no allergens',
     }]);
-    setRecipeFlow(8);
+    setRecipeFlow(11);
   }
 
   function confirmSites() {
@@ -3177,17 +3872,17 @@ export default function Feed({
       role: 'user',
       text: `Assign to: ${sitesStr}`,
     }]);
-    setRecipeFlow(10);
+    setRecipeFlow(13);
   }
 
   function confirmRecipe() {
     setMessages(prev => [...prev, { id: `u-confirm-${Date.now()}`, role: 'user', text: 'Looks good, save it' }]);
-    setRecipeFlow(11);
+    setRecipeFlow(14);
   }
 
   function confirmSupplier() {
     setMessages(prev => [...prev, { id: `u-supplier-${Date.now()}`, role: 'user', text: 'Yes, add them' }]);
-    setRecipeFlow(13);
+    setRecipeFlow(16);
   }
 
   // ─── Production flow actions ──────────────────────────────────────────────
@@ -3195,16 +3890,16 @@ export default function Feed({
   function startProductionFlow() {
     setMessages(prev => [...prev,
       { id: `u-prod-yes-${Date.now()}`, role: 'user', text: 'Yes, set it up' },
-      { id: `q-prod-start-${Date.now()}`, role: 'quinn', text: PROD_PREP_MSG, msgType: 'prod-prep' },
+      { id: `q-prod-start-${Date.now()}`, role: 'quinn', text: buildProdPrepMsg(activeTemplate), msgType: 'prod-prep' },
     ]);
-    setRecipeFlow(16);
+    setRecipeFlow(19);
     setProdSettings({ ...DEFAULT_PROD_SETTINGS });
     setProductionFlow(2);
   }
 
   function skipProductionOffer() {
     setMessages(prev => [...prev, { id: `u-prod-skip-${Date.now()}`, role: 'user', text: 'Not now, thanks' }]);
-    setRecipeFlow(16);
+    setRecipeFlow(19);
   }
 
   function confirmPrepTime(time: string) {
@@ -3248,6 +3943,19 @@ export default function Feed({
     setChatStarted(true);
     setChatMinimized(false);
     setInput('');
+
+    // "New recipe" intent — sits BEFORE parseCommand because the recipe
+    // wizard is its own state machine (not a registered Command), and
+    // we want flexible phrasing ("add an avocado toast", "new recipe",
+    // bare "avocado toast") to land on the wizard rather than the
+    // generic text reply.
+    if (explicitChart === undefined && !tableOpts) {
+      const seed = detectNewRecipeIntent(text);
+      if (seed !== null) {
+        startRecipeFlow(seed, { userEcho: text });
+        return;
+      }
+    }
 
     // Chat-command detection — runs before analytics so phrases like
     // "waste 3 muffins" don't get routed to a fallback text reply.
@@ -3420,7 +4128,7 @@ export default function Feed({
   }
 
   const analyticsActive = analyticsStep > 0 && analyticsStep < 3;
-  const composerDisabled = (recipeFlow > 0 && recipeFlow < 16) || (productionFlow > 0 && productionFlow < 10) || analyticsActive;
+  const composerDisabled = (recipeFlow > 0 && recipeFlow < 19) || (productionFlow > 0 && productionFlow < 10) || analyticsActive;
   const composerPlaceholder = composerDisabled
     ? (productionFlow > 0
         ? 'Edify is setting up your production plan\u2026'
@@ -3719,7 +4427,7 @@ export default function Feed({
                           type="button"
                           onClick={() => {
                             if (chip.action === 'recipe') {
-                              startRecipeFlow();
+                              startRecipeFlow(chip.text);
                             } else if (chip.action === 'integrity') {
                               startIntegrityCheck();
                             } else if (chip.commandId) {
@@ -3832,22 +4540,86 @@ export default function Feed({
                         )}
                         {m.msgType === 'recipe-card' && (
                           <RecipeCardEditor
+                            recipeName={activeTemplate.name}
+                            servesQty={activeTemplate.yieldQty}
+                            servesUom={activeTemplate.yieldUom}
                             ingredients={recipeIngredients}
                             onChange={(idx, qty) => {
                               setRecipeIngredients(prev => prev.map((ing, i) => i === idx ? { ...ing, qty } : ing));
                             }}
+                            onAdd={(row) => {
+                              setRecipeIngredients(prev => [...prev, row]);
+                              // Clear any selected swap on a row id that
+                              // happens to collide — defensive: shouldn't
+                              // happen given the `user-` prefix, but keeps
+                              // the explorer consistent if a template
+                              // ingredient is re-added under its old id.
+                              setSelectedSwaps(prev => {
+                                if (!(row.id in prev)) return prev;
+                                const next = { ...prev };
+                                delete next[row.id];
+                                return next;
+                              });
+                            }}
+                            onRemove={(id) => {
+                              setRecipeIngredients(prev => prev.filter(r => r.id !== id));
+                              setSelectedSwaps(prev => {
+                                if (!(id in prev)) return prev;
+                                const next = { ...prev };
+                                delete next[id];
+                                return next;
+                              });
+                            }}
+                            onStartNewProduct={(query) => {
+                              // Route through the existing product-swap
+                              // wizard in `add` mode. Seeding the name
+                              // skips the purpose card and lands the
+                              // user straight on the Add-new-product
+                              // info step with the typed query
+                              // pre-filled.
+                              commandRunner.runCommand({
+                                commandId: 'product-swap',
+                                args: { mode: 'add', newProductName: query },
+                                confidence: 1,
+                              });
+                            }}
                           />
                         )}
-                        {m.msgType === 'cost-breakdown' && (
-                          <CostBreakdownCard />
+                        {m.msgType === 'cogs-target' && (
+                          <CogsTargetPicker
+                            value={targetCogsPct}
+                            onChange={setTargetCogsPct}
+                            onConfirm={confirmCogsTarget}
+                            disabled={recipeFlow !== 4}
+                          />
+                        )}
+                        {m.msgType === 'margin-explorer' && (
+                          <MarginExplorerCard
+                            template={activeTemplate}
+                            targetCogsPct={targetCogsPct}
+                            selectedSwaps={selectedSwaps}
+                            liveIngredients={recipeIngredientsToTemplateRows(recipeIngredients)}
+                            locked={recipeFlow !== 6}
+                            onTargetChange={setTargetCogsPct}
+                            onSwap={(ingredientId, swapId) => {
+                              setSelectedSwaps(prev => {
+                                const next = { ...prev };
+                                if (swapId === null) delete next[ingredientId];
+                                else next[ingredientId] = swapId;
+                                return next;
+                              });
+                            }}
+                            onConfirm={confirmMarginExplorer}
+                          />
                         )}
                         {m.msgType === 'integrity-check' && (
                           <DataIntegrityCard
                             onFixWithQuinn={() => sendMessage('Walk me through fixing the data integrity issues — let\'s start with the 3 that need immediate attention.')}
                           />
                         )}
-                        {m.msgType === 'packaging-picker' && recipeFlow === 5 && (
+                        {m.msgType === 'packaging-picker' && recipeFlow === 8 && (
                           <PackagingPicker
+                            options={activeTemplate.packaging}
                             selected={selectedPackaging}
                             onToggle={(id) => setSelectedPackaging(prev => {
                               const next = new Set(prev);
@@ -3858,9 +4630,10 @@ export default function Feed({
                             onSkip={skipPackaging}
                           />
                         )}
-                        {m.msgType === 'allergen-check' && recipeFlow === 7 && (
+                        {m.msgType === 'allergen-check' && recipeFlow === 10 && (
                           <AllergenCard
                             confirmed={selectedAllergens}
+                            detected={new Set(activeTemplate.autoDetectedAllergens)}
                             onToggle={(a) => setSelectedAllergens(prev => {
                               const next = new Set(prev);
                               if (next.has(a)) next.delete(a); else next.add(a);
@@ -3869,7 +4642,7 @@ export default function Feed({
                             onConfirm={confirmAllergens}
                           />
                         )}
-                        {m.msgType === 'site-selection' && recipeFlow === 9 && (
+                        {m.msgType === 'site-selection' && recipeFlow === 12 && (
                           <SiteSelectionCard
                             selected={selectedSites}
                             onToggle={(id) => setSelectedSites(prev => {
@@ -4314,13 +5087,13 @@ export default function Feed({
                     ));
                     })()}
 
-                    {recipeFlow === 10 && (
+                    {recipeFlow === 13 && (
                       <ActionButton label="Looks good, save it" onClick={confirmRecipe} />
                     )}
-                    {recipeFlow === 12 && (
+                    {recipeFlow === 15 && (
                       <ActionButton label="Yes, add them" onClick={confirmSupplier} />
                     )}
-                    {recipeFlow === 15 && (
+                    {recipeFlow === 18 && (
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', maxWidth: '88%' }}>
                         <button type="button" onClick={skipProductionOffer} style={{ padding: '8px 18px', borderRadius: '100px', border: '1.5px solid var(--color-border)', background: '#fff', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
                           Not now

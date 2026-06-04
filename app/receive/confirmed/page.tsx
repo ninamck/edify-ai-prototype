@@ -11,8 +11,10 @@ function ConfirmedContent() {
   const supplier = searchParams.get('supplier') ?? 'Unknown';
   const poNums = (searchParams.get('pos') ?? '').split(',').filter(Boolean);
   const variances = parseInt(searchParams.get('variances') ?? '0', 10);
+  const altCount = parseInt(searchParams.get('alts') ?? '0', 10);
+  const masterId = searchParams.get('master') ?? undefined;
 
-  const grnNumber = `GRN-${1245 + Math.floor(Math.random() * 10)}`;
+  const grnNumber = searchParams.get('grn') ?? `GRN-${1245 + Math.floor(Math.random() * 10)}`;
 
   return (
     <ConfirmationScreen
@@ -20,8 +22,11 @@ function ConfirmedContent() {
       supplier={supplier}
       poNumbers={poNums}
       varianceCount={variances}
+      altCount={altCount}
+      masterId={masterId}
       receivedBy="Ed Barry"
       onBackToDeliveries={() => router.push('/receive')}
+      onViewMaster={masterId ? () => router.push(`/suppliers/master-products/${masterId}`) : undefined}
     />
   );
 }

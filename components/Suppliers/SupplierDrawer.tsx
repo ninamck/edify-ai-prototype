@@ -167,7 +167,7 @@ export default function SupplierDrawer({
             <Field label="Lead time (days)">
               <NumberInput value={draft.leadTimeDays ?? 0} onChange={(v) => update('leadTimeDays', v)} />
             </Field>
-            <Field label="Minimum order value (DH)">
+            <Field label="Minimum order value (£)">
               <NumberInput value={draft.minimumOrderValue ?? 0} onChange={(v) => update('minimumOrderValue', v)} />
             </Field>
             <Field label="Delivery days">

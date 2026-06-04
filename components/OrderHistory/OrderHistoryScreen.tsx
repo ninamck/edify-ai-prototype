@@ -172,7 +172,7 @@ export default function OrderHistoryScreen() {
         <span aria-hidden="true" style={{ color: 'var(--color-border-subtle)' }}>·</span>
         <span>
           <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            ${totalSpend.toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            £{totalSpend.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </span>
           {' '}spent (30d)
         </span>
@@ -322,12 +322,12 @@ function ApprovalStatusModal({ approval, onClose }: { approval: PendingApproval;
           <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
             {approval.originalTotal !== undefined ? (
               <>
-                <span style={{ textDecoration: 'line-through', color: 'var(--color-text-muted)' }}>${approval.originalTotal.toFixed(2)}</span>
+                <span style={{ textDecoration: 'line-through', color: 'var(--color-text-muted)' }}>£{approval.originalTotal.toFixed(2)}</span>
                 {' \u2192 '}
-                <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>${approval.total.toFixed(2)}</span>
+                <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>£{approval.total.toFixed(2)}</span>
               </>
             ) : (
-              <>${approval.total.toFixed(2)}</>
+              <>£{approval.total.toFixed(2)}</>
             )}
             {' · '}{approval.lines.length} items · submitted {approval.submittedAt}
           </div>
@@ -423,7 +423,7 @@ function ApprovalStatusModal({ approval, onClose }: { approval: PendingApproval;
                       )}
                     </div>
                     <span style={{ fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-                      ${(l.qty * l.unitPrice).toFixed(2)}
+                      £{(l.qty * l.unitPrice).toFixed(2)}
                     </span>
                   </div>
                 );
@@ -438,7 +438,7 @@ function ApprovalStatusModal({ approval, onClose }: { approval: PendingApproval;
                     </span>
                   </div>
                   <span style={{ fontWeight: 600, color: 'var(--color-text-muted)', textDecoration: 'line-through' }}>
-                    ${(removed.qty * removed.unitPrice).toFixed(2)}
+                    £{(removed.qty * removed.unitPrice).toFixed(2)}
                   </span>
                 </div>
               ))}
@@ -515,7 +515,7 @@ function OrderRow({ order, onClick }: { order: Order; onClick: () => void }) {
         {order.items}
       </td>
       <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontWeight: 600, color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>
-        ${order.total.toFixed(2)}
+        £{order.total.toFixed(2)}
       </td>
       <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
         <StatusBadge status={order.status} variant={STATUS_BADGE_VARIANT[order.status]} />

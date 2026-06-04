@@ -683,7 +683,7 @@ function PassThroughRow({ invoice, onView }: { invoice: PassThroughInvoice; onVi
 const SPLIT_PO_PALETTE = [
   { bar: '#224444', chipBg: 'rgba(34,68,68,0.09)',  chipText: '#224444', chipBorder: 'rgba(34,68,68,0.25)' },
   { bar: '#0369A1', chipBg: 'rgba(3,105,161,0.09)', chipText: '#0369A1', chipBorder: 'rgba(3,105,161,0.25)' },
-  { bar: '#EA580C', chipBg: 'rgba(234,88,12,0.09)', chipText: '#EA580C', chipBorder: 'rgba(234,88,12,0.25)' },
+  { bar: '#475569', chipBg: 'rgba(71,85,105,0.09)', chipText: '#475569', chipBorder: 'rgba(71,85,105,0.25)' },
   { bar: '#6B21A8', chipBg: 'rgba(107,33,168,0.09)',chipText: '#6B21A8', chipBorder: 'rgba(107,33,168,0.25)' },
 ];
 

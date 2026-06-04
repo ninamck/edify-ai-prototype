@@ -156,7 +156,7 @@ function ApprovalCard({ approval, onOpen }: { approval: PendingApproval; onOpen:
           </div>
         </div>
         <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-          ${approval.total.toFixed(2)}
+          £{approval.total.toFixed(2)}
           <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)', marginLeft: '8px' }}>
             {approval.lines.length} items
           </span>
@@ -279,12 +279,12 @@ function ApprovalReviewModal({ approval, reviewerId, onClose }: { approval: Pend
             {submitter?.name ?? '—'} ({submitter?.role.replace('_', ' ')}) ·{' '}
             {edited ? (
               <>
-                <span style={{ textDecoration: 'line-through', color: 'var(--color-text-muted)' }}>${approval.total.toFixed(2)}</span>
+                <span style={{ textDecoration: 'line-through', color: 'var(--color-text-muted)' }}>£{approval.total.toFixed(2)}</span>
                 {' → '}
-                <span style={{ fontWeight: 700, color: 'var(--color-accent-active)' }}>${editedTotal.toFixed(2)}</span>
+                <span style={{ fontWeight: 700, color: 'var(--color-accent-active)' }}>£{editedTotal.toFixed(2)}</span>
               </>
             ) : (
-              <span>${approval.total.toFixed(2)}</span>
+              <span>£{approval.total.toFixed(2)}</span>
             )}
             {' · '}{approval.submittedAt}
           </div>
@@ -423,7 +423,7 @@ function ApprovalReviewModal({ approval, reviewerId, onClose }: { approval: Pend
                               >
                                 <option value="" disabled>Select product…</option>
                                 {SITE_CATALOG.map(p => (
-                                  <option key={p.id} value={p.id}>{p.description} · ${p.unitPrice.toFixed(2)}</option>
+                                  <option key={p.id} value={p.id}>{p.description} · £{p.unitPrice.toFixed(2)}</option>
                                 ))}
                               </select>
                               <ChevronDown
@@ -478,7 +478,7 @@ function ApprovalReviewModal({ approval, reviewerId, onClose }: { approval: Pend
                       )}
                     </div>
                     <span style={{ fontWeight: 600, color: 'var(--color-text-secondary)', flexShrink: 0 }}>
-                      ${(l.qty * l.unitPrice).toFixed(2)}
+                      £{(l.qty * l.unitPrice).toFixed(2)}
                     </span>
                   </div>
                 );

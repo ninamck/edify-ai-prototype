@@ -33,13 +33,13 @@ interface Aggregations {
 }
 
 function fmtMoney(v: number): string {
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`;
-  if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}k`;
-  return `$${v.toFixed(0)}`;
+  if (v >= 1_000_000) return `£${(v / 1_000_000).toFixed(2)}M`;
+  if (v >= 1_000) return `£${(v / 1_000).toFixed(0)}k`;
+  return `£${v.toFixed(0)}`;
 }
 
 function fmtMoneyExact(v: number): string {
-  return `$${Math.round(v).toLocaleString('en-US')}`;
+  return `£${Math.round(v).toLocaleString('en-US')}`;
 }
 
 function fmtPct(v: number | null): string {
@@ -103,7 +103,7 @@ function aggregate(rows: FlashReportRow[]): Aggregations {
     {
       id: 'avg-ticket',
       label: 'Avg ticket',
-      value: avgTicket !== null ? `$${avgTicket.toFixed(2)}` : '—',
+      value: avgTicket !== null ? `£${avgTicket.toFixed(2)}` : '—',
     },
     {
       id: 'food-cost',

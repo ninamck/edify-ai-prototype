@@ -10,6 +10,13 @@ export interface POLine {
   unit: string;
   price: number;
   expectedQty: number;
+  /** Optional link to the catalogue master product this line rolls up into.
+   *  Used to blend the delivered cost into the master's weighted-average cost
+   *  and to prefill the master when receiving an alternative SKU. */
+  masterProductId?: string;
+  /** How many master `unit`s each ordered line item contains (e.g. a "15pk"
+   *  egg line = 15 eggs). Lets the WAC math normalise across pack sizes. */
+  unitsPerLineItem?: number;
 }
 
 export interface PO {
@@ -32,6 +39,13 @@ export interface GRNLine {
   expectedQty: number;
   receivedQty: number;
   varianceResolution?: VarianceResolution;
+  alternativeFor?: {
+    poLineId: string;
+    poName: string;
+    poSku: string;
+    poExpectedQty: number;
+    note: string;
+  };
 }
 
 export interface GRN {
@@ -49,6 +63,29 @@ export interface GRN {
   lines: GRNLine[];
 }
 
+export interface DeliveryCommitLine {
+  poLineId: string;
+  receivedQty: number;
+  resolution?: VarianceResolution;
+}
+
+export interface DeliveryCommitAlternative {
+  id: string;
+  originPoLineId?: string;
+  masterProductId: string;
+  masterName: string;
+  masterUnit: string;
+  productName: string;
+  supplierCode: string;
+  packType: 'Pack' | 'Single';
+  packQty: number;
+  singleUnitType: 'Each' | 'kg' | 'L' | 'g' | 'ml';
+  packCost: number;
+  receivedQty: number;
+  supplierName: string;
+  site: string;
+}
+
 export const MOCK_POS: PO[] = [
   {
     id: 'po-1',
@@ -60,7 +97,7 @@ export const MOCK_POS: PO[] = [
     lines: [
       { id: 'pl-1', name: 'Full cream milk 2L', sku: 'FCM-2L', unit: 'EA', price: 4.20, expectedQty: 20 },
       { id: 'pl-2', name: 'Double cream 1L', sku: 'DC-1L', unit: 'EA', price: 8.00, expectedQty: 8 },
-      { id: 'pl-3', name: 'Free range eggs 15pk', sku: 'FRE-15', unit: 'EA', price: 8.00, expectedQty: 12 },
+      { id: 'pl-3', name: 'Free range eggs 15pk', sku: 'FRE-15', unit: 'EA', price: 8.00, expectedQty: 12, masterProductId: 'mp-eggs', unitsPerLineItem: 15 },
       { id: 'pl-4', name: 'Unsalted butter 500g', sku: 'UB-500', unit: 'EA', price: 6.50, expectedQty: 6 },
       { id: 'pl-4b', name: 'Dishwasher tablets 100pk', sku: 'DWT-100', unit: 'BOX', price: 24.00, expectedQty: 2 },
     ],
@@ -115,7 +152,7 @@ export const MOCK_POS: PO[] = [
     lines: [
       { id: 'pl-15', name: 'Full cream milk 2L', sku: 'FCM-2L', unit: 'EA', price: 4.20, expectedQty: 30 },
       { id: 'pl-16', name: 'Double cream 1L', sku: 'DC-1L', unit: 'EA', price: 8.00, expectedQty: 10 },
-      { id: 'pl-17', name: 'Free range eggs 15pk', sku: 'FRE-15', unit: 'EA', price: 8.00, expectedQty: 15 },
+      { id: 'pl-17', name: 'Free range eggs 15pk', sku: 'FRE-15', unit: 'EA', price: 8.00, expectedQty: 15, masterProductId: 'mp-eggs', unitsPerLineItem: 15 },
       { id: 'pl-18', name: 'Unsalted butter 500g', sku: 'UB-500', unit: 'EA', price: 6.50, expectedQty: 12 },
       { id: 'pl-19', name: 'Plain flour 10kg', sku: 'FLR-10', unit: 'SACK', price: 18.00, expectedQty: 4 },
     ],
@@ -141,7 +178,7 @@ export const MOCK_POS: PO[] = [
     dateSent: '10 Apr 2026',
     lines: [
       { id: 'pl-22', name: 'Double cream 1L', sku: 'DC-1L', unit: 'EA', price: 8.00, expectedQty: 8 },
-      { id: 'pl-23', name: 'Free range eggs 15pk', sku: 'FRE-15', unit: 'EA', price: 8.00, expectedQty: 10 },
+      { id: 'pl-23', name: 'Free range eggs 15pk', sku: 'FRE-15', unit: 'EA', price: 8.00, expectedQty: 10, masterProductId: 'mp-eggs', unitsPerLineItem: 15 },
     ],
   },
 ];
@@ -243,7 +280,23 @@ export const MOCK_COMPLETED_DELIVERIES: GRN[] = [
     receivedBy: 'Aisha Nguyen',
     invoiceStatus: 'Pending Invoice',
     lines: [
-      { id: 'gl-12', poLineId: 'pl-17', name: 'Free range eggs 15pk', sku: 'FRE-15', unit: 'EA', price: 8.00, expectedQty: 15, receivedQty: 15 },
+      {
+        id: 'gl-12',
+        poLineId: 'pl-17',
+        name: 'Free range eggs 4pk',
+        sku: 'FRE-4',
+        unit: 'PACK',
+        price: 4.00,
+        expectedQty: 15,
+        receivedQty: 15,
+        alternativeFor: {
+          poLineId: 'pl-17',
+          poName: 'Free range eggs 15pk',
+          poSku: 'FRE-15',
+          poExpectedQty: 15,
+          note: 'Supplier sent alternative egg pack; reconciled during delivery and linked to Free Range Eggs master product.',
+        },
+      },
       { id: 'gl-13', poLineId: 'pl-19', name: 'Plain flour 10kg', sku: 'FLR-10', unit: 'SACK', price: 18.00, expectedQty: 4, receivedQty: 4 },
     ],
   },
@@ -283,9 +336,82 @@ export function poItemCount(po: PO): number {
 
 export function poTotal(po: PO): string {
   const t = po.lines.reduce((sum, l) => sum + l.price * l.expectedQty, 0);
-  return `$${t.toFixed(2)}`;
+  return `£${t.toFixed(2)}`;
 }
 
 export function grnVarianceCount(grn: GRN): number {
   return grn.lines.filter(l => l.receivedQty !== l.expectedQty).length;
+}
+
+export function recordCompletedDeliveryFromReceiving(input: {
+  pos: PO[];
+  lines: DeliveryCommitLine[];
+  alternatives: DeliveryCommitAlternative[];
+  invoiceNumber?: string;
+  receivedBy?: string;
+}): GRN | null {
+  if (input.pos.length === 0) return null;
+  const poLineById = new Map(input.pos.flatMap(po => po.lines).map(line => [line.id, line]));
+  const substitutedLineIds = new Set(input.alternatives.map(a => a.originPoLineId).filter((id): id is string => !!id));
+  const supplier = input.pos[0].supplier;
+  const site = input.pos[0].site;
+  const dateReceived = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  const normalLines: GRNLine[] = input.lines
+    .filter(line => !substitutedLineIds.has(line.poLineId))
+    .flatMap((line, idx): GRNLine[] => {
+      const poLine = poLineById.get(line.poLineId);
+      if (!poLine) return [];
+      return [{
+        id: `gl-runtime-${Date.now()}-${idx}`,
+        poLineId: poLine.id,
+        name: poLine.name,
+        sku: poLine.sku,
+        unit: poLine.unit,
+        price: poLine.price,
+        expectedQty: poLine.expectedQty,
+        receivedQty: line.receivedQty,
+        varianceResolution: line.resolution,
+      }];
+    });
+
+  const alternativeLines: GRNLine[] = input.alternatives.map((alt, idx) => {
+    const origin = alt.originPoLineId ? poLineById.get(alt.originPoLineId) : undefined;
+    return {
+      id: `gl-runtime-alt-${Date.now()}-${idx}`,
+      poLineId: origin?.id ?? alt.id,
+      name: alt.productName,
+      sku: alt.supplierCode || alt.id.toUpperCase(),
+      unit: alt.packType === 'Pack' ? 'PACK' : alt.singleUnitType,
+      price: alt.packCost,
+      expectedQty: origin?.expectedQty ?? alt.receivedQty,
+      receivedQty: alt.receivedQty,
+      alternativeFor: origin
+        ? {
+            poLineId: origin.id,
+            poName: origin.name,
+            poSku: origin.sku,
+            poExpectedQty: origin.expectedQty,
+            note: `Supplier sent alternative product; reconciled during delivery and linked to ${alt.masterName} master product.`,
+          }
+        : undefined,
+    };
+  });
+
+  const grn: GRN = {
+    id: `grn-runtime-${Date.now()}`,
+    grnNumber: `GRN-${1252 + MOCK_COMPLETED_DELIVERIES.filter(g => g.id.startsWith('grn-runtime')).length}`,
+    poNumbers: input.pos.map(po => po.poNumber),
+    supplier,
+    site,
+    status: 'Pending Invoice',
+    dateReceived,
+    receivedBy: input.receivedBy ?? 'Ed Barry',
+    invoiceNumber: input.invoiceNumber || undefined,
+    invoiceStatus: 'Pending Invoice',
+    lines: [...normalLines, ...alternativeLines],
+  };
+
+  MOCK_COMPLETED_DELIVERIES.push(grn);
+  return grn;
 }

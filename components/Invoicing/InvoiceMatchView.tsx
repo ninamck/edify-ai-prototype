@@ -14,6 +14,7 @@ import {
   getGRNsForInvoice,
   getUnmatchedInvoiceLines,
   invoiceGRNTotal,
+  getDeliveryReconciledSubstitutions,
   getSuggestedGRN,
   getPOContextForInvoice,
   POContextForInvoice,
@@ -25,6 +26,7 @@ import {
   vatCategoryLabel,
   VatCategory,
   GRN,
+  DeliveryReconciledSubstitution,
   saveApprovedResolutions,
 } from './mockData';
 import {
@@ -65,7 +67,7 @@ function varianceBadgeVariant(type: MatchVariance['type']): 'warning' | 'info' |
 
 function VarianceTypeChip({ type }: { type: MatchVariance['type'] }) {
   const styles: Record<MatchVariance['type'], { bg: string; color: string; border: string }> = {
-    price: { bg: 'rgba(217,119,6,0.1)', color: 'var(--color-warning)', border: 'rgba(217,119,6,0.3)' },
+    price: { bg: 'var(--color-warning-light)', color: 'var(--color-warning)', border: 'var(--color-warning-border)' },
     qty: { bg: 'rgba(3,105,161,0.08)', color: 'var(--color-info)', border: 'rgba(3,105,161,0.25)' },
     'over-invoice': { bg: 'rgba(185,28,28,0.09)', color: 'var(--color-error)', border: 'rgba(185,28,28,0.3)' },
   };
@@ -126,6 +128,10 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
   const grns = useMemo(() => getGRNsForInvoice(invoice, linkedGRNs), [invoice, linkedGRNs]);
   const grnTotal = useMemo(() => invoiceGRNTotal(invoice, linkedGRNs), [invoice, linkedGRNs]);
   const unmatchedLines = useMemo(() => getUnmatchedInvoiceLines(invoice, linkedGRNs), [invoice, linkedGRNs]);
+  const deliverySubstitutions = useMemo(
+    () => getDeliveryReconciledSubstitutions(invoice, linkedGRNs),
+    [invoice, linkedGRNs],
+  );
   const varianceTotal = invoice.total - grnTotal;
 
   const hasUnmatched = unmatchedLines.length > 0;
@@ -384,6 +390,16 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
           });
         }
 
+        if (deliverySubstitutions.length > 0) {
+          chips.push({
+            id: 'delivery-substitution',
+            icon: '✓',
+            label: `${deliverySubstitutions.length} delivery alternative${deliverySubstitutions.length === 1 ? '' : 's'} reconciled`,
+            tone: 'success',
+            content: <DeliverySubstitutionBanner substitutions={deliverySubstitutions} />,
+          });
+        }
+
         if (aiSuggestion) {
           chips.push({
             id: 'ai-suggestion',
@@ -562,7 +578,7 @@ function MatchContextBar({ chips, initialExpandedId }: {
     neutral: { bg: 'var(--color-bg-hover)', bgActive: 'rgba(0, 28, 53,0.08)', color: 'var(--color-text-primary)', border: 'var(--color-border-subtle)' },
     info: { bg: 'rgba(3,105,161,0.06)', bgActive: 'rgba(3,105,161,0.14)', color: 'var(--color-info)', border: 'rgba(3,105,161,0.3)' },
     success: { bg: 'rgba(21,128,61,0.06)', bgActive: 'rgba(21,128,61,0.14)', color: 'var(--color-success)', border: 'var(--color-success-border)' },
-    warning: { bg: 'rgba(217,119,6,0.08)', bgActive: 'rgba(217,119,6,0.18)', color: 'var(--color-warning)', border: 'var(--color-warning-border)' },
+    warning: { bg: 'var(--color-warning-bg)', bgActive: 'var(--color-warning-light)', color: 'var(--color-warning)', border: 'var(--color-warning-border)' },
     error: { bg: 'rgba(185,28,28,0.08)', bgActive: 'rgba(185,28,28,0.16)', color: 'var(--color-error)', border: 'var(--color-error-border)' },
   };
   const toneStyle = (tone: Tone, active: boolean): React.CSSProperties => {
@@ -640,6 +656,36 @@ function AutoAppliedBanner({ variances }: { variances: MatchVariance[] }) {
           <li key={e.variance.id}>{e.meta.note}</li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function DeliverySubstitutionBanner({ substitutions }: { substitutions: DeliveryReconciledSubstitution[] }) {
+  return (
+    <div style={{
+      padding: '14px 18px',
+      borderRadius: '12px',
+      background: 'rgba(21,128,61,0.06)',
+      border: '1px solid var(--color-success-border)',
+      marginBottom: '20px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+        <span style={{ fontSize: '16px', color: 'var(--color-success)' }}>✓</span>
+        <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--color-text-primary)' }}>
+          Alternative item already reconciled at delivery
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {substitutions.map(({ grnNumber, invoiceLine, grnLine }) => (
+          <div key={`${grnNumber}-${grnLine.id}`} style={{ fontSize: '13px', color: 'var(--color-text-primary)', lineHeight: 1.45 }}>
+            <strong>{invoiceLine.description}</strong> on the invoice matches <strong>{grnLine.name}</strong> on {grnNumber}.
+            {' '}The PO ordered <strong>{grnLine.alternativeFor?.poName}</strong>, but receiving marked it as an alternative product, linked it to the master product, and captured the delivered cost.
+            <div style={{ marginTop: '4px', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+              Invoice/GRN: {invoiceLine.qty} × £{invoiceLine.unitPrice.toFixed(2)} · PO item replaced: {grnLine.alternativeFor?.poSku}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1076,7 +1122,7 @@ function AutoStatusNoteCard({ invoice }: { invoice: Invoice }) {
   if (!note) return null;
   const toneStyles: Record<AutoStatusNoteData['tone'], { bg: string; border: string; icon: string; iconColor: string }> = {
     info:    { bg: 'var(--color-info-light)',    border: 'rgba(3,105,161,0.2)',      icon: 'ℹ',  iconColor: 'var(--color-info)' },
-    warning: { bg: 'var(--color-warning-light)', border: 'var(--color-warning-border)', icon: '⚠', iconColor: 'var(--color-warning)' },
+    warning: { bg: 'var(--color-bg-surface)',    border: '#EA580C',                     icon: '⚠', iconColor: 'var(--color-warning)' },
     error:   { bg: 'var(--color-error-light)',   border: 'var(--color-error-border)',   icon: '⚠', iconColor: 'var(--color-error)' },
     success: { bg: 'var(--color-success-light)', border: 'var(--color-success-border)', icon: '✓', iconColor: 'var(--color-success)' },
     neutral: { bg: 'var(--color-bg-hover)',      border: 'var(--color-border-subtle)',  icon: 'ℹ',  iconColor: 'var(--color-text-secondary)' },
@@ -1456,6 +1502,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
       receivedQty: gl.receivedQty,
       unitPrice: gl.price,
       lineTotal: gl.receivedQty * gl.price,
+      alternativeFor: gl.alternativeFor,
       matched: !invoice.variances.some(v => v.sku === gl.sku),
     }));
     const pos = MOCK_POS.filter(p => grn.poNumbers.includes(p.poNumber));
@@ -1699,6 +1746,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                 {/* GRN tab rows */}
                 {rightTab === 'grn' && lines.flatMap(grnLine => {
                   const invLine = invoice.lines.find(il => il.sku === grnLine.sku);
+                  const alternativeFor = grnLine.alternativeFor;
                   const isShort = grnLine.receivedQty < grnLine.orderedQty;
                   const priceVar = invLine ? invLine.unitPrice !== grnLine.unitPrice : false;
                   const priceDiff = invLine ? invLine.unitPrice - grnLine.unitPrice : 0;
@@ -1708,8 +1756,8 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const isResolved = !!variance && !!resolutions[variance.id];
                   const isCleared = isResolved || isAutoApplied;
                   const hasVar = (priceVar || variance?.type === 'qty') && !isCleared;
-                  const rowBg = hasVar ? 'rgba(217, 119, 6, 0.11)' : 'transparent';
-                  const leftAccent: React.CSSProperties = hasVar ? { boxShadow: 'inset 4px 0 0 #D97706' } : {};
+                  const rowBg = hasVar ? 'var(--color-warning-bg)' : 'transparent';
+                  const leftAccent: React.CSSProperties = hasVar ? { boxShadow: 'inset 4px 0 0 var(--color-warning)' } : {};
                   const qtyDiff = variance?.type === 'qty' ? variance.invoiceValue - variance.grnValue : 0;
                   const varLabel = variance?.type === 'qty'
                     ? `${qtyDiff > 0 ? '+' : ''}${qtyDiff} unit${Math.abs(qtyDiff) !== 1 ? 's' : ''}`
@@ -1718,7 +1766,19 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const dataRow = (
                     <tr key={grnLine.id} style={{ background: rowBg }}>
                       <td style={{ ...cell, ...leftAccent }}>
-                        <div style={{ fontWeight: hasVar ? 600 : 400 }}>{invLine?.description ?? grnLine.description}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontWeight: hasVar ? 600 : 400 }}>
+                          {invLine?.description ?? grnLine.description}
+                          {alternativeFor && (
+                            <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(21,128,61,0.08)', color: 'var(--color-success)', border: '1px solid var(--color-success-border)', whiteSpace: 'nowrap' }}>
+                              Reconciled alternative
+                            </span>
+                          )}
+                        </div>
+                        {alternativeFor && (
+                          <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+                            PO ordered {alternativeFor.poName}
+                          </div>
+                        )}
                         <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{grnLine.sku}</div>
                       </td>
                       <td style={{ ...cell, fontWeight: variance?.type === 'qty' && !isCleared ? 700 : 400, color: variance?.type === 'qty' && !isCleared ? 'var(--color-warning)' : undefined }}>
@@ -1767,7 +1827,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const detail = varianceDetailText(variance);
                   const impactLabel = variance.impact >= 0 ? `+£${variance.impact.toFixed(2)}` : `-£${Math.abs(variance.impact).toFixed(2)}`;
 
-                  const expandBg = isResolved ? 'rgba(16,185,129,0.03)' : 'rgba(217,119,6,0.04)';
+                  const expandBg = isResolved ? 'rgba(16,185,129,0.03)' : 'var(--color-warning-bg)';
                   const expandAccent = isResolved ? 'inset 3px 0 0 var(--color-success)' : 'inset 3px 0 0 var(--color-warning)';
 
                   const expandRow = (
@@ -1825,6 +1885,12 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
             grnGroups.forEach(g => g.pos.forEach(p => p.lines.forEach(pl => {
               if (!poBySku.has(pl.sku)) poBySku.set(pl.sku, pl);
             })));
+            const substitutionBySku = new Map<string, { original: POLine | undefined }>();
+            grnGroups.forEach(g => g.lines.forEach(gl => {
+              if (!gl.alternativeFor) return;
+              const original = g.pos.flatMap(p => p.lines).find(pl => pl.id === gl.alternativeFor?.poLineId);
+              substitutionBySku.set(gl.sku, { original });
+            }));
             const allPoNumbers = Array.from(new Set(grnGroups.flatMap(g => g.pos.map(p => p.poNumber))));
 
             return (
@@ -1857,8 +1923,10 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                 )}
 
                 {invoice.lines.flatMap(invLine => {
-                  const poLine = poBySku.get(invLine.sku);
-                  const priceMatch = poLine ? invLine.unitPrice === poLine.price : true;
+                  const substitution = substitutionBySku.get(invLine.sku);
+                  const poLine = poBySku.get(invLine.sku) ?? substitution?.original;
+                  const isDeliverySubstitution = !!substitution;
+                  const priceMatch = isDeliverySubstitution ? true : poLine ? invLine.unitPrice === poLine.price : true;
                   const priceDiff = poLine ? invLine.unitPrice - poLine.price : 0;
                   const lineTotal = poLine ? poLine.price * poLine.expectedQty : 0;
                   const variance = invoice.variances.find(v => v.sku === invLine.sku);
@@ -1866,14 +1934,26 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const isAutoApplied = !!variance && !!getAutoAppliedForVariance(variance.id);
                   const isResolved = !!variance && !!resolutions[variance.id];
                   const isCleared = isResolved || isAutoApplied;
-                  const rowBg = !priceMatch && !isCleared ? 'rgba(217, 119, 6, 0.11)' : 'transparent';
-                  const leftAccent: React.CSSProperties = !priceMatch && !isCleared ? { boxShadow: 'inset 4px 0 0 #D97706' } : {};
+                  const rowBg = !priceMatch && !isCleared ? 'var(--color-warning-bg)' : 'transparent';
+                  const leftAccent: React.CSSProperties = !priceMatch && !isCleared ? { boxShadow: 'inset 4px 0 0 var(--color-warning)' } : {};
                   const overOnLine = poLine ? invLine.qty > poLine.expectedQty : false;
 
                   const dataRow = (
                     <tr key={invLine.id} style={{ background: rowBg }}>
                       <td style={{ ...cell, ...leftAccent }}>
-                        <div style={{ fontWeight: !priceMatch && !isCleared ? 600 : 400 }}>{invLine.description}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontWeight: !priceMatch && !isCleared ? 600 : 400 }}>
+                          {invLine.description}
+                          {isDeliverySubstitution && (
+                            <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(21,128,61,0.08)', color: 'var(--color-success)', border: '1px solid var(--color-success-border)', whiteSpace: 'nowrap' }}>
+                              Delivery reconciled
+                            </span>
+                          )}
+                        </div>
+                        {isDeliverySubstitution && poLine && (
+                          <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+                            PO item was {poLine.name}; receiving accepted this alternative.
+                          </div>
+                        )}
                         <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{invLine.sku}</div>
                       </td>
                       <td style={cell}>
@@ -1892,7 +1972,9 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                           : '—'}
                       </td>
                       <td style={{ ...cell, color: 'var(--color-text-secondary)', textAlign: 'center' }}>{poLine ? poLine.expectedQty : '—'}</td>
-                      <td style={{ ...cell, textAlign: 'center', color: 'var(--color-text-secondary)' }}>—</td>
+                      <td style={{ ...cell, textAlign: 'center', color: isDeliverySubstitution ? 'var(--color-success)' : 'var(--color-text-secondary)', fontWeight: isDeliverySubstitution ? 700 : 500 }}>
+                        {isDeliverySubstitution ? 'Alternative sent' : '—'}
+                      </td>
                       <td style={{ ...cell, fontWeight: !priceMatch && !isCleared ? 700 : 400, color: !priceMatch && !isCleared ? 'var(--color-warning)' : undefined }}>
                         {poLine ? `£${poLine.price.toFixed(2)}` : '—'}
                       </td>
@@ -1905,6 +1987,8 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                           ? getAutoAppliedForVariance(variance.id)
                             ? <AutoAppliedChip varianceId={variance.id} />
                             : <VarBadge varianceId={variance.id} label={varianceShortLabel(variance, priceDiff)} />
+                          : isDeliverySubstitution
+                            ? <span style={{ color: 'var(--color-success)', fontSize: '11px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'rgba(21,128,61,0.08)', border: '1px solid var(--color-success-border)' }}>Reconciled</span>
                           : overOnLine
                             ? <span style={{ color: 'var(--color-error)', fontSize: '11px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'rgba(185,28,28,0.09)', border: '1px solid rgba(185,28,28,0.3)' }}>Over</span>
                             : !poLine
@@ -1922,7 +2006,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const detail = varianceDetailText(variance);
                   const impactLabel = variance.impact >= 0 ? `+£${variance.impact.toFixed(2)}` : `-£${Math.abs(variance.impact).toFixed(2)}`;
 
-                  const expandBgPo = isResolved ? 'rgba(16,185,129,0.03)' : 'rgba(217,119,6,0.04)';
+                  const expandBgPo = isResolved ? 'rgba(16,185,129,0.03)' : 'var(--color-warning-bg)';
                   const expandAccentPo = isResolved ? 'inset 3px 0 0 var(--color-success)' : 'inset 3px 0 0 var(--color-warning)';
 
                   const expandRow = (

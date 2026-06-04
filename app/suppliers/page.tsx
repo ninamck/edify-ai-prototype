@@ -6,6 +6,7 @@ import { Search, Plus, Upload } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import {
   useSuppliers, useProducts, useMasterProducts,
+  upsertMasterProduct, genId,
 } from '@/components/Suppliers/store';
 import {
   TOP_NAV_BAR_PADDING,
@@ -83,6 +84,20 @@ export default function SuppliersPage() {
     setQuinn({ open: true, scope: { kind: 'bulk-products', selectedIds: [...selectedIds] } });
   }
 
+  function createMaster() {
+    const id = genId('mp');
+    upsertMasterProduct({
+      id,
+      name: 'New master product',
+      category: 'Other',
+      unit: 'each',
+      slug: `new-${id}`,
+      productClass: 'Food',
+      status: 'Available',
+    });
+    router.push(`/suppliers/master-products/${id}`);
+  }
+
   // Suggestion chip set varies by tab. Each chip seeds the global flow with
   // a natural-language sentence Quinn knows how to route in flows.ts. The
   // chips render inside QuinnSheet (the right-side sidebar) as starter
@@ -149,20 +164,28 @@ export default function SuppliersPage() {
         {/* Title row */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text-primary)', margin: 0, flex: 1 }}>
-            Suppliers
+            {tab === 'suppliers' ? 'Suppliers' : 'Master products'}
           </h1>
-          <button
-            onClick={() => router.push('/suppliers/import')}
-            style={ghostButtonStyle}
-          >
-            <Upload size={14} strokeWidth={2.2} /> Import CSV
-          </button>
-          <button
-            onClick={() => openQuinnGlobal('Add a new supplier')}
-            style={primaryButtonStyle}
-          >
-            <Plus size={14} strokeWidth={2.2} /> Add supplier
-          </button>
+          {tab === 'suppliers' ? (
+            <>
+              <button
+                onClick={() => router.push('/suppliers/import')}
+                style={ghostButtonStyle}
+              >
+                <Upload size={14} strokeWidth={2.2} /> Import CSV
+              </button>
+              <button
+                onClick={() => openQuinnGlobal('Add a new supplier')}
+                style={primaryButtonStyle}
+              >
+                <Plus size={14} strokeWidth={2.2} /> Add supplier
+              </button>
+            </>
+          ) : (
+            <button onClick={createMaster} style={primaryButtonStyle}>
+              <Plus size={14} strokeWidth={2.2} /> Create Master Product
+            </button>
+          )}
         </div>
         {/* Search */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>

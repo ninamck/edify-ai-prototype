@@ -109,6 +109,72 @@ export function deleteMasterProduct(id: string): void {
   setMasterProducts(state.masterProducts.filter((m) => m.id !== id));
 }
 
+// ── Delivery / WAC helpers ───────────────────────────────────────────────────
+
+function todayLabel(): string {
+  return new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/**
+ * Blend a received delivery into a master product's per-site weighted-average
+ * cost. `deliveredUnits` and `deliveredUnitCost` are expressed in the master's
+ * reference `unit` (e.g. eggs and £-per-egg). The first real purchase for a
+ * site replaces its "estimated" state with a calculated WAC.
+ */
+export function recordMasterDelivery(
+  masterId: string,
+  site: string,
+  deliveredUnits: number,
+  deliveredUnitCost: number,
+  when?: string,
+): void {
+  const master = findMasterProduct(masterId);
+  if (!master || deliveredUnits <= 0) return;
+  const siteCosts = { ...(master.siteCosts ?? {}) };
+  const prev = siteCosts[site];
+  const lastCalculated = when ?? todayLabel();
+  if (!prev || prev.onHandQty <= 0) {
+    siteCosts[site] = { wac: deliveredUnitCost, onHandQty: deliveredUnits, lastCalculated };
+  } else {
+    const totalQty = prev.onHandQty + deliveredUnits;
+    const wac = (prev.onHandQty * prev.wac + deliveredUnits * deliveredUnitCost) / totalQty;
+    siteCosts[site] = { wac, onHandQty: totalQty, lastCalculated };
+  }
+  upsertMasterProduct({ ...master, siteCosts });
+}
+
+/** Mark a linked supplier product as the default SKU for a master. */
+export function setDefaultSupplierProduct(masterId: string, productId: string): void {
+  const master = findMasterProduct(masterId);
+  if (!master) return;
+  upsertMasterProduct({ ...master, defaultProductId: productId });
+}
+
+/**
+ * Bridge a delivery's supplier-name string (e.g. "Bidfood") to a catalogue
+ * Supplier. Matches an existing supplier by name or short code (case
+ * insensitive); otherwise creates a new supplier so the received product has
+ * somewhere to live.
+ */
+export function resolveOrCreateSupplier(name: string): Supplier {
+  const trimmed = name.trim();
+  const lower = trimmed.toLowerCase();
+  const existing = state.suppliers.find(
+    (s) => s.name.toLowerCase() === lower || s.shortCode?.toLowerCase() === lower,
+  );
+  if (existing) return existing;
+  const supplier: Supplier = {
+    id: genId('sup'),
+    name: trimmed,
+    shortCode: trimmed,
+    categories: [],
+    sites: [],
+    status: 'Available',
+  };
+  upsertSupplier(supplier);
+  return supplier;
+}
+
 // ── Convenience selectors ────────────────────────────────────────────────────
 export function productsBySupplier(supplierId: string): Product[] {
   return state.products.filter((p) => p.supplierId === supplierId);

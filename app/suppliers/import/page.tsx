@@ -473,7 +473,7 @@ function PreviewTable({
               <div key={p.id} style={previewRowStyle}>
                 <span style={{ flex: 1, fontWeight: 600, fontSize: 13, color: 'var(--color-text-primary)' }}>{p.name}</span>
                 <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{existingSuppliers.find((s) => s.id === p.supplierId)?.name ?? 'New supplier'}</span>
-                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', fontWeight: 600 }}>{p.packQty} \u00d7 {p.packCost.toFixed(2)} DH</span>
+                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', fontWeight: 600 }}>{p.packQty} \u00d7 £{p.packCost.toFixed(2)}</span>
               </div>
             ))
           : suppliers.slice(0, 5).map((s) => (
