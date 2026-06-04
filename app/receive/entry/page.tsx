@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useMemo, useState, useCallback } from 'react';
 import ReceivingScreen from '@/components/Receiving/ReceivingScreen';
 import { MOCK_POS, PO, recordCompletedDeliveryFromReceiving } from '@/components/Receiving/mockData';
-import { AddPOModal, ScanGRNModal } from '@/components/Receiving/ReceivingModals';
+import { AddPOModal } from '@/components/Receiving/ReceivingModals';
 import {
   upsertProduct,
   recordMasterDelivery,
@@ -20,7 +20,6 @@ function EntryContent() {
 
   const [selectedIds, setSelectedIds] = useState<string[]>(() => poParam.split(',').filter(Boolean));
   const [showAddPO, setShowAddPO] = useState(false);
-  const [showScanGRN, setShowScanGRN] = useState(false);
 
   const selectedPOs: PO[] = useMemo(() => {
     return selectedIds.map(id => MOCK_POS.find(po => po.id === id)).filter(Boolean) as PO[];
@@ -141,7 +140,6 @@ function EntryContent() {
         }}
         onBack={() => router.push('/receive')}
         onAddPO={() => setShowAddPO(true)}
-        onScanGRN={() => setShowScanGRN(true)}
       />
 
       {showAddPO && (
@@ -150,9 +148,6 @@ function EntryContent() {
           onAdd={handleAddPO}
           onClose={() => setShowAddPO(false)}
         />
-      )}
-      {showScanGRN && (
-        <ScanGRNModal onClose={() => setShowScanGRN(false)} />
       )}
     </>
   );

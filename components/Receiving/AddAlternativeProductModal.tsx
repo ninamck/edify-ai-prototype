@@ -43,8 +43,14 @@ export interface StagedAlternative {
   site: string;
 }
 
+export type AlternativeProductPrefill = Partial<Pick<
+  StagedAlternative,
+  'masterProductId' | 'productName' | 'supplierCode' | 'packType' | 'packQty' | 'singleUnitType' | 'packCost' | 'receivedQty'
+>>;
+
 interface AddAlternativeProductModalProps {
   originLine?: POLine;
+  initialValues?: AlternativeProductPrefill;
   supplierName: string;
   site: string;
   onSave: (alt: StagedAlternative) => void;
@@ -57,6 +63,7 @@ function localId(): string {
 
 export default function AddAlternativeProductModal({
   originLine,
+  initialValues,
   supplierName,
   site,
   onSave,
@@ -70,17 +77,18 @@ export default function AddAlternativeProductModal({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const [masterId, setMasterId] = useState<string>(originLine?.masterProductId ?? '');
+  const initialMasterId = initialValues?.masterProductId ?? originLine?.masterProductId ?? '';
+  const [masterId, setMasterId] = useState<string>(initialMasterId);
   const [masterQuery, setMasterQuery] = useState('');
-  const [pickerOpen, setPickerOpen] = useState(!originLine?.masterProductId);
+  const [pickerOpen, setPickerOpen] = useState(!initialMasterId);
 
-  const [productName, setProductName] = useState('');
-  const [supplierCode, setSupplierCode] = useState('');
-  const [packType, setPackType] = useState<PackType>('Pack');
-  const [packQty, setPackQty] = useState<number>(originLine?.unitsPerLineItem ?? 1);
-  const [singleUnitType, setSingleUnitType] = useState<SingleUnitType>('Each');
-  const [packCost, setPackCost] = useState<number>(originLine?.price ?? 0);
-  const [receivedQty, setReceivedQty] = useState<number>(1);
+  const [productName, setProductName] = useState(initialValues?.productName ?? '');
+  const [supplierCode, setSupplierCode] = useState(initialValues?.supplierCode ?? '');
+  const [packType, setPackType] = useState<PackType>(initialValues?.packType ?? 'Pack');
+  const [packQty, setPackQty] = useState<number>(initialValues?.packQty ?? originLine?.unitsPerLineItem ?? 1);
+  const [singleUnitType, setSingleUnitType] = useState<SingleUnitType>(initialValues?.singleUnitType ?? 'Each');
+  const [packCost, setPackCost] = useState<number>(initialValues?.packCost ?? originLine?.price ?? 0);
+  const [receivedQty, setReceivedQty] = useState<number>(initialValues?.receivedQty ?? 1);
 
   const selectedMaster = useMemo(
     () => masters.find((m) => m.id === masterId) ?? null,

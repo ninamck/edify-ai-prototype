@@ -5,8 +5,10 @@ import Stepper from './Stepper';
 import StatusBadge from './StatusBadge';
 import ResponsiveDataList, { Column } from './ResponsiveDataList';
 import { PO, POLine, VarianceResolution, poItemCount, poTotal } from './mockData';
-import AddAlternativeProductModal, { type StagedAlternative } from './AddAlternativeProductModal';
+import AddAlternativeProductModal, { type AlternativeProductPrefill, type StagedAlternative } from './AddAlternativeProductModal';
+import { ScanGRNModal } from './ReceivingModals';
 import { formatPrice } from '@/components/Suppliers/fixtures';
+import { findMasterProduct } from '@/components/Suppliers/store';
 
 interface ReceivedLine {
   poLineId: string;
@@ -27,7 +29,6 @@ interface ReceivingScreenProps {
   onConfirm: (data: { invoiceNumber: string; lines: ReceivedLine[]; alternatives: StagedAlternative[] }) => void;
   onBack: () => void;
   onAddPO: () => void;
-  onScanGRN: () => void;
 }
 
 const RESOLUTION_OPTIONS: VarianceResolution[] = [
@@ -42,7 +43,7 @@ function getVarianceLabel(expected: number, received: number): { label: string; 
   return { label: `Over ${received - expected}`, variant: 'warning' };
 }
 
-export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO, onScanGRN }: ReceivingScreenProps) {
+export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: ReceivingScreenProps) {
   const allLines = useMemo(() => pos.flatMap(po => po.lines), [pos]);
 
   const [receivedMap, setReceivedMap] = useState<Record<string, number>>(() => {
@@ -55,7 +56,8 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO, onSca
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [attachedFile, setAttachedFile] = useState<string | null>(null);
   const [alternatives, setAlternatives] = useState<StagedAlternative[]>([]);
-  const [altModal, setAltModal] = useState<{ open: boolean; line?: POLine } | null>(null);
+  const [altModal, setAltModal] = useState<{ open: boolean; line?: POLine; initialValues?: AlternativeProductPrefill } | null>(null);
+  const [showScanGRN, setShowScanGRN] = useState(false);
 
   const poForLine = (lineId: string): PO => pos.find(p => p.lines.some(l => l.id === lineId)) ?? pos[0];
   const modalPO = altModal?.line ? poForLine(altModal.line.id) : pos[0];
@@ -92,6 +94,60 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO, onSca
 
   const setResolution = (lineId: string, res: VarianceResolution) => {
     setResolutionMap(prev => ({ ...prev, [lineId]: res }));
+  };
+
+  const scanEggLine = useMemo(
+    () => allLines.find(l => l.masterProductId === 'mp-eggs') ?? allLines.find(l => l.sku === 'FRE-15'),
+    [allLines],
+  );
+  const scanPO = scanEggLine ? poForLine(scanEggLine.id) : pos[0];
+
+  // Open the editable alternative-product form, prefilled with the scan.
+  const openScanEditable = () => {
+    if (!scanEggLine || !scanPO) return;
+    const master = findMasterProduct(scanEggLine.masterProductId ?? 'mp-eggs');
+    const masterId = master?.id ?? scanEggLine.masterProductId ?? 'mp-eggs';
+    setAttachedFile('scanned-grn-bidfood-eggs.pdf');
+    setInvoiceNumber('INV-4433');
+    setAltModal({
+      open: true,
+      line: scanEggLine,
+      initialValues: {
+        masterProductId: masterId,
+        productName: 'Free range eggs 4pk',
+        supplierCode: 'FRE-4',
+        packType: 'Pack',
+        packQty: 4,
+        singleUnitType: 'Each',
+        packCost: 4,
+        receivedQty: scanEggLine.expectedQty,
+      },
+    });
+  };
+
+  // Accept the scan as-is and stage the alternative straight into the order.
+  const confirmScanDirect = () => {
+    if (!scanEggLine || !scanPO) return;
+    const master = findMasterProduct(scanEggLine.masterProductId ?? 'mp-eggs');
+    const masterId = master?.id ?? scanEggLine.masterProductId ?? 'mp-eggs';
+    setAttachedFile('scanned-grn-bidfood-eggs.pdf');
+    setInvoiceNumber('INV-4433');
+    addAlternative({
+      id: `scan-alt-${scanEggLine.id}`,
+      originPoLineId: scanEggLine.id,
+      masterProductId: masterId,
+      masterName: master?.name ?? 'Free Range Eggs',
+      masterUnit: master?.unit ?? 'egg',
+      productName: 'Free range eggs 4pk',
+      supplierCode: 'FRE-4',
+      packType: 'Pack',
+      packQty: 4,
+      singleUnitType: 'Each',
+      packCost: 4,
+      receivedQty: scanEggLine.expectedQty,
+      supplierName: scanPO.supplier,
+      site: scanPO.site,
+    });
   };
 
   const substitutedLineIds = useMemo(
@@ -262,7 +318,7 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO, onSca
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={onAddPO} style={secondaryBtnStyle}>+ Add PO</button>
           <button onClick={() => setAltModal({ open: true })} style={secondaryBtnStyle}>+ Add unexpected item</button>
-          <button onClick={onScanGRN} style={secondaryBtnStyle}>Scan GRN</button>
+          <button onClick={() => setShowScanGRN(true)} style={secondaryBtnStyle}>Scan GRN</button>
         </div>
       </div>
 
@@ -413,8 +469,8 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO, onSca
                   gap: '10px',
                   padding: '10px 14px',
                   borderRadius: '8px',
-                  background: 'var(--color-success-light)',
-                  border: '1px solid var(--color-success-border)',
+                  background: 'var(--color-bg-hover)',
+                  border: '1px solid var(--color-border-subtle)',
                 }}
               >
                 <span style={{ fontSize: '16px' }}>📄</span>
@@ -493,10 +549,20 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO, onSca
       {altModal?.open && (
         <AddAlternativeProductModal
           originLine={altModal.line}
+          initialValues={altModal.initialValues}
           supplierName={modalPO.supplier}
           site={modalPO.site}
           onSave={addAlternative}
           onClose={() => setAltModal(null)}
+        />
+      )}
+      {showScanGRN && (
+        <ScanGRNModal
+          po={scanPO}
+          eggLineName={scanEggLine?.name}
+          onOpenEditable={openScanEditable}
+          onConfirmScan={confirmScanDirect}
+          onClose={() => setShowScanGRN(false)}
         />
       )}
     </div>
