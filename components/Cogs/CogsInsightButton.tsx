@@ -1,10 +1,42 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { renderMarkdownLite } from './markdownLite';
+
+/**
+ * Renders insight text as a tight bullet list. Each line is expected to be a
+ * bullet (optionally prefixed with "- "); inline **bold** is preserved.
+ */
+function renderInsightBody(text: string): ReactNode {
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => (l.startsWith('- ') ? l.slice(2) : l));
+
+  return (
+    <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {lines.map((l, i) => (
+        <li key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+          <span
+            style={{
+              marginTop: 6,
+              width: 5,
+              height: 5,
+              borderRadius: '50%',
+              background: 'var(--color-text-muted)',
+              flexShrink: 0,
+            }}
+          />
+          <span>{renderMarkdownLite(l)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 const POPOVER_WIDTH = 320;
 
@@ -171,10 +203,10 @@ export default function CogsInsightButton({ text }: { text: string }) {
                 fontSize: 12,
                 fontWeight: 500,
                 color: 'var(--color-text-secondary)',
-                lineHeight: 1.55,
+                lineHeight: 1.45,
               }}
             >
-              {renderMarkdownLite(text)}
+              {renderInsightBody(text)}
             </div>
           </div>,
           document.body,

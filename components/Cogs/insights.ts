@@ -9,7 +9,13 @@
  * existing QuinnInsightButton renders, so they style consistently.
  */
 
-import { COGS_SUMMARY, COGS_CLASS_TOTALS, COGS_VARIANCE_ROWS, COGS_SITE_NAME } from './fixtures';
+import {
+  COGS_SUMMARY,
+  COGS_CLASS_TOTALS,
+  COGS_VARIANCE_ROWS,
+  COGS_SITE_NAME,
+  type CogsVarianceRow,
+} from './fixtures';
 
 /** Threshold (absolute variance %) above which a row gets the Edify chip. */
 export const VARIANCE_INSIGHT_THRESHOLD = 10;
@@ -20,24 +26,66 @@ export function rowHasInsight(varPct: number, insightId?: string): boolean {
   return Boolean(insightId) || Math.abs(varPct) >= VARIANCE_INSIGHT_THRESHOLD;
 }
 
-/** Authored narratives keyed by `insightId` on the variance rows. */
+/** One-line "why we think this is happening" for the top-variances board.
+ *  Keyed by the scripted insightId; rows without one fall back to a heuristic. */
+const VARIANCE_REASONS: Record<string, string> = {
+  avocado: 'New avocado recipe not yet costed, plus likely unlogged waste',
+  'smoked-salmon': 'Short delivery — invoiced for more than was received',
+  'house-red-wine': 'Bottle count down more than sales — over-measures or breakage',
+  'sourdough-loaf': 'Staff sandwiches not rung into the till',
+  'chicken-breast': 'Portions made heavier than the recipe',
+  'basil-leaves': 'Fresh herb spoiling faster than the recipe allows',
+  'oat-milk': 'Free-poured when frothing coffee',
+  'whole-milk': 'Steamed-milk over-pour when frothing',
+  'bagel-vegan': 'Baked to a tray count, not to forecast',
+  'beans-red-kidney': 'Scoops not weighed to spec',
+};
+
+export function getVarianceReason(row: CogsVarianceRow): string {
+  if (row.insightId && VARIANCE_REASONS[row.insightId]) {
+    return VARIANCE_REASONS[row.insightId];
+  }
+  if (row.actualUsage < 0 || row.varPct === -100) {
+    return 'Negative usage — likely an un-logged transfer or return';
+  }
+  if (Math.abs(row.varPct) < VARIANCE_INSIGHT_THRESHOLD) {
+    return 'Within tolerance — normal week-to-week movement';
+  }
+  return row.varCost >= 0
+    ? 'Used more than the recipe predicts'
+    : 'Used less than the recipe predicts';
+}
+
+/** Top variance rows by absolute £ impact, for the variance-tab board. */
+export function getTopVariances(limit = 10): CogsVarianceRow[] {
+  return [...COGS_VARIANCE_ROWS]
+    .sort((a, b) => Math.abs(b.varCost) - Math.abs(a.varCost))
+    .slice(0, limit);
+}
+
+/** Authored narratives keyed by `insightId` on the variance rows. Kept as
+ *  short bullet lines (one point each) so the popover stays scannable. */
 const ROW_INSIGHTS: Record<string, string> = {
   avocado:
-    '**Avocado is the single biggest discrepancy this period** — actual usage (128 kg) is well above the **52 kg** the recipe predicts. 70 kg was logged as transferred out to spokes, but the receiving side never confirmed it, so it reads as usage here and the closing count was taken against the old figure. **Fix:** confirm the inter-site transfer was logged on both ends, and recount the avocado bin before locking the stocktake.',
-  'arabic-protein-bread':
-    'Arabic Protein bread shows up as **two separate master products** with opposite variances (+£153 and −£76.50). One copy carries the purchases, the other carries the recipe usage — so neither reconciles on its own. This is an **item-matching problem, not a kitchen problem**: the supplier line and the recipe ingredient are pointing at different master records. **Fix:** merge the duplicate master products and the variance largely nets out.',
+    '- **Biggest variance** this period\n- Used 128 kg vs 52 kg recipe\n- New avocado dish not yet costed + unlogged waste\n- **Fix:** cost the new recipe, log waste, recount',
+  'smoked-salmon':
+    '- +25% over recipe (+£154)\n- Stock lower than the invoice says\n- Likely a short delivery\n- **Fix:** check delivery vs invoice, raise credit',
+  'house-red-wine':
+    '- +25% over recipe (+£78)\n- Bottles down more than sales\n- Over-measures or breakage\n- **Fix:** use measures, log breakages',
+  'sourdough-loaf':
+    '- +16% over recipe (+£40)\n- Used more than sales explain\n- Staff sandwiches not rung in\n- **Fix:** ring in staff food / comps',
   'bagel-vegan':
-    'Vegan Multi Grain bagels used **50 units more than the recipe forecast (+12.2%)**. Purchases and counts look clean, so this is **over-production or over-portioning at the bench** rather than a data error — likely baking to a round tray count instead of to forecast. **Fix:** check the production plan vs. actual bake; trimming the standing par by ~15% recovers ~£23.',
+    '- +12.2% over recipe (50 units)\n- Baking to tray count, not forecast\n- **Fix:** trim standing par ~15%',
   'basil-leaves':
-    'Basil Leaves has **recipe usage of 14 packs but zero stock movement** — no opening, no purchase, no count. The herb is being **consumed in recipes but never received into stock**, so it silently inflates theoretical cost and never shows as a real spend. **Fix:** add basil to the stock count and the standing order so theoretical and actual line up.',
+    '- +31.6% over recipe (£18.60)\n- Fresh herb spoiling before use\n- **Fix:** order smaller, more often',
   'beans-red-kidney':
-    'Red Kidney Beans used **18.8% more than theoretical**. Small absolute value (£7.20) but a consistent pattern across pulses this month — usually **scoops not weighed to spec**. Worth a portioning spot-check rather than urgent action.',
+    '- +18.8% over recipe (£7.20)\n- Scoops not weighed to spec\n- Spot-check portioning',
   'whole-milk':
-    'Whole Milk is **9.6% over theoretical**. Most of the gap tracks **steamed-milk wastage on the bar** (8 L logged as waste). Within tolerance, but the espresso bar is the place to watch if beverage cost keeps drifting.',
+    '- +9.6% over recipe\n- Steamed-milk waste on the bar (8 L)\n- Watch the espresso bar',
   'oat-milk':
-    'Oat Milk is **18.8% over recipe**. Plant milks are the classic **free-pour culprit** — baristas tend to fill to the jug line rather than to spec on flat whites. **Fix:** a marked pitcher line typically claws back ~10% of the variance.',
+    '- +18.8% over recipe\n- Free-pour on flat whites\n- **Fix:** marked pitcher line',
   'chicken-breast':
-    'Chicken Breast is **16% over theoretical (+£117)** — the largest protein variance. Yield loss on trimming plus generous build weights on hot sandwiches. **Fix:** weigh a sample of builds against the recipe card; protein is where over-portioning costs the most.',
+    '- +16% over recipe (+£117)\n- Made heavier than recipe + trim loss\n- **Fix:** weigh portions vs recipe card',
 };
 
 /** Returns the authored narrative for a variance row, or a generated
@@ -52,9 +100,9 @@ export function getCogsRowInsight(rowId: string): string {
   const mag = Math.abs(row.varPct).toFixed(1);
   const cost = Math.abs(row.varCost).toLocaleString('en-US', { maximumFractionDigits: 2 });
   if (Math.abs(row.varPct) < VARIANCE_INSIGHT_THRESHOLD) {
-    return `**${row.name}** is within tolerance — ${mag}% ${dir} theoretical (£${cost}). No action needed; this is normal week-to-week noise.`;
+    return `- ${mag}% ${dir} theoretical (£${cost})\n- Within tolerance — no action`;
   }
-  return `**${row.name}** ran **${mag}% ${dir} theoretical**, a £${cost} swing. Worth a quick check of counts, portioning and any un-logged transfers for this line.`;
+  return `- ${mag}% ${dir} theoretical (£${cost})\n- Check counts, portioning & transfers`;
 }
 
 /** Cross-cutting patterns Edify has noticed — shown in a summary card. */
@@ -67,17 +115,17 @@ export type CogsPattern = {
 
 export const COGS_PATTERNS: CogsPattern[] = [
   {
-    id: 'transfer-leak',
-    title: 'Un-logged transfers are the #1 driver',
+    id: 'uncosted-recipe',
+    title: 'A new recipe not yet costed is the #1 driver',
     detail:
-      'Avocado alone accounts for ~£320 of the gap, and the pattern repeats on items with one-sided transfers. Closing the transfer-logging loop would remove most of the unfavourable variance.',
+      'Avocado alone accounts for ~£320 of the gap — a new avocado dish is selling but its recipe isn\u2019t costed yet, so theoretical under-counts it, and some avocado waste went unlogged. Cost the recipe and the variance largely closes.',
     severity: 'high',
   },
   {
-    id: 'duplicate-masters',
-    title: 'Duplicate master products distort variance',
+    id: 'short-deliveries',
+    title: 'Deliveries not matching invoices',
     detail:
-      'Arabic Protein bread (and two other lines) appear twice — purchases land on one record, recipe usage on the other, so neither reconciles. An item-matching clean-up flatters the numbers without any kitchen change.',
+      'Smoked Salmon is 25% over recipe because stock on hand is lower than the invoice claims — a classic short delivery. Checking goods-in against invoices and raising credits recovers spend that otherwise reads as kitchen variance.',
     severity: 'medium',
   },
   {
@@ -89,9 +137,9 @@ export const COGS_PATTERNS: CogsPattern[] = [
   },
   {
     id: 'protein-portioning',
-    title: 'Protein build weights creeping up',
+    title: 'Protein portions creeping up',
     detail:
-      'Chicken (+16%) shows generous build weights on hot sandwiches. Protein is the highest-value variance per gram, so a portioning spot-check pays back fastest.',
+      'Chicken (+16%) is being made heavier than the recipe on hot sandwiches. Protein is the highest-value variance per gram, so a portioning spot-check pays back fastest.',
     severity: 'low',
   },
 ];
@@ -122,36 +170,36 @@ export type CogsInsightCard = {
 
 export const COGS_INSIGHT_CARDS: CogsInsightCard[] = [
   {
-    id: 'avocado-transfer',
+    id: 'avocado-recipe',
     severity: 'high',
-    title: 'Avocado transfer never received',
+    title: 'New avocado recipe not yet costed',
     diagnosis:
-      'Actual usage (128 kg) is well above the 52 kg the recipe predicts. 70 kg was logged out to spokes but never confirmed at the receiving site, so it reads as usage and the stocktake was counted against the old figure.',
-    action: 'Reconcile the inter-site transfer on both ends, then recount the avocado bin before locking the stocktake.',
+      'Actual usage (128 kg) is well above the 52 kg theoretical, because a new avocado dish is selling but its recipe isn\u2019t costed in the library yet \u2014 so theory under-counts it. Some avocado waste (browning) also went unlogged.',
+    action: 'Cost the new avocado recipe in the library, log the waste, then recount the avocado bin before locking the stocktake.',
     impactDh: 319.2,
-    kind: 'Data fix',
+    kind: 'Setup',
     rowIds: ['avocado'],
     link: { href: '/stock?tab=stocktake', label: 'Open stocktake' },
   },
   {
-    id: 'duplicate-master',
+    id: 'salmon-short-delivery',
     severity: 'high',
-    title: 'Duplicate "Arabic Protein bread" master product',
+    title: 'Smoked salmon short delivery',
     diagnosis:
-      'The item exists as two master products \u2014 purchases land on one, recipe usage on the other \u2014 so neither line reconciles and the variance looks far worse than reality.',
-    action: 'Merge the duplicate master products in Item Matching so purchases and usage sit on one record.',
-    impactDh: 153.0,
+      'Salmon is 25% over recipe because the stock on hand is lower than the delivery note and invoice claim \u2014 the case looks like a short delivery, so the missing cost reads as kitchen usage.',
+    action: 'Check goods-in against the invoice and raise a supplier credit for the shortfall.',
+    impactDh: 154.0,
     kind: 'Data fix',
-    rowIds: ['arabic-protein-bread-a', 'arabic-protein-bread-b'],
-    link: { href: '/item-matching', label: 'Open item matching' },
+    rowIds: ['smoked-salmon'],
+    link: { href: '/suppliers', label: 'Open suppliers' },
   },
   {
     id: 'milk-free-pour',
     severity: 'medium',
-    title: 'Plant & dairy milk over-poured on the bar',
+    title: 'Milk over-poured when frothing coffee',
     diagnosis:
-      'Oat (+18.8%) and whole milk (+9.6%) run over recipe every week \u2014 a free-pour habit on flat whites, not a data error.',
-    action: 'Add a marked pour line to the milk pitchers and brief the bar; typically recovers ~10% of the variance.',
+      'Oat (+18.8%) and whole milk (+9.6%) run over recipe every week \u2014 too much milk poured when frothing/steaming for coffees, not a data error.',
+    action: 'Add a marked pour line to the milk pitchers and brief baristas; typically recovers ~10% of the variance.',
     impactDh: 67.65,
     kind: 'Operations',
     rowIds: ['oat-milk', 'whole-milk'],
@@ -159,36 +207,57 @@ export const COGS_INSIGHT_CARDS: CogsInsightCard[] = [
   {
     id: 'protein-portioning',
     severity: 'medium',
-    title: 'Protein build weights creeping up',
+    title: 'Protein portions creeping up',
     diagnosis:
-      'Chicken is 16% over theoretical \u2014 the largest protein variance \u2014 from generous build weights on hot sandwiches plus trim yield loss.',
-    action: 'Weigh a sample of hot-sandwich builds against the recipe card and re-brief the line.',
+      'Chicken is 16% over theoretical \u2014 the largest protein variance \u2014 from making hot sandwiches heavier than the recipe plus trim yield loss.',
+    action: 'Weigh a sample of hot sandwiches against the recipe card and re-brief the line.',
     impactDh: 117.0,
     kind: 'Operations',
     rowIds: ['chicken-breast'],
   },
   {
-    id: 'basil-not-stocked',
-    severity: 'low',
-    title: 'Basil used in recipes but never stocked',
+    id: 'wine-shrinkage',
+    severity: 'medium',
+    title: 'House wine down more than sales',
     diagnosis:
-      'Basil Leaves shows recipe usage with zero stock movement \u2014 it is consumed but never received, so it silently inflates theoretical cost and hides real spend.',
-    action: 'Add Basil Leaves to the stock count and the standing order so theoretical and actual line up.',
-    impactDh: 43.4,
-    kind: 'Setup',
+      'House Red is 25% over recipe \u2014 bottle count dropped more than the till explains. That points to free-poured measures, comps, or unlogged breakage at the bar rather than a data error.',
+    action: 'Pour to a measure, log breakages, and ring in any comps so usage and sales line up.',
+    impactDh: 78.0,
+    kind: 'Operations',
+    rowIds: ['house-red-wine'],
+  },
+  {
+    id: 'sourdough-staff',
+    severity: 'low',
+    title: 'Sourdough used beyond sales',
+    diagnosis:
+      'Sourdough runs 16% over recipe \u2014 more loaves are going out than menu sales explain, typically staff sandwiches and comps that never hit the till.',
+    action: 'Ring staff food and comps through the till (at zero price) so they leave the variance.',
+    impactDh: 40.0,
+    kind: 'Operations',
+    rowIds: ['sourdough-loaf'],
+  },
+  {
+    id: 'basil-spoilage',
+    severity: 'low',
+    title: 'Basil spoiling faster than the recipe',
+    diagnosis:
+      'Basil Leaves runs 31.6% over recipe \u2014 a fast-perishing fresh herb being binned before it\u2019s used, so usage outruns what the menu mix predicts.',
+    action: 'Order basil in smaller, more frequent drops and prep to order to cut spoilage.',
+    impactDh: 18.6,
+    kind: 'Operations',
     rowIds: ['basil-leaves'],
-    link: { href: '/stock?tab=stocktake', label: 'Open stocktake' },
   },
   {
     id: 'unassigned-spend',
     severity: 'low',
-    title: 'Uncategorised purchases hiding cost',
+    title: 'Unmatched POS items hiding costs',
     diagnosis:
-      'The Unassigned class holds £140 of purchases with no product-class mapping, so that spend never shows against a menu category.',
-    action: 'Categorise the unassigned purchases to a product class so the cost is attributed correctly.',
+      'Several POS sale items aren\u2019t matched to a recipe or product, so their cost lands in Unassigned (£140) instead of a menu category.',
+    action: 'Match the POS items to their recipes/products so the cost is attributed correctly.',
     impactDh: 110.0,
     kind: 'Setup',
-    link: { href: '/suppliers', label: 'Open products' },
+    link: { href: '/item-matching', label: 'Open item matching' },
   },
 ];
 
@@ -219,8 +288,8 @@ export function getCogsChatAnswer(question: string): CogsChatAnswer {
 
   if (q.includes('biggest') || q.includes('largest') || q.includes('worst')) {
     return {
-      text: `The biggest single discrepancy is **Avocado** — about **£320** of unfavourable variance. Actual usage (128 kg) far outruns the 52 kg the recipe predicts, and 70 kg was transferred out but never confirmed — a **transfer sent but not received**, with the stocktake then counted against the old figure. Sort it on both ends and recount before locking. Next worst is the **duplicate Arabic Protein bread** master product.`,
-      rowIds: ['avocado', 'arabic-protein-bread-b'],
+      text: `The biggest single discrepancy is **Avocado** — about **£320** of unfavourable variance. Actual usage (128 kg) far outruns the 52 kg theoretical because a **new avocado dish isn't costed in the recipe library yet**, so theory under-counts it, and some avocado waste went unlogged. Cost the recipe, log the waste and recount before locking. Next worst is **Smoked Salmon** (+£154) — stock is lower than the invoice, a likely short delivery.`,
+      rowIds: ['avocado', 'smoked-salmon'],
     };
   }
 
@@ -229,41 +298,41 @@ export function getCogsChatAnswer(question: string): CogsChatAnswer {
     !q.includes('item')
   ) {
     return {
-      text: `Actual COGS is **${COGS_SUMMARY.actualPct.toFixed(1)}%** vs a theoretical **${COGS_SUMMARY.theoreticalPct.toFixed(1)}%** — that's **+${COGS_SUMMARY.variancePp.toFixed(1)}pp**, or about **£${fmt(COGS_SUMMARY.varianceCost)}** unfavourable. **Food** is the driver (31.5% vs 28% target). Roughly three causes, in order: un-logged transfers (Avocado), duplicate master products (Arabic bread), and over-portioning on milks and protein.`,
+      text: `Actual COGS is **${COGS_SUMMARY.actualPct.toFixed(1)}%** vs a theoretical **${COGS_SUMMARY.theoreticalPct.toFixed(1)}%** — that's **+${COGS_SUMMARY.variancePp.toFixed(1)}pp**, or about **£${fmt(COGS_SUMMARY.varianceCost)}** unfavourable. **Food** is the driver (31.5% vs 28% target). Roughly three causes, in order: a new uncosted recipe (Avocado), a supplier short delivery (Salmon), and over-portioning on milks and protein.`,
     };
   }
 
   if (q.includes('portion') || q.includes('over-pour') || q.includes('over pour') || q.includes('item')) {
     return {
-      text: `The clearest over-portioning lines are **Oat Milk (+18.8%)**, **Chicken Breast (+16%)**, **Vegan bagels (+12.2%)** and **Whole Milk (+9.6%)**. Milks are free-pour on the bar; chicken is build weight on hot sandwiches; bagels look like baking to a tray count rather than forecast. A marked pitcher line and a build-weight spot-check recover most of it.`,
+      text: `The clearest over-portioning lines are **Oat Milk (+18.8%)**, **Chicken Breast (+16%)**, **Vegan bagels (+12.2%)** and **Whole Milk (+9.6%)**. Milks are free-pour on the bar; chicken is made heavier than the recipe on hot sandwiches; bagels look like baking to a tray count rather than forecast. A marked pitcher line and a portioning spot-check recover most of it.`,
       rowIds: ['oat-milk', 'chicken-breast', 'bagel-vegan-multigrain', 'whole-milk'],
     };
   }
 
   if (q.includes('check first') || q.includes('priorit') || q.includes('what should') || q.includes('action')) {
     return {
-      text: `In priority order: **1)** Confirm the Avocado transfer logged on both ends and recount it — that's the single biggest number. **2)** Merge the duplicate **Arabic Protein bread** master products. **3)** Add **Basil Leaves** to the stock count (used in recipes, never received). The first two are data fixes, not kitchen problems, and clear most of the gap.`,
-      rowIds: ['avocado', 'arabic-protein-bread-b', 'basil-leaves'],
+      text: `In priority order: **1)** Cost the new **Avocado** recipe in the library and recount it — that's the single biggest number. **2)** Check the **Smoked Salmon** delivery against the invoice and raise a credit. **3)** Pour **House Red** to a measure and ring in staff sandwiches. The first two are data/setup fixes, not kitchen problems, and clear most of the gap.`,
+      rowIds: ['avocado', 'smoked-salmon', 'house-red-wine'],
     };
   }
 
   if (q.includes('transfer')) {
     return {
-      text: `Transfers are the biggest theme. **Avocado** shows 70 kg moved out with only 52 kg of theoretical usage, and several lines carry one-sided transfers. When a transfer is logged on the sending side but not received, it reads as phantom usage and inflates COGS. Reconciling transfers on both ends would remove most of the unfavourable variance.`,
-      rowIds: ['avocado'],
+      text: `Transfers are clean this period — no one-sided movements driving the gap. The biggest items are a **new Avocado recipe that isn't costed yet** and a **Smoked Salmon short delivery**. Both are data/setup fixes rather than kitchen or transfer problems.`,
+      rowIds: ['avocado', 'smoked-salmon'],
     };
   }
 
-  if (q.includes('duplicate') || q.includes('match') || q.includes('arabic') || q.includes('bread')) {
+  if (q.includes('deliver') || q.includes('invoice') || q.includes('supplier') || q.includes('match') || q.includes('salmon')) {
     return {
-      text: `**Arabic Protein bread** exists as two master products. One holds the purchases (+£153), the other holds the recipe usage (−£76.50), so neither reconciles alone. This is an **item-matching** issue — merge the two master records and the variance largely cancels out. Two other lines show the same pattern.`,
-      rowIds: ['arabic-protein-bread-a', 'arabic-protein-bread-b'],
+      text: `Two supply-side issues stand out. **Smoked Salmon** is +£154 over recipe because stock on hand is below the invoice — a likely **short delivery** to check against goods-in and credit. Separately, several **POS sale items aren't matched to a recipe**, so ~£140 of cost lands in Unassigned. Both are data fixes, not kitchen problems.`,
+      rowIds: ['smoked-salmon'],
     };
   }
 
   if (q.includes('waste')) {
     return {
-      text: `Logged waste is modest this period (**£${fmt(COGS_CLASS_TOTALS.waste)}** total, mostly steamed milk on the bar and a little produce). Waste isn't your problem right now — the variance is dominated by transfers and portioning, not bin loss.`,
+      text: `Logged waste is modest this period (**£${fmt(COGS_CLASS_TOTALS.waste)}** total, mostly steamed milk on the bar and a little produce). The one watch-out is **avocado and basil**, where some spoilage looks unlogged — but the variance is dominated by a new uncosted recipe and portioning, not bin loss.`,
     };
   }
 
@@ -276,7 +345,7 @@ export function getCogsChatAnswer(question: string): CogsChatAnswer {
 
   if (q.includes('summar') || q.includes('story') || q.includes('overview') || q.includes('explain')) {
     return {
-      text: `This period actual COGS landed at **${COGS_SUMMARY.actualPct.toFixed(1)}%** against a **${COGS_SUMMARY.theoreticalPct.toFixed(1)}%** theoretical — **£${fmt(COGS_SUMMARY.varianceCost)}** unfavourable. The headline isn't the kitchen: **~70% of the gap is data** (an un-logged Avocado transfer and a duplicate bread master). The genuine operational slice is **milk free-pour and protein build weights**. Fix the two data issues first, then run a portioning spot-check.`,
+      text: `This period actual COGS landed at **${COGS_SUMMARY.actualPct.toFixed(1)}%** against a **${COGS_SUMMARY.theoreticalPct.toFixed(1)}%** theoretical — **£${fmt(COGS_SUMMARY.varianceCost)}** unfavourable. The headline isn't the kitchen: **roughly two-thirds of the gap is data/setup** (a new Avocado recipe not yet costed and a Smoked Salmon short delivery). The genuine operational slice is **milk over-pour, wine measures and protein portions**. Fix the data issues first, then run a portioning spot-check.`,
     };
   }
 

@@ -21,13 +21,13 @@ function pct(n: number | null): string {
 }
 
 const HEADER_INSIGHT =
-  'Actual COGS came in at **' +
+  '- Actual **' +
   COGS_SUMMARY.actualPct.toFixed(1) +
-  '%** vs a theoretical **' +
+  '%** vs theoretical **' +
   COGS_SUMMARY.theoreticalPct.toFixed(1) +
-  '%** \u2014 **+' +
+  '%**\n- **+' +
   COGS_SUMMARY.variancePp.toFixed(1) +
-  'pp** unfavourable. **Food** is the driver (31.5% vs 28% target). Most of the gap is data, not the kitchen: an un-logged Avocado transfer and a duplicate bread master product. Open the COGs Variance tab to see the line-by-line breakdown.';
+  'pp** unfavourable; Food is the driver\n- Mostly data: uncosted avocado recipe + salmon short delivery\n- See COGs Variance for line detail';
 
 /** Donut gauge showing a single COGS % with the gross margin beneath. */
 function CogsGauge({
@@ -366,7 +366,7 @@ export default function SingleSiteCogs() {
           </span>
           <CogsInsightButton
             text={
-              'Across classes, **Food** carries the whole problem (31.5% vs 28%). Beverage is mildly over on free-pour milks, and **Unassigned** holds \u00a3140 of purchases with no menu mapping \u2014 categorise those to stop them hiding cost. General and Other are on plan.'
+              '- **Food** carries it (31.5% vs 28%)\n- Beverage mildly over on free-pour milk\n- **Unassigned** £140 unmapped \u2014 categorise\n- General & Other on plan'
             }
           />
         </div>
