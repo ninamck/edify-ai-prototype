@@ -22,7 +22,7 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { CheckCircle2, ChevronRight, X, AlertTriangle, Pencil, RotateCcw } from 'lucide-react';
+import { CheckCircle2, ChevronRight, X, AlertTriangle, RotateCcw } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import StatusPill from '@/components/Production/StatusPill';
 import {
@@ -98,7 +98,10 @@ export default function SiteSettingsEditor({
   // Staged overlay = "what the editor will commit on Save". Starts as a
   // copy of the persisted overlay so the user picks up where they left off.
   const [staged, setStaged] = useState<SiteSettingsOverlay>(() => overlay ?? {});
-  const [editing, setEditing] = useState(false);
+  // The editor is always editable — there's no read-only/edit-mode toggle.
+  // Fields are live; changes still stage locally and commit through the
+  // save bar so Discard remains a true rollback.
+  const editing = true;
   const [activeTab, setActiveTab] = useState<SettingsTabId>(initialTab);
   const [savedSummary, setSavedSummary] = useState<string[] | null>(null);
   const [resolvedHealth, setResolvedHealthIds] = useState<Set<string>>(new Set());
@@ -148,7 +151,6 @@ export default function SiteSettingsEditor({
 
   function discardStaged() {
     setStaged(overlay ?? {});
-    setEditing(false);
     setSavedSummary(null);
   }
 
@@ -179,7 +181,6 @@ export default function SiteSettingsEditor({
     // Drop empty branches so we don't persist `{}`.
     replace(prune(staged));
     setSavedSummary(summary.length > 0 ? summary : ['No changes.']);
-    setEditing(false);
   }, [overlay, staged, effective, replace, siteHealth]);
 
   function resetAll() {
@@ -234,13 +235,11 @@ export default function SiteSettingsEditor({
         fontFamily: 'var(--font-primary)',
       }}
     >
-      {/* Editor header — site identity + edit-mode toggle */}
+      {/* Editor header — site identity + reset */}
       <EditorHeader
         siteName={effective.core.name}
         siteType={effective.core.type}
         hubId={effective.core.hubId}
-        editing={editing}
-        onToggleEdit={() => setEditing(e => !e)}
         onResetAll={resetAll}
         canResetAll={persistedCounts.total > 0}
         overridesCount={persistedCounts.total}
@@ -332,7 +331,6 @@ export default function SiteSettingsEditor({
           );
         })}
         <div style={{ flex: 1 }} />
-        <QuinnRampButton activeTab={activeTab} />
       </div>
 
       {/* Tab body */}
@@ -370,17 +368,13 @@ function EditorHeader({
   siteName,
   siteType,
   hubId,
-  editing,
-  onToggleEdit,
   onResetAll,
   canResetAll,
   overridesCount,
 }: {
   siteName: string;
-  siteType: 'STANDALONE' | 'HUB' | 'SPOKE' | 'HYBRID';
+  siteType: 'STANDALONE' | 'HUB' | 'SPOKE' | 'HYBRID' | 'HYBRID_HUB';
   hubId: SiteId | null;
-  editing: boolean;
-  onToggleEdit: () => void;
   onResetAll: () => void;
   canResetAll: boolean;
   overridesCount: number;
@@ -443,13 +437,6 @@ function EditorHeader({
           <RotateCcw size={12} /> Reset to defaults
         </button>
       )}
-      <button
-        type="button"
-        onClick={onToggleEdit}
-        style={editing ? activeToggleBtn() : ghostToggleBtn()}
-      >
-        <Pencil size={12} /> {editing ? 'Editing — tap to lock' : 'Enable edit mode'}
-      </button>
     </div>
   );
 }
@@ -601,57 +588,6 @@ function SaveBanner({
         <X size={14} />
       </button>
     </div>
-  );
-}
-
-// ─── Quinn ramp ──────────────────────────────────────────────────────────────
-
-const QUINN_PROMPTS: Record<SettingsTabId, string> = {
-  general:     'Help me link this site to a different hub.',
-  cutoffs:     'Move the spoke cutoff later for one week.',
-  benches:     'Add a new bakery bench like the existing one.',
-  team:        'Add three new GMs to the bench rotation.',
-  windows:     'Push P1 back by 30 minutes on Mondays.',
-  'range-tiers': 'Tell me what the Range & tiers redesign should solve.',
-  'night-shift': 'Move egg-mayo filling above tuna-mayo in the night sequence.',
-};
-
-function QuinnRampButton({ activeTab }: { activeTab: SettingsTabId }) {
-  // We don't open the panel programmatically — the QuinnProductionPanel
-  // already lives in the layout and the user can pop it open. Instead
-  // this button surfaces the conversational alternative inline (principle
-  // 3) and copies the suggested prompt to the clipboard so the manager
-  // can paste it into Quinn (or just read it as a hint).
-  const prompt = QUINN_PROMPTS[activeTab];
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        try {
-          navigator.clipboard?.writeText(prompt);
-        } catch {
-          // ignore — clipboard may be blocked
-        }
-      }}
-      title={`Suggested Quinn prompt: "${prompt}" — copied to clipboard`}
-      style={{
-        padding: '8px 10px',
-        borderRadius: 8,
-        background: 'var(--color-info-light)',
-        border: '1px solid var(--color-info)',
-        color: 'var(--color-info)',
-        fontSize: 11,
-        fontWeight: 700,
-        fontFamily: 'var(--font-primary)',
-        cursor: 'pointer',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        whiteSpace: 'nowrap',
-      }}
-    >
-      <EdifyMark size={11} color="var(--color-info)" /> Ask Edify instead
-    </button>
   );
 }
 
@@ -824,31 +760,6 @@ function ghostBtn(): React.CSSProperties {
     background: '#ffffff',
     color: 'var(--color-text-secondary)',
     border: '1px solid var(--color-border)',
-    cursor: 'pointer',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    whiteSpace: 'nowrap',
-  };
-}
-
-function ghostToggleBtn(): React.CSSProperties {
-  return {
-    ...ghostBtn(),
-    background: 'var(--color-bg-hover)',
-  };
-}
-
-function activeToggleBtn(): React.CSSProperties {
-  return {
-    padding: '8px 12px',
-    borderRadius: 8,
-    fontSize: 11,
-    fontWeight: 700,
-    fontFamily: 'var(--font-primary)',
-    background: 'var(--color-info-light)',
-    color: 'var(--color-info)',
-    border: '1px solid var(--color-info)',
     cursor: 'pointer',
     display: 'inline-flex',
     alignItems: 'center',

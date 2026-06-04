@@ -188,7 +188,12 @@ function defaultTeamForSite(site: Site): { users: TeamUser[]; duties: SiteDuty[]
   // realistic seed so the editor renders something out of the box. This
   // mirrors the Pret screenshots (GMs / TMs + Bins/Floor/Sinks/Touch
   // Surfaces duties).
-  if (site.type !== 'HUB' && site.type !== 'HYBRID' && site.type !== 'STANDALONE') {
+  if (
+    site.type !== 'HUB' &&
+    site.type !== 'HYBRID' &&
+    site.type !== 'HYBRID_HUB' &&
+    site.type !== 'STANDALONE'
+  ) {
     return { users: [], duties: [] };
   }
   return {

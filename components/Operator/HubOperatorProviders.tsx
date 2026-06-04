@@ -12,6 +12,7 @@ import { HubExtrasStoreProvider } from '@/components/Production/hubExtrasStore';
 import { DispatchTransferStoreProvider } from '@/components/Production/dispatchStore';
 import { DemoNotificationsProvider } from '@/components/Production/demoNotificationsStore';
 import { HybridOrderStoreProvider } from '@/components/Production/hybridOrderStore';
+import { PlanConfirmStoreProvider } from '@/components/Production/planConfirmStore';
 import { ProductionSiteProvider } from '@/components/Production/ProductionSiteContext';
 
 /**
@@ -40,7 +41,9 @@ export default function HubOperatorProviders({ children }: { children: React.Rea
                       <DispatchTransferStoreProvider>
                         <DemoNotificationsProvider>
                           <HybridOrderStoreProvider>
-                            <ProductionSiteProvider>{children}</ProductionSiteProvider>
+                            <PlanConfirmStoreProvider>
+                              <ProductionSiteProvider>{children}</ProductionSiteProvider>
+                            </PlanConfirmStoreProvider>
                           </HybridOrderStoreProvider>
                         </DemoNotificationsProvider>
                       </DispatchTransferStoreProvider>

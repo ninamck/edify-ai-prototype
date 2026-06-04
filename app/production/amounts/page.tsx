@@ -13,6 +13,7 @@ import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import { useDemoNotifications } from '@/components/Production/demoNotificationsStore';
 import { useProductionSite } from '@/components/Production/ProductionSiteContext';
 import { useRole } from '@/components/Production/RoleContext';
+import PlanConfirmBar from '@/components/Production/PlanConfirmBar';
 
 /**
  * 14-day day-strip range (yesterday on the far left, today second).
@@ -55,7 +56,10 @@ function TodayPageInner() {
   const demoFlags = useDemoNotifications();
   const { siteId, setSiteId } = useProductionSite();
   const site = getSite(siteId);
-  const isHub = site?.type === 'HUB';
+  // Sites that bake for downstream spokes — a plain HUB and the producing
+  // hybrid (HYBRID_HUB). Both triage incoming-from-spokes work (rejects,
+  // ad-hoc requests, urgent remakes) on the Today screen.
+  const suppliesSpokes = site?.type === 'HUB' || site?.type === 'HYBRID_HUB';
 
   // Day strip selection — drives both the grid date and the hub triage
   // strips. Defaults to today; selecting a future day reuses the same
@@ -120,7 +124,7 @@ function TodayPageInner() {
       {/* Incoming-from-spokes surfaces — only relevant when the hub manager
           is viewing one of their own hubs AND on the live day. Future
           days have no rejects / ad-hoc requests yet. */}
-      {isHub && selectedDate === DEMO_TODAY && (
+      {suppliesSpokes && selectedDate === DEMO_TODAY && (
         <>
           {demoFlags.urgentRemake && (
             <UrgentRemakeBanner hubId={siteId} recordedBy="Hub manager" />
@@ -141,7 +145,12 @@ function TodayPageInner() {
           perspective="hub"
         />
       ) : (
-        <RecipeFirstGrid siteId={siteId} date={selectedDate} surface="today" />
+        <>
+          {/* Flow-through from Plan: once the day's plan is confirmed, the
+              Run screen shows it's running to those committed numbers. */}
+          <PlanConfirmBar siteId={siteId} date={selectedDate} variant="run" />
+          <RecipeFirstGrid siteId={siteId} date={selectedDate} surface="today" />
+        </>
       )}
     </div>
   );

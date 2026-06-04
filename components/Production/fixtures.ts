@@ -32,7 +32,7 @@ export type UserId = string;
 export type BatchId = string;
 
 // ───── Core enums ─────
-export type SiteType = 'STANDALONE' | 'HUB' | 'SPOKE' | 'HYBRID';
+export type SiteType = 'STANDALONE' | 'HUB' | 'SPOKE' | 'HYBRID' | 'HYBRID_HUB';
 export type Role = 'Manager' | 'Staff';
 
 export type ProductionMode = 'run' | 'variable' | 'increment';
@@ -85,6 +85,7 @@ export type WorkType =
   | 'weigh-up'
   | 'thaw'
   | 'mise'
+  | 'butcher'
   | 'wash'
   | 'sanitise'
   | 'slice'
@@ -128,7 +129,7 @@ export type Equipment =
 /** Display order for work types — earliest in the day first. Drives the
  *  Run sheet section order and the order chips render in. */
 export const WORK_TYPE_ORDER: WorkType[] = [
-  'weigh-up', 'thaw', 'mise',
+  'weigh-up', 'thaw', 'mise', 'butcher',
   'wash', 'sanitise', 'slice',
   'mix', 'proof',
   'bake', 'grill',
@@ -142,6 +143,7 @@ export const WORK_TYPE_LABELS: Record<WorkType, string> = {
   'weigh-up':  'Weigh up',
   'thaw':      'Thaw',
   'mise':      'Mise',
+  'butcher':   'Butcher',
   'wash':      'Wash',
   'sanitise':  'Sanitise',
   'slice':     'Slice',
@@ -165,6 +167,9 @@ export const WORK_TYPE_COLORS: Record<WorkType, { bg: string; color: string }> =
   'weigh-up':  { bg: 'rgba(241,180,52,0.16)', color: 'var(--color-warning)' },
   'thaw':      { bg: 'rgba(3,105,161,0.10)',  color: 'var(--color-info)' },
   'mise':      { bg: 'rgba(0, 28, 53,0.07)',    color: 'var(--color-accent-active)' },
+  // Butcher — protein breakdown; a deep rose to read distinct from the
+  // hot-work reds (bake/grill) while still signalling "raw protein".
+  'butcher':   { bg: 'rgba(159,18,57,0.10)',  color: '#9f1239' },
   // Cold prep — cool blues/teals.
   'wash':      { bg: 'rgba(3,105,161,0.10)',  color: 'var(--color-info)' },
   'sanitise':  { bg: 'rgba(74,108,181,0.14)', color: 'var(--color-accent-mid)' },
@@ -409,7 +414,12 @@ export type Site = {
    * defaults to 'self' when omitted.
    */
   linkType?: 'self' | 'linked';
-  /** For HUB + HYBRID sites: spokes / linked-standalones they supply. */
+  /**
+   * For HUB + HYBRID_HUB sites: spokes / linked-standalones they supply.
+   * A HYBRID_HUB is the "producing hybrid" — it both receives from its own
+   * upstream `hubId` (like a HYBRID) and bakes + dispatches to the spokes
+   * listed here (like a HUB).
+   */
   servesSiteIds?: SiteId[];
   /**
    * Demand size relative to the parent hub for hub-linked sites. Used to
@@ -486,6 +496,43 @@ export const PRET_SITES: Site[] = [
     type: 'HYBRID',
     openingHours: { open: '04:30', close: '23:00' },
     hubId: 'hub-central', // still pulls proofed dough from hub
+  },
+  // ── Producing hybrid (HYBRID_HUB) ───────────────────────────────────────
+  // A variation of the hybrid that ALSO bakes for nearby spokes. It pulls
+  // its linked range from `hub-central` (like a hybrid) AND produces +
+  // dispatches the bakery range to its own two satellite spokes (like a
+  // hub). Gets Run + Plan + Dispatch; Plan/Run surface both its own floor
+  // production and the per-spoke production it owes the sites it supplies.
+  {
+    id: 'site-hybrid-hub-gatwick',
+    estateId: 'estate-pret',
+    formatId: 'format-airport',
+    name: 'Gatwick Cross',
+    type: 'HYBRID_HUB',
+    openingHours: { open: '04:30', close: '23:00' },
+    hubId: 'hub-central', // receives part of its range from central hub
+    servesSiteIds: ['site-spoke-gatwick-a', 'site-spoke-gatwick-b'],
+    salesFactor: 0.55,
+  },
+  {
+    id: 'site-spoke-gatwick-a',
+    estateId: 'estate-pret',
+    formatId: 'format-corner',
+    name: 'Gatwick South Terminal',
+    type: 'SPOKE',
+    openingHours: { open: '05:00', close: '22:00' },
+    hubId: 'site-hybrid-hub-gatwick',
+    salesFactor: 0.35,
+  },
+  {
+    id: 'site-spoke-gatwick-b',
+    estateId: 'estate-pret',
+    formatId: 'format-corner',
+    name: 'Gatwick North Terminal',
+    type: 'SPOKE',
+    openingHours: { open: '05:00', close: '21:30' },
+    hubId: 'site-hybrid-hub-gatwick',
+    salesFactor: 0.30,
   },
 ];
 
@@ -624,7 +671,7 @@ export const PRET_BENCHES: Bench[] = [
     siteId: 'hub-central',
     name: 'Prep bench (fillings & sauces)',
     capabilities: ['cold-prep', 'prep'],
-    workTypes: ['weigh-up', 'mise', 'mix', 'slice', 'portion'],
+    workTypes: ['weigh-up', 'mise', 'butcher', 'wash', 'sanitise', 'mix', 'slice', 'portion'],
     equipment: ['prep-table', 'walk-in-chiller', 'slicer', 'food-processor'],
     online: true,
     primaryMode: 'run',
@@ -706,7 +753,7 @@ export const PRET_BENCHES: Bench[] = [
     siteId: 'site-standalone-north',
     name: 'Prep bench',
     capabilities: ['cold-prep', 'prep'],
-    workTypes: ['weigh-up', 'mise', 'mix', 'slice'],
+    workTypes: ['weigh-up', 'mise', 'butcher', 'wash', 'sanitise', 'mix', 'slice'],
     equipment: ['prep-table', 'walk-in-chiller'],
     online: true,
     primaryMode: 'run',
@@ -727,7 +774,13 @@ export const PRET_BENCHES: Bench[] = [
     workTypes: ['assemble', 'pack', 'label'],
     equipment: ['prep-table'],
     online: true,
-    primaryMode: 'variable',
+    // Build is a run bench: a morning bulk-build lays down the baseline,
+    // then the floor tops up variable production (VP) through the day.
+    primaryMode: 'run',
+    runs: [
+      { id: 'r1', label: 'R1', startTime: '06:00', durationMinutes: 120 },
+      { id: 'r2', label: 'R2', startTime: '10:30', durationMinutes: 90 },
+    ],
   },
   {
     id: 'bench-north-hot-shelf',
@@ -825,7 +878,7 @@ export const PRET_BENCHES: Bench[] = [
     siteId: 'site-hybrid-airport',
     name: 'Prep bench',
     capabilities: ['cold-prep', 'prep'],
-    workTypes: ['weigh-up', 'mise', 'mix'],
+    workTypes: ['weigh-up', 'mise', 'butcher', 'wash', 'sanitise', 'mix'],
     equipment: ['prep-table', 'walk-in-chiller'],
     online: true,
     primaryMode: 'run',
@@ -836,6 +889,78 @@ export const PRET_BENCHES: Bench[] = [
   {
     id: 'bench-airport-cold-chain',
     siteId: 'site-hybrid-airport',
+    name: 'Cold chain intake',
+    capabilities: ['cold-prep', 'pack'],
+    workTypes: ['thaw', 'chill', 'label', 'pack'],
+    equipment: ['walk-in-chiller', 'blast-chiller'],
+    online: true,
+    primaryMode: 'run',
+    runs: [
+      { id: 'r1', label: 'R1', startTime: '04:00', durationMinutes: 60 },
+    ],
+  },
+
+  // ─── site-hybrid-hub-gatwick (Gatwick Cross — producing hybrid) ───────────
+  // Combines a retail floor (hot shelf + build) with a bakery oven big
+  // enough to bake the viennoiserie/bread range for its own two spokes,
+  // plus a cold-chain intake for the linked range it pulls from hub-central.
+  {
+    id: 'bench-gatwick-bakery',
+    siteId: 'site-hybrid-hub-gatwick',
+    name: 'Bakery & ovens',
+    capabilities: ['oven', 'proofing'],
+    equipment: ['oven', 'proofer', 'walk-in-chiller'],
+    batchRules: { min: 6, max: 24, multipleOf: 6 },
+    online: true,
+    primaryMode: 'run',
+    runs: [
+      { id: 'r1', label: 'R1', startTime: '04:30', durationMinutes: 180 },
+      { id: 'r2', label: 'R2', startTime: '10:30', durationMinutes: 90 },
+    ],
+  },
+  {
+    id: 'bench-gatwick-build',
+    siteId: 'site-hybrid-hub-gatwick',
+    name: 'Sandwich & salad build',
+    capabilities: ['assemble', 'pack'],
+    workTypes: ['assemble', 'pack', 'label'],
+    equipment: ['prep-table'],
+    online: true,
+    // Build is a run bench: a morning bulk-build lays down the baseline,
+    // then the floor tops up variable production (VP) through the day.
+    primaryMode: 'run',
+    runs: [
+      { id: 'r1', label: 'R1', startTime: '05:30', durationMinutes: 120 },
+      { id: 'r2', label: 'R2', startTime: '10:30', durationMinutes: 90 },
+    ],
+  },
+  {
+    id: 'bench-gatwick-hot-shelf',
+    siteId: 'site-hybrid-hub-gatwick',
+    name: 'Hot shelf (oven & grill)',
+    capabilities: ['oven', 'prep'],
+    workTypes: ['bake', 'grill'],
+    equipment: ['oven', 'panini-press', 'griddle'],
+    batchRules: { min: 4, max: 14, multipleOf: 2 },
+    online: true,
+    primaryMode: 'increment',
+  },
+  {
+    id: 'bench-gatwick-prep',
+    siteId: 'site-hybrid-hub-gatwick',
+    name: 'Prep bench',
+    capabilities: ['cold-prep', 'prep'],
+    workTypes: ['weigh-up', 'mise', 'butcher', 'wash', 'sanitise', 'mix'],
+    equipment: ['prep-table', 'walk-in-chiller'],
+    online: true,
+    primaryMode: 'run',
+    runs: [
+      { id: 'r1', label: 'R1', startTime: '05:00', durationMinutes: 120 },
+    ],
+  },
+  {
+    id: 'bench-gatwick-cold-chain',
+    siteId: 'site-hybrid-hub-gatwick',
     name: 'Cold chain intake',
     capabilities: ['cold-prep', 'pack'],
     workTypes: ['thaw', 'chill', 'label', 'pack'],
@@ -1230,6 +1355,16 @@ export type ProductionItem = {
    * batches that were larger or smaller than default.
    */
   targetMinutes?: number;
+  /**
+   * Variable production (VP). When true this run recipe also carries a
+   * variable-production stream: a scheduled run lays down the baseline,
+   * then the floor tops it up through the day against Edify's live
+   * "adjusted forecast". Only ever set on `mode === 'run'` items — VP
+   * always sits on top of a real production run, never on its own.
+   * Roughly two-thirds of a retail site's run range carries VP; bulk
+   * breads, prep components and cold-chain intake do not.
+   */
+  variableProduction?: boolean;
 };
 
 export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
@@ -1577,8 +1712,122 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
   { id: 'pi-airport-eod-chicken-prep', siteId: 'site-hybrid-airport', recipeId: 'prec-eod-chicken-prep', skuId: 'sku-eod-chicken-prep', mode: 'run', batchSize: 2, preferredBenchId: 'bench-airport-cold-chain' },
   { id: 'pi-airport-eod-dough-prep',   siteId: 'site-hybrid-airport', recipeId: 'prec-eod-dough-prep',   skuId: 'sku-eod-dough-prep',   mode: 'run', batchSize: 4, preferredBenchId: 'bench-airport-cold-chain' },
 
+  // ─── site-hybrid-hub-gatwick (producing hybrid) ───────────────────────────
+  // Bakery oven (run) — the viennoiserie + bread range it bakes both for its
+  // own counter AND to dispatch to its two Gatwick spokes.
+  { id: 'pi-gatwick-croissant',         siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-croissant',           skuId: 'sku-croissant',           mode: 'run', batchSize: 12, preferredBenchId: 'bench-gatwick-bakery', targetMinutes: 16 },
+  { id: 'pi-gatwick-pain',              siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-pain-au-chocolat',    skuId: 'sku-pain-au-choc',        mode: 'run', batchSize: 12, preferredBenchId: 'bench-gatwick-bakery', targetMinutes: 18 },
+  { id: 'pi-gatwick-almond-croissant',  siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-almond-croissant',    skuId: 'sku-almond-croissant',    mode: 'run', batchSize: 12, preferredBenchId: 'bench-gatwick-bakery', targetMinutes: 18 },
+  { id: 'pi-gatwick-cinnamon-swirl',    siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-cinnamon-swirl',      skuId: 'sku-cinnamon-swirl',      mode: 'run', batchSize: 12, preferredBenchId: 'bench-gatwick-bakery', targetMinutes: 17 },
+  { id: 'pi-gatwick-granary',           siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-granary',             skuId: 'sku-granary',             mode: 'run', batchSize: 12, preferredBenchId: 'bench-gatwick-bakery', targetMinutes: 18 },
+  { id: 'pi-gatwick-baguette',          siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-baguette',            skuId: 'sku-baguette',            mode: 'run', batchSize: 18, preferredBenchId: 'bench-gatwick-bakery', targetMinutes: 24 },
+  { id: 'pi-gatwick-blueberry-muffin',  siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-blueberry-muffin',    skuId: 'sku-blueberry-muffin',    mode: 'run', batchSize: 12, preferredBenchId: 'bench-gatwick-bakery', targetMinutes: 12 },
+  { id: 'pi-gatwick-banana-bread',      siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-banana-bread',        skuId: 'sku-banana-bread',        mode: 'run', batchSize: 16, preferredBenchId: 'bench-gatwick-bakery', targetMinutes: 20 },
+  { id: 'pi-gatwick-brownie',           siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-brownie',             skuId: 'sku-brownie',             mode: 'run', batchSize: 16, preferredBenchId: 'bench-gatwick-bakery', targetMinutes: 18 },
+  { id: 'pi-gatwick-oat-raisin',        siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-oat-raisin-cookie',   skuId: 'sku-oat-raisin-cookie',   mode: 'run', batchSize: 12, preferredBenchId: 'bench-gatwick-bakery', targetMinutes: 14 },
+  // Build bench (variable) — sandwiches + salads it assembles to demand on
+  // its own retail floor.
+  { id: 'pi-gatwick-club',          siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-club-sandwich',        skuId: 'sku-club-sandwich',        mode: 'variable', batchSize: 6, preferredBenchId: 'bench-gatwick-build' },
+  { id: 'pi-gatwick-egg-mayo-sw',   siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-egg-mayo-sandwich',    skuId: 'sku-egg-mayo-sandwich',    mode: 'variable', batchSize: 6, preferredBenchId: 'bench-gatwick-build' },
+  { id: 'pi-gatwick-chicken-avo',   siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-chicken-avo-sandwich', skuId: 'sku-chicken-avo-sandwich', mode: 'variable', batchSize: 6, preferredBenchId: 'bench-gatwick-build' },
+  { id: 'pi-gatwick-salad',         siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-salad-bowl',           skuId: 'sku-salad-bowl',           mode: 'variable', batchSize: 1, preferredBenchId: 'bench-gatwick-build' },
+  { id: 'pi-gatwick-chicken-caesar',siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-chicken-caesar',       skuId: 'sku-chicken-caesar',       mode: 'variable', batchSize: 1, preferredBenchId: 'bench-gatwick-build' },
+  { id: 'pi-gatwick-grain-bowl',    siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-med-grain-bowl',       skuId: 'sku-med-grain-bowl',       mode: 'variable', batchSize: 1, preferredBenchId: 'bench-gatwick-build' },
+  // Hot shelf (increment) — own-floor refresh items.
+  {
+    id: 'pi-gatwick-coffee',
+    siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-brewed-coffee', skuId: 'sku-brewed-coffee',
+    mode: 'increment', batchSize: 1,
+    cadence: { intervalMinutes: 20, startTime: '04:30', endTime: '22:30', quinnProposed: true },
+    preferredBenchId: 'bench-gatwick-hot-shelf',
+  },
+  {
+    id: 'pi-gatwick-hot-croissant',
+    siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-hot-croissant', skuId: 'sku-hot-croissant',
+    mode: 'increment', batchSize: 6,
+    cadence: { intervalMinutes: 45, startTime: '04:30', endTime: '11:00', quinnProposed: true },
+    preferredBenchId: 'bench-gatwick-hot-shelf',
+  },
+  {
+    id: 'pi-gatwick-sausage-roll',
+    siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-sausage-roll', skuId: 'sku-sausage-roll',
+    mode: 'increment', batchSize: 8,
+    cadence: { intervalMinutes: 45, startTime: '06:00', endTime: '20:00', quinnProposed: true },
+    preferredBenchId: 'bench-gatwick-hot-shelf',
+  },
+  {
+    id: 'pi-gatwick-ham-cheese-toastie',
+    siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-ham-cheese-toastie', skuId: 'sku-ham-cheese-toastie',
+    mode: 'increment', batchSize: 4,
+    cadence: { intervalMinutes: 30, startTime: '06:00', endTime: '20:00', quinnProposed: true },
+    preferredBenchId: 'bench-gatwick-hot-shelf',
+  },
+  // Prep bench (run) — a small filling set it makes locally.
+  { id: 'pi-gatwick-egg-filling', siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-egg-mayo-filling', skuId: 'sku-egg-mayo-filling', mode: 'run', batchSize: 1, preferredBenchId: 'bench-gatwick-prep', targetMinutes: 12 },
+  { id: 'pi-gatwick-grilled-chx', siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-grilled-chicken',  skuId: 'sku-grilled-chicken',  mode: 'run', batchSize: 6, preferredBenchId: 'bench-gatwick-prep', targetMinutes: 14 },
+  // Cold chain intake (run) — the linked range it receives from hub-central.
+  { id: 'pi-gatwick-eod-chicken-prep', siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-eod-chicken-prep', skuId: 'sku-eod-chicken-prep', mode: 'run', batchSize: 2, preferredBenchId: 'bench-gatwick-cold-chain' },
+  { id: 'pi-gatwick-eod-dough-prep',   siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-eod-dough-prep',   skuId: 'sku-eod-dough-prep',   mode: 'run', batchSize: 4, preferredBenchId: 'bench-gatwick-cold-chain' },
+
   // site-spoke-south — receive-only, no production items of its own
 ];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Variable production (VP) normalisation
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// VP was originally modelled as a separate "build to demand" mode with no
+// scheduled run. That was the wrong mental model: VP is a *run-style* stream
+// — a scheduled run lays down the baseline and the floor tops it up through
+// the day against Edify's live "adjusted forecast". So:
+//
+//   1. The legacy `mode:'variable'` build-to-demand items become proper run
+//      items (they now always have a production run attached), and
+//   2. roughly two-thirds of each retail site's run range is flagged with
+//      `variableProduction` — the finished goods the floor flexes against
+//      live sales. Bulk breads, prep components/fillings, roast trays and
+//      cold-chain intake stay run-only (no VP), which lands the split at
+//      "most, but not all".
+//
+// Gatwick is a producing hub whose run bakery is planned from spoke demand,
+// so there we keep VP to its own-floor build items only (not the bakery it
+// dispatches to its spokes).
+const VP_RETAIL_SITES = new Set<SiteId>([
+  'site-standalone-north',
+  'site-hybrid-airport',
+  'site-hybrid-hub-gatwick',
+]);
+const VP_RUN_FLAG_SITES = new Set<SiteId>([
+  'site-standalone-north',
+  'site-hybrid-airport',
+]);
+const VP_EXCLUDED_RECIPES = new Set<RecipeId>([
+  // Bulk breads — a single morning bake, no live top-up.
+  'prec-granary', 'prec-baguette', 'prec-focaccia', 'prec-ciabatta',
+  // Prep components / fillings / roasts — made to plan, not floor-flexed.
+  'prec-egg-mayo-filling', 'prec-tuna-mayo-filling', 'prec-chicken-mayo-filling', 'prec-hummus',
+  'prec-grilled-chicken', 'prec-crispy-bacon', 'prec-roast-chicken', 'prec-roast-turkey-breast',
+  'prec-grilled-halloumi', 'prec-chargrilled-veg',
+  // Cold-chain / next-day prep.
+  'prec-eod-chicken-prep', 'prec-eod-dough-prep', 'prec-eod-roast-prep',
+]);
+for (const it of PRET_PRODUCTION_ITEMS) {
+  // Promote the legacy build-to-demand items to run + VP.
+  if (it.mode === 'variable') {
+    it.mode = 'run';
+    if (VP_RETAIL_SITES.has(it.siteId)) it.variableProduction = true;
+  }
+  // Flag the remaining finished-good run recipes at the non-spoke-supplying
+  // retail floors so ~2/3 of the run range carries VP.
+  if (
+    it.variableProduction === undefined &&
+    it.mode === 'run' &&
+    VP_RUN_FLAG_SITES.has(it.siteId) &&
+    !VP_EXCLUDED_RECIPES.has(it.recipeId)
+  ) {
+    it.variableProduction = true;
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Effective batch rules — recipe wins, bench is the fallback
@@ -3591,6 +3840,59 @@ export const PRET_SPOKE_SUBMISSIONS: SpokeSubmission[] = [
       { skuId: 'sku-tuna-sandwich',    recipeId: 'prec-tuna-sandwich',    quinnProposedUnits: 12, confirmedUnits: 12 },
     ],
   },
+
+  // ── Gatwick spokes → producing hybrid (site-hybrid-hub-gatwick) ──────────
+  // Mirrors the hub-central cohort so the producing hybrid's Dispatch matrix
+  // is populated the same way: a "today" acknowledged drop plus a "tomorrow"
+  // cohort across both Gatwick terminals in mixed statuses. SKUs are drawn
+  // from the gatwick hub's own bakery range (`productionItemsAt`).
+  {
+    id: 'spoke-sub-gatwick-a-today',
+    fromSiteId: 'site-spoke-gatwick-a',
+    toHubId: 'site-hybrid-hub-gatwick',
+    forDate: DEMO_TODAY,
+    cutoffDateTime: `${dayOffset(-1)}T15:00:00Z`,
+    status: 'acknowledged',
+    lines: [
+      { skuId: 'sku-croissant',        recipeId: 'prec-croissant',        quinnProposedUnits: 18, confirmedUnits: 18 },
+      { skuId: 'sku-pain-au-choc',     recipeId: 'prec-pain-au-chocolat', quinnProposedUnits: 12, confirmedUnits: 12 },
+      { skuId: 'sku-baguette',         recipeId: 'prec-baguette',         quinnProposedUnits: 10, confirmedUnits: 10 },
+      { skuId: 'sku-blueberry-muffin', recipeId: 'prec-blueberry-muffin', quinnProposedUnits: 8,  confirmedUnits: 8  },
+    ],
+  },
+  {
+    id: 'spoke-sub-gatwick-a-friday',
+    fromSiteId: 'site-spoke-gatwick-a',
+    toHubId: 'site-hybrid-hub-gatwick',
+    forDate: dayOffset(1),
+    cutoffDateTime: `${DEMO_TODAY}T15:00:00Z`,
+    status: 'submitted',
+    lines: [
+      { skuId: 'sku-croissant',        recipeId: 'prec-croissant',        quinnProposedUnits: 20, confirmedUnits: 20 },
+      { skuId: 'sku-pain-au-choc',     recipeId: 'prec-pain-au-chocolat', quinnProposedUnits: 14, confirmedUnits: 14 },
+      { skuId: 'sku-almond-croissant', recipeId: 'prec-almond-croissant', quinnProposedUnits: 8,  confirmedUnits: 8  },
+      { skuId: 'sku-cinnamon-swirl',   recipeId: 'prec-cinnamon-swirl',   quinnProposedUnits: 6,  confirmedUnits: 6  },
+      { skuId: 'sku-baguette',         recipeId: 'prec-baguette',         quinnProposedUnits: 10, confirmedUnits: 10 },
+      { skuId: 'sku-blueberry-muffin', recipeId: 'prec-blueberry-muffin', quinnProposedUnits: 8,  confirmedUnits: 8  },
+      { skuId: 'sku-brownie',          recipeId: 'prec-brownie',          quinnProposedUnits: 6,  confirmedUnits: 6  },
+    ],
+  },
+  {
+    id: 'spoke-sub-gatwick-b-friday',
+    fromSiteId: 'site-spoke-gatwick-b',
+    toHubId: 'site-hybrid-hub-gatwick',
+    forDate: dayOffset(1),
+    cutoffDateTime: `${DEMO_TODAY}T15:00:00Z`,
+    status: 'acknowledged',
+    lines: [
+      { skuId: 'sku-croissant',         recipeId: 'prec-croissant',         quinnProposedUnits: 16, confirmedUnits: 16 },
+      { skuId: 'sku-pain-au-choc',      recipeId: 'prec-pain-au-chocolat',  quinnProposedUnits: 10, confirmedUnits: 10 },
+      { skuId: 'sku-granary',           recipeId: 'prec-granary',           quinnProposedUnits: 6,  confirmedUnits: 6  },
+      { skuId: 'sku-banana-bread',      recipeId: 'prec-banana-bread',      quinnProposedUnits: 6,  confirmedUnits: 6  },
+      { skuId: 'sku-baguette',          recipeId: 'prec-baguette',          quinnProposedUnits: 8,  confirmedUnits: 8  },
+      { skuId: 'sku-oat-raisin-cookie', recipeId: 'prec-oat-raisin-cookie', quinnProposedUnits: 8,  confirmedUnits: 8  },
+    ],
+  },
 ];
 
 /**
@@ -3771,7 +4073,7 @@ export function effectiveSubmissionsForHub(
 export function linkedReceiversFor(hubId: SiteId): Site[] {
   return PRET_SITES.filter(s => {
     if (s.hubId !== hubId) return false;
-    if (s.type === 'SPOKE' || s.type === 'HYBRID') return true;
+    if (s.type === 'SPOKE' || s.type === 'HYBRID' || s.type === 'HYBRID_HUB') return true;
     if (s.type === 'STANDALONE' && s.linkType === 'linked') return true;
     return false;
   });
@@ -3780,7 +4082,7 @@ export function linkedReceiversFor(hubId: SiteId): Site[] {
 /** True when a site receives some / all production from a hub. */
 export function isHubLinked(site: Site | undefined): boolean {
   if (!site || !site.hubId) return false;
-  if (site.type === 'SPOKE' || site.type === 'HYBRID') return true;
+  if (site.type === 'SPOKE' || site.type === 'HYBRID' || site.type === 'HYBRID_HUB') return true;
   if (site.type === 'STANDALONE' && site.linkType === 'linked') return true;
   return false;
 }
@@ -4150,6 +4452,13 @@ export type DispatchTransfer = {
   totalUnits: number;
   /** Optional override note — surfaced on the audit panel. */
   note?: string;
+  /**
+   * Dispatch temperature (°C) captured by the operator at Send. Recorded
+   * here for the audit trail and forwarded to the external cold-chain /
+   * food-safety system on confirm. Optional — older / seeded transfers
+   * predate the field.
+   */
+  dispatchTempC?: number;
 };
 
 /**
@@ -4385,6 +4694,38 @@ export const PRET_SPOKE_REJECT_SEEDS: SpokeReject[] = [
     hubAcknowledged: false,
     rolledIntoNext: false,
   },
+  // Gatwick Cross (producing hybrid-hub) gets the same incoming-from-spokes
+  // loop as the central hub so the demo can be run from the Gatwick persona
+  // too: one of its terminal spokes flagged damaged pastries on yesterday's
+  // drop.
+  {
+    id: 'reject-seed-gatwick-south-yesterday',
+    spokeId: 'site-spoke-gatwick-a',
+    hubId: 'site-hybrid-hub-gatwick',
+    forDate: dayOffset(-1),
+    recordedAtISO: `${dayOffset(-1)}T07:50:00Z`,
+    recordedBy: 'Spoke manager (demo)',
+    transferId: 'transfer-seed-gatwick-south-yesterday',
+    lines: [
+      {
+        skuId: 'sku-pain-au-choc',
+        recipeId: 'prec-pain-au-chocolat',
+        rejectedUnits: 4,
+        reason: 'damaged',
+        note: 'Squashed on the trolley — chocolate leaked through the box.',
+      },
+      {
+        skuId: 'sku-almond-croissant',
+        recipeId: 'prec-almond-croissant',
+        rejectedUnits: 2,
+        reason: 'damaged',
+        note: 'Topping knocked off in transit.',
+      },
+    ],
+    totalRejectedUnits: 6,
+    hubAcknowledged: false,
+    rolledIntoNext: false,
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4497,6 +4838,38 @@ export const PRET_ADHOC_REQUEST_SEEDS: AdhocRequest[] = [
       },
     ],
     totalRequestedUnits: 10,
+    totalApprovedUnits: 0,
+    status: 'pending',
+  },
+  // Gatwick North Terminal had an early flight rush and needs a top-up from
+  // its hub (Gatwick Cross) for tomorrow — surfaces the ad-hoc strip when
+  // the demo is run from the Gatwick persona.
+  {
+    id: 'adhoc-seed-gatwick-north-tomorrow',
+    spokeId: 'site-spoke-gatwick-b',
+    hubId: 'site-hybrid-hub-gatwick',
+    forDate: dayOffset(1),
+    submittedAtISO: `${DEMO_TODAY}T12:10:00Z`,
+    submittedBy: 'Spoke manager (demo)',
+    reason: 'unexpected-demand',
+    notes: 'Two delayed flights pushed a load of passengers through the terminal — cleared the pastry shelf before 9am.',
+    lines: [
+      {
+        id: 'adhoc-seed-gatwick-line-1',
+        skuId: 'sku-croissant',
+        recipeId: 'prec-croissant',
+        requestedUnits: 8,
+        lineStatus: 'pending',
+      },
+      {
+        id: 'adhoc-seed-gatwick-line-2',
+        skuId: 'sku-cinnamon-swirl',
+        recipeId: 'prec-cinnamon-swirl',
+        requestedUnits: 6,
+        lineStatus: 'pending',
+      },
+    ],
+    totalRequestedUnits: 14,
     totalApprovedUnits: 0,
     status: 'pending',
   },
@@ -4629,6 +5002,34 @@ export const PRET_REMAKE_REQUEST_SEEDS: RemakeRequest[] = [
       { skuId: 'sku-chicken-mayo-filling',recipeId: 'prec-chicken-mayo-filling',units: 2  },
     ],
     totalUnits: 64,
+    status: 'pending',
+  },
+  // Gatwick Cross sees its own critical-incident loop: a chilled run to
+  // Gatwick South Terminal lost its cold chain on the airport perimeter
+  // road, so the whole drop needs remaking. Lets the urgent-remake banner
+  // demo run from the Gatwick persona too.
+  {
+    id: 'remake-seed-gatwick-south-yesterday',
+    spokeId: 'site-spoke-gatwick-a',
+    hubId: 'site-hybrid-hub-gatwick',
+    sourceTransferId: 'transfer-seed-gatwick-south-yesterday',
+    sourceTransferDate: dayOffset(-1),
+    submittedAtISO: `${DEMO_TODAY}T07:20:00Z`,
+    submittedBy: 'Spoke manager (demo)',
+    reason: 'temperature-breach',
+    evidence: {
+      temperatureC: 9.2,
+      holdTimeMinutes: 38,
+      notes: 'Van held at a security checkpoint on the perimeter road; chiller cut out for 38 mins and the logger peaked at 9.2°C. Chilled lines cannot be sold.',
+    },
+    lines: [
+      { skuId: 'sku-croissant',        recipeId: 'prec-croissant',        units: 16 },
+      { skuId: 'sku-pain-au-choc',     recipeId: 'prec-pain-au-chocolat', units: 10 },
+      { skuId: 'sku-almond-croissant', recipeId: 'prec-almond-croissant', units: 8  },
+      { skuId: 'sku-club-sandwich',    recipeId: 'prec-club-sandwich',    units: 12 },
+      { skuId: 'sku-egg-mayo-sandwich',recipeId: 'prec-egg-mayo-sandwich',units: 9  },
+    ],
+    totalUnits: 55,
     status: 'pending',
   },
 ];
@@ -4822,6 +5223,7 @@ export const PRET_QUINN_SETUP_INTERVIEW: SetupInterviewScenario = {
         { id: 'HUB',        label: 'Hub',        detail: 'Produces for other sites' },
         { id: 'SPOKE',      label: 'Spoke',      detail: 'Receives from a hub' },
         { id: 'HYBRID',     label: 'Hybrid',     detail: 'Produces + receives' },
+        { id: 'HYBRID_HUB', label: 'Hybrid',     detail: 'Produces, receives + supplies spokes' },
       ],
       defaultOptionIds: ['SPOKE'],
       hint: 'Most new sites in Pret’s estate this year are spokes.',
@@ -5086,6 +5488,58 @@ export function productionItemsAt(siteId: SiteId): ProductionItem[] {
   return PRET_PRODUCTION_ITEMS.filter(p => p.siteId === siteId);
 }
 
+/**
+ * Benches at a site that run scheduled productions — i.e. the "production /
+ * run" benches a manager would route accepted work onto. A bench qualifies
+ * if it has scheduled runs or its primary mode is run/variable (the streams
+ * that lay down a planned batch), as opposed to a pure increment cadence
+ * bench. Falls back to every bench if a site has none flagged so the
+ * dropdown is never empty.
+ */
+export function productionBenchesAt(siteId: SiteId): Bench[] {
+  const all = benchesAt(siteId);
+  const runBenches = all.filter(
+    b => (b.runs && b.runs.length > 0) || b.primaryMode === 'run' || b.primaryMode === 'variable',
+  );
+  return runBenches.length > 0 ? runBenches : all;
+}
+
+/**
+ * The most logical bench for producing a set of SKUs at a site. Used to
+ * pre-select a sensible default when a hub accepts an incoming remake or
+ * ad-hoc request: resolve each SKU's production item → its primary bench,
+ * then return whichever bench covers the most of the requested lines (ties
+ * broken by the first matched line). Falls back to the site's first
+ * production/run bench, then any bench.
+ */
+export function mostLogicalBenchForSkus(
+  siteId: SiteId,
+  skuIds: SkuId[],
+): Bench | undefined {
+  const items = productionItemsAt(siteId);
+  const tally = new Map<BenchId, number>();
+  let firstBenchId: BenchId | undefined;
+  for (const skuId of skuIds) {
+    const item = items.find(p => p.skuId === skuId);
+    if (!item) continue;
+    const bench = primaryBenchForItem(item);
+    if (!bench) continue;
+    if (!firstBenchId) firstBenchId = bench.id;
+    tally.set(bench.id, (tally.get(bench.id) ?? 0) + 1);
+  }
+  let bestId: BenchId | undefined;
+  let bestCount = 0;
+  for (const [id, count] of tally) {
+    if (count > bestCount) {
+      bestCount = count;
+      bestId = id;
+    }
+  }
+  const chosen = bestId ?? firstBenchId;
+  if (chosen) return getBench(chosen);
+  return productionBenchesAt(siteId)[0];
+}
+
 export function tierForSiteOnDate(siteId: SiteId, iso: string): Tier | undefined {
   const dow = dayOfWeek(iso);
   const assignment = PRET_SITE_TIER_ASSIGNMENTS.find(a => a.siteId === siteId);
@@ -5134,6 +5588,7 @@ export function forecastFor(
     !!site?.hubId &&
     (site.type === 'SPOKE' ||
       site.type === 'HYBRID' ||
+      site.type === 'HYBRID_HUB' ||
       (site.type === 'STANDALONE' && site.linkType === 'linked'));
   if (site && isHubLinked) {
     const hubProjected = forecastFor(site.hubId!, skuId, date);
@@ -5141,7 +5596,11 @@ export function forecastFor(
     const factor = site.salesFactor ?? 0.4;
     const scale = (n: number) => Math.max(0, Math.round(n * factor));
     const linkLabel =
-      site.type === 'STANDALONE' ? 'Linked standalone' : site.type === 'HYBRID' ? 'Hybrid' : 'Spoke';
+      site.type === 'STANDALONE'
+        ? 'Linked standalone'
+        : site.type === 'HYBRID' || site.type === 'HYBRID_HUB'
+          ? 'Hybrid'
+          : 'Spoke';
     return {
       ...hubProjected,
       siteId,
@@ -5329,15 +5788,21 @@ export const PRET_INGREDIENTS: Ingredient[] = [
   { id: 'ing-egg',         name: 'Free-range eggs',     canonicalUnit: 'unit', category: 'protein' },
   { id: 'ing-mayo',        name: 'Mayonnaise',          canonicalUnit: 'g',    category: 'pantry'  },
   { id: 'ing-tuna',        name: 'Tuna (skipjack)',     canonicalUnit: 'g',    category: 'protein' },
-  // Roast chicken: master defaults the weigh-up to the day before so
-  // mises bake the schedule into "do this tonight, not tomorrow morning".
-  // Every recipe that uses chicken inherits this unless it overrides.
+  // Roast chicken: master defaults the weigh-up + butchery to the day
+  // before so the prep schedule reads "do this from midday once tomorrow's
+  // plan is confirmed, not tomorrow morning". Butchery (portioning the
+  // roast birds into pulled/sliced chicken) is the heaviest protein-prep
+  // task and lands on the prep bench. Every recipe that uses chicken
+  // inherits both unless it overrides.
   {
     id: 'ing-chicken',
     name: 'Roast chicken',
     canonicalUnit: 'g',
     category: 'protein',
-    defaultPrepWork: [{ workType: 'weigh-up', leadOffset: -1 }],
+    defaultPrepWork: [
+      { workType: 'weigh-up', leadOffset: -1 },
+      { workType: 'butcher', leadOffset: -1 },
+    ],
   },
   { id: 'ing-chocolate',   name: 'Dark chocolate batons', canonicalUnit: 'g',  category: 'pantry'  },
   { id: 'ing-cocoa-powder', name: 'Cocoa powder',       canonicalUnit: 'g',    category: 'pantry'  },
@@ -5350,8 +5815,10 @@ export const PRET_INGREDIENTS: Ingredient[] = [
     name: 'Vine tomatoes',
     canonicalUnit: 'unit',
     category: 'produce',
+    // Sanitise is a prep-bench task that kicks off from midday once the
+    // next day's plan is confirmed; slicing stays same-day for freshness.
     defaultPrepWork: [
-      { workType: 'sanitise' },
+      { workType: 'sanitise', leadOffset: -1 },
       { workType: 'slice' },
     ],
   },
@@ -5364,7 +5831,7 @@ export const PRET_INGREDIENTS: Ingredient[] = [
     canonicalUnit: 'unit',
     category: 'produce',
     defaultPrepWork: [
-      { workType: 'sanitise' },
+      { workType: 'sanitise', leadOffset: -1 },
       { workType: 'slice' },
     ],
   },
@@ -5376,7 +5843,9 @@ export const PRET_INGREDIENTS: Ingredient[] = [
     name: 'Mixed leaves',
     canonicalUnit: 'g',
     category: 'produce',
-    defaultPrepWork: [{ workType: 'wash' }],
+    // Washing is a prep-bench task that starts from midday once the next
+    // day's plan is confirmed.
+    defaultPrepWork: [{ workType: 'wash', leadOffset: -1 }],
   },
   // Avocado — slice on the day. No sanitise (skin is removed); just
   // the slicing step.
@@ -5395,7 +5864,7 @@ export const PRET_INGREDIENTS: Ingredient[] = [
     canonicalUnit: 'unit',
     category: 'produce',
     defaultPrepWork: [
-      { workType: 'sanitise' },
+      { workType: 'sanitise', leadOffset: -1 },
       { workType: 'slice' },
     ],
   },
@@ -5407,7 +5876,7 @@ export const PRET_INGREDIENTS: Ingredient[] = [
     canonicalUnit: 'unit',
     category: 'produce',
     defaultPrepWork: [
-      { workType: 'sanitise' },
+      { workType: 'sanitise', leadOffset: -1 },
       { workType: 'slice' },
     ],
   },
@@ -5447,7 +5916,9 @@ export const PRET_INGREDIENTS: Ingredient[] = [
     name: 'Falafel',
     canonicalUnit: 'g',
     category: 'protein',
-    defaultPrepWork: [{ workType: 'mise' }],
+    // Mise (bringing falafel up to temp / portioning) is a prep-bench task
+    // that starts from midday once the next day's plan is confirmed.
+    defaultPrepWork: [{ workType: 'mise', leadOffset: -1 }],
   },
 ];
 
@@ -5837,8 +6308,15 @@ export function amountsForSiteOnDate(siteId: SiteId, date: string): AmountsLine[
   // Pre-build dispatch demand per SKU for this hub+date so each line is a
   // simple Map lookup rather than a re-scan of all submissions.
   const dispatchBySku = new Map<SkuId, DispatchDemandLine[]>();
-  if (site?.type === 'HUB') {
-    const subs = submissionsForHub(siteId, date);
+  if (site?.type === 'HUB' || site?.type === 'HYBRID_HUB') {
+    // A plain HUB bakes only against what spokes have actually committed
+    // (seeded submissions). A HYBRID_HUB has no hand-seeded submissions in
+    // the fixture, so we use the effective (auto-finalised) set so its
+    // spokes' baseline orders still drive the bake total once cutoff passes.
+    const subs =
+      site.type === 'HYBRID_HUB'
+        ? effectiveSubmissionsForHub(siteId, date)
+        : submissionsForHub(siteId, date);
     for (const sub of subs) {
       // A spoke that's still in `draft` hasn't placed an order yet — the
       // hub must NOT bake against those numbers (they're Quinn's working

@@ -5,8 +5,8 @@ import {
   AlertTriangle,
   Check,
   CheckCircle2,
-  ChevronRight,
   Clock,
+  ExternalLink,
   Package,
   PackageCheck,
   RotateCcw,
@@ -305,7 +305,7 @@ function IdleAwaitingConfirm({
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-          Hub drop arrived · {dayOfWeek(transfer.forDate)} {transfer.forDate}
+          Hub drop expected · {dayOfWeek(transfer.forDate)} {transfer.forDate}
         </div>
         <div
           style={{
@@ -319,14 +319,18 @@ function IdleAwaitingConfirm({
           }}
         >
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <Clock size={10} /> Sent {formatSentClock(transfer.sentAtISO)}
+            <Clock size={10} /> Should arrive around {formatSentClock(transfer.sentAtISO)}
           </span>
           <span>· {transfer.totalUnits} units across {transfer.lines.length} line{transfer.lines.length === 1 ? '' : 's'}</span>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 5 }}>
+          Delivery is accepted in Fourth — confirmation &amp; any rejects sync back here automatically.
         </div>
       </div>
       <button
         type="button"
         onClick={onStart}
+        title="Opens Fourth to accept this delivery (integration)"
         style={{
           padding: '8px 14px',
           borderRadius: 8,
@@ -342,8 +346,8 @@ function IdleAwaitingConfirm({
           gap: 6,
         }}
       >
-        Confirm delivery
-        <ChevronRight size={13} />
+        Accept in Fourth
+        <ExternalLink size={13} />
       </button>
     </div>
   );
@@ -784,12 +788,13 @@ function ConfirmedCleanSummary({
       <CheckCircle2 size={16} color="var(--color-success)" />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-          Delivery confirmed · {transfer.totalUnits} unit{transfer.totalUnits === 1 ? '' : 's'} from {dayOfWeek(transfer.forDate)}&rsquo;s drop
+          Delivery accepted in Fourth · {transfer.totalUnits} unit{transfer.totalUnits === 1 ? '' : 's'} from {dayOfWeek(transfer.forDate)}&rsquo;s drop
         </div>
         <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 3 }}>
           All lines received as expected.
         </div>
       </div>
+      <FourthSyncBadge />
       <button
         type="button"
         onClick={onReopen}
@@ -840,8 +845,8 @@ function SubmittedSummary({
       <Check size={16} color={reject.hubAcknowledged ? 'var(--color-success)' : 'var(--color-info)'} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-          Delivery confirmed with rejects · {reject.totalRejectedUnits} unit
-          {reject.totalRejectedUnits === 1 ? '' : 's'} from {dayOfWeek(transfer.forDate)}&rsquo;s drop
+          Delivery accepted in Fourth · {reject.totalRejectedUnits} unit
+          {reject.totalRejectedUnits === 1 ? '' : 's'} rejected from {dayOfWeek(transfer.forDate)}&rsquo;s drop
         </div>
         <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 3 }}>
           {reject.lines.map(ln => rejectLineLabel(ln)).join(' · ')}
@@ -850,6 +855,7 @@ function SubmittedSummary({
             : ' · Hub will be notified, rolled into next drop'}
         </div>
       </div>
+      <FourthSyncBadge />
       <button
         type="button"
         onClick={onUndo}
@@ -882,4 +888,32 @@ function SubmittedSummary({
 function rejectLineLabel(ln: SpokeRejectLine): string {
   const recipe = getRecipe(ln.recipeId);
   return `${ln.rejectedUnits} ${recipe?.name ?? ln.skuId} (${SPOKE_REJECT_REASON_LABEL[ln.reason].toLowerCase()})`;
+}
+
+/** Small "Pulled from Fourth" pill — flags that this delivery-acceptance
+ *  record was accepted in Fourth and synced into Edify via the Fourth
+ *  integration, rather than entered here directly. */
+function FourthSyncBadge() {
+  return (
+    <span
+      title="Accepted in Fourth — pulled into Edify via the Fourth integration"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        padding: '3px 9px',
+        borderRadius: 100,
+        fontSize: 10.5,
+        fontWeight: 700,
+        fontFamily: 'var(--font-primary)',
+        background: '#fff',
+        color: 'var(--color-text-secondary)',
+        border: '1px solid var(--color-border-subtle)',
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
+      }}
+    >
+      Pulled from Fourth
+    </span>
+  );
 }

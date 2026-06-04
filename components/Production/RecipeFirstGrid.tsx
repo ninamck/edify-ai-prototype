@@ -36,7 +36,8 @@ import HybridOrderSubmitBar from './HybridOrderSubmitBar';
 import StepperLauncher from './StepperLauncher';
 import { daySummary } from './salesReport';
 import { unitPriceFor, formatCurrency } from '../Forecast/economics';
-import { Pencil, Check, RotateCcw, Activity } from 'lucide-react';
+import { Pencil, Check, RotateCcw, Activity, Lock } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 
 /**
  * Recipe-first daily plan grid.
@@ -67,6 +68,13 @@ export type RecipeFirstGridProps = {
    * downstream tweaks (live-sales lens, end-of-day lifecycle) hook here.
    */
   surface?: 'today' | 'plan';
+  /**
+   * When true the editable number inputs (per-run / VP steppers) render
+   * read-only — used when a plan has been confirmed / the live day is
+   * locked. The rest of the grid stays fully interactive (filters,
+   * scrolling, focus drill-in); only the numbers are pinned.
+   */
+  locked?: boolean;
 };
 
 const CATEGORY_ORDER: ProductionRecipe['category'][] = [
@@ -100,6 +108,21 @@ const P_INDEX_BY_MODE: Record<Exclude<ViewMode, 'all'>, number> = {
 };
 
 /**
+ * Spread a single total evenly across `count` run slots, pushing the
+ * remainder onto the last slot so the slots always sum back to `total`
+ * exactly. Used to seed a hub/hybrid's per-run plan from the combined
+ * spoke demand on the Plan surface.
+ */
+function splitEvenlyAcross(total: number, count: number): number[] {
+  if (count <= 0) return [];
+  const base = Math.floor(total / count);
+  const rem = total - base * count;
+  const arr = Array<number>(count).fill(base);
+  if (rem > 0) arr[arr.length - 1] = base + rem;
+  return arr;
+}
+
+/**
  * Synthetic "now" anchor for the demo. Drives the On-demand pin on
  * the expanded HotProdDrops strip so the active drop is always
  * visible at the leftmost position when the user is looking at
@@ -109,7 +132,7 @@ const P_INDEX_BY_MODE: Record<Exclude<ViewMode, 'all'>, number> = {
  */
 const DEMO_NOW_HHMM = '07:30';
 
-export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: RecipeFirstGridProps) {
+export default function RecipeFirstGrid({ siteId, date, surface = 'today', locked = false }: RecipeFirstGridProps) {
   const site = getSite(siteId) ?? PRET_SITES[0];
   const lines = usePlan(siteId, date);
   const planStore = usePlanStore();
@@ -119,12 +142,30 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   const isHub = site.type === 'HUB';
   const isStandalone = site.type === 'STANDALONE';
   const isHybrid = site.type === 'HYBRID';
+  // The "producing hybrid" — a site that runs its own retail floor AND bakes
+  // for its own downstream spokes. It sits at the TOP of its supply chain
+  // (it IS the hub for its spokes), so it never orders up to another hub.
+  const isProducingHybrid = site.type === 'HYBRID_HUB';
+  // Semantic capability flags so the grid stays readable as types multiply.
+  //   • hasRetailFloor — sells to walk-in customers on its own floor, so it
+  //     gets Hot Prod / VP / carry-over / Avail now (standalone, hybrid,
+  //     producing hybrid).
+  //   • receivesFromHub — pulls part of its range from an upstream hub, so
+  //     rows split into Make / Receive and a receive-order bar appears on
+  //     plan. HYBRID only: a producing hybrid is itself the hub, so it
+  //     makes its whole range and never submits an order upstream.
+  //   • suppliesSpokes — bakes for + dispatches to downstream spokes, so it
+  //     gets per-spoke columns, extras, overrides and a make-total footer
+  //     (hub, producing hybrid).
+  const hasRetailFloor = isStandalone || isHybrid || isProducingHybrid;
+  const receivesFromHub = isHybrid && !!site.hubId;
+  const suppliesSpokes = isHub || isProducingHybrid;
   // Hot Prod, VP and carry-over are only meaningful on sites with their
-  // own retail floor — so STANDALONE + HYBRID. HUB and SPOKE never see
-  // them on the live-floor / today surface.
-  const baseShowHotProd = isStandalone || isHybrid;
-  const baseShowVP = isStandalone || isHybrid;
-  const baseShowCarryOver = isStandalone || isHybrid;
+  // own retail floor — so STANDALONE + HYBRID + the producing hybrid. HUB
+  // and SPOKE never see them on the live-floor / today surface.
+  const baseShowHotProd = hasRetailFloor;
+  const baseShowVP = hasRetailFloor;
+  const baseShowCarryOver = hasRetailFloor;
 
   // Plan surface intentionally diverges from today:
   //   • carry-over is always visible — even on a hub, the manager wants
@@ -133,32 +174,45 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   //     focus drawer instead — keeps the planning grid uncluttered)
   //   • view-mode tabs and the spoke filter are hidden — planning shows
   //     all P-slots at once because the manager is editing them in place
-  //   • VP column drops off on plan — VP rows are planned per-slot in
-  //     the P-columns directly (same grid run-mode items use), so a
-  //     separate daily VP cell on plan would just duplicate the row
-  //     total. VP stays visible on today, where the floor can top up
-  //     variable production through the day in real units.
+  //   • VP column drops off on plan. VP is a live top-up the floor adds
+  //     on the day (a stepper on the Run-production surface, pre-filled
+  //     with Edify's adjusted forecast), not something planned ahead — so
+  //     the plan grid stays focused on the run baseline (P-slots) and the
+  //     VP stepper only appears on today.
   //   • Hot Prod stays visible on both surfaces — its per-drop strip
   //     is the only place hot-prod items get planned/adjusted, on plan
   //     and today alike.
   const showCarryOver = isPlanSurface ? true : baseShowCarryOver;
-  const showSpokeCols = isPlanSurface ? false : isHub;
+  // Sites that dispatch to spokes (HUB + producing HYBRID_HUB) show the
+  // per-spoke columns on BOTH surfaces: the Plan view is where the hub
+  // plans its spokes (and the same make as the day), and Today is where
+  // it runs that bake — so the columns stay visible throughout.
+  const showSpokeCols = suppliesSpokes;
+  // On the Plan surface a hub / producing hybrid plans its bake to fulfil
+  // its spokes, so the per-run steppers (P1..Pn) default to the spokes'
+  // combined order for each recipe — split across the runs — rather than
+  // an even split of the site's own forecast. A manager edit still wins
+  // (perRunOverrides). The row total + the "Total to make" footer read
+  // from the same source so the three always tie out.
+  const planFromSpokeDemand = isPlanSurface && suppliesSpokes;
   // Extras column rides next to the spoke columns — same gating (HUB
   // today only). The column never reads from `perSpokeBySku`, so a
   // bump here can't pollute any spoke's allocation.
   const showExtras = showSpokeCols;
   const showHotProd = baseShowHotProd;
+  // VP shows only on the Run-production (today) surface — it's a live
+  // top-up, not part of the plan. The cell only renders for run items
+  // flagged `variableProduction`; other rows show a dash.
   const showVP = !isPlanSurface && baseShowVP;
-  // VP cell is editable on today for self-producing sites (the floor
-  // adjusts variable production through the day). Plan hides the
-  // column entirely, so this flag only matters on today.
-  const editableVP = !isPlanSurface && (isStandalone || isHybrid);
+  // VP is always an editable stepper on Run production (the floor flexes
+  // variable production through the day). A locked day pins it read-only.
+  const editableVP = !isPlanSurface && hasRetailFloor && !locked;
   // "Avail now" column — only for self-producing sites (the only ones
   // with a retail floor) and only on the today/run surface (Plan is
   // forward-looking). Shows planned − sold so far (clamped at zero), so
   // a manager glancing at the grid sees how many units of each recipe
   // are still on the floor without doing the math themselves.
-  const showAvailNow = !isPlanSurface && (isStandalone || isHybrid);
+  const showAvailNow = !isPlanSurface && hasRetailFloor;
   // On-demand column retired — VP and Hot Prod cover that intent
   // directly on the plan surface now. Variable items: VP stepper.
   // Increment (hot prod) items: per-drop strip behind the Hot Prod
@@ -186,7 +240,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   // submit-to-hub bar at the top of the plan view. Mirrors what spokes
   // do on `/production/spokes`, but inlined here so the hybrid manager
   // never has to context-switch between "ordering" and "planning".
-  const showHybridOrder = isHybrid && isPlanSurface && !!site.hubId;
+  const showHybridOrder = receivesFromHub && isPlanSurface;
   const hybridHubId = site.hubId ?? null;
   const hybridSlotCount = Math.max(1, pColumnCount);
   const hybridOrder = useHybridOrder(siteId, date, hybridHubId, hybridSlotCount);
@@ -203,8 +257,8 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   // Per-spoke columns for HUB. Sorted by site fixture order so layouts
   // stay stable across renders.
   const spokes = useMemo(
-    () => (isHub ? linkedReceiversFor(siteId) : []),
-    [isHub, siteId],
+    () => (suppliesSpokes ? linkedReceiversFor(siteId) : []),
+    [suppliesSpokes, siteId],
   );
 
   // Hub-side per-spoke override store. The actual edit mode state +
@@ -212,7 +266,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   // declared (the rule: edit is only enabled when a specific spoke is
   // selected, not when viewing "All sites").
   const { getOverride, setOverride, clearOverride, overrideCount } = useHubOverrides();
-  const overrideTotal = isHub ? overrideCount(siteId, date) : 0;
+  const overrideTotal = suppliesSpokes ? overrideCount(siteId, date) : 0;
 
   // Hub-side "Extras" — off-list units the manager adds on top of every
   // spoke's allocation. Stored separately from `perSpokeBySku` so a bump
@@ -241,9 +295,9 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   // Cutoff state is read live (via Date.now) so the flip is purely time-
   // driven — no fixture edits required.
   const effectiveSubmissions = useMemo<SpokeSubmission[]>(() => {
-    if (!isHub) return [];
+    if (!suppliesSpokes) return [];
     return effectiveSubmissionsForHub(siteId, date);
-  }, [isHub, siteId, date]);
+  }, [suppliesSpokes, siteId, date]);
 
   // Per-(spoke, sku) quantity lookup. Builds the matrix cells.
   //
@@ -255,7 +309,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   // to bake against even when the spoke missed the cutoff.
   const perSpokeBySku = useMemo(() => {
     const map = new Map<string, number>();
-    if (!isHub) return map;
+    if (!suppliesSpokes) return map;
     for (const sub of effectiveSubmissions) {
       if (sub.status === 'draft') continue;
       for (const ln of sub.lines) {
@@ -265,7 +319,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
       }
     }
     return map;
-  }, [isHub, effectiveSubmissions, siteId, date, getOverride]);
+  }, [suppliesSpokes, effectiveSubmissions, siteId, date, getOverride]);
 
   // Set of spokes that have actually placed an order for `date`. Used to
   // gate header countdowns and per-cell "—" placeholders. Anything not
@@ -274,34 +328,34 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   // committed numbers, not the "—" placeholder.
   const submittedSpokeIds = useMemo(() => {
     const set = new Set<SiteId>();
-    if (!isHub) return set;
+    if (!suppliesSpokes) return set;
     for (const sub of effectiveSubmissions) {
       if (sub.status !== 'draft') set.add(sub.fromSiteId);
     }
     return set;
-  }, [isHub, effectiveSubmissions]);
+  }, [suppliesSpokes, effectiveSubmissions]);
 
   // Hub-side per-spoke unlock context — needed to render the inline
   // Lock / Unlock affordance on each spoke column header. Computed
   // once per render so the SpokeUnlockControl component just plugs in.
   const { transferFor } = useDispatchTransfers();
   const spokeSubmissions = useMemo(() => {
-    if (!isHub) return new Map<SiteId, SpokeSubmission>();
+    if (!suppliesSpokes) return new Map<SiteId, SpokeSubmission>();
     const map = new Map<SiteId, SpokeSubmission>();
     for (const sub of effectiveSubmissions) {
       map.set(sub.fromSiteId, sub);
     }
     return map;
-  }, [isHub, effectiveSubmissions]);
+  }, [suppliesSpokes, effectiveSubmissions]);
 
   // For HYBRID: which SKUs the site bakes itself (everything else is
   // received from the hub). Drives the Make / Receive tag per row.
   const hybridMakeSkus = useMemo(() => {
-    if (!isHybrid) return null;
+    if (!receivesFromHub) return null;
     const set = new Set<SkuId>();
     for (const item of productionItemsAt(siteId)) set.add(item.skuId);
     return set;
-  }, [isHybrid, siteId]);
+  }, [receivesFromHub, siteId]);
 
   // Build the row dataset. For HYBRID we also have to surface "receive"
   // rows for SKUs the hub bakes that this site doesn't bake itself —
@@ -322,6 +376,9 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
      * can include receive recipes in the right bucket too.
      */
     itemMode: ProductionMode | null;
+    /** Whether the underlying run item carries a variable-production
+     *  stream — drives the VP production-type filter. */
+    itemVariableProduction: boolean;
   };
 
   const rows: Row[] = useMemo(() => {
@@ -342,13 +399,14 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
         recipe: line.recipe,
         skuId: line.recipe.skuId,
         itemId: line.item.id,
-        hybridSource: isHybrid ? 'make' : null,
+        hybridSource: receivesFromHub ? 'make' : null,
         itemMode: line.item.mode,
+        itemVariableProduction: line.item.variableProduction === true,
       });
     }
 
     // HYBRID receive rows — anything the hub bakes that this site doesn't.
-    if (isHybrid && site.hubId) {
+    if (receivesFromHub && site.hubId) {
       const hubItems = productionItemsAt(site.hubId);
       for (const hi of hubItems) {
         if (seenSku.has(hi.skuId)) continue;
@@ -362,12 +420,13 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
           itemId: null,
           hybridSource: 'receive',
           itemMode: hi.mode,
+          itemVariableProduction: hi.variableProduction === true,
         });
       }
     }
 
     return out;
-  }, [lines, isHub, isHybrid, site.hubId]);
+  }, [lines, isHub, receivesFromHub, site.hubId]);
 
   const [focusedItemId, setFocusedItemId] = useState<ProductionItemId | null>(null);
   const [expandedHotProdId, setExpandedHotProdId] = useState<ProductionItemId | null>(null);
@@ -381,14 +440,14 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   // The site dropdown filters which spoke columns appear (HUB only).
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [spokeFilter, setSpokeFilter] = useState<SiteId | 'all'>('all');
-  // Production-type filter (today surface, self-producing sites only):
-  // 'all' | 'run' | 'variable' | 'increment'. Lets the floor zero in on
-  // VP rows or Hot Prod rows during a live shift.
+  // Production-type filter (self-producing sites, Plan AND Today):
+  // 'all' | 'run' | 'variable' | 'increment'. Lets the manager zero in on
+  // VP rows or Hot Prod rows while planning or during a live shift.
   const [modeFilter, setModeFilter] = useState<'all' | 'run' | 'variable' | 'increment'>('all');
 
   // Group by category for the section headers. Production-type filter
-  // (today, self-producing only) narrows rows to a single mode so the
-  // floor can focus on e.g. just VP rows during a busy push.
+  // (self-producing, both surfaces) narrows rows to a single mode so the
+  // manager can focus on e.g. just VP rows while planning or mid-push.
   const grouped = useMemo(() => {
     const filteredRows =
       modeFilter === 'all'
@@ -401,6 +460,10 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
             // matches — e.g. a HYBRID filtering to VP should still see
             // the VP sandwiches it gets from `hub-central`.
             if (!r.itemMode) return false;
+            // The 'variable' tab is the VP filter: VP is now a flag on run
+            // recipes (a top-up stream), not a separate mode — so match the
+            // flag rather than the item's base mode.
+            if (modeFilter === 'variable') return r.itemVariableProduction;
             return r.itemMode === modeFilter;
           });
     const map = new Map<ProductionRecipe['category'], Row[]>();
@@ -449,22 +512,20 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   }, [editLocked, editMode]);
 
   /** Whether to render every P-slot column inline rather than collapse
-   *  them into a single "Production" total.
+   *  them into a single "Production" total / one focused slot.
    *
-   *  • Plan surface — always: the manager is editing each slot in place.
-   *  • STANDALONE / HYBRID Today — always: a single-shop manager wants
-   *    the whole day's shape on screen in one glance.
-   *  • HUB Today — whenever the slot filter is on "All". Both "All
-   *    sites" and a specific-site selection get the full P1..Pn split
-   *    so the manager always sees how the day is shaped under the
-   *    "All" tab. Edit mode is implied (it requires a specific site +
-   *    All slots and is already covered by this rule).
+   *  • Sites that dispatch to spokes (HUB + producing HYBRID_HUB) —
+   *    follow the slot filter on BOTH Run and Plan: "All" shows the full
+   *    P1..Pn split (across all sites or a focused one), and a specific
+   *    Pn collapses to just that run so the manager can read one run's
+   *    production at a time.
+   *  • Pure self-producing floors (STANDALONE / HYBRID) — always expand:
+   *    Plan edits each slot in place, and a single-shop manager wants the
+   *    whole day's shape in one glance on Today.
    */
-  const expandAllPSlots =
-    isPlanSurface ||
-    isStandalone ||
-    isHybrid ||
-    (isHub && viewMode === 'all');
+  const expandAllPSlots = suppliesSpokes
+    ? viewMode === 'all'
+    : isPlanSurface || hasRetailFloor;
 
   /** Which `perRunPlan[i]` indices to render as columns.
    *
@@ -508,13 +569,13 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
    *  pill so the manager can read top-down "today's runs are out the
    *  door for this spoke" without scanning right to the spoke column. */
   const selectedSpokeStatus = useMemo(() => {
-    if (!isHub || spokeFilter === 'all') return null;
+    if (!suppliesSpokes || spokeFilter === 'all') return null;
     const submission = spokeSubmissions.get(spokeFilter);
     const cutoffISO = submission?.cutoffDateTime ?? submissionCutoffFor(siteId, date);
     const cutoffPassed = new Date(cutoffISO).getTime() < demoNow().getTime();
     const hasTransfer = !!transferFor(siteId, spokeFilter, date);
     return { submission, cutoffISO, cutoffPassed, hasTransfer };
-  }, [isHub, spokeFilter, spokeSubmissions, siteId, date, transferFor]);
+  }, [suppliesSpokes, spokeFilter, spokeSubmissions, siteId, date, transferFor]);
 
   /** Whether to surface the "Sent" pill above each P-slot header.
    *  Only fires when a single spoke is selected AND the hub has
@@ -523,12 +584,20 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   const showSentBadgeAboveP =
     !!selectedSpokeStatus && selectedSpokeStatus.hasTransfer;
 
-  /** Filter row (tabs + dropdown) is hidden on the plan surface. */
-  const showFilterControls = !isPlanSurface;
+  /** Filter row (slot tabs + site dropdown + production-type tabs).
+   *  Shown on Today for every baking persona; on Plan for sites that
+   *  dispatch to spokes (HUB + producing HYBRID_HUB) so the hub plan
+   *  carries the same All / P1..Pn + site filters as its Run view; and
+   *  on Plan for self-producing floors (STANDALONE / HYBRID) so they get
+   *  the production-type toggle while planning, matching their Run view. */
+  const showFilterControls = !isPlanSurface || suppliesSpokes || hasRetailFloor;
 
-  // Production-type tabs only meaningful on today + self-producing (the
-  // only personas with VP / Hot Prod variety). Auto-hides for HUB.
-  const showModeFilter = !isPlanSurface && (isStandalone || isHybrid);
+  // Production-type tabs (All / Run / VP / Hot Prod) are meaningful for any
+  // self-producing persona — the only personas with VP / Hot Prod variety —
+  // on BOTH Plan and Today, so the manager can narrow the table to one
+  // production type while planning as well as during the live shift.
+  // Auto-hides for pure HUB (no retail floor / mode variety).
+  const showModeFilter = hasRetailFloor;
 
   // Sold-so-far lookup — keyed by skuId so we can join against grid
   // rows. Drives the "Avail now" cell (planned − sold). Builds once
@@ -561,7 +630,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   // already lets them override per-spoke amounts gets the per-run dials
   // alongside, so they can adjust the hub's bake split without
   // bouncing back to the Plan page.
-  const editableRuns = isPlanSurface || (isHub && editMode);
+  const editableRuns = !locked && (isPlanSurface || (suppliesSpokes && editMode));
 
   // Total column count for empty-state colSpan.
   const colCount =
@@ -582,7 +651,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
   // built for HUB sites; the per-row total / per-spoke split has no
   // analogue on standalone or hybrid surfaces.
   const hubTotals = useMemo(() => {
-    if (!isHub) return null;
+    if (!suppliesSpokes) return null;
     let carryOver = 0;
     let production = 0;
     let grand = 0;
@@ -617,16 +686,45 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
         carryOverSales += coUnits * price;
         const line = r.line;
         if (line) {
-          grand += line.planned;
-          grandSales += line.planned * price;
-          if (line.item.mode === 'run') {
-            production += line.runPlanned;
-            productionSales += line.runPlanned * price;
-            const pr = line.perRunPlan ?? [];
+          if (planFromSpokeDemand && line.item.mode === 'run' && !line.item.variableProduction) {
+            // Plan surface: the hub's run plan IS the spokes' combined
+            // order, split across the runs (manager edit wins). Drive the
+            // per-run + grand totals from that so the footer matches the
+            // per-run steppers and the row totals exactly.
+            const demand = visibleSpokes.reduce(
+              (s, sp) => s + (perSpokeBySku.get(`${sp.id}|${r.skuId}`) ?? 0),
+              0,
+            );
+            const override = planStore.perRunOverrides[`${date}|${line.item.id}`];
+            const perRunArr =
+              override && override.length
+                ? override
+                : splitEvenlyAcross(demand, pColumnCount);
+            const runTotal = perRunArr.reduce((a, b) => a + (b ?? 0), 0);
+            grand += runTotal;
+            grandSales += runTotal * price;
+            production += runTotal;
+            productionSales += runTotal * price;
             for (let i = 0; i < pColumnCount; i++) {
-              const u = pr[i] ?? 0;
+              const u = perRunArr[i] ?? 0;
               pSlots[i] += u;
               pSlotsSales[i] += u * price;
+            }
+          } else {
+            // VP is a live top-up, not part of the plan — so on the Plan
+            // surface the bake total comes from the run baseline only.
+            const ownBake = isPlanSurface ? line.runPlanned : line.planned;
+            grand += ownBake;
+            grandSales += ownBake * price;
+            if (line.item.mode === 'run') {
+              production += line.runPlanned;
+              productionSales += line.runPlanned * price;
+              const pr = line.perRunPlan ?? [];
+              for (let i = 0; i < pColumnCount; i++) {
+                const u = pr[i] ?? 0;
+                pSlots[i] += u;
+                pSlotsSales[i] += u * price;
+              }
             }
           }
           // Team food lifts the bake target only. No `*price` term —
@@ -670,7 +768,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
       spokeSales,
       extrasSales,
     };
-  }, [isHub, grouped, pColumnCount, siteId, visibleSpokes, perSpokeBySku, showExtras, getExtras, date]);
+  }, [suppliesSpokes, planFromSpokeDemand, planStore.perRunOverrides, grouped, pColumnCount, siteId, visibleSpokes, perSpokeBySku, showExtras, getExtras, date]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -691,21 +789,23 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
 
       <div style={{ padding: '16px 30px 32px' }}>
         {/* Toolbar:
-              • HUB Today: All / P1..Pn slot tabs + spoke filter + Edit
-                + Stepper launcher.
+              • HUB / hybrid (Today AND Plan): All / P1..Pn slot tabs +
+                spoke filter. Today additionally carries the Edit toggle +
+                Stepper launcher (run-only affordances).
               • Self-producing Today: production-type tabs (All / Run /
                 VP / Hot Prod) — slot tabs hidden because every P-slot
                 column is already on screen — plus the Stepper launcher.
-              • Plan surface: nothing — Plan is "edit everything at
-                once" and the Stepper only makes sense as a Run-
-                production affordance.
+              • Self-producing Plan: production-type tabs (All / Run /
+                VP / Hot Prod) so the manager can narrow the plan to one
+                production type. Slot tabs stay hidden (every P-slot is
+                edited in place) and the Stepper only makes sense on Run.
         */}
         {(() => {
           const hasFilters =
             showFilterControls &&
             (viewModeTabs.length > 1 ||
               (showSpokeCols && spokes.length > 1) ||
-              isHub ||
+              suppliesSpokes ||
               showModeFilter);
           const showStepperHere = !isPlanSurface;
           if (!hasFilters && !showStepperHere) return null;
@@ -719,19 +819,28 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
                 marginBottom: 10,
               }}
             >
-              {/* Slot tabs only on HUB Today; self-producing always
-                  shows every P-slot inline. */}
-              {showFilterControls && !expandAllPSlots && viewModeTabs.length > 1 && (
-                <ViewModeTabs
-                  tabs={viewModeTabs}
-                  value={viewMode}
-                  onChange={setViewMode}
-                />
-              )}
+              {/* Production-type tabs stay on the LEFT. Everything after
+                  the spacer (slot tabs, spoke filter, stepper) is pushed
+                  to the right-hand side on every surface. */}
               {showFilterControls && showModeFilter && (
                 <ProductionTypeTabs
                   value={modeFilter}
                   onChange={setModeFilter}
+                />
+              )}
+              <div style={{ flex: 1 }} />
+              {/* Slot tabs: sites that dispatch to spokes (HUB +
+                  producing HYBRID_HUB) get them on Run so the manager can
+                  break production down by All vs a single run (P1..Pn)
+                  across all sites. Pure self-producing floors keep every
+                  P-slot inline, so the tabs would be redundant there. */}
+              {showFilterControls &&
+                viewModeTabs.length > 1 &&
+                (suppliesSpokes || !expandAllPSlots) && (
+                <ViewModeTabs
+                  tabs={viewModeTabs}
+                  value={viewMode}
+                  onChange={setViewMode}
                 />
               )}
               {showFilterControls && showSpokeCols && spokes.length > 1 && (
@@ -741,7 +850,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
                   onChange={setSpokeFilter}
                 />
               )}
-              {showFilterControls && isHub && showSpokeCols && (
+              {showFilterControls && !isPlanSurface && suppliesSpokes && showSpokeCols && (
                 <EditHubPlanButton
                   editMode={editMode}
                   overrideCount={overrideTotal}
@@ -751,10 +860,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
                 />
               )}
               {showStepperHere && (
-                <>
-                  <div style={{ flex: 1 }} />
-                  <StepperLauncher siteId={siteId} date={date} variant="ghost" />
-                </>
+                <StepperLauncher siteId={siteId} date={date} variant="ghost" />
               )}
             </div>
           );
@@ -767,7 +873,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
             total at a glance. The number is independent of any active
             P-slot or spoke filter so the manager has a stable reference
             even while drilling into runs / individual spokes. */}
-        {isHub && hubTotals && grouped.length > 0 && (
+        {suppliesSpokes && hubTotals && grouped.length > 0 && (
           <HubMakeTotalChip
             totalUnits={hubTotals.grand}
             extrasUnits={hubTotals.extras}
@@ -970,7 +1076,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
                     perSpokeBySku={perSpokeBySku}
                     submittedSpokeIds={submittedSpokeIds}
                     showRowTotal={showRowTotal}
-                    isHybrid={isHybrid}
+                    isHybrid={receivesFromHub}
                     siteId={siteId}
                     date={date}
                     planStore={planStore}
@@ -1000,7 +1106,7 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
                 ))}
               </tbody>
 
-              {isHub && hubTotals && grouped.length > 0 && (
+              {suppliesSpokes && hubTotals && grouped.length > 0 && (
                 <tfoot>
                   <tr>
                     <td style={footStyle({ left: true, sticky: true })}>
@@ -1175,11 +1281,19 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today' }: Rec
           }}
         >
           {isPlanSurface ? (
-            <>
-              Each cell is editable — use the steppers to adjust planned
-              units. The faded <em>fc</em> number underneath is Edify's
-              forecast for that slot, shown for reference.
-            </>
+            locked ? (
+              <>
+                Plan locked — the numbers are read-only. Unlock from the bar
+                above to adjust. The faded <em>fc</em> number underneath is
+                Edify&apos;s forecast for that slot, shown for reference.
+              </>
+            ) : (
+              <>
+                Each cell is editable — use the steppers to adjust planned
+                units. The faded <em>fc</em> number underneath is Edify&apos;s
+                forecast for that slot, shown for reference.
+              </>
+            )
           ) : expandAllPSlots ? (
             <>
               Every P-slot shown inline.
@@ -1657,13 +1771,38 @@ function RecipeRow({
   const line = row.line;
   // Per-run cells (P1..Pn) — only run-mode lines populate these.
   const perRun: number[] = line?.perRunPlan ?? [];
-  // VP — for run-mode items, vp is the variableAdditions on top of run.
-  // For variable-mode items, vp is the whole planned qty.
-  const vpQty = line
-    ? line.item.mode === 'variable'
-      ? line.planned
-      : line.variablePlanned
-    : 0;
+
+  // Plan surface (hub / producing hybrid): the per-run steppers plan the
+  // bake that fulfils the spokes, so they default to the spokes' combined
+  // order for this recipe split across the runs — unless the manager has
+  // hand-set them (a stored perRunOverride wins). Run-mode rows only.
+  const isRunModeLine = !!line && line.item.mode === 'run';
+  // VP recipes are the site's own-floor build items, not what it bakes for
+  // spokes — so they keep their own forecast split rather than defaulting
+  // to the spokes' combined order.
+  const planFromSpokeDemand =
+    isPlanSurface && showSpokeCols && isRunModeLine && !(line && line.item.variableProduction === true);
+  const hasManualPerRun =
+    !!line && !!planStore.perRunOverrides[`${date}|${line.item.id}`];
+  const spokeDemandTotal = useMemo(() => {
+    if (!planFromSpokeDemand) return 0;
+    let t = 0;
+    for (const sp of spokes) t += perSpokeBySku.get(`${sp.id}|${row.skuId}`) ?? 0;
+    return t;
+  }, [planFromSpokeDemand, spokes, perSpokeBySku, row.skuId]);
+  const spokeDemandPerRun = useMemo(
+    () => splitEvenlyAcross(spokeDemandTotal, pColumnCount),
+    [spokeDemandTotal, pColumnCount],
+  );
+  // What the run row sums to for the spokes: the manager's hand-set
+  // per-run plan if present, otherwise the combined spoke demand.
+  const planRunTotalForSpokes = hasManualPerRun
+    ? perRun.reduce((a, b) => a + (b ?? 0), 0)
+    : spokeDemandTotal;
+  // VP — the variable-production top-up on a flagged run recipe. Only
+  // run items with `variableProduction` carry it; everything else is 0.
+  const isVPLine = !!line && line.item.mode === 'run' && line.item.variableProduction === true;
+  const vpQty = isVPLine ? line!.variablePlanned : 0;
   // Hot Prod — increment-mode items only.
   const isHotProd = line?.item.mode === 'increment';
   const hotProdQty = isHotProd ? line.planned : 0;
@@ -1679,7 +1818,6 @@ function RecipeRow({
   const slotForecasts = isPlanSurface
     ? buildPerSlotForecast(line, pColumnCount)
     : [];
-  const dayForecast = line?.forecast?.projectedUnits ?? 0;
 
   // Default per-slot split for a variable row before the manager has
   // edited any P-cell. Even split of `line.planned` across the grid's
@@ -1711,10 +1849,19 @@ function RecipeRow({
   // Total = customer-facing plan + any hub-side extras + team food.
   // For run items `line.planned` already includes the variable
   // additions; for variable / increment items it's the whole qty.
-  // Receive rows (HYBRID receiving from hub) skip the column.
+  // On the hub/hybrid Plan surface the run total instead reflects the
+  // spokes' combined order (see `planRunTotalForSpokes`) so it ties out
+  // with the per-run steppers below. Receive rows skip the column.
+  // On the Plan surface VP isn't shown and isn't planned ahead, so the row
+  // total comes from the run baseline only (which the P-slots sum to). On
+  // Today the VP top-up is part of the day's production, so `planned`
+  // (= run baseline + VP) is the right total.
+  const ownTotal = line ? (isPlanSurface ? line.runPlanned : line.planned) : 0;
   const totalDisplay: string | number = isReceive
     ? '—'
-    : (line ? line.planned : 0) + extrasUnits + teamFoodUnits;
+    : planFromSpokeDemand
+      ? planRunTotalForSpokes + extrasUnits + teamFoodUnits
+      : ownTotal + extrasUnits + teamFoodUnits;
 
   return (
     <>
@@ -1748,8 +1895,8 @@ function RecipeRow({
                     size="xs"
                   />
                 )}
-                {line?.item.mode === 'variable' && (
-                  <StatusPill tone="warning" label="VP" size="xs" />
+                {isVPLine && (
+                  <StatusPill tone="info" label="VP" size="xs" />
                 )}
                 {isHotProd && <StatusPill tone="warning" label="Hot" size="xs" />}
                 {!line && !isReceive && (
@@ -1869,11 +2016,18 @@ function RecipeRow({
             if (isRunRow || isVariableRow) {
               const stored = perRun;
               const hasStored = stored.length > 0;
-              const displaySlots = hasStored
-                ? stored
-                : isVariableRow && pColumnCount > 0 && line
-                  ? variableDefaultPerSlot
-                  : [];
+              // Run rows on the hub/hybrid Plan default to the spokes'
+              // combined order split across the runs; a manager edit
+              // (stored override) wins. Variable rows keep their even
+              // split of `planned`.
+              const displaySlots =
+                planFromSpokeDemand && isRunRow && !hasManualPerRun
+                  ? spokeDemandPerRun
+                  : hasStored
+                    ? stored
+                    : isVariableRow && pColumnCount > 0 && line
+                      ? variableDefaultPerSlot
+                      : [];
               return (
                 <td key={`p${i + 1}`} style={bodyStyle({ focused })}>
                   <PlanStepperCell
@@ -1882,7 +2036,10 @@ function RecipeRow({
                     step={step}
                     onChange={next => {
                       if (!line) return;
-                      const seed = hasStored ? stored : displaySlots;
+                      // Seed from exactly what's on screen so the first
+                      // edit promotes the spoke-demand split (or the
+                      // existing override) into a persisted array.
+                      const seed = displaySlots;
                       const padded = Array.from(
                         { length: pColumnCount },
                         (_, j) => seed[j] ?? 0,
@@ -1911,43 +2068,39 @@ function RecipeRow({
           );
         })}
 
-        {/* VP — today-only column for self-producing sites. The floor
-            adjusts variable production through the day, so this cell
-            is an inline stepper (variable rows step the whole-day
-            planned qty; run rows step the variable add-on on top of
-            the run baseline). Plan hides the column upstream because
-            variable rows already have per-slot steppers in P1..Pn. */}
+        {/* VP — the variable-production stream on flagged run recipes.
+            A scheduled run lays down the baseline (P-slots); VP is the
+            top-up the floor flexes through the day against Edify's
+            adjusted forecast. On Today it's an editable stepper that
+            starts locked-in to the adjusted forecast, with two figures
+            shown distinctly below: the adjusted VP target (info pill) and
+            Edify's more basic original day forecast (muted "fc N"). On a
+            locked day it's the read-only locked-in number with the same
+            two figures. Non-VP rows (breads, prep, cold-chain) show a dash. */}
         {showVP && (
           <td style={bodyStyle({ focused })}>
-            {isReceive ? (
+            {isReceive || !isVPLine || !line ? (
               <span style={{ color: 'var(--color-text-muted)' }}>—</span>
-            ) : editableVP && line && line.item.mode === 'variable' ? (
-              <PlanStepperCell
-                value={line.planned}
-                // Forecast under the VP stepper — placeholder for now;
-                // proper "VP forecast" logic (forecast minus what's
-                // already covered by run plan / carry-over) lands in a
-                // later slice. Using the day projection keeps the
-                // signal honest at a glance.
-                forecast={dayForecast > 0 ? dayForecast : undefined}
-                step={step}
-                onChange={next => planStore.setPlanned(line.item.id, next, date)}
-              />
-            ) : editableVP && line && line.item.mode === 'run' ? (
+            ) : editableVP ? (
               <PlanStepperCell
                 value={line.variablePlanned}
-                // Same placeholder treatment as the variable-mode cell —
-                // wire the day forecast through so the floor sees a
-                // reference number under the VP top-up. Real logic
-                // (forecast − run plan − carry-over) to follow.
-                forecast={dayForecast > 0 ? dayForecast : undefined}
+                // The adjusted forecast: Edify's VP target for the day.
+                // Shown distinctly below the stepper (see forecastVariant).
+                forecast={line.variableForecast > 0 ? line.variableForecast : undefined}
+                forecastVariant="vp"
+                // The more basic, original forecast: Edify's raw day
+                // projection for the recipe — shown muted beneath the
+                // adjusted VP target for context.
+                baseForecast={line.forecast?.projectedUnits}
                 step={step}
                 onChange={next => planStore.setVariablePlan(line.item.id, next, date)}
               />
-            ) : vpQty > 0 ? (
-              <span style={numStyle()}>{vpQty}</span>
             ) : (
-              <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+              <VPLockedCell
+                value={line.variablePlanned}
+                forecast={line.variableForecast}
+                baseForecast={line.forecast?.projectedUnits}
+              />
             )}
           </td>
         )}
@@ -2177,7 +2330,7 @@ function RecipeRow({
                 }}
                 title={[
                   `${totalDisplay} total`,
-                  `${line ? line.planned : 0} for spokes`,
+                  `${planFromSpokeDemand ? planRunTotalForSpokes : line ? line.planned : 0} for spokes`,
                   extrasUnits > 0
                     ? `${extrasUnits} extra${extrasUnits === 1 ? '' : 's'}`
                     : null,
@@ -2827,11 +2980,20 @@ function formatCutoffClock(iso: string): string {
 function PlanStepperCell({
   value,
   forecast,
+  forecastVariant = 'fc',
+  baseForecast,
   step,
   onChange,
 }: {
   value: number;
   forecast: number | undefined;
+  /** 'fc' = muted day-forecast reference; 'vp' = the distinct VP
+   *  adjusted-forecast pill shown under the variable-production stepper. */
+  forecastVariant?: 'fc' | 'vp';
+  /** Optional second, more basic forecast number rendered beneath the
+   *  primary one in the muted "fc N" style — used under the VP stepper to
+   *  show Edify's original day forecast alongside the adjusted VP target. */
+  baseForecast?: number;
   step: number;
   onChange: (next: number) => void;
 }) {
@@ -2883,9 +3045,136 @@ function PlanStepperCell({
           }}
         />
       </QtyStepper>
-      {forecast != null && forecast > 0 ? (
+      {(forecast != null && forecast > 0) ||
+      (baseForecast != null && baseForecast > 0) ? (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row-reverse',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 4,
+          }}
+        >
+          {forecast != null && forecast > 0 &&
+            (forecastVariant === 'vp' ? (
+              <span
+                title="Edify adjusted forecast for variable production"
+                style={{
+                  fontSize: 9.5,
+                  fontWeight: 700,
+                  fontVariantNumeric: 'tabular-nums',
+                  color: 'var(--color-info)',
+                  background: 'var(--color-info-light)',
+                  border: '1px solid var(--color-info)',
+                  borderRadius: 999,
+                  padding: '1px 7px',
+                  letterSpacing: '0.02em',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                }}
+              >
+                <EdifyMark size={9} color="var(--color-info)" /> {forecast}
+              </span>
+            ) : (
+              <span
+                title="Edify forecast"
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  fontVariantNumeric: 'tabular-nums',
+                  color: 'var(--color-text-muted)',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                fc {forecast}
+              </span>
+            ))}
+          {baseForecast != null && baseForecast > 0 && (
+            <span
+              title="Edify forecast — original day projection"
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                fontVariantNumeric: 'tabular-nums',
+                color: 'var(--color-text-muted)',
+                letterSpacing: '0.02em',
+              }}
+            >
+              fc {baseForecast}
+            </span>
+          )}
+        </div>
+      ) : (
+        <span style={{ fontSize: 10, color: 'transparent' }}>·</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Read-only VP cell for the Plan surface (and locked today). Shows the
+ * locked-in variable-production number with the adjusted-forecast pill
+ * beneath it — visually distinct from the editable Today stepper so the
+ * manager reads it as "set by the forecast; you flex it on the day".
+ */
+function VPLockedCell({
+  value,
+  forecast,
+  baseForecast,
+}: {
+  value: number;
+  forecast: number;
+  baseForecast?: number;
+}) {
+  if (forecast <= 0 && value <= 0) {
+    return <span style={{ color: 'var(--color-text-muted)' }}>—</span>;
+  }
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 3,
+      }}
+    >
+      <span
+        title="Variable production — locked to Edify's adjusted forecast"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 3,
+          fontSize: 13,
+          fontWeight: 700,
+          color: 'var(--color-text-primary)',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        <Lock size={10} color="var(--color-text-muted)" /> {value}
+      </span>
+      <span
+        title="Edify adjusted forecast for variable production"
+        style={{
+          fontSize: 9.5,
+          fontWeight: 700,
+          fontVariantNumeric: 'tabular-nums',
+          color: 'var(--color-info)',
+          background: 'var(--color-info-light)',
+          border: '1px solid var(--color-info)',
+          borderRadius: 999,
+          padding: '1px 7px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 3,
+        }}
+      >
+        <EdifyMark size={9} color="var(--color-info)" /> {forecast}
+      </span>
+      {baseForecast != null && baseForecast > 0 && (
         <span
-          title="Edify forecast"
+          title="Edify forecast — original day projection"
           style={{
             fontSize: 10,
             fontWeight: 600,
@@ -2894,10 +3183,8 @@ function PlanStepperCell({
             letterSpacing: '0.02em',
           }}
         >
-          fc {forecast}
+          fc {baseForecast}
         </span>
-      ) : (
-        <span style={{ fontSize: 10, color: 'transparent' }}>·</span>
       )}
     </div>
   );

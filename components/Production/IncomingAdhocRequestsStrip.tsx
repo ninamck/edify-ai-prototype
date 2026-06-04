@@ -24,6 +24,10 @@ import {
 } from './fixtures';
 import { useAdhocRequests } from './adhocStore';
 import { useRole } from './RoleContext';
+import BenchRunRoutingPicker, {
+  describeRouting,
+  type BenchRunRouting,
+} from './BenchRunRoutingPicker';
 
 /**
  * IncomingAdhocRequestsStrip — compact trigger that opens a review modal.
@@ -63,15 +67,16 @@ export default function IncomingAdhocRequestsStrip({ hubId }: { hubId: SiteId })
 
   // Banner shell mirrors UrgentRemakeBanner so the two hub-side
   // notification strips read as siblings: same outer gutter
-  // (`12px 16px 0`), same 2px-bordered card pulled to the page edges,
-  // same full-width header button. Tone steps down from red →
+  // (`12px 30px 0` — matches the recipe grid's 30px horizontal padding
+  // so the card edges line up with the table below), same 2px-bordered
+  // card, same full-width header button. Tone steps down from red →
   // amber-tinted (warning) since ad-hoc requests are time-sensitive
   // but not safety-critical like a cold-chain remake.
   return (
     <>
       <div
         style={{
-          margin: '12px 16px 0',
+          margin: '12px 30px 0',
           background: '#ffffff',
           border: `2px solid ${needsAction ? 'var(--color-warning)' : 'var(--color-border)'}`,
           borderRadius: 'var(--radius-card)',
@@ -329,8 +334,21 @@ function RequestRow({
   });
   const [notes, setNotes] = useState('');
 
+  // Where the approved units are produced. Default = Edify auto-routes to the
+  // most logical bench; the manager can flip the switch in the routing picker
+  // to override the bench + run before sending the decision.
+  const [routing, setRouting] = useState<BenchRunRouting | null>(null);
+
   const spoke = getSite(request.spokeId);
   const totalApproved = Object.values(decisions).reduce((a, d) => a + d.approvedUnits, 0);
+
+  /** Prefix the response notes with an explicit bench/run override (if on). */
+  function withBenchNote(base?: string): string | undefined {
+    const routeLabel = describeRouting(routing);
+    const benchNote = routeLabel ? `Routed to ${routeLabel}.` : '';
+    const combined = [benchNote, base?.trim()].filter(Boolean).join(' ');
+    return combined || undefined;
+  }
 
   function setQty(lineId: string, n: number) {
     setDecisions(prev => ({
@@ -359,7 +377,7 @@ function RequestRow({
       next[ln.id] = { approvedUnits: ln.requestedUnits };
     }
     setDecisions(next);
-    onRespond(next, notes.trim() || undefined);
+    onRespond(next, withBenchNote(notes));
   }
   function rejectAll() {
     const next: Record<string, DraftLineDecision> = {};
@@ -370,7 +388,9 @@ function RequestRow({
     onRespond(next, notes.trim() || 'Hub couldn\'t fulfil this request.');
   }
   function send() {
-    onRespond(decisions, notes.trim() || undefined);
+    // Only attach the bench routing note when at least one line is approved.
+    const anyApproved = Object.values(decisions).some(d => d.approvedUnits > 0);
+    onRespond(decisions, anyApproved ? withBenchNote(notes) : notes.trim() || undefined);
   }
 
   return (
@@ -467,6 +487,11 @@ function RequestRow({
           {/* Notes + actions */}
           {isPending ? (
             <>
+              <BenchRunRoutingPicker
+                siteId={request.hubId}
+                skuIds={request.lines.map(l => l.skuId)}
+                onChange={setRouting}
+              />
               <textarea
                 value={notes}
                 onChange={e => setNotes(e.target.value)}

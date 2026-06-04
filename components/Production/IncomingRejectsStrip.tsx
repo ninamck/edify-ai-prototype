@@ -1,14 +1,11 @@
 'use client';
 
 import { useMemo } from 'react';
-import Link from 'next/link';
 import {
   AlertTriangle,
   Check,
-  Trash2,
   Package,
   Clock,
-  ExternalLink,
 } from 'lucide-react';
 import {
   dayOfWeek,
@@ -20,7 +17,6 @@ import {
   type SpokeRejectLine,
 } from './fixtures';
 import { useSpokeRejects } from './rejectsStore';
-import { wasteLogUrlForRejectLine } from './wasteRouting';
 
 /**
  * IncomingRejectsStrip — PAC141 surface mounted at the top of
@@ -58,7 +54,7 @@ export default function IncomingRejectsStrip({ hubId }: { hubId: SiteId }) {
   return (
     <div
       style={{
-        margin: '12px 16px 0',
+        margin: '12px 30px 0',
         background: '#ffffff',
         border: '1px solid var(--color-border-subtle)',
         borderRadius: 'var(--radius-card)',
@@ -245,29 +241,6 @@ function RejectRow({
         >
           {ack ? <><Check size={11} /> Acknowledged</> : 'Acknowledge'}
         </button>
-        <Link
-          href={wasteLogUrlForRejectLine(reject.lines[0], reject.recordedAtISO)}
-          target="_blank"
-          rel="noopener"
-          style={{
-            padding: '6px 10px',
-            borderRadius: 8,
-            border: '1px solid var(--color-border)',
-            background: '#ffffff',
-            color: 'var(--color-text-secondary)',
-            fontSize: 11,
-            fontWeight: 600,
-            cursor: 'pointer',
-            fontFamily: 'var(--font-primary)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 4,
-            textDecoration: 'none',
-            justifyContent: 'center',
-          }}
-        >
-          <Trash2 size={11} /> Log to hub waste <ExternalLink size={9} />
-        </Link>
       </div>
     </div>
   );

@@ -12,6 +12,8 @@ import {
   dayOfWeek,
 } from '@/components/Production/fixtures';
 import { useProductionSite } from '@/components/Production/ProductionSiteContext';
+import { usePlanConfirm } from '@/components/Production/planConfirmStore';
+import PlanConfirmBar from '@/components/Production/PlanConfirmBar';
 // Polymorphic Plan view — when a hub-linked site (spoke / hybrid /
 // linked-standalone) is selected in the layout site picker, the Plan
 // tab swaps over to the spoke-order workflow that used to live behind
@@ -46,18 +48,33 @@ export default function ProductionPlanPage() {
   // open question 2 for the VP-math editing decision.
   useRole();
   const { siteId } = useProductionSite();
+  const { isConfirmed, isDayUnlocked } = usePlanConfirm();
   const [selectedDate, setSelectedDate] = useState(DEMO_TODAY);
   const site = getSite(siteId) ?? PRET_SITES[0];
 
-  // SPOKE + linked STANDALONE swap to the spoke-order workflow. HYBRID stays
-  // on the recipe-first grid because each row already self-tags Make/Receive.
-  if (isHubLinked(site) && site.type !== 'HYBRID') {
+  // SPOKE + linked STANDALONE swap to the spoke-order workflow. HYBRID and
+  // the producing hybrid (HYBRID_HUB) stay on the recipe-first grid: each row
+  // already self-tags Make/Receive, and the producing hybrid additionally
+  // surfaces its per-spoke production columns here so the plan shows both its
+  // own production and what it produces for others.
+  if (isHubLinked(site) && site.type !== 'HYBRID' && site.type !== 'HYBRID_HUB') {
     return <SpokeSubmissionsPage />;
   }
 
   const isPastDay = selectedDate < DEMO_TODAY;
   const dow = dayOfWeek(selectedDate);
   const isToday = selectedDate === DEMO_TODAY;
+
+  // Lock state for the grid:
+  //   • Today is locked by default — its plan was committed the day before
+  //     and the kitchen is already running to it. The manager can Unlock it
+  //     for live edits from the bar above.
+  //   • Future days lock once the manager confirms the plan.
+  // Either way an explicit unlock wins, and the lock dims the grid + blocks
+  // interaction (steppers, focus panel, filters).
+  const planLocked = isDayUnlocked(site.id, selectedDate)
+    ? false
+    : isToday || isConfirmed(site.id, selectedDate);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -95,7 +112,15 @@ export default function ProductionPlanPage() {
         )}
       </div>
 
-      <RecipeFirstGrid siteId={site.id} date={selectedDate} surface="plan" />
+      {/* Confirm-and-flow-through bar — the manager locks the day's plan
+          here and it becomes the committed bake target for Run production. */}
+      <PlanConfirmBar siteId={site.id} date={selectedDate} variant="plan" />
+
+      {/* When locked we don't dim the whole surface — the page stays fully
+          readable and the filters / drill-in still work. Only the editable
+          numbers (the per-run / VP steppers) are pinned read-only via the
+          grid's `locked` flag. */}
+      <RecipeFirstGrid siteId={site.id} date={selectedDate} surface="plan" locked={planLocked} />
     </div>
   );
 }

@@ -36,21 +36,22 @@ type SubTab = { id: string; label: string; href: string };
 //   • Plan production → tomorrow & future (week plan, carry-over to
 //                       inform tomorrow, performance and setup)
 // The sub-tabs surface depends on which sidebar item brought you here.
-// HUB persona — single unified tab row. The Plan/Run split was removed
-// after Ed feedback: a hub manager is monitoring an automated bake
-// driven by spoke demand, not authoring it, so a separate "Plan" menu
-// group was just noise. Instead we merge the old run tabs (live floor:
-// Today, Run sheet, Benches, PCR queue) with the old plan tabs'
-// management surfaces (Carry-over, Productivity, Settings) into one
-// strip. Plan itself is dropped — Today carries the day strip so the
-// manager can scan ahead without it. Sales (live) and Sales vs forecast
-// were also dropped: a hub kitchen produces against spoke orders, not
-// against retail sell-through, so live tills aren't the signal here.
-const HUB_TABS: SubTab[] = [
+// HUB persona — Run / Plan split, mirroring the self-producing sites:
+//   • Run  = live floor (Today, Run sheet, Benches, PCR queue)
+//   • Plan = forward-looking (Plan, Carry-over, Productivity, Settings)
+// The Plan tab itself shows the hub's spoke planning + the same make as
+// the day (see RecipeFirstGrid). Sales (live) and Sales vs forecast stay
+// dropped: a hub kitchen produces against spoke orders, not retail
+// sell-through, so live tills aren't the signal here.
+const HUB_RUN_TABS: SubTab[] = [
   { id: 'amounts',         label: 'Today',             href: '/production/amounts' },
   { id: 'run-sheet',       label: 'Run sheet',         href: '/production/run-sheet' },
   { id: 'board',           label: 'Benches',           href: '/production/board' },
   { id: 'pcr',             label: 'PCR queue',         href: '/production/pcr' },
+];
+
+const HUB_PLAN_TABS: SubTab[] = [
+  { id: 'plan',            label: 'Plan',              href: '/production/plan' },
   { id: 'carry-over',      label: 'Carry-over',        href: '/production/carry-over' },
   { id: 'productivity',    label: 'Productivity',      href: '/production/productivity' },
   { id: 'site-settings',   label: 'Settings',          href: '/production/settings' },
@@ -113,15 +114,14 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
   const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
   const router = useRouter();
   const pathname = usePathname();
-  const { isSpoke, isHub, isHybrid, isStandalone } = useActiveSite();
+  const { isSpoke, isHybrid, isStandalone, isProducingHybrid } = useActiveSite();
 
-  // Persona drives the tab set:
-  //   • Hub                 — single unified strip (no Run/Plan split)
-  //   • Standalone / Hybrid — Run/Plan split: each context shows only
-  //                           the affordances that fit that mental mode
-  //                           (live floor on Run, planning + retro on Plan).
-  //   • Spoke               — receive + sell + order (curated)
-  const isSelfProducing = isHybrid || isStandalone;
+  // Persona drives the tab set. Every baking persona (Hub, Standalone,
+  // Hybrid, producing HYBRID_HUB) now gets a Run/Plan split so the chrome
+  // matches the mental mode the manager is in (live floor on Run,
+  // planning + retro on Plan). Spokes receive + sell + order (curated),
+  // so they keep their single strip.
+  const isSelfProducing = isHybrid || isStandalone || isProducingHybrid;
   const productionGroup = productionGroupForPath(pathname);
   const subTabs = isSpoke
     ? SPOKE_SUB_TABS
@@ -129,18 +129,17 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
       ? productionGroup === 'run'
         ? SELF_PRODUCING_RUN_TABS
         : SELF_PRODUCING_PLAN_TABS
-      : HUB_TABS;
+      : productionGroup === 'run'
+        ? HUB_RUN_TABS
+        : HUB_PLAN_TABS;
 
-  // Header copy — what kind of view the manager is on. Self-producing
-  // personas swap label with the strip so the chrome reflects the
-  // mental mode they're in.
+  // Header copy — what kind of view the manager is on. Swaps with the
+  // strip so the chrome reflects the mental mode they're in.
   const headerLabel = isSpoke
     ? 'Production'
-    : isHub
+    : productionGroup === 'run'
       ? 'Run production'
-      : isSelfProducing && productionGroup === 'run'
-        ? 'Run production'
-        : 'Plan production';
+      : 'Plan production';
 
   return (
     <HubOperatorProviders>

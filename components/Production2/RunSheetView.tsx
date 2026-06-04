@@ -50,6 +50,7 @@ const TODAY_WINDOWS: Record<WorkType, DayWindow> = {
   'weigh-up':  { from: '05:30', to: '06:30', label: 'Open shift'    },
   'thaw':      { from: '00:00', to: '06:00', label: 'Overnight'     },
   'mise':      { from: '05:30', to: '07:00', label: 'Open shift'    },
+  'butcher':   { from: '05:30', to: '07:30', label: 'Open shift'    },
   'wash':      { from: '06:00', to: '07:30', label: 'Open shift'    },
   'sanitise':  { from: '06:00', to: '07:30', label: 'Open shift'    },
   'slice':     { from: '06:30', to: '08:00', label: 'Open shift'    },

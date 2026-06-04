@@ -33,6 +33,7 @@ const STORAGE_KEY = 'edify.production.siteId';
 const HUB_DEFAULT: SiteId = 'hub-central';
 const SPOKE_LOCKED: SiteId = 'site-spoke-south';
 const HYBRID_LOCKED: SiteId = 'site-hybrid-airport';
+const HYBRID_HUB_LOCKED: SiteId = 'site-hybrid-hub-gatwick';
 const STANDALONE_LOCKED: SiteId = 'site-standalone-north';
 
 type ProductionSiteContextValue = {
@@ -46,7 +47,7 @@ type ProductionSiteContextValue = {
 const Context = createContext<ProductionSiteContextValue | null>(null);
 
 export function ProductionSiteProvider({ children }: { children: React.ReactNode }) {
-  const { isSpoke, isHybrid, isStandalone } = useActiveSite();
+  const { isSpoke, isHybrid, isStandalone, isProducingHybrid } = useActiveSite();
   const [siteId, setSiteIdState] = useState<SiteId>(HUB_DEFAULT);
 
   // Hydrate from localStorage on mount (client only — keep SSR default
@@ -72,18 +73,21 @@ export function ProductionSiteProvider({ children }: { children: React.ReactNode
       setSiteIdState(SPOKE_LOCKED);
     } else if (isHybrid) {
       setSiteIdState(HYBRID_LOCKED);
+    } else if (isProducingHybrid) {
+      setSiteIdState(HYBRID_HUB_LOCKED);
     } else if (isStandalone) {
       setSiteIdState(STANDALONE_LOCKED);
     } else {
       setSiteIdState(prev =>
         prev === SPOKE_LOCKED ||
         prev === HYBRID_LOCKED ||
+        prev === HYBRID_HUB_LOCKED ||
         prev === STANDALONE_LOCKED
           ? HUB_DEFAULT
           : prev,
       );
     }
-  }, [isSpoke, isHybrid, isStandalone]);
+  }, [isSpoke, isHybrid, isProducingHybrid, isStandalone]);
 
   const setSiteId = useCallback((id: SiteId) => {
     if (!PRODUCTION_SITE_OPTIONS.some(o => o.id === id)) return;
@@ -100,9 +104,9 @@ export function ProductionSiteProvider({ children }: { children: React.ReactNode
       siteId,
       setSiteId,
       options: PRODUCTION_SITE_OPTIONS,
-      canPickSite: !isSpoke && !isHybrid && !isStandalone,
+      canPickSite: !isSpoke && !isHybrid && !isProducingHybrid && !isStandalone,
     }),
-    [siteId, setSiteId, isSpoke, isHybrid, isStandalone],
+    [siteId, setSiteId, isSpoke, isHybrid, isProducingHybrid, isStandalone],
   );
 
   return <Context.Provider value={value}>{children}</Context.Provider>;

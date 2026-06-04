@@ -23,7 +23,7 @@ import {
  * changes during a demo session.
  */
 
-export type ActiveSiteType = 'HUB' | 'SPOKE' | 'HYBRID' | 'STANDALONE' | 'ALL';
+export type ActiveSiteType = 'HUB' | 'SPOKE' | 'HYBRID' | 'HYBRID_HUB' | 'STANDALONE' | 'ALL';
 
 export type ActiveSite = {
   id: string;
@@ -68,6 +68,16 @@ export const ACTIVE_SITES: ActiveSite[] = [
     caption: 'Hybrid airport site · Makes + receives',
   },
   {
+    id: 'fitzroy-gatwick',
+    name: 'Fitzroy Gatwick',
+    type: 'HYBRID_HUB',
+    // Producing hybrid = the union of hybrid + hub. It makes + sells on
+    // its own floor, receives a linked range from the central hub, AND
+    // bakes for / dispatches to its own two Gatwick spokes. Maps to the
+    // `site-hybrid-hub-gatwick` fixture row.
+    caption: 'Hybrid hub · Makes, receives + supplies spokes',
+  },
+  {
     id: 'fitzroy-islington',
     name: 'Fitzroy Islington',
     type: 'STANDALONE',
@@ -91,6 +101,8 @@ type ActiveSiteContextValue = {
   isHub: boolean;
   isSpoke: boolean;
   isHybrid: boolean;
+  /** The producing hybrid (HYBRID_HUB) — makes, receives AND supplies spokes. */
+  isProducingHybrid: boolean;
   // NOTE: `isStandalone` is intentionally `true` for the ALL meta-site
   // too. The user-facing intent is "treat All sites like a standalone
   // for every page except the surfaces that genuinely roll up across
@@ -140,6 +152,7 @@ export function ActiveSiteProvider({ children }: { children: React.ReactNode }) 
       isHub: activeSite.type === 'HUB',
       isSpoke: activeSite.type === 'SPOKE',
       isHybrid: activeSite.type === 'HYBRID',
+      isProducingHybrid: activeSite.type === 'HYBRID_HUB',
       isStandalone:
         activeSite.type === 'STANDALONE' || activeSite.type === 'ALL',
       isAllSites: activeSite.type === 'ALL',
@@ -163,6 +176,7 @@ export function useActiveSite(): ActiveSiteContextValue {
       isHub: fallback.type === 'HUB',
       isSpoke: fallback.type === 'SPOKE',
       isHybrid: fallback.type === 'HYBRID',
+      isProducingHybrid: fallback.type === 'HYBRID_HUB',
       isStandalone:
         fallback.type === 'STANDALONE' || fallback.type === 'ALL',
       isAllSites: fallback.type === 'ALL',

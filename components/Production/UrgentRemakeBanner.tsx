@@ -26,6 +26,10 @@ import {
   type SiteId,
 } from './fixtures';
 import { useRemakeRequests } from './remakeStore';
+import BenchRunRoutingPicker, {
+  describeRouting,
+  type BenchRunRouting,
+} from './BenchRunRoutingPicker';
 
 /**
  * UrgentRemakeBanner — hub-side surface for full-production-remake
@@ -100,7 +104,7 @@ export default function UrgentRemakeBanner({
     <>
       <div
         style={{
-          margin: '12px 16px 0',
+          margin: '12px 30px 0',
           background: '#ffffff',
           border: `2px solid ${hasPending ? 'var(--color-error)' : 'var(--color-success)'}`,
           borderRadius: 'var(--radius-card)',
@@ -297,7 +301,7 @@ function PendingPanel({
           </div>
         </div>
         <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
-          Submitted {formatRel(request.submittedAtISO)}
+          Reported earlier today
         </span>
       </div>
 
@@ -427,6 +431,11 @@ function ReviewModal({
   const slots = useMemo(() => buildSlotOptions(), []);
   const [pickedSlot, setPickedSlot] = useState<string>(slots[0]?.id ?? '');
 
+  // Where the remake batches are produced. Default = Edify auto-routes to
+  // the most logical bench; the manager can flip the switch in the routing
+  // picker to override the bench + run before accepting.
+  const [routing, setRouting] = useState<BenchRunRouting | null>(null);
+
   // Reset form when navigating between incidents.
   useEffect(() => {
     setMode('idle');
@@ -449,10 +458,17 @@ function ReviewModal({
   function onAccept() {
     const slot = slots.find(s => s.id === pickedSlot);
     if (!slot) return;
+    // Fold an explicit bench/run override into the committed slot label +
+    // note so the routing decision is visible on the in-flight card and the
+    // spoke side. When the override is off, Edify's auto-route stays implicit.
+    const routeLabel = describeRouting(routing);
+    const slotLabel = routeLabel ? `${slot.label} · ${routeLabel}` : slot.label;
+    const benchNote = routeLabel ? `Routed to ${routeLabel}.` : '';
+    const combinedNote = [benchNote, hubNote.trim()].filter(Boolean).join(' ');
     accept(
       request.id,
-      { proposedISO: slot.proposedISO, label: slot.label },
-      { respondedBy: recordedBy, notes: hubNote.trim() || undefined },
+      { proposedISO: slot.proposedISO, label: slotLabel },
+      { respondedBy: recordedBy, notes: combinedNote || undefined },
     );
     onClose();
   }
@@ -619,8 +635,8 @@ function ReviewModal({
               <div style={{ fontSize: 12, color: 'var(--color-text-primary)' }}>
                 Affecting drop <strong>{request.sourceTransferDate}</strong> ·{' '}
                 <strong>{request.totalUnits} units</strong> across{' '}
-                <strong>{request.lines.length} recipes</strong> · submitted{' '}
-                {formatRel(request.submittedAtISO)} by {request.submittedBy ?? 'spoke manager'}
+                <strong>{request.lines.length} recipes</strong> · reported earlier today by{' '}
+                {request.submittedBy ?? 'spoke manager'}
               </div>
             </div>
 
@@ -730,6 +746,15 @@ function ReviewModal({
                       </button>
                     ))}
                   </div>
+                </div>
+
+                <div>
+                  <SectionLabel>Production routing</SectionLabel>
+                  <BenchRunRoutingPicker
+                    siteId={request.hubId}
+                    skuIds={request.lines.map(l => l.skuId)}
+                    onChange={setRouting}
+                  />
                 </div>
 
                 <div>
@@ -1135,15 +1160,18 @@ function buildSlotOptions(): Array<{ id: string; label: string; proposedISO: str
   const now = new Date();
   const out: Array<{ id: string; label: string; proposedISO: string }> = [];
 
+  // We don't commit to an exact minute — the spoke just needs to know which
+  // run it'll ride and roughly when it should arrive. Labels read as
+  // approximate windows ("around 14:00").
   if (now.getHours() < 14) {
     const d = new Date(now);
     d.setHours(14, 0, 0, 0);
-    out.push({ id: 'today-pm', label: 'Today 14:00 (afternoon run)', proposedISO: d.toISOString() });
+    out.push({ id: 'today-pm', label: 'Today, around 14:00 (afternoon run)', proposedISO: d.toISOString() });
   }
   if (now.getHours() < 18) {
     const d = new Date(now);
     d.setHours(18, 0, 0, 0);
-    out.push({ id: 'today-eve', label: 'Today 18:00 (evening run)', proposedISO: d.toISOString() });
+    out.push({ id: 'today-eve', label: 'Today, around 18:00 (evening run)', proposedISO: d.toISOString() });
   }
 
   const tomEarly = new Date(now);
@@ -1151,7 +1179,7 @@ function buildSlotOptions(): Array<{ id: string; label: string; proposedISO: str
   tomEarly.setHours(6, 30, 0, 0);
   out.push({
     id: 'tom-early',
-    label: 'Tomorrow 06:30 (next morning drop)',
+    label: 'Tomorrow, around 06:30 (next morning drop)',
     proposedISO: tomEarly.toISOString(),
   });
 
@@ -1159,7 +1187,7 @@ function buildSlotOptions(): Array<{ id: string; label: string; proposedISO: str
   tomMid.setHours(12, 0, 0, 0);
   out.push({
     id: 'tom-mid',
-    label: 'Tomorrow 12:00 (midday top-up)',
+    label: 'Tomorrow, around 12:00 (midday top-up)',
     proposedISO: tomMid.toISOString(),
   });
 

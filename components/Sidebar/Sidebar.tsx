@@ -97,7 +97,11 @@ export default function Sidebar() {
   // don't dispatch (the hub does), don't match invoices or own credit
   // notes (estate-level), and don't see analytics / compare-sites
   // (estate-level performance views).
-  const { isSpoke, isHub, isAllSites, activeSiteId } = useActiveSite();
+  const { isSpoke, isHub, isProducingHybrid, isAllSites, activeSiteId } = useActiveSite();
+  // The producing hybrid (HYBRID_HUB) dispatches to its own spokes, so it
+  // gets the hub's "Dispatch to stores" entry and the fuller group title —
+  // while keeping the Run + Plan entries every self-producing site has.
+  const dispatchesToStores = isHub || isProducingHybrid;
 
   // Badge on "Manage stock" — mirrors the AttentionTrigger pill on
   // /stock so the operator sees the same "this many items need a
@@ -159,7 +163,7 @@ export default function Sidebar() {
           title={
             isSpoke
               ? 'Plan & order'
-              : isHub
+              : dispatchesToStores
                 ? 'Make, plan & dispatch'
                 : 'Make & plan'
           }
@@ -192,28 +196,24 @@ export default function Sidebar() {
                 active={isRunProductionPath(pathname)}
                 onClick={() => router.push(`${versionPrefix}/production/amounts`)}
               />
-              {/* Plan production — tomorrow + future. Hidden on the HUB
-                  persona: the Plan group was collapsed back into Today
-                  (with a day strip) since hub managers monitor an
-                  automated bake rather than authoring it. Standalone
-                  and Hybrid personas keep this entry — it's their
-                  primary surface (steppers + forecast + carry-over). */}
-              {!isHub && (
-                <NavItem
-                  label="Plan production"
-                  icon={CalendarClock}
-                  compact={compact}
-                  active={isPlanProductionPath(pathname)}
-                  onClick={() => router.push(`${versionPrefix}/production/plan`)}
-                />
-              )}
+              {/* Plan production — tomorrow + future. Every baking
+                  persona gets this: a hub plans its spokes (and the same
+                  make as the day) here; standalone / hybrid plan their
+                  own floor (steppers + forecast + carry-over). */}
+              <NavItem
+                label="Plan production"
+                icon={CalendarClock}
+                compact={compact}
+                active={isPlanProductionPath(pathname)}
+                onClick={() => router.push(`${versionPrefix}/production/plan`)}
+              />
               {/* Dispatch to stores — HUB only. Standalone / Hybrid /
                   Spoke don't dispatch (Standalone is single-shop and
                   bakes for itself; Hybrid bakes some + receives the
                   rest from its hub; Spoke is purely a receiver). The
                   group title also collapses to "Make & plan" for those
                   personas since "dispatch" is no longer in scope. */}
-              {isHub && (
+              {dispatchesToStores && (
                 <NavItem
                   label="Dispatch to stores"
                   icon={Send}

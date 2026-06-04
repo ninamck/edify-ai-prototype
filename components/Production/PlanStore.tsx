@@ -359,6 +359,16 @@ export type PlanLine = AmountsLine & {
   /** Variable additions layered on top of the run baseline. */
   variablePlanned: number;
   /**
+   * Edify's "adjusted forecast" for the variable-production stream — the
+   * VP top-up it expects the floor to make on top of the planned run
+   * baseline. Only > 0 for run items flagged `variableProduction`. The
+   * Run-production VP stepper starts "locked in" to this number; the floor
+   * flexes it up/down through the day. VP is a live top-up, not part of the
+   * plan — `runPlanned` carries the planned baseline and the Plan surface
+   * totals from that alone.
+   */
+  variableForecast: number;
+  /**
    * Team-food (staff lunch) units bolted onto the bake target. Excluded
    * from `planned` so sales / forecast comparisons stay honest, and
    * surfaced separately so the bench card can caption "(incl. N team
@@ -397,6 +407,19 @@ export type PlanLine = AmountsLine & {
   lockedRunLabels: string[];
 };
 
+/**
+ * Share of a VP recipe's day forecast that Edify expects to be made as
+ * variable top-ups (the rest is the scheduled run baseline). Kept modest
+ * so VP reads as a real top-up stream rather than the bulk of the bake.
+ */
+const VP_FORECAST_SHARE = 0.3;
+
+/** Edify's "adjusted forecast" for the VP stream, derived from the day's
+ *  proposed quantity. Rounded to whole units. */
+function vpForecastFor(quinnProposed: number): number {
+  return Math.max(0, Math.round(quinnProposed * VP_FORECAST_SHARE));
+}
+
 export function resolvePlan(
   siteId: SiteId,
   date: string,
@@ -431,7 +454,17 @@ export function resolvePlan(
     }
     const baseOverride = overrides[k];
     const baseline = baseOverride ?? line.quinnProposed;
-    const variable = line.item.mode === 'run' ? variableOverrides[k] ?? 0 : 0;
+    // VP (variable production) is a live top-up the floor adds on the day,
+    // on top of the planned run baseline. It defaults to ("locks in") Edify's
+    // adjusted forecast so the Run-production VP stepper starts pre-filled;
+    // the floor flexes it up/down through the shift. It's NOT part of the
+    // plan — the Plan surface hides VP and totals from the run baseline only.
+    const isVP = line.item.mode === 'run' && line.item.variableProduction === true;
+    const variable = isVP
+      ? variableOverrides[k] ?? vpForecastFor(line.quinnProposed)
+      : line.item.mode === 'run'
+        ? variableOverrides[k] ?? 0
+        : 0;
     runPlan.set(line.item.id, baseline);
     variablePlan.set(line.item.id, variable);
     directPlan.set(line.item.id, baseline + variable);
@@ -496,6 +529,10 @@ export function resolvePlan(
     const planned = directPlan.get(line.item.id) ?? line.quinnProposed;
     const runPlanned = runPlan.get(line.item.id) ?? line.quinnProposed;
     const variablePlanned = variablePlan.get(line.item.id) ?? 0;
+    const variableForecast =
+      line.item.mode === 'run' && line.item.variableProduction === true
+        ? vpForecastFor(line.quinnProposed)
+        : 0;
     const teamFoodPlanned = Math.max(0, teamFoodOverrides[k] ?? 0);
     const perDropStored = perDropOverrides[k];
     const isOverridden =
@@ -615,6 +652,7 @@ export function resolvePlan(
       planned,
       runPlanned,
       variablePlanned,
+      variableForecast,
       teamFoodPlanned,
       isOverridden,
       assemblyDemand,

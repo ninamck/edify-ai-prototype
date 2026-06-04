@@ -18,8 +18,8 @@ export type ProductionSiteOption = {
   id: SiteId;
   /** Persona-friendly label shown on the picker button. */
   label: string;
-  /** Right-side chip on the button (HUB / SPOKE / YOUR SITE). */
-  tag: 'YOUR SITE' | 'HUB' | 'SPOKE';
+  /** Right-side chip on the button (HUB / SPOKE / HYBRID / YOUR SITE). */
+  tag: 'YOUR SITE' | 'HUB' | 'SPOKE' | 'HYBRID';
 };
 
 export const PRODUCTION_SITE_OPTIONS: ProductionSiteOption[] = [
@@ -28,6 +28,7 @@ export const PRODUCTION_SITE_OPTIONS: ProductionSiteOption[] = [
   { id: 'site-spoke-east',       label: 'Fitzroy Shoreditch',   tag: 'SPOKE' },
   { id: 'site-spoke-west',       label: 'Fitzroy Notting Hill', tag: 'SPOKE' },
   { id: 'site-hybrid-airport',   label: 'Fitzroy Heathrow',     tag: 'SPOKE' },
+  { id: 'site-hybrid-hub-gatwick', label: 'Fitzroy Gatwick',    tag: 'HYBRID' },
   { id: 'site-standalone-north', label: 'Fitzroy Islington',    tag: 'SPOKE' },
 ];
 

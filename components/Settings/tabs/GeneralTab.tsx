@@ -1,19 +1,23 @@
 'use client';
 
 /**
- * GeneralTab — the canonical "site setup" surface.
+ * GeneralTab — the canonical "production setup" surface.
  *
- * Holds the site's core identity (name, format) + opening hours + hub
- * link, plus the production-setup block lifted up from the deep tabs
- * so a manager can see at a glance how the site is shaped without
- * tab-hopping:
- *   • Does this site have a kitchen?
- *   • Is it baking for other sites?
- *   • Optional hub it pulls from
+ * The site's name lives elsewhere (company / sites admin) and the type is
+ * no longer hand-picked here. Instead the manager answers three plain
+ * questions and the site model is *derived* from them (see
+ * `deriveSiteModel`): does it have a kitchen, is it producing for other
+ * sites, and which hub (if any) it pulls from. Those three answers settle
+ * the site into one of the five estate models — spoke, standalone, hybrid,
+ * hub, or producing hybrid-hub — and the rest of the page (hub link
+ * requirement, hub coverage, forecast seeding) keys off that.
+ *
+ * The tab also surfaces:
  *   • Bench count (read-only summary; the Benches tab is still the
  *     editor for individual benches)
  *   • Which P-slots run + variable production
  *   • Per-day schedule + sales-forecast windows for each slot
+ *   • Opening hours and (for hubs) the spokes it covers
  *
  * The P-slot / windows section reads + writes the same `staged.windows`
  * overlay the dedicated ProductionWindowsTab uses, so edits here
@@ -28,17 +32,19 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, LineChart } from 'lucide-react';
 import StatusPill from '@/components/Production/StatusPill';
 import {
   DAYS_OF_WEEK,
-  PRET_FORMATS,
   PRET_SITES,
   PRET_RECIPES,
+  dayOffset,
   type DayOfWeek,
-  type FormatId,
   type RecipeId,
   type SiteId,
+  type SiteType,
 } from '@/components/Production/fixtures';
+import { usePlanStore } from '@/components/Production/PlanStore';
 import {
   useSiteSettings,
   type TimeRange,
@@ -51,7 +57,6 @@ import {
   PillPicker,
   ReadOnlyValue,
   Section,
-  TextInput,
   TimeInput,
   type TabProps,
 } from './_shared';
@@ -81,45 +86,132 @@ const SLOT_CONFIG: Array<{
   { id: 'vp', label: 'Variable Production', persisted: true },
 ];
 
+// The producing-for-others answer is the lever that — together with the
+// "has a kitchen?" toggle and the optional hub link — derives which of the
+// five site models this location is. See `deriveSiteModel` below.
 const PRODUCING_FOR_OTHERS_OPTIONS = [
   { id: 'self-only', label: 'No — only for my own shop' },
-  { id: 'hub', label: 'Yes — I bake for other sites (hub mode)' },
+  { id: 'exclusive', label: 'Yes — exclusively for other shops' },
+  { id: 'own-plus-others', label: 'Yes — I also have my own production' },
 ] as const;
 type ProducingForOthers = (typeof PRODUCING_FOR_OTHERS_OPTIONS)[number]['id'];
+
+/**
+ * The five operating models a site can take. These map 1:1 onto the
+ * `SiteType` union the rest of the app runs on, but the manager never picks
+ * the type directly — it falls out of three plain-language questions:
+ *
+ *   1. Does this location have a kitchen?            (hasKitchen)
+ *   2. Are you producing for other sites?            (producingForOthers)
+ *   3. Optional: which hub does it pull from?        (hubId)
+ *
+ *   ┌─────────────┬──────────────────────┬──────────┬──────────────┐
+ *   │ Kitchen     │ Producing for others │ Hub link │ Model        │
+ *   ├─────────────┼──────────────────────┼──────────┼──────────────┤
+ *   │ No          │ —                    │ required │ SPOKE        │
+ *   │ Yes         │ No (own shop only)   │ none     │ STANDALONE   │
+ *   │ Yes         │ No (own shop only)   │ set      │ HYBRID       │
+ *   │ Yes         │ Exclusively others   │ —        │ HUB          │
+ *   │ Yes         │ Also own production  │ —        │ HYBRID_HUB   │
+ *   └─────────────┴──────────────────────┴──────────┴──────────────┘
+ */
+function deriveSiteModel(
+  hasKitchen: 'yes' | 'no',
+  producing: ProducingForOthers,
+  hubId: SiteId | null,
+): SiteType {
+  if (hasKitchen === 'no') return 'SPOKE';
+  switch (producing) {
+    case 'exclusive':
+      return 'HUB';
+    case 'own-plus-others':
+      return 'HYBRID_HUB';
+    case 'self-only':
+    default:
+      return hubId ? 'HYBRID' : 'STANDALONE';
+  }
+}
+
+/** Map a persisted site type back to the producing-for-others answer. */
+function producingFromType(type: SiteType): ProducingForOthers {
+  if (type === 'HUB') return 'exclusive';
+  if (type === 'HYBRID_HUB') return 'own-plus-others';
+  return 'self-only';
+}
 
 export default function GeneralTab({ siteId, editing, staged, onStage, health }: TabProps) {
   const { effective } = useSiteSettings(siteId);
   const core = effective.core;
   const stagedCore = staged.core ?? {};
 
-  const isHub = core.type === 'HUB';
-  const isSpoke = core.type === 'SPOKE';
-  const hubOptions = PRET_SITES.filter(s => s.type === 'HUB').map(s => ({
-    id: s.id,
-    label: s.name,
-  }));
+  // Candidate parent hubs = any site already acting as a hub (a plain HUB or
+  // a producing HYBRID_HUB), minus this site itself so it can't link to its
+  // own kitchen.
+  const hubOptions = PRET_SITES
+    .filter(s => (s.type === 'HUB' || s.type === 'HYBRID_HUB') && s.id !== siteId)
+    .map(s => ({ id: s.id, label: s.name }));
+
+  // ── Apply forecast → plan ──
+  // Hybrids + standalones plan their own production against their retail
+  // forecast (hubs plan from spoke demand; spokes order from a hub), so
+  // this one-click seed is offered only to those two personas. The plan's
+  // baseline already derives from Edify's forecast, so "apply" means:
+  // drop any manual overrides on the upcoming days so each day snaps back
+  // to the latest forecast. Today's committed plan is intentionally left
+  // untouched — managers re-forecast for tomorrow onward.
+  const planStore = usePlanStore();
+  const [forecastConfirmOpen, setForecastConfirmOpen] = useState(false);
+  const [forecastApplied, setForecastApplied] = useState(false);
+  const FORECAST_HORIZON_DAYS = 12;
+  function applyForecastToPlan() {
+    // Reset each upcoming day (tomorrow → +12) back to the forecast
+    // baseline. Looping per-date keeps today / past plans intact.
+    for (let d = 1; d <= FORECAST_HORIZON_DAYS; d += 1) {
+      planStore.resetAll(dayOffset(d));
+    }
+    setForecastConfirmOpen(false);
+    setForecastApplied(true);
+  }
+  useEffect(() => {
+    setForecastConfirmOpen(false);
+    setForecastApplied(false);
+  }, [siteId]);
 
   // Resolve the candidate values: staged → persisted overlay → fixture default
-  const name = stagedCore.name ?? core.name;
-  const formatId = stagedCore.formatId ?? core.formatId;
   const hubId = stagedCore.hubId === undefined ? core.hubId : stagedCore.hubId;
   const open = stagedCore.openingHours?.open ?? core.openingHours.open;
   const close = stagedCore.openingHours?.close ?? core.openingHours.close;
 
   // ── Production setup (local UI state for fields not in the overlay) ──
-  // Defaults derived from site type so the form starts in a sensible
-  // shape per persona — managers shouldn't have to reset four fields
-  // just to land on what's already true today.
+  // Defaults derived from the current site type so the form starts in a
+  // sensible shape per persona — managers shouldn't have to re-answer
+  // questions just to land on what's already true today.
   const [hasKitchen, setHasKitchen] = useState<'yes' | 'no'>(
-    isSpoke ? 'no' : 'yes',
+    core.type === 'SPOKE' ? 'no' : 'yes',
   );
   const [producingForOthers, setProducingForOthers] = useState<ProducingForOthers>(
-    isHub ? 'hub' : 'self-only',
+    producingFromType(core.type),
   );
   useEffect(() => {
-    setHasKitchen(isSpoke ? 'no' : 'yes');
-    setProducingForOthers(isHub ? 'hub' : 'self-only');
-  }, [siteId, isSpoke, isHub]);
+    setHasKitchen(core.type === 'SPOKE' ? 'no' : 'yes');
+    setProducingForOthers(producingFromType(core.type));
+  }, [siteId, core.type]);
+
+  // The model is computed live from the three questions above — this is
+  // what replaces the old hand-picked "Site type" field. Settling on a hub
+  // model clears any inbound hub link (a hub doesn't order from itself);
+  // dropping the kitchen forces a hub link (a spoke must order from one).
+  const derivedModel = deriveSiteModel(hasKitchen, producingForOthers, hubId ?? null);
+  const isHubModel = derivedModel === 'HUB' || derivedModel === 'HYBRID_HUB';
+  const requiresHub = derivedModel === 'SPOKE';
+
+  // The forecast→plan seed is for sites that bake their own retail range:
+  // standalone, hybrid, and the producing hybrid-hub. Pure hubs plan from
+  // spoke demand and spokes order from a hub, so neither gets the button.
+  const showApplyForecast =
+    derivedModel === 'HYBRID' ||
+    derivedModel === 'STANDALONE' ||
+    derivedModel === 'HYBRID_HUB';
 
   const benchCount = effective.benches.length;
 
@@ -130,9 +222,9 @@ export default function GeneralTab({ siteId, editing, staged, onStage, health }:
   // self-producing sites since they have a retail floor.
   const seededRuns = useMemo<SlotId[]>(() => {
     const set = new Set<SlotId>(['p1', 'p2']);
-    if (!isSpoke) set.add('vp');
+    if (hasKitchen === 'yes') set.add('vp');
     return Array.from(set);
-  }, [isSpoke]);
+  }, [hasKitchen]);
   const [activeRuns, setActiveRuns] = useState<SlotId[]>(seededRuns);
   useEffect(() => {
     setActiveRuns(seededRuns);
@@ -150,6 +242,27 @@ export default function GeneralTab({ siteId, editing, staged, onStage, health }:
     [],
   );
   const [flexibleLineItems, setFlexibleLineItems] = useState<RecipeId[]>([]);
+
+  // ── Hub coverage (local state) ──
+  // Which spokes this hub produces for. Candidate sites are the spokes +
+  // hybrids in the estate (a hub bakes for receive-only spokes and the
+  // order-portion of hybrids), minus this site itself. Seeds from whoever
+  // already points their `hubId` here so the picker starts truthful.
+  const spokeCandidates = useMemo(
+    () =>
+      PRET_SITES.filter(
+        s => s.id !== siteId && (s.type === 'SPOKE' || s.type === 'HYBRID'),
+      ).map(s => ({ id: s.id, label: s.name })),
+    [siteId],
+  );
+  const servedDefault = useMemo(
+    () => PRET_SITES.filter(s => s.hubId === siteId).map(s => s.id),
+    [siteId],
+  );
+  const [servedSpokeIds, setServedSpokeIds] = useState<SiteId[]>(servedDefault);
+  useEffect(() => {
+    setServedSpokeIds(servedDefault);
+  }, [servedDefault]);
 
   // ── Production schedules ──
   // Day picker for the per-day schedule + sales forecast windows.
@@ -196,70 +309,9 @@ export default function GeneralTab({ siteId, editing, staged, onStage, health }:
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 1040 }}>
       <HealthAlertStrip items={health} />
 
-      <Section title="Site identity" description="The name shown across the app, plus where this site sits in the estate.">
-        <FieldRow
-          label="Site name"
-          control={
-            <TextInput
-              value={name}
-              disabled={!editing}
-              onChange={v => setCore({ name: v })}
-            />
-          }
-          fullWidthControl
-          cascade={
-            stagedCore.name === undefined && core.name === core.defaults.name
-              ? `Default · ${core.defaults.name}`
-              : undefined
-          }
-          isOverridden={
-            (stagedCore.name !== undefined && stagedCore.name !== core.defaults.name) ||
-            core.name !== core.defaults.name
-          }
-          onReset={() => setCore({ name: core.defaults.name })}
-        />
-
-        <FieldRow
-          label="Site type"
-          hint="Type is structural — change it via Quinn rather than a single-field edit."
-          control={
-            <ReadOnlyValue
-              value={core.type}
-              hint={
-                isHub
-                  ? `Acts as the hub for ${
-                      PRET_SITES.filter(s => s.hubId === siteId).length
-                    } site(s)`
-                  : core.hubId
-                  ? `Hub-linked · receives from ${core.hubId.replace(/-/g, ' ')}`
-                  : 'Self-producing'
-              }
-            />
-          }
-        />
-
-        <FieldRow
-          label="Format"
-          hint="Determines the cascade defaults — opening hours, cutoffs, run profile."
-          control={
-            <PillPicker<FormatId>
-              options={PRET_FORMATS.map(f => ({ id: f.id, label: f.name }))}
-              value={formatId}
-              onChange={v => setCore({ formatId: v })}
-              disabled={!editing}
-            />
-          }
-          cascade={`Format default · ${
-            PRET_FORMATS.find(f => f.id === core.defaults.formatId)?.name ?? core.defaults.formatId
-          }`}
-          isOverridden={formatId !== core.defaults.formatId}
-          onReset={() => setCore({ formatId: core.defaults.formatId })}
-        />
-      </Section>
-
       <Section
         title="Production setup"
-        description="The high-level shape of this site's production — kitchen, hub link, bench count. Detailed bench config lives in the Benches tab."
+        description="Answer these three questions and Edify works out how this site sits in the estate — whether it bakes, who it bakes for, and which hub (if any) it pulls from. The site model below updates as you go."
       >
         <FieldRow
           label="Does this location have a kitchen?"
@@ -277,45 +329,53 @@ export default function GeneralTab({ siteId, editing, staged, onStage, health }:
           }
         />
 
-        <FieldRow
-          label="Are you producing for other sites?"
-          hint="Hub sites bake for a network of spokes and dispatch ahead of each cutoff."
-          control={
-            <Select<ProducingForOthers>
-              value={producingForOthers}
-              onChange={setProducingForOthers}
-              disabled={!editing}
-              options={PRODUCING_FOR_OTHERS_OPTIONS.map(o => ({ id: o.id, label: o.label }))}
-            />
-          }
-        />
+        {hasKitchen === 'yes' && (
+          <FieldRow
+            label="Are you producing for other sites?"
+            hint="Drives whether this is a standalone, a hybrid, a hub, or a producing hybrid-hub."
+            control={
+              <Select<ProducingForOthers>
+                value={producingForOthers}
+                onChange={setProducingForOthers}
+                disabled={!editing}
+                options={PRODUCING_FOR_OTHERS_OPTIONS.map(o => ({ id: o.id, label: o.label }))}
+              />
+            }
+          />
+        )}
 
-        <FieldRow
-          label="Optional: Production HUB"
-          hint={
-            isSpoke
-              ? 'Spokes always order from one hub. Switching here re-points future orders only.'
-              : 'Hybrid + linked-standalone sites can pull part of their range from a hub. Leave empty for fully self-producing.'
-          }
-          control={
-            <PillPicker<SiteId>
-              options={[
-                { id: '__none' as SiteId, label: 'Select a HUB' },
-                ...hubOptions,
-              ]}
-              value={(hubId ?? '__none') as SiteId}
-              onChange={v => setCore({ hubId: v === '__none' ? null : v })}
-              disabled={!editing || isSpoke}
-            />
-          }
-          cascade={
-            core.defaults.hubId
-              ? `Default · ${core.defaults.hubId.replace(/-/g, ' ')}`
-              : 'Default · self-producing'
-          }
-          isOverridden={hubId !== core.defaults.hubId}
-          onReset={() => setCore({ hubId: core.defaults.hubId })}
-        />
+        {derivedModel !== 'HUB' && (
+          <FieldRow
+            label={requiresHub ? 'Production hub' : 'Optional: production hub'}
+            hint={
+              requiresHub
+                ? 'A spoke has no kitchen, so it must order its full range from one hub.'
+                : derivedModel === 'HYBRID_HUB'
+                ? 'A producing hybrid-hub can still pull part of its own range from another hub. Leave empty to bake everything it sells.'
+                : 'Link a hub to pull part of the range from it (makes this a hybrid). Leave empty to stay fully standalone.'
+            }
+            control={
+              <PillPicker<SiteId>
+                options={[
+                  { id: '__none' as SiteId, label: requiresHub ? 'Select a hub' : 'No hub — self-producing' },
+                  ...hubOptions,
+                ]}
+                value={(hubId ?? '__none') as SiteId}
+                onChange={v => setCore({ hubId: v === '__none' ? null : v })}
+                disabled={!editing}
+              />
+            }
+            cascade={
+              requiresHub && !hubId
+                ? '⚠ A spoke needs a hub to order from'
+                : core.defaults.hubId
+                ? `Default · ${core.defaults.hubId.replace(/-/g, ' ')}`
+                : 'Default · self-producing'
+            }
+            isOverridden={hubId !== core.defaults.hubId}
+            onReset={() => setCore({ hubId: core.defaults.hubId })}
+          />
+        )}
 
         <FieldRow
           label="Number of benches"
@@ -329,6 +389,41 @@ export default function GeneralTab({ siteId, editing, staged, onStage, health }:
         />
 
       </Section>
+
+      {isHubModel && (
+        <Section
+          title="Hub coverage"
+          description={
+            derivedModel === 'HYBRID_HUB'
+              ? 'The spokes this producing hybrid-hub bakes for, on top of its own range. Pick which sites it supplies.'
+              : 'The sites this hub bakes for. Pick which spokes it supplies — their orders flow into this hub\'s plan.'
+          }
+        >
+          <FieldRow
+            label="Spokes this hub produces for"
+            hint="Select every spoke (and the order-portion of any hybrid) this hub bakes and dispatches to."
+            control={
+              spokeCandidates.length === 0 ? (
+                <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                  No eligible spokes in this estate yet.
+                </span>
+              ) : (
+                <PillMultiPicker<SiteId>
+                  options={spokeCandidates}
+                  value={servedSpokeIds}
+                  onChange={setServedSpokeIds}
+                  disabled={!editing}
+                />
+              )
+            }
+            cascade={
+              servedSpokeIds.length === 0
+                ? '⚠ A hub with no spokes has nothing to dispatch'
+                : `Supplying ${servedSpokeIds.length} site${servedSpokeIds.length === 1 ? '' : 's'}`
+            }
+          />
+        </Section>
+      )}
 
       <Section
         title="Production runs"
@@ -360,6 +455,94 @@ export default function GeneralTab({ siteId, editing, staged, onStage, health }:
           }
         />
       </Section>
+
+      {showApplyForecast && (
+        <Section
+          title="Forecast → plan"
+          description="Seed the upcoming production plan straight from Edify's demand forecast. Applies to every day from tomorrow onward — today's committed plan stays put. Fine-tune any day afterward on the Plan tab."
+        >
+          {forecastApplied ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 10,
+                padding: '12px 14px',
+                borderRadius: 10,
+                background: 'var(--color-success-light)',
+                border: '1px solid var(--color-success-border)',
+                color: 'var(--color-success)',
+              }}
+            >
+              <CheckCircle2 size={16} style={{ marginTop: 1, flexShrink: 0 }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 12, fontWeight: 700 }}>
+                  Edify's forecast applied to the next {FORECAST_HORIZON_DAYS} days
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--color-text-primary)', fontWeight: 500 }}>
+                  Each upcoming day now matches the latest forecast. Open the Plan tab to review and confirm.
+                </span>
+              </div>
+              <div style={{ flex: 1 }} />
+              <button
+                type="button"
+                onClick={() => setForecastApplied(false)}
+                style={ghostActionBtn()}
+              >
+                Apply again
+              </button>
+            </div>
+          ) : forecastConfirmOpen ? (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                padding: '12px 14px',
+                borderRadius: 10,
+                background: 'var(--color-warning-bg)',
+                border: '1px solid var(--color-warning-border)',
+              }}
+            >
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                Replace the upcoming plan with the forecast?
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                Any manual edits you&apos;ve made for tomorrow onward will be overwritten with Edify&apos;s forecast. Today&apos;s plan is not affected.
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setForecastConfirmOpen(false)}
+                  style={ghostActionBtn()}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={applyForecastToPlan}
+                  style={primaryActionBtn()}
+                >
+                  <LineChart size={13} /> Apply forecast
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => setForecastConfirmOpen(true)}
+                style={primaryActionBtn()}
+              >
+                <LineChart size={13} /> Apply forecast to plan
+              </button>
+              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                Populates tomorrow → +{FORECAST_HORIZON_DAYS} days from Edify&apos;s forecast.
+              </span>
+            </div>
+          )}
+        </Section>
+      )}
 
       <Section
         title="Production schedules"
@@ -491,44 +674,6 @@ export default function GeneralTab({ siteId, editing, staged, onStage, health }:
           </div>
         )}
       </Section>
-
-      {isHub && (
-        <Section
-          title="Hub coverage"
-          description="The sites this hub bakes for. Manage links from each spoke's Production setup field."
-        >
-          <div
-            style={{
-              display: 'flex',
-              gap: 6,
-              flexWrap: 'wrap',
-            }}
-          >
-            {PRET_SITES.filter(s => s.hubId === siteId).length === 0 ? (
-              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                No spokes linked yet. Add a hub link from a spoke site to wire it in.
-              </span>
-            ) : (
-              PRET_SITES.filter(s => s.hubId === siteId).map(s => (
-                <span
-                  key={s.id}
-                  style={{
-                    padding: '6px 10px',
-                    borderRadius: 999,
-                    background: 'var(--color-bg-hover)',
-                    border: '1px solid var(--color-border-subtle)',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: 'var(--color-text-primary)',
-                  }}
-                >
-                  {s.name}
-                </span>
-              ))
-            )}
-          </div>
-        </Section>
-      )}
     </div>
   );
 }
@@ -700,6 +845,42 @@ function dayPillStyle(active: boolean): React.CSSProperties {
     minHeight: 36,
     display: 'inline-flex',
     alignItems: 'center',
+  };
+}
+
+function primaryActionBtn(): React.CSSProperties {
+  return {
+    padding: '9px 14px',
+    borderRadius: 8,
+    fontSize: 12,
+    fontWeight: 700,
+    fontFamily: 'var(--font-primary)',
+    background: 'var(--color-accent-active)',
+    color: 'var(--color-text-on-active)',
+    border: '1px solid var(--color-accent-active)',
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    whiteSpace: 'nowrap',
+  };
+}
+
+function ghostActionBtn(): React.CSSProperties {
+  return {
+    padding: '9px 14px',
+    borderRadius: 8,
+    fontSize: 12,
+    fontWeight: 700,
+    fontFamily: 'var(--font-primary)',
+    background: '#ffffff',
+    color: 'var(--color-text-secondary)',
+    border: '1px solid var(--color-border)',
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    whiteSpace: 'nowrap',
   };
 }
 

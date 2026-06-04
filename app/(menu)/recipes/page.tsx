@@ -610,25 +610,27 @@ function TypeCell({ recipe, usedInCount }: { recipe: Recipe; usedInCount: number
 }
 
 function StatusPill({ status }: { status: Recipe['status'] }) {
-  const bg =
-    status === 'Active' ? 'var(--color-success-light)' :
-    status === 'Draft' ? 'var(--color-bg-hover)' :
-    '#F0EFED';
+  // Outline-only pills — see `.cursor/rules/status-pills.mdc`. White
+  // background, coloured text, 1.5px coloured border. Never solid fills.
   const color =
     status === 'Active' ? 'var(--color-success)' :
     status === 'Draft' ? 'var(--color-text-secondary)' :
     'var(--color-text-muted)';
+  const border =
+    status === 'Active' ? 'var(--color-success)' : 'var(--color-border)';
   return (
     <span
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        padding: '3px 10px',
+        padding: '3px 9px',
         borderRadius: '100px',
-        background: bg,
+        background: '#ffffff',
         color,
+        border: `1.5px solid ${border}`,
         fontSize: '11.5px',
         fontWeight: 600,
+        whiteSpace: 'nowrap',
       }}
     >
       {status}

@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Truck, X, AlertTriangle, ChevronRight, Printer, Sparkles, Pencil, Check } from 'lucide-react';
+import { Truck, X, AlertTriangle, ChevronRight, Printer, Sparkles, Pencil, Check, Thermometer } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import QtyStepper from './QtyStepper';
 import {
@@ -92,9 +92,15 @@ type Props = {
    * Called when the manager confirms. The manifest may have been edited
    * line-by-line inside the sheet (the manager can dial each spoke's
    * units up or down with a stepper); the adjusted manifest is what
-   * actually gets dispatched.
+   * actually gets dispatched. `dispatchTempC` is the temperature the
+   * operator logged for this drop (°C) — forwarded onto the transfer so
+   * it flows through to the external cold-chain / food-safety system.
    */
-  onConfirm: (note: string | undefined, adjustedManifest: DispatchManifestEntry[]) => void;
+  onConfirm: (
+    note: string | undefined,
+    adjustedManifest: DispatchManifestEntry[],
+    dispatchTempC?: number,
+  ) => void;
 };
 
 /**
@@ -125,6 +131,16 @@ export default function DispatchConfirmSheet({
     reallocatedRecipes.length - autoReallocatedCount,
   );
   const [note, setNote] = useState('');
+  // Dispatch temperature (°C) the operator logs at Send. Kept as a raw
+  // string so the field can be empty / mid-edit; parsed to a number only
+  // when handed to `onConfirm`. Flows through to the cold-chain system.
+  const [tempInput, setTempInput] = useState('');
+  const parsedTemp = useMemo(() => {
+    const t = tempInput.trim();
+    if (t === '') return undefined;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : undefined;
+  }, [tempInput]);
   // Per-spoke section is now tab-based, not an accordion. One spoke is
   // active at a time, defaulting to the first in the manifest. The
   // manager can flip between spokes without scrolling, and each tab
@@ -667,6 +683,64 @@ export default function DispatchConfirmSheet({
             </div>
           )}
 
+          {/* Dispatch temperature — logged at Send and forwarded to the
+              external cold-chain / food-safety system on confirm. */}
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: 'var(--color-text-muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              Dispatch temperature
+            </span>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 10px',
+                background: '#ffffff',
+                border: '1px solid var(--color-border)',
+                borderRadius: 8,
+                maxWidth: 200,
+              }}
+            >
+              <Thermometer size={14} color="var(--color-text-muted)" style={{ flexShrink: 0 }} />
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                value={tempInput}
+                onChange={e => setTempInput(e.target.value)}
+                placeholder="—"
+                aria-label="Dispatch temperature in degrees Celsius"
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  padding: 0,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  fontVariantNumeric: 'tabular-nums',
+                  border: 'none',
+                  background: 'transparent',
+                  outline: 'none',
+                  fontFamily: 'var(--font-primary)',
+                  color: 'var(--color-text-primary)',
+                }}
+              />
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-secondary)' }}>
+                °C
+              </span>
+            </div>
+            <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
+              Recorded against this dispatch and sent to the cold-chain log.
+            </span>
+          </label>
+
           {/* Optional override note */}
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
             <span
@@ -725,6 +799,7 @@ export default function DispatchConfirmSheet({
                 note: note.trim() || undefined,
                 grandTotal,
                 totalLines,
+                dispatchTempC: parsedTemp,
               })
             }
             disabled={grandTotal === 0}
@@ -767,7 +842,7 @@ export default function DispatchConfirmSheet({
             Cancel
           </button>
           <button
-            onClick={() => onConfirm(note.trim() || undefined, adjustedManifest)}
+            onClick={() => onConfirm(note.trim() || undefined, adjustedManifest, parsedTemp)}
             disabled={grandTotal === 0}
             style={{
               padding: '10px 16px',
@@ -1446,6 +1521,7 @@ type PrintInput = {
   note?: string;
   grandTotal: number;
   totalLines: number;
+  dispatchTempC?: number;
 };
 
 function printDispatchManifest(input: PrintInput) {
@@ -1474,7 +1550,7 @@ function printDispatchManifest(input: PrintInput) {
 }
 
 function buildDispatchPrintHTML(input: PrintInput): string {
-  const { hubName, forDate, manifest, sentBy, note, grandTotal, totalLines } = input;
+  const { hubName, forDate, manifest, sentBy, note, grandTotal, totalLines, dispatchTempC } = input;
   const printedAt = new Date().toLocaleString('en-GB', {
     weekday: 'short',
     day: '2-digit',
@@ -1705,6 +1781,11 @@ function buildDispatchPrintHTML(input: PrintInput): string {
       <span><strong>${manifest.length}</strong> ${manifest.length === 1 ? 'spoke' : 'spokes'}</span>
       <span><strong>${totalLines}</strong> lines</span>
       <span><strong>${grandTotal}</strong> total units</span>
+      ${
+        dispatchTempC !== undefined
+          ? `<span>Temp <strong>${escape(String(dispatchTempC))}°C</strong></span>`
+          : ''
+      }
     </div>
     ${note ? `<div class="note"><strong>Note:</strong> ${escape(note)}</div>` : ''}
     ${spokeSections}

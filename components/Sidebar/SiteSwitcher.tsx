@@ -62,6 +62,7 @@ function siteTypeTheme(type: ActiveSite['type']) {
         chipFg: 'var(--color-accent-active)',
       };
     case 'HYBRID':
+    case 'HYBRID_HUB':
       return {
         avatarBg: 'var(--color-warning)',
         chipBg: 'var(--color-warning-light)',
@@ -83,6 +84,14 @@ function siteTypeTheme(type: ActiveSite['type']) {
   }
 }
 
+/** Short chip label shown next to the site name in the dropdown row.
+ *  Keeps the internal HYBRID_HUB enum value out of the UI — a producing
+ *  hybrid still reads as "HYBRID" on the chip, matching the persona's
+ *  user-facing "Hybrid" framing. */
+function siteTypeChipLabel(type: ActiveSite['type']): string {
+  return type === 'HYBRID_HUB' ? 'HYBRID' : type;
+}
+
 /** One-line "what kind of site this is" caption used under the name. */
 function siteTypeCaption(type: ActiveSite['type']): string {
   switch (type) {
@@ -92,6 +101,8 @@ function siteTypeCaption(type: ActiveSite['type']): string {
       return 'Hub kitchen';
     case 'HYBRID':
       return 'Hybrid site';
+    case 'HYBRID_HUB':
+      return 'Hybrid hub';
     case 'STANDALONE':
       return 'Standalone site';
     case 'SPOKE':
@@ -364,7 +375,7 @@ function SiteRow({
               color: siteTypeTheme(site.type).chipFg,
             }}
           >
-            {site.type}
+            {siteTypeChipLabel(site.type)}
           </span>
         </span>
         <span

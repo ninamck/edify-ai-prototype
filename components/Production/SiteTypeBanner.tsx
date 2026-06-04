@@ -131,6 +131,25 @@ function bannerVariant(site: Site): Variant {
       Icon: Truck,
     };
   }
+  if (site.type === 'HYBRID_HUB') {
+    const hubName = productionSiteLabel(site.hubId ?? '') || (site.hubId ? getSite(site.hubId)?.name : null) || 'the hub';
+    return {
+      kicker: 'Hybrid Site',
+      body: (
+        <>
+          You are planning for a <strong>Hybrid Site</strong> that also bakes
+          for other shops. The linked range comes in from{' '}
+          <strong>{hubName}</strong> and the rest is made on your benches
+          (each row is tagged <em>Make</em> or <em>Receive</em>) — and the
+          per-spoke columns show what you produce and dispatch for the sites
+          you supply.
+        </>
+      ),
+      accent: 'var(--color-warning)',
+      iconBg: 'var(--color-warning-light)',
+      Icon: Boxes,
+    };
+  }
   // STANDALONE (self or linked dark-kitchen)
   if (site.linkType === 'linked' && site.hubId) {
     const hubName = productionSiteLabel(site.hubId) || getSite(site.hubId)?.name || 'the hub';

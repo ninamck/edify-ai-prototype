@@ -50,6 +50,7 @@ const TODAY_WINDOWS: Record<WorkType, DayWindow> = {
   'weigh-up':  { from: '05:30', to: '06:30', label: 'Open shift'    },
   'thaw':      { from: '00:00', to: '06:00', label: 'Overnight'     },
   'mise':      { from: '05:30', to: '07:00', label: 'Open shift'    },
+  'butcher':   { from: '05:30', to: '07:30', label: 'Open shift'    },
   'wash':      { from: '06:00', to: '07:30', label: 'Open shift'    },
   'sanitise':  { from: '06:00', to: '07:30', label: 'Open shift'    },
   'slice':     { from: '06:30', to: '08:00', label: 'Open shift'    },
@@ -71,11 +72,30 @@ const PREV_EVENING_WINDOW: DayWindow = {
   from: '20:00', to: '23:00', label: 'Tonight (close-down)',
 };
 
+/**
+ * Prep-bench work types. These are the tasks a kitchen kicks off the
+ * moment the next day's plan is confirmed (around midday the day before)
+ * — weigh-ups, mise, washing/sanitising produce, and butchery — and they
+ * all run on the prep bench. Their prep-ahead window therefore opens at
+ * midday rather than waiting for the close-down shift.
+ */
+const PREP_WORK_TYPES = new Set<WorkType>([
+  'weigh-up', 'mise', 'wash', 'sanitise', 'butcher',
+]);
+
+/** Prep-ahead window for prep-bench work: the prep a kitchen does today,
+ *  from midday onward, for tomorrow's production. Runs through the
+ *  afternoon shift. */
+const PREP_AHEAD_WINDOW: DayWindow = {
+  from: '12:00', to: '17:00', label: 'From midday · for tomorrow',
+};
+
 function windowFor(workType: WorkType, leadOffset: -2 | -1 | 0): DayWindow {
   if (leadOffset === 0) return TODAY_WINDOWS[workType];
-  // For prep-ahead work (-1 / -2) we prefer "tonight" framing — these
-  // tasks happen on the previous shift's close-down regardless of
-  // their natural daytime window.
+  // Prep-bench work starts as soon as the next day's plan is confirmed
+  // (midday the day before); everything else prep-ahead stays on the
+  // previous shift's close-down.
+  if (PREP_WORK_TYPES.has(workType)) return PREP_AHEAD_WINDOW;
   return PREV_EVENING_WINDOW;
 }
 
@@ -84,6 +104,7 @@ const WORK_TYPE_PACE: Partial<Record<WorkType, number>> = {
   'weigh-up': 0.02,   // ~2 min per 100g
   'thaw':     0.005,  // passive, but accounts for mises checking trays
   'mise':     0.05,
+  'butcher':  0.01,   // portioning/breaking down protein, ~1 min per 100g
   'wash':     0.005,  // ~30s per 100g of leaves
   'sanitise': 0.4,    // per produce unit
   'slice':    0.4,    // per produce unit

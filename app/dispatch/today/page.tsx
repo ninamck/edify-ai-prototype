@@ -14,12 +14,14 @@ import { useHubUnlocks } from '@/components/Production/hubUnlockStore';
 import {
   dayOffset,
   getRecipe,
+  getSite,
   type DispatchTransfer,
   type RecipeId,
   type SiteId,
 } from '@/components/Production/fixtures';
 import type { ShortfallReallocationResult } from '@/components/Production/ShortfallReallocationModal';
 import { useRole } from '@/components/Production/RoleContext';
+import { useProductionSite } from '@/components/Production/ProductionSiteContext';
 
 /**
  * Dispatch › Today — hub-side aggregated view of what each spoke has
@@ -48,13 +50,17 @@ export default function DispatchTodayPage() {
 }
 
 function DispatchTodayPageInner() {
-  // The demo only ships one hub (`hub-central`). Hard-coding it removes
-  // the redundant in-page hub picker — the layout's site switcher up
-  // top is already the global "which site am I on" control. If a
-  // multi-hub demo is needed later, switch this back to local state
-  // driven by `PRET_SITES.filter(s => s.type === 'HUB')` and re-add a
-  // picker control.
-  const hubId: SiteId = 'hub-central';
+  // Dispatch runs against whichever supplying site is active in the shared
+  // production site context: the central HUB for the hub persona, or the
+  // producing hybrid (HYBRID_HUB) for the Gatwick persona. Any other
+  // selection (a spoke / standalone that doesn't dispatch) falls back to
+  // `hub-central` so the page never renders an empty non-hub matrix.
+  const { siteId } = useProductionSite();
+  const selectedSite = getSite(siteId);
+  const hubId: SiteId =
+    selectedSite && (selectedSite.type === 'HUB' || selectedSite.type === 'HYBRID_HUB')
+      ? siteId
+      : 'hub-central';
   const forDate = dayOffset(1);
 
   // Pending requests fed into the confirm sheet — `null` means closed.
@@ -85,7 +91,11 @@ function DispatchTodayPageInner() {
     setPendingRequests(reqs);
   }
 
-  function handleConfirm(note: string | undefined, adjustedManifest: DispatchManifestEntry[]) {
+  function handleConfirm(
+    note: string | undefined,
+    adjustedManifest: DispatchManifestEntry[],
+    dispatchTempC?: number,
+  ) {
     if (!pendingRequests) return;
     const nowISO = new Date().toISOString();
     // Match each pending request to the (possibly edited) manifest entry by
@@ -104,6 +114,10 @@ function DispatchTodayPageInner() {
         lines: adjusted?.lines ?? req.lines,
         totalUnits: adjusted?.totalUnits ?? req.totalUnits,
         note,
+        // Single temperature reading for the whole drop — forwarded onto
+        // every spoke transfer in this Send so the cold-chain system has
+        // a value per manifest.
+        dispatchTempC,
       };
     });
     recordBulkTransfer(transfers);
