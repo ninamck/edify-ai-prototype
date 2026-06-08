@@ -15,6 +15,7 @@ import { createPortal } from 'react-dom';
 import { useMasterProducts } from '@/components/Suppliers/store';
 import { createMasterProductFromName } from '@/components/Ingredients/catalogue';
 import { formatPrice } from '@/components/Suppliers/fixtures';
+import { ScanCaptureModal } from './ReceivingModals';
 import type { POLine } from './mockData';
 
 export type PackType = 'Pack' | 'Single';
@@ -51,6 +52,10 @@ export type AlternativeProductPrefill = Partial<Pick<
 interface AddAlternativeProductModalProps {
   originLine?: POLine;
   initialValues?: AlternativeProductPrefill;
+  /** Kick off a mock GRN scan as soon as the modal mounts. */
+  autoScan?: boolean;
+  /** Photo of the GRN captured/uploaded in the scan step, shown as a thumbnail. */
+  scanImageUrl?: string | null;
   supplierName: string;
   site: string;
   onSave: (alt: StagedAlternative) => void;
@@ -64,6 +69,8 @@ function localId(): string {
 export default function AddAlternativeProductModal({
   originLine,
   initialValues,
+  autoScan,
+  scanImageUrl,
   supplierName,
   site,
   onSave,
@@ -89,6 +96,45 @@ export default function AddAlternativeProductModal({
   const [singleUnitType, setSingleUnitType] = useState<SingleUnitType>(initialValues?.singleUnitType ?? 'Each');
   const [packCost, setPackCost] = useState<number>(initialValues?.packCost ?? originLine?.price ?? 0);
   const [receivedQty, setReceivedQty] = useState<number>(initialValues?.receivedQty ?? 1);
+
+  // Mock GRN scan: shows a brief "scanning" state, then fills every field so
+  // the user only has to review and confirm.
+  const [scanning, setScanning] = useState(false);
+  const [scannedApplied, setScannedApplied] = useState(false);
+  const [captureOpen, setCaptureOpen] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const bannerImage = capturedImage ?? scanImageUrl;
+
+  function handleCaptured(imageUrl: string | null) {
+    setCapturedImage(imageUrl);
+    setCaptureOpen(false);
+    runScan();
+  }
+
+  function runScan() {
+    setScanning(true);
+    setTimeout(() => {
+      const egg = masters.find((m) => m.name.toLowerCase().includes('egg'));
+      if (egg) {
+        setMasterId(egg.id);
+        setPickerOpen(false);
+      }
+      setProductName('Free range eggs 4pk');
+      setSupplierCode('FRE-4');
+      setPackType('Pack');
+      setPackQty(4);
+      setSingleUnitType('Each');
+      setPackCost(4);
+      setReceivedQty(originLine?.expectedQty ?? 1);
+      setScannedApplied(true);
+      setScanning(false);
+    }, 1100);
+  }
+
+  useEffect(() => {
+    if (autoScan) runScan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const selectedMaster = useMemo(
     () => masters.find((m) => m.id === masterId) ?? null,
@@ -161,16 +207,40 @@ export default function AddAlternativeProductModal({
   return createPortal(
     <div style={overlayStyle} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={modalStyle}>
-        <div style={{ marginBottom: 18 }}>
-          <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>
-            {originLine ? 'Received a different item' : 'Add unexpected item'}
-          </h3>
-          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>
-            {originLine
-              ? `${supplierName} sent a different product for "${originLine.name}". Add it so cost and stock stay accurate.`
-              : `${supplierName} delivered an item that wasn't on the PO. Add it to the catalogue.`}
-          </p>
+        <div style={{ marginBottom: 18, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>
+              {originLine ? 'Received a different item' : 'Add unexpected item'}
+            </h3>
+            <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>
+              {originLine
+                ? `${supplierName} sent a different product for "${originLine.name}". Add it so cost and stock stay accurate.`
+                : `${supplierName} delivered an item that wasn't on the PO. Add it to the catalogue.`}
+            </p>
+          </div>
+          <button onClick={() => setCaptureOpen(true)} disabled={scanning} style={scanBtnStyle}>
+            {scanning ? 'Scanning…' : '📷 Add GRN'}
+          </button>
         </div>
+
+        {scanning && (
+          <div style={scanBannerStyle}>
+            {bannerImage && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={bannerImage} alt="Scanned GRN" style={scanThumbStyle} />
+            )}
+            <span>📷 Scanning supplier GRN… matching pack size, supplier code, quantity and cost.</span>
+          </div>
+        )}
+        {scannedApplied && !scanning && (
+          <div style={scanBannerStyle}>
+            {bannerImage && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={bannerImage} alt="Scanned GRN" style={scanThumbStyle} />
+            )}
+            <span>✓ Prefilled from scanned GRN — review the details below and confirm.</span>
+          </div>
+        )}
 
         {/* Master product link */}
         <Field label="Linked master product">
@@ -334,6 +404,13 @@ export default function AddAlternativeProductModal({
           </button>
         </div>
       </div>
+
+      {captureOpen && (
+        <ScanCaptureModal
+          onCaptured={handleCaptured}
+          onClose={() => setCaptureOpen(false)}
+        />
+      )}
     </div>,
     document.body,
   );
@@ -411,4 +488,24 @@ const secondaryBtnStyle: React.CSSProperties = {
   border: '1px solid var(--color-border)', background: '#fff',
   color: 'var(--color-text-secondary)', fontSize: 14, fontWeight: 600,
   cursor: 'pointer', fontFamily: 'var(--font-primary)',
+};
+
+const scanBtnStyle: React.CSSProperties = {
+  flexShrink: 0,
+  padding: '8px 14px', borderRadius: 8,
+  border: '1px solid var(--color-border)', background: '#fff',
+  color: 'var(--color-text-primary)', fontSize: 13, fontWeight: 600,
+  cursor: 'pointer', fontFamily: 'var(--font-primary)', whiteSpace: 'nowrap',
+};
+
+const scanBannerStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 10,
+  padding: '10px 12px', borderRadius: 8,
+  background: 'var(--color-bg-hover)', border: '1px solid var(--color-border-subtle)',
+  fontSize: 12.5, color: 'var(--color-text-secondary)', lineHeight: 1.4,
+};
+
+const scanThumbStyle: React.CSSProperties = {
+  width: 40, height: 40, borderRadius: 6, objectFit: 'cover', flexShrink: 0,
+  border: '1px solid var(--color-border-subtle)',
 };

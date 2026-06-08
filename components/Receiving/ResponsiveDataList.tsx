@@ -8,6 +8,7 @@ export interface Column<T> {
   mobileRole?: 'title' | 'subtitle' | 'badge' | 'hidden';
   render: (row: T, index: number) => ReactNode;
   width?: string;
+  align?: 'left' | 'center' | 'right';
 }
 
 interface Props<T> {
@@ -55,7 +56,7 @@ export default function ResponsiveDataList<T>({ columns, data, getRowKey, emptyT
               <th
                 key={col.key}
                 style={{
-                  textAlign: 'left',
+                  textAlign: col.align ?? 'left',
                   padding: '10px 12px',
                   fontSize: '12px', fontWeight: 500,
                   letterSpacing: '0.04em',
@@ -80,6 +81,7 @@ export default function ResponsiveDataList<T>({ columns, data, getRowKey, emptyT
                     borderBottom: '1px solid var(--color-border-subtle)',
                     verticalAlign: 'middle',
                     color: 'var(--color-text-primary)',
+                    textAlign: col.align ?? 'left',
                   }}
                 >
                   {col.render(row, i)}

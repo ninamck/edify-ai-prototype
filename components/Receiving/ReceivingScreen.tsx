@@ -6,9 +6,8 @@ import StatusBadge from './StatusBadge';
 import ResponsiveDataList, { Column } from './ResponsiveDataList';
 import { PO, POLine, VarianceResolution, poItemCount, poTotal } from './mockData';
 import AddAlternativeProductModal, { type AlternativeProductPrefill, type StagedAlternative } from './AddAlternativeProductModal';
-import { ScanGRNModal } from './ReceivingModals';
+import { ScanCaptureModal, LineActionModal } from './ReceivingModals';
 import { formatPrice } from '@/components/Suppliers/fixtures';
-import { findMasterProduct } from '@/components/Suppliers/store';
 
 interface ReceivedLine {
   poLineId: string;
@@ -56,8 +55,11 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [attachedFile, setAttachedFile] = useState<string | null>(null);
   const [alternatives, setAlternatives] = useState<StagedAlternative[]>([]);
-  const [altModal, setAltModal] = useState<{ open: boolean; line?: POLine; initialValues?: AlternativeProductPrefill } | null>(null);
-  const [showScanGRN, setShowScanGRN] = useState(false);
+  const [altModal, setAltModal] = useState<{ open: boolean; line?: POLine; initialValues?: AlternativeProductPrefill; autoScan?: boolean } | null>(null);
+  const [scanCapture, setScanCapture] = useState(false);
+  const [scanImageUrl, setScanImageUrl] = useState<string | null>(null);
+  const [grnFile, setGrnFile] = useState<{ name: string; image: string | null } | null>(null);
+  const [lineActionLine, setLineActionLine] = useState<POLine | null>(null);
 
   const poForLine = (lineId: string): PO => pos.find(p => p.lines.some(l => l.id === lineId)) ?? pos[0];
   const modalPO = altModal?.line ? poForLine(altModal.line.id) : pos[0];
@@ -102,52 +104,14 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
   );
   const scanPO = scanEggLine ? poForLine(scanEggLine.id) : pos[0];
 
-  // Open the editable alternative-product form, prefilled with the scan.
-  const openScanEditable = () => {
+  // "Scan GRN" → capture a photo (camera/upload) → run the mock scan that
+  // prefills the editable alternative-product form, so the user just confirms.
+  const handleScanCaptured = (imageUrl: string | null) => {
     if (!scanEggLine || !scanPO) return;
-    const master = findMasterProduct(scanEggLine.masterProductId ?? 'mp-eggs');
-    const masterId = master?.id ?? scanEggLine.masterProductId ?? 'mp-eggs';
-    setAttachedFile('scanned-grn-bidfood-eggs.pdf');
-    setInvoiceNumber('INV-4433');
-    setAltModal({
-      open: true,
-      line: scanEggLine,
-      initialValues: {
-        masterProductId: masterId,
-        productName: 'Free range eggs 4pk',
-        supplierCode: 'FRE-4',
-        packType: 'Pack',
-        packQty: 4,
-        singleUnitType: 'Each',
-        packCost: 4,
-        receivedQty: scanEggLine.expectedQty,
-      },
-    });
-  };
-
-  // Accept the scan as-is and stage the alternative straight into the order.
-  const confirmScanDirect = () => {
-    if (!scanEggLine || !scanPO) return;
-    const master = findMasterProduct(scanEggLine.masterProductId ?? 'mp-eggs');
-    const masterId = master?.id ?? scanEggLine.masterProductId ?? 'mp-eggs';
-    setAttachedFile('scanned-grn-bidfood-eggs.pdf');
-    setInvoiceNumber('INV-4433');
-    addAlternative({
-      id: `scan-alt-${scanEggLine.id}`,
-      originPoLineId: scanEggLine.id,
-      masterProductId: masterId,
-      masterName: master?.name ?? 'Free Range Eggs',
-      masterUnit: master?.unit ?? 'egg',
-      productName: 'Free range eggs 4pk',
-      supplierCode: 'FRE-4',
-      packType: 'Pack',
-      packQty: 4,
-      singleUnitType: 'Each',
-      packCost: 4,
-      receivedQty: scanEggLine.expectedQty,
-      supplierName: scanPO.supplier,
-      site: scanPO.site,
-    });
+    setScanImageUrl(imageUrl);
+    setGrnFile({ name: 'scanned-grn-bidfood-eggs.jpg', image: imageUrl });
+    setScanCapture(false);
+    setAltModal({ open: true, line: scanEggLine, autoScan: true });
   };
 
   const substitutedLineIds = useMemo(
@@ -208,17 +172,9 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
           );
         }
         const { alt } = row;
-        const perUnit = alt.packQty > 0 ? alt.packCost / alt.packQty : 0;
-        const origin = alt.originPoLineId ? allLines.find(l => l.id === alt.originPoLineId) : undefined;
         return (
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-              <StatusBadge status="New product" variant="warning" />
-              <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text-primary)' }}>{alt.productName}</span>
-            </div>
-            <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-              → {alt.masterName} · {formatPrice(perUnit)}/{alt.masterUnit}{origin ? ` · for "${origin.name}"` : ' · off-PO'}
-            </div>
+            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text-primary)' }}>{alt.productName}</span>
           </div>
         );
       },
@@ -273,7 +229,7 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
       width: '150px',
       render: (row) => {
         if (row.kind === 'alt') {
-          return <StatusBadge status={row.alt.originPoLineId ? 'Alternative' : 'Off-PO item'} variant="warning" />;
+          return <StatusBadge status="New product" variant="warning" />;
         }
         if (substitutedLineIds.has(row.line.id)) {
           return <StatusBadge status="Alternative sent" variant="warning" />;
@@ -286,15 +242,16 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
     {
       key: 'actions',
       header: '',
-      width: '140px',
+      width: '80px',
+      align: 'right',
       render: (row) => {
         if (row.kind === 'alt') {
           return <button onClick={() => removeAlternative(row.alt.id)} style={removeBtnStyle}>Remove</button>;
         }
         if (substitutedLineIds.has(row.line.id)) return null;
         return (
-          <button onClick={() => setAltModal({ open: true, line: row.line })} style={substituteBtnStyle}>
-            Sent different?
+          <button onClick={() => setLineActionLine(row.line)} style={substituteBtnStyle}>
+            Edit
           </button>
         );
       },
@@ -316,9 +273,9 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
         <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>Receive Items</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={onAddPO} style={secondaryBtnStyle}>+ Add PO</button>
-          <button onClick={() => setAltModal({ open: true })} style={secondaryBtnStyle}>+ Add unexpected item</button>
-          <button onClick={() => setShowScanGRN(true)} style={secondaryBtnStyle}>Scan GRN</button>
+          <button onClick={onAddPO} style={secondaryBtnStyle}>Add PO</button>
+          <button onClick={() => setAltModal({ open: true })} style={secondaryBtnStyle}>Add new item</button>
+          <button onClick={() => setScanCapture(true)} style={secondaryBtnStyle}>Add GRN</button>
         </div>
       </div>
 
@@ -431,7 +388,7 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
         }}
       >
         <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 14px' }}>
-          Invoice / Delivery Note
+          Invoice
         </h3>
         <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div style={{ flex: '1 1 240px', minWidth: '200px' }}>
@@ -524,6 +481,64 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
         </div>
       </div>
 
+      {/* Goods received note (GRN) */}
+      {grnFile && (
+        <div
+          style={{
+            marginTop: '16px',
+            padding: '18px',
+            borderRadius: '10px',
+            border: '1px solid var(--color-border-subtle)',
+            background: '#fff',
+          }}
+        >
+          <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 14px' }}>
+            Goods received note (GRN)
+          </h3>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '10px 14px',
+              borderRadius: '8px',
+              background: 'var(--color-bg-hover)',
+              border: '1px solid var(--color-border-subtle)',
+            }}
+          >
+            {grnFile.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={grnFile.image}
+                alt="GRN"
+                style={{ width: 40, height: 40, borderRadius: 6, objectFit: 'cover', flexShrink: 0, border: '1px solid var(--color-border-subtle)' }}
+              />
+            ) : (
+              <span style={{ fontSize: '16px' }}>📄</span>
+            )}
+            <span style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {grnFile.name}
+            </span>
+            <button
+              type="button"
+              onClick={() => setGrnFile(null)}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '16px',
+                cursor: 'pointer',
+                color: 'var(--color-text-secondary)',
+                padding: '0 2px',
+                lineHeight: 1,
+              }}
+              aria-label="Remove GRN"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Confirm button */}
       <div style={{ marginTop: '28px', display: 'flex', justifyContent: 'flex-end' }}>
         <button
@@ -546,23 +561,35 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
         </button>
       </div>
 
+      {scanCapture && (
+        <ScanCaptureModal
+          po={scanPO}
+          onCaptured={handleScanCaptured}
+          onClose={() => setScanCapture(false)}
+        />
+      )}
+      {lineActionLine && (
+        <LineActionModal
+          line={lineActionLine}
+          onReject={() => setLineActionLine(null)}
+          onAddProduct={() => {
+            setAltModal({ open: true, line: lineActionLine });
+            setLineActionLine(null);
+          }}
+          onAcceptPrice={() => setLineActionLine(null)}
+          onClose={() => setLineActionLine(null)}
+        />
+      )}
       {altModal?.open && (
         <AddAlternativeProductModal
           originLine={altModal.line}
           initialValues={altModal.initialValues}
+          autoScan={altModal.autoScan}
+          scanImageUrl={altModal.autoScan ? scanImageUrl : null}
           supplierName={modalPO.supplier}
           site={modalPO.site}
           onSave={addAlternative}
           onClose={() => setAltModal(null)}
-        />
-      )}
-      {showScanGRN && (
-        <ScanGRNModal
-          po={scanPO}
-          eggLineName={scanEggLine?.name}
-          onOpenEditable={openScanEditable}
-          onConfirmScan={confirmScanDirect}
-          onClose={() => setShowScanGRN(false)}
         />
       )}
     </div>
