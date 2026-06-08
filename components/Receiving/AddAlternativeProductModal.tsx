@@ -12,7 +12,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useMasterProducts } from '@/components/Suppliers/store';
+import { useMasterProducts, useProducts } from '@/components/Suppliers/store';
 import { createMasterProductFromName } from '@/components/Ingredients/catalogue';
 import { formatPrice } from '@/components/Suppliers/fixtures';
 import { ScanCaptureModal } from './ReceivingModals';
@@ -77,6 +77,7 @@ export default function AddAlternativeProductModal({
   onClose,
 }: AddAlternativeProductModalProps) {
   const masters = useMasterProducts();
+  const products = useProducts();
 
   // Render into document.body so the overlay escapes any ancestor stacking
   // context (the receiving layout's sticky/transformed wrappers would
@@ -88,6 +89,11 @@ export default function AddAlternativeProductModal({
   const [masterId, setMasterId] = useState<string>(initialMasterId);
   const [masterQuery, setMasterQuery] = useState('');
   const [pickerOpen, setPickerOpen] = useState(!initialMasterId);
+
+  // Off-PO items can either be a completely new product (we create a master for
+  // it) or be linked to an existing master. Line substitutions always link.
+  const isOffPo = !originLine;
+  const [mode, setMode] = useState<'new' | 'link'>(isOffPo ? 'new' : 'link');
 
   const [productName, setProductName] = useState(initialValues?.productName ?? '');
   const [supplierCode, setSupplierCode] = useState(initialValues?.supplierCode ?? '');
@@ -136,6 +142,31 @@ export default function AddAlternativeProductModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-link the master product for a delivered line so the user never has to
+  // pick it: use the line's own link, else a supplier-product SKU match, else a
+  // name match, else create the master from the line name.
+  useEffect(() => {
+    if (masterId || !originLine) return;
+    let resolvedId: string | undefined = originLine.masterProductId;
+    if (!resolvedId && originLine.sku) {
+      const skuLower = originLine.sku.toLowerCase();
+      resolvedId = products.find((p) => p.supplierCode.toLowerCase() === skuLower)?.masterProductId;
+    }
+    if (!resolvedId) {
+      const nameLower = originLine.name.toLowerCase();
+      resolvedId = masters.find((m) => {
+        const mn = m.name.toLowerCase();
+        return nameLower.includes(mn) || mn.includes(nameLower);
+      })?.id;
+    }
+    if (!resolvedId) {
+      resolvedId = createMasterProductFromName({ name: originLine.name }).id;
+    }
+    setMasterId(resolvedId);
+    setPickerOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const selectedMaster = useMemo(
     () => masters.find((m) => m.id === masterId) ?? null,
     [masters, masterId],
@@ -143,8 +174,8 @@ export default function AddAlternativeProductModal({
 
   const matches = useMemo(() => {
     const q = masterQuery.trim().toLowerCase();
-    if (!q) return masters.slice(0, 8);
-    return masters.filter((m) => m.name.toLowerCase().includes(q)).slice(0, 8);
+    if (!q) return masters.slice(0, 50);
+    return masters.filter((m) => m.name.toLowerCase().includes(q)).slice(0, 50);
   }, [masters, masterQuery]);
 
   const exactMatch = masters.some(
@@ -161,13 +192,17 @@ export default function AddAlternativeProductModal({
     currentWac != null && currentQty > 0 && deliveredUnits > 0
       ? (currentQty * currentWac + deliveredUnits * perUnitCost) / (currentQty + deliveredUnits)
       : perUnitCost;
+  // Unit label for the preview — falls back to the chosen single-unit type when
+  // a brand-new master hasn't been created yet.
+  const previewUnit = selectedMaster?.unit ?? singleUnitType.toLowerCase();
+  const showPreview = (mode === 'new' || !!selectedMaster) && packQty > 0 && packCost > 0;
 
   const canSave =
-    !!selectedMaster &&
     productName.trim().length > 0 &&
     packQty > 0 &&
     packCost > 0 &&
-    receivedQty > 0;
+    receivedQty > 0 &&
+    (mode === 'new' || !!selectedMaster);
 
   function chooseMaster(id: string) {
     setMasterId(id);
@@ -183,13 +218,22 @@ export default function AddAlternativeProductModal({
   }
 
   function handleSave() {
-    if (!selectedMaster || !canSave) return;
+    if (!canSave) return;
+    let master = selectedMaster;
+    if (mode === 'new') {
+      const nameTrim = productName.trim();
+      const unit = singleUnitType === 'Each' ? 'each' : singleUnitType;
+      master =
+        masters.find((m) => m.name.toLowerCase() === nameTrim.toLowerCase()) ??
+        createMasterProductFromName({ name: nameTrim, unit });
+    }
+    if (!master) return;
     onSave({
       id: localId(),
       originPoLineId: originLine?.id,
-      masterProductId: selectedMaster.id,
-      masterName: selectedMaster.name,
-      masterUnit: selectedMaster.unit,
+      masterProductId: master.id,
+      masterName: master.name,
+      masterUnit: master.unit,
       productName: productName.trim(),
       supplierCode: supplierCode.trim(),
       packType,
@@ -242,7 +286,41 @@ export default function AddAlternativeProductModal({
           </div>
         )}
 
+        {/* Off-PO: choose between a brand-new product or linking to a master */}
+        {isOffPo && (
+          <div style={segmentRowStyle}>
+            <button
+              type="button"
+              onClick={() => { setMode('new'); setMasterId(''); setPickerOpen(false); }}
+              style={segmentBtnStyle(mode === 'new')}
+            >
+              Completely new product
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode('link'); setPickerOpen(true); setMasterQuery(''); }}
+              style={segmentBtnStyle(mode === 'link')}
+            >
+              Link to master product
+            </button>
+          </div>
+        )}
+
         {/* Master product link */}
+        {mode === 'new' ? (
+          <Field label="Master product">
+            <div style={selectedMasterStyle}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                  {productName.trim() || 'New master product'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                  A new master product will be created from the product name.
+                </div>
+              </div>
+            </div>
+          </Field>
+        ) : (
         <Field label="Linked master product">
           {selectedMaster && !pickerOpen ? (
             <div style={selectedMasterStyle}>
@@ -290,6 +368,7 @@ export default function AddAlternativeProductModal({
             </div>
           )}
         </Field>
+        )}
 
         {/* Product details */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -315,7 +394,7 @@ export default function AddAlternativeProductModal({
               <option value="Single">Single</option>
             </select>
           </Field>
-          <Field label={`Units per pack (${selectedMaster?.unit ?? 'unit'})`}>
+          <Field label={`Units per pack (${previewUnit})`}>
             <input
               type="number"
               min={1}
@@ -357,7 +436,7 @@ export default function AddAlternativeProductModal({
         </div>
 
         {/* WAC preview */}
-        {selectedMaster && packQty > 0 && packCost > 0 && (
+        {showPreview && (
           <div style={previewStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
               <span style={{ color: 'var(--color-text-secondary)' }}>{packType} price</span>
@@ -368,13 +447,13 @@ export default function AddAlternativeProductModal({
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
               <span style={{ color: 'var(--color-text-secondary)' }}>Unit cost</span>
               <strong style={{ color: 'var(--color-text-primary)' }}>
-                {formatPrice(perUnitCost)} / {selectedMaster.unit}
+                {formatPrice(perUnitCost)} / {previewUnit}
               </strong>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
               <span style={{ color: 'var(--color-text-secondary)' }}>Delivering</span>
               <span style={{ color: 'var(--color-text-primary)' }}>
-                {deliveredUnits.toLocaleString()} {selectedMaster.unit}{deliveredUnits === 1 ? '' : 's'} → {site}
+                {deliveredUnits.toLocaleString()} {previewUnit}{deliveredUnits === 1 ? '' : 's'} → {site}
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, paddingTop: 8, borderTop: '1px solid var(--color-border-subtle)' }}>
@@ -463,7 +542,7 @@ const linkBtnStyle: React.CSSProperties = {
 
 const pickerListStyle: React.CSSProperties = {
   marginTop: 6, border: '1px solid var(--color-border-subtle)', borderRadius: 8,
-  overflow: 'hidden', display: 'flex', flexDirection: 'column',
+  overflowY: 'auto', maxHeight: 240, display: 'flex', flexDirection: 'column',
 };
 
 const pickerRowStyle: React.CSSProperties = {
@@ -489,6 +568,27 @@ const secondaryBtnStyle: React.CSSProperties = {
   color: 'var(--color-text-secondary)', fontSize: 14, fontWeight: 600,
   cursor: 'pointer', fontFamily: 'var(--font-primary)',
 };
+
+const segmentRowStyle: React.CSSProperties = {
+  display: 'flex', padding: 3, borderRadius: 100,
+  background: 'var(--color-bg-hover)',
+};
+
+function segmentBtnStyle(active: boolean): React.CSSProperties {
+  return {
+    flex: 1,
+    padding: '8px 18px',
+    borderRadius: 100,
+    border: 'none',
+    background: active ? 'var(--color-accent-active)' : 'transparent',
+    color: active ? '#fff' : 'var(--color-text-secondary)',
+    fontSize: 13,
+    fontWeight: 600,
+    fontFamily: 'var(--font-primary)',
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+  };
+}
 
 const scanBtnStyle: React.CSSProperties = {
   flexShrink: 0,
