@@ -233,7 +233,7 @@ export default function DunkinOverview() {
           color: '#d44d4d',
         }}
       >
-        Couldn&rsquo;t load Dunkin flash-report data: {error}
+        Couldn&rsquo;t load Coffee &amp; Co US flash-report data: {error}
       </div>
     );
   }
@@ -262,7 +262,7 @@ export default function DunkinOverview() {
             marginBottom: 6,
           }}
         >
-          Dunkin&rsquo; · chain overview
+          Coffee &amp; Co US · chain overview
         </div>
         <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text-primary)' }}>
           Week of {formatWeekLabel(agg.latestWeekStart)}

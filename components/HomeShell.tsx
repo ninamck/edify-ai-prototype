@@ -11,6 +11,8 @@ import ManagerDashboard from '@/components/Dashboard/ManagerDashboard';
 import PlaytomicDashboard from '@/components/Dashboard/PlaytomicDashboard';
 import CulinaryCollectiveDashboard from '@/components/Dashboard/CulinaryCollective/CulinaryCollectiveDashboard';
 import MorningBriefingTimeline from '@/components/Feed/MorningBriefingTimeline';
+import BriefingDrawer, { briefingLabelForPhase } from '@/components/Feed/BriefingDrawer';
+import NoteForEdifyPopup from '@/components/Feed/NoteForEdifyPopup';
 import RightPanelSheetOverlay from '@/components/RightPanel/RightPanelSheetOverlay';
 import MobileInsightsBar from '@/components/MobileInsightsBar';
 import AddInsightPopup from '@/components/Dashboard/AddInsightPopup';
@@ -53,6 +55,8 @@ export default function HomeShell() {
   const [editingDashboard, setEditingDashboard] = useState(false);
   const [addInsightOpen, setAddInsightOpen] = useState(false);
   const [phaseOverride, setPhaseOverride] = useState<PhaseOverride>('auto');
+  const [briefingOpen, setBriefingOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
   const effectivePhase: BriefingPhase =
     phaseOverride === 'auto' ? phaseFromHour(new Date().getHours()) : phaseOverride;
   const isNarrow = useMediaQuery(NARROW_BREAKPOINT);
@@ -136,6 +140,8 @@ export default function HomeShell() {
         onShellViewChange={setShellView}
         phaseOverride={phaseOverride}
         onPhaseOverrideChange={setPhaseOverride}
+        briefingLabel={briefingLabelForPhase(effectivePhase).title}
+        onOpenBriefing={() => setBriefingOpen(true)}
       />
       <div
         style={{
@@ -191,6 +197,7 @@ export default function HomeShell() {
                     <FloorActionsBox
                       briefingRole={briefingRole}
                       onReceiveDelivery={() => router.push('/receive')}
+                      onNote={() => setNoteOpen(true)}
                     />
                     {isNarrow && (
                       <MobileInsightsBar onOpen={() => setMobileInsightsOpen(true)} />
@@ -206,30 +213,9 @@ export default function HomeShell() {
                 onAddToDashboard={addPinnedChart}
                 onViewDashboard={() => setShellView('dashboard')}
                 autoStartFlow={autoStartFlow}
+                enableNoteCapture
               />
             </div>
-
-            {/* Right panel: briefing timeline — fades out when chat opens */}
-            <AnimatePresence initial={false}>
-              {!chatActive && !isNarrow && (
-                <motion.div
-                  key="right-panel"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  style={{
-                    flexShrink: 0,
-                    padding: '12px 12px 12px 0',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    minHeight: 0,
-                  }}
-                >
-                  <MorningBriefingTimeline briefingRole={briefingRole} phase={effectivePhase} />
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
         ) : (
           <div
@@ -288,6 +274,19 @@ export default function HomeShell() {
         )}
       </div>
       </div>
+
+      <BriefingDrawer
+        open={briefingOpen}
+        onClose={() => setBriefingOpen(false)}
+        briefingRole={briefingRole}
+        phase={effectivePhase}
+      />
+
+      <NoteForEdifyPopup
+        open={noteOpen}
+        onClose={() => setNoteOpen(false)}
+        phase={effectivePhase}
+      />
 
       <RightPanelSheetOverlay
         open={mobileInsightsOpen}

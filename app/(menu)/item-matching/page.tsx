@@ -29,6 +29,7 @@ import { FITZROY_POS_INTAKE } from '@/components/Recipe/intakeFixtures';
 import {
   useMatchOverrides,
   setHidden,
+  setMatchTarget,
   clearMatchTarget,
   type MatchTarget,
 } from '@/components/ItemMatching/overrideStore';
@@ -54,6 +55,36 @@ type ResolvedTarget =
 function posSourceIdFor(posItemId: string): string {
   return `pos-${posItemId}`;
 }
+
+/** Loose normalization for name-similarity scoring — mirrors the
+ *  helper inside `SyncMatchModal` so the inline-suggestion and the
+ *  sync-modal stay consistent if we ever cross-reference them. */
+function normalize(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9 ]+/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function nameScore(a: string, b: string): number {
+  const na = normalize(a);
+  const nb = normalize(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+  if (na.includes(nb) || nb.includes(na)) return 0.85;
+  // Token overlap (Jaccard) for fuzzier matches like "Coca-Cola" → "Atlas Cola".
+  const ta = new Set(na.split(' '));
+  const tb = new Set(nb.split(' '));
+  let shared = 0;
+  for (const t of ta) if (tb.has(t)) shared += 1;
+  const union = new Set([...ta, ...tb]).size;
+  return union === 0 ? 0 : shared / union;
+}
+
+/** Threshold for surfacing a suggestion on an unmatched Drinks row.
+ *  Much looser than Sync & match's auto-apply threshold (0.8) because
+ *  the operator still has to confirm here, and we want loose token
+ *  overlap (e.g. "Coca-Cola" ↔ "Atlas Cola Mixer") to count. The
+ *  candidate pool is already restricted to Beverage products, so the
+ *  risk of a noisy suggestion is small. */
+const SUGGESTION_THRESHOLD = 0.2;
 
 export default function ItemMatchingPage() {
   const router = useRouter();
@@ -95,6 +126,15 @@ export default function ItemMatchingPage() {
     return m;
   }, [masters]);
 
+  // Beverage products are pre-filtered so we don't re-scan the
+  // whole catalogue for every Drinks row. New imports (e.g. the
+  // Atlas Drinks Co. supplier catalogue from the chat flow) land
+  // here automatically because `useProducts()` reflects the store.
+  const beverageProducts = useMemo(
+    () => products.filter((p) => p.category === 'Beverage'),
+    [products],
+  );
+
   const rows = useMemo(() => {
     return FITZROY_POS_INTAKE.menuItems.map((p) => {
       const override = overrides.get(p.id);
@@ -131,9 +171,35 @@ export default function ItemMatchingPage() {
           ? 'review'
           : 'matched';
 
-      return { pos: p, target, matchTarget, state, hidden };
+      // Surface a one-click suggestion for unmatched whole-drink POS
+      // rows (Sparkling water, Coca-Cola, Apple Fizz, …). We scope
+      // to category === 'Drinks' on the POS side and
+      // category === 'Beverage' on the catalogue side so the
+      // affordance only appears where the operator would expect it.
+      let suggestion: ResolvedTarget | undefined;
+      let suggestionMatch: MatchTarget | undefined;
+      if (state === 'unmatched' && p.category === 'Drinks' && beverageProducts.length > 0) {
+        let best: { id: string; name: string; s: number } | null = null;
+        for (const cand of beverageProducts) {
+          const s = nameScore(p.name, cand.name);
+          if (s >= SUGGESTION_THRESHOLD && (!best || s > best.s)) {
+            best = { id: cand.id, name: cand.name, s };
+          }
+        }
+        if (best) {
+          suggestion = {
+            kind: 'product',
+            id: best.id,
+            name: best.name,
+            href: `/suppliers/products/${best.id}`,
+          };
+          suggestionMatch = { type: 'product', id: best.id };
+        }
+      }
+
+      return { pos: p, target, matchTarget, state, hidden, suggestion, suggestionMatch };
     });
-  }, [overrides, recipesByPosSourceId, recipesById, productsById, mastersById]);
+  }, [overrides, recipesByPosSourceId, recipesById, productsById, mastersById, beverageProducts]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -376,12 +442,16 @@ export default function ItemMatchingPage() {
               pos={row.pos}
               target={row.target}
               matchTarget={row.matchTarget}
+              suggestion={row.suggestion}
               state={row.state}
               hidden={row.hidden}
               isMenuOpen={menuFor === row.pos.id}
               isPickerOpen={pickerFor === row.pos.id}
               onOpenTarget={(href) => router.push(href)}
               onMatch={() => setPickerFor(pickerFor === row.pos.id ? null : row.pos.id)}
+              onApplySuggestion={() => {
+                if (row.suggestionMatch) setMatchTarget(row.pos.id, row.suggestionMatch);
+              }}
               onClosePicker={() => setPickerFor(null)}
               onCreate={() => router.push(`/recipes/intake/pos`)}
               onToggleMenu={() => setMenuFor(menuFor === row.pos.id ? null : row.pos.id)}
@@ -466,19 +536,23 @@ function StatTile({
 }
 
 function Row({
-  pos, target, matchTarget, state, hidden, isMenuOpen, isPickerOpen,
-  onOpenTarget, onMatch, onClosePicker, onCreate, onToggleMenu, onCloseMenu,
-  onHide, onClearMatch, canClearMatch,
+  pos, target, matchTarget, suggestion, state, hidden, isMenuOpen, isPickerOpen,
+  onOpenTarget, onMatch, onApplySuggestion, onClosePicker, onCreate,
+  onToggleMenu, onCloseMenu, onHide, onClearMatch, canClearMatch,
 }: {
   pos: typeof FITZROY_POS_INTAKE.menuItems[number];
   target?: ResolvedTarget;
   matchTarget?: MatchTarget;
+  /** When set, the unmatched cell renders a one-click "Suggested"
+   *  affordance instead of the bare "Match to…" placeholder. */
+  suggestion?: ResolvedTarget;
   state: RowState;
   hidden: boolean;
   isMenuOpen: boolean;
   isPickerOpen: boolean;
   onOpenTarget: (href: string) => void;
   onMatch: () => void;
+  onApplySuggestion?: () => void;
   onClosePicker: () => void;
   onCreate: () => void;
   onToggleMenu: () => void;
@@ -592,6 +666,64 @@ function Row({
             </span>
             <ChevronDown size={14} style={{ color: 'var(--color-text-muted)' }} />
           </div>
+        ) : suggestion ? (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => onApplySuggestion?.()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onApplySuggestion?.();
+              }
+            }}
+            style={{
+              ...recipeLinkStyle,
+              borderStyle: 'dashed',
+              borderColor: 'var(--color-accent-active)',
+              background: 'rgba(40, 175, 201, 0.06)',
+              ...(isPickerOpen ? { borderStyle: 'solid' } : null),
+            }}
+            title={`Match to ${suggestion.name}`}
+          >
+            <EdifyMark size={12} />
+            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {suggestion.name}
+            </span>
+            <span
+              style={{
+                fontSize: 9.5, fontWeight: 700, letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                color: 'var(--color-accent-active)',
+                padding: '1px 5px', borderRadius: 100,
+                border: '1px solid var(--color-accent-active)',
+                background: 'rgba(40, 175, 201, 0.10)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Suggested
+            </span>
+            <span
+              role="link"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); onMatch(); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onMatch();
+                }
+              }}
+              title="Pick a different match"
+              style={{
+                display: 'inline-flex', alignItems: 'center',
+                cursor: 'pointer',
+                color: 'var(--color-text-muted)',
+              }}
+            >
+              <ChevronDown size={14} />
+            </span>
+          </div>
         ) : (
           <button
             onClick={onMatch}
@@ -607,11 +739,17 @@ function Row({
             <ChevronDown size={14} />
           </button>
         )}
-        {/* Inline dropdown anchored under the linked-target trigger */}
+        {/* Inline dropdown anchored under the linked-target trigger.
+            When the operator opens the picker on an unmatched row that
+            has a pending suggestion, pre-highlight the suggestion as
+            the "Current" choice so they have a reference point. */}
         {isPickerOpen && (
           <MatchPicker
             posItemId={pos.id}
-            currentTarget={matchTarget}
+            currentTarget={
+              matchTarget
+                ?? (suggestion ? { type: suggestion.kind, id: suggestion.id } : undefined)
+            }
             onClose={onClosePicker}
             align="left"
           />

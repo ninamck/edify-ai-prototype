@@ -23,6 +23,7 @@ import {
   Scale,
   Clock,
   FileText,
+  NotebookPen,
   AlertTriangle,
   CheckCircle,
   CalendarClock,
@@ -55,6 +56,7 @@ const ICON_OPTIONS: { key: string; Icon: LucideIcon; label: string }[] = [
   { key: 'Scale', Icon: Scale, label: 'Scale' },
   { key: 'Clock', Icon: Clock, label: 'Clock' },
   { key: 'FileText', Icon: FileText, label: 'Document' },
+  { key: 'NotebookPen', Icon: NotebookPen, label: 'Note' },
   { key: 'AlertTriangle', Icon: AlertTriangle, label: 'Alert' },
   { key: 'CheckCircle', Icon: CheckCircle, label: 'Complete' },
   { key: 'CalendarClock', Icon: CalendarClock, label: 'Schedule' },
@@ -113,6 +115,7 @@ export interface FloorAction {
 }
 
 export const DEFAULT_FLOOR_ACTIONS: FloorAction[] = [
+  { id: 'note-to-edify', label: 'Note to Edify', iconKey: 'NotebookPen', visible: true },
   { id: 'checklists', label: 'Checklists', iconKey: 'ListChecks', visible: true },
   { id: 'review-orders', label: 'Review orders', iconKey: 'ShoppingCart', visible: true },
   { id: 'log-waste', label: 'Log waste', iconKey: 'Trash2', visible: true },
@@ -123,6 +126,7 @@ export const DEFAULT_FLOOR_ACTIONS: FloorAction[] = [
 export const DEFAULT_FLOOR_ACTIONS_BY_ROLE: Record<BriefingRole, FloorAction[]> = {
   ed: DEFAULT_FLOOR_ACTIONS,
   cheryl: [
+    { id: 'note-to-edify', label: 'Note to Edify', iconKey: 'NotebookPen', visible: true },
     { id: 'review-orders', label: 'Review orders', iconKey: 'ShoppingCart', visible: true },
     { id: 'receive-delivery', label: 'Receive delivery', iconKey: 'Truck', visible: true },
     { id: 'transfer-stock', label: 'Transfer stock', iconKey: 'ArrowLeftRight', visible: true },
@@ -130,6 +134,7 @@ export const DEFAULT_FLOOR_ACTIONS_BY_ROLE: Record<BriefingRole, FloorAction[]> 
     { id: 'log-waste', label: 'Log waste', iconKey: 'Trash2', visible: true },
   ],
   gm: [
+    { id: 'note-to-edify', label: 'Note to Edify', iconKey: 'NotebookPen', visible: true },
     { id: 'checklists', label: 'Checklists', iconKey: 'ListChecks', visible: true },
     { id: 'log-waste', label: 'Log waste', iconKey: 'Trash2', visible: true },
     { id: 'receive-delivery', label: 'Receive delivery', iconKey: 'Truck', visible: true },

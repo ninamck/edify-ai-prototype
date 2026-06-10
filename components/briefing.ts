@@ -16,8 +16,8 @@ export const BRIEFING_ROLES: { id: BriefingRole; label: string; short: string }[
   { id: 'ed', label: 'Manager', short: 'Manager' },
   { id: 'cheryl', label: 'Admin', short: 'Admin' },
   { id: 'gm', label: 'Employee', short: 'Employee' },
-  { id: 'playtomic', label: 'Playtomic (padel demo)', short: 'Playtomic' },
-  { id: 'dunkin', label: 'Dunkin (QSR demo)', short: 'Dunkin' },
+  { id: 'playtomic', label: 'Coffee & Co · United Kingdom', short: 'Coffee & Co UK' },
+  { id: 'dunkin', label: 'Coffee & Co · United States', short: 'Coffee & Co US' },
   { id: 'pilot', label: 'Pilot (clean slate)', short: 'Pilot' },
   { id: 'culinary', label: 'Culinary Collective (FIS demo)', short: 'Culinary' },
 ];
@@ -32,9 +32,9 @@ export function morningGreetingLine(role: BriefingRole): string {
     case 'gm':
       return 'Good morning — Fitzroy Espresso';
     case 'playtomic':
-      return 'Good morning — Playtomic';
+      return 'Good morning — Coffee & Co (UK)';
     case 'dunkin':
-      return "Good morning — Dunkin'";
+      return 'Good morning — Coffee & Co (US)';
     case 'pilot':
       return 'Good morning — Pilot';
     case 'culinary':
@@ -56,9 +56,9 @@ export function timeAwareGreeting(role: BriefingRole): string {
     case 'gm':
       return `Good ${tod} — Fitzroy Espresso`;
     case 'playtomic':
-      return `Good ${tod} — Playtomic`;
+      return `Good ${tod} — Coffee & Co (UK)`;
     case 'dunkin':
-      return `Good ${tod} — Dunkin'`;
+      return `Good ${tod} — Coffee & Co (US)`;
     case 'pilot':
       return `Good ${tod} — Pilot`;
     case 'culinary':

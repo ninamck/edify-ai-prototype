@@ -15,9 +15,11 @@ function varColor(varCost: number): string {
 
 export default function CogsTopVariancesBoard({
   onHighlightRows,
+  onOpenDetail,
   onAskEdify,
 }: {
   onHighlightRows: (ids: string[]) => void;
+  onOpenDetail: (rowId: string) => void;
   onAskEdify: () => void;
 }) {
   const [open, setOpen] = useState(true);
@@ -45,7 +47,7 @@ export default function CogsTopVariancesBoard({
           Top 10 variances
         </span>
         <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-          biggest £ swings and why we think they happened
+          biggest £ swings — open a line for the breakdown and fix
         </span>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -98,100 +100,113 @@ export default function CogsTopVariancesBoard({
               alignItems: 'stretch',
             }}
           >
-            {TOP.map((row, i) => (
-              <button
-                key={row.id}
-                type="button"
-                onClick={() => onHighlightRows([row.id])}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8,
-                  minHeight: 132,
-                  padding: 12,
-                  borderRadius: 10,
-                  border: '1px solid var(--color-border-subtle)',
-                  background: '#fff',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  fontFamily: 'var(--font-primary)',
-                }}
-              >
-                {/* Rank + name */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span
+            {TOP.map((row, i) => {
+              const openDetail = () => {
+                onHighlightRows([row.id]);
+                onOpenDetail(row.id);
+              };
+              return (
+                <div
+                  key={row.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={openDetail}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openDetail();
+                    }
+                  }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                    minHeight: 132,
+                    padding: 12,
+                    borderRadius: 10,
+                    border: '1px solid var(--color-border-subtle)',
+                    background: '#fff',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontFamily: 'var(--font-primary)',
+                  }}
+                >
+                  {/* Rank + name */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        background: varColor(row.varCost),
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: '0.05em',
+                        textTransform: 'uppercase',
+                        color: 'var(--color-text-muted)',
+                      }}
+                    >
+                      {`#${i + 1}`}
+                    </span>
+                  </div>
+
+                  {/* Name */}
+                  <div
                     style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: '50%',
-                      background: varColor(row.varCost),
-                    }}
-                  />
-                  <span
-                    style={{
-                      fontSize: 10,
+                      fontSize: 13,
                       fontWeight: 700,
-                      letterSpacing: '0.05em',
-                      textTransform: 'uppercase',
-                      color: 'var(--color-text-muted)',
+                      lineHeight: 1.3,
+                      color: 'var(--color-text-primary)',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
                     }}
                   >
-                    {`#${i + 1}`}
-                  </span>
-                </div>
+                    {row.name}
+                  </div>
 
-                {/* Name */}
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 700,
-                    lineHeight: 1.3,
-                    color: 'var(--color-text-primary)',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                  }}
-                >
-                  {row.name}
-                </div>
+                  {/* Reason */}
+                  <div
+                    style={{
+                      fontSize: 12,
+                      lineHeight: 1.4,
+                      color: 'var(--color-text-secondary)',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {getVarianceReason(row)}
+                  </div>
 
-                {/* Reason */}
-                <div
-                  style={{
-                    fontSize: 12,
-                    lineHeight: 1.4,
-                    color: 'var(--color-text-secondary)',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 3,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                  }}
-                >
-                  {getVarianceReason(row)}
+                  {/* Footer — variance £ + % */}
+                  <div
+                    style={{
+                      marginTop: 'auto',
+                      paddingTop: 6,
+                      display: 'flex',
+                      alignItems: 'baseline',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                    }}
+                  >
+                    <span style={{ fontSize: 14, fontWeight: 700, color: varColor(row.varCost) }}>
+                      {gbp(row.varCost, { sign: true, decimals: 0 })}
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                      {row.varPct > 0 ? '+' : ''}
+                      {row.varPct.toFixed(1)}%
+                    </span>
+                  </div>
                 </div>
-
-                {/* Footer — variance £ + % */}
-                <div
-                  style={{
-                    marginTop: 'auto',
-                    paddingTop: 6,
-                    display: 'flex',
-                    alignItems: 'baseline',
-                    justifyContent: 'space-between',
-                    gap: 8,
-                  }}
-                >
-                  <span style={{ fontSize: 14, fontWeight: 700, color: varColor(row.varCost) }}>
-                    {gbp(row.varCost, { sign: true, decimals: 0 })}
-                  </span>
-                  <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                    {row.varPct > 0 ? '+' : ''}
-                    {row.varPct.toFixed(1)}%
-                  </span>
-                </div>
-              </button>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

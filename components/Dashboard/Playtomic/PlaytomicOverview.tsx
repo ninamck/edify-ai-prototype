@@ -97,13 +97,13 @@ export default function PlaytomicOverview() {
             marginBottom: 6,
           }}
         >
-          Playtomic · overview
+          Coffee &amp; Co UK · overview
         </div>
         <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-          Today across the chain
+          Today across the UK chain
         </div>
         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-muted)', marginTop: 4 }}>
-          Court bookings, cafe revenue and member growth at a glance.
+          Store sales, basket growth and customer momentum at a glance.
         </div>
       </header>
 

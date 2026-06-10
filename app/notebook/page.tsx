@@ -27,6 +27,7 @@
 // reflect what it's been picking up alongside.
 
 import { useState, useMemo, useEffect } from 'react';
+import { useNotebookNotes } from '@/components/notebookStore';
 import {
   Mic,
   Square,
@@ -204,6 +205,33 @@ export default function NotebookPage() {
   const [openEmailSignalId, setOpenEmailSignalId] = useState<string | null>(null);
   const [pastExpanded, setPastExpanded] = useState(false);
 
+  // Notes captured elsewhere (e.g. the "Note:" quick action in the Quinn
+  // chat) thread into the running record here. Newest first, ahead of the
+  // canned demo history.
+  const chatNotes = useNotebookNotes();
+  const capturedEntries = useMemo<PastEntry[]>(
+    () =>
+      chatNotes.map((n) => {
+        const d = new Date(n.createdAt);
+        return {
+          id: n.id,
+          dateLabel: new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(d),
+          weekday: new Intl.DateTimeFormat('en-GB', { weekday: 'long' }).format(d),
+          note: n.text,
+          tags: n.tags.filter((t): t is EntryTag => (ALL_TAGS as string[]).includes(t)),
+          edifyReply: n.reply,
+        };
+      }),
+    [chatNotes],
+  );
+  const allEntries = useMemo(() => [...capturedEntries, ...PAST_ENTRIES], [capturedEntries]);
+
+  // Surface freshly-captured notes without making the operator hunt for
+  // them: open the Past entries section when there's something new.
+  useEffect(() => {
+    if (capturedEntries.length > 0) setPastExpanded(true);
+  }, [capturedEntries.length]);
+
   const today = useMemo(() => {
     return new Intl.DateTimeFormat('en-GB', {
       weekday: 'long',
@@ -283,8 +311,8 @@ export default function NotebookPage() {
   }
 
   const visibleEntries = filterTag
-    ? PAST_ENTRIES.filter((e) => e.tags.includes(filterTag))
-    : PAST_ENTRIES;
+    ? allEntries.filter((e) => e.tags.includes(filterTag))
+    : allEntries;
 
   const visibleSignals = DATA_SIGNALS.filter((s) => !dismissedSignals.has(s.id));
 
@@ -736,7 +764,7 @@ export default function NotebookPage() {
           >
             {filterTag
               ? `${visibleEntries.length} tagged ${filterTag}`
-              : `${PAST_ENTRIES.length} entries · 13–19 May`}
+              : `${allEntries.length} entries`}
           </span>
           <div style={{ flex: 1 }} />
           {filterTag ? (

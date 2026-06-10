@@ -27,6 +27,7 @@ import {
   type ProductCategory, type SupplierStatus,
 } from './fixtures';
 import { Checkbox, RowQuinnButton, StatusPill, SmallButton } from './Primitives';
+import { SharedBadge } from '@/components/Franchise/SharedLibrary';
 
 const COLUMNS = '32px 2fr 1.4fr 70px 80px 110px 90px';
 
@@ -260,6 +261,7 @@ export default function SuppliersTable({
                   {s.shortCode}
                 </span>
               )}
+              <SharedBadge />
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, minWidth: 0 }}>
               {s.categories.length === 0 ? (

@@ -63,6 +63,19 @@ export function getTopVariances(limit = 10): CogsVarianceRow[] {
     .slice(0, limit);
 }
 
+/** The suggested fix for a variance row: the action (and optional deep-link)
+ *  from the insight card that points at this row, when one exists. */
+export type CogsRowAction = {
+  action: string;
+  link?: { href: string; label: string };
+};
+
+export function getVarianceAction(rowId: string): CogsRowAction | undefined {
+  const card = COGS_INSIGHT_CARDS.find((c) => c.rowIds?.includes(rowId));
+  if (!card) return undefined;
+  return { action: card.action, link: card.link };
+}
+
 /** Authored narratives keyed by `insightId` on the variance rows. Kept as
  *  short bullet lines (one point each) so the popover stays scannable. */
 const ROW_INSIGHTS: Record<string, string> = {

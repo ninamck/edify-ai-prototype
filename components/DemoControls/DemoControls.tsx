@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { usePathname, useRouter } from 'next/navigation';
 import { FlaskConical, ChevronDown } from 'lucide-react';
 import { USERS, getRoleRules } from '@/components/Approvals/approvalsStore';
+import { useFranchise, type FranchiseViewMode } from '@/components/Franchise/FranchiseContext';
 import { BRIEFING_ROLES } from '@/components/briefing';
 import type { BriefingRole } from '@/components/briefing';
 import {
@@ -205,16 +206,56 @@ function PanelHeader({ onClose }: { onClose: () => void }) {
   );
 }
 
+const VIEW_OPTIONS: { id: FranchiseViewMode; label: string }[] = [
+  { id: 'store', label: 'Store' },
+  { id: 'group', label: 'Franchise admin' },
+];
+
 function PanelBody({ extraSection }: { extraSection?: ReactNode }) {
   const router = useRouter();
   const actingUserId = useActingUser();
   const briefingRole = useDemoBriefingRole();
   const demoVersion = useDemoVersion();
+  const { viewMode, setViewMode } = useFranchise();
   const actingUser = USERS.find((u) => u.id === actingUserId);
   const rules = actingUser ? getRoleRules(actingUser.role) : null;
 
   return (
     <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div>
+        <div style={sectionLabelStyle}>View</div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {VIEW_OPTIONS.map((v) => {
+            const active = viewMode === v.id;
+            return (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => {
+                  setViewMode(v.id);
+                  // Group view lands on the franchise overview; switching
+                  // back to Store drops into the normal single-site app.
+                  router.push(v.id === 'group' ? '/franchise' : '/');
+                }}
+                style={pillOptionStyle(active)}
+              >
+                {v.label}
+              </button>
+            );
+          })}
+        </div>
+        <div
+          style={{
+            fontSize: 10,
+            lineHeight: 1.4,
+            color: 'var(--color-text-muted)',
+            marginTop: 6,
+          }}
+        >
+          Franchise admin sees every brand in the group and picks which stores to view.
+        </div>
+      </div>
+
       <div>
         <div style={sectionLabelStyle}>Version</div>
         <div style={{ display: 'flex', gap: 4 }}>

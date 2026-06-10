@@ -344,6 +344,35 @@ export const SEED_SUPPLIERS: Supplier[] = [
     cutOffTime: '15:30',
     leadTimeDays: 2,
   },
+  // Meat suppliers used by the chat-driven "import product from sheet"
+  // demo. Two pre-existing suppliers carry the Bacon master so the
+  // sheet-import flow has something to anchor "matched to your existing
+  // Bacon master · already has 2 suppliers" against.
+  {
+    id: 'sup-meatworks',
+    name: 'Meatworks London',
+    shortCode: 'Meatworks',
+    categories: ['Meat'],
+    sites: ALL_AGILITY_SITES.slice(0, 5),
+    status: 'Available',
+    email: 'orders@meatworks.london',
+    phone: '+44 20 7946 0218',
+    cutOffTime: '16:00',
+    leadTimeDays: 1,
+    deliveryDays: ['Tue', 'Thu', 'Sat'],
+  },
+  {
+    id: 'sup-borough-butchery',
+    name: 'Borough Butchery Co.',
+    shortCode: 'Borough',
+    categories: ['Meat'],
+    sites: ALL_AGILITY_SITES.slice(0, 4),
+    status: 'Available',
+    email: 'trade@boroughbutchery.co.uk',
+    cutOffTime: '15:00',
+    leadTimeDays: 2,
+    deliveryDays: ['Mon', 'Wed', 'Fri'],
+  },
 ];
 
 export const SEED_MASTER_PRODUCTS: MasterProduct[] = [
@@ -375,6 +404,14 @@ export const SEED_MASTER_PRODUCTS: MasterProduct[] = [
   { id: 'mp-coke', name: 'Coca-Cola 200ml mixer', category: 'Beverage', unit: '200ml can', slug: 'coke' },
   { id: 'mp-lemonade', name: 'Lemonade 200ml mixer', category: 'Beverage', unit: '200ml can', slug: 'lemonade' },
   { id: 'mp-tonic', name: 'Tonic Water 200ml', category: 'Beverage', unit: '200ml can', slug: 'tonic' },
+  // Whole / finished drinks sold as-is on the POS (not mixers, not
+  // recipe-built). These are the targets a whole-drink POS button matches
+  // to so sales deplete the bottled/canned stock directly.
+  { id: 'mp-sparkling-water-500', name: 'Sparkling Water 500ml', category: 'Beverage', unit: '500ml bottle', slug: 'sparkling-water-500', productClass: 'Beverage', status: 'Available' },
+  { id: 'mp-still-water-500', name: 'Still Water 500ml', category: 'Beverage', unit: '500ml bottle', slug: 'still-water-500', productClass: 'Beverage', status: 'Available' },
+  { id: 'mp-coca-cola-330', name: 'Coca-Cola 330ml', category: 'Beverage', unit: '330ml can', slug: 'coca-cola-330', productClass: 'Beverage', status: 'Available' },
+  { id: 'mp-diet-coke-330', name: 'Diet Coke 330ml', category: 'Beverage', unit: '330ml can', slug: 'diet-coke-330', productClass: 'Beverage', status: 'Available' },
+  { id: 'mp-orange-juice-250', name: 'Orange Juice 250ml', category: 'Beverage', unit: '250ml bottle', slug: 'orange-juice-250', productClass: 'Beverage', status: 'Available' },
   { id: 'mp-savvy-b', name: 'Marlborough Sauvignon Blanc', category: 'Beverage', unit: '750ml bottle', slug: 'savvy-b' },
   // Eggs master — reference unit is a single egg so SKUs of different pack
   // sizes (15pk, 30pk, …) blend into one weighted-average cost. One site
@@ -394,6 +431,22 @@ export const SEED_MASTER_PRODUCTS: MasterProduct[] = [
     siteCosts: {
       'Fitzroy Heathrow': { wac: 0.55, onHandQty: 150, lastCalculated: '24 Mar 2026' },
     },
+  },
+  // Bacon master — anchor for the chat-driven "import product from
+  // sheet" demo. Two existing supplier products are linked below
+  // (Meatworks London + Borough Butchery Co.) so when the user
+  // uploads a third supplier's sheet via paperclip, the wizard can
+  // say "matched to your existing Bacon master · already has 2
+  // suppliers" rather than asking the user where it belongs.
+  {
+    id: 'mp-bacon',
+    name: 'Bacon',
+    category: 'Meat',
+    unit: '1kg pack',
+    slug: 'bacon',
+    productClass: 'Food',
+    status: 'Available',
+    defaultProductId: 'prd-meatworks-bacon-1kg',
   },
 ];
 
@@ -443,6 +496,81 @@ export const SEED_PRODUCTS: Product[] = [
     packCost: 105.39,
     singleUnitType: 'Each',
     singleUnitVolumeOrWeight: 0.33,
+    unitOfMeasure: 'L',
+  }),
+  // ── Whole / finished drinks ─────────────────────────────────────────
+  // Bottled water and canned soft drinks sold as-is. Tagged 'whole-drink'
+  // so they read clearly as sellable finished products. They flow into the
+  // POS item-matching candidate pool (MatchPicker + Sync & match) like any
+  // other product, giving whole-drink POS buttons something to link to.
+  p({
+    id: 'prd-sparkling-water-500',
+    name: 'Sparkling Water 500ml',
+    supplierCode: 'B210',
+    masterProductId: 'mp-sparkling-water-500',
+    productClass: 'Beverage',
+    category: 'Beverage',
+    tags: ['whole-drink'],
+    packQty: 24,
+    packCost: 14.40,
+    singleUnitType: 'Each',
+    singleUnitVolumeOrWeight: 0.5,
+    unitOfMeasure: 'L',
+  }),
+  p({
+    id: 'prd-still-water-500',
+    name: 'Still Water 500ml',
+    supplierCode: 'B211',
+    masterProductId: 'mp-still-water-500',
+    productClass: 'Beverage',
+    category: 'Beverage',
+    tags: ['whole-drink'],
+    packQty: 24,
+    packCost: 12.00,
+    singleUnitType: 'Each',
+    singleUnitVolumeOrWeight: 0.5,
+    unitOfMeasure: 'L',
+  }),
+  p({
+    id: 'prd-coca-cola-330',
+    name: 'Coca-Cola 330ml',
+    supplierCode: 'B212',
+    masterProductId: 'mp-coca-cola-330',
+    productClass: 'Beverage',
+    category: 'Beverage',
+    tags: ['whole-drink'],
+    packQty: 24,
+    packCost: 18.00,
+    singleUnitType: 'Each',
+    singleUnitVolumeOrWeight: 0.33,
+    unitOfMeasure: 'L',
+  }),
+  p({
+    id: 'prd-diet-coke-330',
+    name: 'Diet Coke 330ml',
+    supplierCode: 'B213',
+    masterProductId: 'mp-diet-coke-330',
+    productClass: 'Beverage',
+    category: 'Beverage',
+    tags: ['whole-drink'],
+    packQty: 24,
+    packCost: 18.00,
+    singleUnitType: 'Each',
+    singleUnitVolumeOrWeight: 0.33,
+    unitOfMeasure: 'L',
+  }),
+  p({
+    id: 'prd-orange-juice-250',
+    name: 'Orange Juice 250ml',
+    supplierCode: 'B214',
+    masterProductId: 'mp-orange-juice-250',
+    productClass: 'Beverage',
+    category: 'Beverage',
+    tags: ['whole-drink'],
+    packQty: 12,
+    packCost: 15.00,
+    singleUnitType: 'Each',
+    singleUnitVolumeOrWeight: 0.25,
     unitOfMeasure: 'L',
   }),
   p({
@@ -591,6 +719,44 @@ export const SEED_PRODUCTS: Product[] = [
     singleUnitVolumeOrWeight: 1,
     unitOfMeasure: 'L',
     allergensContains: ['Dairy'],
+  }),
+  // Two pre-existing Bacon supplier products that link to the
+  // `mp-bacon` master. The chat-driven sheet-import flow adds a 3rd.
+  p({
+    id: 'prd-meatworks-bacon-1kg',
+    name: 'Meatworks Streaky Bacon 1kg',
+    supplierCode: 'MW-BAC-STK-1KG',
+    supplierId: 'sup-meatworks',
+    masterProductId: 'mp-bacon',
+    productClass: 'Food',
+    category: 'Meat',
+    packType: 'Pack',
+    packQty: 6,
+    packCost: 32.40,
+    singleUnitType: 'kg',
+    singleUnitVolumeOrWeight: 1,
+    unitOfMeasure: 'kg',
+    taxRatePct: 0,
+    allergensContains: ['Sulphites'],
+    sites: ALL_AGILITY_SITES.slice(0, 5),
+  }),
+  p({
+    id: 'prd-borough-bacon-1kg',
+    name: 'Borough Smoked Bacon Lardons 1kg',
+    supplierCode: 'BB-LARD-1KG',
+    supplierId: 'sup-borough-butchery',
+    masterProductId: 'mp-bacon',
+    productClass: 'Food',
+    category: 'Meat',
+    packType: 'Pack',
+    packQty: 8,
+    packCost: 51.20,
+    singleUnitType: 'kg',
+    singleUnitVolumeOrWeight: 1,
+    unitOfMeasure: 'kg',
+    taxRatePct: 0,
+    allergensContains: ['Sulphites'],
+    sites: ALL_AGILITY_SITES.slice(0, 4),
   }),
   // ── In-house / CPU-made Products ───────────────────────────────────────────
   // These are produced from recipes, then dispatched to spoke stores. From a

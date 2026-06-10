@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, Search } from 'lucide-react';
-import CogsInsightButton from './CogsInsightButton';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { gbp } from './format';
 import { COGS_VARIANCE_ROWS, type CogsVarianceRow } from './fixtures';
-import { getCogsRowInsight, rowHasInsight } from './insights';
+import { rowHasInsight } from './insights';
 
 const OK = 'var(--color-success)';
 const WARN = 'var(--color-error)';
@@ -86,8 +86,10 @@ const TD_BASE: React.CSSProperties = {
 
 export default function CogsVarianceTable({
   highlightRowIds,
+  onOpenDetail,
 }: {
   highlightRowIds?: string[];
+  onOpenDetail?: (rowId: string) => void;
 }) {
   const [search, setSearch] = useState('');
   const [largeOnly, setLargeOnly] = useState(false);
@@ -314,7 +316,29 @@ export default function CogsVarianceTable({
                   </td>
                   <td style={{ ...TD_BASE, textAlign: 'center' }}>
                     {rowHasInsight(r.varPct, r.insightId) ? (
-                      <CogsInsightButton text={getCogsRowInsight(r.id)} />
+                      <button
+                        type="button"
+                        onClick={() => onOpenDetail?.(r.id)}
+                        aria-label="Edify insight"
+                        title="Open Edify breakdown"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '4px 8px',
+                          borderRadius: 999,
+                          border: '1px solid var(--color-border-subtle)',
+                          background: '#fff',
+                          color: 'var(--color-accent-deep)',
+                          cursor: 'pointer',
+                          fontFamily: 'var(--font-primary)',
+                          fontSize: 12,
+                          fontWeight: 600,
+                        }}
+                      >
+                        <EdifyMark size={12} color="var(--color-accent-deep)" />
+                        Edify
+                      </button>
                     ) : (
                       <span style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>{'\u2014'}</span>
                     )}

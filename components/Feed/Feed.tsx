@@ -24,6 +24,10 @@ import {
   Clock,
   Truck,
   X,
+  Paperclip,
+  FileText,
+  Package,
+  Check,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import EdifyMarkThinking from '@/components/EdifyMark/EdifyMarkThinking';
@@ -31,6 +35,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import QuinnOrb from '@/components/Sidebar/QuinnOrb';
 import type { BriefingRole } from '@/components/briefing';
 import { timeAwareGreeting } from '@/components/briefing';
+import { addNotebookNote } from '@/components/notebookStore';
 import type { AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
 import { renderAnalyticsChart, ANALYTICS_CONFIG } from '@/components/Analytics/AnalyticsCharts';
 import { getDunkinInsight } from '@/components/Analytics/DunkinAnalyticsInsights';
@@ -65,6 +70,7 @@ import ProductPickReplacedCard from '@/components/Feed/commands/cards/ProductPic
 import ProductPackDetailsCard from '@/components/Feed/commands/cards/ProductPackDetailsCard';
 import ProductPickRecipesCard from '@/components/Feed/commands/cards/ProductPickRecipesCard';
 import ProductSwapSummaryCard from '@/components/Feed/commands/cards/ProductSwapSummaryCard';
+import ProductSheetDetailsCard from '@/components/Feed/commands/cards/ProductSheetDetailsCard';
 import AmbiguityPicker from '@/components/Feed/commands/cards/AmbiguityPicker';
 import ReceiptCard from '@/components/Feed/commands/cards/ReceiptCard';
 import MarginExplorerCard from '@/components/Feed/commands/cards/MarginExplorerCard';
@@ -85,8 +91,28 @@ import {
   type IngredientCatalogueRow,
   type ResolvedIngredient,
 } from '@/components/Ingredients/catalogue';
-import { useProducts } from '@/components/Suppliers/store';
-import { masterCompanyAvg, type Product } from '@/components/Suppliers/fixtures';
+import {
+  useProducts,
+  findMasterProduct,
+  upsertProduct,
+  upsertSupplier,
+  genId,
+  snapshot as snapshotSuppliersStore,
+} from '@/components/Suppliers/store';
+import {
+  masterCompanyAvg,
+  ALL_SITES as ALL_SUPPLIER_SITES,
+  type Product,
+  type Allergen,
+  type DayOfWeek,
+  type ProductCategory,
+  type ProductClass,
+} from '@/components/Suppliers/fixtures';
+import {
+  setMatchTarget,
+  useMatchOverrides,
+} from '@/components/ItemMatching/overrideStore';
+import { FITZROY_POS_INTAKE } from '@/components/Recipe/intakeFixtures';
 
 function QuinnAvatar({
   size = 30,
@@ -310,6 +336,11 @@ type ChatMsg = {
   role: 'user' | 'quinn';
   text: string;
   msgType?: string;
+  /** When set on a user message, renders an attached-file chip inside
+   *  the user bubble (small paperclip + filename pill). Used by the
+   *  chat-driven "import product from sheet" flow so the conversation
+   *  visibly carries the supplier sheet the operator attached. */
+  attachmentName?: string;
   chartId?: string;
   tableQuery?: TableQuery;
   tableTitle?: string;
@@ -416,7 +447,7 @@ function kindBadgeColor(kind: IngredientCatalogueRow['kind']): { bg: string; fg:
 }
 
 const RECIPE_GREETING =
-  "Hey, happy to add this to the menu. What's the dish — and have you got a target food-cost % in mind?";
+  "Hey, happy to add this to the menu. Have you got a target food-cost % in mind?";
 const RECIPE_COST_MSG =
   "Here's the cost build-up and what the price needs to be to hit your target food cost. Tap a swap to see how the price moves:";
 const RECIPE_COGS_TARGET_MSG =
@@ -1412,6 +1443,1675 @@ function AllergenCard({ confirmed, detected, onToggle, onConfirm }: {
   );
 }
 
+// ─── Product-sheet import flow ───────────────────────────────────────────────
+
+/** All the fields a parsed supplier sheet would carry — these come
+ *  directly off the mock extraction, no operator input required. */
+type ExtractedProductSheet = {
+  productName: string;
+  supplierName: string;
+  category: 'Meat' | 'Dairy' | 'Bakery' | 'Produce' | 'Pantry' | 'Beverage' | 'Other';
+  packType: 'Pack' | 'Single';
+  packQty: number;
+  packCost: number;
+  singleUnitType: 'Each' | 'kg' | 'L' | 'g' | 'ml';
+  singleUnitVolumeOrWeight?: number;
+  unitOfMeasure?: string;
+  taxRatePct: number;
+  allergens: Allergen[];
+  /** Master we auto-matched the sheet against. The flow assumes a
+   *  hit — the demo seed includes a Bacon master so this always
+   *  resolves; in production this would be a fuzzy lookup with a
+   *  "create new master" fallback. */
+  matchedMasterId: string;
+};
+
+/** Mock the LLM/parser output. The brief is "the file already has
+ *  everything", so this returns a complete, plausible bacon sheet
+ *  regardless of what the user actually picked — the demo is about
+ *  the *flow speed*, not the parser. */
+function mockExtractFromSheet(_fileName: string): ExtractedProductSheet {
+  return {
+    productName: 'Smoked Streaky Bacon 1kg',
+    supplierName: 'Hawkshead Smokehouse',
+    category: 'Meat',
+    packType: 'Pack',
+    packQty: 10,
+    packCost: 48.00,
+    singleUnitType: 'kg',
+    singleUnitVolumeOrWeight: 1,
+    unitOfMeasure: 'kg',
+    taxRatePct: 0,
+    allergens: ['Sulphites'],
+    matchedMasterId: 'mp-bacon',
+  };
+}
+
+/** Compact card the import flow renders into the chat. Shows the
+ *  parsed fields (read-only — operator can't tweak; the brief says
+ *  the sheet has it all), the master-product match badge, and a
+ *  site-picker that defaults to ALL sites checked so the only
+ *  required interaction is "click Add product". */
+function ProductSheetImportCard({
+  data,
+  fileName,
+  sites,
+  onToggleSite,
+  onToggleAll,
+  confirmed,
+  onConfirm,
+}: {
+  data: ExtractedProductSheet;
+  fileName: string;
+  sites: Set<string>;
+  onToggleSite: (site: string) => void;
+  onToggleAll: (all: boolean) => void;
+  confirmed: boolean;
+  onConfirm: () => void;
+}) {
+  const allProducts = useProducts();
+  const existingSuppliers = allProducts
+    .filter((p) => p.masterProductId === data.matchedMasterId)
+    .length;
+  const matched = findMasterProduct(data.matchedMasterId);
+  const pricePerUom =
+    data.packQty > 0 && data.singleUnitVolumeOrWeight
+      ? data.packCost / (data.packQty * data.singleUnitVolumeOrWeight)
+      : null;
+
+  const allOn = sites.size === ALL_SUPPLIER_SITES.length;
+
+  return (
+    <div
+      style={{
+        marginTop: '8px',
+        borderRadius: '14px',
+        background: '#fff',
+        border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.12))',
+        boxShadow: '0 4px 16px rgba(0, 28, 53, 0.08)',
+        overflow: 'hidden',
+        fontFamily: 'var(--font-primary)',
+        opacity: confirmed ? 0.85 : 1,
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          padding: '11px 14px',
+          borderBottom: '1px solid var(--color-border-subtle)',
+        }}
+      >
+        <FileText size={15} strokeWidth={1.9} color="var(--color-text-muted)" />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+            Adding new product from sheet
+          </div>
+          <div style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
+            Parsed in 1.2s · {fileName}
+          </div>
+        </div>
+        {confirmed && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', fontWeight: 700, color: '#15803D' }}>
+            <CheckCircle2 size={13} strokeWidth={2.2} />
+            Added
+          </span>
+        )}
+      </div>
+
+      {/* Extracted fields */}
+      <div style={{ padding: '10px 14px 4px' }}>
+        <div
+          style={{
+            fontSize: '10.5px',
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            color: 'var(--color-text-muted)',
+            marginBottom: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          <EdifyMark size={11} />
+          Auto-detected
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '8px 16px',
+            fontSize: '12.5px',
+          }}
+        >
+          <DetailRow label="Product" value={data.productName} />
+          <DetailRow label="Category" value={data.category} />
+          <DetailRow
+            label="Pack"
+            value={`${data.packQty} × ${data.singleUnitVolumeOrWeight ?? 1}${data.unitOfMeasure ?? data.singleUnitType.toLowerCase()} · £${data.packCost.toFixed(2)}`}
+          />
+          <DetailRow
+            label="Price per uom"
+            value={pricePerUom !== null ? `£${pricePerUom.toFixed(2)} / ${data.unitOfMeasure ?? data.singleUnitType.toLowerCase()}` : '—'}
+          />
+          <DetailRow label="VAT" value={`${data.taxRatePct}%`} />
+          <DetailRow label="Allergens" value={data.allergens.length ? data.allergens.join(', ') : 'None'} />
+        </div>
+      </div>
+
+      {/* Master match */}
+      <div style={{ padding: '10px 14px', borderTop: '1px solid var(--color-border-subtle)' }}>
+        <div
+          style={{
+            fontSize: '10.5px',
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            color: 'var(--color-text-muted)',
+            marginBottom: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          <EdifyMark size={11} />
+          Master product
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 10px',
+            borderRadius: '10px',
+            background: 'rgba(40,175,201,0.08)',
+            border: '1px solid rgba(40,175,201,0.20)',
+          }}
+        >
+          <Package size={14} strokeWidth={1.9} color="var(--color-accent-active)" />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+              Matched to <strong>{matched?.name ?? 'Bacon'}</strong> master
+            </div>
+            <div style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
+              {existingSuppliers} existing supplier{existingSuppliers === 1 ? '' : 's'} · this sheet adds <strong>{data.supplierName}</strong> as a new one
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Sites picker */}
+      <div style={{ padding: '10px 14px', borderTop: '1px solid var(--color-border-subtle)' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '6px',
+          }}
+        >
+          <div
+            style={{
+              fontSize: '10.5px',
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              color: 'var(--color-text-muted)',
+            }}
+          >
+            Which stores will use this?
+          </div>
+          <button
+            type="button"
+            onClick={() => onToggleAll(!allOn)}
+            disabled={confirmed}
+            style={{
+              padding: '3px 10px',
+              borderRadius: '999px',
+              border: '1px solid var(--color-border-subtle)',
+              background: '#fff',
+              fontSize: '11px',
+              fontWeight: 600,
+              fontFamily: 'var(--font-primary)',
+              color: 'var(--color-text-secondary)',
+              cursor: confirmed ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {allOn ? 'None' : 'All'}
+          </button>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {ALL_SUPPLIER_SITES.map((site) => {
+            const on = sites.has(site);
+            return (
+              <button
+                key={site}
+                type="button"
+                onClick={() => onToggleSite(site)}
+                disabled={confirmed}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: '999px',
+                  border: on ? '1.5px solid var(--color-accent-active)' : '1.5px solid var(--color-border)',
+                  background: on ? 'rgba(40,175,201,0.10)' : '#fff',
+                  fontSize: '12px',
+                  fontWeight: on ? 700 : 500,
+                  fontFamily: 'var(--font-primary)',
+                  color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                  cursor: confirmed ? 'not-allowed' : 'pointer',
+                  transition: 'background 0.12s ease, border-color 0.12s ease',
+                }}
+              >
+                {site}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* CTA */}
+      <div
+        style={{
+          padding: '10px 14px',
+          borderTop: '1px solid var(--color-border-subtle)',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          background: 'rgba(0,28,53,0.02)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={confirmed || sites.size === 0}
+          style={{
+            padding: '8px 18px',
+            borderRadius: '100px',
+            border: 'none',
+            background: confirmed
+              ? 'rgba(0,28,53,0.08)'
+              : sites.size === 0
+                ? 'rgba(0,28,53,0.08)'
+                : 'var(--color-accent-active)',
+            fontSize: '12.5px',
+            fontWeight: 700,
+            fontFamily: 'var(--font-primary)',
+            color: confirmed || sites.size === 0 ? 'var(--color-text-muted)' : '#fff',
+            cursor: confirmed || sites.size === 0 ? 'not-allowed' : 'pointer',
+            boxShadow: confirmed || sites.size === 0 ? 'none' : '0 2px 8px rgba(34,68,68,0.25)',
+          }}
+        >
+          {confirmed ? 'Added to catalogue' : `Add product${sites.size > 0 ? ` to ${sites.size} ${sites.size === 1 ? 'site' : 'sites'}` : ''}`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: '12.5px',
+          fontWeight: 600,
+          color: 'var(--color-text-primary)',
+          marginTop: '1px',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+// ─── POS-match follow-up (chat-side) ─────────────────────────────────────────
+
+/** A POS button ↔ just-imported product pairing we surface in the
+ *  chat after an import lands. The operator confirms (or skips) each
+ *  one without leaving the conversation; "applied" rows write to the
+ *  same override store the Item matching page reads from. */
+type POSMatchSuggestion = {
+  posItemId: string;
+  posItemName: string;
+  productId: string;
+  productName: string;
+  /** Similarity score (0–1). Drives the "high / likely" pill. */
+  score: number;
+};
+
+function normalizePosName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9 ]+/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function scorePosName(a: string, b: string): number {
+  const na = normalizePosName(a);
+  const nb = normalizePosName(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+  if (na.includes(nb) || nb.includes(na)) return 0.85;
+  const ta = new Set(na.split(' '));
+  const tb = new Set(nb.split(' '));
+  let shared = 0;
+  for (const t of ta) if (tb.has(t)) shared += 1;
+  const union = new Set([...ta, ...tb]).size;
+  return union === 0 ? 0 : shared / union;
+}
+
+/** Threshold mirrors the Item matching page so the suggestions the
+ *  user accepts in chat match what they'd see on the matching page
+ *  if they navigated there directly. */
+const POS_SUGGESTION_THRESHOLD = 0.2;
+
+/** Compute the cross-product of unmatched Drinks-category POS buttons
+ *  and just-imported Beverage products. Returns at most one suggestion
+ *  per POS button — the highest-scoring product candidate. */
+function computePOSDrinkSuggestions(
+  justAddedProducts: { id: string; name: string; category: ProductCategory }[],
+  alreadyMatchedPosIds: Set<string>,
+): POSMatchSuggestion[] {
+  const beverages = justAddedProducts.filter((p) => p.category === 'Beverage');
+  if (beverages.length === 0) return [];
+  const out: POSMatchSuggestion[] = [];
+  for (const pos of FITZROY_POS_INTAKE.menuItems) {
+    if (pos.category !== 'Drinks') continue;
+    if (alreadyMatchedPosIds.has(pos.id)) continue;
+    let best: { id: string; name: string; s: number } | null = null;
+    for (const prd of beverages) {
+      const s = scorePosName(pos.name, prd.name);
+      if (s >= POS_SUGGESTION_THRESHOLD && (!best || s > best.s)) {
+        best = { id: prd.id, name: prd.name, s };
+      }
+    }
+    if (best) {
+      out.push({
+        posItemId: pos.id,
+        posItemName: pos.name,
+        productId: best.id,
+        productName: best.name,
+        score: best.s,
+      });
+    }
+  }
+  return out;
+}
+
+// ─── New-supplier import flow ────────────────────────────────────────────────
+
+/** One product parsed off the supplier's catalogue file. Mirrors the
+ *  shape of `Product` but holds only what the catalogue knows — the
+ *  flow fills in the supplier id, sites, status etc. at confirm time. */
+type ExtractedSupplierProduct = {
+  name: string;
+  supplierCode: string;
+  category: ProductCategory;
+  productClass: ProductClass;
+  packType: 'Pack' | 'Single';
+  packQty: number;
+  packCost: number;
+  singleUnitType: 'Each' | 'kg' | 'L' | 'g' | 'ml';
+  singleUnitVolumeOrWeight?: number;
+  unitOfMeasure?: string;
+  taxRatePct: number;
+  allergens: Allergen[];
+};
+
+/** Everything we read off the two attached files (supplier sheet +
+ *  catalogue spreadsheet). The flow assumes both files have already
+ *  been parsed cleanly — the brief is to show how fast the flow can
+ *  feel when nothing is missing, not how to handle parse errors. */
+type ExtractedSupplierSheet = {
+  name: string;
+  shortCode: string;
+  categories: ProductCategory[];
+  email?: string;
+  phone?: string;
+  cutOffTime?: string;
+  leadTimeDays?: number;
+  minimumOrderValue?: number;
+  deliveryDays?: DayOfWeek[];
+  /** Per-supplier filenames so the chat surface can show both chips
+   *  in the user bubble + the card subtitle. */
+  supplierFileName: string;
+  catalogueFileName: string;
+  products: ExtractedSupplierProduct[];
+};
+
+/** Builds a plausible 20-SKU beverage distributor — Atlas Drinks Co.
+ *  Used by the chat-driven "new supplier" demo so the card has
+ *  enough realistic variation to be worth scrolling through. Mixes
+ *  waters, mixers, kombuchas, coffees and juices — wide enough
+ *  category spread that the catalogue feels real. */
+function mockSupplierSheet(): ExtractedSupplierSheet {
+  // Helper to keep each row terse — every product is canned/bottled
+  // and reports the same shape, so a builder is cleaner than spelling
+  // out the same defaults 20 times.
+  const drink = (
+    over: Pick<ExtractedSupplierProduct, 'name' | 'supplierCode' | 'packQty' | 'packCost' | 'singleUnitVolumeOrWeight'> &
+      Partial<ExtractedSupplierProduct>,
+  ): ExtractedSupplierProduct => ({
+    category: 'Beverage',
+    productClass: 'Beverage',
+    packType: 'Pack',
+    singleUnitType: 'Each',
+    unitOfMeasure: 'L',
+    taxRatePct: 20,
+    allergens: [],
+    ...over,
+  });
+  return {
+    name: 'Atlas Drinks Co.',
+    shortCode: 'Atlas',
+    categories: ['Beverage'],
+    email: 'wholesale@atlasdrinks.co',
+    phone: '+44 20 7946 1280',
+    cutOffTime: '14:00',
+    leadTimeDays: 2,
+    minimumOrderValue: 220,
+    deliveryDays: ['Mon', 'Wed', 'Fri'],
+    supplierFileName: 'atlas-supplier-details.pdf',
+    catalogueFileName: 'atlas-catalogue-2026.xlsx',
+    products: [
+      drink({ name: 'Atlas Sparkling Water 330ml', supplierCode: 'AT-SPK-330', packQty: 24, packCost: 18.00, singleUnitVolumeOrWeight: 0.33 }),
+      drink({ name: 'Atlas Still Water 500ml', supplierCode: 'AT-STL-500', packQty: 24, packCost: 22.00, singleUnitVolumeOrWeight: 0.5 }),
+      drink({ name: 'Atlas Tonic Water 200ml', supplierCode: 'AT-TON-200', packQty: 24, packCost: 28.80, singleUnitVolumeOrWeight: 0.2 }),
+      drink({ name: 'Atlas Cola Mixer 200ml', supplierCode: 'AT-COL-200', packQty: 24, packCost: 26.40, singleUnitVolumeOrWeight: 0.2 }),
+      drink({ name: 'Atlas Ginger Beer 200ml', supplierCode: 'AT-GNG-200', packQty: 24, packCost: 30.00, singleUnitVolumeOrWeight: 0.2 }),
+      drink({ name: 'Atlas Bitter Lemon 200ml', supplierCode: 'AT-BIT-200', packQty: 24, packCost: 28.80, singleUnitVolumeOrWeight: 0.2 }),
+      drink({ name: 'Atlas Lemon Soda 330ml', supplierCode: 'AT-LEM-330', packQty: 24, packCost: 32.40, singleUnitVolumeOrWeight: 0.33 }),
+      drink({ name: 'Atlas Cucumber Soda 330ml', supplierCode: 'AT-CUC-330', packQty: 24, packCost: 32.40, singleUnitVolumeOrWeight: 0.33 }),
+      drink({ name: 'Atlas Kombucha Original 330ml', supplierCode: 'AT-KMB-ORG-330', packQty: 12, packCost: 36.00, singleUnitVolumeOrWeight: 0.33 }),
+      drink({ name: 'Atlas Kombucha Ginger 330ml', supplierCode: 'AT-KMB-GNG-330', packQty: 12, packCost: 36.00, singleUnitVolumeOrWeight: 0.33 }),
+      drink({ name: 'Atlas Kombucha Hibiscus 330ml', supplierCode: 'AT-KMB-HIB-330', packQty: 12, packCost: 36.00, singleUnitVolumeOrWeight: 0.33 }),
+      drink({ name: 'Atlas Cold Brew Coffee 250ml', supplierCode: 'AT-CBR-250', packQty: 12, packCost: 33.60, singleUnitVolumeOrWeight: 0.25 }),
+      drink({ name: 'Atlas Iced Latte 330ml', supplierCode: 'AT-LAT-330', packQty: 12, packCost: 30.00, singleUnitVolumeOrWeight: 0.33, allergens: ['Dairy'] }),
+      drink({ name: 'Atlas Matcha Latte 330ml', supplierCode: 'AT-MCH-330', packQty: 12, packCost: 33.00, singleUnitVolumeOrWeight: 0.33, allergens: ['Dairy'] }),
+      drink({ name: 'Atlas Energy Original 250ml', supplierCode: 'AT-ENG-ORG-250', packQty: 24, packCost: 36.00, singleUnitVolumeOrWeight: 0.25 }),
+      drink({ name: 'Atlas Energy Watermelon 250ml', supplierCode: 'AT-ENG-WAT-250', packQty: 24, packCost: 36.00, singleUnitVolumeOrWeight: 0.25 }),
+      drink({ name: 'Atlas Coconut Water 330ml', supplierCode: 'AT-COC-330', packQty: 24, packCost: 42.00, singleUnitVolumeOrWeight: 0.33 }),
+      drink({ name: 'Atlas Apple Juice 330ml', supplierCode: 'AT-APL-330', packQty: 24, packCost: 33.60, singleUnitVolumeOrWeight: 0.33 }),
+      drink({ name: 'Atlas Orange Juice 330ml', supplierCode: 'AT-ORG-330', packQty: 24, packCost: 33.60, singleUnitVolumeOrWeight: 0.33 }),
+      drink({ name: 'Atlas Lemonade 330ml', supplierCode: 'AT-LMD-330', packQty: 24, packCost: 30.00, singleUnitVolumeOrWeight: 0.33 }),
+    ],
+  };
+}
+
+const SUPPLIER_PRODUCT_CATEGORIES: ProductCategory[] = [
+  'Beverage', 'Bakery', 'Dairy', 'Produce', 'Meat', 'Seafood',
+  'Pantry', 'Cleaning', 'Packaging', 'Other',
+];
+
+const SUPPLIER_PRODUCT_CLASSES: ProductClass[] = ['Food', 'Beverage', 'Non-food', 'General'];
+
+const SUPPLIER_UNIT_TYPES: ExtractedSupplierProduct['singleUnitType'][] = [
+  'Each', 'kg', 'g', 'L', 'ml',
+];
+
+/** Inline edit panel for a single product inside the supplier
+ *  catalogue. Rendered directly under the row that opened it so
+ *  the operator stays in the same scroll position. Every field
+ *  edits in-place via `onEdit` (no draft buffer) — this matches
+ *  the "fast, low-friction review" tone of the wider import flow. */
+function SupplierProductEditPanel({
+  product,
+  confirmed,
+  onEdit,
+  onRemove,
+  onClose,
+}: {
+  product: ExtractedSupplierProduct;
+  confirmed: boolean;
+  onEdit: (patch: Partial<ExtractedSupplierProduct>) => void;
+  onRemove: () => void;
+  onClose: () => void;
+}) {
+  const unitSize = product.singleUnitVolumeOrWeight ?? 1;
+  // Catalogue cost shown per unit of the chosen UoM. Helps the
+  // operator sanity-check that "£48 / 24 × 1L = £2.00 per L" — a
+  // very common transcription error class for catalogue uploads.
+  const perUom = product.packCost / Math.max(0.001, product.packQty * unitSize);
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: '10px',
+    fontWeight: 700,
+    letterSpacing: '0.04em',
+    textTransform: 'uppercase',
+    color: 'var(--color-text-muted)',
+    marginBottom: '4px',
+  };
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '6px 9px',
+    borderRadius: '7px',
+    border: '1px solid var(--color-border-subtle)',
+    background: confirmed ? 'rgba(0,28,53,0.03)' : '#fff',
+    fontSize: '12.5px',
+    fontFamily: 'var(--font-primary)',
+    color: 'var(--color-text-primary)',
+    outline: 'none',
+    boxSizing: 'border-box',
+  };
+  const fieldRow: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '10px',
+    marginBottom: '8px',
+  };
+
+  return (
+    <div
+      style={{
+        padding: '10px 14px 12px',
+        borderTop: '1px dashed var(--color-border-subtle)',
+        background: 'rgba(40,175,201,0.04)',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          fontSize: '10px',
+          fontWeight: 700,
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+          color: 'var(--color-text-muted)',
+          marginBottom: '8px',
+        }}
+      >
+        <EdifyMark size={10} />
+        AI-parsed · edit to adjust
+      </div>
+
+      <div style={fieldRow}>
+        <div>
+          <div style={labelStyle}>Name</div>
+          <input
+            type="text"
+            value={product.name}
+            disabled={confirmed}
+            onChange={(e) => onEdit({ name: e.target.value })}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <div style={labelStyle}>Supplier code</div>
+          <input
+            type="text"
+            value={product.supplierCode}
+            disabled={confirmed}
+            onChange={(e) => onEdit({ supplierCode: e.target.value })}
+            style={{
+              ...inputStyle,
+              fontFamily: 'var(--font-mono, ui-monospace, "SF Mono", monospace)',
+            }}
+          />
+        </div>
+      </div>
+
+      <div style={fieldRow}>
+        <div>
+          <div style={labelStyle}>Category</div>
+          <select
+            value={product.category}
+            disabled={confirmed}
+            onChange={(e) => onEdit({ category: e.target.value as ProductCategory })}
+            style={inputStyle}
+          >
+            {SUPPLIER_PRODUCT_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div style={labelStyle}>Product class</div>
+          <select
+            value={product.productClass}
+            disabled={confirmed}
+            onChange={(e) => onEdit({ productClass: e.target.value as ProductClass })}
+            style={inputStyle}
+          >
+            {SUPPLIER_PRODUCT_CLASSES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div style={fieldRow}>
+        <div>
+          <div style={labelStyle}>Pack qty</div>
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={product.packQty}
+            disabled={confirmed}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              onEdit({ packQty: Number.isFinite(v) && v > 0 ? v : 1 });
+            }}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <div style={labelStyle}>Pack cost (£)</div>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            value={product.packCost}
+            disabled={confirmed}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              onEdit({ packCost: Number.isFinite(v) && v >= 0 ? v : 0 });
+            }}
+            style={inputStyle}
+          />
+        </div>
+      </div>
+
+      <div style={fieldRow}>
+        <div>
+          <div style={labelStyle}>Unit size</div>
+          <input
+            type="number"
+            min={0}
+            step={0.001}
+            value={product.singleUnitVolumeOrWeight ?? ''}
+            disabled={confirmed}
+            placeholder="—"
+            onChange={(e) => {
+              if (e.target.value === '') {
+                onEdit({ singleUnitVolumeOrWeight: undefined });
+                return;
+              }
+              const v = parseFloat(e.target.value);
+              onEdit({ singleUnitVolumeOrWeight: Number.isFinite(v) ? v : undefined });
+            }}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <div style={labelStyle}>Unit of measure</div>
+          <select
+            value={product.singleUnitType}
+            disabled={confirmed}
+            onChange={(e) => {
+              const v = e.target.value as ExtractedSupplierProduct['singleUnitType'];
+              // Keep `unitOfMeasure` in sync so the row summary, the
+              // downstream Product.unitOfMeasure, and the per-UoM
+              // cost preview all line up after edits.
+              onEdit({ singleUnitType: v, unitOfMeasure: v });
+            }}
+            style={inputStyle}
+          >
+            {SUPPLIER_UNIT_TYPES.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div style={fieldRow}>
+        <div>
+          <div style={labelStyle}>VAT %</div>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={0.5}
+            value={product.taxRatePct}
+            disabled={confirmed}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              onEdit({ taxRatePct: Number.isFinite(v) && v >= 0 ? v : 0 });
+            }}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <div style={labelStyle}>Per-UoM cost (auto)</div>
+          <div
+            style={{
+              ...inputStyle,
+              background: 'transparent',
+              border: '1px dashed var(--color-border-subtle)',
+              color: 'var(--color-text-secondary)',
+              fontWeight: 600,
+            }}
+          >
+            £{perUom.toFixed(perUom < 1 ? 3 : 2)} / {product.singleUnitType}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '10px' }}>
+        <div style={labelStyle}>Allergens</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+          {ALL_ALLERGENS.map((al) => {
+            const allergen = al as Allergen;
+            const on = product.allergens.includes(allergen);
+            return (
+              <button
+                key={al}
+                type="button"
+                disabled={confirmed}
+                onClick={() => {
+                  const next = on
+                    ? product.allergens.filter((x) => x !== allergen)
+                    : [...product.allergens, allergen];
+                  onEdit({ allergens: next });
+                }}
+                style={{
+                  padding: '3px 9px',
+                  borderRadius: '999px',
+                  border: on
+                    ? '1px solid var(--color-accent-active)'
+                    : '1px solid var(--color-border-subtle)',
+                  background: on ? 'rgba(40,175,201,0.14)' : '#fff',
+                  fontSize: '11px',
+                  fontWeight: on ? 700 : 500,
+                  fontFamily: 'var(--font-primary)',
+                  color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                  cursor: confirmed ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {al}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: '4px',
+        }}
+      >
+        <button
+          type="button"
+          disabled={confirmed}
+          onClick={onRemove}
+          style={{
+            padding: '5px 11px',
+            borderRadius: '999px',
+            border: '1px solid var(--color-border)',
+            background: '#fff',
+            fontSize: '11px',
+            fontWeight: 600,
+            fontFamily: 'var(--font-primary)',
+            color: confirmed ? 'var(--color-text-muted)' : '#B91C1C',
+            cursor: confirmed ? 'not-allowed' : 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+          }}
+        >
+          <X size={11} strokeWidth={2.2} />
+          Drop from import
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            padding: '5px 16px',
+            borderRadius: '999px',
+            border: '1px solid var(--color-accent-active)',
+            background: 'var(--color-accent-active)',
+            fontSize: '11.5px',
+            fontWeight: 700,
+            fontFamily: 'var(--font-primary)',
+            color: '#fff',
+            cursor: 'pointer',
+          }}
+        >
+          Done
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Follow-up card that appears in chat right after an import finishes,
+ *  surfacing unmatched Drinks-category POS buttons that look like the
+ *  SKUs we just added. The operator can apply each suggestion (or all
+ *  in one go) without leaving the conversation — the writes go to the
+ *  same override store the Item matching page reads from. */
+function POSMatchSuggestionsCard({
+  suggestions,
+  decisions,
+  onApply,
+  onSkip,
+  onApplyAll,
+  onUndo,
+}: {
+  suggestions: POSMatchSuggestion[];
+  /** Per-row decision keyed by `posItemId`. Undefined = pending. */
+  decisions: Record<string, 'applied' | 'skipped'>;
+  onApply: (suggestion: POSMatchSuggestion) => void;
+  onSkip: (posItemId: string) => void;
+  onApplyAll: () => void;
+  onUndo: (posItemId: string) => void;
+}) {
+  const total = suggestions.length;
+  const appliedCount = suggestions.filter((s) => decisions[s.posItemId] === 'applied').length;
+  const skippedCount = suggestions.filter((s) => decisions[s.posItemId] === 'skipped').length;
+  const pendingCount = total - appliedCount - skippedCount;
+  const allHandled = pendingCount === 0;
+
+  return (
+    <div
+      style={{
+        marginTop: '8px',
+        borderRadius: '14px',
+        background: '#fff',
+        border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.12))',
+        boxShadow: '0 4px 16px rgba(0, 28, 53, 0.08)',
+        overflow: 'hidden',
+        fontFamily: 'var(--font-primary)',
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          padding: '11px 14px',
+          borderBottom: '1px solid var(--color-border-subtle)',
+        }}
+      >
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 26,
+            height: 26,
+            borderRadius: 8,
+            background: 'rgba(40,175,201,0.12)',
+            flexShrink: 0,
+          }}
+        >
+          <EdifyMark size={13} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+            POS matches found
+          </div>
+          <div
+            style={{
+              fontSize: '11.5px',
+              fontWeight: 500,
+              color: 'var(--color-text-muted)',
+              marginTop: '1px',
+            }}
+          >
+            {allHandled
+              ? `${appliedCount} linked · ${skippedCount} skipped`
+              : `${total} unmatched ${total === 1 ? 'POS button lines' : 'POS buttons line'} up with the new SKUs`}
+          </div>
+        </div>
+        {appliedCount > 0 && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              fontSize: '11.5px',
+              fontWeight: 700,
+              color: '#15803D',
+            }}
+          >
+            <CheckCircle2 size={13} strokeWidth={2.2} />
+            {appliedCount} linked
+          </span>
+        )}
+      </div>
+
+      {/* Suggestion rows */}
+      <div>
+        {suggestions.map((s, i) => {
+          const decision = decisions[s.posItemId];
+          const isApplied = decision === 'applied';
+          const isSkipped = decision === 'skipped';
+          const confidence: 'high' | 'likely' = s.score >= 0.7 ? 'high' : 'likely';
+          return (
+            <div
+              key={s.posItemId}
+              style={{
+                padding: '10px 14px',
+                borderBottom:
+                  i < suggestions.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
+                background: isSkipped ? '#FBFAF8' : '#fff',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span
+                  style={{
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    color: 'var(--color-text-primary)',
+                  }}
+                >
+                  {s.posItemName}
+                </span>
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    color: 'var(--color-text-muted)',
+                  }}
+                >
+                  POS button
+                </span>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  flexWrap: 'wrap',
+                  fontSize: '12.5px',
+                }}
+              >
+                <span style={{ color: 'var(--color-text-muted)' }}>→</span>
+                <span
+                  style={{
+                    fontWeight: 600,
+                    color: 'var(--color-text-primary)',
+                    flex: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  {s.productName}
+                </span>
+                <span
+                  style={{
+                    fontSize: 9.5,
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    color:
+                      confidence === 'high'
+                        ? 'var(--color-accent-active)'
+                        : 'var(--color-text-muted)',
+                    padding: '1px 6px',
+                    borderRadius: 100,
+                    border: `1px solid ${
+                      confidence === 'high'
+                        ? 'var(--color-accent-active)'
+                        : 'var(--color-border-subtle)'
+                    }`,
+                    background:
+                      confidence === 'high' ? 'rgba(40,175,201,0.10)' : '#fff',
+                  }}
+                >
+                  {confidence === 'high' ? 'High' : 'Likely'}
+                </span>
+              </div>
+
+              {/* Per-row action strip */}
+              {!decision && (
+                <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+                  <button
+                    type="button"
+                    onClick={() => onApply(s)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      padding: '5px 12px',
+                      borderRadius: '999px',
+                      border: 'none',
+                      background: 'var(--color-accent-active)',
+                      color: '#fff',
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      fontFamily: 'var(--font-primary)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Check size={11} strokeWidth={2.6} />
+                    Link
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSkip(s.posItemId)}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: '999px',
+                      border: '1px solid var(--color-border-subtle)',
+                      background: '#fff',
+                      color: 'var(--color-text-secondary)',
+                      fontSize: '11.5px',
+                      fontWeight: 600,
+                      fontFamily: 'var(--font-primary)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Skip
+                  </button>
+                </div>
+              )}
+              {isApplied && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontSize: '11.5px',
+                    fontWeight: 600,
+                    color: '#15803D',
+                  }}
+                >
+                  <CheckCircle2 size={12} strokeWidth={2.4} />
+                  Linked
+                  <button
+                    type="button"
+                    onClick={() => onUndo(s.posItemId)}
+                    style={{
+                      marginLeft: 4,
+                      padding: 0,
+                      background: 'transparent',
+                      border: 'none',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: 'var(--color-text-muted)',
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-primary)',
+                    }}
+                  >
+                    Undo
+                  </button>
+                </div>
+              )}
+              {isSkipped && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontSize: '11.5px',
+                    color: 'var(--color-text-muted)',
+                  }}
+                >
+                  Skipped — finish on the Item matching page.
+                  <button
+                    type="button"
+                    onClick={() => onUndo(s.posItemId)}
+                    style={{
+                      marginLeft: 4,
+                      padding: 0,
+                      background: 'transparent',
+                      border: 'none',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: 'var(--color-text-muted)',
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-primary)',
+                    }}
+                  >
+                    Undo
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer */}
+      {pendingCount > 1 && (
+        <div
+          style={{
+            padding: '10px 14px',
+            borderTop: '1px solid var(--color-border-subtle)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 8,
+            background: 'rgba(0,28,53,0.02)',
+          }}
+        >
+          <button
+            type="button"
+            onClick={onApplyAll}
+            style={{
+              padding: '7px 14px',
+              borderRadius: '100px',
+              border: 'none',
+              background: 'var(--color-accent-active)',
+              fontSize: '12.5px',
+              fontWeight: 700,
+              fontFamily: 'var(--font-primary)',
+              color: '#fff',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(34,68,68,0.25)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <Check size={12} strokeWidth={2.6} />
+            Link all {pendingCount} remaining
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Card pushed into the chat once the new-supplier flow has "parsed"
+ *  both attached files. Shows the supplier-detail grid, an
+ *  expandable 20-product catalogue inspector, and the site picker.
+ *  One CTA confirms the supplier + every product in one go. */
+function NewSupplierImportCard({
+  data,
+  products,
+  expandedIndex,
+  onToggleExpandRow,
+  onEditProduct,
+  onRemoveProduct,
+  sites,
+  onToggleSite,
+  onToggleAll,
+  catalogueOpen,
+  onToggleCatalogue,
+  confirmed,
+  onConfirm,
+}: {
+  data: ExtractedSupplierSheet;
+  /** Live mutable product list — operator edits/removals are
+   *  applied here, not on `data.products`. Falls back to the parsed
+   *  catalogue at the call-site. */
+  products: ExtractedSupplierProduct[];
+  /** Index of the currently-expanded edit row (single row at a time),
+   *  or `null` if everything is collapsed. */
+  expandedIndex: number | null;
+  onToggleExpandRow: (index: number) => void;
+  onEditProduct: (index: number, patch: Partial<ExtractedSupplierProduct>) => void;
+  onRemoveProduct: (index: number) => void;
+  sites: Set<string>;
+  onToggleSite: (site: string) => void;
+  onToggleAll: (all: boolean) => void;
+  catalogueOpen: boolean;
+  onToggleCatalogue: () => void;
+  confirmed: boolean;
+  onConfirm: () => void;
+}) {
+  const allOn = sites.size === ALL_SUPPLIER_SITES.length;
+  const previewProducts = products.slice(0, 3);
+  const remaining = products.length - previewProducts.length;
+  return (
+    <div
+      style={{
+        marginTop: '8px',
+        borderRadius: '14px',
+        background: '#fff',
+        border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.12))',
+        boxShadow: '0 4px 16px rgba(0, 28, 53, 0.08)',
+        overflow: 'hidden',
+        fontFamily: 'var(--font-primary)',
+        opacity: confirmed ? 0.85 : 1,
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          padding: '11px 14px',
+          borderBottom: '1px solid var(--color-border-subtle)',
+        }}
+      >
+        <FileText size={15} strokeWidth={1.9} color="var(--color-text-muted)" />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+            Adding new supplier
+          </div>
+          <div
+            style={{
+              fontSize: '11.5px',
+              fontWeight: 500,
+              color: 'var(--color-text-muted)',
+              marginTop: '1px',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            Parsed in 1.8s · {data.supplierFileName} + {data.catalogueFileName}
+          </div>
+        </div>
+        {confirmed && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', fontWeight: 700, color: '#15803D' }}>
+            <CheckCircle2 size={13} strokeWidth={2.2} />
+            Added
+          </span>
+        )}
+      </div>
+
+      {/* Supplier details */}
+      <div style={{ padding: '10px 14px 4px' }}>
+        <div
+          style={{
+            fontSize: '10.5px',
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            color: 'var(--color-text-muted)',
+            marginBottom: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          <EdifyMark size={11} />
+          Supplier details
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '8px 16px',
+            fontSize: '12.5px',
+          }}
+        >
+          <DetailRow label="Name" value={data.name} />
+          <DetailRow label="Short code" value={data.shortCode} />
+          <DetailRow label="Categories" value={data.categories.join(', ')} />
+          <DetailRow label="Email" value={data.email ?? '—'} />
+          <DetailRow label="Phone" value={data.phone ?? '—'} />
+          <DetailRow
+            label="Cut-off · lead time"
+            value={`${data.cutOffTime ?? '—'} · ${data.leadTimeDays ?? '—'}d`}
+          />
+          <DetailRow
+            label="Min order"
+            value={data.minimumOrderValue ? `£${data.minimumOrderValue.toFixed(0)}` : '—'}
+          />
+          <DetailRow
+            label="Delivery days"
+            value={data.deliveryDays && data.deliveryDays.length ? data.deliveryDays.join(', ') : '—'}
+          />
+        </div>
+      </div>
+
+      {/* Catalogue — collapsible */}
+      <div style={{ padding: '10px 14px', borderTop: '1px solid var(--color-border-subtle)' }}>
+        <div
+          style={{
+            fontSize: '10.5px',
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            color: 'var(--color-text-muted)',
+            marginBottom: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          <EdifyMark size={11} />
+          Catalogue
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 10px',
+            borderRadius: '10px',
+            background: 'rgba(40,175,201,0.08)',
+            border: '1px solid rgba(40,175,201,0.20)',
+          }}
+        >
+          <Package size={14} strokeWidth={1.9} color="var(--color-accent-active)" />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+              <strong>{products.length} products</strong> parsed from {data.catalogueFileName}
+            </div>
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 500,
+                color: 'var(--color-text-muted)',
+                marginTop: '1px',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {previewProducts.map((p) => p.name.replace(/ \d.+$/, '')).join(' · ')}
+              {remaining > 0 ? ` · +${remaining} more` : ''}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onToggleCatalogue}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '5px 11px',
+              borderRadius: '999px',
+              border: '1px solid var(--color-accent-active)',
+              background: catalogueOpen ? 'var(--color-accent-active)' : '#fff',
+              fontSize: '11.5px',
+              fontWeight: 700,
+              fontFamily: 'var(--font-primary)',
+              color: catalogueOpen ? '#fff' : 'var(--color-accent-active)',
+              cursor: 'pointer',
+              flexShrink: 0,
+              transition: 'background 0.12s ease, color 0.12s ease',
+            }}
+          >
+            {catalogueOpen ? 'Hide' : `View all ${products.length}`}
+            <ChevronDown
+              size={12}
+              strokeWidth={2.2}
+              style={{
+                transform: catalogueOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.15s ease',
+              }}
+            />
+          </button>
+        </div>
+
+        {/* Expanded product list */}
+        {catalogueOpen && (
+          <div
+            style={{
+              marginTop: '8px',
+              borderRadius: '10px',
+              border: '1px solid var(--color-border-subtle)',
+              overflow: 'hidden',
+              fontSize: '12px',
+            }}
+          >
+            {/* Header row — extra trailing column reserves space for
+                the per-row expand chevron so summary + header line up. */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '32px 1fr 90px 110px 80px 22px',
+                gap: '8px',
+                padding: '8px 12px',
+                background: 'var(--color-bg-hover)',
+                borderBottom: '1px solid var(--color-border-subtle)',
+                fontSize: '10.5px',
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                color: 'var(--color-text-muted)',
+              }}
+            >
+              <span>#</span>
+              <span>Product</span>
+              <span>Code</span>
+              <span>Pack</span>
+              <span style={{ textAlign: 'right' }}>£/pack</span>
+              <span />
+            </div>
+            <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+              {products.map((p, i) => {
+                const isOpen = expandedIndex === i;
+                return (
+                  <div
+                    key={p.supplierCode + ':' + i}
+                    style={{
+                      borderBottom:
+                        i < products.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
+                      background: isOpen ? 'rgba(40,175,201,0.05)' : '#fff',
+                    }}
+                  >
+                    {/* Summary row — the whole row is the click target
+                        so operators don't have to aim for the chevron. */}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => onToggleExpandRow(i)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onToggleExpandRow(i);
+                        }
+                      }}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '32px 1fr 90px 110px 80px 22px',
+                        gap: '8px',
+                        alignItems: 'center',
+                        padding: '8px 12px',
+                        cursor: confirmed ? 'default' : 'pointer',
+                        transition: 'background 0.12s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isOpen && !confirmed) {
+                          (e.currentTarget as HTMLDivElement).style.background =
+                            'var(--color-bg-hover)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isOpen) {
+                          (e.currentTarget as HTMLDivElement).style.background = 'transparent';
+                        }
+                      }}
+                    >
+                      <span style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: '12.5px',
+                            fontWeight: 600,
+                            color: 'var(--color-text-primary)',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {p.name}
+                        </div>
+                        {p.allergens.length > 0 && (
+                          <div style={{ fontSize: '10.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
+                            Allergens: {p.allergens.join(', ')}
+                          </div>
+                        )}
+                      </div>
+                      <span style={{ fontSize: '11px', fontWeight: 600, fontFamily: 'var(--font-mono, ui-monospace, "SF Mono", monospace)', color: 'var(--color-text-secondary)' }}>
+                        {p.supplierCode}
+                      </span>
+                      <span style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                        {p.packQty} × {p.singleUnitVolumeOrWeight ?? 1}{p.unitOfMeasure === 'L' ? 'L' : (p.unitOfMeasure ?? '')}
+                      </span>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)', textAlign: 'right' }}>
+                        £{p.packCost.toFixed(2)}
+                      </span>
+                      <ChevronDown
+                        size={13}
+                        strokeWidth={2.2}
+                        color="var(--color-text-muted)"
+                        style={{
+                          justifySelf: 'end',
+                          transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.15s ease',
+                        }}
+                      />
+                    </div>
+                    {isOpen && (
+                      <SupplierProductEditPanel
+                        product={p}
+                        confirmed={confirmed}
+                        onEdit={(patch) => onEditProduct(i, patch)}
+                        onRemove={() => onRemoveProduct(i)}
+                        onClose={() => onToggleExpandRow(i)}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+              {products.length === 0 && (
+                <div
+                  style={{
+                    padding: '14px 12px',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: 'var(--color-text-muted)',
+                    textAlign: 'center',
+                  }}
+                >
+                  All products removed from this import.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Sites picker */}
+      <div style={{ padding: '10px 14px', borderTop: '1px solid var(--color-border-subtle)' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '6px',
+          }}
+        >
+          <div
+            style={{
+              fontSize: '10.5px',
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              color: 'var(--color-text-muted)',
+            }}
+          >
+            Which stores will use this supplier?
+          </div>
+          <button
+            type="button"
+            onClick={() => onToggleAll(!allOn)}
+            disabled={confirmed}
+            style={{
+              padding: '3px 10px',
+              borderRadius: '999px',
+              border: '1px solid var(--color-border-subtle)',
+              background: '#fff',
+              fontSize: '11px',
+              fontWeight: 600,
+              fontFamily: 'var(--font-primary)',
+              color: 'var(--color-text-secondary)',
+              cursor: confirmed ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {allOn ? 'None' : 'All'}
+          </button>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {ALL_SUPPLIER_SITES.map((site) => {
+            const on = sites.has(site);
+            return (
+              <button
+                key={site}
+                type="button"
+                onClick={() => onToggleSite(site)}
+                disabled={confirmed}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: '999px',
+                  border: on ? '1.5px solid var(--color-accent-active)' : '1.5px solid var(--color-border)',
+                  background: on ? 'rgba(40,175,201,0.10)' : '#fff',
+                  fontSize: '12px',
+                  fontWeight: on ? 700 : 500,
+                  fontFamily: 'var(--font-primary)',
+                  color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                  cursor: confirmed ? 'not-allowed' : 'pointer',
+                  transition: 'background 0.12s ease, border-color 0.12s ease',
+                }}
+              >
+                {site}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* CTA */}
+      <div
+        style={{
+          padding: '10px 14px',
+          borderTop: '1px solid var(--color-border-subtle)',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          background: 'rgba(0,28,53,0.02)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={confirmed || sites.size === 0 || products.length === 0}
+          style={{
+            padding: '8px 18px',
+            borderRadius: '100px',
+            border: 'none',
+            background:
+              confirmed || sites.size === 0 || products.length === 0
+                ? 'rgba(0,28,53,0.08)'
+                : 'var(--color-accent-active)',
+            fontSize: '12.5px',
+            fontWeight: 700,
+            fontFamily: 'var(--font-primary)',
+            color:
+              confirmed || sites.size === 0 || products.length === 0
+                ? 'var(--color-text-muted)'
+                : '#fff',
+            cursor:
+              confirmed || sites.size === 0 || products.length === 0 ? 'not-allowed' : 'pointer',
+            boxShadow:
+              confirmed || sites.size === 0 || products.length === 0
+                ? 'none'
+                : '0 2px 8px rgba(34,68,68,0.25)',
+          }}
+        >
+          {confirmed
+            ? `${data.name} added`
+            : `Add supplier + ${products.length} ${products.length === 1 ? 'product' : 'products'}`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Production flow components ──────────────────────────────────────────────
 
 function PillPicker({ options, selected, onSelect, onConfirm }: { options: string[]; selected: string; onSelect: (o: string) => void; onConfirm: () => void }) {
@@ -1572,36 +3272,20 @@ function ProductionSummaryCard({ settings }: { settings: ProdSettings }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ActionButton({ label, onClick }: { label: string; onClick: () => void }) {
-  // Confirmation buttons at the end of a long chat flow — operators
-  // routinely miss them when they're styled as small pills. The card
-  // wrapper, larger hit-area, check icon, and explicit "next step"
-  // label make this read unambiguously as the primary action.
+  // End-of-flow confirmation — a single calm pill. The previous
+  // dashed "NEXT STEP" call-out box was overbearing; the button on
+  // its own (right-aligned, brand fill, check icon) is enough to
+  // read as the primary action without shouting at the operator.
   return (
     <div
       style={{
         marginBottom: '14px',
         marginTop: '4px',
-        padding: '12px',
-        borderRadius: '14px',
-        background: 'rgba(40,175,201,0.06)',
-        border: '1.5px dashed rgba(40,175,201,0.45)',
         display: 'flex',
-        flexDirection: 'column',
-        gap: '8px',
-        alignItems: 'flex-start',
+        justifyContent: 'flex-end',
+        maxWidth: '88%',
       }}
     >
-      <span
-        style={{
-          fontSize: '11px',
-          fontWeight: 700,
-          letterSpacing: '0.06em',
-          textTransform: 'uppercase',
-          color: 'var(--color-text-muted)',
-        }}
-      >
-        Next step
-      </span>
       <button
         type="button"
         onClick={onClick}
@@ -1609,34 +3293,30 @@ function ActionButton({ label, onClick }: { label: string; onClick: () => void }
           display: 'inline-flex',
           alignItems: 'center',
           gap: '8px',
-          padding: '12px 22px',
-          borderRadius: '12px',
+          padding: '10px 18px',
+          borderRadius: '100px',
           border: 'none',
           background: 'var(--color-accent-active)',
           color: '#fff',
-          fontSize: '14px',
-          fontWeight: 700,
-          letterSpacing: '0.01em',
+          fontSize: '13px',
+          fontWeight: 600,
           fontFamily: 'var(--font-primary)',
           cursor: 'pointer',
-          boxShadow:
-            '0 4px 14px rgba(0,28,53,0.28), 0 0 0 3px rgba(40,175,201,0.18)',
+          boxShadow: '0 2px 8px rgba(34,68,68,0.25)',
           transition: 'transform 0.12s ease, box-shadow 0.12s ease',
         }}
         onMouseEnter={(e) => {
           const el = e.currentTarget;
           el.style.transform = 'translateY(-1px)';
-          el.style.boxShadow =
-            '0 6px 18px rgba(0,28,53,0.32), 0 0 0 4px rgba(40,175,201,0.24)';
+          el.style.boxShadow = '0 4px 12px rgba(34,68,68,0.3)';
         }}
         onMouseLeave={(e) => {
           const el = e.currentTarget;
           el.style.transform = 'translateY(0)';
-          el.style.boxShadow =
-            '0 4px 14px rgba(0,28,53,0.28), 0 0 0 3px rgba(40,175,201,0.18)';
+          el.style.boxShadow = '0 2px 8px rgba(34,68,68,0.25)';
         }}
       >
-        <CheckCircle2 size={16} strokeWidth={2.4} />
+        <CheckCircle2 size={14} strokeWidth={2.4} />
         {label}
       </button>
     </div>
@@ -2049,7 +3729,55 @@ function ChatBubble({
             EDIFY
           </div>
         )}
-        {isUser ? msg.text : <QuinnMessageBody text={msg.text} streaming={msg.streaming} />}
+        {isUser ? (
+          (() => {
+            // The new-supplier flow attaches a second filename via
+            // cmdArgsJson; parse defensively so unrelated user
+            // messages that happen to use cmdArgsJson don't crash.
+            let secondAttachment: string | undefined;
+            if (msg.cmdArgsJson) {
+              try {
+                const parsed = JSON.parse(msg.cmdArgsJson) as { secondAttachment?: string };
+                secondAttachment = parsed.secondAttachment;
+              } catch {
+                // ignore — message body still renders normally
+              }
+            }
+            const chips: string[] = [];
+            if (msg.attachmentName) chips.push(msg.attachmentName);
+            if (secondAttachment) chips.push(secondAttachment);
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: chips.length > 0 && msg.text ? '6px' : 0 }}>
+                {chips.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {chips.map((chip) => (
+                      <div
+                        key={chip}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '4px 9px 4px 7px',
+                          borderRadius: '999px',
+                          background: 'rgba(40,175,201,0.10)',
+                          border: '1px solid rgba(40,175,201,0.30)',
+                        }}
+                      >
+                        <FileText size={12} strokeWidth={1.9} color="var(--color-accent-active)" />
+                        <span style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--color-text-primary)', fontFamily: 'var(--font-primary)' }}>
+                          {chip}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {msg.text && <span>{msg.text}</span>}
+              </div>
+            );
+          })()
+        ) : (
+          <QuinnMessageBody text={msg.text} streaming={msg.streaming} />
+        )}
         {children}
       </div>
       {showControls && onRate && onRetry && onToggleComment && onCommentChange && (
@@ -2101,6 +3829,18 @@ type ComposerProps = {
    *  `+` popover. The receiver is responsible for running the
    *  command via the command runner. */
   onQuickAction?: (commandId: string) => void;
+  /** Shows a "Note for Edify" row in the quick-actions menu that
+   *  prefills the composer with "Note: " and focuses it. */
+  enableNote?: boolean;
+  /** Currently-attached file (from the paperclip button). When set,
+   *  the composer renders a chip above the textarea and the Send
+   *  button enables even with empty text. */
+  attachedFileName?: string | null;
+  /** Called when the user picks a file via the paperclip. We pass
+   *  only the filename — actual parsing is mocked downstream. */
+  onAttachFile?: (fileName: string) => void;
+  /** Called when the user clears the attached file chip. */
+  onClearAttachment?: () => void;
 };
 
 function ClaudeComposer({
@@ -2112,8 +3852,32 @@ function ClaudeComposer({
   placeholder,
   minHeight,
   onQuickAction,
+  enableNote,
+  attachedFileName,
+  onAttachFile,
+  onClearAttachment,
 }: ComposerProps) {
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
+  /** Hidden file input — opened by the paperclip button. Any
+   *  filename the user picks is mocked into the chat as a supplier
+   *  sheet; we never read the file's contents. */
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  /** Local ref to the textarea so the "Note for Edify" quick action
+   *  can prefill "Note: " and drop the cursor at the end. */
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  function startNote() {
+    setQuickActionsOpen(false);
+    onChange('Note: ');
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        const len = el.value.length;
+        el.setSelectionRange(len, len);
+      }
+    });
+  }
 
   // The popover is portalled to document.body so it can escape the
   // composer's `overflow: hidden` rounded wrapper. We compute its
@@ -2207,6 +3971,7 @@ function ClaudeComposer({
           </div>
         )}
         <textarea
+          ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
@@ -2241,6 +4006,71 @@ function ClaudeComposer({
           }}
         />
       </div>
+      {/* Attached-file chip — appears between the textarea and the
+          button strip when the operator has paperclipped a sheet. */}
+      {attachedFileName && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '4px 14px 8px',
+          }}
+        >
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '5px 8px 5px 10px',
+              borderRadius: '999px',
+              background: 'rgba(40,175,201,0.10)',
+              border: '1px solid rgba(40,175,201,0.30)',
+              maxWidth: '100%',
+              minWidth: 0,
+            }}
+          >
+            <FileText size={13} strokeWidth={1.9} color="var(--color-accent-active)" style={{ flexShrink: 0 }} />
+            <span
+              style={{
+                fontSize: '12.5px',
+                fontWeight: 600,
+                color: 'var(--color-text-primary)',
+                fontFamily: 'var(--font-primary)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                minWidth: 0,
+              }}
+            >
+              {attachedFileName}
+            </span>
+            {onClearAttachment && (
+              <button
+                type="button"
+                onClick={onClearAttachment}
+                aria-label="Remove attachment"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '50%',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--color-text-muted)',
+                  cursor: 'pointer',
+                  padding: 0,
+                  flexShrink: 0,
+                }}
+              >
+                <X size={11} strokeWidth={2.2} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {/* Tab hint strip */}
       {ghost && (
         <div style={{
@@ -2308,6 +4138,43 @@ function ClaudeComposer({
             }}
           />
         </button>
+        {/* Paperclip — opens a file picker. The actual file isn't
+            parsed; the chat-driven "import product from sheet" flow
+            mocks an extraction off the filename. */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/pdf,image/*,.csv,.xlsx,.xls,.txt"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f && onAttachFile) onAttachFile(f.name);
+            // Clear the input so picking the same file twice still fires.
+            e.target.value = '';
+          }}
+        />
+        <button
+          type="button"
+          aria-label="Attach a file"
+          title="Attach a product sheet, email or document"
+          disabled={disabled}
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '32px',
+            height: '32px',
+            borderRadius: '10px',
+            border: 'none',
+            background: attachedFileName ? 'rgba(40,175,201,0.12)' : 'transparent',
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            color: attachedFileName ? 'var(--color-accent-mid, #28AFC9)' : 'var(--color-text-muted)',
+            transition: 'background 0.12s ease, color 0.12s ease',
+          }}
+        >
+          <Paperclip size={16} strokeWidth={2} />
+        </button>
         {quickActionsOpen && onQuickAction && quickActionsPos && typeof document !== 'undefined' &&
           createPortal(
             <div
@@ -2349,6 +4216,43 @@ function ClaudeComposer({
                   6px horizontal inset so it feels like its own card,
                   not a list squeezed into a tooltip. */}
               <div style={{ padding: '0 6px 8px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                {enableNote && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={startNote}
+                    style={{
+                      display: 'flex',
+                      width: '100%',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '6px 8px',
+                      border: 'none',
+                      borderRadius: '6px',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--font-primary)',
+                      transition: 'background 0.12s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = 'rgba(0,28,53,0.04)';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = 'transparent';
+                    }}
+                  >
+                    <Mic
+                      size={15}
+                      strokeWidth={1.8}
+                      color="var(--color-text-muted)"
+                      style={{ flexShrink: 0 }}
+                    />
+                    <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                      Note for Edify
+                    </span>
+                  </button>
+                )}
                 {QUICK_ACTION_CHIPS.map((chip) => {
                   const Icon = chip.icon;
                   return (
@@ -2417,7 +4321,7 @@ function ClaudeComposer({
           >
             <Mic size={16} strokeWidth={2} />
           </button>
-          {hasText && (
+          {(hasText || !!attachedFileName) && (
             <button
               type="button"
               onClick={onSend}
@@ -3143,6 +5047,7 @@ export default function Feed({
   autoSendTableTitle,
   alreadyPinned,
   autoStartFlow,
+  enableNoteCapture,
   onUserMessageCountChange,
   onPinTable,
   onOpenTableInNewView,
@@ -3187,6 +5092,9 @@ export default function Feed({
   alreadyPinned?: Set<AnalyticsChartId>;
   /** If set, auto-start the named guided flow on mount (e.g. from an external "Ask Quinn" entry point). */
   autoStartFlow?: 'recipe' | 'integrity';
+  /** Shows the "Note for Edify" quick action in the composer. Sending a
+   *  message that starts with "Note:" logs it straight to the notebook. */
+  enableNoteCapture?: boolean;
   /**
    * Fires whenever the count of user-role messages in the chat changes.
    * Used by AddInsightPopup to detect follow-up activity for history saving.
@@ -3206,6 +5114,11 @@ export default function Feed({
       : [],
   );
   const [input, setInput] = useState('');
+  /** Filename of the paperclip-attached file. Pure UI state — we
+   *  never read the actual file. When set, the composer renders an
+   *  attached-file chip and `sendMessage` mocks a supplier-sheet
+   *  import flow from this name. */
+  const [attachedFileName, setAttachedFileName] = useState<string | null>(null);
   // Anchors for the slash-command typeahead. Two wrappers exist —
   // one in the empty/initial state (above the briefing) and one in
   // the active chat state (the bottom composer dock). Each rendering
@@ -3215,6 +5128,39 @@ export default function Feed({
   const dockComposerWrapperRef = useRef<HTMLDivElement>(null);
   const [recipeFlow, setRecipeFlow] = useState(0);
   const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>(INITIAL_RECIPE_INGREDIENTS);
+  /** Per-card site selections for the chat-driven "import product
+   *  from sheet" flow. Keyed by the card's message id so multiple
+   *  imports stay independent. The selection is seeded to all sites
+   *  on card mount — matches the "super fast, ALL stores by default"
+   *  brief; the operator only tweaks if they want a subset. */
+  const [productImportSites, setProductImportSites] = useState<Record<string, Set<string>>>({});
+  /** Per-card confirmed flag. Once an import is confirmed, the card
+   *  flips to a `confirmed` style and the bottom CTA becomes "Added". */
+  const [productImportConfirmed, setProductImportConfirmed] = useState<Record<string, boolean>>({});
+  /** Sibling state for the new-supplier import card. Same key shape
+   *  as the product-sheet flow — each card carries its own sites,
+   *  catalogue-expanded toggle, and confirmed flag. */
+  const [supplierImportSites, setSupplierImportSites] = useState<Record<string, Set<string>>>({});
+  const [supplierImportConfirmed, setSupplierImportConfirmed] = useState<Record<string, boolean>>({});
+  const [supplierCatalogueOpen, setSupplierCatalogueOpen] = useState<Record<string, boolean>>({});
+  /** Live product list per card. Seeded from the parsed catalogue on
+   *  flow start; any row-level edits or removals mutate this so the
+   *  confirm handler persists the operator's adjustments rather than
+   *  the original mock. */
+  const [supplierImportProducts, setSupplierImportProducts] = useState<Record<string, ExtractedSupplierProduct[]>>({});
+  /** Which row inside the catalogue table is currently expanded for
+   *  inline edit. Single index per card (operator focuses on one
+   *  product at a time); `null` collapses everything. */
+  const [supplierExpandedRow, setSupplierExpandedRow] = useState<Record<string, number | null>>({});
+  /** Per-row decisions on the POS-match follow-up card. Outer key is
+   *  the card's message id; inner key is the POS button id; value is
+   *  the operator's decision. Lets the operator step through, undo,
+   *  or pick up later without losing state on re-render. */
+  const [posMatchDecisions, setPosMatchDecisions] = useState<Record<string, Record<string, 'applied' | 'skipped'>>>({});
+  /** Snapshot of existing match overrides so we can skip POS buttons
+   *  that have already been linked (either by Sync & match, by a
+   *  previous chat suggestion, or by hand on the Item matching page). */
+  const matchOverrides = useMatchOverrides();
   const [selectedPackaging, setSelectedPackaging] = useState<Set<string>>(new Set());
   const [selectedAllergens, setSelectedAllergens] = useState<Set<string>>(new Set());
   const [selectedSites, setSelectedSites] = useState<Set<string>>(new Set(['fitzroy']));
@@ -3728,19 +5674,57 @@ export default function Feed({
     lockedPricingRef.current = null;
     recipeSeedRef.current = seedText && seedText.trim().length > 0 ? seedText.trim() : template.name;
     recipeTemplateMatchedRef.current = !!resolved || !seedText;
-    // When the wizard is opened from typed text (rather than a chip
-    // click) we keep the user's original message visible above Quinn's
-    // greeting so the conversation reads naturally.
+    // Two staging paths:
+    //
+    //  • Typed-input path (`echo` set): user message first, then a
+    //    5s "thinking" bubble, then the greeting streams in, then
+    //    the recipe-card editor lands. Mirrors the product-sheet
+    //    import flow's cadence so flows that start from a typed
+    //    message feel like Quinn is actually working on them.
+    //  • Chip-click path: skip the thinking beat — the operator
+    //    just clicked an explicit affordance, so showing Quinn
+    //    "thinking" reads as artificial. The greeting renders
+    //    instantly and the simulated-echo stage (state 1) handles
+    //    the rest of the pacing.
     const echo = opts?.userEcho?.trim();
-    const greetingMsg: ChatMsg = {
+    if (echo) {
+      const userMsgId = `u-recipe-seed-${Date.now()}`;
+      const thinkingId = `q-recipe-thinking-${Date.now()}`;
+      const greetingId = `q-greeting-${Date.now()}`;
+      setMessages([
+        { id: userMsgId, role: 'user', text: echo },
+        { id: thinkingId, role: 'quinn', text: '', msgType: 'cmd-thinking' },
+      ]);
+
+      // 5s "thinking" hold → swap to the streaming greeting.
+      window.setTimeout(() => {
+        setMessages((prev) => {
+          const without = prev.filter((m) => m.id !== thinkingId);
+          return [
+            ...without,
+            {
+              id: greetingId,
+              role: 'quinn',
+              text: RECIPE_GREETING,
+              streaming: true,
+            },
+          ];
+        });
+        // After the greeting finishes typing + a small breath,
+        // advance the wizard so the recipe-card editor appears.
+        // STREAM_CHAR_MS is 18ms — buffer for the natural pause
+        // between bubbles keeps it from snapping in.
+        const streamMs = RECIPE_GREETING.length * 18 + 600;
+        window.setTimeout(() => setRecipeFlow(2), streamMs);
+      }, 5000);
+      return;
+    }
+
+    setMessages([{
       id: `q-greeting-${Date.now()}`,
       role: 'quinn',
       text: RECIPE_GREETING,
-    };
-    setMessages(echo
-      ? [{ id: `u-recipe-seed-${Date.now()}`, role: 'user', text: echo }, greetingMsg]
-      : [greetingMsg],
-    );
+    }]);
     setRecipeFlow(1);
   }
 
@@ -3780,6 +5764,589 @@ export default function Feed({
     // Case 4: just the word "recipe" on its own.
     if (recipeKeyword && lower.split(/\s+/).length <= 3) return text;
     return null;
+  }
+
+  /** Did the user just ask to import a product from a sheet/file?
+   *
+   *  Two paths kick the flow:
+   *    1. A file is paperclipped — the attachment alone is treated
+   *       as an explicit "process this sheet" signal regardless of
+   *       what the user typed (or even if they typed nothing).
+   *    2. No attachment, but the text reads like an import request:
+   *       a creation verb + a "sheet / file / document" word.
+   *
+   *  The keyword set is intentionally loose so phrasings like
+   *  "Add this product of a new bacon from this product sheet" hit
+   *  alongside "import bacon from sheet", "upload supplier sheet",
+   *  "add a new product from this document", etc.
+   *
+   *  IMPORTANT: this runs AFTER detectNewSupplierImport in
+   *  sendMessage so the more specific "new supplier" intent wins
+   *  when both detectors would fire. */
+  function detectProductSheetImport(text: string, hasAttachment: boolean): boolean {
+    if (hasAttachment) return true;
+    const lower = text.toLowerCase().trim();
+    if (!lower) return false;
+    const verb = /\b(?:add|adding|import|importing|upload|uploading|create|creating|set\s*up|setup|new|attach|attaching)\b/.test(lower);
+    if (!verb) return false;
+    const productWord = /\b(?:product|sku|item|bacon|supplier)\b/.test(lower);
+    const sourceWord = /\b(?:sheet|file|document|spreadsheet|csv|pdf|email|attachment|attach|invoice)\b/.test(lower);
+    // Verb + a "sheet/file" word is the strongest signal — also
+    // accept verb + product word + "from" preposition (covers "add
+    // bacon from this sheet" when the sheet word is dropped).
+    if (sourceWord) return true;
+    if (productWord && /\b(?:from|via|using|out\s+of)\b/.test(lower)) return true;
+    return false;
+  }
+
+  /** Did the user just ask to add a new product and swap it across the
+   *  recipes that use the existing one? This is the sheet-driven
+   *  product-swap flow (parse a supplier sheet → confirm the new
+   *  product → confirm the recipes → done). It must be checked BEFORE
+   *  the generic product-sheet importer so an attached coffee-bean
+   *  sheet lands here rather than on the single-product importer.
+   *
+   *  Scoped deliberately tight: the coffee-bean scenario, or the
+   *  generic "swap/replace a product (in a/across) recipe(s)" phrasing
+   *  with no other specifically-named product. A specific inline swap
+   *  ("replace whole milk with oat milk") still falls through to the
+   *  command parser so it isn't served the coffee mock. */
+  function detectProductSwapAcrossRecipes(text: string): boolean {
+    const lower = text.toLowerCase().trim();
+    if (!lower) return false;
+    const swapVerb = /\b(?:swap|swapping|replace|replacing|switch|switching)\b/.test(lower);
+    if (!swapVerb) return false;
+    // Coffee-bean scenario — explicit.
+    if (/\b(?:coffee\s*beans?|espresso(?:\s*blend)?|beans?)\b/.test(lower)) return true;
+    // Generic "swap/replace a product …" (the wording the old manual
+    // wizard used) — no other named product to confuse the mock.
+    if (/\b(?:swap|replace|switch)\b\s+(?:a|an|the|my|our)?\s*product\b/.test(lower)) return true;
+    return false;
+  }
+
+  /** Mock the parsed coffee-bean sheet + the swap context (which
+   *  existing item it maps to). The brief is "the sheet has all the
+   *  product details", so this returns a complete, believable new bean
+   *  and points it at the existing Espresso Blend master the coffee
+   *  recipes use.
+   *
+   *  We deliberately do NOT mint a new supplier — a product sheet
+   *  doesn't carry the supplier onboarding details (cut-off, lead time,
+   *  MOV, delivery days), so we attach the new bean to an existing
+   *  supplier and leave setting up the real one for later. */
+  function coffeeBeanSwapArgs(fileName: string): Record<string, unknown> {
+    // Resolve an existing supplier to hang the new bean off — first an
+    // Available one that already carries Beverage, else the first
+    // available supplier in the book.
+    const suppliers = snapshotSuppliersStore().suppliers;
+    const existing =
+      suppliers.find((s) => s.status === 'Available' && s.categories.includes('Beverage')) ??
+      suppliers.find((s) => s.status === 'Available') ??
+      suppliers[0];
+    return {
+      fileName,
+      newProductName: 'Single-Origin Colombian Beans 1kg',
+      // Existing supplier — not a new one (we don't have its details).
+      supplierMode: 'existing',
+      supplierId: existing?.id,
+      supplierName: existing?.shortCode ?? existing?.name ?? 'Existing supplier',
+      category: 'Beverage',
+      packType: 'Pack',
+      packQty: 6,
+      packCost: 132.0,
+      unitType: 'kg',
+      singleUnitVolumeOrWeight: 1,
+      unitOfMeasure: 'kg',
+      taxRatePct: 0,
+      allergens: [],
+      sites: [...ALL_SUPPLIER_SITES],
+      // What we're swapping out — the coffee recipes reference this via
+      // a master ref (typed rows) and a legacy "Espresso blend" row.
+      oldProductName: 'Espresso blend',
+      oldMasterId: 'mp-espresso-blend',
+      oldPackCost: 30.0,
+      oldPackQty: 1,
+    };
+  }
+
+  /** Kick the sheet-driven product swap. Same cinematic as the single-
+   *  product importer (user echo with attachment chip → thinking hold →
+   *  streaming summary), then hands off to the command runner which
+   *  opens the task + the new-product confirmation card. */
+  function startBeanSwapFromSheet(opts: { fileName: string; userText: string }) {
+    setChatMinimized(false);
+    setChatStarted(true);
+    setAttachedFileName(null);
+
+    const args = coffeeBeanSwapArgs(opts.fileName);
+    const userMsgId = `u-beanswap-${Date.now()}`;
+    const thinkingId = `q-beanswap-thinking-${Date.now()}`;
+    const summaryId = `q-beanswap-summary-${Date.now()}`;
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: userMsgId,
+        role: 'user',
+        text: opts.userText || `Add this coffee bean and swap it in from ${opts.fileName}`,
+        attachmentName: opts.fileName,
+      },
+      { id: thinkingId, role: 'quinn', text: '', msgType: 'cmd-thinking' },
+    ]);
+
+    const summaryText =
+      `Got it — I parsed **${opts.fileName}** and pulled the product details. ` +
+      `It's a new coffee bean, **${args.newProductName as string}**, at £${((args.packCost as number) / (args.packQty as number)).toFixed(2)}/kg. ` +
+      `That maps to the espresso blend your coffees already use, so I can swap it across all of them. ` +
+      `The sheet doesn't include supplier terms, so I've kept it under your existing supplier for now — you can set up the new one later. ` +
+      `Here's the new product — confirm and I'll line up the recipes.`;
+
+    window.setTimeout(() => {
+      setMessages((prev) => {
+        const without = prev.filter((m) => m.id !== thinkingId);
+        return [...without, { id: summaryId, role: 'quinn', text: summaryText, streaming: true }];
+      });
+      const streamingDurationMs = summaryText.length * 18;
+      window.setTimeout(() => {
+        commandRunner.startProductSwapFromSheet(args);
+      }, streamingDurationMs + 400);
+    }, 3500);
+  }
+
+  /** Did the user just ask to onboard a new supplier (with their
+   *  details + a product catalogue)? Distinct from the product-sheet
+   *  detector because:
+   *    • the wizard creates a Supplier + many Products at once
+   *      rather than a single Product against an existing master.
+   *    • the demo expects two attached files (supplier sheet + 20-SKU
+   *      catalogue), so we surface two chips in the user bubble.
+   *
+   *  Loose keyword detection so phrasings like "I want to add a new
+   *  supplier", "import supplier with their catalogue", "onboard a
+   *  new vendor and their SKUs" all route here. */
+  function detectNewSupplierImport(text: string): boolean {
+    const lower = text.toLowerCase().trim();
+    if (!lower) return false;
+    const supplierWord = /\b(?:supplier|vendor)\b/.test(lower);
+    if (!supplierWord) return false;
+    const supplierVerb =
+      /\b(?:add|adding|import|importing|onboard|onboarding|create|creating|set\s*up|setup|new|register|registering)\b/.test(lower);
+    if (!supplierVerb) return false;
+    // Corroborate — "supplier" near a creation verb on its own is too
+    // loose. Require at least one of: catalogue word, sheet/file word,
+    // products word, OR the literal phrase "new supplier".
+    const corroborate =
+      /\bnew\s+supplier\b/.test(lower) ||
+      /\b(?:catalogue|catalog|sku|skus|products?|details?)\b/.test(lower) ||
+      /\b(?:sheet|file|document|spreadsheet|csv|pdf|attachment|attach)\b/.test(lower);
+    return corroborate;
+  }
+
+  /** Kick the sheet-import wizard. Pushes a user echo with the
+   *  attached-filename chip, a "parsing…" thinking bubble, then —
+   *  after a short delay — the extracted-summary message and the
+   *  import card. The card lives in the chat as an interactive
+   *  message; clicking "Add product" runs `confirmProductImport`. */
+  function startProductSheetImport(opts: { fileName: string; userText: string }) {
+    setChatMinimized(false);
+    setChatStarted(true);
+    setAttachedFileName(null);
+
+    const data = mockExtractFromSheet(opts.fileName);
+    const userMsgId = `u-sheet-${Date.now()}`;
+    const thinkingId = `q-sheet-thinking-${Date.now()}`;
+    const cardId = `q-sheet-card-${Date.now()}`;
+
+    // Default site selection — all sites checked. Brief says "the
+    // only thing the user needs to decide is what stores will use
+    // this product", so the fastest path is all-on with the operator
+    // ticking off any they want to exclude.
+    setProductImportSites((prev) => ({ ...prev, [cardId]: new Set(ALL_SUPPLIER_SITES) }));
+    setProductImportConfirmed((prev) => ({ ...prev, [cardId]: false }));
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: userMsgId,
+        role: 'user',
+        text: opts.userText || `Add this product from ${opts.fileName}`,
+        attachmentName: opts.fileName,
+      },
+      { id: thinkingId, role: 'quinn', text: '', msgType: 'cmd-thinking' },
+    ]);
+
+    // Staggered reveal:
+    //   1. After a 5s "thinking" hold, the thinking bubble is swapped
+    //      for the streaming summary message. This feels like the LLM
+    //      is actually parsing the sheet rather than instantly
+    //      snapping to a result.
+    //   2. The import card only appears *after* the summary text has
+    //      finished streaming, so the operator reads the framing
+    //      before the card slides in underneath. Delay is computed
+    //      from the message length × STREAM_CHAR_MS + a small buffer
+    //      so it adapts if the copy ever changes.
+    const summaryText =
+      `Got it — I parsed **${opts.fileName}** and pulled all the details. ` +
+      `It matches your existing **Bacon** master product (already has 2 suppliers), ` +
+      `so I'll add this as a 3rd supplier. The only thing I need from you is which stores will stock it.`;
+    const summaryId = `q-sheet-summary-${Date.now()}`;
+    window.setTimeout(() => {
+      setMessages((prev) => {
+        const without = prev.filter((m) => m.id !== thinkingId);
+        return [
+          ...without,
+          {
+            id: summaryId,
+            role: 'quinn',
+            text: summaryText,
+            streaming: true,
+          },
+        ];
+      });
+      const streamingDurationMs = summaryText.length * 18; // matches STREAM_CHAR_MS
+      window.setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: cardId,
+            role: 'quinn',
+            text: '',
+            msgType: 'product-sheet-import',
+            cmdId: cardId,
+            cmdArgsJson: JSON.stringify({ data, fileName: opts.fileName }),
+          },
+        ]);
+      }, streamingDurationMs + 400);
+    }, 5000);
+  }
+
+  /** Commit the import: persists the new supplier (de-duped by name)
+   *  and the new Product (linked to the matched master) into the
+   *  Suppliers store, then pushes a confirmation message into the
+   *  chat. Subsequent renders of the card flip to the `confirmed`
+   *  state so the operator can't double-add. */
+  /** Shared follow-up: take the products that just landed in the
+   *  store, find unmatched Drinks-category POS buttons that look
+   *  like them, and queue a chat card so the operator can link them
+   *  without leaving the conversation. Staggered after the success
+   *  message so they read as two distinct beats. */
+  function queuePosMatchFollowUp(
+    justAddedProducts: { id: string; name: string; category: ProductCategory }[],
+  ) {
+    // Build a skip-set of POS buttons that have already been
+    // linked/hidden so we don't re-surface a row the operator
+    // already actioned on the Item matching page or in a previous
+    // chat turn. Drinks buttons start life with no recipe match
+    // (matchStatus === 'no-modifiers'), so checking just the
+    // override store covers the relevant cases.
+    const alreadyMatchedPosIds = new Set<string>();
+    for (const [posId, ov] of matchOverrides) {
+      if (ov.target || ov.hidden) alreadyMatchedPosIds.add(posId);
+    }
+
+    const suggestions = computePOSDrinkSuggestions(justAddedProducts, alreadyMatchedPosIds);
+    if (suggestions.length === 0) return;
+
+    const intro =
+      suggestions.length === 1
+        ? `One of these lines up with an unmatched **POS button** on your menu — want me to link it so sales start depleting the right stock?`
+        : `${suggestions.length} of these line up with unmatched **POS buttons** on your menu — want me to link them so sales start depleting the right stock?`;
+
+    // Intro text first (typed-out streaming), then the card.
+    window.setTimeout(() => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `q-pos-suggest-intro-${Date.now()}`,
+          role: 'quinn',
+          text: `While I was at it — ${intro}`,
+          streaming: true,
+        },
+      ]);
+    }, 1800);
+    window.setTimeout(() => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `q-pos-suggest-card-${Date.now()}`,
+          role: 'quinn',
+          text: '',
+          msgType: 'pos-match-suggestions',
+          cmdArgsJson: JSON.stringify({ suggestions }),
+        },
+      ]);
+    }, 3200);
+  }
+
+  function confirmProductImport(cardId: string, data: ExtractedProductSheet, fileName: string) {
+    if (productImportConfirmed[cardId]) return;
+    setProductImportConfirmed((prev) => ({ ...prev, [cardId]: true }));
+
+    const sites = [...(productImportSites[cardId] ?? new Set<string>())];
+
+    // De-duplicate the supplier by name so re-running the demo
+    // doesn't stack identical "Hawkshead Smokehouse" rows.
+    const supplierName = data.supplierName.trim();
+    // We could call `resolveOrCreateSupplier` from the store, but the
+    // demo needs the new supplier to carry category + sites, so build
+    // explicitly here.
+    const supplierId = genId('sup');
+    upsertSupplier({
+      id: supplierId,
+      name: supplierName,
+      shortCode: supplierName,
+      categories: [data.category],
+      sites: [...ALL_SUPPLIER_SITES],
+      status: 'Available',
+    });
+
+    const newProductId = genId('prd');
+    upsertProduct({
+      id: newProductId,
+      name: data.productName,
+      source: 'supplier',
+      supplierId,
+      masterProductId: data.matchedMasterId,
+      supplierCode: 'SHEET-IMPORT',
+      productClass: 'Food',
+      category: data.category,
+      tags: [],
+      packType: data.packType,
+      packQty: data.packQty,
+      packCost: data.packCost,
+      taxRatePct: data.taxRatePct,
+      singleUnitType: data.singleUnitType,
+      singleUnitVolumeOrWeight: data.singleUnitVolumeOrWeight,
+      unitOfMeasure: data.unitOfMeasure,
+      altUoms: [],
+      allergensContains: data.allergens,
+      allergensTraces: [],
+      nutrition: {},
+      sites,
+      status: 'Available',
+      flag: null,
+    });
+
+    const siteSummary =
+      sites.length === ALL_SUPPLIER_SITES.length
+        ? 'all sites'
+        : `${sites.length} ${sites.length === 1 ? 'site' : 'sites'}`;
+    void fileName; // currently unused in copy; kept for future "see sheet" link
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `u-sheet-confirm-${Date.now()}`,
+        role: 'user',
+        text:
+          sites.length === ALL_SUPPLIER_SITES.length
+            ? 'Add it everywhere'
+            : `Add it to ${sites.length} ${sites.length === 1 ? 'store' : 'stores'}`,
+      },
+      {
+        id: `q-sheet-done-${Date.now()}`,
+        role: 'quinn',
+        text:
+          `Done. **${data.productName}** is in your catalogue, linked to the ` +
+          `**Bacon** master product, with **${data.supplierName}** added as a ` +
+          `new supplier. Live at ${siteSummary}.`,
+        streaming: true,
+      },
+    ]);
+
+    // No-ops when the product isn't a beverage — but cheap to call,
+    // and means a future single-product import of, say, a sparkling
+    // water would naturally surface POS matches here too.
+    queuePosMatchFollowUp([
+      { id: newProductId, name: data.productName, category: data.category },
+    ]);
+  }
+
+  /** Kick the new-supplier flow. Same staged reveal as the product-
+   *  sheet flow (user echo → 5s thinking → streaming summary →
+   *  card after streaming completes) but the user bubble carries
+   *  TWO attachment chips (supplier sheet + catalogue) — the brief
+   *  is that both are paperclipped. */
+  function startNewSupplierImport(opts: { primaryFileName: string | null; userText: string }) {
+    setChatMinimized(false);
+    setChatStarted(true);
+    setAttachedFileName(null);
+
+    const data = mockSupplierSheet();
+    // The user might have paperclipped one file or none. The flow
+    // always renders the supplier-sheet + catalogue filenames the
+    // mock provides — if the operator did attach a file we surface
+    // their filename as the supplier sheet for continuity, and we
+    // mock the catalogue alongside it.
+    const supplierFileName = opts.primaryFileName ?? data.supplierFileName;
+    const catalogueFileName = data.catalogueFileName;
+    const sealed: ExtractedSupplierSheet = {
+      ...data,
+      supplierFileName,
+      catalogueFileName,
+    };
+
+    const userMsgId = `u-supplier-${Date.now()}`;
+    const thinkingId = `q-supplier-thinking-${Date.now()}`;
+    const cardId = `q-supplier-card-${Date.now()}`;
+
+    // Default site selection — all sites checked; matches the
+    // "minimal interaction" brief from the product-sheet flow.
+    setSupplierImportSites((prev) => ({ ...prev, [cardId]: new Set(ALL_SUPPLIER_SITES) }));
+    setSupplierImportConfirmed((prev) => ({ ...prev, [cardId]: false }));
+    setSupplierCatalogueOpen((prev) => ({ ...prev, [cardId]: false }));
+    // Seed the editable product list — any row-level edits or
+    // removals mutate this rather than the original mock so the
+    // operator's adjustments survive into the persisted Products.
+    setSupplierImportProducts((prev) => ({ ...prev, [cardId]: sealed.products }));
+    setSupplierExpandedRow((prev) => ({ ...prev, [cardId]: null }));
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: userMsgId,
+        role: 'user',
+        text: opts.userText || 'I want to add a new supplier with their catalogue.',
+        attachmentName: supplierFileName,
+        // Second attachment chip — the catalogue. ChatMsg only has
+        // one attachment slot today, so we serialise the second
+        // file as a sibling chip via cmdArgsJson (read by the user
+        // bubble render below). Kept narrow so the ChatMsg shape
+        // doesn't need a list-typed field for one rare flow.
+        cmdArgsJson: JSON.stringify({ secondAttachment: catalogueFileName }),
+      },
+      { id: thinkingId, role: 'quinn', text: '', msgType: 'cmd-thinking' },
+    ]);
+
+    // 5s thinking hold (matches the product-sheet flow's pacing —
+    // two files take a beat longer to "parse" than one in real life,
+    // but keeping the timing identical keeps the demo predictable).
+    const summaryText =
+      `Got it — I parsed **${supplierFileName}** for the supplier details ` +
+      `and **${catalogueFileName}** for the catalogue. ` +
+      `That's **${sealed.products.length} products** ready to add under ` +
+      `**${sealed.name}**. You can click through to confirm each product, ` +
+      `or just pick which stores will use them and I'll set it all up.`;
+    const summaryId = `q-supplier-summary-${Date.now()}`;
+    window.setTimeout(() => {
+      setMessages((prev) => {
+        const without = prev.filter((m) => m.id !== thinkingId);
+        return [
+          ...without,
+          { id: summaryId, role: 'quinn', text: summaryText, streaming: true },
+        ];
+      });
+      const streamingDurationMs = summaryText.length * 18; // STREAM_CHAR_MS
+      window.setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: cardId,
+            role: 'quinn',
+            text: '',
+            msgType: 'new-supplier-import',
+            cmdId: cardId,
+            cmdArgsJson: JSON.stringify({ data: sealed }),
+          },
+        ]);
+      }, streamingDurationMs + 400);
+    }, 5000);
+  }
+
+  /** Commit the new supplier + all 20 (or however many remain after
+   *  any operator removals) products to the store in one go. Each
+   *  product uses the freshly-created supplier id; sites come from
+   *  the operator's selection (defaulted to all). */
+  function confirmNewSupplierImport(cardId: string, data: ExtractedSupplierSheet) {
+    if (supplierImportConfirmed[cardId]) return;
+    setSupplierImportConfirmed((prev) => ({ ...prev, [cardId]: true }));
+
+    const sites = [...(supplierImportSites[cardId] ?? new Set<string>())];
+    // Use the LIVE product list — picks up any inline edits or
+    // operator-dropped rows. Falls back to the seed catalogue if
+    // the live list ref is somehow missing (e.g. card restored from
+    // a history snapshot in the future).
+    const products = supplierImportProducts[cardId] ?? data.products;
+
+    const supplierId = genId('sup');
+    upsertSupplier({
+      id: supplierId,
+      name: data.name,
+      shortCode: data.shortCode,
+      categories: data.categories,
+      sites: sites.length > 0 ? sites : [...ALL_SUPPLIER_SITES],
+      status: 'Available',
+      email: data.email,
+      phone: data.phone,
+      cutOffTime: data.cutOffTime,
+      leadTimeDays: data.leadTimeDays,
+      minimumOrderValue: data.minimumOrderValue,
+      deliveryDays: data.deliveryDays,
+    });
+
+    // Capture the persisted product IDs alongside their names so the
+    // POS-match follow-up can reference them by id when the operator
+    // confirms a suggestion (writes to the override store keyed by id).
+    const persistedProducts: { id: string; name: string; category: ProductCategory }[] = [];
+    for (const p of products) {
+      const id = genId('prd');
+      upsertProduct({
+        id,
+        name: p.name,
+        source: 'supplier',
+        supplierId,
+        supplierCode: p.supplierCode,
+        productClass: p.productClass,
+        category: p.category,
+        tags: [],
+        packType: p.packType,
+        packQty: p.packQty,
+        packCost: p.packCost,
+        taxRatePct: p.taxRatePct,
+        singleUnitType: p.singleUnitType,
+        singleUnitVolumeOrWeight: p.singleUnitVolumeOrWeight,
+        unitOfMeasure: p.unitOfMeasure,
+        altUoms: [],
+        allergensContains: p.allergens,
+        allergensTraces: [],
+        nutrition: {},
+        sites,
+        status: 'Available',
+        flag: null,
+      });
+      persistedProducts.push({ id, name: p.name, category: p.category });
+    }
+
+    const siteSummary =
+      sites.length === ALL_SUPPLIER_SITES.length
+        ? 'all sites'
+        : `${sites.length} ${sites.length === 1 ? 'site' : 'sites'}`;
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `u-supplier-confirm-${Date.now()}`,
+        role: 'user',
+        text:
+          sites.length === ALL_SUPPLIER_SITES.length
+            ? 'Add them everywhere'
+            : `Add them to ${sites.length} ${sites.length === 1 ? 'store' : 'stores'}`,
+      },
+      {
+        id: `q-supplier-done-${Date.now()}`,
+        role: 'quinn',
+        text:
+          `Done. **${data.name}** is now a supplier with **${products.length} products** ` +
+          `in your catalogue. Live at ${siteSummary}. You can review the SKUs anytime under ` +
+          `Suppliers → ${data.name}.`,
+        streaming: true,
+      },
+    ]);
+
+    // POS-match follow-up — runs after the done message has had a
+    // moment to type, so the suggestion card lands as a deliberate
+    // second beat rather than fighting the confirmation for attention.
+    queuePosMatchFollowUp(persistedProducts);
   }
 
   function startIntegrityCheck() {
@@ -3937,12 +6504,96 @@ export default function Feed({
   ) {
     const raw = overrideText !== undefined ? overrideText : input;
     const text = raw.trim();
-    if (!text) return;
+    // Allow a send with empty text when there's an attached file —
+    // the paperclip itself carries intent (the chat-driven product
+    // sheet import flow handles the empty-text path).
+    if (!text && !attachedFileName) return;
+
+    // Starting fresh from the command-centre composer? Clear the
+    // previous thread first so a new send doesn't pile onto whatever
+    // conversation was running just before the user minimised. The
+    // prior chat is preserved in the history drawer via
+    // `logHistoryEntry`, so dropping it from in-memory state here is
+    // safe. Functional setMessages calls below still see the cleared
+    // array because React applies queued updates in order before
+    // running each functional updater.
+    if (chatMinimized) {
+      setMessages([]);
+    }
 
     const userMsg: ChatMsg = { id: `u-${Date.now()}`, role: 'user', text };
     setChatStarted(true);
     setChatMinimized(false);
     setInput('');
+
+    // "Note:" capture — a note the operator jots from the composer's
+    // "Note for Edify" quick action. Logs straight to the notebook
+    // (/notebook) and gets a short Edify confirmation, skipping the
+    // normal command / analytics routing below.
+    if (explicitChart === undefined && !tableOpts) {
+      const noteMatch = /^note\s*:/i.exec(text);
+      if (noteMatch) {
+        const body = text.slice(noteMatch[0].length).trim();
+        if (body) {
+          const reply =
+            "Logged to your notebook. I'll thread it through your themes and flag if it connects to anything in your data.";
+          addNotebookNote({ text: body, reply });
+          logHistoryEntry({
+            kind: 'chat',
+            title: body.length > 60 ? `${body.slice(0, 57)}…` : body,
+            subtitle: 'Note · notebook',
+          });
+          setMessages((prev) => [
+            ...prev,
+            userMsg,
+            { id: `q-note-${Date.now()}`, role: 'quinn' as const, text: reply, streaming: true },
+          ]);
+          return;
+        }
+      }
+    }
+
+    // New-supplier onboarding — runs FIRST so phrasings like "add a
+    // new supplier with their catalogue" don't get hijacked by the
+    // product-sheet detector below (which also matches "supplier" +
+    // "sheet"). The flow expects two attached files conceptually
+    // (supplier sheet + catalogue) — either one paperclip or none
+    // is enough because the demo mocks the second file.
+    // Sheet-driven product swap — "add a new coffee bean and swap it
+    // across the recipes that use it". Checked before the generic
+    // sheet importer so an attached bean sheet lands here. Mocks the
+    // sheet filename when the operator described it in words but didn't
+    // actually paperclip anything.
+    if (explicitChart === undefined && !tableOpts) {
+      if (detectProductSwapAcrossRecipes(text)) {
+        const fileName = attachedFileName ?? 'riverbank-roasters-beans.pdf';
+        startBeanSwapFromSheet({ fileName, userText: text });
+        return;
+      }
+    }
+
+    if (explicitChart === undefined && !tableOpts) {
+      if (detectNewSupplierImport(text)) {
+        startNewSupplierImport({ primaryFileName: attachedFileName, userText: text });
+        return;
+      }
+    }
+
+    // Product-sheet import — short-circuits the rest. Fires when:
+    //   • a file is paperclipped to this message (the attachment alone
+    //     is the intent signal), OR
+    //   • the text reads like an "add a product from a sheet/file/
+    //     document" ask. When the operator says it in words but
+    //     didn't actually paperclip anything, we mock a filename so
+    //     the demo still flows.
+    if (explicitChart === undefined && !tableOpts) {
+      const hasAttachment = !!attachedFileName;
+      if (detectProductSheetImport(text, hasAttachment)) {
+        const fileName = attachedFileName ?? 'bacon-supplier-sheet.pdf';
+        startProductSheetImport({ fileName, userText: text });
+        return;
+      }
+    }
 
     // "New recipe" intent — sits BEFORE parseCommand because the recipe
     // wizard is its own state machine (not a registered Command), and
@@ -4351,6 +7002,10 @@ export default function Feed({
                   placeholder={PLACEHOLDER}
                   minHeight={72}
                   onQuickAction={handleQuickAction}
+                  enableNote={enableNoteCapture}
+                  attachedFileName={attachedFileName}
+                  onAttachFile={setAttachedFileName}
+                  onClearAttachment={() => setAttachedFileName(null)}
                 />
               </div>
 
@@ -4538,6 +7193,175 @@ export default function Feed({
                         {m.msgType === 'cmd-thinking' && (
                           <QuinnThinkingContent variant="step" />
                         )}
+                        {m.msgType === 'new-supplier-import' && (() => {
+                          let parsed: { data: ExtractedSupplierSheet } | null = null;
+                          try {
+                            parsed = m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : null;
+                          } catch {
+                            parsed = null;
+                          }
+                          if (!parsed) return null;
+                          const sites = supplierImportSites[m.id] ?? new Set<string>(ALL_SUPPLIER_SITES);
+                          const confirmed = !!supplierImportConfirmed[m.id];
+                          const open = !!supplierCatalogueOpen[m.id];
+                          // Live product list — falls back to the
+                          // sealed catalogue if state hasn't been
+                          // seeded yet (mostly for safety on remounts).
+                          const liveProducts =
+                            supplierImportProducts[m.id] ?? parsed.data.products;
+                          const expandedIdx =
+                            supplierExpandedRow[m.id] ?? null;
+                          return (
+                            <NewSupplierImportCard
+                              data={parsed.data}
+                              products={liveProducts}
+                              expandedIndex={expandedIdx}
+                              onToggleExpandRow={(idx) => {
+                                setSupplierExpandedRow((prev) => ({
+                                  ...prev,
+                                  [m.id]: prev[m.id] === idx ? null : idx,
+                                }));
+                              }}
+                              onEditProduct={(idx, patch) => {
+                                setSupplierImportProducts((prev) => {
+                                  const rows = prev[m.id] ?? parsed!.data.products;
+                                  const next = rows.map((row, i) =>
+                                    i === idx ? { ...row, ...patch } : row,
+                                  );
+                                  return { ...prev, [m.id]: next };
+                                });
+                              }}
+                              onRemoveProduct={(idx) => {
+                                setSupplierImportProducts((prev) => {
+                                  const rows = prev[m.id] ?? parsed!.data.products;
+                                  const next = rows.filter((_, i) => i !== idx);
+                                  return { ...prev, [m.id]: next };
+                                });
+                                // Collapse the panel since the row
+                                // it was anchored to is gone.
+                                setSupplierExpandedRow((prev) => ({
+                                  ...prev,
+                                  [m.id]: null,
+                                }));
+                              }}
+                              sites={sites}
+                              confirmed={confirmed}
+                              catalogueOpen={open}
+                              onToggleCatalogue={() => {
+                                setSupplierCatalogueOpen((prev) => ({ ...prev, [m.id]: !prev[m.id] }));
+                              }}
+                              onToggleSite={(site) => {
+                                setSupplierImportSites((prev) => {
+                                  const cur = new Set(prev[m.id] ?? new Set<string>(ALL_SUPPLIER_SITES));
+                                  if (cur.has(site)) cur.delete(site);
+                                  else cur.add(site);
+                                  return { ...prev, [m.id]: cur };
+                                });
+                              }}
+                              onToggleAll={(allOn) => {
+                                setSupplierImportSites((prev) => ({
+                                  ...prev,
+                                  [m.id]: allOn ? new Set(ALL_SUPPLIER_SITES) : new Set<string>(),
+                                }));
+                              }}
+                              onConfirm={() => {
+                                if (!parsed) return;
+                                confirmNewSupplierImport(m.id, parsed.data);
+                              }}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'product-sheet-import' && (() => {
+                          // Parse the args we baked into the message
+                          // when the flow created it. The card reads
+                          // selections from `productImportSites` keyed
+                          // by the message id (== the card id).
+                          let parsed: { data: ExtractedProductSheet; fileName: string } | null = null;
+                          try {
+                            parsed = m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : null;
+                          } catch {
+                            parsed = null;
+                          }
+                          if (!parsed) return null;
+                          const sites = productImportSites[m.id] ?? new Set<string>(ALL_SUPPLIER_SITES);
+                          const confirmed = !!productImportConfirmed[m.id];
+                          return (
+                            <ProductSheetImportCard
+                              data={parsed.data}
+                              fileName={parsed.fileName}
+                              sites={sites}
+                              confirmed={confirmed}
+                              onToggleSite={(site) => {
+                                setProductImportSites((prev) => {
+                                  const cur = new Set(prev[m.id] ?? new Set<string>(ALL_SUPPLIER_SITES));
+                                  if (cur.has(site)) cur.delete(site);
+                                  else cur.add(site);
+                                  return { ...prev, [m.id]: cur };
+                                });
+                              }}
+                              onToggleAll={(allOn) => {
+                                setProductImportSites((prev) => ({
+                                  ...prev,
+                                  [m.id]: allOn ? new Set(ALL_SUPPLIER_SITES) : new Set<string>(),
+                                }));
+                              }}
+                              onConfirm={() => {
+                                if (!parsed) return;
+                                confirmProductImport(m.id, parsed.data, parsed.fileName);
+                              }}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'pos-match-suggestions' && (() => {
+                          let parsed: { suggestions: POSMatchSuggestion[] } | null = null;
+                          try {
+                            parsed = m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : null;
+                          } catch {
+                            parsed = null;
+                          }
+                          if (!parsed || parsed.suggestions.length === 0) return null;
+                          const decisions = posMatchDecisions[m.id] ?? {};
+
+                          const apply = (s: POSMatchSuggestion) => {
+                            // Write through to the same override store the
+                            // Item matching page reads from — so the row
+                            // there will reflect the link instantly.
+                            setMatchTarget(s.posItemId, { type: 'product', id: s.productId });
+                            setPosMatchDecisions((prev) => ({
+                              ...prev,
+                              [m.id]: { ...(prev[m.id] ?? {}), [s.posItemId]: 'applied' },
+                            }));
+                          };
+                          const skip = (posItemId: string) => {
+                            setPosMatchDecisions((prev) => ({
+                              ...prev,
+                              [m.id]: { ...(prev[m.id] ?? {}), [posItemId]: 'skipped' },
+                            }));
+                          };
+                          const undo = (posItemId: string) => {
+                            setPosMatchDecisions((prev) => {
+                              const cur = { ...(prev[m.id] ?? {}) };
+                              delete cur[posItemId];
+                              return { ...prev, [m.id]: cur };
+                            });
+                          };
+                          const applyAll = () => {
+                            for (const s of parsed!.suggestions) {
+                              if (!decisions[s.posItemId]) apply(s);
+                            }
+                          };
+
+                          return (
+                            <POSMatchSuggestionsCard
+                              suggestions={parsed.suggestions}
+                              decisions={decisions}
+                              onApply={apply}
+                              onSkip={skip}
+                              onUndo={undo}
+                              onApplyAll={applyAll}
+                            />
+                          );
+                        })()}
                         {m.msgType === 'recipe-card' && (
                           <RecipeCardEditor
                             recipeName={activeTemplate.name}
@@ -4949,16 +7773,51 @@ export default function Feed({
                             />
                           );
                         })()}
+                        {m.msgType === 'cmd-product-sheet-details' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            fileName: string;
+                            newProductName: string;
+                            supplierName: string;
+                            category: string;
+                            packType: 'Pack' | 'Single';
+                            packQty: number;
+                            packCost: number;
+                            unitType: string;
+                            singleUnitVolumeOrWeight?: number;
+                            allergens?: string[];
+                            oldProductName: string;
+                          };
+                          return (
+                            <ProductSheetDetailsCard
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              fileName={args.fileName}
+                              newProductName={args.newProductName}
+                              supplierName={args.supplierName}
+                              category={args.category}
+                              packType={args.packType}
+                              packQty={args.packQty}
+                              packCost={args.packCost}
+                              unitType={args.unitType}
+                              singleUnitVolumeOrWeight={args.singleUnitVolumeOrWeight}
+                              allergens={args.allergens ?? []}
+                              oldProductName={args.oldProductName}
+                              onConfirm={() => commandRunner.confirmProductSheetDetails(m.id, args)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                            />
+                          );
+                        })()}
                         {m.msgType === 'cmd-product-pick-recipes' && m.cmdArgsJson && (() => {
                           const args = JSON.parse(m.cmdArgsJson) as {
                             mode?: 'add' | 'replace';
                             oldProductId?: string;
                             oldProductName?: string;
+                            oldMasterId?: string;
                             newProductName: string;
                             unitType?: 'Each' | 'kg' | 'L' | 'g' | 'ml';
                             recipeIds?: string[];
                             addQty?: number;
                             addUom?: string;
+                            fromSheet?: boolean;
                           };
                           return (
                             <ProductPickRecipesCard
@@ -4966,12 +7825,18 @@ export default function Feed({
                               mode={args.mode}
                               oldProductId={args.oldProductId}
                               oldProductName={args.oldProductName}
+                              oldMasterId={args.oldMasterId}
                               newProductName={args.newProductName}
                               newProductUnitType={args.unitType}
                               initialSelectedIds={args.recipeIds}
                               initialAddQty={args.addQty}
                               initialAddUom={args.addUom}
-                              onConfirm={(input) => commandRunner.submitProductPickRecipes(m.id, args, input)}
+                              confirmLabelOverride={args.fromSheet ? 'Confirm — swap them all' : undefined}
+                              onConfirm={(input) =>
+                                args.fromSheet
+                                  ? commandRunner.confirmProductSwapFromSheetRecipes(m.id, args, input)
+                                  : commandRunner.submitProductPickRecipes(m.id, args, input)
+                              }
                               onCancel={() => commandRunner.cancelCard(m.id)}
                             />
                           );
@@ -5143,6 +8008,10 @@ export default function Feed({
                   placeholder={composerPlaceholder}
                   minHeight={composerMinH}
                   onQuickAction={handleQuickAction}
+                  enableNote={enableNoteCapture}
+                  attachedFileName={attachedFileName}
+                  onAttachFile={setAttachedFileName}
+                  onClearAttachment={() => setAttachedFileName(null)}
                 />
               </div>
             </div>

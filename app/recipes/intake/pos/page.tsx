@@ -23,7 +23,7 @@ import {
 type CategoryFilter = 'All' | MenuItemDraft['category'];
 
 const CATEGORY_ORDER: CategoryFilter[] = [
-  'All', 'Coffee', 'Tea', 'Pastry', 'Food', 'Wine', 'Spirits', 'Kids',
+  'All', 'Coffee', 'Tea', 'Pastry', 'Food', 'Wine', 'Spirits', 'Kids', 'Drinks',
 ];
 
 export default function POSIntakePage() {

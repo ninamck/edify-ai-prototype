@@ -10,7 +10,10 @@ export type MatchStatus =
 export type MenuItemDraft = {
   id: string;
   name: string;
-  category: 'Coffee' | 'Tea' | 'Pastry' | 'Food' | 'Wine' | 'Spirits' | 'Kids';
+  // 'Drinks' covers whole/finished drinks sold as-is (bottled water,
+  // canned soft drinks, juices) — these match to a Product / Master
+  // product rather than a built recipe.
+  category: 'Coffee' | 'Tea' | 'Pastry' | 'Food' | 'Wine' | 'Spirits' | 'Kids' | 'Drinks';
   ingredientCount: number;
   matchStatus: MatchStatus;
   note?: string;
@@ -114,6 +117,16 @@ export const FITZROY_POS_INTAKE: POSIntakeData = {
     { id: 'mi-tanqueray',       name: 'Tanqueray gin',       category: 'Spirits', ingredientCount: 1, matchStatus: 'all-matched',    modifierGroups: ['Pour size'] },
     { id: 'mi-savvy-b',         name: 'Savvy B',             category: 'Wine',    ingredientCount: 1, matchStatus: 'needs-info',     note: 'needs a size modifier — glass vs bottle' },
     { id: 'mi-house-red',       name: 'House red',           category: 'Wine',    ingredientCount: 1, matchStatus: 'all-matched' },
+    // Whole / finished drinks — sold as-is, so they match to a finished
+    // Product (or Master product) rather than a built recipe. They land
+    // here unmatched until linked manually or by Sync & match, which name-
+    // matches them to the bottled/canned beverage products in the catalog.
+    { id: 'mi-sparkling-water', name: 'Sparkling water',     category: 'Drinks',  ingredientCount: 0, matchStatus: 'no-modifiers' },
+    { id: 'mi-still-water',     name: 'Still water',         category: 'Drinks',  ingredientCount: 0, matchStatus: 'no-modifiers' },
+    { id: 'mi-coca-cola',       name: 'Coca-Cola',           category: 'Drinks',  ingredientCount: 0, matchStatus: 'no-modifiers' },
+    { id: 'mi-diet-coke',       name: 'Diet Coke',           category: 'Drinks',  ingredientCount: 0, matchStatus: 'no-modifiers' },
+    { id: 'mi-orange-juice',    name: 'Orange juice',        category: 'Drinks',  ingredientCount: 0, matchStatus: 'no-modifiers' },
+    { id: 'mi-apple-fizz',      name: 'Apple Fizz',          category: 'Drinks',  ingredientCount: 0, matchStatus: 'no-modifiers' },
     { id: 'mi-avocado-toast',   name: 'Avocado toast',       category: 'Food',    ingredientCount: 5, matchStatus: 'all-matched' },
     { id: 'mi-salmon-bagel',    name: 'Smoked salmon bagel', category: 'Food',    ingredientCount: 5, matchStatus: 'all-matched' },
     { id: 'mi-babyccino',       name: 'Kids babyccino',      category: 'Kids',    ingredientCount: 1, matchStatus: 'no-modifiers' },

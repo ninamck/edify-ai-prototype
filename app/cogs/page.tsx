@@ -10,10 +10,9 @@ import {
   TOP_NAV_PILL_IDLE_TRANSPARENT,
 } from '@/components/Production/topNavStyles';
 import SingleSiteCogs from '@/components/Cogs/SingleSiteCogs';
-import CogsVarianceTable from '@/components/Cogs/CogsVarianceTable';
 import CogsQuinnPanel from '@/components/Cogs/CogsQuinnPanel';
-import CogsInsightsBoard from '@/components/Cogs/CogsInsightsBoard';
 import CogsTopVariancesBoard from '@/components/Cogs/CogsTopVariancesBoard';
+import CogsVarianceDetailPanel from '@/components/Cogs/CogsVarianceDetailPanel';
 import { COGS_PERIOD } from '@/components/Cogs/fixtures';
 
 type Tab = 'flash' | 'consolidated' | 'single' | 'variance' | 'line';
@@ -77,6 +76,7 @@ export default function CogsPage() {
   const [netGross, setNetGross] = useState<'net' | 'gross'>('net');
   const [quinnOpen, setQuinnOpen] = useState(false);
   const [highlightRowIds, setHighlightRowIds] = useState<string[]>([]);
+  const [detailRowId, setDetailRowId] = useState<string | null>(null);
   const highlightTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -191,26 +191,21 @@ export default function CogsPage() {
           gap: 20,
         }}
       >
-        {tab === 'single' && (
-          <CogsInsightsBoard
-            onHighlightRows={highlightRows}
-            onViewVariance={() => setTab('variance')}
-            onAskEdify={() => setQuinnOpen(true)}
-          />
-        )}
         {tab === 'variance' && (
           <CogsTopVariancesBoard
             onHighlightRows={highlightRows}
+            onOpenDetail={setDetailRowId}
             onAskEdify={() => setQuinnOpen(true)}
           />
         )}
 
         {tab === 'single' && <SingleSiteCogs />}
-        {tab === 'variance' && <CogsVarianceTable highlightRowIds={highlightRowIds} />}
         {tab !== 'single' && tab !== 'variance' && (
           <PlaceholderTab label={TABS.find((t) => t.id === tab)?.label ?? ''} />
         )}
       </div>
+
+      <CogsVarianceDetailPanel rowId={detailRowId} onClose={() => setDetailRowId(null)} />
 
       <CogsQuinnPanel
         open={quinnOpen}

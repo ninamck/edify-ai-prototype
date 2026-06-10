@@ -172,16 +172,16 @@ export default function PlaytomicDashboard({
                   lineHeight: 1.4,
                 }}
               >
-                7 open clubs across the chain · ask Edify anything to add a chart
+                7 stores trading across the UK · ask Edify anything to add a chart
               </p>
             </>
           ) : (
             <>
               <h1 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                Playtomic <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>· chain dashboard</span>
+                Coffee &amp; Co <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>· UK chain dashboard</span>
               </h1>
               <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)' }}>
-                Dummy data · 7 open clubs · ask Edify anything to add a chart
+                7 UK stores trading · ask Edify anything to add a chart
               </p>
             </>
           )}
@@ -199,7 +199,7 @@ export default function PlaytomicDashboard({
       {tab !== 'manchester' && (
         <div
           role="tablist"
-          aria-label="Playtomic dashboard view"
+          aria-label="Coffee & Co UK dashboard view"
           style={{
             alignSelf: 'flex-start',
             display: 'flex',

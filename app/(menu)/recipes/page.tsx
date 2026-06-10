@@ -32,6 +32,7 @@ import {
 } from '@/components/Production/fixtures';
 import { WorkTypeChips } from '@/components/Production/WorkTypeChip';
 import { useRecipes, setRecipes as storeSetRecipes } from '@/components/Recipe/recipeStore';
+import { SharedLibraryBanner, SharedBadge } from '@/components/Franchise/SharedLibrary';
 import { useModifierGroups } from '@/components/Modifiers/store';
 import type { ModifierGroup } from '@/components/Modifiers/types';
 import {
@@ -155,6 +156,8 @@ export default function RecipesLibraryPage() {
       <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', margin: '0 0 20px' }}>
         {recipes.length} recipes · {componentsCount} components &amp; prep · 3 shared modifier groups
       </p>
+
+      <SharedLibraryBanner noun="recipes" />
 
       {/* Filter strip */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px', flexWrap: 'wrap' }}>
@@ -528,7 +531,10 @@ function RecipeRow({
       >
         {selected && <Check size={12} color="#fff" strokeWidth={3} />}
       </span>
-      <span style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{recipe.name}</span>
+      <span style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--color-text-primary)', display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{recipe.name}</span>
+        <SharedBadge />
+      </span>
       <span style={{ fontSize: '12.5px', color: 'var(--color-text-muted)' }}>{recipe.category}</span>
       <TypeCell recipe={recipe} usedInCount={usedInCount} />
       <span style={{ fontSize: '12.5px', color: 'var(--color-text-secondary)' }}>

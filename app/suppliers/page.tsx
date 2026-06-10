@@ -19,6 +19,7 @@ import SuppliersTable from '@/components/Suppliers/SuppliersTable';
 import MasterProductsTable from '@/components/Suppliers/MasterProductsTable';
 import BulkActionBar from '@/components/Suppliers/BulkActionBar';
 import QuinnSheet, { type QuinnScope } from '@/components/Suppliers/QuinnSheet';
+import { SharedLibraryBanner } from '@/components/Franchise/SharedLibrary';
 
 type Tab = 'suppliers' | 'masters';
 
@@ -187,6 +188,9 @@ export default function SuppliersPage() {
             </button>
           )}
         </div>
+
+        <SharedLibraryBanner noun={tab === 'suppliers' ? 'suppliers' : 'products'} />
+
         {/* Search */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           <div style={{

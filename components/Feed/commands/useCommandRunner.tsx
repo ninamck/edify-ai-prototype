@@ -60,7 +60,7 @@ import type {
   SupplierField,
 } from './parsers';
 import type { Recipe, RecipeIngredient } from '@/components/Recipe/libraryFixtures';
-import { makeRecipeIngredient } from '@/components/Recipe/libraryFixtures';
+import { makeRecipeIngredient, ALL_LIBRARY_RECIPES } from '@/components/Recipe/libraryFixtures';
 import {
   startTask,
   completeTask,
@@ -1867,6 +1867,261 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     [pushReceipt, recordTaskChanges],
   );
 
+  // ── Sheet-driven product swap (add a product + swap across recipes) ─
+  //
+  // A streamlined replacement for the manual product-swap wizard: the
+  // operator attaches a supplier sheet, we parse it, they confirm the
+  // new product, then they confirm the recipes that use the old one —
+  // and that second confirm applies everything. Just two taps.
+  //
+  // The cinematic "parsing the sheet" beat lives in Feed.tsx; this
+  // launcher picks up once the extract is ready and opens the task +
+  // the first (product-details) card. We don't clear the thread —
+  // Feed has already pushed the user echo + parsing summary.
+
+  const startProductSwapFromSheet = useCallback(
+    (args: Record<string, unknown>) => {
+      setChatStarted(true);
+      setChatMinimized(false);
+
+      // Idempotent demo reset — restore the recipes that use the
+      // espresso-blend beans to their seed state before we begin. This
+      // is a scripted "swap the coffee bean across every recipe that
+      // uses one" flow; re-running it would otherwise find fewer
+      // recipes each time (the legacy "Espresso blend" rows get renamed
+      // to the new bean on the first pass and stop matching), so we
+      // re-seed up front to always show the full set.
+      const oldMasterId = (args.oldMasterId as string | undefined) ?? 'mp-espresso-blend';
+      const usesOldBean = (r: Recipe): boolean =>
+        (r.ingredientsV2 ?? []).some(
+          (row) => row.ref.kind === 'master' && row.ref.masterProductId === oldMasterId,
+        ) || (r.ingredients ?? []).some((i) => i.name.toLowerCase().includes('espresso'));
+      const seedById = new Map(ALL_LIBRARY_RECIPES.map((r) => [r.id, r]));
+      const espressoSeedIds = new Set(
+        ALL_LIBRARY_RECIPES.filter(usesOldBean).map((r) => r.id),
+      );
+      if (espressoSeedIds.size > 0) {
+        setRecipes(
+          snapshotRecipes().map((r) =>
+            espressoSeedIds.has(r.id)
+              ? (JSON.parse(JSON.stringify(seedById.get(r.id))) as Recipe)
+              : r,
+          ),
+        );
+      }
+
+      onFreshTask?.();
+      const t = startTask({
+        kind: 'product-swap' as TaskKind,
+        title: 'Add a product',
+        subtitle: (args.newProductName as string) ?? undefined,
+      });
+      activeTaskIdRef.current = t.id;
+      pushCard('product-swap', 'cmd-product-sheet-details', args);
+    },
+    [onFreshTask, pushCard, setChatMinimized, setChatStarted],
+  );
+
+  const confirmProductSheetDetails = useCallback(
+    (msgId: string, args: Record<string, unknown>) => {
+      writeCmdState(msgId, 'confirmed');
+      pushUserEcho('Looks right');
+      const oldName = (args.oldProductName as string) ?? 'your current beans';
+      const newName = (args.newProductName as string) ?? 'the new product';
+      pushResponseFlow({
+        text: `Great. Here's every recipe that uses ${oldName} — confirm and I'll swap them all over to ${newName} in one go.`,
+        commandId: 'product-swap',
+        cardMsgType: 'cmd-product-pick-recipes',
+        cardArgs: { ...args, mode: 'replace', fromSheet: true },
+      });
+    },
+    [pushResponseFlow, pushUserEcho, writeCmdState],
+  );
+
+  const confirmProductSwapFromSheetRecipes = useCallback(
+    (
+      msgId: string,
+      args: Record<string, unknown>,
+      input: { recipeIds: string[]; totalMatched: number },
+    ) => {
+      const newProductName = (args.newProductName as string) ?? 'New product';
+      const supplierName = (args.supplierName as string) ?? 'Existing supplier';
+      const oldMasterId = args.oldMasterId as string | undefined;
+      const oldProductName = (args.oldProductName as string) ?? 'the old product';
+      const packType = (args.packType as 'Pack' | 'Single') ?? 'Pack';
+      const packQty = (args.packQty as number) ?? 1;
+      const packCost = (args.packCost as number) ?? 0;
+      const unitType = (args.unitType as Product['singleUnitType']) ?? 'kg';
+      const category = (args.category as ProductCategory) ?? 'Other';
+      const allergens = (args.allergens as string[]) ?? [];
+      const sites = (args.sites as string[]) ?? [];
+
+      const suppliersBefore = snapshotSuppliersStore();
+      const recipesBefore = snapshotRecipes().map((r) => ({ ...r }));
+
+      // Existing supplier — a product sheet doesn't carry supplier
+      // onboarding terms, so we attach to one we already have rather
+      // than minting a half-populated new supplier. Fall back to the
+      // first supplier in the book if the caller didn't resolve one.
+      const supplierId =
+        (args.supplierId as string | undefined) ?? suppliersBefore.suppliers[0]?.id ?? '';
+
+      // Product — linked to the SAME master as the old bean so the two
+      // are treated as one item across the catalogue. Shaped exactly
+      // like the single-product sheet importer (source, master link,
+      // pack details, all sites, no new supplier).
+      const newProductId = genId('prd');
+      const newProduct: Product = {
+        id: newProductId,
+        name: newProductName,
+        source: 'supplier',
+        supplierId,
+        masterProductId: oldMasterId,
+        supplierCode: 'SHEET-IMPORT',
+        productClass: 'Food',
+        category,
+        tags: [],
+        packType,
+        packQty,
+        packCost,
+        taxRatePct: (args.taxRatePct as number) ?? 0,
+        singleUnitType: unitType,
+        singleUnitVolumeOrWeight: args.singleUnitVolumeOrWeight as number | undefined,
+        unitOfMeasure: args.unitOfMeasure as string | undefined,
+        altUoms: [],
+        allergensContains: allergens as Product['allergensContains'],
+        allergensTraces: [],
+        nutrition: {},
+        sites,
+        status: 'Available',
+        flag: null,
+      };
+      upsertProduct(newProduct);
+
+      // 3. Recipe sweep — master-aware. The beans are referenced either
+      //    via a master ref (typed v2 rows) or a legacy "Espresso blend"
+      //    free-text row, so rewrite both to the new product.
+      const selectedSet = new Set(input.recipeIds);
+      let recipesTouched = 0;
+      for (const recipeId of selectedSet) {
+        const recipe = findRecipe(recipeId);
+        if (!recipe) continue;
+        const nextV2 = (recipe.ingredientsV2 ?? []).map((row) => {
+          const isMasterRef = row.ref.kind === 'master' && row.ref.masterProductId === oldMasterId;
+          const isLinkedProduct =
+            row.ref.kind === 'product' && findProduct(row.ref.productId)?.masterProductId === oldMasterId;
+          if (isMasterRef || isLinkedProduct) {
+            return { ...row, ref: { kind: 'product' as const, productId: newProductId } };
+          }
+          return row;
+        });
+        const nextLegacy = (recipe.ingredients ?? []).map((ing) =>
+          ing.name.toLowerCase().includes('espresso') || ing.name.toLowerCase().includes('coffee bean')
+            ? { ...ing, name: newProductName, supplier: supplierName }
+            : ing,
+        );
+        updateRecipe({
+          ...recipe,
+          ingredients: nextLegacy,
+          ingredientsV2: recipe.ingredientsV2 ? nextV2 : undefined,
+        });
+        recipesTouched += 1;
+      }
+
+      // 4. Receipt.
+      const receipt: CommandReceipt = {
+        headline: `Added ${newProductName} · swapped into ${recipesTouched} recipe${recipesTouched === 1 ? '' : 's'}`,
+        detail: `Replaced ${oldProductName} · kept under ${supplierName} · all sites`,
+        href: `/suppliers/products/${newProductId}`,
+        hrefLabel: 'Open product',
+        undo: () => {
+          restoreSuppliersStore(suppliersBefore);
+          setRecipes(recipesBefore);
+        },
+      };
+      writeCmdState(msgId, 'confirmed');
+
+      // 5. History — parent global change + per-recipe children, exactly
+      //    like the manual product-swap so the Activity log reads the same.
+      const recipesAfter = snapshotRecipes().map((r) => ({ ...r }));
+      const affectedIds = Array.from(selectedSet).filter((id) =>
+        recipesAfter.some((r) => r.id === id),
+      );
+      // Synthetic "old product" so the blast-radius GP maths has a cost
+      // basis (the old beans aren't a concrete Product in the catalogue).
+      const syntheticOld = {
+        id: oldMasterId ?? 'old-beans',
+        name: oldProductName,
+        packCost: (args.oldPackCost as number) ?? packCost,
+        packQty: (args.oldPackQty as number) ?? packQty,
+      } as Product;
+
+      const parentDiff = diffProductSwap({
+        mode: 'replace',
+        newProduct,
+        oldProduct: syntheticOld,
+        newProductName,
+        oldProductName,
+        supplierName,
+        supplierCreated: false,
+        recipesBefore,
+        recipesAfter,
+        affectedRecipeIds: affectedIds,
+      });
+      recordTaskChanges({
+        changes: parentDiff.changes,
+        blastRadius: parentDiff.blastRadius,
+        commandIntent: {
+          commandId: 'product-swap',
+          cardMsgType: 'cmd-product-swap-summary',
+          args: {
+            mode: 'replace',
+            newProductName,
+            oldProductName,
+            supplierName,
+            recipeIds: input.recipeIds,
+          },
+        },
+      });
+
+      const parentTaskId = activeTaskIdRef.current;
+      pushReceipt(receipt, msgId);
+
+      if (parentTaskId && affectedIds.length > 0) {
+        markGroupParent(parentTaskId);
+        const slices = splitProductSwapPerRecipe({
+          mode: 'replace',
+          newProduct,
+          oldProduct: syntheticOld,
+          newProductName,
+          oldProductName,
+          recipesBefore,
+          recipesAfter,
+          affectedRecipeIds: affectedIds,
+          scope: 'all',
+        });
+        for (const slice of slices) {
+          logChildTask({
+            kind: 'product-swap',
+            title: slice.title,
+            subtitle: supplierName,
+            receipt: {
+              headline: slice.title,
+              detail: `Part of "${receipt.headline}"`,
+              href: `/recipes/${slice.recipeId}/edit`,
+              hrefLabel: 'Open recipe',
+            },
+            changes: slice.changes,
+            blastRadius: slice.blastRadius,
+            commandIntent: slice.revertIntent,
+            groupId: parentTaskId,
+          });
+        }
+      }
+    },
+    [pushReceipt, recordTaskChanges, writeCmdState],
+  );
+
   // ── Ambiguity pick → re-emit the command with the chosen args ───
 
   const pickAmbiguity = useCallback(
@@ -2114,6 +2369,10 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     submitProductPackDetails,
     submitProductPickRecipes,
     confirmProductSwap,
+    // Sheet-driven product swap (add a product + swap across recipes)
+    startProductSwapFromSheet,
+    confirmProductSheetDetails,
+    confirmProductSwapFromSheetRecipes,
     undoReceipt,
     restoreMessages,
     snapshotTask,

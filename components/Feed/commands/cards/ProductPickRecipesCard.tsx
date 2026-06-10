@@ -15,6 +15,11 @@ interface ProductPickRecipesCardProps {
   /** Required for replace mode — what we're swapping out. Unused in add mode. */
   oldProductId?: string;
   oldProductName?: string;
+  /** Alternative replace-mode key: match recipes by a master-product id
+   *  directly. Used when the thing being swapped out is referenced by a
+   *  master ref (e.g. the espresso-blend beans the coffee recipes use)
+   *  rather than a concrete product. */
+  oldMasterId?: string;
   newProductName: string;
   /** New product's unit type (from pack details). Used to seed the
    *  per-recipe quantity input in add mode. */
@@ -26,6 +31,9 @@ interface ProductPickRecipesCardProps {
   /** Add-mode pre-fill, when the operator came back to edit this step. */
   initialAddQty?: number;
   initialAddUom?: string;
+  /** Override the footer button label (e.g. "Confirm — swap in 9 recipes"
+   *  for the sheet-driven flow where this step also applies the change). */
+  confirmLabelOverride?: string;
   onConfirm: (input: {
     recipeIds: string[];
     totalMatched: number;
@@ -59,11 +67,13 @@ export default function ProductPickRecipesCard({
   mode = 'replace',
   oldProductId,
   oldProductName,
+  oldMasterId,
   newProductName,
   newProductUnitType,
   initialSelectedIds,
   initialAddQty,
   initialAddUom,
+  confirmLabelOverride,
   onConfirm,
   onCancel,
 }: ProductPickRecipesCardProps) {
@@ -78,12 +88,12 @@ export default function ProductPickRecipesCard({
     matchedLabel: string;
   }
   const masterId = useMemo(
-    () => (oldProductId ? findProduct(oldProductId)?.masterProductId : undefined),
-    [oldProductId],
+    () => oldMasterId ?? (oldProductId ? findProduct(oldProductId)?.masterProductId : undefined),
+    [oldMasterId, oldProductId],
   );
 
   const replaceMatches = useMemo<RecipeMatch[]>(() => {
-    if (mode !== 'replace' || !oldProductId || !oldProductName) return [];
+    if (mode !== 'replace' || (!oldProductId && !oldMasterId) || !oldProductName) return [];
     const out: RecipeMatch[] = [];
     const nameLower = oldProductName.toLowerCase();
     for (const r of recipes) {
@@ -120,7 +130,7 @@ export default function ProductPickRecipesCard({
       if (hit) out.push(hit);
     }
     return out;
-  }, [mode, recipes, oldProductId, oldProductName, masterId]);
+  }, [mode, recipes, oldProductId, oldMasterId, oldProductName, masterId]);
 
   // ── Add mode: category-based "naturally-associated" recipes ──────
   //
@@ -282,7 +292,10 @@ export default function ProductPickRecipesCard({
       title={cardTitle}
       subtitle={cardSubtitle}
       state={state}
-      confirmLabel={mode === 'replace' && totalCount === 0 ? 'Skip — just add the product' : 'Next'}
+      confirmLabel={
+        confirmLabelOverride ??
+        (mode === 'replace' && totalCount === 0 ? 'Skip — just add the product' : 'Next')
+      }
       confirmDisabled={!canSubmit}
       onCancel={onCancel}
       onConfirm={() =>

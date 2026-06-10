@@ -1,6 +1,9 @@
 'use client';
 
+import { Sparkles } from 'lucide-react';
 import SiteSwitcher from '@/components/Sidebar/SiteSwitcher';
+import FranchiseSwitcher from '@/components/Franchise/FranchiseSwitcher';
+import { useFranchise } from '@/components/Franchise/FranchiseContext';
 import PhaseSwitcher from '@/components/PhaseSwitcher';
 import type { PhaseOverride } from '@/components/PhaseSwitcher';
 import DemoControls from '@/components/DemoControls/DemoControls';
@@ -13,6 +16,8 @@ type ShellTopBarProps = {
   onShellViewChange: (v: ShellViewMode) => void;
   phaseOverride: PhaseOverride;
   onPhaseOverrideChange: (v: PhaseOverride) => void;
+  briefingLabel: string;
+  onOpenBriefing: () => void;
 };
 
 export default function ShellTopBar({
@@ -21,7 +26,10 @@ export default function ShellTopBar({
   onShellViewChange,
   phaseOverride,
   onPhaseOverrideChange,
+  briefingLabel,
+  onOpenBriefing,
 }: ShellTopBarProps) {
+  const { isGroupView } = useFranchise();
   return (
     <header
       style={{
@@ -40,7 +48,11 @@ export default function ShellTopBar({
       }}
     >
       <div style={{ minWidth: 0, maxWidth: 'min(280px, 100%)', justifySelf: 'start' }}>
-        <SiteSwitcher siteName={siteName} compact={false} />
+        {isGroupView ? (
+          <FranchiseSwitcher compact={false} />
+        ) : (
+          <SiteSwitcher siteName={siteName} compact={false} />
+        )}
       </div>
 
       <div
@@ -115,6 +127,30 @@ export default function ShellTopBar({
       >
         <DemoControls variant="inline" />
         <PhaseSwitcher phaseOverride={phaseOverride} onPhaseOverrideChange={onPhaseOverrideChange} />
+        <button
+          type="button"
+          onClick={onOpenBriefing}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 12px',
+            borderRadius: '100px',
+            border: '1px solid var(--color-shell-tab-border, rgba(0, 28, 53, 1))',
+            background: 'var(--color-accent-active)',
+            color: '#fff',
+            fontSize: '12px',
+            fontWeight: 600,
+            fontFamily: 'var(--font-primary)',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+            boxShadow: '0 2px 8px rgba(34,68,68,0.25)',
+          }}
+        >
+          <Sparkles size={14} />
+          {briefingLabel}
+        </button>
       </div>
     </header>
   );

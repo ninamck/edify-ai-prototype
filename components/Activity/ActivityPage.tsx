@@ -27,10 +27,10 @@
  *   • No per-entity drilldown (recipe / supplier History tabs).
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Info, RefreshCw } from 'lucide-react';
-import { seedActivityDemo, type Task } from '@/components/Feed/taskHistoryStore';
+import { getTasks, seedActivityDemo, type Task } from '@/components/Feed/taskHistoryStore';
 import ActivityRow from './ActivityRow';
 import ActivityFilters, {
   type ActivityFilter,
@@ -62,6 +62,20 @@ export default function ActivityPage() {
   const [filter, setFilter] = useState<ActivityFilter>('all');
   const [dateRange, setDateRange] = useState<ActivityDateRange>('week');
   const [search, setSearch] = useState('');
+
+  // Seed the demo entries on first visit so the log is never empty —
+  // the operator sees a populated, realistic week without having to
+  // press the Reset & seed button. Runs once, and only when the store
+  // is genuinely empty (after localStorage hydration), so it never
+  // clobbers real activity the user has accumulated.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current) return;
+    seededRef.current = true;
+    if (getTasks().length === 0) {
+      seedActivityDemo({ clear: false });
+    }
+  }, []);
 
   const { kindCounts, totalForRange } = useMemo(() => {
     const now = Date.now();
@@ -247,7 +261,7 @@ export default function ActivityPage() {
         <EmptyState search={search} dateRange={dateRange} filter={filter} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          {grouped.map((group, gIdx) => (
+          {grouped.map((group) => (
             <section key={group.label} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div
                 style={{
@@ -275,12 +289,12 @@ export default function ActivityPage() {
                 </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {group.tasks.map((task, tIdx) => (
+                {group.tasks.map((task) => (
                   <ActivityRow
                     key={task.id}
                     task={task}
                     allTasks={tasks}
-                    defaultExpanded={gIdx === 0 && tIdx === 0}
+                    defaultExpanded={false}
                     onRevert={handleRevert}
                     onEdit={handleEdit}
                     onOpenChat={handleOpenChat}

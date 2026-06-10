@@ -90,15 +90,18 @@ function FloorActionSquare({
 
 export default function FloorActionsBox({
   onReceiveDelivery,
+  onNote,
   briefingRole,
 }: {
   onReceiveDelivery?: () => void;
+  /** Opens the Edify chat composer ready for a quick note. */
+  onNote?: () => void;
   /** Picks which per-role action set to render + edit. */
   briefingRole?: BriefingRole;
 }) {
   const role: BriefingRole = briefingRole ?? 'ed';
   const { visibleActions, handleActionClick, setEditOpen, editPopup } =
-    useFloorActions(role, onReceiveDelivery);
+    useFloorActions(role, onReceiveDelivery, onNote);
 
   return (
     <div

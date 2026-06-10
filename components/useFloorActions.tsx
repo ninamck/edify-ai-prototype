@@ -23,6 +23,7 @@ import {
   Scale,
   Clock,
   FileText,
+  NotebookPen,
   AlertTriangle,
   CheckCircle,
   CalendarClock,
@@ -60,6 +61,7 @@ export const FLOOR_ACTION_ICON_MAP: Record<string, LucideIcon> = {
   Scale,
   Clock,
   FileText,
+  NotebookPen,
   AlertTriangle,
   CheckCircle,
   CalendarClock,
@@ -122,6 +124,7 @@ export interface UseFloorActions {
 export function useFloorActions(
   role: BriefingRole,
   onReceiveDelivery?: () => void,
+  onNote?: () => void,
 ): UseFloorActions {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
@@ -140,6 +143,9 @@ export function useFloorActions(
 
   function handleActionClick(action: FloorAction) {
     switch (action.id) {
+      case 'note-to-edify':
+        onNote?.();
+        return;
       case 'checklists':
         router.push('/checklists/complete');
         return;

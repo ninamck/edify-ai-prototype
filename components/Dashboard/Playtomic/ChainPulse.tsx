@@ -38,7 +38,7 @@ export default function ChainPulse({
           Chain pulse · this week
         </div>
         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-muted)', marginTop: 4 }}>
-          All 7 open clubs. Click any club to drill into hourly utilisation, pipeline and members.
+          All 7 UK stores. Click any store to drill into hourly trade, pipeline and customers.
         </div>
       </header>
 

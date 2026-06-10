@@ -316,9 +316,9 @@ export default function Mvp1Shell() {
   const dateControls = <DateRangePicker value={dateRange} onChange={setDateRange} />;
   const siteName =
     briefingRole === 'dunkin'
-      ? "Dunkin'"
+      ? 'Coffee & Co (US)'
       : briefingRole === 'playtomic'
-        ? 'Playtomic'
+        ? 'Coffee & Co (UK)'
         : 'Fitzroy Espresso';
 
   function renderDashboardTab() {

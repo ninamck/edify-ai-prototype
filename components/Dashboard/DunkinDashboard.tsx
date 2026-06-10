@@ -164,7 +164,7 @@ export default function DunkinDashboard({
                   lineHeight: 1.4,
                 }}
               >
-                Live chain view of your Dunkin&rsquo; flash report — ask Edify anything to add a chart.
+                Live chain view of your Coffee &amp; Co US flash report — ask Edify anything to add a chart.
               </p>
             </>
           ) : (
@@ -177,9 +177,9 @@ export default function DunkinDashboard({
                   color: 'var(--color-text-primary)',
                 }}
               >
-                Dunkin&rsquo;{' '}
+                Coffee &amp; Co{' '}
                 <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>
-                  · chain dashboard
+                  · US chain dashboard
                 </span>
               </h1>
               <p
@@ -190,7 +190,7 @@ export default function DunkinDashboard({
                   color: 'var(--color-text-muted)',
                 }}
               >
-                Powered by your weekly flash report · ask Edify anything to add a chart
+                Powered by your US weekly flash report · ask Edify anything to add a chart
               </p>
             </>
           )}

@@ -2,7 +2,6 @@
 
 import { Cell, Pie, PieChart } from 'recharts';
 import { DollarSign, Info } from 'lucide-react';
-import CogsInsightButton from './CogsInsightButton';
 import { gbp } from './format';
 import {
   COGS_CLASS_ROWS,
@@ -19,15 +18,6 @@ function pct(n: number | null): string {
   if (n === null) return '\u2014';
   return `${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}%`;
 }
-
-const HEADER_INSIGHT =
-  '- Actual **' +
-  COGS_SUMMARY.actualPct.toFixed(1) +
-  '%** vs theoretical **' +
-  COGS_SUMMARY.theoreticalPct.toFixed(1) +
-  '%**\n- **+' +
-  COGS_SUMMARY.variancePp.toFixed(1) +
-  'pp** unfavourable; Food is the driver\n- Mostly data: uncosted avocado recipe + salmon short delivery\n- See COGs Variance for line detail';
 
 /** Donut gauge showing a single COGS % with the gross margin beneath. */
 function CogsGauge({
@@ -316,7 +306,6 @@ export default function SingleSiteCogs() {
                 Summary
               </div>
             </div>
-            <CogsInsightButton text={HEADER_INSIGHT} />
           </div>
 
           <SummaryRow label="Opening Stock" value={gbp(COGS_SUMMARY.openingStock)} />
@@ -364,11 +353,6 @@ export default function SingleSiteCogs() {
           <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-text-primary)', flex: 1 }}>
             COGs Breakdown
           </span>
-          <CogsInsightButton
-            text={
-              '- **Food** carries it (31.5% vs 28%)\n- Beverage mildly over on free-pour milk\n- **Unassigned** £140 unmapped \u2014 categorise\n- General & Other on plan'
-            }
-          />
         </div>
 
         <div style={{ overflowX: 'auto' }}>

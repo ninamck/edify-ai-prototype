@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import "./globals.css";
 import { ActiveSiteProvider } from "@/components/ActiveSite/ActiveSiteContext";
+import { FranchiseProvider } from "@/components/Franchise/FranchiseContext";
 import { SiteSettingsStoreProvider } from "@/components/Settings/siteSettingsStore";
 import { NightShiftPolicyProvider } from "@/components/Settings/nightShiftPolicyStore";
 import { CompanyContextProvider } from "@/components/Settings/companyContextStore";
@@ -26,13 +27,15 @@ export default function RootLayout({
     <html lang="en" className={`${poppins.variable} h-full`}>
       <body className="h-full">
         <ActiveSiteProvider>
-          <SiteSettingsStoreProvider>
-            <NightShiftPolicyProvider>
-              <CompanyContextProvider>
-                {children}
-              </CompanyContextProvider>
-            </NightShiftPolicyProvider>
-          </SiteSettingsStoreProvider>
+          <FranchiseProvider>
+            <SiteSettingsStoreProvider>
+              <NightShiftPolicyProvider>
+                <CompanyContextProvider>
+                  {children}
+                </CompanyContextProvider>
+              </NightShiftPolicyProvider>
+            </SiteSettingsStoreProvider>
+          </FranchiseProvider>
         </ActiveSiteProvider>
       </body>
     </html>

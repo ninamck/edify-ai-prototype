@@ -94,6 +94,35 @@ function pickBest<T>(items: T[], scoreOf: (item: T) => number): { item: T; score
   return { item: best.item, score: best.score, runners };
 }
 
+/**
+ * Normalise progressive/gerund command verbs to their imperative base
+ * so the verb regexes fire on natural phrasings like "swapping a
+ * product" or "adding a new product". Operators describe what they're
+ * doing ("I'm swapping…", "adding coffee beans…") at least as often
+ * as they bark an imperative ("swap…", "add…"); without this the
+ * parsers silently no-match the -ing forms and the chat shows nothing.
+ *
+ * Only known command verbs are mapped, so this can't accidentally
+ * mangle a product name that happens to end in "ing".
+ */
+const GERUND_TO_BASE: Record<string, string> = {
+  swapping: 'swap',
+  adding: 'add',
+  replacing: 'replace',
+  changing: 'change',
+  removing: 'remove',
+  switching: 'switch',
+  updating: 'update',
+  importing: 'import',
+};
+
+function normalizeVerbs(text: string): string {
+  return text.replace(
+    /\b(swapping|adding|replacing|changing|removing|switching|updating|importing)\b/gi,
+    (m) => GERUND_TO_BASE[m.toLowerCase()] ?? m,
+  );
+}
+
 // ─── Waste ──────────────────────────────────────────────────────────────────
 
 const WASTE_VERBS = /^\s*(\/waste\b|waste\b|bin\b|trash\b|toss\b|threw out\b|chuck\b)/i;
@@ -353,6 +382,14 @@ export function parseRecipeEdit(text: string): CommandIntent | null {
   // <recipe>" / "from <recipe>".
   const recMatch = text.match(/\b(?:in|on|to|from)\s+(?:the\s+|our\s+)?(.+)$/i);
   let recipeName: string | undefined = recMatch ? recMatch[1].trim().replace(/[.!?]+$/, '') : undefined;
+
+  // A generic placeholder ("a recipe", "the recipe", "my recipe") names
+  // no real recipe — fuzzy-matching it would pin a random recipe and
+  // wrongly outrank the product wizard for asks like "swap a product in
+  // a recipe". Treat it as "no recipe yet" so the wizard asks instead.
+  if (recipeName && /^(?:a|an|the|my|our|this|that)?\s*recipe$/i.test(recipeName)) {
+    recipeName = undefined;
+  }
 
   // Resolve recipe by fuzzy match.
   let recipeId: string | undefined;
@@ -820,14 +857,19 @@ export function parseCommand(text: string): CommandIntent | null {
     if (/^\/(swap|replace|add)-product\b/i.test(trimmed)) return parseProductSwap(trimmed) ?? { commandId: 'product-swap', args: {}, confidence: 1 };
   }
 
+  // Natural-language path: normalise gerund verbs ("swapping" →
+  // "swap", "adding" → "add") so phrasings like "swapping a product in
+  // a recipe" or "adding a new product" reach the right parser instead
+  // of silently no-matching.
+  const nl = normalizeVerbs(trimmed);
   const candidates: (CommandIntent | null)[] = [
-    parseWaste(trimmed),
-    parseStock(trimmed),
-    parseRecipeEdit(trimmed),
-    parseProduction(trimmed),
-    parseMenu(trimmed),
-    parseSupplier(trimmed),
-    parseProductSwap(trimmed),
+    parseWaste(nl),
+    parseStock(nl),
+    parseRecipeEdit(nl),
+    parseProduction(nl),
+    parseMenu(nl),
+    parseSupplier(nl),
+    parseProductSwap(nl),
   ];
   const hits = candidates.filter((c): c is CommandIntent => c !== null);
   if (hits.length === 0) return null;

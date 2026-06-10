@@ -730,8 +730,263 @@ export function seedActivityDemo(input: SeedActivityDemoInput = {}): void {
     };
   });
 
+  // A spread of standalone examples — one per kind — so the Activity
+  // log reads like a real week of work rather than a single batch.
+  // Each is a top-level row (no groupRole) timed earlier than the oat
+  // milk batch so they stack below it. The underlying stores aren't
+  // mutated; Revert / Edit replay through chat the same way the batch
+  // children do.
+  const hr = 1000 * 60 * 60;
+  const extras: Task[] = [
+    {
+      id: `task-demo-waste-${Math.random().toString(36).slice(2, 6)}`,
+      kind: 'waste',
+      title: 'Logged waste · Croissants (12)',
+      subtitle: 'End of day',
+      status: 'completed',
+      pinned: false,
+      startedAt: now - 5 * hr,
+      completedAt: now - 5 * hr,
+      receipt: {
+        headline: 'Logged 12 croissants as waste',
+        detail: 'Reason: overproduction · £14.40 cost',
+        href: '/waste',
+        hrefLabel: 'Open waste log',
+      },
+      actor: DEFAULT_ACTOR,
+      provenance: 'ai-suggested-human-approved',
+      changes: [
+        {
+          entityType: 'waste-entry',
+          entityId: 'waste-croissant',
+          entityLabel: 'Croissant',
+          fieldPath: 'qty',
+          fieldLabel: 'Waste qty',
+          before: 0,
+          after: 12,
+          unit: 'units',
+          valueKind: 'number',
+        },
+      ],
+      blastRadius: [
+        {
+          metric: 'cogs_daily',
+          entityLabel: "Today's COGS",
+          before: 312.5,
+          after: 326.9,
+          delta: 14.4,
+          unit: '£',
+        },
+      ],
+      commandIntent: {
+        commandId: 'waste',
+        cardMsgType: 'cmd-waste-summary',
+        args: { itemName: 'Croissant', qty: 12, reason: 'overproduction' },
+      },
+    },
+    {
+      id: `task-demo-recipe-${Math.random().toString(36).slice(2, 6)}`,
+      kind: 'recipe-edit',
+      title: 'Raised dine-in price · Egg mayo sandwich',
+      subtitle: 'Menu pricing',
+      status: 'completed',
+      pinned: false,
+      startedAt: now - 26 * hr,
+      completedAt: now - 26 * hr,
+      receipt: {
+        headline: 'Egg mayo sandwich · £4.20 → £4.60',
+        detail: 'GP 61% → 65% · applied to all sites',
+        href: '/recipes/rec-egg-mayo/edit',
+        hrefLabel: 'Open recipe',
+      },
+      actor: DEFAULT_ACTOR,
+      provenance: 'ai-suggested-human-approved',
+      changes: [
+        {
+          entityType: 'recipe',
+          entityId: 'rec-egg-mayo',
+          entityLabel: 'Egg mayo sandwich',
+          fieldPath: 'priceDineIn',
+          fieldLabel: 'Dine-in price',
+          before: 4.2,
+          after: 4.6,
+          unit: '£',
+          valueKind: 'currency',
+        },
+      ],
+      blastRadius: [
+        {
+          metric: 'gp_pct',
+          entityLabel: 'Egg mayo sandwich',
+          before: 61,
+          after: 65,
+          delta: 4,
+          unit: 'pp',
+        },
+      ],
+      commandIntent: {
+        commandId: 'recipe-edit',
+        cardMsgType: 'cmd-recipe-summary',
+        args: { recipeId: 'rec-egg-mayo', recipeName: 'Egg mayo sandwich', kind: 'price', scope: 'all' },
+      },
+    },
+    {
+      id: `task-demo-production-${Math.random().toString(36).slice(2, 6)}`,
+      kind: 'production',
+      title: 'Updated par level · Sourdough loaf',
+      subtitle: 'Production planning',
+      status: 'completed',
+      pinned: false,
+      startedAt: now - 28 * hr,
+      completedAt: now - 28 * hr,
+      receipt: {
+        headline: 'Sourdough loaf par · 24 → 30 / day',
+        detail: 'Based on 4-week demand trend',
+        href: '/production/plan',
+        hrefLabel: 'Open plan',
+      },
+      actor: DEFAULT_ACTOR,
+      provenance: 'ai-suggested-human-approved',
+      changes: [
+        {
+          entityType: 'production-setting',
+          entityId: 'par-sourdough',
+          entityLabel: 'Sourdough loaf',
+          fieldPath: 'par',
+          fieldLabel: 'Daily par',
+          before: 24,
+          after: 30,
+          unit: 'units',
+          valueKind: 'number',
+        },
+      ],
+      commandIntent: {
+        commandId: 'production',
+        cardMsgType: 'cmd-production-summary',
+        args: { itemId: 'par-sourdough', par: 30 },
+      },
+    },
+    {
+      id: `task-demo-question-${Math.random().toString(36).slice(2, 6)}`,
+      kind: 'question',
+      title: 'Asked · Which drinks dropped GP this month?',
+      subtitle: 'Analytics',
+      status: 'completed',
+      pinned: false,
+      startedAt: now - 30 * hr,
+      completedAt: now - 30 * hr,
+      receipt: {
+        headline: '5 drinks below 60% GP',
+        detail: 'Latte, Mocha and Iced latte led the drop after the oat milk switch',
+      },
+      actor: DEFAULT_ACTOR,
+      provenance: 'ai-suggested-human-approved',
+    },
+    {
+      id: `task-demo-supplier-${Math.random().toString(36).slice(2, 6)}`,
+      kind: 'supplier',
+      title: 'Updated supplier price · Bacon (Smithfield)',
+      subtitle: 'Suppliers',
+      status: 'completed',
+      pinned: false,
+      startedAt: now - 50 * hr,
+      completedAt: now - 50 * hr,
+      receipt: {
+        headline: 'Bacon · £6.80 → £7.40 / kg',
+        detail: 'Smithfield Meats · affects 6 recipes',
+        href: '/suppliers',
+        hrefLabel: 'Open supplier',
+      },
+      actor: DEFAULT_ACTOR,
+      provenance: 'ai-suggested-human-approved',
+      changes: [
+        {
+          entityType: 'product',
+          entityId: 'prd-bacon',
+          entityLabel: 'Bacon',
+          fieldPath: 'unitPrice',
+          fieldLabel: 'Unit price',
+          before: 6.8,
+          after: 7.4,
+          unit: '£/kg',
+          valueKind: 'currency',
+        },
+      ],
+      blastRadius: [
+        {
+          metric: 'recipes_affected',
+          entityLabel: 'Across menu',
+          before: 0,
+          after: 6,
+          delta: 6,
+        },
+      ],
+    },
+    {
+      id: `task-demo-menu-${Math.random().toString(36).slice(2, 6)}`,
+      kind: 'menu',
+      title: 'Marked unavailable · Avocado toast',
+      subtitle: 'Menu',
+      status: 'completed',
+      pinned: false,
+      startedAt: now - 52 * hr,
+      completedAt: now - 52 * hr,
+      receipt: {
+        headline: 'Avocado toast hidden from menu',
+        detail: 'Out of stock · all sites',
+        href: '/recipes/rec-avo-toast/edit',
+        hrefLabel: 'Open recipe',
+      },
+      actor: DEFAULT_ACTOR,
+      provenance: 'ai-suggested-human-approved',
+      changes: [
+        {
+          entityType: 'recipe',
+          entityId: 'rec-avo-toast',
+          entityLabel: 'Avocado toast',
+          fieldPath: 'available',
+          fieldLabel: 'Available',
+          before: true,
+          after: false,
+          valueKind: 'boolean',
+        },
+      ],
+    },
+    {
+      id: `task-demo-stock-${Math.random().toString(36).slice(2, 6)}`,
+      kind: 'stock',
+      title: 'Counted stock · Dry store',
+      subtitle: 'Weekly count',
+      status: 'completed',
+      pinned: false,
+      startedAt: now - 74 * hr,
+      completedAt: now - 74 * hr,
+      receipt: {
+        headline: 'Dry store count submitted',
+        detail: '42 lines counted · 3 variances flagged',
+        href: '/count',
+        hrefLabel: 'Open count',
+      },
+      actor: DEFAULT_ACTOR,
+      provenance: 'ai-suggested-human-approved',
+      changes: [
+        {
+          entityType: 'stock-count',
+          entityId: 'count-dry-store',
+          entityLabel: 'Dry store',
+          fieldPath: 'lines',
+          fieldLabel: 'Lines counted',
+          before: 0,
+          after: 42,
+          unit: 'lines',
+          valueKind: 'number',
+        },
+      ],
+    },
+  ];
+
   // Most-recent-first inside the store; the activity page re-sorts anyway.
-  TASKS = [parent, ...children, ...TASKS].slice(0, MAX_ENTRIES);
+  TASKS = [parent, ...children, ...extras, ...TASKS].slice(0, MAX_ENTRIES);
   persist();
   notify();
 }

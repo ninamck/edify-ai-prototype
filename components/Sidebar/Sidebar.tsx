@@ -15,7 +15,6 @@ import {
   FileX,
   Box,
   ShieldCheck,
-  Layers,
   Star,
   MapPin,
   Settings,
@@ -24,6 +23,7 @@ import {
   PanelLeftClose,
   Activity as ActivityIcon,
   BarChart3,
+  Boxes,
 } from 'lucide-react';
 
 import NavGroup from './NavGroup';
@@ -32,6 +32,7 @@ import { useApprovals } from '@/components/Approvals/approvalsStore';
 import { needsReviewCount } from '@/components/Invoicing/mockData';
 import { useDemoVersion } from '@/components/DemoControls/demoStore';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+import { useFranchise } from '@/components/Franchise/FranchiseContext';
 import { ESTATE_SITES } from '@/components/Stock/fixtures';
 import { getStockStatus } from '@/components/Stock/status';
 
@@ -99,6 +100,10 @@ export default function Sidebar() {
   // notes (estate-level), and don't see analytics / compare-sites
   // (estate-level performance views).
   const { isSpoke, isHub, isProducingHybrid, isAllSites, activeSiteId } = useActiveSite();
+  // In the franchise-admin "group view" the operator sits above the whole
+  // group, so the sidebar surfaces a dedicated entry back to the group
+  // overview alongside the normal store nav.
+  const { isGroupView } = useFranchise();
   // The producing hybrid (HYBRID_HUB) dispatches to its own spokes, so it
   // gets the hub's "Dispatch to stores" entry and the fuller group title —
   // while keeping the Run + Plan entries every self-producing site has.
@@ -143,6 +148,15 @@ export default function Sidebar() {
       {/* Zone 1 — Home (site switcher lives in ShellTopBar) */}
       <div style={{ marginTop: compact ? 0 : '2px' }}>
         <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+          {isGroupView && (
+            <NavItem
+              label="Franchise group"
+              icon={Boxes}
+              active={is('/franchise')}
+              compact={compact}
+              onClick={() => router.push('/franchise')}
+            />
+          )}
           <NavItem
             label="Home"
             icon={Home}
@@ -301,7 +315,6 @@ export default function Sidebar() {
             active={is('/activity')}
             onClick={() => router.push('/activity')}
           />
-          <NavItem label="Compare sites" icon={Layers} compact={compact} active={is('/compare')} />
         </NavGroup>
 
         {/* SETUP — full set for both personas (per the demo brief). */}

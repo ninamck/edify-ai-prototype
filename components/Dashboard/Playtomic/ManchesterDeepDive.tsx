@@ -72,13 +72,13 @@ export default function ManchesterDeepDive({
             marginBottom: 6,
           }}
         >
-          Venue · drill-down
+          Store · drill-down
         </div>
         <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-          Manchester
+          Coffee &amp; Co Manchester
         </div>
         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-muted)', marginTop: 4 }}>
-          Court utilisation, forward pipeline and player activity for the last 4 weeks.
+          Trade, forward pipeline and customer activity for the last 4 weeks.
         </div>
       </header>
 

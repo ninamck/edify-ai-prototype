@@ -400,7 +400,7 @@ const NOTE_COPY: Record<BriefingPhase, NoteForEdifyCopy> = {
   },
 };
 
-function NoteForEdify({ phase }: { phase: BriefingPhase }) {
+export function NoteForEdify({ phase }: { phase: BriefingPhase }) {
   const router = useRouter();
   const [state, setState] = useState<'idle' | 'recording' | 'done'>('idle');
   const [tag, setTag] = useState<string | null>(null);
