@@ -1,7 +1,7 @@
 export type POStatus = 'Draft' | 'Sent' | 'Partially Received' | 'Fully Received' | 'Closed' | 'Cancelled';
 export type GRNStatus = 'Created' | 'Pending Invoice' | 'Matched' | 'Variance — Awaiting Resolution' | 'Closed';
 export type InvoiceStatus = 'Pending Invoice' | 'Matched' | 'Closed';
-export type VarianceResolution = 'Request credit note' | 'Back-order remaining' | 'Accept short';
+export type VarianceResolution = 'Request credit note' | 'Coming in another delivery' | 'Accept short';
 
 export interface POLine {
   id: string;
@@ -46,6 +46,9 @@ export interface GRNLine {
     poExpectedQty: number;
     note: string;
   };
+  /** Set when an existing catalogue item was added at receiving without a
+   *  PO line — e.g. phoned through to the supplier after the PO was sent. */
+  addedAtReceiving?: { note: string };
 }
 
 export interface GRN {
@@ -67,6 +70,18 @@ export interface DeliveryCommitLine {
   poLineId: string;
   receivedQty: number;
   resolution?: VarianceResolution;
+}
+
+/** An existing catalogue item received without a PO line (added to the
+ *  order after the PO was sent), staged in the receiving screen. */
+export interface DeliveryCommitExtra {
+  id: string;
+  productId: string;
+  name: string;
+  sku: string;
+  unit: string;
+  price: number;
+  qty: number;
 }
 
 export interface DeliveryCommitAlternative {
@@ -343,10 +358,70 @@ export function grnVarianceCount(grn: GRN): number {
   return grn.lines.filter(l => l.receivedQty !== l.expectedQty).length;
 }
 
+function ordinal(n: number): string {
+  if (n === 1) return '1st';
+  if (n === 2) return '2nd';
+  if (n === 3) return '3rd';
+  return `${n}th`;
+}
+
+/**
+ * When a PO was split across multiple deliveries (partial receipts),
+ * returns the GRN's place in the sequence, e.g. "2nd delivery · PO-2901".
+ * Null for single-delivery POs.
+ */
+export function deliverySequenceTag(grn: GRN): string | null {
+  for (const po of grn.poNumbers) {
+    const ids = MOCK_COMPLETED_DELIVERIES
+      .filter(g => g.poNumbers.includes(po))
+      .map(g => g.id);
+    if (ids.length > 1) return `${ordinal(ids.indexOf(grn.id) + 1)} delivery · ${po}`;
+  }
+  return null;
+}
+
+/**
+ * Close the loop on a confirmed delivery: update the source POs so a
+ * partial receipt can be finished later. Lines resolved as
+ * "Coming in another delivery" stay on the PO at the remaining quantity and
+ * the PO flips to Partially Received — it stays in the Awaiting
+ * Delivery list, ready to receive again when the second delivery
+ * arrives. Everything else (fully received, substituted, accepted
+ * short, credit-noted) is settled and comes off the PO.
+ */
+export function applyReceiptToPOs(input: {
+  pos: PO[];
+  lines: DeliveryCommitLine[];
+  alternatives: DeliveryCommitAlternative[];
+}): void {
+  const byLineId = new Map(input.lines.map(l => [l.poLineId, l]));
+  const substitutedLineIds = new Set(
+    input.alternatives.map(a => a.originPoLineId).filter((id): id is string => !!id),
+  );
+  for (const po of input.pos) {
+    const target = MOCK_POS.find(p => p.id === po.id);
+    if (!target) continue;
+    const remainingLines: POLine[] = [];
+    for (const line of target.lines) {
+      const rec = byLineId.get(line.id);
+      // Untouched in this session — still expected on the PO.
+      if (!rec) { remainingLines.push(line); continue; }
+      if (substitutedLineIds.has(line.id)) continue;
+      const remaining = line.expectedQty - rec.receivedQty;
+      if (remaining > 0 && rec.resolution === 'Coming in another delivery') {
+        remainingLines.push({ ...line, expectedQty: remaining });
+      }
+    }
+    target.lines = remainingLines;
+    target.status = remainingLines.length > 0 ? 'Partially Received' : 'Fully Received';
+  }
+}
+
 export function recordCompletedDeliveryFromReceiving(input: {
   pos: PO[];
   lines: DeliveryCommitLine[];
   alternatives: DeliveryCommitAlternative[];
+  extras?: DeliveryCommitExtra[];
   invoiceNumber?: string;
   receivedBy?: string;
 }): GRN | null {
@@ -398,6 +473,23 @@ export function recordCompletedDeliveryFromReceiving(input: {
     };
   });
 
+  // Catalogue items added at receiving without a PO line. Expected is set
+  // to the received qty — the item was verbally added to the order, so the
+  // GRN should line up with the invoice rather than flag a variance.
+  const extraLines: GRNLine[] = (input.extras ?? []).map((extra, idx) => ({
+    id: `gl-runtime-extra-${Date.now()}-${idx}`,
+    poLineId: extra.id,
+    name: extra.name,
+    sku: extra.sku,
+    unit: extra.unit,
+    price: extra.price,
+    expectedQty: extra.qty,
+    receivedQty: extra.qty,
+    addedAtReceiving: {
+      note: 'Added to the order after the PO was sent; recorded at receiving so the invoice matches.',
+    },
+  }));
+
   const grn: GRN = {
     id: `grn-runtime-${Date.now()}`,
     grnNumber: `GRN-${1252 + MOCK_COMPLETED_DELIVERIES.filter(g => g.id.startsWith('grn-runtime')).length}`,
@@ -409,7 +501,7 @@ export function recordCompletedDeliveryFromReceiving(input: {
     receivedBy: input.receivedBy ?? 'Ed Barry',
     invoiceNumber: input.invoiceNumber || undefined,
     invoiceStatus: 'Pending Invoice',
-    lines: [...normalLines, ...alternativeLines],
+    lines: [...normalLines, ...alternativeLines, ...extraLines],
   };
 
   MOCK_COMPLETED_DELIVERIES.push(grn);

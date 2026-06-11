@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import StatusBadge from './StatusBadge';
-import { MOCK_POS, MOCK_COMPLETED_DELIVERIES, poItemCount, poTotal, PO, GRN, grnVarianceCount } from './mockData';
+import { MOCK_POS, MOCK_COMPLETED_DELIVERIES, poItemCount, poTotal, PO, GRN, grnVarianceCount, deliverySequenceTag } from './mockData';
 
 interface POSelectionProps {
   onReceive: (poIds: string[]) => void;
@@ -236,6 +236,8 @@ function CompletedList({ deliveries }: { deliveries: GRN[] }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       {deliveries.map(grn => {
         const variances = grnVarianceCount(grn);
+        // "1st/2nd delivery · PO-x" when a PO was split across deliveries.
+        const deliveryTag = deliverySequenceTag(grn);
         return (
           <div
             key={grn.id}
@@ -257,6 +259,7 @@ function CompletedList({ deliveries }: { deliveries: GRN[] }) {
               <span>Received {grn.dateReceived}</span>
               <span>·</span>
               <span>By {grn.receivedBy}</span>
+              {deliveryTag && <StatusBadge status={deliveryTag} variant="info" />}
               {variances > 0 && <StatusBadge status={`${variances} variance${variances > 1 ? 's' : ''}`} variant="warning" />}
               <StatusBadge status={grn.invoiceStatus} />
             </div>

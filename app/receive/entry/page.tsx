@@ -3,13 +3,14 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useMemo, useState, useCallback } from 'react';
 import ReceivingScreen from '@/components/Receiving/ReceivingScreen';
-import { MOCK_POS, PO, recordCompletedDeliveryFromReceiving } from '@/components/Receiving/mockData';
+import { MOCK_POS, PO, recordCompletedDeliveryFromReceiving, applyReceiptToPOs } from '@/components/Receiving/mockData';
 import { AddPOModal } from '@/components/Receiving/ReceivingModals';
 import {
   upsertProduct,
   recordMasterDelivery,
   resolveOrCreateSupplier,
   findMasterProduct,
+  findProduct,
   genId,
 } from '@/components/Suppliers/store';
 
@@ -111,11 +112,32 @@ function EntryContent() {
             }
           });
 
+          // 2b. Catalogue items added at receiving (no PO line) — blend their
+          //     delivered cost into the linked master's WAC the same way.
+          data.extras.forEach(extra => {
+            const product = findProduct(extra.productId);
+            if (!product?.masterProductId || extra.qty <= 0) return;
+            const perUnit = product.packQty > 0 ? product.packCost / product.packQty : 0;
+            const deliveredUnits = extra.qty * product.packQty;
+            recordMasterDelivery(product.masterProductId, selectedPOs[0].site, deliveredUnits, perUnit);
+            affectedMasterId = affectedMasterId ?? product.masterProductId;
+          });
+
           const recordedGRN = recordCompletedDeliveryFromReceiving({
             pos: selectedPOs,
             lines: data.lines,
             alternatives: data.alternatives,
+            extras: data.extras,
             invoiceNumber: data.invoiceNumber,
+          });
+
+          // 3. Update the POs themselves — back-ordered lines stay on the PO
+          //    at the remaining qty so the second delivery can be received
+          //    against it; fully-settled POs flip to Fully Received.
+          applyReceiptToPOs({
+            pos: selectedPOs,
+            lines: data.lines,
+            alternatives: data.alternatives,
           });
 
           const substitutedLineIds = new Set(
@@ -136,6 +158,17 @@ function EntryContent() {
           });
           if (recordedGRN) params.set('grn', recordedGRN.grnNumber);
           if (affectedMasterId) params.set('master', affectedMasterId);
+
+          // Back-ordered lines → tell the confirmation screen which POs
+          // stay open so it can explain the second-delivery story.
+          const backOrdered = data.lines.filter(l => l.resolution === 'Coming in another delivery').length;
+          if (backOrdered > 0) {
+            // selectedPOs are the live MOCK_POS objects, so their status
+            // already reflects applyReceiptToPOs above.
+            const openPos = selectedPOs.filter(p => p.status === 'Partially Received').map(p => p.poNumber);
+            params.set('backorders', String(backOrdered));
+            params.set('openpos', openPos.join(','));
+          }
           router.push(`/receive/confirmed?${params.toString()}`);
         }}
         onBack={() => router.push('/receive')}

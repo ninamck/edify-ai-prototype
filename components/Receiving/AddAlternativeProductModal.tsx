@@ -95,12 +95,15 @@ export default function AddAlternativeProductModal({
   const isOffPo = !originLine;
   const [mode, setMode] = useState<'new' | 'link'>(isOffPo ? 'new' : 'link');
 
+  // Form starts blank for manual entry — no values carried over from the
+  // ordered line (the substitute's pack size / cost are its own). Only an
+  // explicit prefill (the GRN scan) populates fields.
   const [productName, setProductName] = useState(initialValues?.productName ?? '');
   const [supplierCode, setSupplierCode] = useState(initialValues?.supplierCode ?? '');
   const [packType, setPackType] = useState<PackType>(initialValues?.packType ?? 'Pack');
-  const [packQty, setPackQty] = useState<number>(initialValues?.packQty ?? originLine?.unitsPerLineItem ?? 1);
+  const [packQty, setPackQty] = useState<number>(initialValues?.packQty ?? 1);
   const [singleUnitType, setSingleUnitType] = useState<SingleUnitType>(initialValues?.singleUnitType ?? 'Each');
-  const [packCost, setPackCost] = useState<number>(initialValues?.packCost ?? originLine?.price ?? 0);
+  const [packCost, setPackCost] = useState<number>(initialValues?.packCost ?? 0);
   const [receivedQty, setReceivedQty] = useState<number>(initialValues?.receivedQty ?? 1);
 
   // Mock GRN scan: shows a brief "scanning" state, then fills every field so
@@ -254,11 +257,11 @@ export default function AddAlternativeProductModal({
         <div style={{ marginBottom: 18, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div>
             <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>
-              {originLine ? 'Received a different item' : 'Add unexpected item'}
+              {originLine ? 'Received a substitute item' : 'Add unexpected item'}
             </h3>
             <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>
               {originLine
-                ? `${supplierName} sent a different product for "${originLine.name}". Add it so cost and stock stay accurate.`
+                ? `Scan the GRN to fill in the substitute's details — or enter them manually below. If it's not in your system yet, we'll add it to your catalogue and link it to the right master product.`
                 : `${supplierName} delivered an item that wasn't on the PO. Add it to the catalogue.`}
             </p>
           </div>
@@ -394,7 +397,7 @@ export default function AddAlternativeProductModal({
               <option value="Single">Single</option>
             </select>
           </Field>
-          <Field label={`Units per pack (${previewUnit})`}>
+          <Field label="Units per pack">
             <input
               type="number"
               min={1}

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import StatusBadge from './StatusBadge';
+import { MOCK_COMPLETED_DELIVERIES, deliverySequenceTag } from './mockData';
 
 interface ConfirmationScreenProps {
   grnNumber: string;
@@ -11,6 +12,10 @@ interface ConfirmationScreenProps {
   receivedBy: string;
   altCount?: number;
   masterId?: string;
+  /** Lines resolved as "Coming in another delivery" — the rest arrives later. */
+  backOrderCount?: number;
+  /** POs left Partially Received (still in Awaiting Delivery). */
+  openPoNumbers?: string[];
   onBackToDeliveries: () => void;
   onViewMaster?: () => void;
 }
@@ -22,16 +27,25 @@ export default function ConfirmationScreen({
   varianceCount,
   receivedBy,
   altCount = 0,
+  backOrderCount = 0,
+  openPoNumbers = [],
   onBackToDeliveries,
   onViewMaster,
 }: ConfirmationScreenProps) {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
-  const statusLabel = altCount > 0
-    ? 'Alternative product sent'
-    : varianceCount > 0
-      ? 'Variance — Awaiting Resolution'
-      : 'Fully Received';
-  const statusVariant = altCount > 0 ? 'warning' : undefined;
+  const statusLabel = backOrderCount > 0
+    ? 'Partially Received'
+    : altCount > 0
+      ? 'Alternative product sent'
+      : varianceCount > 0
+        ? 'Variance — Awaiting Resolution'
+        : 'Fully Received';
+  const statusVariant = altCount > 0 && backOrderCount === 0 ? 'warning' : undefined;
+
+  // "1st/2nd delivery · PO-x" — shown when this GRN's PO has been split
+  // across multiple deliveries (e.g. the back-order's second drop).
+  const recordedGrn = MOCK_COMPLETED_DELIVERIES.find(g => g.grnNumber === grnNumber);
+  const deliveryTag = recordedGrn ? deliverySequenceTag(recordedGrn) : null;
 
   return (
     <div style={{ fontFamily: 'var(--font-primary)' }}>
@@ -75,8 +89,9 @@ export default function ConfirmationScreen({
           <SummaryRow label="Confirmed By" value={receivedBy} />
           <div>
             <span style={{ color: 'var(--color-text-secondary)' }}>Status</span>
-            <div style={{ marginTop: '4px' }}>
+            <div style={{ marginTop: '4px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               <StatusBadge status={statusLabel} variant={statusVariant} />
+              {deliveryTag && <StatusBadge status={deliveryTag} variant="info" />}
             </div>
           </div>
           {varianceCount > 0 && altCount === 0 && (
@@ -89,6 +104,29 @@ export default function ConfirmationScreen({
           )}
         </div>
       </div>
+
+      {/* Back-order note — the rest comes in a second delivery */}
+      {backOrderCount > 0 && (
+        <div
+          style={{
+            border: '1px solid var(--color-border-subtle)',
+            background: '#fff',
+            borderRadius: '12px',
+            padding: '18px 20px',
+            marginBottom: '24px',
+          }}
+        >
+          <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 6px' }}>
+            {backOrderCount} item{backOrderCount > 1 ? 's' : ''} coming in another delivery
+          </h3>
+          <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: 0, lineHeight: 1.5 }}>
+            {openPoNumbers.length > 0 ? openPoNumbers.join(', ') : 'The PO'} stays in
+            Awaiting Delivery with just the remaining quantities. Receive it again when
+            the rest arrives — that delivery gets its own GRN against the same PO, so
+            each invoice matches its delivery.
+          </p>
+        </div>
+      )}
 
       {/* New products / cost update note */}
       {altCount > 0 && (

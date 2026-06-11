@@ -2,7 +2,10 @@
 
 import { useRef, useState, useMemo } from 'react';
 import StatusBadge from './StatusBadge';
+import Stepper from './Stepper';
 import { MOCK_POS, PO, POLine, poItemCount, poTotal } from './mockData';
+import { useProducts, findSupplier } from '@/components/Suppliers/store';
+import { formatPrice, type Product } from '@/components/Suppliers/fixtures';
 
 /* ──────────── Add PO Modal ──────────── */
 
@@ -113,6 +116,194 @@ function PORow({ po, onAdd }: { po: PO; onAdd: () => void }) {
   );
 }
 
+/* ──────────── Add catalogue item (already-known product, not on the PO) ──────────── */
+
+/**
+ * An existing catalogue product added to the GRN that wasn't on the PO —
+ * e.g. the GM phoned the supplier after the PO went out and got an item
+ * added to the order, so it arrives on the delivery + invoice but isn't
+ * on any PO line. Staged locally and committed on "Confirm Delivery" so
+ * the GRN matches the invoice.
+ */
+export interface CatalogueExtra {
+  /** Local-only id for list rendering before commit. */
+  id: string;
+  productId: string;
+  name: string;
+  sku: string;
+  unit: string;
+  price: number;
+  qty: number;
+}
+
+interface AddCatalogueItemModalProps {
+  /** Supplier on the delivery — their products are listed first. */
+  supplierName: string;
+  onAdd: (extra: CatalogueExtra) => void;
+  onClose: () => void;
+}
+
+export function AddCatalogueItemModal({ supplierName, onAdd, onClose }: AddCatalogueItemModalProps) {
+  const products = useProducts();
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<Product | null>(null);
+  const [qty, setQty] = useState(1);
+
+  const matches = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const supplierOf = (p: Product) => findSupplier(p.supplierId)?.name ?? '';
+    const list = products
+      .filter(p => p.source !== 'made' && p.status === 'Available')
+      .filter(p => {
+        if (!q) return true;
+        return (
+          p.name.toLowerCase().includes(q) ||
+          p.supplierCode.toLowerCase().includes(q) ||
+          supplierOf(p).toLowerCase().includes(q)
+        );
+      });
+    // Products from the delivery's supplier float to the top — that's
+    // almost always where the off-PO item came from.
+    const sLower = supplierName.toLowerCase();
+    return list
+      .sort((a, b) => {
+        const aMatch = supplierOf(a).toLowerCase().includes(sLower) ? 0 : 1;
+        const bMatch = supplierOf(b).toLowerCase().includes(sLower) ? 0 : 1;
+        return aMatch - bMatch || a.name.localeCompare(b.name);
+      })
+      .slice(0, 30);
+  }, [products, search, supplierName]);
+
+  const handleAdd = () => {
+    if (!selected || qty <= 0) return;
+    onAdd({
+      id: `extra-${Date.now()}`,
+      productId: selected.id,
+      name: selected.name,
+      sku: selected.supplierCode,
+      unit: selected.packType === 'Pack' ? 'PACK' : 'EA',
+      price: selected.packCost,
+      qty,
+    });
+    onClose();
+  };
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <h3 style={{ fontSize: '17px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 6px' }}>
+        Add item from catalogue
+      </h3>
+      <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: '0 0 16px', lineHeight: 1.5 }}>
+        For items added to the order after the PO was sent — they&rsquo;ll be
+        recorded on the GRN so the invoice matches.
+      </p>
+
+      <input
+        type="text"
+        placeholder="Search your catalogue by name, code or supplier…"
+        value={search}
+        onChange={(e) => { setSearch(e.target.value); setSelected(null); }}
+        autoFocus
+        style={{
+          width: '100%',
+          padding: '10px 14px',
+          borderRadius: '8px',
+          border: '1px solid var(--color-border)',
+          fontSize: '13px',
+          fontFamily: 'var(--font-primary)',
+          marginBottom: '14px',
+          outline: 'none',
+          boxSizing: 'border-box',
+        }}
+      />
+
+      {matches.length === 0 ? (
+        <p style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-secondary)', fontSize: '13px' }}>
+          No catalogue products match.
+        </p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '260px', overflowY: 'auto' }}>
+          {matches.map(p => {
+            const isSelected = selected?.id === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setSelected(isSelected ? null : p)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '10px',
+                  padding: '12px 14px',
+                  borderRadius: '8px',
+                  border: isSelected
+                    ? '1.5px solid var(--color-accent-active)'
+                    : '1px solid var(--color-border-subtle)',
+                  background: isSelected ? 'var(--color-bg-hover)' : '#fff',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  fontFamily: 'var(--font-primary)',
+                  width: '100%',
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {p.name}
+                  </div>
+                  <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+                    {p.supplierCode} · {findSupplier(p.supplierId)?.name ?? 'Unknown supplier'}
+                  </div>
+                </div>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)', flexShrink: 0 }}>
+                  {formatPrice(p.packCost)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {selected && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            marginTop: '14px',
+            padding: '12px 14px',
+            borderRadius: '8px',
+            background: 'var(--color-bg-hover)',
+            border: '1px solid var(--color-border-subtle)',
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+            Quantity received
+          </span>
+          <Stepper value={qty} onChange={setQty} label={selected.name} />
+        </div>
+      )}
+
+      <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+        <button onClick={onClose} style={cancelBtnStyle}>Cancel</button>
+        <button
+          onClick={handleAdd}
+          disabled={!selected || qty <= 0}
+          style={{
+            ...primaryBtnStyle,
+            opacity: !selected || qty <= 0 ? 0.5 : 1,
+            cursor: !selected || qty <= 0 ? 'not-allowed' : 'pointer',
+          }}
+        >
+          Add to GRN
+        </button>
+      </div>
+    </ModalOverlay>
+  );
+}
+
 /* ──────────── Resolve line — action chooser ──────────── */
 
 interface LineActionModalProps {
@@ -165,7 +356,7 @@ function PriceIcon() {
 
 /**
  * When a delivered line doesn't match the PO, the user picks how to resolve it.
- * Only "Add a new product" is wired up today; reject / accept-price are stubs
+ * Only "Add a substitute item" is wired up today; reject / accept-price are stubs
  * for future flows.
  */
 export function LineActionModal({ line, onReject, onAddProduct, onAcceptPrice, onClose }: LineActionModalProps) {
@@ -188,7 +379,7 @@ export function LineActionModal({ line, onReject, onAddProduct, onAcceptPrice, o
         <button onClick={onAddProduct} style={captureOptionStyle}>
           <span style={optionTitleRowStyle}>
             <AddIcon />
-            Add a new product
+            Add a substitute item
           </span>
           <span style={optionDescStyle}>Log it and link it to a master product.</span>
         </button>

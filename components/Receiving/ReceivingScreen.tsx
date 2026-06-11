@@ -6,7 +6,7 @@ import StatusBadge from './StatusBadge';
 import ResponsiveDataList, { Column } from './ResponsiveDataList';
 import { PO, POLine, VarianceResolution, poItemCount, poTotal } from './mockData';
 import AddAlternativeProductModal, { type AlternativeProductPrefill, type StagedAlternative } from './AddAlternativeProductModal';
-import { ScanCaptureModal, LineActionModal } from './ReceivingModals';
+import { ScanCaptureModal, LineActionModal, AddCatalogueItemModal, type CatalogueExtra } from './ReceivingModals';
 import { formatPrice } from '@/components/Suppliers/fixtures';
 
 interface ReceivedLine {
@@ -16,23 +16,30 @@ interface ReceivedLine {
 }
 
 /**
- * A row in the receiving table — either a real PO line or a staged
- * alternative the supplier sent in place of (or on top of) the order.
+ * A row in the receiving table — a real PO line, a staged alternative
+ * the supplier sent in place of (or on top of) the order, or an
+ * existing catalogue item added to the order after the PO went out.
  */
 type DisplayRow =
   | { kind: 'po'; line: POLine }
-  | { kind: 'alt'; alt: StagedAlternative };
+  | { kind: 'alt'; alt: StagedAlternative }
+  | { kind: 'extra'; extra: CatalogueExtra };
 
 interface ReceivingScreenProps {
   pos: PO[];
-  onConfirm: (data: { invoiceNumber: string; lines: ReceivedLine[]; alternatives: StagedAlternative[] }) => void;
+  onConfirm: (data: {
+    invoiceNumber: string;
+    lines: ReceivedLine[];
+    alternatives: StagedAlternative[];
+    extras: CatalogueExtra[];
+  }) => void;
   onBack: () => void;
   onAddPO: () => void;
 }
 
 const RESOLUTION_OPTIONS: VarianceResolution[] = [
   'Request credit note',
-  'Back-order remaining',
+  'Coming in another delivery',
   'Accept short',
 ];
 
@@ -55,6 +62,9 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [attachedFile, setAttachedFile] = useState<string | null>(null);
   const [alternatives, setAlternatives] = useState<StagedAlternative[]>([]);
+  const [extras, setExtras] = useState<CatalogueExtra[]>([]);
+  const [catalogueModalOpen, setCatalogueModalOpen] = useState(false);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [altModal, setAltModal] = useState<{ open: boolean; line?: POLine; initialValues?: AlternativeProductPrefill; autoScan?: boolean } | null>(null);
   const [scanCapture, setScanCapture] = useState(false);
   const [scanImageUrl, setScanImageUrl] = useState<string | null>(null);
@@ -67,7 +77,7 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
   const addAlternative = (alt: StagedAlternative) => {
     setAlternatives(prev => [...prev, alt]);
     // When the alternative substitutes an ordered line, that line wasn't
-    // delivered — drop its received qty to 0 (it gets an "Alternative sent"
+    // delivered — drop its received qty to 0 (it gets a "Substitution sent"
     // tag instead of a short-variance flag).
     if (alt.originPoLineId) {
       const originId = alt.originPoLineId;
@@ -92,6 +102,20 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
 
   const setQty = (lineId: string, qty: number) => {
     setReceivedMap(prev => ({ ...prev, [lineId]: qty }));
+  };
+
+  const setAltQty = (altId: string, qty: number) => {
+    setAlternatives(prev => prev.map(a => (a.id === altId ? { ...a, receivedQty: qty } : a)));
+  };
+
+  const addExtra = (extra: CatalogueExtra) => {
+    setExtras(prev => [...prev, extra]);
+  };
+  const removeExtra = (id: string) => {
+    setExtras(prev => prev.filter(e => e.id !== id));
+  };
+  const setExtraQty = (id: string, qty: number) => {
+    setExtras(prev => prev.map(e => (e.id === id ? { ...e, qty } : e)));
   };
 
   const setResolution = (lineId: string, res: VarianceResolution) => {
@@ -120,7 +144,8 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
   );
 
   // Interleave alternatives directly under the PO line they replace; any
-  // standalone (off-PO) alternatives fall to the bottom of the order.
+  // standalone (off-PO) alternatives and catalogue extras fall to the
+  // bottom of the order.
   const tableData = useMemo<DisplayRow[]>(() => {
     const rows: DisplayRow[] = [];
     for (const line of allLines) {
@@ -132,8 +157,9 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
     alternatives
       .filter(a => !a.originPoLineId)
       .forEach(alt => rows.push({ kind: 'alt', alt }));
+    extras.forEach(extra => rows.push({ kind: 'extra', extra }));
     return rows;
-  }, [allLines, alternatives]);
+  }, [allLines, alternatives, extras]);
 
   // Substituted lines are intentionally at 0 — don't treat them as shorts.
   const varianceLines = allLines.filter(
@@ -151,6 +177,7 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
         resolution: resolutionMap[l.id],
       })),
       alternatives,
+      extras,
     });
   };
 
@@ -171,10 +198,21 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
             </div>
           );
         }
+        if (row.kind === 'extra') {
+          return (
+            <div>
+              <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text-primary)' }}>{row.extra.name}</div>
+              <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{row.extra.sku} · {row.extra.unit}</div>
+            </div>
+          );
+        }
         const { alt } = row;
         return (
           <div>
-            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text-primary)' }}>{alt.productName}</span>
+            <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text-primary)' }}>{alt.productName}</div>
+            <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+              {alt.supplierCode} · {alt.singleUnitType === 'Each' ? 'EA' : alt.singleUnitType}
+            </div>
           </div>
         );
       },
@@ -185,7 +223,7 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
       mobileRole: 'subtitle',
       width: '90px',
       render: (row) => {
-        if (row.kind === 'alt') return <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>—</span>;
+        if (row.kind !== 'po') return <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>—</span>;
         return <span style={expectedPillStyle}>{row.line.expectedQty}</span>;
       },
     },
@@ -196,14 +234,26 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
       render: (row) => {
         if (row.kind === 'alt') {
           return (
-            <div style={{ lineHeight: 1.3 }}>
-              <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{row.alt.receivedQty}</span>
-              <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}> × {row.alt.packQty} {row.alt.masterUnit}</span>
-            </div>
+            <Stepper
+              value={row.alt.receivedQty}
+              onChange={(v) => setAltQty(row.alt.id, v)}
+              label={row.alt.productName}
+            />
+          );
+        }
+        if (row.kind === 'extra') {
+          return (
+            <Stepper
+              value={row.extra.qty}
+              onChange={(v) => setExtraQty(row.extra.id, v)}
+              label={row.extra.name}
+            />
           );
         }
         if (substitutedLineIds.has(row.line.id)) {
-          return <span style={zeroPillStyle}>0</span>;
+          // Pinned at 0 (the alternative was sent instead) — rendered as
+          // a disabled stepper so the number lines up with editable rows.
+          return <Stepper value={0} onChange={() => {}} label={row.line.name} disabled />;
         }
         return (
           <Stepper
@@ -218,9 +268,11 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
       key: 'price',
       header: 'Unit Price',
       width: '90px',
-      render: (row) => row.kind === 'po'
-        ? <span>£{row.line.price.toFixed(2)}</span>
-        : <span>{formatPrice(row.alt.packCost)}</span>,
+      render: (row) => {
+        if (row.kind === 'po') return <span>£{row.line.price.toFixed(2)}</span>;
+        if (row.kind === 'extra') return <span>{formatPrice(row.extra.price)}</span>;
+        return <span>{formatPrice(row.alt.packCost)}</span>;
+      },
     },
     {
       key: 'variance',
@@ -231,8 +283,11 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
         if (row.kind === 'alt') {
           return <StatusBadge status="New product" variant="warning" />;
         }
+        if (row.kind === 'extra') {
+          return <StatusBadge status="Added to order" variant="info" />;
+        }
         if (substitutedLineIds.has(row.line.id)) {
-          return <StatusBadge status="Alternative sent" variant="warning" />;
+          return <StatusBadge status="Substitution sent" variant="warning" />;
         }
         const v = getVarianceLabel(row.line.expectedQty, receivedMap[row.line.id] ?? row.line.expectedQty);
         if (!v) return <StatusBadge status="OK" variant="success" />;
@@ -247,6 +302,9 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
       render: (row) => {
         if (row.kind === 'alt') {
           return <button onClick={() => removeAlternative(row.alt.id)} style={removeBtnStyle}>Remove</button>;
+        }
+        if (row.kind === 'extra') {
+          return <button onClick={() => removeExtra(row.extra.id)} style={removeBtnStyle}>Remove</button>;
         }
         if (substitutedLineIds.has(row.line.id)) return null;
         return (
@@ -273,8 +331,52 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
         <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>Receive Items</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={onAddPO} style={secondaryBtnStyle}>Add PO</button>
-          <button onClick={() => setAltModal({ open: true })} style={secondaryBtnStyle}>Add new item</button>
+          {/* Less-frequent "add something to this delivery" actions live in
+              one menu; the scan flow keeps its own button as the hero path. */}
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setAddMenuOpen(o => !o)} style={secondaryBtnStyle}>
+              Add{' '}
+              <span aria-hidden style={{ fontSize: '10px', verticalAlign: '1px' }}>▾</span>
+            </button>
+            {addMenuOpen && (
+              <>
+                <div
+                  style={{ position: 'fixed', inset: 0, zIndex: 50 }}
+                  onClick={() => setAddMenuOpen(false)}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    right: 0,
+                    zIndex: 51,
+                    width: '280px',
+                    background: '#fff',
+                    borderRadius: '10px',
+                    border: '1px solid var(--color-border-subtle)',
+                    boxShadow: '0 8px 28px rgba(0,0,0,0.12)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <AddMenuItem
+                    title="Purchase order"
+                    desc="Receive another PO in this delivery."
+                    onClick={() => { setAddMenuOpen(false); onAddPO(); }}
+                  />
+                  <AddMenuItem
+                    title="Catalogue item"
+                    desc="Already in your catalogue — added to the order after the PO was sent."
+                    onClick={() => { setAddMenuOpen(false); setCatalogueModalOpen(true); }}
+                  />
+                  <AddMenuItem
+                    title="New product"
+                    desc="Not in your catalogue yet — log it and link it to a master product."
+                    onClick={() => { setAddMenuOpen(false); setAltModal({ open: true }); }}
+                  />
+                </div>
+              </>
+            )}
+          </div>
           <button onClick={() => setScanCapture(true)} style={secondaryBtnStyle}>Add GRN</button>
         </div>
       </div>
@@ -320,7 +422,11 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
         <ResponsiveDataList
           columns={columns}
           data={tableData}
-          getRowKey={(row) => row.kind === 'po' ? row.line.id : row.alt.id}
+          getRowKey={(row) => {
+            if (row.kind === 'po') return row.line.id;
+            if (row.kind === 'extra') return row.extra.id;
+            return row.alt.id;
+          }}
           emptyText="No line items"
         />
       </div>
@@ -370,6 +476,13 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
                     <option value="" disabled>Select resolution…</option>
                     {RESOLUTION_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                   </select>
+                  {resolutionMap[line.id] === 'Coming in another delivery' && (
+                    <div style={{ width: '100%', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                      The remaining {line.expectedQty - (receivedMap[line.id] ?? line.expectedQty)} stays
+                      on {poForLine(line.id).poNumber} — it&rsquo;ll be waiting in Awaiting Delivery to
+                      receive when the rest arrives.
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -580,6 +693,13 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
           onClose={() => setLineActionLine(null)}
         />
       )}
+      {catalogueModalOpen && (
+        <AddCatalogueItemModal
+          supplierName={pos[0]?.supplier ?? ''}
+          onAdd={addExtra}
+          onClose={() => setCatalogueModalOpen(false)}
+        />
+      )}
       {altModal?.open && (
         <AddAlternativeProductModal
           originLine={altModal.line}
@@ -593,6 +713,33 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
         />
       )}
     </div>
+  );
+}
+
+function AddMenuItem({ title, desc, onClick }: { title: string; desc: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'block',
+        width: '100%',
+        padding: '11px 14px',
+        border: 'none',
+        borderBottom: '1px solid var(--color-border-subtle)',
+        background: '#fff',
+        cursor: 'pointer',
+        textAlign: 'left',
+        fontFamily: 'var(--font-primary)',
+      }}
+    >
+      <span style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+        {title}
+      </span>
+      <span style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '2px', lineHeight: 1.4 }}>
+        {desc}
+      </span>
+    </button>
   );
 }
 
@@ -629,11 +776,6 @@ const expectedPillStyle: React.CSSProperties = {
   fontSize: '14px',
   fontWeight: 700,
   color: 'var(--color-text-primary)',
-};
-
-const zeroPillStyle: React.CSSProperties = {
-  ...expectedPillStyle,
-  color: 'var(--color-text-muted)',
 };
 
 const removeBtnStyle: React.CSSProperties = {

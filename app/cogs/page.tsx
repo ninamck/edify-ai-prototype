@@ -13,39 +13,20 @@ import SingleSiteCogs from '@/components/Cogs/SingleSiteCogs';
 import CogsQuinnPanel from '@/components/Cogs/CogsQuinnPanel';
 import CogsTopVariancesBoard from '@/components/Cogs/CogsTopVariancesBoard';
 import CogsVarianceDetailPanel from '@/components/Cogs/CogsVarianceDetailPanel';
+import DailyFlashReport from '@/components/Cogs/DailyFlashReport';
+import ConsolidatedCogs from '@/components/Cogs/ConsolidatedCogs';
+import LineLevelCogs from '@/components/Cogs/LineLevelCogs';
 import { COGS_PERIOD } from '@/components/Cogs/fixtures';
 
 type Tab = 'flash' | 'consolidated' | 'single' | 'variance' | 'line';
 
-const TABS: { id: Tab; label: string; ready?: boolean }[] = [
+const TABS: { id: Tab; label: string }[] = [
   { id: 'flash', label: 'Daily Flash Report' },
   { id: 'consolidated', label: 'Consolidated COGs' },
-  { id: 'single', label: 'Single Site COGs', ready: true },
-  { id: 'variance', label: 'COGs Variance', ready: true },
+  { id: 'single', label: 'Single Site COGs' },
+  { id: 'variance', label: 'COGs Variance' },
   { id: 'line', label: 'Line Level COGs' },
 ];
-
-function PlaceholderTab({ label }: { label: string }) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        padding: '64px 24px',
-        borderRadius: 'var(--radius-card)',
-        border: '1px dashed var(--color-border)',
-        background: '#fff',
-        textAlign: 'center',
-      }}
-    >
-      <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-text-primary)' }}>{label}</span>
-      <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Coming soon</span>
-    </div>
-  );
-}
 
 function DateChip({ label, value }: { label: string; value: string }) {
   return (
@@ -200,9 +181,9 @@ export default function CogsPage() {
         )}
 
         {tab === 'single' && <SingleSiteCogs />}
-        {tab !== 'single' && tab !== 'variance' && (
-          <PlaceholderTab label={TABS.find((t) => t.id === tab)?.label ?? ''} />
-        )}
+        {tab === 'flash' && <DailyFlashReport />}
+        {tab === 'consolidated' && <ConsolidatedCogs />}
+        {tab === 'line' && <LineLevelCogs />}
       </div>
 
       <CogsVarianceDetailPanel rowId={detailRowId} onClose={() => setDetailRowId(null)} />

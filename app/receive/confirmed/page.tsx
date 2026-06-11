@@ -13,6 +13,8 @@ function ConfirmedContent() {
   const variances = parseInt(searchParams.get('variances') ?? '0', 10);
   const altCount = parseInt(searchParams.get('alts') ?? '0', 10);
   const masterId = searchParams.get('master') ?? undefined;
+  const backOrderCount = parseInt(searchParams.get('backorders') ?? '0', 10);
+  const openPoNumbers = (searchParams.get('openpos') ?? '').split(',').filter(Boolean);
 
   const grnNumber = searchParams.get('grn') ?? `GRN-${1245 + Math.floor(Math.random() * 10)}`;
 
@@ -24,6 +26,8 @@ function ConfirmedContent() {
       varianceCount={variances}
       altCount={altCount}
       masterId={masterId}
+      backOrderCount={backOrderCount}
+      openPoNumbers={openPoNumbers}
       receivedBy="Ed Barry"
       onBackToDeliveries={() => router.push('/receive')}
       onViewMaster={masterId ? () => router.push(`/suppliers/master-products/${masterId}`) : undefined}
