@@ -345,8 +345,8 @@ export default function DailyFlashReport() {
                   tickFormatter={(v: number) => `£${(v / 1000).toFixed(v >= 1000 ? 0 : 1)}k`}
                 />
                 <Tooltip
-                  formatter={(value: number, name: string) => [
-                    gbp(value, { decimals: 0 }),
+                  formatter={(value, name) => [
+                    gbp(Number(value ?? 0), { decimals: 0 }),
                     name === 'labour' ? 'Labour Cost' : 'Net Sales',
                   ]}
                   contentStyle={{ fontSize: 12, fontFamily: 'var(--font-primary)', borderRadius: 8 }}
