@@ -162,7 +162,14 @@ export default function Sidebar() {
             icon={Home}
             active={pathname === homeHref}
             compact={compact}
-            onClick={() => router.push(homeHref)}
+            onClick={() => {
+              router.push(homeHref);
+              // Already home with a chat open (incl. the split
+              // workspace view)? Tapping Home should land the user
+              // back on the calm command centre — the Feed listens
+              // for this and minimises the active chat.
+              window.dispatchEvent(new Event('edify:minimise-chat'));
+            }}
           />
         </ul>
       </div>

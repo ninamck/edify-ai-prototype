@@ -33,13 +33,14 @@ export default function FranchiseOverviewPage() {
   const {
     group,
     franchises,
-    setViewMode,
   } = useFranchise();
   const { setActiveSiteId } = useActiveSite();
 
+  // Opening a store sets the active site and lands on its dashboard, but
+  // stays in the franchise "group view" — so the Franchise group nav item
+  // persists until the admin explicitly switches back via the View toggle.
   function enterStore(activeSiteId: string) {
     setActiveSiteId(activeSiteId);
-    setViewMode('store');
     router.push('/');
   }
 

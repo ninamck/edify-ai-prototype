@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import {
   TOP_NAV_BAR_PADDING,
   TOP_NAV_PILL_ACTIVE,
@@ -10,6 +10,7 @@ import {
   TOP_NAV_PILL_IDLE_TRANSPARENT,
 } from '@/components/Production/topNavStyles';
 import SingleSiteCogs from '@/components/Cogs/SingleSiteCogs';
+import CogsVarianceTable from '@/components/Cogs/CogsVarianceTable';
 import CogsQuinnPanel from '@/components/Cogs/CogsQuinnPanel';
 import CogsTopVariancesBoard from '@/components/Cogs/CogsTopVariancesBoard';
 import CogsVarianceDetailPanel from '@/components/Cogs/CogsVarianceDetailPanel';
@@ -58,6 +59,7 @@ export default function CogsPage() {
   const [quinnOpen, setQuinnOpen] = useState(false);
   const [highlightRowIds, setHighlightRowIds] = useState<string[]>([]);
   const [detailRowId, setDetailRowId] = useState<string | null>(null);
+  const [tableOpen, setTableOpen] = useState(false);
   const highlightTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -173,11 +175,58 @@ export default function CogsPage() {
         }}
       >
         {tab === 'variance' && (
-          <CogsTopVariancesBoard
-            onHighlightRows={highlightRows}
-            onOpenDetail={setDetailRowId}
-            onAskEdify={() => setQuinnOpen(true)}
-          />
+          <>
+            <CogsTopVariancesBoard
+              onHighlightRows={highlightRows}
+              onOpenDetail={setDetailRowId}
+              onAskEdify={() => setQuinnOpen(true)}
+            />
+
+            {/* Full product table, tucked behind a dropdown */}
+            <div
+              style={{
+                borderRadius: 'var(--radius-card)',
+                border: '1px solid var(--color-border-subtle)',
+                background: '#fff',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setTableOpen((v) => !v)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '12px 16px',
+                  border: 'none',
+                  borderBottom: tableOpen ? '1px solid var(--color-border-subtle)' : 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  fontFamily: 'var(--font-primary)',
+                }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                  Full variance table
+                </span>
+                <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                  every product line for the period
+                </span>
+                <span style={{ marginLeft: 'auto', display: 'inline-flex', color: 'var(--color-text-muted)' }}>
+                  {tableOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                </span>
+              </button>
+              {tableOpen && (
+                <div style={{ padding: 16 }}>
+                  <CogsVarianceTable
+                    highlightRowIds={highlightRowIds}
+                    onOpenDetail={setDetailRowId}
+                  />
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {tab === 'single' && <SingleSiteCogs />}

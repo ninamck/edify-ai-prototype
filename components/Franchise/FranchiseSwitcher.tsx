@@ -25,7 +25,7 @@ function groupInitials(name: string): string {
 
 export default function FranchiseSwitcher({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
-  const { group, franchises, setViewMode } = useFranchise();
+  const { group, franchises } = useFranchise();
   const { setActiveSiteId } = useActiveSite();
 
   const [open, setOpen] = useState(false);
@@ -60,9 +60,10 @@ export default function FranchiseSwitcher({ compact = false }: { compact?: boole
     setMenuPos({ left: r.left, top: r.bottom + 6, width: Math.max(r.width, 320) });
   }, [open]);
 
+  // Stay in group view when opening a store — only the View toggle in Demo
+  // controls switches back, so the Franchise group context persists.
   function enterStore(activeSiteId: string) {
     setActiveSiteId(activeSiteId);
-    setViewMode('store');
     setOpen(false);
     router.push('/');
   }

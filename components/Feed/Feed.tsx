@@ -370,6 +370,54 @@ type ChatMsg = {
   };
 };
 
+/** Message types whose interactive card renders in the right-hand
+ *  workspace panel (Claude-artifacts style) when the chat surface is
+ *  wide enough. Conversational bubbles, thinking placeholders,
+ *  ambiguity pickers and receipts stay in the chat stream — only the
+ *  "work surfaces" (wizard steps, import cards, charts, tables)
+ *  migrate to the side. */
+const WORKSPACE_MSG_TYPES = new Set<string>([
+  'new-supplier-import',
+  'product-sheet-import',
+  'pos-match-suggestions',
+  'recipe-card',
+  'cogs-target',
+  'margin-explorer',
+  'integrity-check',
+  'packaging-picker',
+  'allergen-check',
+  'site-selection',
+  'prod-prep',
+  'prod-shelf',
+  'prod-batch',
+  'prod-category',
+  'prod-summary',
+  'analytics-chart',
+  'table-result',
+  'cmd-waste-card',
+  'cmd-stock-card',
+  'cmd-recipe-pick-recipe',
+  'cmd-recipe-pick-action',
+  'cmd-recipe-pick-ingredient',
+  'cmd-recipe-new-ingredient',
+  'cmd-recipe-summary',
+  'cmd-prod-card',
+  'cmd-menu-card',
+  'cmd-supplier-card',
+  'cmd-product-purpose',
+  'cmd-product-new-info',
+  'cmd-product-new-supplier',
+  'cmd-product-pick-replaced',
+  'cmd-product-pack-details',
+  'cmd-product-sheet-details',
+  'cmd-product-pick-recipes',
+  'cmd-product-swap-summary',
+]);
+
+function isWorkspaceMsg(m: ChatMsg): boolean {
+  return !!m.msgType && WORKSPACE_MSG_TYPES.has(m.msgType);
+}
+
 /** Working-state row for the in-Feed wizard. Mirrors
  *  `TemplateIngredient` but allows qty to be edited as a string
  *  (so the editor doesn't clamp the user's keystrokes). */
@@ -5303,6 +5351,20 @@ export default function Feed({
     onChatStateChange?.(chatStarted && !chatMinimized);
   }, [chatStarted, chatMinimized, onChatStateChange]);
 
+  // Sidebar "Home" tap while a chat is open (incl. the split
+  // workspace view) → minimise back to the command centre. The
+  // sidebar broadcasts a window event since it has no direct line
+  // to this component.
+  useEffect(() => {
+    const onMinimise = () => {
+      // No-op when there's no open chat — keeps the untouched start
+      // screen from picking up the minimised-layout styles.
+      if (chatStarted) setChatMinimized(true);
+    };
+    window.addEventListener('edify:minimise-chat', onMinimise);
+    return () => window.removeEventListener('edify:minimise-chat', onMinimise);
+  }, [chatStarted]);
+
   const userMessageCount = messages.filter((m) => m.role === 'user').length;
   useEffect(() => {
     onUserMessageCountChange?.(userMessageCount);
@@ -6778,422 +6840,62 @@ export default function Feed({
     }
   }
 
-  const analyticsActive = analyticsStep > 0 && analyticsStep < 3;
-  const composerDisabled = (recipeFlow > 0 && recipeFlow < 19) || (productionFlow > 0 && productionFlow < 10) || analyticsActive;
-  const composerPlaceholder = composerDisabled
-    ? (productionFlow > 0
-        ? 'Edify is setting up your production plan\u2026'
-        : analyticsActive
-          ? 'Edify is analysing your data\u2026'
-          : 'Edify is working on your recipe\u2026')
-    : PLACEHOLDER;
-  const composerMinH = chatStarted ? 40 : 72;
+  // ── Workspace split view ─────────────────────────────────────────
+  // Claude-artifacts style: when the chat surface is wide enough and
+  // the conversation has produced interactive cards, the chat stream
+  // stays on the left and the cards stack in a workspace panel on the
+  // right. Width is measured on the root element so the split only
+  // engages on the expanded/full-page chat — the narrow aside keeps
+  // cards inline.
+  const feedRootRef = useRef<HTMLDivElement | null>(null);
+  const [feedWidth, setFeedWidth] = useState(0);
+  useEffect(() => {
+    const el = feedRootRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) setFeedWidth(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
-  const showHeader = !noHeader && (quinnExpanded || chatStarted) && !chatMinimized;
+  // Step-gated cards render nothing once their wizard step has
+  // passed — mirror those conditions here so dead cards don't leave
+  // phantom slots in the panel (or keep it open with nothing in it).
+  const isWorkspaceCardLive = (m: ChatMsg): boolean => {
+    switch (m.msgType) {
+      case 'packaging-picker': return recipeFlow === 8;
+      case 'allergen-check': return recipeFlow === 10;
+      case 'site-selection': return recipeFlow === 12;
+      case 'prod-prep': return productionFlow === 2;
+      case 'prod-shelf': return productionFlow === 4;
+      case 'prod-batch': return productionFlow === 6;
+      case 'prod-category': return productionFlow === 8;
+      case 'prod-summary': return productionFlow === 10;
+      default: return true;
+    }
+  };
+  const workspaceMessages = messages.filter(
+    (m) => isWorkspaceMsg(m) && isWorkspaceCardLive(m),
+  );
+  const splitView =
+    chatStarted && !chatMinimized && workspaceMessages.length > 0 && feedWidth >= 960;
 
-  return (
-    <div style={{
-      flex: 1,
-      display: 'flex',
-      flexDirection: 'column',
-      minHeight: 0,
-      minWidth: 0,
-      height: '100%',
-      width: '100%',
-      maxWidth: noHeader ? '100%' : (chatStarted ? '100%' : 'min(680px, 100%)'),
-      margin: '0 auto',
-      background: noHeader ? '#fff' : (quinnExpanded || chatStarted ? '#fff' : 'transparent'),
-      borderRadius: noHeader ? 0 : ((quinnExpanded || chatStarted) ? 0 : 'var(--radius-nav)'),
-      overflow: 'hidden',
-      fontFamily: 'var(--font-primary)',
-      boxShadow: (quinnExpanded || chatStarted) ? 'none' : undefined,
-      position: 'relative',
-    }}>
+  // Keep the workspace panel pinned to the newest card.
+  const workspaceEndRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!splitView) return;
+    workspaceEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [splitView, workspaceMessages.length]);
 
-      {showHeader && (
-        <div style={{
-          padding: '12px 16px',
-          borderBottom: '1px solid var(--color-border-subtle)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          flexShrink: 0,
-          background: quinnExpanded ? 'var(--color-bg-nav)' : 'transparent',
-        }}>
-          <QuinnAvatar mode="sparkle" />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-              Ask Edify
-            </div>
-            {quinnExpanded && !chatStarted && (
-              <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
-                Full screen · chat
-              </div>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => setHistoryDrawerOpen(true)}
-            title="Open history"
-            aria-label="Open history"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '36px',
-              height: '36px',
-              borderRadius: '10px',
-              border: '1px solid var(--color-border-subtle)',
-              background: '#fff',
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
-          >
-            <Clock size={16} color="var(--color-text-secondary)" strokeWidth={2} />
-          </button>
-          {chatStarted && (
-            <button
-              type="button"
-              onClick={() => setChatMinimized(true)}
-              title="Minimise chat"
-              aria-label="Minimise chat"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '36px',
-                height: '36px',
-                borderRadius: '10px',
-                border: '1px solid var(--color-border-subtle)',
-                background: '#fff',
-                cursor: 'pointer',
-                flexShrink: 0,
-              }}
-            >
-              <ChevronDown size={17} color="var(--color-text-secondary)" strokeWidth={2} />
-            </button>
-          )}
-          {onToggleQuinnExpand && (
-            <button
-              type="button"
-              onClick={onToggleQuinnExpand}
-              title={quinnExpanded ? 'Exit full screen' : 'Expand Edify to full screen'}
-              aria-label={quinnExpanded ? 'Exit full screen' : 'Expand Edify to full screen'}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '36px',
-                height: '36px',
-                borderRadius: '10px',
-                border: '1px solid var(--color-border-subtle)',
-                background: '#fff',
-                cursor: 'pointer',
-                flexShrink: 0,
-              }}
-            >
-              {quinnExpanded
-                ? <Minimize2 size={17} color="var(--color-text-secondary)" strokeWidth={2} />
-                : <Maximize2 size={17} color="var(--color-text-secondary)" strokeWidth={2} />}
-            </button>
-          )}
-        </div>
-      )}
-
-      {!showHeader && onToggleQuinnExpand && (
-        <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 2 }}>
-          <button
-            type="button"
-            onClick={onToggleQuinnExpand}
-            title="Expand Edify to full screen"
-            aria-label="Expand Edify to full screen"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '36px',
-              height: '36px',
-              borderRadius: '10px',
-              border: '1px solid var(--color-border-subtle)',
-              background: '#fff',
-              cursor: 'pointer',
-              boxShadow: '0 2px 6px rgba(0, 28, 53,0.08)',
-            }}
-          >
-            <Maximize2 size={17} color="var(--color-text-secondary)" strokeWidth={2} />
-          </button>
-        </div>
-      )}
-
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        minHeight: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative',
-      }}>
-        {(!chatStarted || chatMinimized) ? (
-          <div style={{
-            flex: chatMinimized ? 0 : 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: chatMinimized ? 'flex-start' : 'center',
-            // Extra top padding so the logo sits clear of the
-            // "On the floor" tasks strip above. The old 20/28px
-            // values made the logo crowd the floor-action panel —
-            // a comfortable 48px gives the brand mark room to
-            // breathe on both the start screen and the minimised
-            // command-centre view.
-            padding: chatMinimized ? '48px 16px 0' : '48px 16px 24px',
-            boxSizing: 'border-box',
-            background: 'transparent',
-          }}>
-            <div style={{ width: '100%', maxWidth: '560px' }}>
-              <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-                <img
-                  src="/edify-logo.png"
-                  alt="Edify"
-                  style={{
-                    display: 'inline-block',
-                    height: '72px',
-                    width: 'auto',
-                    verticalAlign: 'middle',
-                  }}
-                />
-                <div style={{
-                  marginTop: '20px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  flexWrap: 'wrap',
-                }}>
-                  <EdifyMark size={22} color="var(--color-accent-quinn)" strokeWidth={2} style={{ flexShrink: 0 }} />
-                  <span style={{
-                    fontFamily: 'Georgia, "Times New Roman", serif',
-                    fontSize: 'clamp(22px, 4vw, 28px)',
-                    fontWeight: 400,
-                    color: 'var(--color-text-primary)',
-                    lineHeight: 1.25,
-                    margin: 0,
-                  }}
-                  >
-                    {greeting}
-                  </span>
-                </div>
-              </div>
-
-              <div ref={initialComposerWrapperRef} style={{ position: 'relative' }}>
-                <SlashMenu
-                  value={input}
-                  visible={input.trimStart().startsWith('/')}
-                  anchorEl={initialComposerWrapperRef.current}
-                  onPick={(slash) => setInput(slash)}
-                  onClose={() => setInput('')}
-                />
-                <ClaudeComposer
-                  value={input}
-                  onChange={setInput}
-                  onSend={() => sendMessage()}
-                  onAcceptSuggestion={(full) => sendMessage(full)}
-                  disabled={false}
-                  placeholder={PLACEHOLDER}
-                  minHeight={72}
-                  onQuickAction={handleQuickAction}
-                  enableNote={enableNoteCapture}
-                  attachedFileName={attachedFileName}
-                  onAttachFile={setAttachedFileName}
-                  onClearAttachment={() => setAttachedFileName(null)}
-                />
-              </div>
-
-              {/* The "Current chat | Resume →" banner used to live
-                  here. Removed: it duplicates the top entry in the
-                  Recent chats column (since opening a chat now bumps
-                  its timestamp), and the user didn't want a second
-                  affordance pointing at the active conversation. */}
-
-              {/* Command-centre two-column block — Notion-style.
-                  Left column = what the operator did recently
-                  (persisted across sessions); right column =
-                  suggested next moves. Both columns share the same
-                  bare-icon row treatment so the eye reads them as
-                  one quiet surface instead of competing widgets.
-                  The "View all" trigger on the left opens the side
-                  drawer; clicking a left-side row replays the
-                  saved conversation. */}
-              <div style={{
-                marginTop: '28px',
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '32px',
-                alignItems: 'start',
-              }}>
-                {/* Wrap the left list so we can pin `min-width: 0`
-                    on the grid item itself. Grid items default to
-                    `min-width: auto`, which lets long titles push
-                    the column past its `1fr` share — that's what
-                    was making the two columns unequal. With both
-                    cells at min-width 0, 1fr 1fr actually wins. */}
-                <div style={{ minWidth: 0 }}>
-                  {/* defaultExpanded stays false here regardless of
-                      chatMinimized — the user wants the same calm
-                      compact list in both states. The drawer is the
-                      only place that opts into the expanded view
-                      (filters + pinned section). */}
-                  <TaskHistoryList
-                    defaultExpanded={false}
-                    onExpand={() => setHistoryDrawerOpen(true)}
-                    onOpenTask={openTaskInChat}
-                    sectionLabel="Recent chats"
-                  />
-                </div>
-
-                <div style={{ minWidth: 0 }}>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 10,
-                  }}>
-                    <span style={{
-                      fontSize: '12px',
-                      fontWeight: 700,
-                      color: 'var(--color-text-secondary)',
-                      letterSpacing: '0.04em',
-                      textTransform: 'uppercase',
-                    }}>
-                      Suggested
-                    </span>
-                  </div>
-                  <div style={{
-                    marginTop: '8px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '2px',
-                  }}>
-                    {PROMPT_CHIPS.map((chip, i) => {
-                      const Icon = chip.icon;
-                      return (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() => {
-                            if (chip.action === 'recipe') {
-                              startRecipeFlow(chip.text);
-                            } else if (chip.action === 'integrity') {
-                              startIntegrityCheck();
-                            } else if (chip.commandId) {
-                              handleQuickAction(chip.commandId);
-                            } else {
-                              sendMessage(chip.text);
-                            }
-                          }}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            padding: '6px 8px',
-                            borderRadius: '6px',
-                            border: 'none',
-                            background: 'transparent',
-                            width: '100%',
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                            fontFamily: 'var(--font-primary)',
-                            transition: 'background 0.12s ease',
-                          }}
-                          onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLElement).style.background = 'rgba(0,28,53,0.04)';
-                          }}
-                          onMouseLeave={(e) => {
-                            (e.currentTarget as HTMLElement).style.background = 'transparent';
-                          }}
-                        >
-                          <Icon
-                            size={15}
-                            strokeWidth={1.8}
-                            color="var(--color-text-muted)"
-                            style={{ flexShrink: 0 }}
-                          />
-                          <span style={{
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            color: 'var(--color-text-primary)',
-                          }}>
-                            {chip.label}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            <div style={{
-              flex: 1,
-              overflowY: 'auto',
-              display: 'flex',
-              justifyContent: 'center',
-            }}>
-              <div style={{
-                width: '100%',
-                maxWidth: '680px',
-                padding: '16px 24px 16px',
-              }}>
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key="chat"
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    {(() => {
-                      // Index of the most recent Quinn response that isn't the
-                      // thinking placeholder — only that bubble gets the
-                      // signature footer.
-                      let lastQuinnSignatureId: string | null = null;
-                      for (let i = messages.length - 1; i >= 0; i--) {
-                        const cand = messages[i];
-                        if (
-                          cand.role === 'quinn' &&
-                          cand.msgType !== 'analytics-thinking' &&
-                          cand.msgType !== 'cmd-thinking'
-                        ) {
-                          lastQuinnSignatureId = cand.id;
-                          break;
-                        }
-                      }
-                      return messages.map((m) => (
-                      <motion.div
-                        key={m.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.28, ease: [0.25, 0.1, 0.25, 1] }}
-                      >
-                      <ChatBubble
-                        key={m.id}
-                        msg={m}
-                        showSignature={m.id === lastQuinnSignatureId}
-                        feedback={evalFeedback[m.id]}
-                        commentOpen={evalCommentOpenFor === m.id}
-                        onRate={(rating) => handleEvalRate(m.id, rating)}
-                        onRetry={() => handleEvalRetry(m.id)}
-                        onToggleComment={() => handleEvalToggleComment(m.id)}
-                        onCommentChange={(text) => handleEvalCommentChange(m.id, text)}
-                      >
-                        {m.msgType === 'analytics-thinking' && (
-                          <QuinnThinkingContent />
-                        )}
-                        {m.msgType === 'cmd-thinking' && (
-                          <QuinnThinkingContent variant="step" />
-                        )}
-                        {m.msgType === 'new-supplier-import' && (() => {
+  /** Renders the interactive card for a message (or nothing if the
+   *  message isn't a card / its wizard step has passed). Used by both
+   *  the inline chat stream (narrow view) and the workspace panel
+   *  (split view) so the card logic lives in exactly one place. */
+  function renderWorkspaceCard(m: ChatMsg): ReactNode {
+    return (
+      <>
+        {m.msgType === 'new-supplier-import' && (() => {
                           let parsed: { data: ExtractedSupplierSheet } | null = null;
                           try {
                             parsed = m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : null;
@@ -7895,6 +7597,438 @@ export default function Feed({
                             />
                           );
                         })()}
+      </>
+    );
+  }
+
+  const analyticsActive = analyticsStep > 0 && analyticsStep < 3;
+  const composerDisabled = (recipeFlow > 0 && recipeFlow < 19) || (productionFlow > 0 && productionFlow < 10) || analyticsActive;
+  const composerPlaceholder = composerDisabled
+    ? (productionFlow > 0
+        ? 'Edify is setting up your production plan\u2026'
+        : analyticsActive
+          ? 'Edify is analysing your data\u2026'
+          : 'Edify is working on your recipe\u2026')
+    : PLACEHOLDER;
+  const composerMinH = chatStarted ? 40 : 72;
+
+  const showHeader = !noHeader && (quinnExpanded || chatStarted) && !chatMinimized;
+
+  return (
+    <div ref={feedRootRef} style={{
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: 0,
+      minWidth: 0,
+      height: '100%',
+      width: '100%',
+      maxWidth: noHeader ? '100%' : (chatStarted ? '100%' : 'min(680px, 100%)'),
+      margin: '0 auto',
+      background: noHeader ? '#fff' : (quinnExpanded || chatStarted ? '#fff' : 'transparent'),
+      borderRadius: noHeader ? 0 : ((quinnExpanded || chatStarted) ? 0 : 'var(--radius-nav)'),
+      overflow: 'hidden',
+      fontFamily: 'var(--font-primary)',
+      boxShadow: (quinnExpanded || chatStarted) ? 'none' : undefined,
+      position: 'relative',
+    }}>
+
+      {showHeader && (
+        <div style={{
+          padding: '12px 16px',
+          borderBottom: '1px solid var(--color-border-subtle)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          flexShrink: 0,
+          background: quinnExpanded ? 'var(--color-bg-nav)' : 'transparent',
+        }}>
+          <QuinnAvatar mode="sparkle" />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+              Ask Edify
+            </div>
+            {quinnExpanded && !chatStarted && (
+              <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
+                Full screen · chat
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setHistoryDrawerOpen(true)}
+            title="Open history"
+            aria-label="Open history"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              border: '1px solid var(--color-border-subtle)',
+              background: '#fff',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            <Clock size={16} color="var(--color-text-secondary)" strokeWidth={2} />
+          </button>
+          {chatStarted && (
+            <button
+              type="button"
+              onClick={() => setChatMinimized(true)}
+              title="Minimise chat"
+              aria-label="Minimise chat"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '36px',
+                height: '36px',
+                borderRadius: '10px',
+                border: '1px solid var(--color-border-subtle)',
+                background: '#fff',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              <ChevronDown size={17} color="var(--color-text-secondary)" strokeWidth={2} />
+            </button>
+          )}
+          {onToggleQuinnExpand && (
+            <button
+              type="button"
+              onClick={onToggleQuinnExpand}
+              title={quinnExpanded ? 'Exit full screen' : 'Expand Edify to full screen'}
+              aria-label={quinnExpanded ? 'Exit full screen' : 'Expand Edify to full screen'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '36px',
+                height: '36px',
+                borderRadius: '10px',
+                border: '1px solid var(--color-border-subtle)',
+                background: '#fff',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              {quinnExpanded
+                ? <Minimize2 size={17} color="var(--color-text-secondary)" strokeWidth={2} />
+                : <Maximize2 size={17} color="var(--color-text-secondary)" strokeWidth={2} />}
+            </button>
+          )}
+        </div>
+      )}
+
+      {!showHeader && onToggleQuinnExpand && (
+        <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 2 }}>
+          <button
+            type="button"
+            onClick={onToggleQuinnExpand}
+            title="Expand Edify to full screen"
+            aria-label="Expand Edify to full screen"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              border: '1px solid var(--color-border-subtle)',
+              background: '#fff',
+              cursor: 'pointer',
+              boxShadow: '0 2px 6px rgba(0, 28, 53,0.08)',
+            }}
+          >
+            <Maximize2 size={17} color="var(--color-text-secondary)" strokeWidth={2} />
+          </button>
+        </div>
+      )}
+
+      <div style={{
+        flex: 1,
+        overflowY: 'auto',
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative',
+      }}>
+        {(!chatStarted || chatMinimized) ? (
+          <div style={{
+            flex: chatMinimized ? 0 : 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: chatMinimized ? 'flex-start' : 'center',
+            // Extra top padding so the logo sits clear of the
+            // "On the floor" tasks strip above. The old 20/28px
+            // values made the logo crowd the floor-action panel —
+            // a comfortable 48px gives the brand mark room to
+            // breathe on both the start screen and the minimised
+            // command-centre view.
+            padding: chatMinimized ? '48px 16px 0' : '48px 16px 24px',
+            boxSizing: 'border-box',
+            background: 'transparent',
+          }}>
+            <div style={{ width: '100%', maxWidth: '560px' }}>
+              <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+                <img
+                  src="/edify-logo.png"
+                  alt="Edify"
+                  style={{
+                    display: 'inline-block',
+                    height: '72px',
+                    width: 'auto',
+                    verticalAlign: 'middle',
+                  }}
+                />
+                <div style={{
+                  marginTop: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  flexWrap: 'wrap',
+                }}>
+                  <EdifyMark size={22} color="var(--color-accent-quinn)" strokeWidth={2} style={{ flexShrink: 0 }} />
+                  <span style={{
+                    fontFamily: 'Georgia, "Times New Roman", serif',
+                    fontSize: 'clamp(22px, 4vw, 28px)',
+                    fontWeight: 400,
+                    color: 'var(--color-text-primary)',
+                    lineHeight: 1.25,
+                    margin: 0,
+                  }}
+                  >
+                    {greeting}
+                  </span>
+                </div>
+              </div>
+
+              <div ref={initialComposerWrapperRef} style={{ position: 'relative' }}>
+                <SlashMenu
+                  value={input}
+                  visible={input.trimStart().startsWith('/')}
+                  anchorEl={initialComposerWrapperRef.current}
+                  onPick={(slash) => setInput(slash)}
+                  onClose={() => setInput('')}
+                />
+                <ClaudeComposer
+                  value={input}
+                  onChange={setInput}
+                  onSend={() => sendMessage()}
+                  onAcceptSuggestion={(full) => sendMessage(full)}
+                  disabled={false}
+                  placeholder={PLACEHOLDER}
+                  minHeight={72}
+                  onQuickAction={handleQuickAction}
+                  enableNote={enableNoteCapture}
+                  attachedFileName={attachedFileName}
+                  onAttachFile={setAttachedFileName}
+                  onClearAttachment={() => setAttachedFileName(null)}
+                />
+              </div>
+
+              {/* The "Current chat | Resume →" banner used to live
+                  here. Removed: it duplicates the top entry in the
+                  Recent chats column (since opening a chat now bumps
+                  its timestamp), and the user didn't want a second
+                  affordance pointing at the active conversation. */}
+
+              {/* Command-centre two-column block — Notion-style.
+                  Left column = what the operator did recently
+                  (persisted across sessions); right column =
+                  suggested next moves. Both columns share the same
+                  bare-icon row treatment so the eye reads them as
+                  one quiet surface instead of competing widgets.
+                  The "View all" trigger on the left opens the side
+                  drawer; clicking a left-side row replays the
+                  saved conversation. */}
+              <div style={{
+                marginTop: '28px',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '32px',
+                alignItems: 'start',
+              }}>
+                {/* Wrap the left list so we can pin `min-width: 0`
+                    on the grid item itself. Grid items default to
+                    `min-width: auto`, which lets long titles push
+                    the column past its `1fr` share — that's what
+                    was making the two columns unequal. With both
+                    cells at min-width 0, 1fr 1fr actually wins. */}
+                <div style={{ minWidth: 0 }}>
+                  {/* defaultExpanded stays false here regardless of
+                      chatMinimized — the user wants the same calm
+                      compact list in both states. The drawer is the
+                      only place that opts into the expanded view
+                      (filters + pinned section). */}
+                  <TaskHistoryList
+                    defaultExpanded={false}
+                    onExpand={() => setHistoryDrawerOpen(true)}
+                    onOpenTask={openTaskInChat}
+                    sectionLabel="Recent chats"
+                  />
+                </div>
+
+                <div style={{ minWidth: 0 }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                  }}>
+                    <span style={{
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      color: 'var(--color-text-secondary)',
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                    }}>
+                      Suggested
+                    </span>
+                  </div>
+                  <div style={{
+                    marginTop: '8px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '2px',
+                  }}>
+                    {PROMPT_CHIPS.map((chip, i) => {
+                      const Icon = chip.icon;
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            if (chip.action === 'recipe') {
+                              startRecipeFlow(chip.text);
+                            } else if (chip.action === 'integrity') {
+                              startIntegrityCheck();
+                            } else if (chip.commandId) {
+                              handleQuickAction(chip.commandId);
+                            } else {
+                              sendMessage(chip.text);
+                            }
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '6px 8px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            background: 'transparent',
+                            width: '100%',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            fontFamily: 'var(--font-primary)',
+                            transition: 'background 0.12s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLElement).style.background = 'rgba(0,28,53,0.04)';
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLElement).style.background = 'transparent';
+                          }}
+                        >
+                          <Icon
+                            size={15}
+                            strokeWidth={1.8}
+                            color="var(--color-text-muted)"
+                            style={{ flexShrink: 0 }}
+                          />
+                          <span style={{
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            color: 'var(--color-text-primary)',
+                          }}>
+                            {chip.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'row' }}>
+            {/* Left column — the conversation stream + composer. In
+                split view the interactive cards move to the workspace
+                panel on the right, Claude-artifacts style. */}
+            <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              display: 'flex',
+              justifyContent: 'center',
+            }}>
+              <div style={{
+                width: '100%',
+                maxWidth: '680px',
+                padding: '16px 24px 16px',
+              }}>
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key="chat"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {(() => {
+                      // Index of the most recent Quinn response that isn't the
+                      // thinking placeholder — only that bubble gets the
+                      // signature footer.
+                      let lastQuinnSignatureId: string | null = null;
+                      for (let i = messages.length - 1; i >= 0; i--) {
+                        const cand = messages[i];
+                        if (
+                          cand.role === 'quinn' &&
+                          cand.msgType !== 'analytics-thinking' &&
+                          cand.msgType !== 'cmd-thinking'
+                        ) {
+                          lastQuinnSignatureId = cand.id;
+                          break;
+                        }
+                      }
+                      return messages.map((m) => {
+                      // In split view the interactive card lives in
+                      // the workspace panel — a message that exists
+                      // only to host a card would render as an empty
+                      // bubble here, so skip it entirely. Messages
+                      // that carry text (the question / intro line)
+                      // still render as a normal bubble.
+                      if (splitView && isWorkspaceMsg(m) && !m.text) return null;
+                      return (
+                      <motion.div
+                        key={m.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.28, ease: [0.25, 0.1, 0.25, 1] }}
+                      >
+                      <ChatBubble
+                        key={m.id}
+                        msg={m}
+                        showSignature={m.id === lastQuinnSignatureId}
+                        feedback={evalFeedback[m.id]}
+                        commentOpen={evalCommentOpenFor === m.id}
+                        onRate={(rating) => handleEvalRate(m.id, rating)}
+                        onRetry={() => handleEvalRetry(m.id)}
+                        onToggleComment={() => handleEvalToggleComment(m.id)}
+                        onCommentChange={(text) => handleEvalCommentChange(m.id, text)}
+                      >
+                        {m.msgType === 'analytics-thinking' && (
+                          <QuinnThinkingContent />
+                        )}
+                        {m.msgType === 'cmd-thinking' && (
+                          <QuinnThinkingContent variant="step" />
+                        )}
+                        {!splitView && renderWorkspaceCard(m)}
                         {m.msgType === 'cmd-ambiguity' && m.cmdChoicesJson && m.cmdId && (
                           <AmbiguityPicker
                             prompt={m.text}
@@ -7949,7 +8083,8 @@ export default function Feed({
                         )}
                       </ChatBubble>
                       </motion.div>
-                    ));
+                      );
+                    });
                     })()}
 
                     {recipeFlow === 13 && (
@@ -8015,6 +8150,59 @@ export default function Feed({
                 />
               </div>
             </div>
+            </div>
+
+            {/* Workspace panel — the interactive cards from this chat
+                (imports, wizard steps, charts, tables) stacked on the
+                right so the conversation stays readable on the left. */}
+            {splitView && (
+              <div style={{
+                width: '52%',
+                minWidth: '420px',
+                maxWidth: '780px',
+                minHeight: 0,
+                borderLeft: '1px solid var(--color-border-subtle)',
+                // Soft warm neutral — NOT --color-bg-nav, which is the
+                // dark navy sidebar colour in this theme.
+                background: '#F7F6F3',
+                display: 'flex',
+                flexDirection: 'column',
+              }}>
+                <div style={{
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '13px 24px',
+                  borderBottom: '1px solid var(--color-border-subtle)',
+                  background: '#fff',
+                }}>
+                  <EdifyMark size={16} color="var(--color-accent-quinn)" strokeWidth={2} />
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                    Workspace
+                  </span>
+                  <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
+                    · what we&apos;re building in this chat
+                  </span>
+                </div>
+                <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 24px 32px' }}>
+                  <div style={{ maxWidth: '640px', margin: '0 auto' }}>
+                    {workspaceMessages.map((wm) => (
+                      <motion.div
+                        key={wm.id}
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.28, ease: [0.25, 0.1, 0.25, 1] }}
+                        style={{ marginBottom: '14px' }}
+                      >
+                        {renderWorkspaceCard(wm)}
+                      </motion.div>
+                    ))}
+                    <div ref={workspaceEndRef} style={{ height: '8px' }} />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
