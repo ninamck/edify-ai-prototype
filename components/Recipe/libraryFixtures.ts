@@ -440,9 +440,11 @@ export type Recipe = {
    * @deprecated Free-text ingredient list kept for back-compat with
    * the read-only drawer view + un-migrated fixtures. New writes go
    * to `ingredientsV2`. Resolver and editor read from `ingredientsV2`
-   * when present.
+   * when present. `price` is the £ line cost for this row at the
+   * stated qty (display-only; typed rows derive cost from the
+   * catalogue via components/Recipe/costing.ts instead).
    */
-  ingredients: { name: string; qty: string; supplier: string }[];
+  ingredients: { name: string; qty: string; supplier: string; price?: number }[];
   /**
    * Typed, master/product-aware ingredient rows (post-rethink). When
    * present, this is the source of truth for the resolver, costing,
@@ -549,12 +551,19 @@ export type Recipe = {
   formExtras?: RecipeFormExtras;
 };
 
+// Line prices use the same per-unit costs as the master catalogue
+// (espresso £25/kg dosed at 18g ≈ £0.45; whole milk £2.20/L).
 const coffeeIngs = (withMilkMl: number | null) => {
   const list: Recipe['ingredients'] = [
-    { name: 'Espresso blend', qty: '7g', supplier: 'Bidvest' },
+    { name: 'Espresso blend', qty: '7g', supplier: 'Bidvest', price: 0.45 },
   ];
   if (withMilkMl != null) {
-    list.push({ name: 'Whole milk', qty: `${withMilkMl}ml`, supplier: 'Fresh Earth Produce' });
+    list.push({
+      name: 'Whole milk',
+      qty: `${withMilkMl}ml`,
+      supplier: 'Fresh Earth Produce',
+      price: Math.round(withMilkMl * 0.0022 * 100) / 100,
+    });
   }
   return list;
 };
@@ -757,10 +766,10 @@ const FITZROY_RECIPES: LegacyFitzroySeed[] = [
     flag: null,
     menuItems: [{ name: 'Mocha', posLinked: true }],
     ingredients: [
-      { name: 'Espresso blend', qty: '7g', supplier: 'Bidvest' },
-      { name: 'Whole milk', qty: '180ml', supplier: 'Fresh Earth Produce' },
-      { name: 'Chocolate syrup', qty: '20ml', supplier: 'Bidvest' },
-      { name: 'Cocoa powder', qty: '2g', supplier: 'Bidvest' },
+      { name: 'Espresso blend', qty: '7g', supplier: 'Bidvest', price: 0.45 },
+      { name: 'Whole milk', qty: '180ml', supplier: 'Fresh Earth Produce', price: 0.40 },
+      { name: 'Chocolate syrup', qty: '20ml', supplier: 'Bidvest', price: 0.08 },
+      { name: 'Cocoa powder', qty: '2g', supplier: 'Bidvest', price: 0.02 },
     ],
     modifierGroups: ['Alt milks', 'Cup sizes'],
     production: { visibility: 'Bar', shelfLifeMinutes: null, prepTimeSeconds: 110 },
@@ -810,9 +819,9 @@ const FITZROY_RECIPES: LegacyFitzroySeed[] = [
     flag: null,
     menuItems: [{ name: 'Iced latte', posLinked: true }],
     ingredients: [
-      { name: 'Espresso blend', qty: '14g', supplier: 'Bidvest' },
-      { name: 'Whole milk', qty: '200ml', supplier: 'Fresh Earth Produce' },
-      { name: 'Ice', qty: '80g', supplier: 'In-house' },
+      { name: 'Espresso blend', qty: '14g', supplier: 'Bidvest', price: 0.45 },
+      { name: 'Whole milk', qty: '200ml', supplier: 'Fresh Earth Produce', price: 0.44 },
+      { name: 'Ice', qty: '80g', supplier: 'In-house', price: 0.05 },
     ],
     modifierGroups: ['Alt milks'],
     production: { visibility: 'Bar', shelfLifeMinutes: null, prepTimeSeconds: 85 },
@@ -830,8 +839,8 @@ const FITZROY_RECIPES: LegacyFitzroySeed[] = [
     flag: null,
     menuItems: [{ name: 'English breakfast', posLinked: true }],
     ingredients: [
-      { name: 'English breakfast tea', qty: '1 bag', supplier: 'Bidvest' },
-      { name: 'Hot water', qty: '250ml', supplier: 'In-house' },
+      { name: 'English breakfast tea', qty: '1 bag', supplier: 'Bidvest', price: 0.30 },
+      { name: 'Hot water', qty: '250ml', supplier: 'In-house', price: 0.02 },
     ],
     modifierGroups: ['Cup sizes'],
     production: { visibility: 'Bar', shelfLifeMinutes: null, prepTimeSeconds: 40 },
@@ -849,8 +858,8 @@ const FITZROY_RECIPES: LegacyFitzroySeed[] = [
     flag: null,
     menuItems: [{ name: 'Earl Grey', posLinked: true }],
     ingredients: [
-      { name: 'Earl Grey tea', qty: '1 bag', supplier: 'Bidvest' },
-      { name: 'Hot water', qty: '250ml', supplier: 'In-house' },
+      { name: 'Earl Grey tea', qty: '1 bag', supplier: 'Bidvest', price: 0.32 },
+      { name: 'Hot water', qty: '250ml', supplier: 'In-house', price: 0.02 },
     ],
     modifierGroups: ['Cup sizes'],
     production: { visibility: 'Bar', shelfLifeMinutes: null, prepTimeSeconds: 40 },
@@ -868,8 +877,8 @@ const FITZROY_RECIPES: LegacyFitzroySeed[] = [
     flag: null,
     menuItems: [{ name: 'Green tea', posLinked: true }],
     ingredients: [
-      { name: 'Green tea', qty: '1 bag', supplier: 'Bidvest' },
-      { name: 'Hot water', qty: '250ml', supplier: 'In-house' },
+      { name: 'Green tea', qty: '1 bag', supplier: 'Bidvest', price: 0.34 },
+      { name: 'Hot water', qty: '250ml', supplier: 'In-house', price: 0.02 },
     ],
     modifierGroups: ['Cup sizes'],
     production: { visibility: 'Bar', shelfLifeMinutes: null, prepTimeSeconds: 40 },
@@ -887,7 +896,7 @@ const FITZROY_RECIPES: LegacyFitzroySeed[] = [
     flag: null,
     menuItems: [{ name: 'Blueberry muffin', posLinked: true }],
     ingredients: [
-      { name: 'Blueberry muffin', qty: '1 unit', supplier: 'Rise Bakery' },
+      { name: 'Blueberry muffin', qty: '1 unit', supplier: 'Rise Bakery', price: 1.12 },
     ],
     modifierGroups: [],
     production: { visibility: null, shelfLifeMinutes: 60 * 12, prepTimeSeconds: null },
@@ -905,7 +914,7 @@ const FITZROY_RECIPES: LegacyFitzroySeed[] = [
     flag: null,
     menuItems: [{ name: 'Croissant', posLinked: true }],
     ingredients: [
-      { name: 'Butter croissant', qty: '1 unit', supplier: 'Rise Bakery' },
+      { name: 'Butter croissant', qty: '1 unit', supplier: 'Rise Bakery', price: 0.85 },
     ],
     modifierGroups: [],
     production: { visibility: null, shelfLifeMinutes: 60 * 8, prepTimeSeconds: null },
@@ -923,7 +932,7 @@ const FITZROY_RECIPES: LegacyFitzroySeed[] = [
     flag: null,
     menuItems: [{ name: 'Almond croissant', posLinked: true }],
     ingredients: [
-      { name: 'Almond croissant', qty: '1 unit', supplier: 'Rise Bakery' },
+      { name: 'Almond croissant', qty: '1 unit', supplier: 'Rise Bakery', price: 1.08 },
     ],
     modifierGroups: [],
     production: { visibility: null, shelfLifeMinutes: 60 * 8, prepTimeSeconds: null },
@@ -1053,7 +1062,7 @@ const FITZROY_RECIPES: LegacyFitzroySeed[] = [
     flag: null,
     menuItems: [{ name: 'House red', posLinked: true }],
     ingredients: [
-      { name: 'House red', qty: '175ml', supplier: 'Bidvest' },
+      { name: 'House red', qty: '175ml', supplier: 'Bidvest', price: 1.32 },
     ],
     modifierGroups: [],
     production: { visibility: 'Bar', shelfLifeMinutes: null, prepTimeSeconds: 30 },
@@ -1071,11 +1080,11 @@ const FITZROY_RECIPES: LegacyFitzroySeed[] = [
     flag: null,
     menuItems: [{ name: 'Avocado toast', posLinked: true }],
     ingredients: [
-      { name: 'Sourdough', qty: '2 slices', supplier: 'Rise Bakery' },
-      { name: 'Avocado', qty: '1 unit', supplier: 'Fresh Earth Produce' },
-      { name: 'Lemon', qty: '0.25 unit', supplier: 'Fresh Earth Produce' },
-      { name: 'Chilli flakes', qty: '1g', supplier: 'Bidvest' },
-      { name: 'Sea salt', qty: '1g', supplier: 'Bidvest' },
+      { name: 'Sourdough', qty: '2 slices', supplier: 'Rise Bakery', price: 0.60 },
+      { name: 'Avocado', qty: '1 unit', supplier: 'Fresh Earth Produce', price: 1.20 },
+      { name: 'Lemon', qty: '0.25 unit', supplier: 'Fresh Earth Produce', price: 0.14 },
+      { name: 'Chilli flakes', qty: '1g', supplier: 'Bidvest', price: 0.05 },
+      { name: 'Sea salt', qty: '1g', supplier: 'Bidvest', price: 0.05 },
     ],
     modifierGroups: [],
     production: { visibility: 'Kitchen', shelfLifeMinutes: 20, prepTimeSeconds: 240 },
@@ -1093,14 +1102,55 @@ const FITZROY_RECIPES: LegacyFitzroySeed[] = [
     flag: { type: 'missing-prod', label: 'no prod' },
     menuItems: [{ name: 'Smoked salmon bagel', posLinked: true }],
     ingredients: [
-      { name: 'Bagel', qty: '1 unit', supplier: 'Rise Bakery' },
-      { name: 'Smoked salmon', qty: '60g', supplier: 'Fresh Earth Produce' },
-      { name: 'Cream cheese', qty: '30g', supplier: 'The Cheese Board' },
-      { name: 'Red onion', qty: '10g', supplier: 'Fresh Earth Produce' },
-      { name: 'Dill', qty: '1g', supplier: 'Fresh Earth Produce' },
+      { name: 'Bagel', qty: '1 unit', supplier: 'Rise Bakery', price: 0.55 },
+      { name: 'Smoked salmon', qty: '60g', supplier: 'Fresh Earth Produce', price: 1.40 },
+      { name: 'Cream cheese', qty: '30g', supplier: 'The Cheese Board', price: 0.30 },
+      { name: 'Red onion', qty: '10g', supplier: 'Fresh Earth Produce', price: 0.10 },
+      { name: 'Dill', qty: '1g', supplier: 'Fresh Earth Produce', price: 0.05 },
     ],
     modifierGroups: [],
     production: { visibility: null, shelfLifeMinutes: 30, prepTimeSeconds: 180 },
+  },
+  {
+    // Imported from the Another Broken Egg Cafe Olo menu. The four
+    // ordering panels (Choose Side / Side 1 – Eggs / Egg Preparation /
+    // Side 2 – Meat Option) map to the four `mg-*` groups attached via
+    // modifierGroupIds — see components/Modifiers/fixtures.ts. The Olo
+    // "Preferences → Made for" free-text box has no modifier-model
+    // equivalent yet (free-text isn't an option type) so it's dropped.
+    id: 'rec-rwc-pancakes',
+    name: 'Raspberry White Chocolate Pancakes',
+    category: 'Food',
+    // Sum of the ingredient line costs below (derived from master WACs
+    // in components/Suppliers/fixtures.ts via components/Recipe/costing.ts).
+    ingredientCost: 2.56,
+    priceDineIn: 13.99,
+    priceTakeaway: 13.99,
+    priceDelivery: 15.50,
+    marginPct: 82,
+    status: 'Active',
+    flag: null,
+    menuItems: [{ name: 'Raspberry White Chocolate Pancakes', posLinked: true }],
+    ingredients: [
+      { name: 'Buttermilk pancake batter', qty: '220g', supplier: 'Rise Bakery', price: 0.88 },
+      { name: 'Streusel crumble', qty: '25g', supplier: 'Rise Bakery', price: 0.20 },
+      { name: 'White chocolate chips', qty: '40g', supplier: 'Bidvest', price: 0.48 },
+      { name: 'Raspberry coulis (house-made)', qty: '60ml', supplier: 'In-house', price: 0.72 },
+      { name: 'Whipping cream', qty: '30ml', supplier: 'Fresh Earth Produce', price: 0.15 },
+      { name: 'Fresh mint', qty: '2g', supplier: 'Fresh Earth Produce', price: 0.13 },
+    ],
+    modifierGroups: [],
+    posSourceId: 'pos-mi-rwc-pancakes',
+    modifierGroupIds: ['mg-pancake-sides', 'mg-side-eggs', 'mg-egg-prep', 'mg-side-meat'],
+    formExtras: {
+      instructions:
+        'Streusel crunch pancakes layered with white chocolate chips. Top with '
+        + 'warm house-made raspberry coulis, white chocolate drizzle (melted '
+        + 'chips), whipped cream & fresh mint. Two eggs any style & choice of '
+        + 'meat side via the side modifier groups.',
+      allergens: ['Cereals containing gluten', 'Dairy', 'Eggs', 'Soya'],
+    },
+    production: { visibility: 'Kitchen', shelfLifeMinutes: 15, prepTimeSeconds: 600 },
   },
   {
     id: 'rec-babyccino',
@@ -1115,8 +1165,8 @@ const FITZROY_RECIPES: LegacyFitzroySeed[] = [
     flag: null,
     menuItems: [{ name: 'Kids babyccino', posLinked: true }],
     ingredients: [
-      { name: 'Whole milk', qty: '80ml', supplier: 'Fresh Earth Produce' },
-      { name: 'Cocoa powder', qty: '1g', supplier: 'Bidvest' },
+      { name: 'Whole milk', qty: '80ml', supplier: 'Fresh Earth Produce', price: 0.16 },
+      { name: 'Cocoa powder', qty: '1g', supplier: 'Bidvest', price: 0.02 },
     ],
     modifierGroups: [],
     production: { visibility: 'Bar', shelfLifeMinutes: null, prepTimeSeconds: 45 },
@@ -1282,6 +1332,50 @@ const FITZROY_INGREDIENTSV2_BY_RECIPE: Record<string, RecipeIngredient[]> = {
       id: 'ri-capp-milk',
       ref: { kind: 'master', masterProductId: 'mp-whole-milk-1l' },
       baseQty: { value: 150, unit: 'ml' },
+    },
+  ],
+  // Base plate only — the eggs and meat sides arrive via `add` effects
+  // on the mg-side-eggs / mg-side-meat modifier groups, so they
+  // deliberately do NOT appear here.
+  'rec-rwc-pancakes': [
+    {
+      id: 'ri-rwc-batter',
+      ref: { kind: 'master', masterProductId: 'mp-pancake-batter' },
+      baseQty: { value: 220, unit: 'g' },
+    },
+    {
+      id: 'ri-rwc-streusel',
+      ref: { kind: 'master', masterProductId: 'mp-streusel-crumble' },
+      baseQty: { value: 25, unit: 'g' },
+    },
+    {
+      id: 'ri-rwc-choc-chips',
+      ref: { kind: 'master', masterProductId: 'mp-white-choc-chips' },
+      baseQty: { value: 30, unit: 'g' },
+      note: 'folded into the batter',
+    },
+    {
+      id: 'ri-rwc-choc-drizzle',
+      ref: { kind: 'master', masterProductId: 'mp-white-choc-chips' },
+      baseQty: { value: 10, unit: 'g' },
+      note: 'melted for the drizzle',
+    },
+    {
+      id: 'ri-rwc-coulis',
+      ref: { kind: 'master', masterProductId: 'mp-raspberry-coulis' },
+      baseQty: { value: 60, unit: 'ml' },
+      note: 'served warm',
+    },
+    {
+      id: 'ri-rwc-cream',
+      ref: { kind: 'master', masterProductId: 'mp-whipping-cream' },
+      baseQty: { value: 30, unit: 'ml' },
+      note: 'whipped to order',
+    },
+    {
+      id: 'ri-rwc-mint',
+      ref: { kind: 'master', masterProductId: 'mp-fresh-mint' },
+      baseQty: { value: 2, unit: 'g' },
     },
   ],
   // Spirit recipes deliberately have NO base ingredients — composition

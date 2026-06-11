@@ -451,8 +451,8 @@ function ModifiersSection({
             <span
               key={g.id}
               style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '6px 11px', borderRadius: 8,
+                display: 'inline-flex', alignItems: 'center', gap: 7,
+                padding: '9px 14px', borderRadius: 9,
                 border: '1px solid var(--color-border-subtle)',
                 background: '#fff', fontSize: 13.5, fontWeight: 600,
                 color: 'var(--color-text-primary)',
@@ -477,10 +477,10 @@ function ModifiersSection({
                 </span>
               )}
               <button type="button" title="Edit group" onClick={() => openEdit(g)} style={iconBtnStyle}>
-                <Pencil size={11} />
+                <Pencil size={13} />
               </button>
               <button type="button" title="Detach" onClick={() => detach(g.id)} style={iconBtnStyle}>
-                <X size={11} />
+                <X size={13} />
               </button>
             </span>
           ))}
@@ -603,7 +603,7 @@ const switchBtn: React.CSSProperties = {
 
 const attachChipStyle: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 5,
-  padding: '6px 11px', borderRadius: 8,
+  padding: '9px 14px', borderRadius: 9,
   border: '1px dashed var(--color-border)',
   background: '#fff', color: 'var(--color-text-secondary)',
   fontSize: 13.5, fontWeight: 600, cursor: 'pointer',
@@ -612,7 +612,7 @@ const attachChipStyle: React.CSSProperties = {
 
 const iconBtnStyle: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  width: 20, height: 20, borderRadius: 4,
+  width: 26, height: 26, borderRadius: 6,
   border: '1px solid var(--color-border-subtle)',
   background: '#fff', color: 'var(--color-text-muted)',
   cursor: 'pointer',

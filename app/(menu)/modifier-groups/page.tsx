@@ -96,7 +96,7 @@ export default function ModifierGroupsPage() {
                 background: '#fff',
                 border: '1px solid var(--color-border-subtle)',
                 borderRadius: 12,
-                padding: '14px 16px',
+                padding: '18px 20px',
                 cursor: 'pointer',
                 fontFamily: 'var(--font-primary)',
                 color: 'var(--color-text-primary)',

@@ -29,6 +29,7 @@ import type {
   RecipeIngredient,
   RecipeIngredientQty,
 } from './libraryFixtures';
+import { lineCostGBP, formatLineCost } from './costing';
 
 const UNITS = ['g', 'kg', 'ml', 'L', 'each', 'unit', 'slice', 'tsp', 'tbsp', 'cup'];
 
@@ -90,6 +91,7 @@ export function IngredientsV2Section({
         <span>Source</span>
         <span>Qty</span>
         <span>Unit</span>
+        <span style={{ textAlign: 'right' }}>Cost</span>
         <span style={{ textAlign: 'center' }}>Site qty</span>
         <span />
       </div>
@@ -190,6 +192,12 @@ function IngredientV2Row({
         {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
         {!UNITS.includes(row.baseQty.unit) && <option value={row.baseQty.unit}>{row.baseQty.unit}</option>}
       </select>
+      <span
+        title="Line cost — qty × current per-unit cost from the catalogue (WAC)"
+        style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right', whiteSpace: 'nowrap' }}
+      >
+        {formatLineCost(lineCostGBP(row))}
+      </span>
       <SiteQtyPopover
         sites={sites}
         baseQty={row.baseQty}
@@ -556,7 +564,7 @@ function pickerKindChip(kind: 'master' | 'supplier' | 'made' | 'subrecipe'): Rea
 // ────────────────────────────────────────────────────────────────────────────
 // Layout primitives matching the existing ComponentTable
 
-const cols = ['28px', '2fr', '1.5fr', '78px', '78px', '128px', '82px'];
+const cols = ['28px', '2fr', '1.5fr', '78px', '78px', '64px', '128px', '82px'];
 
 const tableHeaderStyle: React.CSSProperties = {
   display: 'grid',

@@ -806,7 +806,7 @@ function RecipeDrawer({
                       key={`ing-${ing.name}-${i}`}
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: '20px 1fr auto auto',
+                        gridTemplateColumns: '20px 1fr auto minmax(72px, auto) 48px',
                         gap: '10px',
                         padding: '8px 12px',
                         alignItems: 'center',
@@ -830,6 +830,9 @@ function RecipeDrawer({
                       </span>
                       <span style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>{ing.qty}</span>
                       <span style={{ color: 'var(--color-text-muted)', fontSize: '11.5px', textAlign: 'right' }}>{ing.supplier || '—'}</span>
+                      <span style={{ color: 'var(--color-text-secondary)', fontSize: '12px', fontWeight: 600, textAlign: 'right' }}>
+                        {ing.price != null ? formatCost(ing.price) : '—'}
+                      </span>
                     </div>
                   );
                 })}

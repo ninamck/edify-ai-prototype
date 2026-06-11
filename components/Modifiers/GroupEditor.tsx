@@ -12,8 +12,15 @@
  *
  * The two hosts differ only in chrome (sticky header / drawer header,
  * Used-by side panel vs. none, navigation behaviour). Everything inside
- * — the field card, options list, four effect editors, dropdowns,
- * `IngredientRefPicker`s — lives here.
+ * — the field card, options list, effect editors, `IngredientRefPicker`s
+ * — lives here.
+ *
+ * Effect model note: only `add` and `replace` effects can be created
+ * from this UI. `scale` and `set-slot` still exist in the data model
+ * (the seeded coffee-size / spirit / wine groups use them) so existing
+ * effects of those kinds render read-compatibly with a "legacy" pill,
+ * but there's no way to add new ones — they confused more than they
+ * helped.
  */
 
 import React from 'react';
@@ -99,15 +106,7 @@ export function GroupEditor({
             </StyledSelect>
           </Field>
         </div>
-        <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          <Field label="POS source id (optional)">
-            <input
-              value={value.posSourceId ?? ''}
-              onChange={(e) => patch('posSourceId', e.target.value || undefined)}
-              placeholder="e.g. pos-mg-milks"
-              style={textInput}
-            />
-          </Field>
+        <div style={{ marginTop: 12 }}>
           <Field label="Notes (optional)">
             <input
               value={value.notes ?? ''}
@@ -117,12 +116,17 @@ export function GroupEditor({
             />
           </Field>
         </div>
+        <PosIdDetails
+          value={value.posSourceId}
+          placeholder="e.g. pos-mg-milks"
+          onChange={(v) => patch('posSourceId', v)}
+        />
       </Card>
 
       <Card>
         <SectionHeader
           title="Options"
-          hint="Each option is a customer-facing pick. Effects describe what changes in the recipe at order time."
+          hint="What the customer can pick — and what each pick changes in the recipe."
         />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {value.options.map((opt, i) => (
@@ -163,7 +167,7 @@ function OptionEditor({
   onMoveDown: () => void;
 }) {
   return (
-    <div style={{ border: '1px solid var(--color-border-subtle)', borderRadius: 10, padding: 12 }}>
+    <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: 12 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 110px 110px auto', gap: 10, alignItems: 'center' }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textAlign: 'center' }}>{index + 1}</span>
         <input
@@ -195,29 +199,47 @@ function OptionEditor({
         </span>
       </div>
 
-      {/* Per-option POS source id — separate from the group-level id
-          above. Square / Toast give each modifier option its own id,
-          so we mirror that one-to-one here. Stored on the option
-          itself; no separate mapping table. */}
-      <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '24px 1fr', gap: 10, alignItems: 'center' }}>
+      <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '24px 1fr', gap: 10 }}>
         <span />
-        <Field label="POS source id (optional)">
-          <input
-            value={option.posSourceId ?? ''}
-            onChange={(e) => onPatch({ posSourceId: e.target.value || undefined })}
+        <div>
+          <EffectsEditor effects={option.effects} onChange={onSetEffects} />
+          {/* Per-option POS source id — Square / Toast give each modifier
+              option its own id. Tucked away so it doesn't crowd the
+              common path; auto-open when a value is already set. */}
+          <PosIdDetails
+            value={option.posSourceId}
             placeholder="e.g. pos-mg-milks-oat"
-            style={textInput}
+            onChange={(v) => onPatch({ posSourceId: v })}
           />
-        </Field>
-      </div>
-
-      <div style={{ marginTop: 10 }}>
-        <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: 6 }}>
-          Effects
         </div>
-        <EffectsEditor effects={option.effects} onChange={onSetEffects} />
       </div>
     </div>
+  );
+}
+
+/** Short labels for each effect kind. The type is fixed when the effect
+ *  is created (via the two buttons below) — no dropdown to re-pick it. */
+const EFFECT_LABEL: Record<IngredientEffect['kind'], string> = {
+  add: 'Adds',
+  replace: 'Swaps',
+  scale: 'Scales',
+  'set-slot': 'Sets slot',
+};
+
+function EffectPill({ kind }: { kind: IngredientEffect['kind'] }) {
+  const legacy = kind === 'scale' || kind === 'set-slot';
+  return (
+    <span
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '3px 9px', borderRadius: 100,
+        background: 'rgba(0,28,53,0.06)', color: 'var(--color-text-secondary)',
+        fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+      }}
+    >
+      {EFFECT_LABEL[kind]}
+      {legacy && <span style={{ fontWeight: 600, opacity: 0.6, textTransform: 'none', letterSpacing: 0 }}>legacy</span>}
+    </span>
   );
 }
 
@@ -228,15 +250,13 @@ function EffectsEditor({ effects, onChange }: { effects: IngredientEffect[]; onC
   function remove(i: number) {
     onChange(effects.filter((_, idx) => idx !== i));
   }
-  function addEffect(kind: IngredientEffect['kind']) {
+  // Only `add` and `replace` can be created here. Existing `scale` /
+  // `set-slot` effects (from seeded groups) still render below.
+  function addEffect(kind: 'add' | 'replace') {
     if (kind === 'add') {
       onChange([...effects, { kind: 'add', ref: { kind: 'master', masterProductId: '' }, qty: { value: 0, unit: 'ml' } }]);
-    } else if (kind === 'replace') {
+    } else {
       onChange([...effects, { kind: 'replace', from: { kind: 'master', masterProductId: '' }, to: { kind: 'master', masterProductId: '' }, qtyMode: 'same' }]);
-    } else if (kind === 'scale') {
-      onChange([...effects, { kind: 'scale', factor: 1, targetMasterProductIds: [] }]);
-    } else if (kind === 'set-slot') {
-      onChange([...effects, { kind: 'set-slot', slotKey: '', qty: { value: 0, unit: 'ml' } }]);
     }
   }
 
@@ -244,29 +264,13 @@ function EffectsEditor({ effects, onChange }: { effects: IngredientEffect[]; onC
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {effects.length === 0 && (
         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
-          No effects — this option is a no-op (used for &ldquo;default&rdquo; rows like &ldquo;Whole milk&rdquo; inside an Alt milk group).
+          Changes nothing in the recipe.
         </div>
       )}
       {effects.map((e, i) => (
-        <div key={i} style={{ background: '#fff', border: '1px solid var(--color-border-subtle)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div key={i} style={{ background: '#fff', border: '1px solid var(--color-border)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <StyledSelect
-              width={170}
-              value={e.kind}
-              onChange={(ev) => {
-                const k = ev.target.value as IngredientEffect['kind'];
-                if (k === e.kind) return;
-                if (k === 'add') update(i, { kind: 'add', ref: { kind: 'master', masterProductId: '' }, qty: { value: 0, unit: 'ml' } });
-                else if (k === 'replace') update(i, { kind: 'replace', from: { kind: 'master', masterProductId: '' }, to: { kind: 'master', masterProductId: '' }, qtyMode: 'same' });
-                else if (k === 'scale') update(i, { kind: 'scale', factor: 1, targetMasterProductIds: [] });
-                else if (k === 'set-slot') update(i, { kind: 'set-slot', slotKey: '', qty: { value: 0, unit: 'ml' } });
-              }}
-            >
-              <option value="add">Add ingredient or packaging</option>
-              <option value="replace">Replace ingredient or packaging</option>
-              <option value="scale">Scale recipe</option>
-              <option value="set-slot">Set slot (for shared groups)</option>
-            </StyledSelect>
+            <EffectPill kind={e.kind} />
             <button onClick={() => remove(i)} style={{ ...miniBtn(false), marginLeft: 'auto' }}><X size={12} /></button>
           </div>
           {e.kind === 'add' && <AddEffectEditor effect={e} onChange={(next) => update(i, next)} />}
@@ -276,10 +280,8 @@ function EffectsEditor({ effects, onChange }: { effects: IngredientEffect[]; onC
         </div>
       ))}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <button onClick={() => addEffect('add')} style={addBtnSmall}><Plus size={11} /> Add</button>
-        <button onClick={() => addEffect('replace')} style={addBtnSmall}><Plus size={11} /> Replace</button>
-        <button onClick={() => addEffect('scale')} style={addBtnSmall}><Plus size={11} /> Scale</button>
-        <button onClick={() => addEffect('set-slot')} style={addBtnSmall}><Plus size={11} /> Set slot</button>
+        <button onClick={() => addEffect('add')} style={addBtnSmall}><Plus size={11} /> Add an ingredient</button>
+        <button onClick={() => addEffect('replace')} style={addBtnSmall}><Plus size={11} /> Swap an ingredient</button>
       </div>
     </div>
   );
@@ -287,7 +289,7 @@ function EffectsEditor({ effects, onChange }: { effects: IngredientEffect[]; onC
 
 function AddEffectEditor({ effect, onChange }: { effect: Extract<IngredientEffect, { kind: 'add' }>; onChange: (next: typeof effect) => void }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 80px', gap: 8 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 90px', gap: 8, alignItems: 'center' }}>
       <IngredientRefPicker
         value={effect.ref}
         onChange={(ref) => onChange({ ...effect, ref })}
@@ -298,7 +300,7 @@ function AddEffectEditor({ effect, onChange }: { effect: Extract<IngredientEffec
         onChange={(ev) => onChange({ ...effect, qty: { ...effect.qty, value: Number(ev.target.value) } })}
         style={textInput}
       />
-      <StyledSelect width={90} value={effect.qty.unit} onChange={(ev) => onChange({ ...effect, qty: { ...effect.qty, unit: ev.target.value } })}>
+      <StyledSelect value={effect.qty.unit} onChange={(ev) => onChange({ ...effect, qty: { ...effect.qty, unit: ev.target.value } })}>
         {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
       </StyledSelect>
     </div>
@@ -310,10 +312,6 @@ function ReplaceEffectEditor({ effect, onChange }: { effect: Extract<IngredientE
   const customQty: Quantity = effect.qtyMode === 'same' ? { value: 0, unit: 'ml' } : effect.qtyMode.qty;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>
-        Works on anything the recipe consumes — ingredients <em>and</em> packaging.
-        e.g. whole milk → oat milk, or 8oz cup → 12oz cup for a Large coffee.
-      </div>
       <Field label="Replace">
         <IngredientRefPicker value={effect.from} onChange={(from) => onChange({ ...effect, from })} />
       </Field>
@@ -344,7 +342,7 @@ function ReplaceEffectEditor({ effect, onChange }: { effect: Extract<IngredientE
               type="number" step="any"
               value={customQty.value}
               onChange={(ev) => onChange({ ...effect, qtyMode: { qty: { ...customQty, value: Number(ev.target.value) } } })}
-              style={{ ...textInput, width: 80 }}
+              style={{ ...textInput, width: 90 }}
             />
             <StyledSelect
               width={90}
@@ -387,7 +385,7 @@ function ScaleEffectEditor({ effect, onChange }: { effect: Extract<IngredientEff
 
 function SetSlotEffectEditor({ effect, onChange }: { effect: Extract<IngredientEffect, { kind: 'set-slot' }>; onChange: (next: typeof effect) => void }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 80px', gap: 8 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 90px', gap: 8 }}>
       <Field label="Slot key">
         <input
           value={effect.slotKey}
@@ -416,13 +414,49 @@ function SetSlotEffectEditor({ effect, onChange }: { effect: Extract<IngredientE
   );
 }
 
+/**
+ * Collapsed-by-default POS id field. The id matters for POS mapping but
+ * crowds the common path, so it hides behind a small disclosure — open
+ * automatically when a value is already set.
+ */
+function PosIdDetails({
+  value,
+  placeholder,
+  onChange,
+}: {
+  value: string | undefined;
+  placeholder: string;
+  onChange: (v: string | undefined) => void;
+}) {
+  return (
+    <details open={!!value} style={{ marginTop: 8 }}>
+      <summary
+        style={{
+          cursor: 'pointer', fontSize: 11.5, fontWeight: 600,
+          color: 'var(--color-text-muted)', userSelect: 'none',
+        }}
+      >
+        POS id{value ? ` · ${value}` : ''}
+      </summary>
+      <div style={{ marginTop: 6, maxWidth: 320 }}>
+        <input
+          value={value ?? ''}
+          onChange={(e) => onChange(e.target.value || undefined)}
+          placeholder={placeholder}
+          style={textInput}
+        />
+      </div>
+    </details>
+  );
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Shared primitives (exported so the route page header and the drawer
 // can use matching button styling without duplicating the rules).
 
 export function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ padding: 16, borderRadius: 12, border: '1px solid var(--color-border-subtle)', background: '#fff' }}>
+    <div style={{ padding: 16, borderRadius: 12, border: '1px solid var(--color-border)', background: '#fff' }}>
       {children}
     </div>
   );
@@ -449,10 +483,13 @@ export function Field({ label, children }: { label: string; children: React.Reac
 // ────────────────────────────────────────────────────────────────────────────
 // Styles
 
+// Matches StyledSelect's wrapper (38px tall, radius 8, --color-border)
+// so text inputs, selects, and pickers line up at the same size.
 export const textInput: React.CSSProperties = {
-  width: '100%', padding: '7px 10px', borderRadius: 7,
-  border: '1px solid var(--color-border-subtle)', background: '#fff',
+  width: '100%', height: 38, padding: '0 12px', borderRadius: 8,
+  border: '1px solid var(--color-border)', background: '#fff',
   fontFamily: 'var(--font-primary)', fontSize: 13, color: 'var(--color-text-primary)',
+  boxSizing: 'border-box',
 };
 export const primaryBtn: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -488,7 +525,7 @@ const addBtnSmall: React.CSSProperties = {
 function miniBtn(disabled: boolean): React.CSSProperties {
   return {
     width: 24, height: 24, padding: 0,
-    borderRadius: 6, border: '1px solid var(--color-border-subtle)',
+    borderRadius: 6, border: '1px solid var(--color-border)',
     background: '#fff', color: 'var(--color-text-secondary)',
     cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1,
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',

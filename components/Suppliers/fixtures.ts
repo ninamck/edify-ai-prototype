@@ -375,6 +375,13 @@ export const SEED_SUPPLIERS: Supplier[] = [
   },
 ];
 
+/** Shorthand for seeding a single calculated WAC (per master `unit`) at
+ *  the flagship site, so recipe costing has a real per-unit cost to
+ *  derive ingredient line costs from. Other sites stay "estimated". */
+const wacAt = (wac: number, onHandQty = 20): Record<string, MasterSiteCost> => ({
+  'Fitzroy Heathrow': { wac, onHandQty, lastCalculated: '24 Mar 2026' },
+});
+
 export const SEED_MASTER_PRODUCTS: MasterProduct[] = [
   { id: 'mp-foil-45', name: 'Aluminium Foil Roll 45cm', category: 'Other', unit: '150m roll', slug: 'foil-45' },
   { id: 'mp-apple-fizz', name: 'Apple Fizz', category: 'Beverage', unit: '330ml can', slug: 'apple-fizz' },
@@ -388,16 +395,16 @@ export const SEED_MASTER_PRODUCTS: MasterProduct[] = [
   // Takeaway cup sizes — used by the Coffee size modifier group's
   // "Large" option to demonstrate Replace-on-packaging (the cup
   // physically swaps when the customer picks a large coffee).
-  { id: 'mp-cup-takeaway-8oz',  name: 'Takeaway Cup 8oz',  category: 'Packaging', unit: 'pack of 1000', slug: 'cup-takeaway-8oz' },
-  { id: 'mp-cup-takeaway-12oz', name: 'Takeaway Cup 12oz', category: 'Packaging', unit: 'pack of 1000', slug: 'cup-takeaway-12oz' },
-  { id: 'mp-cup-takeaway-16oz', name: 'Takeaway Cup 16oz', category: 'Packaging', unit: 'pack of 1000', slug: 'cup-takeaway-16oz' },
-  { id: 'mp-cup-lid',           name: 'Takeaway Cup Lid',  category: 'Packaging', unit: 'pack of 1000', slug: 'cup-lid' },
-  { id: 'mp-whole-milk-1l', name: 'Whole Milk 1L', category: 'Dairy', unit: '1L carton', slug: 'whole-milk-1l' },
-  { id: 'mp-skim-milk-1l', name: 'Skim Milk 1L', category: 'Dairy', unit: '1L carton', slug: 'skim-milk-1l' },
-  { id: 'mp-oat-milk-1l', name: 'Oat Milk 1L', category: 'Dairy', unit: '1L carton', slug: 'oat-milk-1l' },
+  { id: 'mp-cup-takeaway-8oz',  name: 'Takeaway Cup 8oz',  category: 'Packaging', unit: 'pack of 1000', slug: 'cup-takeaway-8oz', siteCosts: wacAt(80.00, 3) },
+  { id: 'mp-cup-takeaway-12oz', name: 'Takeaway Cup 12oz', category: 'Packaging', unit: 'pack of 1000', slug: 'cup-takeaway-12oz', siteCosts: wacAt(100.00, 3) },
+  { id: 'mp-cup-takeaway-16oz', name: 'Takeaway Cup 16oz', category: 'Packaging', unit: 'pack of 1000', slug: 'cup-takeaway-16oz', siteCosts: wacAt(120.00, 2) },
+  { id: 'mp-cup-lid',           name: 'Takeaway Cup Lid',  category: 'Packaging', unit: 'pack of 1000', slug: 'cup-lid', siteCosts: wacAt(30.00, 5) },
+  { id: 'mp-whole-milk-1l', name: 'Whole Milk 1L', category: 'Dairy', unit: '1L carton', slug: 'whole-milk-1l', siteCosts: wacAt(2.20, 40) },
+  { id: 'mp-skim-milk-1l', name: 'Skim Milk 1L', category: 'Dairy', unit: '1L carton', slug: 'skim-milk-1l', siteCosts: wacAt(2.00, 18) },
+  { id: 'mp-oat-milk-1l', name: 'Oat Milk 1L', category: 'Dairy', unit: '1L carton', slug: 'oat-milk-1l', siteCosts: wacAt(3.00, 24) },
   { id: 'mp-tomato-sauce', name: 'Tomato Sauce 500ml', category: 'Pantry', unit: '500ml jar', slug: 'tomato-sauce' },
-  { id: 'mp-bagel', name: 'Sourdough Bagel', category: 'Bakery', unit: 'each', slug: 'bagel' },
-  { id: 'mp-espresso-blend', name: 'Espresso Blend Beans', category: 'Beverage', unit: '1kg bag', slug: 'espresso-blend' },
+  { id: 'mp-bagel', name: 'Sourdough Bagel', category: 'Bakery', unit: 'each', slug: 'bagel', siteCosts: wacAt(0.55, 30) },
+  { id: 'mp-espresso-blend', name: 'Espresso Blend Beans', category: 'Beverage', unit: '1kg bag', slug: 'espresso-blend', siteCosts: wacAt(25.00, 8) },
   { id: 'mp-smirnoff-vodka', name: 'Smirnoff Vodka 70cl', category: 'Beverage', unit: '70cl bottle', slug: 'smirnoff-vodka' },
   { id: 'mp-grey-goose-vodka', name: 'Grey Goose Vodka 70cl', category: 'Beverage', unit: '70cl bottle', slug: 'grey-goose-vodka' },
   { id: 'mp-tanqueray-gin', name: 'Tanqueray Gin 70cl', category: 'Beverage', unit: '70cl bottle', slug: 'tanqueray-gin' },
@@ -447,7 +454,22 @@ export const SEED_MASTER_PRODUCTS: MasterProduct[] = [
     productClass: 'Food',
     status: 'Available',
     defaultProductId: 'prd-meatworks-bacon-1kg',
+    siteCosts: wacAt(8.50, 6),
   },
+  // ── Raspberry White Chocolate Pancakes (rec-rwc-pancakes) ──────────────
+  // Masters referenced by the recipe's ingredientsV2 rows and by the
+  // breakfast-side modifier groups in components/Modifiers/fixtures.ts.
+  // Eggs (mp-eggs) and bacon (mp-bacon) above are reused as-is.
+  { id: 'mp-pancake-batter', name: 'Buttermilk Pancake Batter', category: 'Bakery', unit: '5kg tub', slug: 'pancake-batter', productClass: 'Food', status: 'Available', siteCosts: wacAt(20.00, 4) },
+  { id: 'mp-streusel-crumble', name: 'Streusel Crumble', category: 'Bakery', unit: '1kg tub', slug: 'streusel-crumble', productClass: 'Food', status: 'Available', siteCosts: wacAt(8.00, 6) },
+  { id: 'mp-white-choc-chips', name: 'White Chocolate Chips', category: 'Pantry', unit: '1kg bag', slug: 'white-choc-chips', productClass: 'Food', status: 'Available', siteCosts: wacAt(12.00, 5) },
+  { id: 'mp-raspberry-coulis', name: 'Raspberry Coulis (house-made)', category: 'Pantry', unit: '1L tub', slug: 'raspberry-coulis', productClass: 'Food', status: 'Available', siteCosts: wacAt(12.00, 3) },
+  { id: 'mp-whipping-cream', name: 'Whipping Cream 1L', category: 'Dairy', unit: '1L carton', slug: 'whipping-cream', productClass: 'Food', status: 'Available', siteCosts: wacAt(5.00, 10) },
+  { id: 'mp-fresh-mint', name: 'Fresh Mint', category: 'Produce', unit: '100g bunch', slug: 'fresh-mint', productClass: 'Food', status: 'Available', siteCosts: wacAt(6.50, 8) },
+  { id: 'mp-sausage-patty', name: 'Breakfast Sausage Patties', category: 'Meat', unit: 'pack of 24', slug: 'sausage-patty', productClass: 'Food', status: 'Available', siteCosts: wacAt(10.80, 4) },
+  { id: 'mp-andouille-sausage', name: 'Andouille Sausage', category: 'Meat', unit: '1kg pack', slug: 'andouille-sausage', productClass: 'Food', status: 'Available', siteCosts: wacAt(11.00, 5) },
+  { id: 'mp-ham-sliced', name: 'Ham (sliced)', category: 'Meat', unit: '1kg pack', slug: 'ham-sliced', productClass: 'Food', status: 'Available', siteCosts: wacAt(9.00, 5) },
+  { id: 'mp-chicken-sausage', name: 'Chicken Sausage', category: 'Meat', unit: '1kg pack', slug: 'chicken-sausage', productClass: 'Food', status: 'Available', siteCosts: wacAt(10.00, 5) },
 ];
 
 const blankNutrition: Nutrition = {};

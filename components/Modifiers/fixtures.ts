@@ -183,4 +183,129 @@ export const SEED_MODIFIER_GROUPS: ModifierGroup[] = [
       },
     ],
   },
+  // ── Breakfast side groups ──────────────────────────────────────────────
+  // Modelled on the Olo ordering flow for Raspberry White Chocolate
+  // Pancakes (rec-rwc-pancakes). Four groups mirror the four POS panels:
+  //
+  //   Choose Side          optional upsell — carries the +3.00 price
+  //   Side 1 – Eggs        the eggs themselves (add effect)
+  //   Egg Preparation      prep instruction only — no ingredient change
+  //   Side 2 – Meat Option which meat lands on the plate (add effects)
+  //
+  // Known model gap: on the POS the eggs/meat groups only apply when
+  // "Two Side Options" is chosen. We have no conditional groups yet, so
+  // the price lives on the upsell option and the composition lives on
+  // the side groups.
+  {
+    id: 'mg-pancake-sides',
+    name: 'Choose Side',
+    selection: 'one',
+    required: false,
+    posSourceId: 'pos-mg-pancake-sides',
+    notes:
+      'Optional side upsell. "Two Side Options" carries the +3.00 price; the '
+      + 'actual composition comes from the Side 1 – Eggs and Side 2 – Meat '
+      + 'Option groups attached alongside this one.',
+    options: [
+      {
+        id: 'mg-pancake-sides-none',
+        name: 'No sides',
+        isDefault: true,
+        effects: [],
+      },
+      {
+        id: 'mg-pancake-sides-two',
+        name: 'Two Side Options',
+        priceDelta: 3.00,
+        posSourceId: 'pos-mg-pancake-sides-two',
+        effects: [], // price only — eggs/meat are added by the groups below
+      },
+    ],
+  },
+  {
+    id: 'mg-side-eggs',
+    name: 'Side 1 – Eggs',
+    selection: 'one',
+    required: true,
+    posSourceId: 'pos-mg-side-eggs',
+    notes: 'Eggs side that comes with the breakfast plates. Single option today.',
+    options: [
+      {
+        id: 'mg-side-eggs-2',
+        name: '2 Eggs',
+        isDefault: true,
+        posSourceId: 'pos-mg-side-eggs-2',
+        effects: [
+          { kind: 'add', ref: { kind: 'master', masterProductId: 'mp-eggs' }, qty: { value: 2, unit: 'each' } },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'mg-egg-prep',
+    name: 'Egg Preparation',
+    selection: 'one',
+    required: true,
+    posSourceId: 'pos-mg-egg-prep',
+    notes:
+      'Kitchen instruction only — the same two eggs are consumed whichever '
+      + 'style is picked, so no option carries ingredient effects.',
+    options: [
+      { id: 'mg-egg-prep-scrambled', name: 'Scrambled', posSourceId: 'pos-mg-egg-prep-scrambled', effects: [] },
+      { id: 'mg-egg-prep-over-easy', name: 'Over Easy', posSourceId: 'pos-mg-egg-prep-over-easy', effects: [] },
+      { id: 'mg-egg-prep-over-medium', name: 'Over Medium', posSourceId: 'pos-mg-egg-prep-over-medium', effects: [] },
+      { id: 'mg-egg-prep-over-hard', name: 'Over Hard', posSourceId: 'pos-mg-egg-prep-over-hard', effects: [] },
+      { id: 'mg-egg-prep-sunny-side-up', name: 'Sunny-Side Up', posSourceId: 'pos-mg-egg-prep-sunny', effects: [] },
+    ],
+  },
+  {
+    id: 'mg-side-meat',
+    name: 'Side 2 – Meat Option',
+    selection: 'one',
+    required: true,
+    posSourceId: 'pos-mg-side-meat',
+    notes: 'Meat side for the breakfast plates — every order picks exactly one.',
+    options: [
+      {
+        id: 'mg-side-meat-bacon',
+        name: 'Bacon',
+        posSourceId: 'pos-mg-side-meat-bacon',
+        effects: [
+          { kind: 'add', ref: { kind: 'master', masterProductId: 'mp-bacon' }, qty: { value: 70, unit: 'g' } },
+        ],
+      },
+      {
+        id: 'mg-side-meat-sausage',
+        name: 'Sausage',
+        posSourceId: 'pos-mg-side-meat-sausage',
+        effects: [
+          { kind: 'add', ref: { kind: 'master', masterProductId: 'mp-sausage-patty' }, qty: { value: 2, unit: 'each' } },
+        ],
+      },
+      {
+        id: 'mg-side-meat-andouille',
+        name: 'Andouille',
+        posSourceId: 'pos-mg-side-meat-andouille',
+        effects: [
+          { kind: 'add', ref: { kind: 'master', masterProductId: 'mp-andouille-sausage' }, qty: { value: 80, unit: 'g' } },
+        ],
+      },
+      {
+        id: 'mg-side-meat-ham',
+        name: 'Ham',
+        posSourceId: 'pos-mg-side-meat-ham',
+        effects: [
+          { kind: 'add', ref: { kind: 'master', masterProductId: 'mp-ham-sliced' }, qty: { value: 80, unit: 'g' } },
+        ],
+      },
+      {
+        id: 'mg-side-meat-chicken-sausage',
+        name: 'Chicken Sausage',
+        posSourceId: 'pos-mg-side-meat-chicken',
+        effects: [
+          { kind: 'add', ref: { kind: 'master', masterProductId: 'mp-chicken-sausage' }, qty: { value: 80, unit: 'g' } },
+        ],
+      },
+    ],
+  },
 ];

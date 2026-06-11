@@ -209,10 +209,13 @@ export function IngredientRefPicker({
         type="button"
         onClick={() => setOpen((v) => !v)}
         style={{
-          width: '100%',
-          padding: '6px 10px', borderRadius: 6, border: '1px solid var(--color-border-subtle)',
+          // Same control size as StyledSelect / textInput (38px, radius 8)
+          // so pickers sit flush next to other fields in a row.
+          width: '100%', height: 38, boxSizing: 'border-box',
+          padding: '0 12px', borderRadius: 8, border: '1px solid var(--color-border)',
           background: '#fff', cursor: 'pointer', textAlign: 'left',
-          fontFamily: 'var(--font-primary)', fontSize: 12.5,
+          fontFamily: 'var(--font-primary)', fontSize: 13,
+          display: 'flex', alignItems: 'center',
         }}
       >
         {resolved?.name ?? <span style={{ color: 'var(--color-text-muted)' }}>{placeholder}</span>}
