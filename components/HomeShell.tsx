@@ -9,6 +9,7 @@ import type { ShellViewMode } from '@/components/ShellTopBar';
 import EstateDashboard from '@/components/Dashboard/EstateDashboard';
 import ManagerDashboard from '@/components/Dashboard/ManagerDashboard';
 import PlaytomicDashboard from '@/components/Dashboard/PlaytomicDashboard';
+import PlatoDashboard from '@/components/Dashboard/PlatoDashboard';
 import CulinaryCollectiveDashboard from '@/components/Dashboard/CulinaryCollective/CulinaryCollectiveDashboard';
 import MorningBriefingTimeline from '@/components/Feed/MorningBriefingTimeline';
 import BriefingDrawer, { briefingLabelForPhase } from '@/components/Feed/BriefingDrawer';
@@ -242,6 +243,15 @@ export default function HomeShell() {
               />
             ) : briefingRole === 'playtomic' ? (
               <PlaytomicDashboard
+                layout={currentLayout}
+                editing={editingDashboard}
+                onLayoutChange={updateCurrentLayout}
+                onToggleEdit={() => setEditingDashboard((v) => !v)}
+                onAddInsight={() => setAddInsightOpen(true)}
+                onRemovePinned={removePinnedChart}
+              />
+            ) : briefingRole === 'plato' ? (
+              <PlatoDashboard
                 layout={currentLayout}
                 editing={editingDashboard}
                 onLayoutChange={updateCurrentLayout}

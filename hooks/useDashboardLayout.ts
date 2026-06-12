@@ -27,6 +27,7 @@ const DEFAULT_LAYOUT_BY_ROLE: LayoutByRole = {
   // state so subsequent additions of new defaults aren't lost.
   pilot: PILOT_DEFAULT_LAYOUT,
   culinary: [],
+  plato: [],
 };
 
 function mergeWithDefaults(
@@ -53,6 +54,7 @@ function loadStored(): LayoutByRole | null {
       dunkin: parsed.dunkin ?? [],
       pilot: mergeWithDefaults(parsed.pilot ?? [], PILOT_DEFAULT_LAYOUT),
       culinary: parsed.culinary ?? [],
+      plato: parsed.plato ?? [],
     };
   } catch {
     return null;

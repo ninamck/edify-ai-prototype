@@ -14,6 +14,7 @@ import {
   Thermometer,
   Hash,
   AlignLeft,
+  Gauge,
   GitBranch,
 } from 'lucide-react';
 import { MOCK_TEMPLATES, MOCK_SITES, MOCK_USERS } from './mockData';
@@ -44,6 +45,7 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
 
 const RESPONSE_OPTIONS: { value: ResponseType; label: string; icon: React.ElementType }[] = [
   { value: 'checkbox', label: 'Checkbox', icon: CheckSquare },
+  { value: 'rating', label: 'Rating', icon: Gauge },
   { value: 'temperature', label: 'Temperature', icon: Thermometer },
   { value: 'number', label: 'Number', icon: Hash },
   { value: 'text', label: 'Text', icon: AlignLeft },
@@ -54,7 +56,7 @@ const CONDITION_OPTIONS: { value: FollowUpConditionType; label: string; forTypes
   { value: 'unchecked', label: 'is unchecked', forTypes: ['checkbox'] },
   { value: 'greater_than', label: 'is greater than', forTypes: ['temperature', 'number'] },
   { value: 'less_than', label: 'is less than', forTypes: ['temperature', 'number'] },
-  { value: 'equals', label: 'equals', forTypes: ['temperature', 'number', 'text'] },
+  { value: 'equals', label: 'equals', forTypes: ['temperature', 'number', 'text', 'rating'] },
   { value: 'contains', label: 'contains', forTypes: ['text'] },
 ];
 
@@ -206,15 +208,18 @@ function FollowUpRuleRow({
 
       {needsValue && (
         <input
-          type={parentResponseType === 'text' ? 'text' : 'number'}
+          type={parentResponseType === 'text' || parentResponseType === 'rating' ? 'text' : 'number'}
           value={rule.condition.value ?? ''}
-          placeholder="value"
+          placeholder={parentResponseType === 'rating' ? 'great / average / urgent' : 'value'}
           onChange={(e) =>
             onChange({
               ...rule,
               condition: {
                 type: rule.condition.type,
-                value: parentResponseType === 'text' ? e.target.value : Number(e.target.value),
+                value:
+                  parentResponseType === 'text' || parentResponseType === 'rating'
+                    ? e.target.value
+                    : Number(e.target.value),
               },
             })
           }
@@ -299,6 +304,8 @@ function QuestionCard({
   function addRule() {
     const defaultCondition = question.responseType === 'checkbox'
       ? { type: 'unchecked' as FollowUpConditionType }
+      : question.responseType === 'rating'
+      ? { type: 'equals' as FollowUpConditionType, value: 'urgent' }
       : { type: 'greater_than' as FollowUpConditionType, value: 0 };
     onChange({
       ...question,

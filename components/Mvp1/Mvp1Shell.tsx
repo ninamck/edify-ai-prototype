@@ -17,6 +17,7 @@ import DateRangePicker, { type DateRange } from '@/components/Mvp1/DateRangePick
 import EstateDashboard from '@/components/Dashboard/EstateDashboard';
 import ManagerDashboard from '@/components/Dashboard/ManagerDashboard';
 import PlaytomicDashboard from '@/components/Dashboard/PlaytomicDashboard';
+import PlatoDashboard from '@/components/Dashboard/PlatoDashboard';
 import DunkinDashboard from '@/components/Dashboard/DunkinDashboard';
 import AddInsightPopup from '@/components/Dashboard/AddInsightPopup';
 import DashboardEditToolbar from '@/components/Dashboard/DashboardEditToolbar';
@@ -319,7 +320,9 @@ export default function Mvp1Shell() {
       ? 'Coffee & Co (US)'
       : briefingRole === 'playtomic'
         ? 'Coffee & Co (UK)'
-        : 'Fitzroy Espresso';
+        : briefingRole === 'plato'
+          ? 'Platō Coffee'
+          : 'Fitzroy Espresso';
 
   function renderDashboardTab() {
     if (briefingRole === 'dunkin') {
@@ -338,6 +341,19 @@ export default function Mvp1Shell() {
     if (briefingRole === 'playtomic') {
       return (
         <PlaytomicDashboard
+          layout={currentLayout}
+          editing={editingDashboard}
+          onLayoutChange={updateCurrentLayout}
+          onToggleEdit={() => setEditingDashboard((v) => !v)}
+          onAddInsight={() => setAddInsightOpen(true)}
+          onRemovePinned={removePinnedChart}
+          toolbarLeadingControls={dateControls}
+        />
+      );
+    }
+    if (briefingRole === 'plato') {
+      return (
+        <PlatoDashboard
           layout={currentLayout}
           editing={editingDashboard}
           onLayoutChange={updateCurrentLayout}

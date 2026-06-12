@@ -1,6 +1,6 @@
 import type { CommandCentreVariant } from '@/components/Feed/CommandCentre';
 
-export type BriefingRole = 'ed' | 'cheryl' | 'gm' | 'playtomic' | 'dunkin' | 'pilot' | 'culinary';
+export type BriefingRole = 'ed' | 'cheryl' | 'gm' | 'playtomic' | 'dunkin' | 'pilot' | 'culinary' | 'plato';
 
 export type BriefingPhase = 'morning' | 'midday' | 'afternoon' | 'evening';
 
@@ -20,6 +20,7 @@ export const BRIEFING_ROLES: { id: BriefingRole; label: string; short: string }[
   { id: 'dunkin', label: 'Coffee & Co · United States', short: 'Coffee & Co US' },
   { id: 'pilot', label: 'Pilot (clean slate)', short: 'Pilot' },
   { id: 'culinary', label: 'Culinary Collective (FIS demo)', short: 'Culinary' },
+  { id: 'plato', label: 'Platō Coffee', short: 'Platō' },
 ];
 
 /** One-line greeting for the top bar (matches timeline persona copy). */
@@ -39,6 +40,8 @@ export function morningGreetingLine(role: BriefingRole): string {
       return 'Good morning — Pilot';
     case 'culinary':
       return 'Good morning — Culinary Collective';
+    case 'plato':
+      return 'Good morning — Platō Coffee';
     default:
       return 'Good morning.';
   }
@@ -63,6 +66,8 @@ export function timeAwareGreeting(role: BriefingRole): string {
       return `Good ${tod} — Pilot`;
     case 'culinary':
       return `Good ${tod} — Culinary Collective`;
+    case 'plato':
+      return `Good ${tod} — Platō Coffee`;
     default:
       return `Good ${tod}.`;
   }
@@ -83,6 +88,8 @@ export function commandCentreVariant(role: BriefingRole): CommandCentreVariant {
     case 'pilot':
       return 'chain';
     case 'culinary':
+      return 'chain';
+    case 'plato':
       return 'chain';
     default:
       return 'chain';

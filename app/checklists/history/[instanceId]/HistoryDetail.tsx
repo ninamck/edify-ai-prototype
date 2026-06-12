@@ -11,6 +11,7 @@ import {
   Hash,
   AlignLeft,
   AlertTriangle,
+  Gauge,
   GitBranch,
 } from 'lucide-react';
 import { getInstanceById, getTemplateForInstance } from '../../mockData';
@@ -22,6 +23,10 @@ function formatAnswer(answer: ChecklistAnswer, responseType: ResponseType): stri
   if (answer.value === null || answer.value === '') return '—';
   if (responseType === 'checkbox') return answer.value ? 'Yes' : 'No';
   if (responseType === 'temperature') return `${answer.value}°C`;
+  if (responseType === 'rating') {
+    const v = String(answer.value);
+    return v.charAt(0).toUpperCase() + v.slice(1);
+  }
   return String(answer.value);
 }
 
@@ -49,6 +54,11 @@ function answerColor(answer: ChecklistAnswer, responseType: ResponseType): { bg:
   if (responseType === 'temperature' || responseType === 'number') {
     return { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' };
   }
+  if (responseType === 'rating') {
+    if (answer.value === 'great') return { bg: '#F0FDF4', text: '#15803D', border: '#BBF7D0' };
+    if (answer.value === 'average') return { bg: '#FFFBEB', text: '#D97706', border: '#FDE68A' };
+    return { bg: '#FEF2F2', text: '#B91C1C', border: '#FECACA' };
+  }
   return { bg: 'var(--color-bg-surface)', text: 'var(--color-text-primary)', border: 'var(--color-border-subtle)' };
 }
 
@@ -57,6 +67,7 @@ const RESPONSE_ICON: Record<ResponseType, React.ElementType> = {
   temperature: Thermometer,
   number: Hash,
   text: AlignLeft,
+  rating: Gauge,
 };
 
 // ─── Answer row ───────────────────────────────────────────────────────────────
@@ -149,6 +160,21 @@ function AnswerRow({
           fontStyle: 'italic',
         }}>
           &ldquo;{String(answer!.value)}&rdquo;
+        </div>
+      )}
+
+      {/* Attached note (rating questions) */}
+      {answer?.note && (
+        <div style={{
+          padding: '10px 12px',
+          borderRadius: '8px',
+          background: 'var(--color-bg-surface)',
+          fontSize: '13px',
+          color: 'var(--color-text-primary)',
+          lineHeight: 1.5,
+          fontStyle: 'italic',
+        }}>
+          &ldquo;{answer.note}&rdquo;
         </div>
       )}
 

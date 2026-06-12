@@ -16,7 +16,7 @@ import {
   GitBranch,
 } from 'lucide-react';
 import { getInstanceById, getTemplateForInstance } from '../../mockData';
-import type { ChecklistAnswer, ChecklistQuestion, ResponseType } from '../../types';
+import type { ChecklistAnswer, ChecklistQuestion, RatingValue, ResponseType } from '../../types';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -108,6 +108,79 @@ function CheckboxInput({
         <Square size={18} />
         No
       </button>
+    </div>
+  );
+}
+
+const RATING_OPTIONS: { value: RatingValue; label: string; activeBg: string }[] = [
+  { value: 'great', label: 'Great', activeBg: '#15803D' },
+  { value: 'average', label: 'Average', activeBg: '#D97706' },
+  { value: 'urgent', label: 'Urgent', activeBg: '#B91C1C' },
+];
+
+function RatingInput({
+  value,
+  note,
+  onChange,
+  onNoteChange,
+}: {
+  value: RatingValue | null;
+  note: string;
+  onChange: (v: RatingValue) => void;
+  onNoteChange: (note: string) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div style={{ display: 'flex', gap: '10px' }}>
+        {RATING_OPTIONS.map((opt) => {
+          const active = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange(opt.value)}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: '52px',
+                borderRadius: '10px',
+                border: active ? 'none' : '1.5px solid var(--color-border)',
+                background: active ? opt.activeBg : '#fff',
+                color: active ? '#fff' : 'var(--color-text-primary)',
+                fontSize: '14px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'var(--font-primary)',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+      <textarea
+        value={note}
+        onChange={(e) => onNoteChange(e.target.value)}
+        placeholder="Add a note (optional)…"
+        rows={2}
+        style={{
+          width: '100%',
+          padding: '10px 12px',
+          borderRadius: '10px',
+          border: '1.5px solid var(--color-border)',
+          fontSize: '13px',
+          fontFamily: 'var(--font-primary)',
+          color: 'var(--color-text-primary)',
+          background: '#fff',
+          outline: 'none',
+          resize: 'vertical',
+          boxSizing: 'border-box',
+          lineHeight: 1.5,
+        }}
+      />
     </div>
   );
 }
@@ -316,6 +389,7 @@ function QuestionCard({
   isFollowUp,
   questionNumber,
   onAnswer,
+  onNoteChange,
   onPhotoChange,
   onConfirm,
   showRequired,
@@ -326,6 +400,7 @@ function QuestionCard({
   isFollowUp: boolean;
   questionNumber: number;
   onAnswer: (questionId: string, value: string | number | boolean | null) => void;
+  onNoteChange: (questionId: string, note: string) => void;
   onPhotoChange: (questionId: string, url: string | undefined) => void;
   onConfirm: (questionId: string) => void;
   showRequired: boolean;
@@ -407,6 +482,19 @@ function QuestionCard({
         <CheckboxInput
           value={typeof answer?.value === 'boolean' ? answer.value : null}
           onChange={(v) => onAnswer(question.id, v)}
+        />
+      )}
+
+      {question.responseType === 'rating' && (
+        <RatingInput
+          value={
+            answer?.value === 'great' || answer?.value === 'average' || answer?.value === 'urgent'
+              ? answer.value
+              : null
+          }
+          note={answer?.note ?? ''}
+          onChange={(v) => onAnswer(question.id, v)}
+          onNoteChange={(note) => onNoteChange(question.id, note)}
         />
       )}
 
@@ -494,13 +582,30 @@ export function CompletionFlowClient({ instanceId }: { instanceId: string }) {
   function handleAnswer(questionId: string, value: string | number | boolean | null) {
     setAnswers((prev) => {
       const existing = prev.findIndex((a) => a.questionId === questionId);
-      const updated: ChecklistAnswer = { questionId, value, photoDataUrl: prev[existing]?.photoDataUrl };
+      const updated: ChecklistAnswer = {
+        questionId,
+        value,
+        note: prev[existing]?.note,
+        photoDataUrl: prev[existing]?.photoDataUrl,
+      };
       if (existing >= 0) {
         const next = [...prev];
         next[existing] = updated;
         return next;
       }
       return [...prev, updated];
+    });
+  }
+
+  function handleNoteChange(questionId: string, note: string) {
+    setAnswers((prev) => {
+      const existing = prev.findIndex((a) => a.questionId === questionId);
+      if (existing >= 0) {
+        const next = [...prev];
+        next[existing] = { ...next[existing], note };
+        return next;
+      }
+      return [...prev, { questionId, value: null, note }];
     });
   }
 
@@ -658,6 +763,7 @@ export function CompletionFlowClient({ instanceId }: { instanceId: string }) {
                   isFollowUp={false}
                   questionNumber={i + 1}
                   onAnswer={(qid, val) => handleAnswerWithScroll(qid, val, rootIds)}
+                  onNoteChange={handleNoteChange}
                   onConfirm={(qid) => scrollToNext(qid, rootIds)}
                   onPhotoChange={handlePhotoChange}
                   showRequired={showRequired}
@@ -679,6 +785,7 @@ export function CompletionFlowClient({ instanceId }: { instanceId: string }) {
                         isFollowUp={true}
                         questionNumber={0}
                         onAnswer={handleAnswer}
+                        onNoteChange={handleNoteChange}
                         onConfirm={() => scrollToNext(q.id, rootIds)}
                         onPhotoChange={handlePhotoChange}
                         showRequired={showRequired}

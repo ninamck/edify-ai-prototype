@@ -1,4 +1,7 @@
-export type ResponseType = 'temperature' | 'number' | 'text' | 'checkbox';
+export type ResponseType = 'temperature' | 'number' | 'text' | 'checkbox' | 'rating';
+
+/** Three-level quality rating used by store-check style questions. */
+export type RatingValue = 'great' | 'average' | 'urgent';
 export type Frequency = 'daily' | 'weekly' | 'monthly' | 'once';
 export type UserRole = 'kitchen' | 'manager' | 'admin';
 export type InstanceStatus = 'pending' | 'in_progress' | 'complete';
@@ -49,6 +52,8 @@ export interface ChecklistTemplate {
 export interface ChecklistAnswer {
   questionId: string;
   value: string | number | boolean | null;
+  /** Free-text note attached to the answer (used by rating questions). */
+  note?: string;
   photoDataUrl?: string;
 }
 
