@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Download, FileText, Layers, ListChecks, Wand2 } from 'lucide-react';
 import BenchCardBoard from '@/components/Production/BenchCardBoard';
+import CrewLineDisplay from '@/components/Production/CrewLineDisplay';
 import BatchDetailPanel from '@/components/Production/BatchDetailPanel';
 import CadenceDetailPanel from '@/components/Production/CadenceDetailPanel';
 import BenchIngredientsPanel from '@/components/Production/BenchIngredientsPanel';
@@ -136,6 +137,13 @@ export default function ProductionBoardPage() {
 
   // Current demo time: Thursday 07:30
   const nowHHMM = '07:30';
+
+  // Burger King is a standalone hot-production line — no benches. Its "Make"
+  // surface is the crew line display (NOW / NEXT / HAVE per station) driven
+  // by the live holding cabinet, not the Pret bench board.
+  if (site.brand === 'bk') {
+    return <CrewLineDisplay siteId={site.id} />;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>

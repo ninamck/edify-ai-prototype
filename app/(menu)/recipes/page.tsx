@@ -32,6 +32,7 @@ import {
 } from '@/components/Production/fixtures';
 import { WorkTypeChips } from '@/components/Production/WorkTypeChip';
 import { useRecipes, setRecipes as storeSetRecipes } from '@/components/Recipe/recipeStore';
+import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import { SharedLibraryBanner, SharedBadge } from '@/components/Franchise/SharedLibrary';
 import { useModifierGroups } from '@/components/Modifiers/store';
 import type { ModifierGroup } from '@/components/Modifiers/types';
@@ -52,7 +53,14 @@ const CATEGORY_ORDER: CategoryFilter[] = [
 
 export default function RecipesLibraryPage() {
   const router = useRouter();
-  const recipes = useRecipes();
+  const allRecipes = useRecipes();
+  const { brand } = useActiveSite();
+  // Scope the menu to the active brand — Burger King's menu only shows when
+  // the BK persona is active, and Pret's stays clean when it isn't.
+  const recipes = useMemo(
+    () => allRecipes.filter((r) => (r.brand ?? 'pret') === brand),
+    [allRecipes, brand],
+  );
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('All');
   const [needsAttentionOnly, setNeedsAttentionOnly] = useState(false);
   const [componentsOnly, setComponentsOnly] = useState(false);

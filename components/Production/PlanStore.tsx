@@ -13,7 +13,6 @@ import {
   proposeBatchSplit,
   productionItemsAt,
   PRET_PLAN,
-  PRET_PRODUCTION_ITEMS,
   type AmountsLine,
   type BenchId,
   type PlannedInstance,
@@ -476,7 +475,7 @@ export function resolvePlan(
   const demandByComponent = new Map<ProductionItemId, AssemblyDemand>();
 
   const itemsBySiteAndRecipe = new Map<RecipeId, ProductionItem[]>();
-  for (const it of PRET_PRODUCTION_ITEMS.filter(p => p.siteId === siteId)) {
+  for (const it of productionItemsAt(siteId)) {
     const arr = itemsBySiteAndRecipe.get(it.recipeId) ?? [];
     arr.push(it);
     itemsBySiteAndRecipe.set(it.recipeId, arr);

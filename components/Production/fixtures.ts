@@ -14,7 +14,28 @@
 //
 // All data is in-memory mock data; no persistence. Dates are anchored on
 // DEMO_TODAY so the scenario stays stable across reloads.
+//
+// Multi-brand: a second brand (Burger King) lives in `./bkFixtures`. Its data
+// arrays are folded into the lookup helpers below (getSite / getRecipe /
+// benchesAt / …) so any surface that goes through them resolves BK data when
+// the active site belongs to that brand. IDs are disjoint across brands and
+// the site-scoped helpers filter by siteId, so the two datasets coexist
+// without a runtime "active brand" flag. `bkFixtures` imports only *types*
+// from here, so there's no runtime import cycle.
 // ─────────────────────────────────────────────────────────────────────────────
+
+import {
+  BK_BENCHES,
+  BK_FORECAST,
+  BK_INGREDIENTS,
+  BK_PRODUCTION_ITEMS,
+  BK_RECIPES,
+  BK_SITES,
+  BK_WORKFLOWS,
+} from './bkFixtures';
+import type { Brand } from './bkFixtures';
+
+export type { Brand };
 
 // ───── IDs (brand types kept loose so fixtures stay readable) ─────
 export type EstateId = string;
@@ -398,6 +419,13 @@ export type Site = {
   formatId: FormatId;
   name: string;
   type: SiteType;
+  /**
+   * Which brand this site belongs to. Defaults to `'pret'` when omitted so
+   * the entire existing fixture set stays Pret without edits. Surfaces that
+   * need to render a brand-specific experience (e.g. the Burger King crew
+   * line display instead of the bench board) branch on this.
+   */
+  brand?: Brand;
   /** Opening hours (HH:MM). */
   openingHours: { open: string; close: string };
   /**
@@ -5306,23 +5334,28 @@ export const DEMO_CURRENT_USER_ID: UserId = 'user-manager-central';
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function getSite(id: SiteId): Site | undefined {
-  return PRET_SITES.find(s => s.id === id);
+  return PRET_SITES.find(s => s.id === id) ?? BK_SITES.find(s => s.id === id);
+}
+
+/** Brand of a site, defaulting to Pret when the field is unset. */
+export function siteBrand(siteId: SiteId): Brand {
+  return getSite(siteId)?.brand ?? 'pret';
 }
 
 export function getBench(id: BenchId): Bench | undefined {
-  return PRET_BENCHES.find(b => b.id === id);
+  return PRET_BENCHES.find(b => b.id === id) ?? BK_BENCHES.find(b => b.id === id);
 }
 
 export function getRecipe(id: RecipeId): ProductionRecipe | undefined {
-  return PRET_RECIPES.find(r => r.id === id);
+  return PRET_RECIPES.find(r => r.id === id) ?? BK_RECIPES.find(r => r.id === id);
 }
 
 export function getProductionItem(id: ProductionItemId): ProductionItem | undefined {
-  return PRET_PRODUCTION_ITEMS.find(p => p.id === id);
+  return PRET_PRODUCTION_ITEMS.find(p => p.id === id) ?? BK_PRODUCTION_ITEMS.find(p => p.id === id);
 }
 
 export function getWorkflow(id: WorkflowId): ProductionWorkflow | undefined {
-  return PRET_WORKFLOWS[id];
+  return PRET_WORKFLOWS[id] ?? BK_WORKFLOWS[id];
 }
 
 /**
@@ -5333,8 +5366,8 @@ export function getWorkflow(id: WorkflowId): ProductionWorkflow | undefined {
  */
 export type WorkflowResolver = (id: WorkflowId) => ProductionWorkflow | undefined;
 
-/** Static fallback — reads PRET_WORKFLOWS directly. */
-const staticWorkflowResolver: WorkflowResolver = (id) => PRET_WORKFLOWS[id];
+/** Static fallback — reads PRET_WORKFLOWS, then the BK workflow set. */
+const staticWorkflowResolver: WorkflowResolver = (id) => PRET_WORKFLOWS[id] ?? BK_WORKFLOWS[id];
 
 let activeWorkflowResolver: WorkflowResolver = staticWorkflowResolver;
 
@@ -5481,11 +5514,11 @@ export function getUser(id: UserId): User | undefined {
 }
 
 export function benchesAt(siteId: SiteId): Bench[] {
-  return PRET_BENCHES.filter(b => b.siteId === siteId);
+  return [...PRET_BENCHES, ...BK_BENCHES].filter(b => b.siteId === siteId);
 }
 
 export function productionItemsAt(siteId: SiteId): ProductionItem[] {
-  return PRET_PRODUCTION_ITEMS.filter(p => p.siteId === siteId);
+  return [...PRET_PRODUCTION_ITEMS, ...BK_PRODUCTION_ITEMS].filter(p => p.siteId === siteId);
 }
 
 /**
@@ -5564,11 +5597,30 @@ export const DOW_MULTIPLIER: Record<DayOfWeek, number> = {
   Sun: 0.65,
 };
 
+/**
+ * Burger King forecast, normalised onto `DEMO_TODAY`. Authored in
+ * `bkFixtures` with a blank date (it can't import the value without forming
+ * a runtime cycle), so we stamp the anchor date here once.
+ */
+const BK_FORECAST_ANCHORED: DemandForecastEntry[] = BK_FORECAST.map(f => ({
+  ...f,
+  date: DEMO_TODAY,
+}));
+
 export function forecastFor(
   siteId: SiteId,
   skuId: SkuId,
   date: string,
 ): DemandForecastEntry | undefined {
+  // Burger King (and any future non-Pret brand): a single authored anchor on
+  // DEMO_TODAY, day-of-week projected for other dates — same shape as the
+  // same-site anchor path below.
+  if (siteBrand(siteId) !== 'pret') {
+    const bkAnchor = BK_FORECAST_ANCHORED.find(f => f.siteId === siteId && f.skuId === skuId);
+    if (!bkAnchor) return undefined;
+    return date === DEMO_TODAY ? bkAnchor : projectAnchor(bkAnchor, siteId, date);
+  }
+
   const exact = PRET_FORECAST.find(f => f.siteId === siteId && f.skuId === skuId && f.date === date);
   if (exact) return exact;
 
@@ -6182,7 +6234,7 @@ export function demandBiasFor(skuId: SkuId): number {
 }
 
 export function getIngredient(id: IngredientId): Ingredient | undefined {
-  return PRET_INGREDIENTS.find(i => i.id === id);
+  return PRET_INGREDIENTS.find(i => i.id === id) ?? BK_INGREDIENTS.find(i => i.id === id);
 }
 
 export function ingredientUsageFor(recipeId: RecipeId): IngredientUsage[] {

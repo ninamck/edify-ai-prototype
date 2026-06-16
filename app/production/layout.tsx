@@ -110,36 +110,61 @@ const SPOKE_SUB_TABS: SubTab[] = [
   { id: 'site-settings',   label: 'Settings',          href: '/production/settings' },
 ];
 
+// Burger King is a standalone hot-production restaurant. Its surfaces are
+// deliberately tight:
+//   • Make = the crew line display (NOW / NEXT / HAVE per station), backed
+//     by the live holding cabinet, plus the Today drop grid.
+//   • Plan = how many of each component to drop per 15-min window.
+// No dispatch, no benches, no PCR / carry-over / run-sheet (those are Pret
+// hub concerns that don't map to a single-restaurant flame-broiler line).
+const BK_RUN_TABS: SubTab[] = [
+  { id: 'board',   label: 'Crew line', href: '/production/board' },
+  { id: 'amounts', label: 'Today',     href: '/production/amounts' },
+];
+
+const BK_PLAN_TABS: SubTab[] = [
+  { id: 'plan', label: 'Plan', href: '/production/plan' },
+];
+
 export default function ProductionLayout({ children }: { children: React.ReactNode }) {
   const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
   const router = useRouter();
   const pathname = usePathname();
-  const { isSpoke, isHybrid, isStandalone, isProducingHybrid } = useActiveSite();
+  const { isSpoke, isHybrid, isStandalone, isProducingHybrid, isBurgerKing } = useActiveSite();
 
   // Persona drives the tab set. Every baking persona (Hub, Standalone,
   // Hybrid, producing HYBRID_HUB) now gets a Run/Plan split so the chrome
   // matches the mental mode the manager is in (live floor on Run,
   // planning + retro on Plan). Spokes receive + sell + order (curated),
-  // so they keep their single strip.
+  // so they keep their single strip. Burger King gets its own trimmed
+  // hot-production strips (crew line + drop plan).
   const isSelfProducing = isHybrid || isStandalone || isProducingHybrid;
   const productionGroup = productionGroupForPath(pathname);
-  const subTabs = isSpoke
-    ? SPOKE_SUB_TABS
-    : isSelfProducing
-      ? productionGroup === 'run'
-        ? SELF_PRODUCING_RUN_TABS
-        : SELF_PRODUCING_PLAN_TABS
-      : productionGroup === 'run'
-        ? HUB_RUN_TABS
-        : HUB_PLAN_TABS;
+  const subTabs = isBurgerKing
+    ? productionGroup === 'run'
+      ? BK_RUN_TABS
+      : BK_PLAN_TABS
+    : isSpoke
+      ? SPOKE_SUB_TABS
+      : isSelfProducing
+        ? productionGroup === 'run'
+          ? SELF_PRODUCING_RUN_TABS
+          : SELF_PRODUCING_PLAN_TABS
+        : productionGroup === 'run'
+          ? HUB_RUN_TABS
+          : HUB_PLAN_TABS;
 
   // Header copy — what kind of view the manager is on. Swaps with the
   // strip so the chrome reflects the mental mode they're in.
   const headerLabel = isSpoke
     ? 'Production'
-    : productionGroup === 'run'
-      ? 'Run production'
-      : 'Plan production';
+    : isBurgerKing
+      ? productionGroup === 'run'
+        ? 'Kitchen line'
+        : 'Drop plan'
+      : productionGroup === 'run'
+        ? 'Run production'
+        : 'Plan production';
 
   return (
     <HubOperatorProviders>

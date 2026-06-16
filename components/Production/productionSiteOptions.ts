@@ -12,6 +12,7 @@
  */
 
 import type { SiteId } from './fixtures';
+import { BK_SITE_ID } from './bkFixtures';
 
 export type ProductionSiteOption = {
   /** Underlying fixture site id — what state/data layers actually use. */
@@ -30,6 +31,10 @@ export const PRODUCTION_SITE_OPTIONS: ProductionSiteOption[] = [
   { id: 'site-hybrid-airport',   label: 'Fitzroy Heathrow',     tag: 'SPOKE' },
   { id: 'site-hybrid-hub-gatwick', label: 'Fitzroy Gatwick',    tag: 'HYBRID' },
   { id: 'site-standalone-north', label: 'Fitzroy Islington',    tag: 'SPOKE' },
+  // Burger King — a separate brand. Locked to this site whenever the BK
+  // persona is active (see ProductionSiteContext), so it never mixes with
+  // the Pret site picker in practice.
+  { id: BK_SITE_ID,              label: 'Burger King — Stratford', tag: 'YOUR SITE' },
 ];
 
 /**

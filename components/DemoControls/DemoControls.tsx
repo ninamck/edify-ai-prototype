@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { usePathname, useRouter } from 'next/navigation';
 import { FlaskConical, ChevronDown } from 'lucide-react';
 import { USERS, getRoleRules } from '@/components/Approvals/approvalsStore';
+import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import { useFranchise, type FranchiseViewMode } from '@/components/Franchise/FranchiseContext';
 import { BRIEFING_ROLES } from '@/components/briefing';
 import type { BriefingRole } from '@/components/briefing';
@@ -211,17 +212,55 @@ const VIEW_OPTIONS: { id: FranchiseViewMode; label: string }[] = [
   { id: 'group', label: 'Franchise admin' },
 ];
 
+const BRAND_OPTIONS: { id: 'pret' | 'bk'; label: string; activeSiteId: string }[] = [
+  { id: 'pret', label: 'Pret', activeSiteId: 'fitzroy-espresso' },
+  { id: 'bk', label: 'Burger King', activeSiteId: 'burger-king-stratford' },
+];
+
 function PanelBody({ extraSection }: { extraSection?: ReactNode }) {
   const router = useRouter();
   const actingUserId = useActingUser();
   const briefingRole = useDemoBriefingRole();
   const demoVersion = useDemoVersion();
   const { viewMode, setViewMode } = useFranchise();
+  const { brand, setActiveSiteId } = useActiveSite();
   const actingUser = USERS.find((u) => u.id === actingUserId);
   const rules = actingUser ? getRoleRules(actingUser.role) : null;
 
   return (
     <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div>
+        <div style={sectionLabelStyle}>Brand</div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {BRAND_OPTIONS.map((b) => {
+            const active = brand === b.id;
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => {
+                  setActiveSiteId(b.activeSiteId);
+                  router.push('/production');
+                }}
+                style={pillOptionStyle(active)}
+              >
+                {b.label}
+              </button>
+            );
+          })}
+        </div>
+        <div
+          style={{
+            fontSize: 10,
+            lineHeight: 1.4,
+            color: 'var(--color-text-muted)',
+            marginTop: 6,
+          }}
+        >
+          Burger King is a standalone hot-production restaurant — plan + make, no dispatch.
+        </div>
+      </div>
+
       <div>
         <div style={sectionLabelStyle}>View</div>
         <div style={{ display: 'flex', gap: 4 }}>

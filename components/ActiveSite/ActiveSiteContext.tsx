@@ -23,6 +23,9 @@ import {
  * changes during a demo session.
  */
 
+import type { Brand } from '@/components/Production/bkFixtures';
+import { BK_SITE_ID } from '@/components/Production/bkFixtures';
+
 export type ActiveSiteType = 'HUB' | 'SPOKE' | 'HYBRID' | 'HYBRID_HUB' | 'STANDALONE' | 'ALL';
 
 export type ActiveSite = {
@@ -31,6 +34,17 @@ export type ActiveSite = {
   type: ActiveSiteType;
   /** Short descriptor shown under the name in the dropdown row. */
   caption: string;
+  /**
+   * Brand this persona belongs to. Defaults to `'pret'` when omitted. Drives
+   * brand-specific shells (e.g. the Burger King crew line display).
+   */
+  brand?: Brand;
+  /**
+   * Explicit production-fixture site this persona maps to. Needed when two
+   * personas share the same `type` (e.g. Pret Islington and Burger King are
+   * both STANDALONE) so the production site can't be derived from type alone.
+   */
+  productionSiteId?: string;
 };
 
 const STORAGE_KEY = 'edify.activeSiteId';
@@ -88,6 +102,17 @@ export const ACTIVE_SITES: ActiveSite[] = [
     // monitoring an automated bake.
     caption: 'Standalone site · Self-producing',
   },
+  {
+    id: 'burger-king-stratford',
+    name: 'Burger King — Stratford',
+    type: 'STANDALONE',
+    brand: 'bk',
+    // Burger King is a standalone hot-production restaurant: no hub, no
+    // dispatch. Plan = how many of each component to drop per 15 min;
+    // Make = the crew line display reading the holding cabinet live.
+    productionSiteId: BK_SITE_ID,
+    caption: 'Burger King · Hot production',
+  },
 ];
 
 const DEFAULT_ACTIVE_SITE_ID = 'fitzroy-espresso';
@@ -111,6 +136,12 @@ type ActiveSiteContextValue = {
   // *do* care about the cross-site case check `isAllSites` explicitly.
   isStandalone: boolean;
   isAllSites: boolean;
+  /** Active brand (defaults to Pret). */
+  brand: Brand;
+  /** True when the active persona is the Burger King restaurant. */
+  isBurgerKing: boolean;
+  /** Explicit production-fixture site id for the persona, when it pins one. */
+  productionSiteId?: string;
 };
 
 const ActiveSiteContext = createContext<ActiveSiteContextValue | null>(null);
@@ -156,6 +187,9 @@ export function ActiveSiteProvider({ children }: { children: React.ReactNode }) 
       isStandalone:
         activeSite.type === 'STANDALONE' || activeSite.type === 'ALL',
       isAllSites: activeSite.type === 'ALL',
+      brand: activeSite.brand ?? 'pret',
+      isBurgerKing: (activeSite.brand ?? 'pret') === 'bk',
+      productionSiteId: activeSite.productionSiteId,
     };
   }, [activeSiteId, setActiveSiteId]);
 
@@ -180,6 +214,9 @@ export function useActiveSite(): ActiveSiteContextValue {
       isStandalone:
         fallback.type === 'STANDALONE' || fallback.type === 'ALL',
       isAllSites: fallback.type === 'ALL',
+      brand: fallback.brand ?? 'pret',
+      isBurgerKing: (fallback.brand ?? 'pret') === 'bk',
+      productionSiteId: fallback.productionSiteId,
     };
   }
   return ctx;

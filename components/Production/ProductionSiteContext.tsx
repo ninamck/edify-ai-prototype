@@ -47,7 +47,13 @@ type ProductionSiteContextValue = {
 const Context = createContext<ProductionSiteContextValue | null>(null);
 
 export function ProductionSiteProvider({ children }: { children: React.ReactNode }) {
-  const { isSpoke, isHybrid, isStandalone, isProducingHybrid } = useActiveSite();
+  const {
+    isSpoke,
+    isHybrid,
+    isStandalone,
+    isProducingHybrid,
+    productionSiteId: personaSiteId,
+  } = useActiveSite();
   const [siteId, setSiteIdState] = useState<SiteId>(HUB_DEFAULT);
 
   // Hydrate from localStorage on mount (client only — keep SSR default
@@ -69,7 +75,11 @@ export function ProductionSiteProvider({ children }: { children: React.ReactNode
   // default if it was previously viewing a locked persona's site,
   // otherwise keeps whatever was last picked.
   useEffect(() => {
-    if (isSpoke) {
+    // A persona that pins an explicit production site (e.g. Burger King)
+    // wins outright — its data graph is a different brand entirely.
+    if (personaSiteId) {
+      setSiteIdState(personaSiteId);
+    } else if (isSpoke) {
       setSiteIdState(SPOKE_LOCKED);
     } else if (isHybrid) {
       setSiteIdState(HYBRID_LOCKED);
@@ -87,7 +97,7 @@ export function ProductionSiteProvider({ children }: { children: React.ReactNode
           : prev,
       );
     }
-  }, [isSpoke, isHybrid, isProducingHybrid, isStandalone]);
+  }, [isSpoke, isHybrid, isProducingHybrid, isStandalone, personaSiteId]);
 
   const setSiteId = useCallback((id: SiteId) => {
     if (!PRODUCTION_SITE_OPTIONS.some(o => o.id === id)) return;
@@ -104,9 +114,10 @@ export function ProductionSiteProvider({ children }: { children: React.ReactNode
       siteId,
       setSiteId,
       options: PRODUCTION_SITE_OPTIONS,
-      canPickSite: !isSpoke && !isHybrid && !isProducingHybrid && !isStandalone,
+      canPickSite:
+        !personaSiteId && !isSpoke && !isHybrid && !isProducingHybrid && !isStandalone,
     }),
-    [siteId, setSiteId, isSpoke, isHybrid, isProducingHybrid, isStandalone],
+    [siteId, setSiteId, isSpoke, isHybrid, isProducingHybrid, isStandalone, personaSiteId],
   );
 
   return <Context.Provider value={value}>{children}</Context.Provider>;

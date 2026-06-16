@@ -429,6 +429,12 @@ export type Recipe = {
   id: string;
   name: string;
   category: RecipeCategory;
+  /**
+   * Brand this library entry belongs to. Defaults to `'pret'` when unset so
+   * the existing library stays Pret. The recipes page filters by the active
+   * brand so the Burger King menu only shows when the BK persona is active.
+   */
+  brand?: import('@/components/Production/bkFixtures').Brand;
   ingredientCost: number;        // £ per serve
   priceDineIn: number;
   priceTakeaway: number;
@@ -1466,12 +1472,66 @@ function migrateLegacySeed(s: LegacyFitzroySeed): Omit<Recipe, 'kind'> {
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Burger King library entries — derived from the BK production fixtures the
+// same way the Pret entries are, tagged `brand: 'bk'` so the recipes page
+// can show the BK menu only when the Burger King persona is active.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { BK_RECIPES } from '@/components/Production/bkFixtures';
+
+const BK_CONSUMED_IDS: Set<string> = new Set(
+  BK_RECIPES.flatMap((r) => r.subRecipes?.map((s) => s.recipeId) ?? []),
+);
+
+export const BK_LIBRARY_RECIPES: Recipe[] = BK_RECIPES.map((r) => {
+  const kind: RecipeKind =
+    r.subRecipes && r.subRecipes.length > 0
+      ? 'assembly'
+      : BK_CONSUMED_IDS.has(r.id)
+        ? 'component'
+        : 'standalone';
+  // Assembled burgers are the sellable POS items; cook components (patties,
+  // cheese-melt, …) are made-to-hold and consumed by assemblies.
+  const sellable = kind === 'assembly';
+  const dineIn = sellable ? 5.99 : 0;
+  const ingredientCost = sellable ? Math.round(dineIn * 0.32 * 100) / 100 : 0;
+  return {
+    id: r.id,
+    name: r.name,
+    category: r.category as RecipeCategory,
+    brand: 'bk',
+    ingredientCost,
+    priceDineIn: dineIn,
+    priceTakeaway: dineIn,
+    priceDelivery: sellable ? dineIn + 1 : 0,
+    marginPct: sellable ? Math.round(((dineIn - ingredientCost) / dineIn) * 100) : 0,
+    status: 'Active' as RecipeStatus,
+    flag: null,
+    ingredients: [],
+    posLinked: sellable,
+    production: {
+      visibility: 'Kitchen' as const,
+      shelfLifeMinutes: r.shelfLifeMinutes,
+      prepTimeSeconds: null,
+    },
+    kind,
+    subRecipes: r.subRecipes?.map((s) => ({
+      recipeId: s.recipeId,
+      quantityPerUnit: s.quantityPerUnit,
+      unit: s.unit,
+    })),
+    workflowId: r.workflowId,
+  } as Recipe;
+});
+
 export const ALL_LIBRARY_RECIPES: Recipe[] = [
   ...FITZROY_RECIPES.map((s): Recipe => withIngredientsV2({
     ...migrateLegacySeed(s),
     kind: 'standalone',
   })),
   ...PRET_LIBRARY_RECIPES,
+  ...BK_LIBRARY_RECIPES,
 ];
 
 /** Inverse of subRecipes: which recipes consume this one. */
