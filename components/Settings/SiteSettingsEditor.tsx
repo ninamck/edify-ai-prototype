@@ -22,9 +22,7 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { CheckCircle2, ChevronRight, X, AlertTriangle, RotateCcw } from 'lucide-react';
-import EdifyMark from '@/components/EdifyMark/EdifyMark';
-import StatusPill from '@/components/Production/StatusPill';
+import { CheckCircle2, ChevronRight, X, AlertTriangle } from 'lucide-react';
 import {
   PRET_SETTINGS_HEALTH,
   type SettingsHealthItem,
@@ -119,7 +117,6 @@ export default function SiteSettingsEditor({
   }, [activeTab, onTabChange]);
 
   const stagedCounts = useMemo(() => countOverrides(staged), [staged]);
-  const persistedCounts = useMemo(() => countOverrides(overlay), [overlay]);
   const stagedDiffCount = useMemo(() => {
     return computeStagedDiff(overlay, staged);
   }, [overlay, staged]);
@@ -183,11 +180,6 @@ export default function SiteSettingsEditor({
     setSavedSummary(summary.length > 0 ? summary : ['No changes.']);
   }, [overlay, staged, effective, replace, siteHealth]);
 
-  function resetAll() {
-    setStaged({});
-    setSavedSummary(null);
-  }
-
   // ─── Render ───────────────────────────────────────────────────────────────
 
   // Estate-scoped tabs (currently just night-shift) read their override
@@ -235,16 +227,6 @@ export default function SiteSettingsEditor({
         fontFamily: 'var(--font-primary)',
       }}
     >
-      {/* Editor header — site identity + reset */}
-      <EditorHeader
-        siteName={effective.core.name}
-        siteType={effective.core.type}
-        hubId={effective.core.hubId}
-        onResetAll={resetAll}
-        canResetAll={persistedCounts.total > 0}
-        overridesCount={persistedCounts.total}
-      />
-
       {/* Saved banner */}
       {savedSummary && (
         <SaveBanner
@@ -358,85 +340,6 @@ export default function SiteSettingsEditor({
           render a "switch site" link here because the host page provides
           a picker. */}
       {lockedSite && null}
-    </div>
-  );
-}
-
-// ─── Header ──────────────────────────────────────────────────────────────────
-
-function EditorHeader({
-  siteName,
-  siteType,
-  hubId,
-  onResetAll,
-  canResetAll,
-  overridesCount,
-}: {
-  siteName: string;
-  siteType: 'STANDALONE' | 'HUB' | 'SPOKE' | 'HYBRID' | 'HYBRID_HUB';
-  hubId: SiteId | null;
-  onResetAll: () => void;
-  canResetAll: boolean;
-  overridesCount: number;
-}) {
-  const typeTone =
-    siteType === 'HUB' ? 'brand' : siteType === 'SPOKE' ? 'info' : 'neutral';
-
-  return (
-    <div
-      style={{
-        flexShrink: 0,
-        padding: '14px 16px',
-        borderBottom: '1px solid var(--color-border-subtle)',
-        background: '#ffffff',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        flexWrap: 'wrap',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 8,
-            background: 'var(--color-bg-hover)',
-            color: 'var(--color-text-secondary)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <EdifyMark size={16} color="var(--color-text-secondary)" />
-        </div>
-        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 14, fontWeight: 700 }}>{siteName || 'Settings'}</span>
-            <StatusPill tone={typeTone} label={siteType} size="xs" />
-            {overridesCount > 0 && (
-              <StatusPill tone="info" label={`${overridesCount} override${overridesCount === 1 ? '' : 's'}`} size="xs" />
-            )}
-          </div>
-          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-            {hubId
-              ? `Ordering from ${hubId.replace(/-/g, ' ')} · estate cascade applies`
-              : 'Configure the defaults for this site. Edits override the format / estate cascade.'}
-          </span>
-        </div>
-      </div>
-      <div style={{ flex: 1 }} />
-      {canResetAll && (
-        <button
-          type="button"
-          onClick={onResetAll}
-          style={ghostBtn()}
-          title="Drop every override on this site"
-        >
-          <RotateCcw size={12} /> Reset to defaults
-        </button>
-      )}
     </div>
   );
 }

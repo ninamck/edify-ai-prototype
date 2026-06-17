@@ -63,23 +63,34 @@ export default function Sidebar() {
   // The hub Production area splits into two sidebar items so the mental
   // model matches what a manager is actually doing:
   //   • Run production  → "what's happening on the floor right now"
-  //                       (Today, Run sheet, Benches, Sales live, PCR)
+  //                       (Today, Run sheet, Sales live, PCR)
   //   • Plan production → "what I'm setting up for tomorrow / future"
-  //                       (Plan, Carry-over, Productivity, Sales vs
-  //                        forecast, Settings, Settings health, Setup)
+  //                       (Plan, Benches, Carry-over, Productivity, Sales
+  //                        vs forecast, Settings, Settings health, Setup)
   // Both items share /production routes; we tell them apart by which
   // sub-page is open. A page that doesn't fall in either bucket (just
   // bare /production) defaults to Run since that's the active-day view.
   // Run/Plan path detection covers both the Original tree (/production/*)
   // and the Prod 2.0 duplicate (/prod-2/production/*) so the active-state
   // pill highlights correctly regardless of which demo version is on.
-  const RUN_PRODUCTION_SUFFIXES = ['/amounts', '/run-sheet', '/board', '/sales', '/pcr'];
+  // Benches (/board) moved into Plan production for Pret personas, so it's
+  // dropped from the Run suffixes. Burger King's crew line shares the
+  // /board path but is a live run-floor surface, so it's re-added as a
+  // persona exception in `isRunProductionPath` below.
+  const RUN_PRODUCTION_SUFFIXES = ['/amounts', '/run-sheet', '/sales', '/pcr'];
   const RUN_PRODUCTION_PREFIXES = [
     ...RUN_PRODUCTION_SUFFIXES.map(s => `/production${s}`),
     ...RUN_PRODUCTION_SUFFIXES.map(s => `/prod-2/production${s}`),
   ];
-  const isRunProductionPath = (p: string) =>
-    RUN_PRODUCTION_PREFIXES.some(prefix => p === prefix || p.startsWith(prefix + '/'));
+  const isRunProductionPath = (p: string) => {
+    if (
+      isBurgerKing &&
+      (p === '/production/board' || p.startsWith('/production/board/'))
+    ) {
+      return true;
+    }
+    return RUN_PRODUCTION_PREFIXES.some(prefix => p === prefix || p.startsWith(prefix + '/'));
+  };
   const isProductionPath = (p: string) =>
     p === '/production' ||
     p.startsWith('/production/') ||
@@ -99,7 +110,7 @@ export default function Sidebar() {
   // don't dispatch (the hub does), don't match invoices or own credit
   // notes (estate-level), and don't see analytics / compare-sites
   // (estate-level performance views).
-  const { isSpoke, isHub, isProducingHybrid, isAllSites, activeSiteId } = useActiveSite();
+  const { isSpoke, isHub, isProducingHybrid, isAllSites, isBurgerKing, activeSiteId } = useActiveSite();
   // In the franchise-admin "group view" the operator sits above the whole
   // group, so the sidebar surfaces a dedicated entry back to the group
   // overview alongside the normal store nav.

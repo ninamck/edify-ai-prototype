@@ -27,7 +27,7 @@ import {
   startCookTimer,
   pauseCookTimer,
   resumeCookTimer,
-  clearCookTimer,
+  completeCookTimer,
   remainingSeconds,
   getCookTimers,
   type CookTimer,
@@ -40,9 +40,12 @@ function stepHasTimer(step: BkCrewStep): boolean {
 
 export default function StepperViewBK({
   recipeId,
+  cookQty = 1,
   onClose,
 }: {
   recipeId: RecipeId | null;
+  /** Batch size for the component being cooked — carried onto the line + cabinet. */
+  cookQty?: number;
   onClose: () => void;
 }) {
   const open = recipeId !== null;
@@ -98,8 +101,9 @@ export default function StepperViewBK({
     } else if (paused) {
       resumeCookTimer(recipeId);
     } else {
-      // Fresh start (or restart after done) for this step.
-      startCookTimer(recipeId, step.label, step.label, step.seconds);
+      // Fresh start (or restart after done) for this step. The batch now
+      // shows on the line; when the timer lands it moves to the cabinet.
+      startCookTimer(recipeId, step.label, step.label, step.seconds, cookQty);
     }
   };
 
@@ -117,8 +121,9 @@ export default function StepperViewBK({
     if (stepIdx < steps.length - 1) {
       goToStep(stepIdx + 1);
     } else if (recipeId) {
-      // Batch finished — into the cabinet, so the cook timer is cleared.
-      clearCookTimer(recipeId);
+      // Batch finished — land it in the cabinet now (don't just discard the
+      // timer), so the crew sees it move from the broiler into the cabinet.
+      completeCookTimer(recipeId);
       onClose();
     }
   };

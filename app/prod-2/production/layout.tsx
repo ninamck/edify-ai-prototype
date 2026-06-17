@@ -36,7 +36,6 @@ type SubTab = { id: string; label: string; href: string };
 const HUB_RUN_TABS: SubTab[] = [
   { id: 'amounts',    label: 'Today',         href: '/production/amounts' },
   { id: 'run-sheet',  label: 'Run sheet',     href: '/production/run-sheet' },
-  { id: 'board',      label: 'Benches',       href: '/production/board' },
   { id: 'sales',      label: 'Sales (live)',  href: '/production/sales' },
   { id: 'pcr',        label: 'PCR queue',     href: '/production/pcr' },
 ];
@@ -49,8 +48,12 @@ const HUB_PLAN_TABS: SubTab[] = [
   // their own /production/spokes "Order" tab. The dedicated "Spoke
   // plans" sub-tab was removed; the layout-level site picker is the
   // only spoke selector.
+  // Benches (the bench board) sits here in Plan: it's where the bake is
+  // laid out across stations ahead of the shift, not a live-floor view.
   { id: 'plan',            label: 'Plan',              href: '/production/plan' },
-  { id: 'carry-over',      label: 'Carry-over',        href: '/production/carry-over' },
+  { id: 'board',           label: 'Benches',           href: '/production/board' },
+  // Carry-over tab hidden per request — page still exists at /production/carry-over:
+  // { id: 'carry-over',      label: 'Carry-over',        href: '/production/carry-over' },
   { id: 'productivity',    label: 'Productivity',      href: '/production/productivity' },
   { id: 'sales-report',    label: 'Sales vs forecast', href: '/production/sales-report' },
   { id: 'site-settings',   label: 'Settings',          href: '/production/settings' },
@@ -76,7 +79,8 @@ function productionGroupForPath(pathname: string): 'run' | 'plan' {
 const SPOKE_SUB_TABS: SubTab[] = [
   { id: 'amounts',      label: 'Today',             href: '/production/amounts' },
   { id: 'sales',        label: 'Sales (live)',      href: '/production/sales' },
-  { id: 'carry-over',   label: 'Carry-over',        href: '/production/carry-over' },
+  // Carry-over tab hidden per request — page still exists at /production/carry-over:
+  // { id: 'carry-over',   label: 'Carry-over',        href: '/production/carry-over' },
   { id: 'spokes',       label: 'Order',             href: '/production/spokes' },
   { id: 'sales-report',    label: 'Sales vs forecast', href: '/production/sales-report' },
   { id: 'site-settings',   label: 'Settings',          href: '/production/settings' },

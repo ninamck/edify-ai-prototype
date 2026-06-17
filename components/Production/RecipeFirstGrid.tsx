@@ -37,7 +37,7 @@ import HybridOrderSubmitBar from './HybridOrderSubmitBar';
 import StepperLauncher from './StepperLauncher';
 import { daySummary } from './salesReport';
 import { unitPriceFor, formatCurrency } from '../Forecast/economics';
-import { Pencil, Check, RotateCcw, Activity, Lock } from 'lucide-react';
+import { Pencil, Check, RotateCcw, Activity, Lock, RefreshCw } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 
 /**
@@ -794,6 +794,11 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today', locke
       )}
 
       <div style={{ padding: '16px 30px 32px' }}>
+        {/* BK plans cook to a forecast pulled from the POS (a third-party
+            system), not numbers typed in here — surface that it's connected
+            and current, mirroring the badge on the crew line. */}
+        {isBKSite && <ForecastSyncBadge />}
+
         {/* Toolbar:
               • HUB / hybrid (Today AND Plan): All / P1..Pn slot tabs +
                 spoke filter. Today additionally carries the Edit toggle +
@@ -1906,7 +1911,7 @@ function RecipeRow({
       >
         <td style={bodyStyle({ left: true, sticky: true, focused })}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, flex: 1 }}>
+            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, rowGap: 3, minWidth: 0, flex: 1, flexWrap: 'wrap' }}>
               <span
                 style={{
                   fontSize: 12,
@@ -1915,11 +1920,13 @@ function RecipeRow({
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
+                  minWidth: 0,
+                  flexShrink: 1,
                 }}
               >
                 {row.recipe.name}
               </span>
-              <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', flexShrink: 0 }}>
                 {isHybrid && row.hybridSource && (
                   <StatusPill
                     tone={row.hybridSource === 'make' ? 'info' : 'neutral'}
@@ -2457,6 +2464,7 @@ function RecipeRow({
                 updated[idx] = Math.max(0, Math.round(next));
                 planStore.setPerDropPlan(line.item.id, updated, date);
               }}
+              onSetPlan={next => planStore.setPerDropPlan(line.item.id, next, date)}
             />
           </td>
         </tr>
@@ -3274,6 +3282,269 @@ function buildPerSlotForecast(
 
 // ─── Hot Prod expansion strip ──────────────────────────────────────────────────
 
+// How extra units are spread across drops, and over which drops.
+type DistMethod = 'even' | 'forecast' | 'frontload';
+type DistScope = 'rest' | 'all';
+
+const DIST_METHOD_LABELS: Record<DistMethod, string> = {
+  even: 'Even',
+  forecast: 'Match forecast',
+  frontload: 'Front-load',
+};
+
+/**
+ * Add `amount` units to a per-drop plan, spread across `targetIdx` by a chosen
+ * method. Uses the largest-remainder method so the integers added sum exactly
+ * to `amount` (no rounding drift), then never drops a drop below zero.
+ */
+function distributeExtra(
+  base: number[],
+  amount: number,
+  targetIdx: number[],
+  forecastPerDrop: number[],
+  method: DistMethod,
+): number[] {
+  const next = base.slice();
+  if (amount <= 0 || targetIdx.length === 0) return next;
+
+  let weights = targetIdx.map((i, k) => {
+    if (method === 'even') return 1;
+    if (method === 'forecast') return Math.max(0, forecastPerDrop[i] ?? 0);
+    // front-load: earliest target drop gets the most, tapering down.
+    return targetIdx.length - k;
+  });
+  let sumW = weights.reduce((a, b) => a + b, 0);
+  if (sumW <= 0) {
+    weights = targetIdx.map(() => 1);
+    sumW = targetIdx.length;
+  }
+
+  const raw = weights.map(w => (amount * w) / sumW);
+  const add = raw.map(r => Math.floor(r));
+  const placed = add.reduce((a, b) => a + b, 0);
+  const remainder = amount - placed;
+  const byFrac = raw
+    .map((r, k) => ({ k, frac: r - Math.floor(r) }))
+    .sort((a, b) => b.frac - a.frac);
+  for (let j = 0; j < remainder; j += 1) add[byFrac[j % byFrac.length].k] += 1;
+
+  targetIdx.forEach((i, k) => {
+    next[i] = Math.max(0, (next[i] ?? 0) + add[k]);
+  });
+  return next;
+}
+
+/** Inline control to add extra units to the day and choose how they spread. */
+function AddUnitsPanel({
+  amount,
+  method,
+  scope,
+  dropCount,
+  canRest,
+  onAmount,
+  onMethod,
+  onScope,
+  onApply,
+  onCancel,
+}: {
+  amount: number;
+  method: DistMethod;
+  scope: DistScope;
+  dropCount: number;
+  canRest: boolean;
+  onAmount: (n: number) => void;
+  onMethod: (m: DistMethod) => void;
+  onScope: (s: DistScope) => void;
+  onApply: () => void;
+  onCancel: () => void;
+}) {
+  const perDrop = dropCount > 0 ? (amount / dropCount).toFixed(1) : '0';
+  const seg = (active: boolean): React.CSSProperties => ({
+    padding: '5px 10px',
+    borderRadius: 8,
+    border: `1px solid ${active ? 'var(--color-accent-active)' : 'var(--color-border-subtle)'}`,
+    background: active ? 'var(--color-accent-active)' : 'transparent',
+    color: active ? '#fff' : 'var(--color-text-secondary)',
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  });
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'flex-end',
+        gap: 16,
+        padding: '12px 14px',
+        marginBottom: 10,
+        borderRadius: 'var(--radius-card)',
+        border: '1px solid var(--color-border-subtle)',
+        background: '#ffffff',
+      }}
+    >
+      {/* Amount */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span style={fieldLabel}>Extra units</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <QtyStepper
+            size="default"
+            canDecrement={amount > 0}
+            onDecrement={() => onAmount(Math.max(0, amount - 12))}
+            onIncrement={() => onAmount(amount + 12)}
+            decrementLabel="Remove 12"
+            incrementLabel="Add 12"
+          >
+            <input
+              type="number"
+              min={0}
+              value={amount}
+              onChange={e => onAmount(Math.max(0, Math.round(Number(e.target.value) || 0)))}
+              style={{
+                width: 56,
+                textAlign: 'center',
+                border: 'none',
+                background: 'transparent',
+                outline: 'none',
+                padding: 0,
+                fontSize: 14,
+                fontWeight: 700,
+                fontVariantNumeric: 'tabular-nums',
+                color: 'var(--color-text-primary)',
+                fontFamily: 'var(--font-primary)',
+              }}
+            />
+          </QtyStepper>
+          {/* Quick-add chips — stack these to build a large amount fast. */}
+          {[25, 50, 100].map(n => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onAmount(amount + n)}
+              title={`Add ${n} more`}
+              style={{
+                padding: '6px 9px',
+                borderRadius: 8,
+                border: '1px solid var(--color-border-subtle)',
+                background: 'var(--color-bg-hover)',
+                color: 'var(--color-text-secondary)',
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              +{n}
+            </button>
+          ))}
+          {amount > 0 && (
+            <button
+              type="button"
+              onClick={() => onAmount(0)}
+              title="Clear"
+              style={{
+                padding: '6px 9px',
+                borderRadius: 8,
+                border: '1px solid transparent',
+                background: 'transparent',
+                color: 'var(--color-text-muted)',
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Distribution method */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span style={fieldLabel}>Spread</span>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {(Object.keys(DIST_METHOD_LABELS) as DistMethod[]).map(m => (
+            <button key={m} type="button" onClick={() => onMethod(m)} style={seg(method === m)}>
+              {DIST_METHOD_LABELS[m]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Scope */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span style={fieldLabel}>Across</span>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            type="button"
+            onClick={() => onScope('rest')}
+            disabled={!canRest}
+            style={{ ...seg(scope === 'rest'), opacity: canRest ? 1 : 0.4 }}
+          >
+            Rest of day
+          </button>
+          <button type="button" onClick={() => onScope('all')} style={seg(scope === 'all')}>
+            Whole day
+          </button>
+        </div>
+      </div>
+
+      <div style={{ flex: 1 }} />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+          +{amount} over {dropCount} drops · ~{perDrop}/drop
+        </span>
+        <button type="button" onClick={onCancel} style={ghostBtnSm}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onApply}
+          disabled={amount <= 0 || dropCount === 0}
+          style={{
+            ...primaryBtnSm,
+            opacity: amount <= 0 || dropCount === 0 ? 0.5 : 1,
+          }}
+        >
+          Add to plan
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const fieldLabel: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
+  color: 'var(--color-text-muted)',
+};
+
+const ghostBtnSm: React.CSSProperties = {
+  padding: '7px 12px',
+  borderRadius: 8,
+  border: '1px solid var(--color-border-subtle)',
+  background: 'transparent',
+  color: 'var(--color-text-secondary)',
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: 'pointer',
+};
+
+const primaryBtnSm: React.CSSProperties = {
+  padding: '7px 14px',
+  borderRadius: 8,
+  border: '1px solid var(--color-accent-active)',
+  background: 'var(--color-accent-active)',
+  color: '#fff',
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: 'pointer',
+};
+
 function HotProdDrops({
   recipeName,
   perDropPlan,
@@ -3283,6 +3554,7 @@ function HotProdDrops({
   forecastByPhase,
   nowHHMM,
   onChangeDrop,
+  onSetPlan,
 }: {
   recipeName: string;
   perDropPlan: number[];
@@ -3296,6 +3568,8 @@ function HotProdDrops({
    *  past or future days — the pin only makes sense for "today". */
   nowHHMM?: string;
   onChangeDrop?: (index: number, next: number) => void;
+  /** Bulk write the whole per-drop plan — used by "Add units" distribution. */
+  onSetPlan?: (next: number[]) => void;
 }) {
   const editable = !!onChangeDrop;
   // With a tight cadence (BK runs 15-min drops all day → 40+ cells) showing
@@ -3304,6 +3578,11 @@ function HotProdDrops({
   // summary chips the manager can expand on demand.
   const [expandEarlier, setExpandEarlier] = useState(false);
   const [expandLater, setExpandLater] = useState(false);
+  // "Add units" — bump the day total and spread the extra across drops.
+  const [addOpen, setAddOpen] = useState(false);
+  const [addAmt, setAddAmt] = useState(12);
+  const [addMethod, setAddMethod] = useState<DistMethod>('forecast');
+  const [addScope, setAddScope] = useState<DistScope>('rest');
   const forecastPerDrop = useMemo(
     () => buildForecastPerDrop(perDropPlan.length, cadence, forecastTotal, forecastByPhase),
     [perDropPlan.length, cadence, forecastTotal, forecastByPhase],
@@ -3391,6 +3670,22 @@ function HotProdDrops({
   for (let i = focusEnd + 1; i < slots.length; i += 1) laterIdx.push(i);
   const sumUnits = (idxs: number[]) => idxs.reduce((a, i) => a + slots[i].qty, 0);
 
+  // Which drops an "add units" distribution targets: the live drop onward
+  // ("rest of day") or every drop ("whole day").
+  const allIdx = slots.map((_, i) => i);
+  const restIdx =
+    activeStatus === 'in' && activeIndex !== null
+      ? allIdx.filter(i => i >= activeIndex)
+      : allIdx;
+  const targetIdx = addScope === 'rest' ? restIdx : allIdx;
+  const applyAdd = () => {
+    if (!onSetPlan || addAmt <= 0 || targetIdx.length === 0) return;
+    onSetPlan(
+      distributeExtra(perDropPlan, Math.round(addAmt), targetIdx, forecastPerDrop, addMethod),
+    );
+    setAddOpen(false);
+  };
+
   return (
     <div style={{ padding: '12px 18px 16px', borderLeft: '3px solid var(--color-warning)' }}>
       <div
@@ -3415,7 +3710,47 @@ function HotProdDrops({
         </span>
         <span>·</span>
         <span>{cadence.intervalMinutes}-min cadence</span>
+        {editable && onSetPlan && (
+          <>
+            <div style={{ flex: 1 }} />
+            <button
+              type="button"
+              onClick={() => setAddOpen(o => !o)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '4px 10px',
+                borderRadius: 100,
+                border: '1px solid var(--color-border-subtle)',
+                background: addOpen ? 'var(--color-accent-active)' : 'var(--color-bg-hover)',
+                color: addOpen ? '#fff' : 'var(--color-text-primary)',
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              <PackagePlus size={13} />
+              Add units
+            </button>
+          </>
+        )}
       </div>
+
+      {editable && onSetPlan && addOpen && (
+        <AddUnitsPanel
+          amount={addAmt}
+          method={addMethod}
+          scope={addScope}
+          dropCount={targetIdx.length}
+          canRest={restIdx.length !== allIdx.length}
+          onAmount={setAddAmt}
+          onMethod={setAddMethod}
+          onScope={setAddScope}
+          onApply={applyAdd}
+          onCancel={() => setAddOpen(false)}
+        />
+      )}
       {/* Strip = optional On-demand pin on the left + cadence grid on
           the right. We use a flex row (instead of folding the pin
           into the same grid) so the pin's width is independent of
@@ -4120,6 +4455,58 @@ function moneyStyle(): React.CSSProperties {
 // ─── Filter controls ──────────────────────────────────────────────────────────
 
 /**
+ * Forecast sync badge — the BK plan cooks to demand pulled from the POS (a
+ * third-party system), not numbers typed in here. Mirrors the crew-line badge
+ * so Plan and Make tell the same "connected + current" story.
+ */
+function ForecastSyncBadge() {
+  const synced = (() => {
+    const d = demoNow();
+    return `${d.getUTCHours().toString().padStart(2, '0')}:${d
+      .getUTCMinutes()
+      .toString()
+      .padStart(2, '0')}`;
+  })();
+  return (
+    <div style={{ display: 'flex', marginBottom: 12 }}>
+      <span
+        title={
+          'Demand forecast synced from Burger King POS (drive-thru, kiosk & app). ' +
+          'Blends 4-week sales history, local events and weather. Auto-syncs every 15 min.'
+        }
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 7,
+          padding: '5px 11px',
+          borderRadius: 100,
+          background: 'var(--color-bg-hover)',
+          border: '1px solid var(--color-border-subtle)',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        <RefreshCw size={12} color="#2f9e60" />
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+          Forecast synced
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-tertiary)' }}>
+          · BK POS · {synced}
+        </span>
+        <span
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: '#2f9e60',
+            boxShadow: '0 0 0 3px rgba(47,158,96,0.18)',
+          }}
+        />
+      </span>
+    </div>
+  );
+}
+
+/**
  * Pill-style tab strip.
  *
  * Mirrors the bench-mode tabs on /production/board and the day-strip pattern
@@ -4145,7 +4532,7 @@ function ProductionTypeTabs({
 }) {
   const tabs: { id: 'all' | 'run' | 'variable' | 'increment'; label: string }[] = [
     { id: 'all', label: 'All' },
-    { id: 'run', label: 'Run' },
+    { id: 'run', label: 'Batch' },
     { id: 'variable', label: 'VP' },
     { id: 'increment', label: 'Hot Prod' },
   ];

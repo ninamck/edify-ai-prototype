@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, Download, FileText, Layers, ListChecks, Wand2 } from 'lucide-react';
+import { ChevronDown, Download, FileText, Layers, LayoutGrid, ListChecks, Scale, Wand2 } from 'lucide-react';
 import BenchCardBoard from '@/components/Production/BenchCardBoard';
+import BenchBalanceView from '@/components/Production/BenchBalanceView';
 import CrewLineDisplay from '@/components/Production/CrewLineDisplay';
 import BatchDetailPanel from '@/components/Production/BatchDetailPanel';
 import CadenceDetailPanel from '@/components/Production/CadenceDetailPanel';
@@ -26,11 +27,24 @@ import {
   downloadAllIngredientsPdf,
 } from '@/lib/pdf/productionPdfs';
 
+type BoardView = 'balance' | 'detail';
+
+// The Bench mode filter (All / Run / Variable / Increment) is hidden for now:
+// the Plan/Balance board doesn't yet have an increment-bench planner view, so
+// the filter has nowhere useful to send the Variable/Increment slices. Kept in
+// place behind this flag so it can be switched back on once those views exist.
+const SHOW_MODE_FILTER = false;
+
+// The Balance view is hidden for now — we only surface the Bench detail board.
+// The Balance code path (and the BenchBalanceView component) is kept intact so
+// the toggle can be switched back on later.
+const SHOW_VIEW_TOGGLE = false;
+
 type ModeTabId = 'all' | ProductionMode;
 
 const MODE_TABS: Array<{ id: ModeTabId; label: string }> = [
   { id: 'all',       label: 'All' },
-  { id: 'run',       label: 'Run' },
+  { id: 'run',       label: 'Batches' },
   { id: 'variable',  label: 'Variable' },
   { id: 'increment', label: 'Increment' },
 ];
@@ -49,6 +63,9 @@ export default function ProductionBoardPage() {
   const [selectedCadenceId, setSelectedCadenceId] = useState<string | null>(null);
   const [selectedBenchId, setSelectedBenchId] = useState<string | null>(null);
   const [focusedItemId, setFocusedItemId] = useState<ProductionItemId | null>(null);
+  // Balance (per-run comparison) is the default lens; Bench detail is the
+  // editable per-bench card board.
+  const [view, setView] = useState<BoardView>('detail');
   const [modeTab, setModeTab] = useState<ModeTabId>('all');
   const [runTab, setRunTab] = useState<RunTabId>('all');
   const site = getSite(siteId) ?? PRET_SITES[0];
@@ -72,13 +89,17 @@ export default function ProductionBoardPage() {
   const runTabs = useMemo(() => {
     const benches = benchesAt(site.id);
     const earliestStart = new Map<string, number>();
+    const latestEnd = new Map<string, number>();
     const benchCount = new Map<string, number>();
     for (const b of benches) {
       const labelsOnBench = new Set<string>();
       for (const r of b.runs ?? []) {
         const cur = earliestStart.get(r.label);
         const startMins = hhmmToMins(r.startTime);
+        const endMins = startMins + r.durationMinutes;
         if (cur === undefined || startMins < cur) earliestStart.set(r.label, startMins);
+        const curEnd = latestEnd.get(r.label);
+        if (curEnd === undefined || endMins > curEnd) latestEnd.set(r.label, endMins);
         labelsOnBench.add(r.label);
       }
       for (const label of labelsOnBench) {
@@ -94,17 +115,34 @@ export default function ProductionBoardPage() {
       id: label,
       label,
       count: benchCount.get(label) ?? 0,
+      startMins: earliestStart.get(label) ?? 0,
+      endMins: latestEnd.get(label) ?? 0,
     }));
   }, [site.id]);
 
-  // Switching sites can leave runTab pointing at a label the new site
-  // doesn't have (e.g. switching from a P3-using site back to one with
-  // only R1/R2). Reset to 'all' so the board doesn't silently render an
-  // empty board.
+  // Current demo time: Thursday 07:30 (only meaningful at the hub, which
+  // drives the live clock; elsewhere we anchor the default to the start).
+  const nowHHMM = '07:30';
+
+  // The run a manager most likely wants on arrival: whichever run is active
+  // or next-up right now, else the last of the day. The board always sits on
+  // a single concrete production run (there's no "All" run option), so this
+  // is what we seed and fall back to.
+  const defaultRun = useMemo<RunTabId>(() => {
+    if (runTabs.length === 0) return 'all';
+    const nowMins = site.id === 'hub-central' ? hhmmToMins(nowHHMM) : -1;
+    const activeOrNext = runTabs.find(t => t.endMins > nowMins);
+    return (activeOrNext ?? runTabs[runTabs.length - 1]).id;
+  }, [runTabs, site.id]);
+
+  // Keep a valid concrete run selected at all times: seed on first render and
+  // recover whenever a site switch leaves the current selection pointing at a
+  // run this site doesn't have. Sites with no scheduled runs hide the
+  // selector entirely and keep the 'all' sentinel.
   useEffect(() => {
-    if (runTab === 'all') return;
-    if (!runTabs.some(t => t.id === runTab)) setRunTab('all');
-  }, [runTab, runTabs]);
+    if (runTabs.length === 0) return;
+    if (!runTabs.some(t => t.id === runTab)) setRunTab(defaultRun);
+  }, [runTabs, runTab, defaultRun]);
 
   // Clear focus when switching site so stale ids don't resolve on the wrong graph.
   useEffect(() => {
@@ -135,9 +173,6 @@ export default function ProductionBoardPage() {
   // bench cards render from.
   const lines = usePlan(site.id, DEMO_TODAY);
 
-  // Current demo time: Thursday 07:30
-  const nowHHMM = '07:30';
-
   // Burger King is a standalone hot-production line — no benches. Its "Make"
   // surface is the crew line display (NOW / NEXT / HAVE per station) driven
   // by the live holding cabinet, not the Pret bench board.
@@ -158,6 +193,10 @@ export default function ProductionBoardPage() {
           background: '#ffffff',
         }}
       >
+        {SHOW_VIEW_TOGGLE && <ViewToggle view={view} onChange={setView} />}
+        {SHOW_MODE_FILTER && (
+        <>
+        <div style={{ width: 1, height: 22, background: 'var(--color-border-subtle)' }} />
         <div
           role="tablist"
           aria-label="Bench mode"
@@ -217,6 +256,8 @@ export default function ProductionBoardPage() {
             );
           })}
         </div>
+        </>
+        )}
         <div style={{ flex: 1 }} />
         <StepperLauncher siteId={site.id} date={DEMO_TODAY} variant="ghost" />
         <PrefillBenchesButton />
@@ -249,7 +290,7 @@ export default function ProductionBoardPage() {
               marginRight: 4,
             }}
           >
-            Run
+            Batches
           </span>
           <div
             role="tablist"
@@ -260,16 +301,10 @@ export default function ProductionBoardPage() {
               flexWrap: 'wrap',
             }}
           >
-            <RunPill
-              label="All"
-              active={runTab === 'all'}
-              onClick={() => setRunTab('all')}
-            />
             {runTabs.map(t => (
               <RunPill
                 key={t.id}
                 label={t.label}
-                count={t.count}
                 active={runTab === t.id}
                 onClick={() => setRunTab(t.id)}
               />
@@ -283,17 +318,21 @@ export default function ProductionBoardPage() {
       )}
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        <BenchCardBoard
-          site={site}
-          date={DEMO_TODAY}
-          nowHHMM={site.id === 'hub-central' ? nowHHMM : undefined}
-          focusedItemId={focusedItemId}
-          onFocusChange={(id) => setFocusedItemId(id)}
-          onClearFocus={() => setFocusedItemId(null)}
-          modeFilter={modeTab}
-          runFilter={runTab}
-          onBenchClick={(id) => setSelectedBenchId(id)}
-        />
+        {view === 'balance' ? (
+          <BenchBalanceView site={site} date={DEMO_TODAY} runFilter={runTab} />
+        ) : (
+          <BenchCardBoard
+            site={site}
+            date={DEMO_TODAY}
+            nowHHMM={site.id === 'hub-central' ? nowHHMM : undefined}
+            focusedItemId={focusedItemId}
+            onFocusChange={(id) => setFocusedItemId(id)}
+            onClearFocus={() => setFocusedItemId(null)}
+            modeFilter={modeTab}
+            runFilter={runTab}
+            onBenchClick={(id) => setSelectedBenchId(id)}
+          />
+        )}
       </div>
 
       <BatchDetailPanel batchId={selectedBatchId} onClose={() => setSelectedBatchId(null)} />
@@ -308,6 +347,70 @@ export default function ProductionBoardPage() {
         benchId={selectedBenchId}
         onClose={() => setSelectedBenchId(null)}
       />
+    </div>
+  );
+}
+
+/**
+ * Board view toggle — Balance (per-run comparison, the default planning
+ * lens) vs Bench detail (the editable per-bench card board). Segmented
+ * control styled to sit left of the mode tabs so the page reads as
+ * "which lens → which slice".
+ */
+function ViewToggle({
+  view,
+  onChange,
+}: {
+  view: BoardView;
+  onChange: (v: BoardView) => void;
+}) {
+  const items: Array<{ id: BoardView; label: string; icon: typeof Scale }> = [
+    { id: 'detail', label: 'Bench detail', icon: LayoutGrid },
+    { id: 'balance', label: 'Balance', icon: Scale },
+  ];
+  return (
+    <div
+      role="tablist"
+      aria-label="Board view"
+      style={{
+        display: 'flex',
+        background: 'var(--color-bg-hover)',
+        borderRadius: 100,
+        padding: 3,
+        width: 'fit-content',
+      }}
+    >
+      {items.map(item => {
+        const active = item.id === view;
+        const Icon = item.icon;
+        return (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(item.id)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 14px',
+              borderRadius: 100,
+              border: 'none',
+              fontSize: 13,
+              fontWeight: 600,
+              fontFamily: 'var(--font-primary)',
+              cursor: 'pointer',
+              background: active ? 'var(--color-accent-active)' : 'transparent',
+              color: active ? '#fff' : 'var(--color-text-secondary)',
+              transition: 'all 0.15s',
+            }}
+          >
+            <Icon size={14} />
+            {item.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

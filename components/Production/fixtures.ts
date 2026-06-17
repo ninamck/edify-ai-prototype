@@ -636,19 +636,21 @@ export type Bench = {
 };
 
 export const PRET_BENCHES: Bench[] = [
-  // ─── hub-central: 7-bench Pret-style layout ────────────────────────────────
-  //   1. Bakery & ovens             — RUN, oven + proofer (overnight + dawn)
-  //   2. Sandwich & wrap build      — RUN, just-a-bench assembly
-  //   3. Salad & pot build          — RUN, just-a-bench assembly
-  //   4. Prep bench                 — fillings, dressings, slicing
-  //   5. Hot shelf                  — INCREMENT, oven + grill (toasties, soup)
-  //   6. Make-to-order              — VARIABLE, on-demand pots/drinks
-  //   7. Cold chain intake          — D-1 component intake + hold + release
-  // Bench layout designed so a Pret manager recognises every station on sight.
+  // ─── hub-central: 3 production benches + prep ───────────────────────────────
+  //   Bench 1. Bakery & ovens   — RUN, oven + proofer (overnight + dawn); also
+  //            carries the hot bakes (cookies, twists, sausage rolls) folded
+  //            in from the retired hot-shelf bench.
+  //   Bench 2. Sandwich & wrap build — RUN assembly; also toasties/melts +
+  //            coffees folded in as increment tails.
+  //   Bench 3. Salad & pot build     — RUN assembly; also soups, pots &
+  //            smoothies folded in as increment tails.
+  //   Prep bench — fillings, dressings, slicing, roasts, grilled components.
+  // The former hot-shelf / make-to-order / cold-chain benches were retired and
+  // their recipes folded across Bench 1/2/3.
   {
     id: 'bench-bakery',
     siteId: 'hub-central',
-    name: 'Bakery & ovens',
+    name: 'Bench 1',
     capabilities: ['oven', 'proofing'],
     equipment: ['oven', 'proofer', 'walk-in-chiller'],
     batchRules: { min: 6, max: 24, multipleOf: 6 },
@@ -659,14 +661,14 @@ export const PRET_BENCHES: Bench[] = [
       // started here so they're ready for handover by 05:00. Order within
       // this run is governed by PRET_NIGHT_SHIFT_POLICY (PAC070).
       { id: 'n1', label: 'N1', startTime: '00:00', durationMinutes: 300 },
-      { id: 'r1', label: 'R1', startTime: '05:00', durationMinutes: 180 },
-      { id: 'r2', label: 'R2', startTime: '10:30', durationMinutes: 90 },
+      { id: 'r1', label: 'P1', startTime: '05:00', durationMinutes: 180 },
+      { id: 'r2', label: 'P2', startTime: '10:30', durationMinutes: 90 },
     ],
   },
   {
     id: 'bench-sandwich-build',
     siteId: 'hub-central',
-    name: 'Sandwich & wrap build',
+    name: 'Bench 2',
     capabilities: ['assemble'],
     workTypes: ['assemble', 'pack', 'label'],
     equipment: ['prep-table'],
@@ -676,28 +678,28 @@ export const PRET_BENCHES: Bench[] = [
       // R1 — morning bulk-build of pre-packed sandwiches/wraps for the
       // shop fridge and the hub-fed spokes. R2 — lunchtime top-up after
       // the first wave of sales reads.
-      { id: 'r1', label: 'R1', startTime: '05:30', durationMinutes: 180 },
-      { id: 'r2', label: 'R2', startTime: '11:00', durationMinutes: 90 },
+      { id: 'r1', label: 'P1', startTime: '05:30', durationMinutes: 180 },
+      { id: 'r2', label: 'P2', startTime: '11:00', durationMinutes: 90 },
     ],
   },
   {
     id: 'bench-salad-build',
     siteId: 'hub-central',
-    name: 'Salad & pot build',
+    name: 'Bench 3',
     capabilities: ['assemble'],
     workTypes: ['assemble', 'pack', 'label'],
     equipment: ['prep-table'],
     online: true,
     primaryMode: 'run',
     runs: [
-      { id: 'r1', label: 'R1', startTime: '06:00', durationMinutes: 180 },
-      { id: 'r2', label: 'R2', startTime: '11:00', durationMinutes: 90 },
+      { id: 'r1', label: 'P1', startTime: '06:00', durationMinutes: 180 },
+      { id: 'r2', label: 'P2', startTime: '11:00', durationMinutes: 90 },
     ],
   },
   {
     id: 'bench-prep',
     siteId: 'hub-central',
-    name: 'Prep bench (fillings & sauces)',
+    name: 'Prep bench',
     capabilities: ['cold-prep', 'prep'],
     workTypes: ['weigh-up', 'mise', 'butcher', 'wash', 'sanitise', 'mix', 'slice', 'portion'],
     equipment: ['prep-table', 'walk-in-chiller', 'slicer', 'food-processor'],
@@ -707,61 +709,16 @@ export const PRET_BENCHES: Bench[] = [
       // Night shift on prep handles fillings that need to chill several
       // hours before assembly hits R1 sandwich build at 05:30.
       { id: 'n1', label: 'N1', startTime: '00:00', durationMinutes: 240 },
-      { id: 'r1', label: 'R1', startTime: '05:30', durationMinutes: 150 },
-      { id: 'r2', label: 'R2', startTime: '10:30', durationMinutes: 90 },
-    ],
-  },
-  {
-    id: 'bench-hot-shelf',
-    siteId: 'hub-central',
-    name: 'Hot shelf (oven & grill)',
-    capabilities: ['oven', 'prep'],
-    workTypes: ['bake', 'grill', 'mise'],
-    equipment: ['oven', 'griddle', 'panini-press', 'hob'],
-    batchRules: { min: 4, max: 18, multipleOf: 2 },
-    online: true,
-    primaryMode: 'increment',
-    // The hot-shelf bench also accepts the morning grilled-component runs
-    // (chicken, halloumi, bacon, chargrilled veg) before the increment
-    // cadence kicks in mid-morning. Those land as off-mode 'run' tail
-    // items on the card.
-    runs: [
-      { id: 'r1', label: 'R1', startTime: '07:30', durationMinutes: 90 },
-    ],
-  },
-  {
-    id: 'bench-variable',
-    siteId: 'hub-central',
-    name: 'Make-to-order bench',
-    capabilities: ['cold-prep', 'pack'],
-    workTypes: ['assemble', 'mix', 'pack'],
-    equipment: ['prep-table', 'blender', 'walk-in-chiller'],
-    online: true,
-    primaryMode: 'variable',
-  },
-  {
-    id: 'bench-cold-chain',
-    siteId: 'hub-central',
-    name: 'Cold chain intake',
-    capabilities: ['cold-prep', 'pack'],
-    workTypes: ['thaw', 'chill', 'label', 'pack'],
-    equipment: ['walk-in-chiller', 'blast-chiller', 'freezer'],
-    online: true,
-    primaryMode: 'run',
-    runs: [
-      // Two scheduled intake windows — early-morning unload of D-1
-      // fillings/doughs + an afternoon top-up to stage tomorrow's
-      // overnight-prep. Demonstrates the D-1 / D-2 leadOffset story.
-      { id: 'r1', label: 'R1', startTime: '04:30', durationMinutes: 90 },
-      { id: 'r2', label: 'R2', startTime: '15:00', durationMinutes: 90 },
+      { id: 'r1', label: 'P1', startTime: '05:30', durationMinutes: 150 },
+      { id: 'r2', label: 'P2', startTime: '10:30', durationMinutes: 90 },
     ],
   },
 
-  // ─── site-standalone-north (Islington North) — 4 benches ──────────────────
+  // ─── site-standalone-north (Islington North) — 3 benches + prep ───────────
   {
     id: 'bench-north-bakery',
     siteId: 'site-standalone-north',
-    name: 'Bakery & ovens',
+    name: 'Bench 1',
     capabilities: ['oven', 'proofing'],
     equipment: ['oven', 'proofer'],
     batchRules: { min: 4, max: 12, multipleOf: 4 },
@@ -769,11 +726,11 @@ export const PRET_BENCHES: Bench[] = [
     primaryMode: 'run',
     runs: [
       // P1 — pre-open bake: croissants, pain au choc, breads ready for 07:00 doors
-      { id: 'r1', label: 'R1', startTime: '05:00', durationMinutes: 120 },
+      { id: 'r1', label: 'P1', startTime: '05:00', durationMinutes: 120 },
       // P2 — mid-morning top-up: cakes, muffins, brownies for the 11:00 retail push
-      { id: 'r2', label: 'R2', startTime: '09:30', durationMinutes: 90 },
+      { id: 'r2', label: 'P2', startTime: '09:30', durationMinutes: 90 },
       // P3 — afternoon bake: cookies + warm bakes for the 15:00 coffee tail
-      { id: 'r3', label: 'R3', startTime: '13:30', durationMinutes: 90 },
+      { id: 'r3', label: 'P3', startTime: '13:30', durationMinutes: 90 },
     ],
   },
   {
@@ -787,17 +744,17 @@ export const PRET_BENCHES: Bench[] = [
     primaryMode: 'run',
     runs: [
       // P1 — early prep: fillings + roast trays before lunch assembly
-      { id: 'r1', label: 'R1', startTime: '06:00', durationMinutes: 120 },
+      { id: 'r1', label: 'P1', startTime: '06:00', durationMinutes: 120 },
       // P2 — mid-morning top-up before peak lunch window
-      { id: 'r2', label: 'R2', startTime: '10:00', durationMinutes: 75 },
+      { id: 'r2', label: 'P2', startTime: '10:00', durationMinutes: 75 },
       // P3 — afternoon refresh: top-up fillings for late-lunch + tomorrow mise
-      { id: 'r3', label: 'R3', startTime: '14:00', durationMinutes: 90 },
+      { id: 'r3', label: 'P3', startTime: '14:00', durationMinutes: 90 },
     ],
   },
   {
     id: 'bench-north-build',
     siteId: 'site-standalone-north',
-    name: 'Sandwich & salad build',
+    name: 'Bench 2',
     capabilities: ['assemble', 'pack'],
     workTypes: ['assemble', 'pack', 'label'],
     equipment: ['prep-table'],
@@ -806,64 +763,20 @@ export const PRET_BENCHES: Bench[] = [
     // then the floor tops up variable production (VP) through the day.
     primaryMode: 'run',
     runs: [
-      { id: 'r1', label: 'R1', startTime: '06:00', durationMinutes: 120 },
-      { id: 'r2', label: 'R2', startTime: '10:30', durationMinutes: 90 },
+      { id: 'r1', label: 'P1', startTime: '06:00', durationMinutes: 120 },
+      { id: 'r2', label: 'P2', startTime: '10:30', durationMinutes: 90 },
     ],
   },
   {
     id: 'bench-north-hot-shelf',
     siteId: 'site-standalone-north',
-    name: 'Hot shelf (oven & grill)',
+    name: 'Bench 3',
     capabilities: ['oven', 'prep'],
     workTypes: ['bake', 'grill'],
     equipment: ['oven', 'panini-press'],
     batchRules: { min: 2, max: 10, multipleOf: 2 },
     online: true,
     primaryMode: 'increment',
-  },
-  // Second sandwich-build bench at North — added when the existing
-  // variable-mode `bench-north-build` couldn't absorb both the morning
-  // pre-pack and the lunchtime top-up. Run-mode with three scheduled
-  // runs lets the cards split work into pre-open / lunch / late-tail.
-  {
-    id: 'bench-north-sandwich-build',
-    siteId: 'site-standalone-north',
-    name: 'Sandwich & wrap build (run)',
-    capabilities: ['assemble', 'pack'],
-    workTypes: ['assemble', 'pack', 'label'],
-    equipment: ['prep-table'],
-    online: true,
-    primaryMode: 'run',
-    runs: [
-      // R1 — morning bulk-build for the 07:00 doors + lunch fridge stock
-      { id: 'r1', label: 'R1', startTime: '06:30', durationMinutes: 120 },
-      // R2 — lunchtime top-up after the first wave of sales reads
-      { id: 'r2', label: 'R2', startTime: '10:30', durationMinutes: 75 },
-      // R3 — afternoon refresh for late-lunch + tomorrow's pre-pack
-      { id: 'r3', label: 'R3', startTime: '14:30', durationMinutes: 60 },
-    ],
-  },
-  // Pastry / dessert build bench — covers cake assembly, dessert pots,
-  // brownie/cookie portioning. Three runs match the day's sweet sales
-  // rhythm (open, lunch, coffee tail) so the run filter on the bench
-  // board produces meaningful R1/R2/R3 buckets.
-  {
-    id: 'bench-north-pastry',
-    siteId: 'site-standalone-north',
-    name: 'Pastry & dessert build',
-    capabilities: ['assemble', 'cold-prep'],
-    workTypes: ['assemble', 'pack', 'portion', 'label'],
-    equipment: ['prep-table', 'walk-in-chiller'],
-    online: true,
-    primaryMode: 'run',
-    runs: [
-      // R1 — pre-open: croissant fills, brownie portioning, dessert pots
-      { id: 'r1', label: 'R1', startTime: '06:00', durationMinutes: 120 },
-      // R2 — mid-morning sweet top-up before the lunch coffee crowd
-      { id: 'r2', label: 'R2', startTime: '10:00', durationMinutes: 60 },
-      // R3 — afternoon coffee tail: cookies + warm bakes for the 15:00 push
-      { id: 'r3', label: 'R3', startTime: '14:00', durationMinutes: 60 },
-    ],
   },
 
   // ─── site-spoke-south (receives from hub — minimal kit) ───────────────────
@@ -879,7 +792,7 @@ export const PRET_BENCHES: Bench[] = [
   {
     id: 'bench-airport-hot-shelf',
     siteId: 'site-hybrid-airport',
-    name: 'Hot shelf (oven & grill)',
+    name: 'Bench 1',
     capabilities: ['oven', 'prep'],
     workTypes: ['bake', 'grill'],
     equipment: ['oven', 'panini-press', 'griddle'],
@@ -890,15 +803,15 @@ export const PRET_BENCHES: Bench[] = [
   {
     id: 'bench-airport-build',
     siteId: 'site-hybrid-airport',
-    name: 'Sandwich & salad build',
+    name: 'Bench 2',
     capabilities: ['assemble', 'pack'],
     workTypes: ['assemble', 'pack', 'label'],
     equipment: ['prep-table'],
     online: true,
     primaryMode: 'run',
     runs: [
-      { id: 'r1', label: 'R1', startTime: '04:45', durationMinutes: 120 },
-      { id: 'r2', label: 'R2', startTime: '10:30', durationMinutes: 90 },
+      { id: 'r1', label: 'P1', startTime: '04:45', durationMinutes: 120 },
+      { id: 'r2', label: 'P2', startTime: '10:30', durationMinutes: 90 },
     ],
   },
   {
@@ -911,45 +824,46 @@ export const PRET_BENCHES: Bench[] = [
     online: true,
     primaryMode: 'run',
     runs: [
-      { id: 'r1', label: 'R1', startTime: '05:00', durationMinutes: 120 },
+      { id: 'r1', label: 'P1', startTime: '05:00', durationMinutes: 120 },
     ],
   },
   {
     id: 'bench-airport-cold-chain',
     siteId: 'site-hybrid-airport',
-    name: 'Cold chain intake',
+    name: 'Bench 3',
     capabilities: ['cold-prep', 'pack'],
     workTypes: ['thaw', 'chill', 'label', 'pack'],
     equipment: ['walk-in-chiller', 'blast-chiller'],
     online: true,
     primaryMode: 'run',
     runs: [
-      { id: 'r1', label: 'R1', startTime: '04:00', durationMinutes: 60 },
+      { id: 'r1', label: 'P1', startTime: '04:00', durationMinutes: 60 },
     ],
   },
 
   // ─── site-hybrid-hub-gatwick (Gatwick Cross — producing hybrid) ───────────
   // Combines a retail floor (hot shelf + build) with a bakery oven big
-  // enough to bake the viennoiserie/bread range for its own two spokes,
-  // plus a cold-chain intake for the linked range it pulls from hub-central.
+  // enough to bake the viennoiserie/bread range for its own two spokes.
+  // 3 benches + prep — the cold-chain intake bench was retired and the
+  // linked range it received folds onto the bakery/build benches.
   {
     id: 'bench-gatwick-bakery',
     siteId: 'site-hybrid-hub-gatwick',
-    name: 'Bakery & ovens',
+    name: 'Bench 1',
     capabilities: ['oven', 'proofing'],
     equipment: ['oven', 'proofer', 'walk-in-chiller'],
     batchRules: { min: 6, max: 24, multipleOf: 6 },
     online: true,
     primaryMode: 'run',
     runs: [
-      { id: 'r1', label: 'R1', startTime: '04:30', durationMinutes: 180 },
-      { id: 'r2', label: 'R2', startTime: '10:30', durationMinutes: 90 },
+      { id: 'r1', label: 'P1', startTime: '04:30', durationMinutes: 180 },
+      { id: 'r2', label: 'P2', startTime: '10:30', durationMinutes: 90 },
     ],
   },
   {
     id: 'bench-gatwick-build',
     siteId: 'site-hybrid-hub-gatwick',
-    name: 'Sandwich & salad build',
+    name: 'Bench 2',
     capabilities: ['assemble', 'pack'],
     workTypes: ['assemble', 'pack', 'label'],
     equipment: ['prep-table'],
@@ -958,14 +872,14 @@ export const PRET_BENCHES: Bench[] = [
     // then the floor tops up variable production (VP) through the day.
     primaryMode: 'run',
     runs: [
-      { id: 'r1', label: 'R1', startTime: '05:30', durationMinutes: 120 },
-      { id: 'r2', label: 'R2', startTime: '10:30', durationMinutes: 90 },
+      { id: 'r1', label: 'P1', startTime: '05:30', durationMinutes: 120 },
+      { id: 'r2', label: 'P2', startTime: '10:30', durationMinutes: 90 },
     ],
   },
   {
     id: 'bench-gatwick-hot-shelf',
     siteId: 'site-hybrid-hub-gatwick',
-    name: 'Hot shelf (oven & grill)',
+    name: 'Bench 3',
     capabilities: ['oven', 'prep'],
     workTypes: ['bake', 'grill'],
     equipment: ['oven', 'panini-press', 'griddle'],
@@ -983,20 +897,7 @@ export const PRET_BENCHES: Bench[] = [
     online: true,
     primaryMode: 'run',
     runs: [
-      { id: 'r1', label: 'R1', startTime: '05:00', durationMinutes: 120 },
-    ],
-  },
-  {
-    id: 'bench-gatwick-cold-chain',
-    siteId: 'site-hybrid-hub-gatwick',
-    name: 'Cold chain intake',
-    capabilities: ['cold-prep', 'pack'],
-    workTypes: ['thaw', 'chill', 'label', 'pack'],
-    equipment: ['walk-in-chiller', 'blast-chiller'],
-    online: true,
-    primaryMode: 'run',
-    runs: [
-      { id: 'r1', label: 'R1', startTime: '04:00', durationMinutes: 60 },
+      { id: 'r1', label: 'P1', startTime: '05:00', durationMinutes: 120 },
     ],
   },
 ];
@@ -1225,6 +1126,23 @@ export const PRET_RECIPES: ProductionRecipe[] = [
   { id: 'prec-eod-chicken-prep', name: 'Tomorrow: chicken filling mise', category: 'Sandwich', shelfLifeMinutes: 12 * 60, batchRules: { min: 1, max: 4, multipleOf: 1 }, skuId: 'sku-eod-chicken-prep', allowCarryOver: false, selectionTags: ['closing'], workflowId: 'wf-filling', defaultMode: 'variable', isPrep: true },
   { id: 'prec-eod-dough-prep',   name: 'Tomorrow: dough proof',          category: 'Bakery',   shelfLifeMinutes: 18 * 60, batchRules: { min: 1, max: 6, multipleOf: 1 }, skuId: 'sku-eod-dough-prep',   allowCarryOver: false, selectionTags: ['closing'], workflowId: 'wf-filling', defaultMode: 'variable', isPrep: true },
   { id: 'prec-eod-roast-prep',   name: 'Tomorrow: roast & stock prep',   category: 'Sandwich', shelfLifeMinutes: 18 * 60, batchRules: { min: 1, max: 4, multipleOf: 1 }, skuId: 'sku-eod-roast-prep',   allowCarryOver: false, selectionTags: ['closing'], workflowId: 'wf-filling', defaultMode: 'variable', isPrep: true },
+
+  // ─── Extra core range (more recipes flowing onto the three benches) ──────
+  // Bench 1 — bakery & ovens
+  { id: 'prec-pain-aux-raisins',  name: 'Pain aux raisins',          category: 'Bakery', shelfLifeMinutes: 8 * 60,  batchRules: { min: 6, max: 18, multipleOf: 6 }, skuId: 'sku-pain-aux-raisins',  allowCarryOver: true,  selectionTags: ['breakfast', 'morning'],            workflowId: 'wf-croissant', defaultMode: 'run' },
+  { id: 'prec-double-choc-cookie',name: 'Double chocolate cookie',   category: 'Bakery', shelfLifeMinutes: 24 * 60, batchRules: { min: 6, max: 12, multipleOf: 6 }, skuId: 'sku-double-choc-cookie',allowCarryOver: true,  selectionTags: ['midday', 'afternoon', 'closing'],  workflowId: 'wf-cookie',    defaultMode: 'run' },
+  { id: 'prec-spinach-feta-roll', name: 'Spinach & feta roll',       category: 'Bakery', shelfLifeMinutes: 8 * 60,  batchRules: { min: 4, max: 12, multipleOf: 2 }, skuId: 'sku-spinach-feta-roll', allowCarryOver: true,  selectionTags: ['morning', 'midday'],               workflowId: 'wf-cookie',    defaultMode: 'run' },
+  { id: 'prec-sourdough-loaf',    name: 'Sourdough loaf',            category: 'Bakery', shelfLifeMinutes: 12 * 60, batchRules: { min: 4, max: 12, multipleOf: 2 }, skuId: 'sku-sourdough-loaf',    allowCarryOver: false, selectionTags: ['core'],                            workflowId: 'wf-ciabatta',  defaultMode: 'run' },
+  // Bench 2 — sandwich & wrap build
+  { id: 'prec-bacon-egg-baguette',     name: 'Smoked bacon & egg baguette', category: 'Sandwich', shelfLifeMinutes: 8 * 60, skuId: 'sku-bacon-egg-baguette',     allowCarryOver: true, selectionTags: ['breakfast', 'morning'], workflowId: 'wf-sandwich', defaultMode: 'run' },
+  { id: 'prec-coronation-chicken-wrap',name: 'Coronation chicken wrap',     category: 'Sandwich', shelfLifeMinutes: 8 * 60, skuId: 'sku-coronation-chicken-wrap',allowCarryOver: true, selectionTags: ['core', 'midday'],       workflowId: 'wf-sandwich', defaultMode: 'run' },
+  { id: 'prec-caprese-baguette',       name: 'Mozzarella & tomato baguette',category: 'Sandwich', shelfLifeMinutes: 8 * 60, skuId: 'sku-caprese-baguette',       allowCarryOver: true, selectionTags: ['core', 'midday'],       workflowId: 'wf-sandwich', defaultMode: 'run' },
+  { id: 'prec-falafel-slaw-wrap',      name: 'Falafel & slaw wrap',         category: 'Sandwich', shelfLifeMinutes: 8 * 60, skuId: 'sku-falafel-slaw-wrap',      allowCarryOver: true, selectionTags: ['core', 'midday'],       workflowId: 'wf-sandwich', defaultMode: 'run' },
+  // Bench 3 — salad & pot build
+  { id: 'prec-quinoa-bowl',      name: 'Quinoa & roasted veg bowl', category: 'Salad', shelfLifeMinutes: 6 * 60,  skuId: 'sku-quinoa-bowl',      allowCarryOver: false, selectionTags: ['core', 'midday'],                 workflowId: 'wf-salad',  defaultMode: 'run' },
+  { id: 'prec-tuna-nicoise',     name: 'Tuna niçoise salad',        category: 'Salad', shelfLifeMinutes: 6 * 60,  skuId: 'sku-tuna-nicoise',     allowCarryOver: false, selectionTags: ['core', 'midday'],                 workflowId: 'wf-salad',  defaultMode: 'run' },
+  { id: 'prec-protein-pot',      name: 'Protein power pot',         category: 'Snack', shelfLifeMinutes: 24 * 60, batchRules: { min: 4, max: 12, multipleOf: 2 }, skuId: 'sku-protein-pot',  allowCarryOver: true, selectionTags: ['morning', 'midday', 'afternoon'], workflowId: 'wf-filling', defaultMode: 'run' },
+  { id: 'prec-overnight-oats',   name: 'Overnight oats pot',        category: 'Snack', shelfLifeMinutes: 24 * 60, batchRules: { min: 4, max: 12, multipleOf: 2 }, skuId: 'sku-overnight-oats',allowCarryOver: true, selectionTags: ['breakfast', 'morning'],          workflowId: 'wf-filling', defaultMode: 'run' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1415,6 +1333,10 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
   { id: 'pi-central-brownie',           siteId: 'hub-central', recipeId: 'prec-brownie',           skuId: 'sku-brownie',           mode: 'run', batchSize: 16, preferredBenchId: 'bench-bakery', targetMinutes: 18 },
   { id: 'pi-central-oat-raisin',        siteId: 'hub-central', recipeId: 'prec-oat-raisin-cookie', skuId: 'sku-oat-raisin-cookie', mode: 'run', batchSize: 12, preferredBenchId: 'bench-bakery', targetMinutes: 14 },
   { id: 'pi-central-salted-caramel',    siteId: 'hub-central', recipeId: 'prec-salted-caramel-cookie', skuId: 'sku-salted-caramel-cookie', mode: 'run', batchSize: 12, preferredBenchId: 'bench-bakery', targetMinutes: 14 },
+  { id: 'pi-central-pain-aux-raisins',  siteId: 'hub-central', recipeId: 'prec-pain-aux-raisins',  skuId: 'sku-pain-aux-raisins',  mode: 'run', batchSize: 12, preferredBenchId: 'bench-bakery', targetMinutes: 18 },
+  { id: 'pi-central-double-choc',       siteId: 'hub-central', recipeId: 'prec-double-choc-cookie', skuId: 'sku-double-choc-cookie', mode: 'run', batchSize: 12, preferredBenchId: 'bench-bakery', targetMinutes: 14 },
+  { id: 'pi-central-spinach-feta-roll', siteId: 'hub-central', recipeId: 'prec-spinach-feta-roll', skuId: 'sku-spinach-feta-roll', mode: 'run', batchSize: 10, preferredBenchId: 'bench-bakery', targetMinutes: 16 },
+  { id: 'pi-central-sourdough',         siteId: 'hub-central', recipeId: 'prec-sourdough-loaf',    skuId: 'sku-sourdough-loaf',    mode: 'run', batchSize: 8,  preferredBenchId: 'bench-bakery', targetMinutes: 22 },
 
   // Prep bench (run): fillings, sauces, slicing, roasts, grilled components
   { id: 'pi-central-filling',           siteId: 'hub-central', recipeId: 'prec-chicken-mayo-filling', skuId: 'sku-chicken-mayo-filling', mode: 'run', batchSize: 2,  preferredBenchId: 'bench-prep', targetMinutes: 14 },
@@ -1440,6 +1362,10 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
   { id: 'pi-central-cheddar-pickle-sw', siteId: 'hub-central', recipeId: 'prec-cheddar-pickle-sandwich',skuId: 'sku-cheddar-pickle-sandwich',mode: 'run',     batchSize: 10, preferredBenchId: 'bench-sandwich-build', targetMinutes: 6 },
   // Variable on the same bench so the card visibly mixes both modes:
   { id: 'pi-central-turkey-brie',       siteId: 'hub-central', recipeId: 'prec-turkey-brie-baguette',  skuId: 'sku-turkey-brie-baguette',  mode: 'variable', batchSize: 8,  preferredBenchId: 'bench-sandwich-build', targetMinutes: 7 },
+  { id: 'pi-central-bacon-egg',         siteId: 'hub-central', recipeId: 'prec-bacon-egg-baguette',      skuId: 'sku-bacon-egg-baguette',      mode: 'run', batchSize: 10, preferredBenchId: 'bench-sandwich-build', targetMinutes: 7 },
+  { id: 'pi-central-coronation-wrap',   siteId: 'hub-central', recipeId: 'prec-coronation-chicken-wrap', skuId: 'sku-coronation-chicken-wrap', mode: 'run', batchSize: 10, preferredBenchId: 'bench-sandwich-build', targetMinutes: 6 },
+  { id: 'pi-central-caprese',           siteId: 'hub-central', recipeId: 'prec-caprese-baguette',        skuId: 'sku-caprese-baguette',        mode: 'run', batchSize: 8,  preferredBenchId: 'bench-sandwich-build', targetMinutes: 7 },
+  { id: 'pi-central-falafel-wrap',      siteId: 'hub-central', recipeId: 'prec-falafel-slaw-wrap',       skuId: 'sku-falafel-slaw-wrap',       mode: 'run', batchSize: 8,  preferredBenchId: 'bench-sandwich-build', targetMinutes: 6 },
 
   // Salad & pot build (run): pre-built bowls + breakfast/snack pots ------
   { id: 'pi-central-salad',             siteId: 'hub-central', recipeId: 'prec-salad-bowl',       skuId: 'sku-salad-bowl',       mode: 'run',      batchSize: 8,  preferredBenchId: 'bench-salad-build', targetMinutes: 4 },
@@ -1453,14 +1379,21 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
   { id: 'pi-central-granola-pot',       siteId: 'hub-central', recipeId: 'prec-granola-pot',      skuId: 'sku-granola-pot',      mode: 'run',      batchSize: 8,  preferredBenchId: 'bench-salad-build', targetMinutes: 4 },
   { id: 'pi-central-mango-pot',         siteId: 'hub-central', recipeId: 'prec-mango-pot',        skuId: 'sku-mango-pot',        mode: 'run',      batchSize: 8,  preferredBenchId: 'bench-salad-build', targetMinutes: 4 },
   { id: 'pi-central-bircher-pot',       siteId: 'hub-central', recipeId: 'prec-bircher-pot',      skuId: 'sku-bircher-pot',      mode: 'run',      batchSize: 8,  preferredBenchId: 'bench-salad-build', targetMinutes: 4 },
+  { id: 'pi-central-quinoa-bowl',       siteId: 'hub-central', recipeId: 'prec-quinoa-bowl',      skuId: 'sku-quinoa-bowl',      mode: 'run',      batchSize: 8,  preferredBenchId: 'bench-salad-build', targetMinutes: 5 },
+  { id: 'pi-central-tuna-nicoise',      siteId: 'hub-central', recipeId: 'prec-tuna-nicoise',     skuId: 'sku-tuna-nicoise',     mode: 'run',      batchSize: 8,  preferredBenchId: 'bench-salad-build', targetMinutes: 5 },
+  { id: 'pi-central-protein-pot',       siteId: 'hub-central', recipeId: 'prec-protein-pot',      skuId: 'sku-protein-pot',      mode: 'run',      batchSize: 8,  preferredBenchId: 'bench-salad-build', targetMinutes: 4 },
+  { id: 'pi-central-overnight-oats',    siteId: 'hub-central', recipeId: 'prec-overnight-oats',   skuId: 'sku-overnight-oats',   mode: 'run',      batchSize: 8,  preferredBenchId: 'bench-salad-build', targetMinutes: 4 },
 
-  // Hot shelf (increment, oven + grill): toasties, soups, fresh-bake
+  // Hot bakes, toasties & soups (increment) — the dedicated hot-shelf bench
+  // was retired, so these fold onto the three production benches: oven bakes
+  // → Bench 1 (bakery), toasties/melts → Bench 2 (sandwich build), pots &
+  // soups → Bench 3 (salad/pot build). They render as increment tails.
   {
     id: 'pi-central-cookie',
     siteId: 'hub-central', recipeId: 'prec-cookie', skuId: 'sku-cookie',
     mode: 'increment', batchSize: 8,
     cadence: { intervalMinutes: 45, startTime: '08:00', endTime: '18:00', quinnProposed: true },
-    preferredBenchId: 'bench-hot-shelf',
+    preferredBenchId: 'bench-bakery',
     targetMinutes: 12,
   },
   {
@@ -1468,21 +1401,21 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
     siteId: 'hub-central', recipeId: 'prec-hot-croissant', skuId: 'sku-hot-croissant',
     mode: 'increment', batchSize: 6,
     cadence: { intervalMinutes: 60, startTime: '07:00', endTime: '14:00', quinnProposed: true },
-    preferredBenchId: 'bench-hot-shelf',
+    preferredBenchId: 'bench-bakery',
   },
   {
     id: 'pi-central-cheese-twist',
     siteId: 'hub-central', recipeId: 'prec-cheese-twist', skuId: 'sku-cheese-twist',
     mode: 'increment', batchSize: 8,
     cadence: { intervalMinutes: 60, startTime: '08:00', endTime: '16:00', quinnProposed: true },
-    preferredBenchId: 'bench-hot-shelf',
+    preferredBenchId: 'bench-bakery',
   },
   {
     id: 'pi-central-sausage-roll',
     siteId: 'hub-central', recipeId: 'prec-sausage-roll', skuId: 'sku-sausage-roll',
     mode: 'increment', batchSize: 10,
     cadence: { intervalMinutes: 45, startTime: '09:00', endTime: '17:00', quinnProposed: true },
-    preferredBenchId: 'bench-hot-shelf',
+    preferredBenchId: 'bench-bakery',
   },
   // Toasties + melts — Pret-style hot service, fresh through lunch
   {
@@ -1490,35 +1423,35 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
     siteId: 'hub-central', recipeId: 'prec-ham-cheese-toastie', skuId: 'sku-ham-cheese-toastie',
     mode: 'increment', batchSize: 4,
     cadence: { intervalMinutes: 30, startTime: '11:00', endTime: '16:00', quinnProposed: true },
-    preferredBenchId: 'bench-hot-shelf',
+    preferredBenchId: 'bench-sandwich-build',
   },
   {
     id: 'pi-central-mozzarella-melt',
     siteId: 'hub-central', recipeId: 'prec-mozzarella-tomato-melt', skuId: 'sku-mozzarella-tomato-melt',
     mode: 'increment', batchSize: 4,
     cadence: { intervalMinutes: 45, startTime: '11:00', endTime: '16:00', quinnProposed: true },
-    preferredBenchId: 'bench-hot-shelf',
+    preferredBenchId: 'bench-sandwich-build',
   },
   {
     id: 'pi-central-mac-cheese-toastie',
     siteId: 'hub-central', recipeId: 'prec-mac-cheese-toastie', skuId: 'sku-mac-cheese-toastie',
     mode: 'increment', batchSize: 4,
     cadence: { intervalMinutes: 60, startTime: '11:30', endTime: '15:30', quinnProposed: true },
-    preferredBenchId: 'bench-hot-shelf',
+    preferredBenchId: 'bench-sandwich-build',
   },
   {
     id: 'pi-central-cheddar-pickle-toastie',
     siteId: 'hub-central', recipeId: 'prec-cheddar-pickle-toastie', skuId: 'sku-cheddar-pickle-toastie',
     mode: 'increment', batchSize: 4,
     cadence: { intervalMinutes: 60, startTime: '11:00', endTime: '16:00', quinnProposed: true },
-    preferredBenchId: 'bench-hot-shelf',
+    preferredBenchId: 'bench-sandwich-build',
   },
   {
     id: 'pi-central-mac-cheese-pot',
     siteId: 'hub-central', recipeId: 'prec-mac-cheese-pot', skuId: 'sku-mac-cheese-pot',
     mode: 'increment', batchSize: 4,
     cadence: { intervalMinutes: 90, startTime: '11:00', endTime: '16:00', quinnProposed: true },
-    preferredBenchId: 'bench-hot-shelf',
+    preferredBenchId: 'bench-salad-build',
   },
   // Soup rotation
   {
@@ -1526,30 +1459,32 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
     siteId: 'hub-central', recipeId: 'prec-chicken-soup', skuId: 'sku-chicken-soup',
     mode: 'increment', batchSize: 2,
     cadence: { intervalMinutes: 90, startTime: '11:00', endTime: '16:00', quinnProposed: true },
-    preferredBenchId: 'bench-hot-shelf',
+    preferredBenchId: 'bench-salad-build',
   },
   {
     id: 'pi-central-tomato-basil-soup',
     siteId: 'hub-central', recipeId: 'prec-tomato-basil-soup', skuId: 'sku-tomato-basil-soup',
     mode: 'increment', batchSize: 2,
     cadence: { intervalMinutes: 120, startTime: '11:00', endTime: '16:00', quinnProposed: true },
-    preferredBenchId: 'bench-hot-shelf',
+    preferredBenchId: 'bench-salad-build',
   },
   {
     id: 'pi-central-butternut-soup',
     siteId: 'hub-central', recipeId: 'prec-butternut-soup', skuId: 'sku-butternut-soup',
     mode: 'increment', batchSize: 2,
     cadence: { intervalMinutes: 120, startTime: '11:30', endTime: '16:00', quinnProposed: true },
-    preferredBenchId: 'bench-hot-shelf',
+    preferredBenchId: 'bench-salad-build',
   },
 
-  // Make-to-order bench (variable): drinks + on-demand top-ups -----------
+  // Drinks + on-demand top-ups (increment) — folded off the retired
+  // make-to-order bench: coffees onto Bench 2, smoothies onto Bench 3,
+  // porridge onto Bench 1.
   {
     id: 'pi-central-coffee',
     siteId: 'hub-central', recipeId: 'prec-brewed-coffee', skuId: 'sku-brewed-coffee',
     mode: 'increment', batchSize: 1,
     cadence: { intervalMinutes: 30, startTime: '06:00', endTime: '20:00', quinnProposed: true },
-    preferredBenchId: 'bench-variable',
+    preferredBenchId: 'bench-sandwich-build',
     targetMinutes: 5,
   },
   {
@@ -1557,45 +1492,43 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
     siteId: 'hub-central', recipeId: 'prec-iced-coffee', skuId: 'sku-iced-coffee',
     mode: 'increment', batchSize: 1,
     cadence: { intervalMinutes: 90, startTime: '08:00', endTime: '18:00', quinnProposed: true },
-    preferredBenchId: 'bench-variable',
+    preferredBenchId: 'bench-sandwich-build',
   },
   {
     id: 'pi-central-green-smoothie',
     siteId: 'hub-central', recipeId: 'prec-green-smoothie', skuId: 'sku-green-smoothie',
     mode: 'increment', batchSize: 1,
     cadence: { intervalMinutes: 60, startTime: '07:00', endTime: '15:00', quinnProposed: true },
-    preferredBenchId: 'bench-variable',
+    preferredBenchId: 'bench-salad-build',
   },
   {
     id: 'pi-central-mango-smoothie',
     siteId: 'hub-central', recipeId: 'prec-mango-smoothie', skuId: 'sku-mango-smoothie',
     mode: 'increment', batchSize: 1,
     cadence: { intervalMinutes: 90, startTime: '08:00', endTime: '17:00', quinnProposed: true },
-    preferredBenchId: 'bench-variable',
+    preferredBenchId: 'bench-salad-build',
   },
   {
     id: 'pi-central-strawberry-banana-smoothie',
     siteId: 'hub-central', recipeId: 'prec-strawberry-banana-smoothie', skuId: 'sku-strawberry-banana-smoothie',
     mode: 'increment', batchSize: 1,
     cadence: { intervalMinutes: 90, startTime: '08:00', endTime: '17:00', quinnProposed: true },
-    preferredBenchId: 'bench-variable',
+    preferredBenchId: 'bench-salad-build',
   },
   {
     id: 'pi-central-porridge',
     siteId: 'hub-central', recipeId: 'prec-porridge', skuId: 'sku-porridge',
     mode: 'increment', batchSize: 4,
     cadence: { intervalMinutes: 45, startTime: '06:30', endTime: '10:30', quinnProposed: true },
-    preferredBenchId: 'bench-variable',
+    preferredBenchId: 'bench-bakery',
   },
 
-  // Cold chain intake (run): D-1 component intake → bench-cold-chain ----
-  // The eod-* prep recipes were previously scattered across run benches as
-  // tail items. Centralising them on the cold-chain bench makes the
-  // D-1/D-2 leadOffset story visible: this is where tomorrow's
-  // ingredients land, get labelled, and held in the chiller.
-  { id: 'pi-central-eod-chicken-prep', siteId: 'hub-central', recipeId: 'prec-eod-chicken-prep', skuId: 'sku-eod-chicken-prep', mode: 'run', batchSize: 4, preferredBenchId: 'bench-cold-chain' },
-  { id: 'pi-central-eod-dough-prep',   siteId: 'hub-central', recipeId: 'prec-eod-dough-prep',   skuId: 'sku-eod-dough-prep',   mode: 'run', batchSize: 6, preferredBenchId: 'bench-cold-chain' },
-  { id: 'pi-central-eod-roast-prep',   siteId: 'hub-central', recipeId: 'prec-eod-roast-prep',   skuId: 'sku-eod-roast-prep',   mode: 'run', batchSize: 4, preferredBenchId: 'bench-cold-chain' },
+  // D-1 component intake (run) — the cold-chain intake bench was retired, so
+  // the eod-* prep recipes fold back onto the three production benches (one
+  // each) as run tail items.
+  { id: 'pi-central-eod-chicken-prep', siteId: 'hub-central', recipeId: 'prec-eod-chicken-prep', skuId: 'sku-eod-chicken-prep', mode: 'run', batchSize: 4, preferredBenchId: 'bench-sandwich-build' },
+  { id: 'pi-central-eod-dough-prep',   siteId: 'hub-central', recipeId: 'prec-eod-dough-prep',   skuId: 'sku-eod-dough-prep',   mode: 'run', batchSize: 6, preferredBenchId: 'bench-bakery' },
+  { id: 'pi-central-eod-roast-prep',   siteId: 'hub-central', recipeId: 'prec-eod-roast-prep',   skuId: 'sku-eod-roast-prep',   mode: 'run', batchSize: 4, preferredBenchId: 'bench-salad-build' },
 
   // ─── site-standalone-north (Islington North) — 4 benches ─────────────────
   // Bakery oven — viennoiserie + breads + cakes for retail counter
@@ -1793,9 +1726,10 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
   // Prep bench (run) — a small filling set it makes locally.
   { id: 'pi-gatwick-egg-filling', siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-egg-mayo-filling', skuId: 'sku-egg-mayo-filling', mode: 'run', batchSize: 1, preferredBenchId: 'bench-gatwick-prep', targetMinutes: 12 },
   { id: 'pi-gatwick-grilled-chx', siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-grilled-chicken',  skuId: 'sku-grilled-chicken',  mode: 'run', batchSize: 6, preferredBenchId: 'bench-gatwick-prep', targetMinutes: 14 },
-  // Cold chain intake (run) — the linked range it receives from hub-central.
-  { id: 'pi-gatwick-eod-chicken-prep', siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-eod-chicken-prep', skuId: 'sku-eod-chicken-prep', mode: 'run', batchSize: 2, preferredBenchId: 'bench-gatwick-cold-chain' },
-  { id: 'pi-gatwick-eod-dough-prep',   siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-eod-dough-prep',   skuId: 'sku-eod-dough-prep',   mode: 'run', batchSize: 4, preferredBenchId: 'bench-gatwick-cold-chain' },
+  // D-1 component intake (run) — the cold-chain intake bench was retired, so
+  // these fold onto the build (chicken) and bakery (dough) benches.
+  { id: 'pi-gatwick-eod-chicken-prep', siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-eod-chicken-prep', skuId: 'sku-eod-chicken-prep', mode: 'run', batchSize: 2, preferredBenchId: 'bench-gatwick-build' },
+  { id: 'pi-gatwick-eod-dough-prep',   siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-eod-dough-prep',   skuId: 'sku-eod-dough-prep',   mode: 'run', batchSize: 4, preferredBenchId: 'bench-gatwick-bakery' },
 
   // site-spoke-south — receive-only, no production items of its own
 ];
@@ -2208,6 +2142,20 @@ export const PRET_FORECAST: DemandForecastEntry[] = [
   { siteId: 'hub-central', skuId: 'sku-oat-raisin-cookie',    date: DEMO_TODAY, projectedUnits: 36, byPhase: { morning: 4,  midday: 18, afternoon: 14 }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
   { siteId: 'hub-central', skuId: 'sku-salted-caramel-cookie',date: DEMO_TODAY, projectedUnits: 30, byPhase: { morning: 3,  midday: 14, afternoon: 13 }, signals: [{ signal: 'sales-history', weight: 1, note: 'Afternoon hero with coffee' }], status: 'confirmed' },
 
+  // Extra core range — feeds the three benches with more recipes
+  { siteId: 'hub-central', skuId: 'sku-pain-aux-raisins',      date: DEMO_TODAY, projectedUnits: 24, byPhase: { morning: 18, midday: 4,  afternoon: 2  }, signals: [{ signal: 'sales-history', weight: 0.8 }], status: 'confirmed' },
+  { siteId: 'hub-central', skuId: 'sku-double-choc-cookie',    date: DEMO_TODAY, projectedUnits: 34, byPhase: { morning: 4,  midday: 16, afternoon: 14 }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'hub-central', skuId: 'sku-spinach-feta-roll',     date: DEMO_TODAY, projectedUnits: 20, byPhase: { morning: 8,  midday: 10, afternoon: 2  }, signals: [{ signal: 'sales-history', weight: 0.8 }], status: 'confirmed' },
+  { siteId: 'hub-central', skuId: 'sku-sourdough-loaf',        date: DEMO_TODAY, projectedUnits: 16, byPhase: { morning: 6,  midday: 8,  afternoon: 2  }, signals: [{ signal: 'sales-history', weight: 0.9 }], status: 'confirmed' },
+  { siteId: 'hub-central', skuId: 'sku-bacon-egg-baguette',    date: DEMO_TODAY, projectedUnits: 40, byPhase: { morning: 30, midday: 8,  afternoon: 2  }, signals: [{ signal: 'sales-history', weight: 0.9 }], status: 'confirmed' },
+  { siteId: 'hub-central', skuId: 'sku-coronation-chicken-wrap',date: DEMO_TODAY, projectedUnits: 32, byPhase: { morning: 4,  midday: 22, afternoon: 6  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'hub-central', skuId: 'sku-caprese-baguette',      date: DEMO_TODAY, projectedUnits: 28, byPhase: { morning: 4,  midday: 18, afternoon: 6  }, signals: [{ signal: 'sales-history', weight: 0.9 }], status: 'confirmed' },
+  { siteId: 'hub-central', skuId: 'sku-falafel-slaw-wrap',     date: DEMO_TODAY, projectedUnits: 26, byPhase: { morning: 3,  midday: 18, afternoon: 5  }, signals: [{ signal: 'sales-history', weight: 0.9 }], status: 'confirmed' },
+  { siteId: 'hub-central', skuId: 'sku-quinoa-bowl',           date: DEMO_TODAY, projectedUnits: 24, byPhase: { morning: 2,  midday: 18, afternoon: 4  }, signals: [{ signal: 'sales-history', weight: 0.9 }, { signal: 'weather', weight: 0.1 }], status: 'confirmed' },
+  { siteId: 'hub-central', skuId: 'sku-tuna-nicoise',          date: DEMO_TODAY, projectedUnits: 20, byPhase: { morning: 1,  midday: 15, afternoon: 4  }, signals: [{ signal: 'sales-history', weight: 0.9 }], status: 'confirmed' },
+  { siteId: 'hub-central', skuId: 'sku-protein-pot',           date: DEMO_TODAY, projectedUnits: 22, byPhase: { morning: 10, midday: 8,  afternoon: 4  }, signals: [{ signal: 'sales-history', weight: 0.8 }], status: 'confirmed' },
+  { siteId: 'hub-central', skuId: 'sku-overnight-oats',        date: DEMO_TODAY, projectedUnits: 18, byPhase: { morning: 14, midday: 3,  afternoon: 1  }, signals: [{ signal: 'sales-history', weight: 0.8 }], status: 'confirmed' },
+
   // Fillings (drive assembly)
   { siteId: 'hub-central', skuId: 'sku-egg-mayo-filling',  date: DEMO_TODAY, projectedUnits: 6, byPhase: { morning: 4, midday: 2, afternoon: 0 }, signals: [{ signal: 'sales-history', weight: 1, note: 'Trays of 4kg, derived from assembly forecasts' }], status: 'confirmed' },
   { siteId: 'hub-central', skuId: 'sku-tuna-mayo-filling', date: DEMO_TODAY, projectedUnits: 5, byPhase: { morning: 3, midday: 2, afternoon: 0 }, signals: [{ signal: 'sales-history', weight: 1, note: 'Derived from tuna sandwich forecast' }], status: 'confirmed' },
@@ -2445,7 +2393,7 @@ export const PRET_PLAN: ProductionPlan = {
       date: DEMO_TODAY,
       startTime: '06:30',
       endTime: '06:45',
-      benchId: 'bench-cold-chain',
+      benchId: 'bench-bakery',
       plannedQty: 48,
     },
 
@@ -2852,7 +2800,7 @@ export const PRET_PLAN: ProductionPlan = {
     {
       id: 'batch-y-cookie-0900',
       productionItemId: 'pi-central-cookie',
-      benchId: 'bench-hot-shelf',
+      benchId: 'bench-bakery',
       date: dayOffset(-1),
       startTime: '09:00', endTime: '09:13',
       actualQty: 8, status: 'reviewed',
@@ -2861,7 +2809,7 @@ export const PRET_PLAN: ProductionPlan = {
     {
       id: 'batch-y-cookie-1100',
       productionItemId: 'pi-central-cookie',
-      benchId: 'bench-hot-shelf',
+      benchId: 'bench-bakery',
       date: dayOffset(-1),
       startTime: '11:00', endTime: '11:18',
       actualQty: 8, status: 'reviewed',
@@ -2871,7 +2819,7 @@ export const PRET_PLAN: ProductionPlan = {
     {
       id: 'batch-y-coffee-0700',
       productionItemId: 'pi-central-coffee',
-      benchId: 'bench-hot-shelf',
+      benchId: 'bench-sandwich-build',
       date: dayOffset(-1),
       startTime: '07:00', endTime: '07:04',
       actualQty: 1, status: 'reviewed',
@@ -2880,7 +2828,7 @@ export const PRET_PLAN: ProductionPlan = {
     {
       id: 'batch-y-coffee-0930',
       productionItemId: 'pi-central-coffee',
-      benchId: 'bench-hot-shelf',
+      benchId: 'bench-sandwich-build',
       date: dayOffset(-1),
       startTime: '09:30', endTime: '09:33',
       actualQty: 1, status: 'reviewed',
@@ -5514,7 +5462,12 @@ export function getUser(id: UserId): User | undefined {
 }
 
 export function benchesAt(siteId: SiteId): Bench[] {
-  return [...PRET_BENCHES, ...BK_BENCHES].filter(b => b.siteId === siteId);
+  const benches = [...PRET_BENCHES, ...BK_BENCHES].filter(b => b.siteId === siteId);
+  // Surface the prep bench last so every bench board reads "Bench 1..N" then
+  // "Prep bench". Stable partition — keeps the relative order of all other
+  // benches untouched.
+  const isPrep = (b: Bench) => b.id.endsWith('prep') || b.name === 'Prep bench';
+  return [...benches.filter(b => !isPrep(b)), ...benches.filter(isPrep)];
 }
 
 export function productionItemsAt(siteId: SiteId): ProductionItem[] {

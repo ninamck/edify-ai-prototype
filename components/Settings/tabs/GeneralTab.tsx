@@ -92,7 +92,7 @@ const SLOT_CONFIG: Array<{
 const PRODUCING_FOR_OTHERS_OPTIONS = [
   { id: 'self-only', label: 'No — only for my own shop' },
   { id: 'exclusive', label: 'Yes — exclusively for other shops' },
-  { id: 'own-plus-others', label: 'Yes — I also have my own production' },
+  { id: 'own-plus-others', label: 'Yes' },
 ] as const;
 type ProducingForOthers = (typeof PRODUCING_FOR_OTHERS_OPTIONS)[number]['id'];
 
@@ -352,7 +352,7 @@ export default function GeneralTab({ siteId, editing, staged, onStage, health }:
                 ? 'A spoke has no kitchen, so it must order its full range from one hub.'
                 : derivedModel === 'HYBRID_HUB'
                 ? 'A producing hybrid-hub can still pull part of its own range from another hub. Leave empty to bake everything it sells.'
-                : 'Link a hub to pull part of the range from it (makes this a hybrid). Leave empty to stay fully standalone.'
+                : 'A Production Hub is a location that produces items on your behalf. Select one to delegate some or all of your production to it.'
             }
             control={
               <PillPicker<SiteId>
@@ -368,9 +368,7 @@ export default function GeneralTab({ siteId, editing, staged, onStage, health }:
             cascade={
               requiresHub && !hubId
                 ? '⚠ A spoke needs a hub to order from'
-                : core.defaults.hubId
-                ? `Default · ${core.defaults.hubId.replace(/-/g, ' ')}`
-                : 'Default · self-producing'
+                : undefined
             }
             isOverridden={hubId !== core.defaults.hubId}
             onReset={() => setCore({ hubId: core.defaults.hubId })}

@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRightLeft, Check, ChevronRight, Clock, Download, Moon, PackagePlus, Repeat, Shuffle, User, UserMinus, Waves } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { ArrowRightLeft, Check, ChevronRight, Clock, Download, GripVertical, Moon, PackagePlus, Repeat, Shuffle, User, UserMinus, Waves } from 'lucide-react';
 import {
   benchesAt,
   effectiveBatchRules,
@@ -218,6 +218,24 @@ type CardData = {
   hasWork: boolean;
 };
 
+/**
+ * Reorder `rows` to match a manager's manual drag order. `order` is the
+ * saved list of ProductionItemIds; rows present in it lead in that exact
+ * order, and any rows not yet seen (newly planned) keep their natural
+ * order at the tail. Returns the original array untouched when there's no
+ * override so the default (estimated-time) sort is preserved.
+ */
+function applyRowOrder(rows: RowData[], order: string[] | undefined): RowData[] {
+  if (!order || order.length === 0) return rows;
+  const rank = new Map(order.map((id, i) => [id, i]));
+  const fallback = order.length;
+  return [...rows].sort((a, b) => {
+    const ra = rank.get(a.line.item.id) ?? fallback;
+    const rb = rank.get(b.line.item.id) ?? fallback;
+    return ra - rb;
+  });
+}
+
 export default function BenchCardBoard({
   site,
   date,
@@ -275,6 +293,34 @@ export default function BenchCardBoard({
   const moveLineToBench = useCallback((itemId: string, benchId: string) => {
     setBenchOverrides(prev => ({ ...prev, [itemId]: benchId }));
   }, []);
+
+  // Manual row ordering — manager drags a recipe up/down its list via the
+  // row's grip handle. Keyed by a per-list id (one list = a bench's flat
+  // mode group, or a single run bucket on a run-mode bench) → the ordered
+  // ProductionItemIds. Demo-scoped: lives in memory, resets on reload.
+  const [rowOrderOverrides, setRowOrderOverrides] = useState<Record<string, string[]>>({});
+
+  const reorderRows = useCallback((listKey: string, orderedItemIds: string[]) => {
+    setRowOrderOverrides(prev => ({ ...prev, [listKey]: orderedItemIds }));
+  }, []);
+
+  // Manager-editable bench start/end window. Keyed by benchId → minutes from
+  // midnight for the start and/or end. Overrides the computed schedule window
+  // shown in the card footer. Demo-scoped: in memory, resets on reload.
+  const [windowOverrides, setWindowOverrides] = useState<
+    Record<string, { startMins?: number; endMins?: number }>
+  >({});
+
+  const setBenchWindow = useCallback(
+    (benchId: string, field: 'start' | 'end', mins: number) => {
+      const key = field === 'start' ? 'startMins' : 'endMins';
+      setWindowOverrides(prev => ({
+        ...prev,
+        [benchId]: { ...(prev[benchId] ?? {}), [key]: mins },
+      }));
+    },
+    [],
+  );
 
   const siteBenches = useMemo(() => benchesAt(site.id), [site.id]);
 
@@ -352,11 +398,22 @@ export default function BenchCardBoard({
           isPrimary && mode === 'run' && bench.runs && bench.runs.length > 0
             ? bucketRowsIntoRuns(groupRows, bench.runs, nightShiftPolicy)
             : undefined;
+
+        // Apply any manual drag-reorder the manager has set. Each rendered
+        // list keeps its own order: per run bucket on run-mode benches, or
+        // the flat group list otherwise.
+        if (runBuckets) {
+          for (const b of runBuckets) {
+            b.rows = applyRowOrder(b.rows, rowOrderOverrides[`${bench.id}::run::${b.run.id}`]);
+          }
+        }
+        const orderedGroupRows = applyRowOrder(groupRows, rowOrderOverrides[`${bench.id}::mode::${mode}`]);
+
         modeGroups.push({
           mode,
           label: groupLabelFor(mode, bench, groupRows, isPrimary, !!runBuckets),
           isPrimary,
-          rows: groupRows,
+          rows: orderedGroupRows,
           productionMins,
           windowStartMins,
           windowEndMins,
@@ -421,7 +478,7 @@ export default function BenchCardBoard({
         hasWork: rows.length > 0,
       };
     });
-  }, [lines, siteBenches, assignmentOverrides, runAssignmentOverrides, benchOverrides, nightShiftPolicy, getExtras, site.id, date]);
+  }, [lines, siteBenches, assignmentOverrides, runAssignmentOverrides, benchOverrides, rowOrderOverrides, nightShiftPolicy, getExtras, site.id, date]);
 
   // Dependency-highlight resolver (same machinery as KitchenBoard).
   const highlightFor = useMemo<(itemId: string) => HighlightMode>(() => {
@@ -456,22 +513,19 @@ export default function BenchCardBoard({
   );
 
   // Filter cards by selected mode tab — keep benches whose primary mode matches.
-  // Then narrow further by run label if a specific run (R1/R2/N1/...) is
-  // selected: a bench is only shown if its `runs` schedule includes that
-  // label. We deliberately match against the bench schedule, NOT against
-  // populated run buckets — empty buckets get dropped at the data layer
-  // (`bucketRowsIntoRuns`) so a brand-new bench with R1/R2/R3 on the rota
-  // but no recipes assigned yet would otherwise disappear here. Filtering
-  // on `bench.runs` keeps those benches visible and lets the card render
-  // a "no recipes scheduled for R1 today" placeholder.
+  // When a specific batch (P1/P2/N1/...) is selected we keep the FULL roster
+  // of run-mode benches visible — not just the ones scheduled for that batch
+  // — so the bench count stays consistent across batches (matching the
+  // Balance view). A bench that doesn't run the selected batch renders its
+  // card with a "no recipes scheduled for {batch} today" placeholder rather
+  // than disappearing. Benches with no run schedule at all (e.g. a
+  // front-of-house counter) drop out while a batch filter is active.
   const visibleCards = useMemo(() => {
     const byMode = modeFilter === 'all'
       ? cards
       : cards.filter(c => c.bench.primaryMode === modeFilter);
     if (runFilter === 'all') return byMode;
-    return byMode.filter(c =>
-      c.bench.runs?.some(r => r.label === runFilter),
-    );
+    return byMode.filter(c => (c.bench.runs?.length ?? 0) > 0);
   }, [cards, modeFilter, runFilter]);
 
   return (
@@ -480,13 +534,14 @@ export default function BenchCardBoard({
           We use columns (not Grid) so a short card doesn't waste vertical
           space waiting for the tallest card in its row to end — the next
           card simply stacks under it within the same column. `break-inside:
-          avoid` keeps each card whole rather than splitting across columns. */}
-      <div
-        style={{
-          columnWidth: 520,
-          columnGap: 44,
-        }}
-      >
+          avoid` keeps each card whole rather than splitting across columns.
+          Always two columns on desktop; collapse to one on mobile (<=640px,
+          matching the breakpoint used elsewhere). */}
+      <style>{`
+        .bench-detail-columns { column-count: 2; column-gap: 44px; }
+        @media (max-width: 640px) { .bench-detail-columns { column-count: 1; } }
+      `}</style>
+      <div className="bench-detail-columns">
         {visibleCards.map(card => (
           <div
             key={card.bench.id}
@@ -509,7 +564,10 @@ export default function BenchCardBoard({
               onAssignRun={setRunAssignment}
               siteBenches={siteBenches}
               onMoveLine={moveLineToBench}
+              onReorder={reorderRows}
               runFilter={runFilter}
+              windowOverride={windowOverrides[card.bench.id]}
+              onSetWindow={setBenchWindow}
             />
           </div>
         ))}
@@ -549,7 +607,10 @@ function BenchCard({
   onAssignRun,
   siteBenches,
   onMoveLine,
+  onReorder,
   runFilter = 'all',
+  windowOverride,
+  onSetWindow,
 }: {
   card: CardData;
   nowHHMM?: string;
@@ -565,18 +626,24 @@ function BenchCard({
   siteBenches: Bench[];
   /** Move a planned recipe row from this bench to another bench. */
   onMoveLine?: (itemId: ProductionItemId, benchId: string) => void;
+  /** Persist a manual drag-reorder for one list (run bucket or flat group). */
+  onReorder?: (listKey: string, orderedItemIds: string[]) => void;
   /** Run-label filter from the board toolbar. 'all' renders every run. */
   runFilter?: string;
+  /** Manager-edited start/end window (minutes from midnight), if any. */
+  windowOverride?: { startMins?: number; endMins?: number };
+  /** Commit an edited start/end time for this bench. */
+  onSetWindow?: (benchId: string, field: 'start' | 'end', mins: number) => void;
 }) {
-  // While a run filter is active, drop any mode group that doesn't have a
-  // matching scheduled run bucket — secondary off-mode work (variable /
-  // increment tails) has no run schedule and shouldn't appear under e.g.
-  // "R1". The primary run group is kept; ModeGroupSection itself narrows
-  // its buckets to the selected run.
+  // While a run filter is active, keep the primary run group only if it has a
+  // matching scheduled run bucket (ModeGroupSection narrows its buckets to the
+  // selected run). Secondary off-mode work (variable / increment tails — e.g.
+  // toasties, soups, smoothies, coffees) has no run schedule, so we always
+  // show it under the "After service" divider rather than hiding it.
   const visibleModeGroups = useMemo(() => {
     if (runFilter === 'all') return card.modeGroups;
     return card.modeGroups.filter(g =>
-      g.runBuckets?.some(b => b.run.label === runFilter)
+      !g.isPrimary || g.runBuckets?.some(b => b.run.label === runFilter)
     );
   }, [card.modeGroups, runFilter]);
   const allRows = useMemo(() => card.modeGroups.flatMap(g => g.rows), [card.modeGroups]);
@@ -592,7 +659,12 @@ function BenchCard({
 
   const cardOpacity = hasFocus && !cardHasRelatedRow ? 0.4 : 1;
 
-  const remainingMins = Math.max(0, card.windowCapacityMins - card.totalMins);
+  // Effective start/end window: manager edits win over the computed schedule
+  // window. End defaults to "start + total work" (so default Remaining is 0);
+  // Remaining is the slack between the chosen window and the work needed.
+  const effectiveStartMins = windowOverride?.startMins ?? card.windowStartMins;
+  const effectiveEndMins = windowOverride?.endMins ?? card.windowStartMins + card.totalMins;
+  const remainingMins = Math.max(0, effectiveEndMins - effectiveStartMins - card.totalMins);
 
   // Find the next / active run for the header chip. We use the primary
   // run-mode group's buckets if present. "Active" wins over "upcoming" — the
@@ -601,6 +673,16 @@ function BenchCard({
   const nextRunInfo = nowHHMM && primaryGroup?.runBuckets
     ? findNextRun(primaryGroup.runBuckets, nowHHMM)
     : null;
+
+  // The run window (start → end) now lives in the bench header instead of
+  // a separate run-bucket header row. With a run filter active we surface
+  // the selected run's window; otherwise the first scheduled run.
+  const headerRun = useMemo(() => {
+    const buckets = primaryGroup?.runBuckets;
+    if (!buckets || buckets.length === 0) return null;
+    if (runFilter !== 'all') return buckets.find(b => b.run.label === runFilter) ?? null;
+    return buckets[0];
+  }, [primaryGroup, runFilter]);
 
   return (
     <section
@@ -657,6 +739,21 @@ function BenchCard({
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {card.bench.primaryMode && <ModeBadge mode={card.bench.primaryMode} />}
             {nextRunInfo && <NextRunChip info={nextRunInfo} />}
+            {headerRun && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontSize: 11,
+                  color: 'var(--color-text-secondary)',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                <Clock size={12} />
+                {minsToHHMM(headerRun.startMins)} → {minsToHHMM(headerRun.endMins)}
+              </span>
+            )}
             {!card.bench.online && (
               <span
                 style={{
@@ -734,6 +831,7 @@ function BenchCard({
                   currentBenchId={card.bench.id}
                   siteBenches={siteBenches}
                   onMoveLine={onMoveLine}
+                  onReorder={onReorder}
                   runFilter={runFilter}
                   onAssignRun={onAssignRun}
                 />
@@ -795,8 +893,16 @@ function BenchCard({
           color: 'var(--color-text-muted)',
         }}
       >
-        <StopwatchCell label="Start" value={minsToHHMM(card.windowStartMins)} />
-        <StopwatchCell label="End" value={minsToHHMM(card.windowStartMins + card.totalMins)} />
+        <EditableStopwatchCell
+          label="Start"
+          mins={effectiveStartMins}
+          onCommit={onSetWindow ? mins => onSetWindow(card.bench.id, 'start', mins) : undefined}
+        />
+        <EditableStopwatchCell
+          label="End"
+          mins={effectiveEndMins}
+          onCommit={onSetWindow ? mins => onSetWindow(card.bench.id, 'end', mins) : undefined}
+        />
         <StopwatchCell label="Remaining" value={formatHMS(remainingMins)} emphasis="muted" />
       </footer>
 
@@ -856,6 +962,7 @@ function ModeGroupSection({
   currentBenchId,
   siteBenches,
   onMoveLine,
+  onReorder,
   runFilter = 'all',
   onAssignRun,
 }: {
@@ -867,6 +974,8 @@ function ModeGroupSection({
   currentBenchId: string;
   siteBenches: Bench[];
   onMoveLine?: (itemId: ProductionItemId, benchId: string) => void;
+  /** Persist a manual drag-reorder for one list (run bucket or flat group). */
+  onReorder?: (listKey: string, orderedItemIds: string[]) => void;
   /** Active run label from the toolbar, or 'all' to show every bucket. */
   runFilter?: string;
   /** Set the assignee for a specific run on the current bench. */
@@ -914,23 +1023,23 @@ function ModeGroupSection({
             currentBenchId={currentBenchId}
             siteBenches={siteBenches}
             onMoveLine={onMoveLine}
+            onReorder={onReorder}
             onAssignRun={onAssignRun}
           />
         ))
       ) : (
         <>
           <ColumnHeader />
-          {group.rows.map(row => (
-            <RecipeRow
-              key={row.line.item.id}
-              row={row}
-              highlight={highlightFor(row.line.item.id)}
-              onClick={() => onRowClick(row.line.item.id)}
-              currentBenchId={currentBenchId}
-              siteBenches={siteBenches}
-              onMoveLine={onMoveLine}
-            />
-          ))}
+          <ReorderableRows
+            rows={group.rows}
+            listKey={`${currentBenchId}::mode::${group.mode}`}
+            onReorder={onReorder}
+            highlightFor={highlightFor}
+            onRowClick={onRowClick}
+            currentBenchId={currentBenchId}
+            siteBenches={siteBenches}
+            onMoveLine={onMoveLine}
+          />
         </>
       )}
     </div>
@@ -942,7 +1051,7 @@ function ColumnHeader() {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: '1fr auto auto auto auto',
+        gridTemplateColumns: 'auto 1fr auto auto auto auto',
         gap: 14,
         padding: '10px 22px',
         fontSize: 10,
@@ -953,12 +1062,96 @@ function ColumnHeader() {
         borderBottom: '1px solid var(--color-border-subtle)',
       }}
     >
+      <span style={{ width: 16 }} />
       <span>Recipe</span>
       <span style={{ textAlign: 'right', minWidth: 36 }}>Qty</span>
       <span style={{ textAlign: 'right', minWidth: 56 }}>Time</span>
       <span style={{ width: 22 }} />
       <span style={{ width: 14 }} />
     </div>
+  );
+}
+
+/**
+ * Drag-to-reorder wrapper around a list of RecipeRows. One instance per
+ * rendered list (a run bucket, or a bench's flat mode group). Uses native
+ * HTML5 drag-and-drop; a row only becomes draggable while the manager is
+ * pressing its grip handle (`armedRef`), so normal clicks, the move-bench
+ * picker, and text stay unaffected. On drop it computes the new order of
+ * ProductionItemIds and hands it up via `onReorder` to persist.
+ */
+function ReorderableRows({
+  rows,
+  listKey,
+  onReorder,
+  highlightFor,
+  onRowClick,
+  currentBenchId,
+  siteBenches,
+  onMoveLine,
+}: {
+  rows: RowData[];
+  listKey: string;
+  onReorder?: (listKey: string, orderedItemIds: string[]) => void;
+  highlightFor: (itemId: string) => HighlightMode;
+  onRowClick: (itemId: ProductionItemId) => void;
+  currentBenchId: string;
+  siteBenches: Bench[];
+  onMoveLine?: (itemId: ProductionItemId, benchId: string) => void;
+}) {
+  const reorderable = !!onReorder && rows.length > 1;
+  const armedRef = useRef(false);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+
+  const ids = rows.map(r => r.line.item.id);
+
+  const finishDrop = (targetId: string) => {
+    const from = dragId;
+    setDragId(null);
+    setOverId(null);
+    armedRef.current = false;
+    if (!from || from === targetId || !onReorder) return;
+    const fromIdx = ids.indexOf(from);
+    const toIdx = ids.indexOf(targetId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const next = ids.filter(id => id !== from);
+    const insertAt = fromIdx < toIdx ? next.indexOf(targetId) + 1 : next.indexOf(targetId);
+    next.splice(insertAt, 0, from);
+    onReorder(listKey, next);
+  };
+
+  return (
+    <>
+      {rows.map(row => {
+        const itemId = row.line.item.id;
+        return (
+          <RecipeRow
+            key={itemId}
+            row={row}
+            highlight={highlightFor(itemId)}
+            onClick={() => onRowClick(itemId)}
+            currentBenchId={currentBenchId}
+            siteBenches={siteBenches}
+            onMoveLine={onMoveLine}
+            reorderable={reorderable}
+            dragging={dragId === itemId}
+            dragOver={overId === itemId && dragId !== null && dragId !== itemId}
+            onHandlePress={() => { armedRef.current = true; }}
+            onHandleRelease={() => { armedRef.current = false; }}
+            onRowDragStart={e => {
+              if (!armedRef.current) { e.preventDefault(); return; }
+              setDragId(itemId);
+              e.dataTransfer.effectAllowed = 'move';
+              try { e.dataTransfer.setData('text/plain', itemId); } catch { /* some browsers throw on setData in tests */ }
+            }}
+            onRowDragEnd={() => { setDragId(null); setOverId(null); armedRef.current = false; }}
+            onRowDragOver={e => { if (dragId) { e.preventDefault(); setOverId(itemId); } }}
+            onRowDrop={e => { e.preventDefault(); finishDrop(itemId); }}
+          />
+        );
+      })}
+    </>
   );
 }
 
@@ -976,6 +1169,7 @@ function RunBucketSection({
   currentBenchId,
   siteBenches,
   onMoveLine,
+  onReorder,
   onAssignRun,
 }: {
   bucket: RunBucket;
@@ -986,124 +1180,33 @@ function RunBucketSection({
   currentBenchId: string;
   siteBenches: Bench[];
   onMoveLine?: (itemId: ProductionItemId, benchId: string) => void;
+  /** Persist a manual drag-reorder for this run bucket. */
+  onReorder?: (listKey: string, orderedItemIds: string[]) => void;
   /** Reassign just this run on the current bench. */
   onAssignRun?: (benchId: string, runId: string, name: string) => void;
 }) {
-  const nowMins = nowHHMM ? hhmmToMins(nowHHMM) : -1;
-  const state: RunTiming | null = nowMins >= 0 ? runTiming(bucket, nowMins) : null;
-  const isNight = bucket.isNight;
-
-  const statePillColor =
-    state === 'active'   ? { fg: 'var(--color-success)',         border: 'var(--color-success)' } :
-    state === 'upcoming' ? { fg: 'var(--color-text-secondary)', border: 'var(--color-border)' } :
-                           { fg: 'var(--color-text-muted)',     border: 'var(--color-border-subtle)' };
-
-  // Run header gets a subtle grey wash so the bench card visually breaks
-  // into runs (R1, R2, N1) without needing extra dividers. Night-shift runs
-  // are flagged by the moon icon + caption inside the header rather than
-  // a darker tint.
-  const headerBg = 'var(--color-bg-hover)';
-  const labelBorder = 'var(--color-border-subtle)';
-
+  // The run-bucket header row (run label, window, duration, recipe count,
+  // assignee, state pill) was removed: the assignee duplicated the bench
+  // header's, and the run window now lives in the bench header. We keep just
+  // the column header + recipe rows here.
   return (
     <div
       style={{
         borderTop: isFirst ? '1px solid var(--color-border-subtle)' : '1px dashed var(--color-border-subtle)',
       }}
     >
-      {/* Run header: R1 · 05:00 → 08:00 · 3h00 · 6 recipes · [state pill] */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          padding: '12px 22px',
-          background: headerBg,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              fontSize: 11,
-              fontWeight: 800,
-              letterSpacing: '0.06em',
-              color: 'var(--color-text-primary)',
-              padding: '2px 7px',
-              borderRadius: 4,
-              background: '#ffffff',
-              border: `1px solid ${labelBorder}`,
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            {isNight && <Moon size={10} color="var(--color-text-secondary)" />}
-            {bucket.run.label}
-          </span>
-          {isNight && (
-            <span
-              style={{
-                fontSize: 9,
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                color: 'var(--color-text-secondary)',
-              }}
-            >
-              Night shift
-            </span>
-          )}
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
-            <Clock size={11} />
-            {minsToHHMM(bucket.startMins)} → {minsToHHMM(bucket.endMins)}
-          </span>
-          <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-            {formatHMS(bucket.productionMins)} · {bucket.rows.length} recipe{bucket.rows.length === 1 ? '' : 's'}
-          </span>
-        </div>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <AssigneeChip
-            assignee={bucket.assignee}
-            size="compact"
-            pickerLabel={`${bucket.run.label} — assign to`}
-            onAssign={onAssignRun ? name => onAssignRun(currentBenchId, bucket.run.id, name) : undefined}
-          />
-          {state && (
-            <span
-              style={{
-                fontSize: 9.5,
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                padding: '3px 8px',
-                borderRadius: 999,
-                background: '#ffffff',
-                color: statePillColor.fg,
-                border: `1.5px solid ${statePillColor.border}`,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {state === 'active' ? 'In progress' : state === 'upcoming' ? 'Upcoming' : 'Done'}
-            </span>
-          )}
-        </div>
-      </div>
-
       <ColumnHeader />
 
-      {bucket.rows.map(row => (
-        <RecipeRow
-          key={row.line.item.id}
-          row={row}
-          highlight={highlightFor(row.line.item.id)}
-          onClick={() => onRowClick(row.line.item.id)}
-          currentBenchId={currentBenchId}
-          siteBenches={siteBenches}
-          onMoveLine={onMoveLine}
-        />
-      ))}
+      <ReorderableRows
+        rows={bucket.rows}
+        listKey={`${currentBenchId}::run::${bucket.run.id}`}
+        onReorder={onReorder}
+        highlightFor={highlightFor}
+        onRowClick={onRowClick}
+        currentBenchId={currentBenchId}
+        siteBenches={siteBenches}
+        onMoveLine={onMoveLine}
+      />
     </div>
   );
 }
@@ -1142,6 +1245,15 @@ function RecipeRow({
   currentBenchId,
   siteBenches,
   onMoveLine,
+  reorderable = false,
+  dragging = false,
+  dragOver = false,
+  onHandlePress,
+  onHandleRelease,
+  onRowDragStart,
+  onRowDragEnd,
+  onRowDragOver,
+  onRowDrop,
 }: {
   row: RowData;
   highlight: HighlightMode;
@@ -1149,6 +1261,18 @@ function RecipeRow({
   currentBenchId: string;
   siteBenches: Bench[];
   onMoveLine?: (itemId: ProductionItemId, benchId: string) => void;
+  /** When true the row can be dragged (by its grip) to reorder the list. */
+  reorderable?: boolean;
+  /** This row is the one currently being dragged. */
+  dragging?: boolean;
+  /** A dragged row is hovering over this row (drop target). */
+  dragOver?: boolean;
+  onHandlePress?: () => void;
+  onHandleRelease?: () => void;
+  onRowDragStart?: (e: DragEvent) => void;
+  onRowDragEnd?: (e: DragEvent) => void;
+  onRowDragOver?: (e: DragEvent) => void;
+  onRowDrop?: (e: DragEvent) => void;
 }) {
   const { line, totalQty, estMinutes, extrasUnits } = row;
   const hasExtras = extrasUnits > 0;
@@ -1176,18 +1300,24 @@ function RecipeRow({
           onClick();
         }
       }}
+      draggable={reorderable}
+      onDragStart={onRowDragStart}
+      onDragEnd={onRowDragEnd}
+      onDragOver={onRowDragOver}
+      onDrop={onRowDrop}
       style={{
         display: 'grid',
-        gridTemplateColumns: '1fr auto auto auto auto',
+        gridTemplateColumns: 'auto 1fr auto auto auto auto',
         gap: 14,
         alignItems: 'center',
         padding: '14px 22px',
         fontSize: 13,
         fontFamily: 'var(--font-primary)',
         color: 'var(--color-text-primary)',
-        background: tone.bg,
+        background: dragOver ? 'var(--color-bg-hover)' : tone.bg,
         border: 'none',
         borderBottom: '1px solid var(--color-border-subtle)',
+        borderTop: dragOver ? '2px solid var(--color-accent-active)' : '2px solid transparent',
         borderLeft: highlight === 'focus' ? '3px solid var(--color-accent-active)' :
                     highlight === 'upstream' ? '3px solid var(--color-text-secondary)' :
                     highlight === 'downstream' ? '3px solid var(--color-text-muted)' :
@@ -1195,10 +1325,32 @@ function RecipeRow({
         textAlign: 'left',
         width: '100%',
         cursor: 'pointer',
-        opacity: tone.opacity,
+        opacity: dragging ? 0.4 : tone.opacity,
         transition: 'opacity 120ms ease, background 120ms ease',
       }}
     >
+      {/* Drag handle ("holder") — press and drag to move this recipe up or
+          down its list. Drag only arms from here so row clicks and the
+          move-bench picker keep working. */}
+      <span
+        aria-hidden={!reorderable}
+        title={reorderable ? 'Drag to reorder' : undefined}
+        onMouseDown={reorderable ? onHandlePress : undefined}
+        onMouseUp={reorderable ? onHandleRelease : undefined}
+        onClick={e => e.stopPropagation()}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 16,
+          color: 'var(--color-text-muted)',
+          cursor: reorderable ? 'grab' : 'default',
+          opacity: reorderable ? 0.6 : 0,
+          touchAction: 'none',
+        }}
+      >
+        <GripVertical size={14} />
+      </span>
       <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
         <span
           style={{
@@ -1628,6 +1780,71 @@ function TotalRow({ label, value }: { label: string; value: string }) {
     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
       <span>{label}</span>
       <span>{value}</span>
+    </div>
+  );
+}
+
+/** Minutes-from-midnight → "HH:MM", wrapped into a single day for the
+ *  native time input (which only accepts 00:00–23:59). */
+function toTimeInputValue(mins: number): string {
+  const x = ((Math.round(mins) % 1440) + 1440) % 1440;
+  const h = Math.floor(x / 60);
+  const m = x % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/** A stopwatch cell whose value is an editable native time input. Falls back
+ *  to a read-only cell when no `onCommit` is supplied. */
+function EditableStopwatchCell({
+  label,
+  mins,
+  onCommit,
+}: {
+  label: string;
+  mins: number;
+  onCommit?: (mins: number) => void;
+}) {
+  if (!onCommit) {
+    return <StopwatchCell label={label} value={minsToHHMM(mins)} />;
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <span
+        style={{
+          fontSize: 10,
+          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
+          color: 'var(--color-text-muted)',
+        }}
+      >
+        {label}
+      </span>
+      <input
+        type="time"
+        value={toTimeInputValue(mins)}
+        onClick={e => e.stopPropagation()}
+        onChange={e => {
+          const v = e.target.value;
+          if (!v) return;
+          const [h, m] = v.split(':').map(Number);
+          if (Number.isNaN(h) || Number.isNaN(m)) return;
+          onCommit(h * 60 + m);
+        }}
+        style={{
+          fontSize: 13,
+          fontWeight: 600,
+          fontVariantNumeric: 'tabular-nums',
+          color: 'var(--color-text-primary)',
+          fontFamily: 'var(--font-primary)',
+          background: '#ffffff',
+          border: '1px solid var(--color-border-subtle)',
+          borderRadius: 6,
+          padding: '2px 6px',
+          width: 'fit-content',
+          maxWidth: '100%',
+          cursor: 'text',
+        }}
+      />
     </div>
   );
 }

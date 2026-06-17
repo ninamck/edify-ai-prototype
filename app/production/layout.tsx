@@ -37,8 +37,11 @@ type SubTab = { id: string; label: string; href: string };
 //                       inform tomorrow, performance and setup)
 // The sub-tabs surface depends on which sidebar item brought you here.
 // HUB persona — Run / Plan split, mirroring the self-producing sites:
-//   • Run  = live floor (Today, Run sheet, Benches, PCR queue)
-//   • Plan = forward-looking (Plan, Carry-over, Productivity, Settings)
+//   • Run  = live floor (Today, Run sheet, PCR queue)
+//   • Plan = forward-looking (Plan, Benches, Carry-over, Productivity, Settings)
+// Benches (the bench board) sits in Plan: it's where the manager shapes
+// how the bake is laid out across stations ahead of the shift, not a
+// live-floor monitoring surface.
 // The Plan tab itself shows the hub's spoke planning + the same make as
 // the day (see RecipeFirstGrid). Sales (live) and Sales vs forecast stay
 // dropped: a hub kitchen produces against spoke orders, not retail
@@ -46,15 +49,17 @@ type SubTab = { id: string; label: string; href: string };
 const HUB_RUN_TABS: SubTab[] = [
   { id: 'amounts',         label: 'Today',             href: '/production/amounts' },
   { id: 'run-sheet',       label: 'Run sheet',         href: '/production/run-sheet' },
-  { id: 'board',           label: 'Benches',           href: '/production/board' },
   { id: 'pcr',             label: 'PCR queue',         href: '/production/pcr' },
 ];
 
 const HUB_PLAN_TABS: SubTab[] = [
   { id: 'plan',            label: 'Plan',              href: '/production/plan' },
-  { id: 'carry-over',      label: 'Carry-over',        href: '/production/carry-over' },
+  { id: 'board',           label: 'Benches',           href: '/production/board' },
+  // Carry-over tab hidden per request — page still exists at /production/carry-over:
+  // { id: 'carry-over',      label: 'Carry-over',        href: '/production/carry-over' },
   { id: 'productivity',    label: 'Productivity',      href: '/production/productivity' },
-  { id: 'site-settings',   label: 'Settings',          href: '/production/settings' },
+  // Settings tab hidden — production settings now live in the lower settings area (/settings/production):
+  // { id: 'site-settings',   label: 'Settings',          href: '/production/settings' },
 ];
 
 // STANDALONE + HYBRID split into a Run group and a Plan group, mirroring
@@ -66,31 +71,44 @@ const HUB_PLAN_TABS: SubTab[] = [
 const SELF_PRODUCING_RUN_TABS: SubTab[] = [
   { id: 'amounts',         label: 'Today',             href: '/production/amounts' },
   { id: 'run-sheet',       label: 'Run sheet',         href: '/production/run-sheet' },
-  { id: 'board',           label: 'Benches',           href: '/production/board' },
   { id: 'pcr',             label: 'PCR queue',         href: '/production/pcr' },
   { id: 'sales',           label: 'Live sales',        href: '/production/sales' },
 ];
 
 const SELF_PRODUCING_PLAN_TABS: SubTab[] = [
   { id: 'plan',            label: 'Plan',              href: '/production/plan' },
-  { id: 'carry-over',      label: 'Carry-over',        href: '/production/carry-over' },
+  { id: 'board',           label: 'Benches',           href: '/production/board' },
+  // Carry-over tab hidden per request — page still exists at /production/carry-over:
+  // { id: 'carry-over',      label: 'Carry-over',        href: '/production/carry-over' },
   { id: 'productivity',    label: 'Productivity',      href: '/production/productivity' },
   { id: 'sales-report',    label: 'Sales vs forecast', href: '/production/sales-report' },
-  { id: 'site-settings',   label: 'Settings',          href: '/production/settings' },
+  // Settings tab hidden — production settings now live in the lower settings area (/settings/production):
+  // { id: 'site-settings',   label: 'Settings',          href: '/production/settings' },
 ];
 
 /** Run-group prefixes — drives the Run/Plan tab-strip swap for
  *  self-producing personas, and lets the site selector hide on the run
- *  / today views (where mid-shift site swaps lose context). */
+ *  / today views (where mid-shift site swaps lose context). Benches
+ *  (/production/board) is deliberately absent: for Pret personas it now
+ *  lives in the Plan group. Burger King's crew line shares that path but
+ *  stays Run — handled as a persona exception in `productionGroupForPath`. */
 const RUN_PRODUCTION_PREFIXES = [
   '/production/amounts',
   '/production/run-sheet',
-  '/production/board',
   '/production/pcr',
   '/production/sales',
 ];
 
-function productionGroupForPath(pathname: string): 'run' | 'plan' {
+function productionGroupForPath(pathname: string, isBurgerKing: boolean): 'run' | 'plan' {
+  // Burger King's crew line lives at /production/board and is a live
+  // run-floor surface (not the Pret "Benches" planning board), so it
+  // stays in the Run group for that persona only.
+  if (
+    isBurgerKing &&
+    (pathname === '/production/board' || pathname.startsWith('/production/board/'))
+  ) {
+    return 'run';
+  }
   return RUN_PRODUCTION_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))
     ? 'run'
     : 'plan';
@@ -104,10 +122,12 @@ function productionGroupForPath(pathname: string): 'run' | 'plan' {
 const SPOKE_SUB_TABS: SubTab[] = [
   { id: 'amounts',      label: 'Today',             href: '/production/amounts' },
   { id: 'sales',        label: 'Sales (live)',      href: '/production/sales' },
-  { id: 'carry-over',   label: 'Carry-over',        href: '/production/carry-over' },
+  // Carry-over tab hidden per request — page still exists at /production/carry-over:
+  // { id: 'carry-over',   label: 'Carry-over',        href: '/production/carry-over' },
   { id: 'spokes',       label: 'Order',             href: '/production/spokes' },
   { id: 'sales-report',    label: 'Sales vs forecast', href: '/production/sales-report' },
-  { id: 'site-settings',   label: 'Settings',          href: '/production/settings' },
+  // Settings tab hidden — production settings now live in the lower settings area (/settings/production):
+  // { id: 'site-settings',   label: 'Settings',          href: '/production/settings' },
 ];
 
 // Burger King is a standalone hot-production restaurant. Its surfaces are
@@ -139,7 +159,7 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
   // so they keep their single strip. Burger King gets its own trimmed
   // hot-production strips (crew line + drop plan).
   const isSelfProducing = isHybrid || isStandalone || isProducingHybrid;
-  const productionGroup = productionGroupForPath(pathname);
+  const productionGroup = productionGroupForPath(pathname, isBurgerKing);
   const subTabs = isBurgerKing
     ? productionGroup === 'run'
       ? BK_RUN_TABS

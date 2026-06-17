@@ -152,6 +152,11 @@ type RunFilter = 'all' | RunId;
 
 const RUN_IDS: RunId[] = ['R1', 'R2', 'R3'];
 
+// Display labels for the dispatch runs. The internal keys stay R1/R2/R3
+// (used as record keys + filter values), but every customer-facing surface
+// now reads P1/P2/P3 in line with the "Batches" terminology.
+const RUN_DISPLAY: Record<RunId, string> = { R1: 'P1', R2: 'P2', R3: 'P3' };
+
 type RunSlice = {
   runId: RunId;
   units: number;
@@ -1504,9 +1509,9 @@ function RunFilterStrip({
 }) {
   const opts: Array<{ id: RunFilter; label: string; hint: string }> = [
     { id: 'all', label: 'All', hint: 'Show full row totals + per-run breakdown' },
-    { id: 'R1', label: 'R1', hint: 'Filter to first dispatch run (already out)' },
-    { id: 'R2', label: 'R2', hint: 'Filter to mid-morning top-up run' },
-    { id: 'R3', label: 'R3', hint: 'Filter to lunch reset run' },
+    { id: 'R1', label: RUN_DISPLAY.R1, hint: 'Filter to first dispatch run (already out)' },
+    { id: 'R2', label: RUN_DISPLAY.R2, hint: 'Filter to mid-morning top-up run' },
+    { id: 'R3', label: RUN_DISPLAY.R3, hint: 'Filter to lunch reset run' },
   ];
   return (
     <div
@@ -1572,7 +1577,7 @@ function RunStatusStrip({
         return (
           <span
             key={id}
-            title={`${id} · ${RUN_STATUS_COPY[slice.status].label} · ${slice.units} units`}
+            title={`${RUN_DISPLAY[id]} · ${RUN_STATUS_COPY[slice.status].label} · ${slice.units} units`}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -1591,7 +1596,7 @@ function RunStatusStrip({
             }}
           >
             <RunStatusIcon status={slice.status} size={9} />
-            {id}
+            {RUN_DISPLAY[id]}
             <span style={{ fontWeight: 600, opacity: 0.85 }}>{slice.units}</span>
           </span>
         );
@@ -1610,7 +1615,7 @@ function RunStatusBadge({ runId, status }: { runId: RunId; status: RunStatus }) 
   const copy = RUN_STATUS_COPY[status];
   return (
     <span
-      title={`${runId} · ${copy.label}`}
+      title={`${RUN_DISPLAY[runId]} · ${copy.label}`}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -1627,7 +1632,7 @@ function RunStatusBadge({ runId, status }: { runId: RunId; status: RunStatus }) 
       }}
     >
       <RunStatusIcon status={status} size={9} />
-      {runId} · {copy.label}
+      {RUN_DISPLAY[runId]} · {copy.label}
     </span>
   );
 }

@@ -29,7 +29,7 @@ type ModeTabId = 'all' | ProductionMode;
 
 const MODE_TABS: Array<{ id: ModeTabId; label: string }> = [
   { id: 'all',       label: 'All' },
-  { id: 'run',       label: 'Run' },
+  { id: 'run',       label: 'Batches' },
   { id: 'variable',  label: 'Variable' },
   { id: 'increment', label: 'Increment' },
 ];
@@ -241,7 +241,7 @@ export default function ProductionBoardPage() {
               marginRight: 4,
             }}
           >
-            Run
+            Batches
           </span>
           <div
             role="tablist"

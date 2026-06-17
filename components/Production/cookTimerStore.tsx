@@ -30,6 +30,10 @@ export type CookTimer = {
   /** Authoritative remaining ms while paused. */
   remainingMs: number;
   status: CookTimerStatus;
+  /** Batch size — how many units this cook represents (for the line + cabinet). */
+  qty: number;
+  /** Wall-clock ms the cook finished, so the cabinet can age it. */
+  doneAt: number | null;
 };
 
 let timers: Record<string, CookTimer> = {};
@@ -52,7 +56,11 @@ function ensureTicking() {
     for (const key of Object.keys(timers)) {
       const t = timers[key];
       if (t.status === 'running' && t.endsAt != null && now >= t.endsAt) {
-        timers = { ...timers, [key]: { ...t, status: 'done', remainingMs: 0, endsAt: null } };
+        // Cook complete — it leaves the broiler and lands in the cabinet.
+        timers = {
+          ...timers,
+          [key]: { ...t, status: 'done', remainingMs: 0, endsAt: null, doneAt: now },
+        };
         mutated = true;
       }
     }
@@ -71,6 +79,7 @@ export function startCookTimer(
   stepId: string,
   label: string,
   seconds: number,
+  qty = 1,
 ) {
   timers = {
     ...timers,
@@ -82,9 +91,22 @@ export function startCookTimer(
       endsAt: Date.now() + seconds * 1000,
       remainingMs: seconds * 1000,
       status: 'running',
+      qty,
+      doneAt: null,
     },
   };
   ensureTicking();
+  emit();
+}
+
+/** Force a cook to finish now — the batch lands in the cabinet immediately. */
+export function completeCookTimer(recipeId: RecipeId) {
+  const t = timers[recipeId];
+  if (!t || t.status === 'done') return;
+  timers = {
+    ...timers,
+    [recipeId]: { ...t, status: 'done', remainingMs: 0, endsAt: null, doneAt: Date.now() },
+  };
   emit();
 }
 

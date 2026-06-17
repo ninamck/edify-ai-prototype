@@ -401,6 +401,10 @@ export type DropItem = {
   readyInMin: number | null;
   /** Demand is surging right now (Quinn cooking ahead) — highlight it. */
   surged: boolean;
+  /** Started by the crew from the stepper (vs auto-dropped by the loop). */
+  crew?: boolean;
+  /** Live wall-clock seconds left for a crew-started cook (mm:ss on the card). */
+  liveSeconds?: number | null;
 };
 
 export type CrewLoopSnapshot = {
