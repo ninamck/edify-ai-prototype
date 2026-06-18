@@ -221,10 +221,10 @@ function surgeMultiplier(state: SimState, recipeId: RecipeId): number {
   return mult;
 }
 
-/** Held (non-expired) units of a recipe. */
+/** Held units of a recipe that are still within their hold (sellable). */
 function heldOf(state: SimState, recipeId: RecipeId): number {
   return state.holder
-    .filter(b => b.recipeId === recipeId)
+    .filter(b => b.recipeId === recipeId && b.expiresAtMin > state.nowMin)
     .reduce((a, b) => a + b.count, 0);
 }
 
@@ -239,6 +239,13 @@ function roundToMultiple(n: number, multiple: number): number {
   if (multiple <= 1) return Math.max(0, Math.round(n));
   return Math.max(0, Math.ceil(n / multiple) * multiple);
 }
+
+/**
+ * How long an expired batch lingers in the cabinet flagged "WASTE" before the
+ * loop actually bins it. Gives the crew a visible window to pull it after the
+ * hold time is up (rather than it silently vanishing between drops).
+ */
+const WASTE_GRACE_MIN = 20;
 
 /**
  * Advance the simulation by `stepMin` demo-minutes (mutates a fresh copy).
@@ -301,8 +308,9 @@ function advance(prev: SimState, stepMin: number): SimState {
     let sellWhole = Math.floor(toSell);
     state.sellCarry[cfg.recipeId] = toSell - sellWhole;
     if (sellWhole <= 0) continue;
+    // Only sell fresh stock — anything past its hold is dead and awaiting waste.
     const batches = state.holder
-      .filter(b => b.recipeId === cfg.recipeId)
+      .filter(b => b.recipeId === cfg.recipeId && b.expiresAtMin > now)
       .sort((a, b) => a.expiresAtMin - b.expiresAtMin);
     for (const batch of batches) {
       if (sellWhole <= 0) break;
@@ -313,12 +321,15 @@ function advance(prev: SimState, stepMin: number): SimState {
     }
   }
 
-  // 4. Bin anything past its shelf life (waste) and drop empty batches.
+  // 4. Anything past its hold lingers in the cabinet flagged WASTE for a grace
+  //    window so the crew can pull it; once the grace is up it's binned and
+  //    counted as waste. Empty batches drop out.
   const survivors: HeldBatch[] = [];
   for (const batch of state.holder) {
-    if (batch.expiresAtMin <= now) {
+    if (batch.count <= 0) continue;
+    if (batch.expiresAtMin + WASTE_GRACE_MIN <= now) {
       state.wasteTotal += batch.count;
-    } else if (batch.count > 0) {
+    } else {
       survivors.push(batch);
     }
   }
@@ -374,6 +385,8 @@ export type HeldDisplay = {
   count: number;
   expiresInMin: number;
   shelfLifeMin: number;
+  /** Hold window is up — pull and bin it. */
+  expired: boolean;
 };
 
 export type StationSnapshot = {
@@ -502,6 +515,7 @@ function buildSnapshot(state: SimState, playing: boolean): CrewLoopSnapshot {
         count: b.count,
         expiresInMin: Math.max(0, b.expiresAtMin - state.nowMin),
         shelfLifeMin: RECIPE_CONFIG[b.recipeId]?.shelfLifeMin ?? 20,
+        expired: b.expiresAtMin <= state.nowMin,
       }));
 
     return { station, recipes, now, next, held };
@@ -587,6 +601,7 @@ function buildSnapshot(state: SimState, playing: boolean): CrewLoopSnapshot {
       count: b.count,
       expiresInMin: Math.max(0, b.expiresAtMin - state.nowMin),
       shelfLifeMin: RECIPE_CONFIG[b.recipeId]?.shelfLifeMin ?? 20,
+      expired: b.expiresAtMin <= state.nowMin,
     }));
 
   return {

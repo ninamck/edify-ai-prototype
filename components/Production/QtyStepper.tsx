@@ -23,7 +23,7 @@ import type { CSSProperties, ReactNode } from 'react';
  * its own number formatting / typing behaviour.
  */
 
-export type QtyStepperSize = 'compact' | 'default' | 'emphasized';
+export type QtyStepperSize = 'compact' | 'default' | 'emphasized' | 'touch';
 
 type SizeTokens = {
   buttonSize: number;
@@ -40,6 +40,8 @@ const SIZE_TOKENS: Record<QtyStepperSize, SizeTokens> = {
   compact:    { buttonSize: 22, buttonRadius: 5, iconSize: 11, wrapperPadding: '2px 4px',  wrapperRadius: 8,  gap: 4 },
   default:    { buttonSize: 28, buttonRadius: 6, iconSize: 13, wrapperPadding: '4px 6px',  wrapperRadius: 8,  gap: 6 },
   emphasized: { buttonSize: 32, buttonRadius: 6, iconSize: 14, wrapperPadding: '4px 6px',  wrapperRadius: 10, gap: 4 },
+  // Tablet / floor-screen touch target — comfortably ≥ 36px.
+  touch:      { buttonSize: 40, buttonRadius: 8, iconSize: 18, wrapperPadding: '5px 7px',  wrapperRadius: 12, gap: 6 },
 };
 
 type Props = {
@@ -161,8 +163,8 @@ export function getStepperValueStyle(
   size: QtyStepperSize,
   opts: { muted?: boolean } = {},
 ): CSSProperties {
-  const fontSize = size === 'compact' ? 12 : size === 'default' ? 14 : 16;
-  const minWidth = size === 'compact' ? 26 : size === 'default' ? 32 : 36;
+  const fontSize = size === 'compact' ? 12 : size === 'default' ? 14 : size === 'touch' ? 18 : 16;
+  const minWidth = size === 'compact' ? 26 : size === 'default' ? 32 : size === 'touch' ? 44 : 36;
   return {
     fontSize,
     fontWeight: 700,

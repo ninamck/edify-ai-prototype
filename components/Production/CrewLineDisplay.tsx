@@ -34,8 +34,6 @@ import {
   RotateCcw,
   Flame,
   Info,
-  Timer,
-  ChevronRight,
   SkipForward,
   Plus,
   Maximize2,
@@ -43,12 +41,23 @@ import {
   Sun,
   Moon,
   RefreshCw,
+  X,
+  SlidersHorizontal,
+  ChevronDown,
+  Trash2,
 } from 'lucide-react';
 import { useCrewLoop, type DropItem, type HeldDisplay, type RecutTone } from './crewLoopStore';
-import { useCookTimers, remainingSeconds, clearAllCookTimers } from './cookTimerStore';
+import {
+  useCookTimers,
+  remainingSeconds,
+  clearAllCookTimers,
+  startCookTimer,
+  addToCookTimer,
+} from './cookTimerStore';
 import StepperViewBK from './StepperViewBK';
+import QtyStepper, { getStepperValueStyle } from './QtyStepper';
 import { getRecipe } from './fixtures';
-import { bkStationForRecipe } from './bkFixtures';
+import { bkStationForRecipe, BK_CREW_STEPS, BK_STATIONS } from './bkFixtures';
 import type { RecipeId, SiteId } from './fixtures';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -165,6 +174,17 @@ const PALETTES: Record<Mode, Palette> = {
 const ThemeContext = createContext<Palette>(PALETTES.dark);
 const useTheme = () => useContext(ThemeContext);
 
+// Every component the line can cook, for the manual "add a large order" picker.
+type OrderRecipe = { recipeId: RecipeId; name: string; stationName: string; accent: string };
+const ORDER_RECIPES: OrderRecipe[] = BK_STATIONS.flatMap(st =>
+  st.recipeIds.map(rid => ({
+    recipeId: rid,
+    name: getRecipe(rid)?.name ?? rid,
+    stationName: st.name,
+    accent: st.accent,
+  })),
+);
+
 export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId }) {
   const loop = useCrewLoop();
   const timers = useCookTimers();
@@ -172,16 +192,18 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
   const [cookQty, setCookQty] = useState(1);
   const [fullscreen, setFullscreen] = useState(false);
   const [mode, setMode] = useState<Mode>('light');
+  const [orderOpen, setOrderOpen] = useState(false);
+  const [orderQtys, setOrderQtys] = useState<Record<string, number>>({});
   const pal = PALETTES[mode];
   const cook = (recipeId: RecipeId, qty = 1) => {
     setStepperRecipe(recipeId);
     setCookQty(qty);
   };
 
-  // Crew-started batches (from the stepper) move through the same lifecycle the
-  // crew watches: while the cook timer runs they're ON THE LINE with a live
-  // mm:ss countdown; once it lands ('done') they drop into the CABINET and age
-  // on their hold-life. These are layered on top of the auto-driven loop.
+  // Crew-started batches move through a two-state lifecycle the crew watches:
+  // while the cook timer runs the batch sits in DROP NOW with a live mm:ss
+  // cooking cue; once it lands ('done') it drops straight into the CABINET and
+  // ages on its hold-life. These are layered on top of the auto-driven loop.
   const crewCooking: DropItem[] = timers
     .filter(t => t.status !== 'done')
     .map(t => {
@@ -204,31 +226,81 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
       } as DropItem;
     });
 
+  // Crew-cooked batches age on the wall clock. Past their hold they stay in the
+  // cabinet flagged WASTE (so the crew can pull them), then drop off after a
+  // grace window — mirroring the auto-loop's waste behaviour.
+  const CREW_WASTE_GRACE_MIN = 20;
   const crewCabinet: HeldDisplay[] = timers
     .filter(t => t.status === 'done')
     .map(t => {
       const recipe = getRecipe(t.recipeId);
       const shelfLifeMin = recipe?.shelfLifeMinutes ?? 20;
       const agedMin = t.doneAt ? (Date.now() - t.doneAt) / 60000 : 0;
+      const leftMin = shelfLifeMin - agedMin;
       return {
         id: `crew-${t.recipeId}`,
         recipeId: t.recipeId,
         name: recipe?.name ?? t.recipeId,
         count: t.qty,
-        expiresInMin: Math.max(0, Math.round(shelfLifeMin - agedMin)),
+        expiresInMin: Math.max(0, Math.round(leftMin)),
         shelfLifeMin,
-      } as HeldDisplay;
+        expired: leftMin <= 0,
+        _overdueMin: -leftMin,
+      } as HeldDisplay & { _overdueMin: number };
     })
-    .filter(h => h.expiresInMin > 0);
+    .filter(h => (h as HeldDisplay & { _overdueMin: number })._overdueMin <= CREW_WASTE_GRACE_MIN);
 
-  // A crew-started cook is a clean hand-off: while it's on the line it leaves
-  // the urgent "Drop now" list (the crew is already on it) and the auto-loop's
-  // own batch for that recipe is suppressed so it doesn't appear twice. Crew
-  // batches lead each list so a just-started cook is the first thing seen.
+  // Everything cooking right now (crew-started + the loop's own auto-drops),
+  // de-duped so a recipe shows once. These render in the "Drop now" area with
+  // a cooking cue; when a cook finishes it drops straight into the cabinet.
   const crewCookingIds = new Set(crewCooking.map(i => i.recipeId));
-  const onLine = [...crewCooking, ...loop.cooking.filter(c => !crewCookingIds.has(c.recipeId))];
-  const dropNow = loop.dropNow.filter(d => !crewCookingIds.has(d.recipeId));
-  const cabinet = [...crewCabinet, ...loop.cabinet];
+  const cooking = [...crewCooking, ...loop.cooking.filter(c => !crewCookingIds.has(c.recipeId))];
+  const cookingIds = new Set(cooking.map(i => i.recipeId));
+  // Shortfall still needing a cook — anything not already cooking. These get a
+  // Start button.
+  const toStart = loop.dropNow.filter(d => !cookingIds.has(d.recipeId));
+  // Waste-now items lead the cabinet, then freshest-expiring first.
+  const cabinet = [...crewCabinet, ...loop.cabinet].sort((a, b) => {
+    if (a.expired !== b.expired) return a.expired ? -1 : 1;
+    return a.expiresInMin - b.expiresInMin;
+  });
+
+  // The flame-broil step for a recipe — the cook timer keys to it so that if the
+  // crew open the steps later, the running timer lines up with the cook step.
+  const cookStepFor = (recipeId: RecipeId) => {
+    const steps = BK_CREW_STEPS[recipeId] ?? [];
+    const cookStep = steps.find(s => s.workType === 'grill') ?? steps[0];
+    return { seconds: cookStep?.seconds ?? 240, stepId: cookStep?.label ?? 'Cook' };
+  };
+
+  // Start a cook straight from the card (no step walkthrough needed on the line).
+  const startCook = (item: DropItem) => {
+    const { seconds, stepId } = cookStepFor(item.recipeId);
+    startCookTimer(item.recipeId, stepId, stepId, seconds, item.count);
+  };
+
+  const bumpOrderQty = (recipeId: RecipeId, delta: number) =>
+    setOrderQtys(prev => ({ ...prev, [recipeId]: Math.max(0, (prev[recipeId] ?? 0) + delta) }));
+
+  // Manual "large order just came in": drop extra batches onto the line now —
+  // any number of recipes in one go (the automatic loop does this too, via
+  // Quinn's re-cuts). Stacks onto an in-flight cook if one's already broiling.
+  const addLargeOrder = () => {
+    let added = false;
+    for (const r of ORDER_RECIPES) {
+      const qty = orderQtys[r.recipeId] ?? 0;
+      if (qty <= 0) continue;
+      const { seconds, stepId } = cookStepFor(r.recipeId);
+      addToCookTimer(r.recipeId, stepId, stepId, seconds, qty);
+      added = true;
+    }
+    if (added) setOrderOpen(false);
+  };
+
+  const openOrder = () => {
+    setOrderQtys({});
+    setOrderOpen(true);
+  };
 
   const resetAll = () => {
     loop.reset();
@@ -245,6 +317,7 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
     <ThemeContext.Provider value={pal}>
       <div
         style={{
+          position: 'relative',
           display: 'flex',
           flexDirection: 'column',
           // Fit one screen — never scroll. Full screen sits above the app
@@ -284,43 +357,44 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
           <span style={{ fontSize: 20, fontWeight: 800, fontVariantNumeric: 'tabular-nums', marginLeft: 4 }}>
             {loop.nowHHMM}
           </span>
-          <ForecastSyncBadge nowHHMM={loop.nowHHMM} />
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginLeft: 12 }}>
+            <SyncBadge
+              label="POS synced"
+              detail={`· BK POS · ${loop.nowHHMM}`}
+              title={
+                'Live sales synced from the Burger King POS (drive-thru, kiosk & app). ' +
+                'Auto-syncs every 15 min.'
+              }
+            />
+            <SyncBadge
+              label="Forecast synced"
+              detail={`· ${loop.nowHHMM}`}
+              title={
+                'Demand forecast synced. Blends 4-week sales history, local events and ' +
+                'weather. Auto-syncs every 15 min.'
+              }
+            />
+          </div>
           <div style={{ flex: 1 }} />
-          {/* Dark / light screen */}
-          <TransportButton
-            onClick={() => setMode(m => (m === 'dark' ? 'light' : 'dark'))}
-            label={mode === 'dark' ? 'Light' : 'Dark'}
-          >
-            {mode === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-          </TransportButton>
-          {/* Stepped demo: the presenter advances the clock by hand so the
-              room can see what changes between drops. */}
-          <TransportButton onClick={() => loop.step(5)} label="+5 min" disabled={loop.atEnd}>
-            <Plus size={14} />
-          </TransportButton>
-          <TransportButton onClick={loop.stepToNextDrop} label="Next drop" disabled={loop.atEnd} primary>
-            <SkipForward size={14} />
-          </TransportButton>
-          <TransportButton onClick={loop.togglePlay} label={loop.playing ? 'Pause' : 'Auto'} disabled={loop.atEnd}>
-            {loop.playing ? <Pause size={14} /> : <Play size={14} />}
-          </TransportButton>
-          <TransportButton onClick={resetAll} label="Reset">
-            <RotateCcw size={14} />
-          </TransportButton>
-          <TransportButton
-            onClick={() => setFullscreen(f => !f)}
-            label={fullscreen ? 'Exit' : 'Full screen'}
-          >
-            {fullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-          </TransportButton>
+          {/* All the demo plumbing (step the clock, auto-play, theme, full
+              screen, reset) tucked into one menu so the line reads like a real
+              floor screen, not a control panel. */}
+          <DemoMenu
+            mode={mode}
+            onToggleMode={() => setMode(m => (m === 'dark' ? 'light' : 'dark'))}
+            playing={loop.playing}
+            atEnd={loop.atEnd}
+            onStep5={() => loop.step(5)}
+            onNextDrop={loop.stepToNextDrop}
+            onTogglePlay={loop.togglePlay}
+            onReset={resetAll}
+            fullscreen={fullscreen}
+            onToggleFullscreen={() => setFullscreen(f => !f)}
+          />
         </div>
 
         {/* Quinn re-cut banner */}
         <RecutBanner recut={loop.recut} />
-
-        {/* Cabinet strip — what's held + freshness, kept up top. Crew-cooked
-            batches land here once their timer is done. */}
-        <CabinetStrip cabinet={cabinet} />
 
         {/* HERO — the drop clock, kept to a compact bar */}
         <div
@@ -379,7 +453,9 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
             />
           </div>
 
-          <span style={{ fontSize: 12, color: pal.textSecondary, whiteSpace: 'nowrap' }}>
+          <span
+            style={{ fontSize: 12, fontWeight: 500, color: pal.textSecondary, whiteSpace: 'nowrap' }}
+          >
             Drop at{' '}
             <strong style={{ color: pal.text, fontVariantNumeric: 'tabular-nums' }}>
               {loop.nextDropHHMM}
@@ -401,27 +477,32 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
             padding: '16px 24px',
           }}
         >
-          {dropNow.length > 0 && (
-            <Section label="Drop now" tone="urgent" hint="Demand is ahead of the cabinet — get these on">
+          {/* CABINET — the hero of this screen: what's ready to serve right
+              now. Cooks land here the moment they finish. */}
+          <CabinetSection cabinet={cabinet} />
+
+          {(toStart.length > 0 || cooking.length > 0) && (
+            <Section
+              label="Drop now"
+              tone={toStart.length > 0 ? 'urgent' : undefined}
+              hint="Hit Start — it moves to the cabinet when it's cooked"
+            >
               <CardGrid>
-                {dropNow.map(item => (
-                  <DropCard key={item.id} item={item} variant="urgent" onCook={cook} />
+                {toStart.map(item => (
+                  <DropCard
+                    key={item.id}
+                    item={item}
+                    variant="start"
+                    onCook={cook}
+                    onStart={startCook}
+                  />
+                ))}
+                {cooking.map(item => (
+                  <DropCard key={item.id} item={item} variant="cooking" onCook={cook} />
                 ))}
               </CardGrid>
             </Section>
           )}
-
-          <Section label="On the line" hint="Broiling now">
-            {onLine.length === 0 ? (
-              <Empty>Nothing on the broiler — cabinet&apos;s covering demand</Empty>
-            ) : (
-              <CardGrid>
-                {onLine.map(item => (
-                  <DropCard key={item.id} item={item} variant="cooking" onCook={cook} />
-                ))}
-              </CardGrid>
-            )}
-          </Section>
 
           <Section
             label={`Coming up · ${loop.nextDropHHMM}`}
@@ -433,12 +514,55 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
             ) : (
               <CardGrid>
                 {loop.nextDrop.map(item => (
-                  <DropCard key={item.id} item={item} variant="next" onCook={cook} />
+                  <DropCard
+                    key={item.id}
+                    item={item}
+                    variant="next"
+                    onCook={cook}
+                    onStart={startCook}
+                  />
                 ))}
               </CardGrid>
             )}
           </Section>
         </div>
+
+        {/* Big manual hook for a large order landing — the crew can drop an
+            extra batch even when the forecast didn't see it coming. */}
+        <button
+          type="button"
+          onClick={openOrder}
+          style={{
+            position: 'absolute',
+            right: 24,
+            bottom: 24,
+            zIndex: 20,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 9,
+            padding: '15px 24px',
+            borderRadius: 100,
+            border: 'none',
+            background: pal.accentSolid,
+            color: pal.onAccent,
+            fontSize: 16,
+            fontWeight: 800,
+            fontFamily: 'var(--font-primary)',
+            cursor: 'pointer',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.28)',
+          }}
+        >
+          <Plus size={20} /> Add order
+        </button>
+
+        <AddOrderModal
+          open={orderOpen}
+          qtys={orderQtys}
+          onBump={bumpOrderQty}
+          onConfirm={addLargeOrder}
+          onClear={() => setOrderQtys({})}
+          onClose={() => setOrderOpen(false)}
+        />
 
         <StepperViewBK
           recipeId={stepperRecipe}
@@ -537,46 +661,53 @@ function DropCard({
   item,
   variant,
   onCook,
+  onStart,
 }: {
   item: DropItem;
-  variant: 'urgent' | 'cooking' | 'next';
+  variant: 'start' | 'cooking' | 'next';
   onCook: (recipeId: RecipeId, qty: number) => void;
+  onStart?: (item: DropItem) => void;
 }) {
   const pal = useTheme();
+  const isNext = variant === 'next';
+  const isStart = variant === 'start';
+  const isCooking = variant === 'cooking';
+
+  // Cooking cue label: crew batches tick a live mm:ss; the loop's own cooks
+  // count down in whole minutes. Either way the card is tinted so a glance
+  // says "this is on".
   const liveLabel =
     item.crew && item.liveSeconds != null
       ? item.liveSeconds <= 0
         ? 'Ready'
-        : `${Math.floor(item.liveSeconds / 60)}:${(item.liveSeconds % 60)
-            .toString()
-            .padStart(2, '0')}`
+        : `${Math.floor(item.liveSeconds / 60)}:${(item.liveSeconds % 60).toString().padStart(2, '0')}`
       : null;
-  const isNext = variant === 'next';
-  const isUrgent = variant === 'urgent';
-  // Colour is reserved for meaning: red only on the urgent "drop now" card,
-  // the station shows as a small dot (not a filled block), and "coming up"
-  // recedes. That gives the eye one place to land per section.
-  const surface = isUrgent ? pal.urgentSurface : pal.surface;
-  const borderCol = isUrgent ? pal.urgentBorder : pal.borderCard;
-  const countColor = isUrgent ? pal.urgent : pal.text;
+  const cookLabel =
+    liveLabel ?? (item.readyInMin != null ? (item.readyInMin <= 0 ? 'Ready' : `${item.readyInMin}m`) : null);
+  const cookReady = cookLabel === 'Ready';
+
+  // Colour carries meaning: red = needs starting, accent tint = cooking,
+  // "coming up" recedes.
+  const surface = isStart ? pal.urgentSurface : isCooking ? pal.accentChipBg : pal.surface;
+  const borderCol = isStart ? pal.urgentBorder : isCooking ? pal.accent : pal.borderCard;
+  const countColor = isStart ? pal.urgent : pal.text;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onCook(item.recipeId, item.count)}
       style={{
         textAlign: 'left',
         border: `1px solid ${borderCol}`,
         borderRadius: 12,
         background: surface,
-        boxShadow: isUrgent ? 'none' : pal.cardShadow,
+        boxShadow: isStart ? 'none' : pal.cardShadow,
         color: pal.text,
         padding: '14px 16px',
         cursor: 'pointer',
         fontFamily: 'var(--font-primary)',
-        opacity: isNext ? (pal.mode === 'light' ? 0.7 : 0.55) : 1,
-        // Uniform card size — chips pin to the bottom, the name clamps so a
-        // long component name can't make one card taller than its neighbours.
+        opacity: isNext ? (pal.mode === 'light' ? 0.85 : 0.72) : 1,
         height: 116,
         display: 'flex',
         flexDirection: 'column',
@@ -616,15 +747,7 @@ function DropCard({
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap', minWidth: 0 }}>
         {/* Station as a quiet dot + label, not a coloured block. */}
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            minWidth: 0,
-            overflow: 'hidden',
-          }}
-        >
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, overflow: 'hidden' }}>
           <span
             style={{
               width: 7,
@@ -668,57 +791,54 @@ function DropCard({
           </span>
         )}
 
-        {liveLabel !== null ? (
-          <span
+        {(isStart || isNext) && onStart ? (
+          <button
+            type="button"
+            onClick={e => {
+              e.stopPropagation();
+              onStart(item);
+            }}
             style={{
+              marginLeft: 'auto',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 4,
+              justifyContent: 'center',
+              gap: 6,
+              minHeight: 36,
+              padding: '0 18px',
+              borderRadius: 100,
+              border: `1px solid ${pal.accentSolid}`,
+              background: pal.accentSolid,
+              color: pal.onAccent,
+              fontSize: 13,
+              fontWeight: 800,
+              cursor: 'pointer',
+              flexShrink: 0,
+              fontFamily: 'var(--font-primary)',
+            }}
+          >
+            <Play size={14} /> {isStart ? 'Start' : 'Drop now'}
+          </button>
+        ) : isCooking ? (
+          <span
+            style={{
+              marginLeft: 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
               fontSize: 12,
               fontWeight: 800,
               fontVariantNumeric: 'tabular-nums',
-              color: liveLabel === 'Ready' ? pal.green : pal.accent,
-              marginLeft: 'auto',
+              color: cookReady ? pal.green : pal.accent,
               flexShrink: 0,
             }}
           >
-            <Timer size={12} />
-            {liveLabel}
+            <Flame size={13} />
+            {cookReady ? 'Ready' : `Cooking ${cookLabel ?? ''}`}
           </span>
-        ) : variant === 'cooking' && item.readyInMin !== null ? (
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              fontSize: 12,
-              fontWeight: 700,
-              color: item.readyInMin <= 0 ? pal.green : pal.accent,
-              marginLeft: 'auto',
-              flexShrink: 0,
-            }}
-          >
-            <Timer size={12} />
-            {item.readyInMin <= 0 ? 'Ready' : `${item.readyInMin}m`}
-          </span>
-        ) : (
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 2,
-              fontSize: 12,
-              fontWeight: 600,
-              color: isUrgent ? pal.urgent : pal.textFaint,
-              marginLeft: 'auto',
-              flexShrink: 0,
-            }}
-          >
-            Steps <ChevronRight size={13} />
-          </span>
-        )}
+        ) : null}
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -726,85 +846,422 @@ function DropCard({
 // Cabinet strip — what's held + freshness
 // ─────────────────────────────────────────────────────────────────────────────
 
-function CabinetStrip({ cabinet }: { cabinet: HeldDisplay[] }) {
+// ─────────────────────────────────────────────────────────────────────────────
+// Add-order modal — manual "a large order just came in" hook. A clean light
+// dialog (so the shared QtyStepper looks at home) over the line.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function AddOrderModal({
+  open,
+  qtys,
+  onBump,
+  onConfirm,
+  onClear,
+  onClose,
+}: {
+  open: boolean;
+  qtys: Record<string, number>;
+  onBump: (recipeId: RecipeId, delta: number) => void;
+  onConfirm: () => void;
+  onClear: () => void;
+  onClose: () => void;
+}) {
   const pal = useTheme();
-  const total = cabinet.reduce((a, h) => a + h.count, 0);
+  if (!open) return null;
+  const accent = pal.accentSolid;
+
+  const total = ORDER_RECIPES.reduce((a, r) => a + (qtys[r.recipeId] ?? 0), 0);
+  const recipeCount = ORDER_RECIPES.filter(r => (qtys[r.recipeId] ?? 0) > 0).length;
+
   return (
     <div
+      onClick={onClose}
       style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 40,
+        background: 'rgba(0,0,0,0.5)',
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
-        padding: '10px 24px',
-        borderBottom: `1px solid ${pal.border}`,
-        background: pal.surfaceSubtle,
-        flexWrap: 'wrap',
+        justifyContent: 'center',
+        padding: 24,
       }}
     >
-      <span
+      <div
+        onClick={e => e.stopPropagation()}
         style={{
-          fontSize: 11,
-          fontWeight: 800,
-          letterSpacing: '0.1em',
-          textTransform: 'uppercase',
-          color: pal.textMuted,
-          whiteSpace: 'nowrap',
+          width: 'min(820px, 96%)',
+          maxHeight: '92%',
+          display: 'flex',
+          flexDirection: 'column',
+          background: '#ffffff',
+          color: '#16181d',
+          borderRadius: 16,
+          boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+          fontFamily: 'var(--font-primary)',
+          overflow: 'hidden',
         }}
       >
-        Cabinet · {total}
-      </span>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '24px 24px 12px' }}>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Add a large order</h2>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6b7280' }}>
+              Set how many of each — they all drop onto the line at once and land in the cabinet
+              when cooked.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              border: '1px solid rgba(0,0,0,0.1)',
+              background: '#fff',
+              borderRadius: 8,
+              width: 40,
+              height: 40,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: '#6b7280',
+              flexShrink: 0,
+            }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Recipe cards — each with its own quantity */}
+        <div
+          style={{
+            overflow: 'auto',
+            padding: '4px 24px 12px',
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 10,
+          }}
+        >
+          {ORDER_RECIPES.map(r => {
+            const qty = qtys[r.recipeId] ?? 0;
+            const active = qty > 0;
+            return (
+              <div
+                key={r.recipeId}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  border: `1px solid ${active ? accent : 'rgba(0,0,0,0.12)'}`,
+                  background: active ? `${accent}0d` : '#fff',
+                  minWidth: 0,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+                  <span
+                    style={{
+                      width: 9,
+                      height: 9,
+                      borderRadius: '50%',
+                      background: r.accent,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: '#16181d',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {r.name}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: '0.03em',
+                        textTransform: 'uppercase',
+                        color: '#9ca3af',
+                      }}
+                    >
+                      {r.stationName}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <QtyStepper
+                    size="touch"
+                    canDecrement={qty > 0}
+                    onDecrement={() => onBump(r.recipeId, -6)}
+                    onIncrement={() => onBump(r.recipeId, 6)}
+                    style={{ flexShrink: 0 }}
+                  >
+                    <span
+                      style={{ ...getStepperValueStyle('touch'), color: active ? '#16181d' : '#9ca3af' }}
+                    >
+                      {qty}
+                    </span>
+                  </QtyStepper>
+                  <div style={{ flex: 1 }} />
+                  {[12, 24].map(n => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => onBump(r.recipeId, n)}
+                      style={{
+                        minHeight: 40,
+                        padding: '0 12px',
+                        borderRadius: 100,
+                        border: '1px solid rgba(0,0,0,0.12)',
+                        background: '#fff',
+                        color: '#374151',
+                        fontSize: 14,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        fontFamily: 'var(--font-primary)',
+                        flexShrink: 0,
+                      }}
+                    >
+                      +{n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '14px 24px',
+            borderTop: '1px solid rgba(0,0,0,0.08)',
+          }}
+        >
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={total === 0}
+            style={{
+              minHeight: 44,
+              padding: '0 16px',
+              borderRadius: 10,
+              border: 'none',
+              background: 'transparent',
+              color: total === 0 ? '#c7c9d1' : '#9ca3af',
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: total === 0 ? 'default' : 'pointer',
+              fontFamily: 'var(--font-primary)',
+            }}
+          >
+            Clear all
+          </button>
+          <div style={{ flex: 1 }} />
+          <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 600 }}>
+            {total > 0 ? `${total} units · ${recipeCount} recipe${recipeCount === 1 ? '' : 's'}` : 'Nothing added yet'}
+          </span>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={total <= 0}
+            style={{
+              minHeight: 44,
+              padding: '0 22px',
+              borderRadius: 10,
+              border: 'none',
+              background: total <= 0 ? '#c7c9d1' : accent,
+              color: pal.onAccent,
+              fontSize: 15,
+              fontWeight: 800,
+              cursor: total <= 0 ? 'not-allowed' : 'pointer',
+              fontFamily: 'var(--font-primary)',
+            }}
+          >
+            Add to the line
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CabinetSection({ cabinet }: { cabinet: HeldDisplay[] }) {
+  const pal = useTheme();
+  const fresh = cabinet.filter(h => !h.expired);
+  const total = fresh.reduce((a, h) => a + h.count, 0);
+  const wasteCount = cabinet.filter(h => h.expired).reduce((a, h) => a + h.count, 0);
+  return (
+    <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
+        <span
+          style={{
+            fontSize: 15,
+            fontWeight: 800,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: pal.text,
+          }}
+        >
+          In the cabinet
+        </span>
+        <span
+          style={{
+            fontSize: 15,
+            fontWeight: 900,
+            fontVariantNumeric: 'tabular-nums',
+            color: pal.accent,
+          }}
+        >
+          {total}
+        </span>
+        <span style={{ fontSize: 12, color: pal.textFaint }}>ready to serve</span>
+        {wasteCount > 0 && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              marginLeft: 4,
+              padding: '3px 10px',
+              borderRadius: 100,
+              background: pal.urgentSurface,
+              border: `1px solid ${pal.urgentBorder}`,
+              color: pal.urgent,
+              fontSize: 12,
+              fontWeight: 800,
+            }}
+          >
+            <Trash2 size={12} /> {wasteCount} to waste
+          </span>
+        )}
+      </div>
       {cabinet.length === 0 ? (
-        <span style={{ fontSize: 13, color: pal.textFaint }}>Empty</span>
+        <Empty>Cabinet empty — start a batch below</Empty>
       ) : (
-        cabinet.map(h => <CabinetChip key={h.id} held={h} />)
+        <CardGrid>
+          {cabinet.map(h => (
+            <CabinetCard key={h.id} held={h} />
+          ))}
+        </CardGrid>
       )}
     </div>
   );
 }
 
-function CabinetChip({ held }: { held: HeldDisplay }) {
+function CabinetCard({ held }: { held: HeldDisplay }) {
   const pal = useTheme();
   const frac = Math.max(0, Math.min(1, held.expiresInMin / held.shelfLifeMin));
-  const color = frac > 0.5 ? pal.green : frac > 0.25 ? pal.accent : pal.urgent;
-  // Freshness lives in a small dot + the expiry figure, so the cabinet reads
-  // as quiet inventory and doesn't compete with the urgent "drop now" cards.
+  // Escalate as the hold runs down; once it's up the whole card flips to WASTE.
+  const expired = held.expired;
+  const color = expired ? pal.urgent : frac > 0.4 ? pal.green : pal.accent;
+  const useSoon = !expired && held.expiresInMin <= 3;
+
   return (
     <div
       style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '5px 10px',
-        borderRadius: 100,
-        background: pal.chip,
-        border: `1px solid ${pal.borderCard}`,
-        boxShadow: pal.cardShadow,
-        whiteSpace: 'nowrap',
+        border: `1px solid ${expired ? pal.urgent : pal.borderCard}`,
+        borderRadius: 12,
+        background: expired ? pal.urgentSurface : pal.surface,
+        boxShadow: expired ? 'none' : pal.cardShadow,
+        padding: '14px 16px',
+        height: 104,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        overflow: 'hidden',
       }}
     >
-      <span
-        style={{
-          width: 7,
-          height: 7,
-          borderRadius: '50%',
-          background: color,
-          flexShrink: 0,
-        }}
-      />
-      <span style={{ fontSize: 14, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
-        {held.count}
-      </span>
-      <span style={{ fontSize: 13, color: pal.textSecondary }}>{held.name}</span>
-      <span
-        style={{
-          fontSize: 11,
-          fontWeight: 700,
-          color,
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        {held.expiresInMin <= 0 ? 'bin' : `${held.expiresInMin}m`}
-      </span>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, minWidth: 0 }}>
+        <span
+          style={{
+            fontSize: 40,
+            fontWeight: 900,
+            lineHeight: 1,
+            fontVariantNumeric: 'tabular-nums',
+            color: expired ? pal.urgent : pal.text,
+            flexShrink: 0,
+          }}
+        >
+          {held.count}
+        </span>
+        <span
+          style={{
+            fontSize: 15,
+            fontWeight: 700,
+            lineHeight: 1.2,
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            minWidth: 0,
+          }}
+        >
+          {held.name}
+        </span>
+      </div>
+
+      {expired ? (
+        // Hold window is up — pull and bin it.
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              borderRadius: 100,
+              background: pal.urgent,
+              color: '#ffffff',
+              fontSize: 12,
+              fontWeight: 800,
+              letterSpacing: '0.04em',
+            }}
+          >
+            <Trash2 size={13} /> WASTE NOW
+          </span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: pal.urgent }}>hold&apos;s up</span>
+        </div>
+      ) : (
+        // Freshness bar + time left — quiet, but legible at a glance.
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span
+            style={{
+              flex: 1,
+              height: 5,
+              borderRadius: 3,
+              background: pal.track,
+              overflow: 'hidden',
+            }}
+          >
+            <span
+              style={{ display: 'block', width: `${frac * 100}%`, height: '100%', background: color }}
+            />
+          </span>
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color,
+              fontVariantNumeric: 'tabular-nums',
+              flexShrink: 0,
+            }}
+          >
+            {useSoon ? `use ${held.expiresInMin}m` : `${held.expiresInMin}m`}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -859,19 +1316,15 @@ function RecutBanner({ recut }: { recut: { message: string; tone: RecutTone } | 
 // (a third-party system), not typed in here. Shows it's connected + current.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ForecastSyncBadge({ nowHHMM }: { nowHHMM: string }) {
+function SyncBadge({ label, detail, title }: { label: string; detail: string; title: string }) {
   const pal = useTheme();
   return (
     <span
-      title={
-        'Demand forecast synced from Burger King POS (drive-thru, kiosk & app). ' +
-        'Blends 4-week sales history, local events and weather. Auto-syncs every 15 min.'
-      }
+      title={title}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
         gap: 7,
-        marginLeft: 12,
         padding: '4px 10px',
         borderRadius: 100,
         background: pal.chip,
@@ -881,10 +1334,8 @@ function ForecastSyncBadge({ nowHHMM }: { nowHHMM: string }) {
       }}
     >
       <RefreshCw size={12} color={pal.green} />
-      <span style={{ fontSize: 11, fontWeight: 700, color: pal.text }}>Forecast synced</span>
-      <span style={{ fontSize: 11, fontWeight: 600, color: pal.textFaint }}>
-        · BK POS · {nowHHMM}
-      </span>
+      <span style={{ fontSize: 11, fontWeight: 700, color: pal.text }}>{label}</span>
+      <span style={{ fontSize: 11, fontWeight: 600, color: pal.textFaint }}>{detail}</span>
       <span
         style={{
           width: 6,
@@ -901,6 +1352,179 @@ function ForecastSyncBadge({ nowHHMM }: { nowHHMM: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Transport button
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Demo menu — every presenter control behind one dropdown so the header stays
+// clean. Stepping/auto/theme keep the menu open (you click them repeatedly);
+// full screen closes it since the layout changes underneath.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function DemoMenu({
+  mode,
+  onToggleMode,
+  playing,
+  atEnd,
+  onStep5,
+  onNextDrop,
+  onTogglePlay,
+  onReset,
+  fullscreen,
+  onToggleFullscreen,
+}: {
+  mode: Mode;
+  onToggleMode: () => void;
+  playing: boolean;
+  atEnd: boolean;
+  onStep5: () => void;
+  onNextDrop: () => void;
+  onTogglePlay: () => void;
+  onReset: () => void;
+  fullscreen: boolean;
+  onToggleFullscreen: () => void;
+}) {
+  const pal = useTheme();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <TransportButton onClick={() => setOpen(o => !o)} label="Demo">
+        <SlidersHorizontal size={14} />
+        <ChevronDown size={13} style={{ marginLeft: -2 }} />
+      </TransportButton>
+
+      {open && (
+        <>
+          {/* Outside-click catcher */}
+          <div
+            onClick={() => setOpen(false)}
+            style={{ position: 'fixed', inset: 0, zIndex: 40 }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 8px)',
+              right: 0,
+              zIndex: 41,
+              minWidth: 220,
+              padding: 6,
+              borderRadius: 12,
+              background: pal.surface,
+              border: `1px solid ${pal.borderStrong}`,
+              boxShadow: '0 16px 40px rgba(0,0,0,0.3)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+            }}
+          >
+            <MenuLabel>Step the clock</MenuLabel>
+            <MenuItem icon={<Plus size={15} />} label="+5 min" disabled={atEnd} onClick={onStep5} />
+            <MenuItem
+              icon={<SkipForward size={15} />}
+              label="Next drop"
+              disabled={atEnd}
+              onClick={onNextDrop}
+            />
+            <MenuItem
+              icon={playing ? <Pause size={15} /> : <Play size={15} />}
+              label={playing ? 'Pause auto-play' : 'Auto-play'}
+              disabled={atEnd}
+              onClick={onTogglePlay}
+            />
+
+            <MenuDivider />
+            <MenuLabel>Screen</MenuLabel>
+            <MenuItem
+              icon={mode === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+              label={mode === 'dark' ? 'Light mode' : 'Dark mode'}
+              onClick={onToggleMode}
+            />
+            <MenuItem
+              icon={fullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+              label={fullscreen ? 'Exit full screen' : 'Full screen'}
+              onClick={() => {
+                setOpen(false);
+                onToggleFullscreen();
+              }}
+            />
+
+            <MenuDivider />
+            <MenuItem icon={<RotateCcw size={15} />} label="Reset demo" onClick={onReset} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function MenuLabel({ children }: { children: React.ReactNode }) {
+  const pal = useTheme();
+  return (
+    <div
+      style={{
+        fontSize: 10,
+        fontWeight: 800,
+        letterSpacing: '0.08em',
+        textTransform: 'uppercase',
+        color: pal.textMuted,
+        padding: '6px 10px 2px',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function MenuDivider() {
+  const pal = useTheme();
+  return <div style={{ height: 1, background: pal.border, margin: '4px 2px' }} />;
+}
+
+function MenuItem({
+  icon,
+  label,
+  onClick,
+  disabled,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  const pal = useTheme();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        width: '100%',
+        padding: '9px 10px',
+        borderRadius: 8,
+        border: 'none',
+        background: 'transparent',
+        color: pal.text,
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.4 : 1,
+        fontSize: 13,
+        fontWeight: 600,
+        textAlign: 'left',
+        fontFamily: 'var(--font-primary)',
+      }}
+      onMouseEnter={e => {
+        if (!disabled) e.currentTarget.style.background = pal.chip;
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background = 'transparent';
+      }}
+    >
+      <span style={{ display: 'inline-flex', color: pal.textSecondary }}>{icon}</span>
+      {label}
+    </button>
+  );
+}
 
 function TransportButton({
   children,

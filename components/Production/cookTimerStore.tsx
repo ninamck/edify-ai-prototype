@@ -99,6 +99,28 @@ export function startCookTimer(
   emit();
 }
 
+/**
+ * Add units to a recipe's cook (a manual "large order just came in"):
+ *  - if a cook is already on the line, bump its batch size so the extra units
+ *    ride the same broiler pass;
+ *  - otherwise start a fresh cook for the order.
+ */
+export function addToCookTimer(
+  recipeId: RecipeId,
+  stepId: string,
+  label: string,
+  seconds: number,
+  qty: number,
+) {
+  const t = timers[recipeId];
+  if (t && t.status !== 'done') {
+    timers = { ...timers, [recipeId]: { ...t, qty: t.qty + qty } };
+    emit();
+    return;
+  }
+  startCookTimer(recipeId, stepId, label, seconds, qty);
+}
+
 /** Force a cook to finish now — the batch lands in the cabinet immediately. */
 export function completeCookTimer(recipeId: RecipeId) {
   const t = timers[recipeId];
