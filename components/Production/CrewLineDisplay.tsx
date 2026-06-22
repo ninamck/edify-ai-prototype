@@ -317,14 +317,15 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
     <ThemeContext.Provider value={pal}>
       <div
         style={{
-          position: 'relative',
           display: 'flex',
           flexDirection: 'column',
           // Fit one screen — never scroll. Full screen sits above the app
           // chrome (header + production sub-nav) so the line is all you see.
+          // `relative` (embedded) / `fixed` (full screen) both anchor the FAB
+          // and order overlay.
           ...(fullscreen
             ? { position: 'fixed', inset: 0, zIndex: 9999, height: '100vh', width: '100vw' }
-            : { height: '100%' }),
+            : { position: 'relative', height: '100%' }),
           minHeight: 0,
           overflow: 'hidden',
           background: pal.appBg,
