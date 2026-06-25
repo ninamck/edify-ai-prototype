@@ -33,7 +33,6 @@ import {
   Play,
   RotateCcw,
   Flame,
-  Info,
   SkipForward,
   Plus,
   Maximize2,
@@ -45,8 +44,19 @@ import {
   SlidersHorizontal,
   ChevronDown,
   Trash2,
+  Sparkles,
+  Radar,
+  Check,
 } from 'lucide-react';
-import { useCrewLoop, type DropItem, type HeldDisplay, type RecutTone } from './crewLoopStore';
+import {
+  useCrewLoop,
+  type DropItem,
+  type HeldDisplay,
+  type RecutTone,
+  type RecutLogEntry,
+  type RadarItem,
+} from './crewLoopStore';
+import { minutesToHHMM } from './time';
 import {
   useCookTimers,
   remainingSeconds,
@@ -394,8 +404,8 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
           />
         </div>
 
-        {/* Quinn re-cut banner */}
-        <RecutBanner recut={loop.recut} />
+        {/* Quinn — persistent presence: current call, recent history + radar */}
+        <QuinnStrip recutLog={loop.recutLog} radar={loop.radar} />
 
         {/* HERO — the drop clock, kept to a compact bar */}
         <div
@@ -776,19 +786,27 @@ function DropCard({
 
         {item.surged && (
           <span
-            title="Demand surging — cooking ahead"
+            title={
+              item.surgeLanded
+                ? 'Quinn predicted this surge — the order just landed'
+                : 'Demand surging — cooking ahead'
+            }
             style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
               fontSize: 11,
-              fontWeight: 700,
-              padding: '2px 7px',
+              fontWeight: 800,
+              padding: '2px 8px',
               borderRadius: 100,
-              background: pal.accentChipBg,
-              color: pal.accentChipFg,
+              background: item.surgeLanded ? pal.greenSurface : pal.accentChipBg,
+              color: item.surgeLanded ? pal.green : pal.accentChipFg,
               whiteSpace: 'nowrap',
               flexShrink: 0,
             }}
           >
-            Ahead
+            {item.surgeLanded ? <Check size={12} /> : null}
+            {item.surgeLanded ? 'Called it' : 'Ahead'}
           </span>
         )}
 
@@ -1115,7 +1133,7 @@ function CabinetSection({ cabinet }: { cabinet: HeldDisplay[] }) {
             color: pal.text,
           }}
         >
-          In the cabinet
+          Pan Holding Unit
         </span>
         <span
           style={{
@@ -1149,7 +1167,7 @@ function CabinetSection({ cabinet }: { cabinet: HeldDisplay[] }) {
         )}
       </div>
       {cabinet.length === 0 ? (
-        <Empty>Cabinet empty — start a batch below</Empty>
+        <Empty>Pan Holding Unit empty — start a batch below</Empty>
       ) : (
         <CardGrid>
           {cabinet.map(h => (
@@ -1271,44 +1289,187 @@ function CabinetCard({ held }: { held: HeldDisplay }) {
 // Re-cut banner
 // ─────────────────────────────────────────────────────────────────────────────
 
-function RecutBanner({ recut }: { recut: { message: string; tone: RecutTone } | null }) {
+/** Tone → chip colours, shared by the Quinn line + radar chips. */
+function useRecutToneStyles(): Record<RecutTone, { bg: string; fg: string; label: string }> {
   const pal = useTheme();
-  if (!recut) return null;
-  const styles: Record<RecutTone, { bg: string; fg: string }> = {
-    'cook-ahead': { bg: pal.accentChipBg, fg: pal.accentChipFg },
-    'ease-off': { bg: pal.greenSurface, fg: pal.green },
-    info: { bg: pal.infoBg, fg: pal.textSecondary },
+  return {
+    'cook-ahead': { bg: pal.accentChipBg, fg: pal.accentChipFg, label: 'Cook ahead' },
+    'ease-off': { bg: pal.greenSurface, fg: pal.green, label: 'Ease off' },
+    info: { bg: pal.infoBg, fg: pal.textSecondary, label: 'Steady' },
   };
-  const s = styles[recut.tone];
+}
+
+/**
+ * QuinnStrip — Quinn's persistent presence on the line.
+ *
+ * Always visible (a calm teammate, not a pop-up). Top row is Quinn's current
+ * call with a tap-to-expand log of recent calls; the second row is the
+ * "on the radar" ribbon of what Quinn sees coming, with countdowns, so a
+ * cook-ahead is never a surprise.
+ */
+function QuinnStrip({ recutLog, radar }: { recutLog: RecutLogEntry[]; radar: RadarItem[] }) {
+  const pal = useTheme();
+  const toneStyles = useRecutToneStyles();
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const current = recutLog[0] ?? null;
+  const s = current ? toneStyles[current.tone] : { bg: pal.infoBg, fg: pal.textSecondary, label: 'Watching' };
+
   return (
-    <div
+    <div style={{ borderBottom: `1px solid ${pal.border}`, background: pal.surfaceSubtle }}>
+      {/* Current call */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 22px', position: 'relative' }}>
+        <QuinnOrb pal={pal} />
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 800,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: pal.textSecondary,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Quinn
+        </span>
+        <span
+          style={{
+            fontSize: 10.5,
+            fontWeight: 800,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            padding: '2px 8px',
+            borderRadius: 100,
+            background: s.bg,
+            color: s.fg,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {s.label}
+        </span>
+        <span style={{ fontSize: 14, fontWeight: 600, color: pal.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {current ? current.message : 'On plan — watching POS + forecast. Cabinet is covering demand.'}
+        </span>
+
+        {recutLog.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setHistoryOpen(o => !o)}
+            aria-expanded={historyOpen}
+            style={{
+              marginLeft: 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              flexShrink: 0,
+              padding: '4px 10px',
+              borderRadius: 100,
+              border: `1px solid ${pal.border}`,
+              background: 'transparent',
+              color: pal.textSecondary,
+              fontSize: 11.5,
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: 'var(--font-primary)',
+            }}
+          >
+            Recent calls
+            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.8 }}>{recutLog.length}</span>
+            <ChevronDown size={13} style={{ transform: historyOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+          </button>
+        )}
+
+        {historyOpen && recutLog.length > 0 && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 'calc(100% - 2px)',
+              right: 22,
+              zIndex: 40,
+              width: 'min(420px, 80vw)',
+              background: pal.surface,
+              border: `1px solid ${pal.borderStrong}`,
+              borderRadius: 12,
+              boxShadow: pal.cardShadow === 'none' ? '0 16px 40px rgba(0,0,0,0.45)' : pal.cardShadow,
+              padding: 8,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+            }}
+          >
+            {recutLog.slice(0, 5).map(entry => {
+              const es = toneStyles[entry.tone];
+              return (
+                <div key={`${entry.id}-${entry.atMin}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', borderRadius: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: pal.textMuted, minWidth: 38, marginTop: 1 }}>
+                    {minutesToHHMM(entry.atMin)}
+                  </span>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: es.fg, marginTop: 6, flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, color: pal.text, lineHeight: 1.4 }}>{entry.message}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* On the radar */}
+      {radar.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 22px 9px', flexWrap: 'wrap' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: pal.textMuted, whiteSpace: 'nowrap' }}>
+            <Radar size={13} /> On the radar
+          </span>
+          {radar.map(item => {
+            const rs = toneStyles[item.tone];
+            return (
+              <span
+                key={item.id}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  padding: '4px 10px',
+                  borderRadius: 100,
+                  background: pal.chip,
+                  border: `1px solid ${pal.border}`,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: pal.text,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: rs.fg }} />
+                {item.label}
+                <span style={{ color: pal.textMuted, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                  in {item.minsUntil}m
+                </span>
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Small Quinn identity orb — accent gradient + spark. */
+function QuinnOrb({ pal }: { pal: Palette }) {
+  return (
+    <span
       style={{
-        display: 'flex',
+        display: 'inline-flex',
         alignItems: 'center',
-        gap: 10,
-        padding: '10px 22px',
-        background: s.bg,
-        color: s.fg,
-        fontSize: 14,
-        fontWeight: 600,
-        borderBottom: `1px solid ${pal.border}`,
+        justifyContent: 'center',
+        width: 26,
+        height: 26,
+        borderRadius: '50%',
+        background: pal.accentSolid,
+        color: pal.onAccent,
+        flexShrink: 0,
+        boxShadow: `0 0 0 3px ${pal.accentChipBg}`,
       }}
     >
-      <Info size={16} />
-      <span>{recut.message}</span>
-      <span
-        style={{
-          marginLeft: 'auto',
-          fontSize: 11,
-          fontWeight: 700,
-          letterSpacing: '0.08em',
-          textTransform: 'uppercase',
-          opacity: 0.7,
-        }}
-      >
-        Quinn re-cut
-      </span>
-    </div>
+      <Sparkles size={14} />
+    </span>
   );
 }
 

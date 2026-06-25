@@ -6,7 +6,7 @@
  * The Pret stepper walks a bench → run → list of recipes. Burger King's
  * line is different: the crew tap a single component on the NOW block and
  * get a glanceable, step-by-step cook card for *that* component — the
- * patties / chicken / cheese-melt that go through the screen — with a
+ * patties / chicken / bacon that go through the screen — with a
  * per-step timer and the build list. Deliberately one component at a time,
  * big type, readable from the line.
  */

@@ -124,16 +124,10 @@ export default function ProductionBoardPage() {
   // drives the live clock; elsewhere we anchor the default to the start).
   const nowHHMM = '07:30';
 
-  // The run a manager most likely wants on arrival: whichever run is active
-  // or next-up right now, else the last of the day. The board always sits on
-  // a single concrete production run (there's no "All" run option), so this
-  // is what we seed and fall back to.
-  const defaultRun = useMemo<RunTabId>(() => {
-    if (runTabs.length === 0) return 'all';
-    const nowMins = site.id === 'hub-central' ? hhmmToMins(nowHHMM) : -1;
-    const activeOrNext = runTabs.find(t => t.endMins > nowMins);
-    return (activeOrNext ?? runTabs[runTabs.length - 1]).id;
-  }, [runTabs, site.id]);
+  // On arrival the board opens on the first scheduled run (P1). Recipes are
+  // balanced across each bench's runs so no single batch reads near-empty,
+  // and the per-run pills let the manager step through P1 → P2 → P3.
+  const defaultRun = useMemo<RunTabId>(() => runTabs[0]?.id ?? 'all', [runTabs]);
 
   // Keep a valid concrete run selected at all times: seed on first render and
   // recover whenever a site switch leaves the current selection pointing at a

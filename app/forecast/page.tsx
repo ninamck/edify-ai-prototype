@@ -24,7 +24,8 @@
 //                    operator wants to nudge one specific item.
 
 import { useCallback, useMemo, useState } from 'react';
-import { Calendar, ChevronDown, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, Calendar, ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
 import { DEMO_TODAY, dayOffset } from '@/components/Production/fixtures';
 import DatePickerPopover from '@/components/Forecast/DatePickerPopover';
 import { useProductionSite } from '@/components/Production/ProductionSiteContext';
@@ -179,6 +180,47 @@ export default function ForecastPage() {
         gap: 16,
       }}
     >
+      {/* AI forecast demo — the headline. Links to the live AI-vs-old-way
+          impact scoreboard, which is the main forecast demonstration. */}
+      <Link
+        href="/forecast/ai-demo"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+          textDecoration: 'none',
+          background: 'linear-gradient(135deg, #2f6df6 0%, #6a4df6 100%)',
+          color: '#fff',
+          borderRadius: 14,
+          padding: '14px 18px',
+          boxShadow: '0 12px 30px rgba(47,109,246,0.22)',
+        }}
+      >
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 38,
+            height: 38,
+            borderRadius: 10,
+            background: 'rgba(255,255,255,0.18)',
+            flexShrink: 0,
+          }}
+        >
+          <Sparkles size={20} />
+        </span>
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+          <span style={{ fontSize: 15, fontWeight: 800 }}>See the AI forecast in action</span>
+          <span style={{ fontSize: 13, opacity: 0.9 }}>
+            Live head-to-head: Edify&rsquo;s forecast vs the old fixed-par plan — waste avoided and sales rescued, in £.
+          </span>
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+          Open demo <ArrowRight size={16} />
+        </span>
+      </Link>
+
       {/* Scope tabs */}
       <div
         style={{

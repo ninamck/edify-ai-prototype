@@ -1,16 +1,18 @@
 'use client';
 
-import { useMemo } from 'react';
-import { ChevronRight, Clock } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Printer, Clock, Layers } from 'lucide-react';
 import {
   benchesAt,
   benchWorkTypes,
   benchEquipment,
-  recipeIngredientPrep,
+  ingredientUsageFor,
+  componentPrepWork,
+  getIngredient,
   stageWorkType,
   getWorkflow,
   getRecipe,
-  dayOffset,
+  getSite,
   WORK_TYPE_LABELS,
   WORK_TYPE_ORDER,
   WORK_TYPE_COLORS,
@@ -18,107 +20,89 @@ import {
   type Bench,
   type Equipment,
   type IngredientId,
-  type Ingredient,
   type RecipeId,
   type SiteId,
   type WorkType,
 } from './fixtures';
+import { usePlan, type PlanLine } from './PlanStore';
+import StepperLauncher from './StepperLauncher';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Time-of-day windows + per-unit pace per work type
+// Run sheet — two layers, one source of truth
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// The Run sheet's job is to choreograph a kitchen day, so each section and
-// row needs a sense of "when". We derive both from light-touch defaults
-// rather than from scheduled stage times because the prototype's plan
-// data isn't yet rich enough to drive real timestamps. These can be
-// pushed into fixtures later if recipes start carrying authored start
-// times.
+// The day's planned work is split into two deliberately separate views
+// rather than one dense merged table:
 //
-// `WORK_TYPE_WINDOWS` is keyed by `(workType, leadOffset)` because the
-// same work behaves very differently across days — e.g. `weigh-up` on
-// today is a 05:30 task; `weigh-up` for tomorrow happens on the
-// previous evening's close-down shift.
+//   1. **Ingredients & quantities** — the "weigh-up" sheet. For each
+//      planned recipe (and each of its sub-recipes) it lists every
+//      ingredient with the total quantity to prep (e.g. "Roast chicken
+//      — 335.2kg") and tags showing what should happen to it (Weigh up,
+//      Slice, Sanitise…).
 //
-// `WORK_TYPE_PACE` is minutes-per-canonical-unit (g / ml / unit). It's
-// deliberately conservative — better to slightly over-budget on the
-// run sheet than under-promise.
+//   2. **Task assignment** — the "who does what, where" sheet. For each
+//      recipe / sub-recipe it lists the workflow stages as tasks (Slice,
+//      Sanitise, Bake, Assemble…) with the bench they run on and a slot
+//      to assign a person.
+//
+// Both views are broken down by recipe → sub-recipe so a chef can read a
+// single recipe top-to-bottom. A Print button renders the active view as
+// a clean A4 sheet the kitchen can pin up and write names onto.
 
-type DayWindow = { from: string; to: string; label: string };
+type ViewMode = 'ingredients' | 'tasks';
 
-const TODAY_WINDOWS: Record<WorkType, DayWindow> = {
-  'weigh-up':  { from: '05:30', to: '06:30', label: 'Open shift'    },
-  'thaw':      { from: '00:00', to: '06:00', label: 'Overnight'     },
-  'mise':      { from: '05:30', to: '07:00', label: 'Open shift'    },
-  'butcher':   { from: '05:30', to: '07:30', label: 'Open shift'    },
-  'wash':      { from: '06:00', to: '07:30', label: 'Open shift'    },
-  'sanitise':  { from: '06:00', to: '07:30', label: 'Open shift'    },
-  'slice':     { from: '06:30', to: '08:00', label: 'Open shift'    },
-  'mix':       { from: '06:00', to: '07:30', label: 'Open shift'    },
-  'proof':     { from: '20:00', to: '06:00', label: 'Overnight'     },
-  'bake':      { from: '05:30', to: '11:00', label: 'Bake-through'  },
-  'grill':     { from: '06:00', to: '11:00', label: 'Hot prep'      },
-  'chill':     { from: '07:00', to: '09:00', label: 'After bake'    },
-  'assemble':  { from: '07:00', to: '10:30', label: 'Build window'  },
-  'portion':   { from: '07:00', to: '10:30', label: 'Build window'  },
-  'label':     { from: '08:00', to: '11:00', label: 'Build window'  },
-  'pack':      { from: '08:00', to: '11:00', label: 'Build window'  },
-  'wash-down': { from: '20:00', to: '22:00', label: 'Close-down'    },
+type IngredientLine = {
+  ingredientId: IngredientId;
+  name: string;
+  totalQty: number;
+  unit: 'g' | 'ml' | 'unit';
+  /** Tags for what should happen to this ingredient (Weigh up, Slice…). */
+  prepTags: WorkType[];
 };
 
-/** Window when prep-ahead work for tomorrow happens — typically the
- *  previous evening / close-down shift. */
-const PREV_EVENING_WINDOW: DayWindow = {
-  from: '20:00', to: '23:00', label: 'Tonight (close-down)',
+type TaskLine = {
+  stageId: string;
+  label: string;
+  workType: WorkType;
+  benchName: string;
+  equipment: Equipment[];
+  durationMinutes: number;
 };
 
-/**
- * Prep-bench work types. These are the tasks a kitchen kicks off the
- * moment the next day's plan is confirmed (around midday the day before)
- * — weigh-ups, mise, washing/sanitising produce, and butchery — and they
- * all run on the prep bench. Their prep-ahead window therefore opens at
- * midday rather than waiting for the close-down shift.
- */
-const PREP_WORK_TYPES = new Set<WorkType>([
-  'weigh-up', 'mise', 'wash', 'sanitise', 'butcher',
-]);
-
-/** Prep-ahead window for prep-bench work: the prep a kitchen does today,
- *  from midday onward, for tomorrow's production. Runs through the
- *  afternoon shift. */
-const PREP_AHEAD_WINDOW: DayWindow = {
-  from: '12:00', to: '17:00', label: 'From midday · for tomorrow',
+/** A recipe or one of its sub-recipes — the breakdown unit shared by both
+ *  views. */
+type ComponentNode = {
+  recipeId: RecipeId;
+  name: string;
+  isSubRecipe: boolean;
+  ingredients: IngredientLine[];
+  tasks: TaskLine[];
 };
 
-function windowFor(workType: WorkType, leadOffset: -2 | -1 | 0): DayWindow {
-  if (leadOffset === 0) return TODAY_WINDOWS[workType];
-  // Prep-bench work starts as soon as the next day's plan is confirmed
-  // (midday the day before); everything else prep-ahead stays on the
-  // previous shift's close-down.
-  if (PREP_WORK_TYPES.has(workType)) return PREP_AHEAD_WINDOW;
-  return PREV_EVENING_WINDOW;
+/** One planned recipe for the day, with its components (self + subs). */
+type RecipeGroup = {
+  recipeId: RecipeId;
+  recipeName: string;
+  category: string;
+  plannedUnits: number;
+  itemId: string;
+  primaryBenchName?: string;
+  components: ComponentNode[];
+  hasIngredients: boolean;
+  hasTasks: boolean;
+};
+
+function orderWorkTypes(wts: WorkType[]): WorkType[] {
+  return WORK_TYPE_ORDER.filter(w => wts.includes(w));
 }
 
-/** Minutes per canonical unit (g / ml / unit). */
-const WORK_TYPE_PACE: Partial<Record<WorkType, number>> = {
-  'weigh-up': 0.02,   // ~2 min per 100g
-  'thaw':     0.005,  // passive, but accounts for mises checking trays
-  'mise':     0.05,
-  'butcher':  0.01,   // portioning/breaking down protein, ~1 min per 100g
-  'wash':     0.005,  // ~30s per 100g of leaves
-  'sanitise': 0.4,    // per produce unit
-  'slice':    0.4,    // per produce unit
-  'mix':      0.04,
-};
-
-/** Minimum minutes shown on a row — a "blip" task still costs a chunk
- *  of human time (set up / clean down). */
-const MIN_ROW_MINUTES = 3;
-
-function ingredientRowMinutes(workType: WorkType, totalQty: number): number {
-  const pace = WORK_TYPE_PACE[workType];
-  if (pace == null) return MIN_ROW_MINUTES;
-  return Math.max(MIN_ROW_MINUTES, Math.round(pace * totalQty));
+function formatQty(q: number, unit: 'g' | 'ml' | 'unit'): string {
+  if (unit === 'unit') return Math.round(q).toLocaleString('en-GB');
+  if (q >= 1000) {
+    const v = q / 1000;
+    return `${v.toLocaleString('en-GB', { maximumFractionDigits: 1 })}${unit === 'g' ? 'kg' : 'L'}`;
+  }
+  return `${Math.round(q).toLocaleString('en-GB')}${unit}`;
 }
 
 function formatDuration(mins: number): string {
@@ -128,31 +112,154 @@ function formatDuration(mins: number): string {
   const m = mins % 60;
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
-import { usePlan, type PlanLine } from './PlanStore';
-import WorkTypeChip from './WorkTypeChip';
-import StepperLauncher from './StepperLauncher';
 
-/**
- * Run sheet — pivots the day's planned work by `WorkType` instead of by
- * recipe or bench. Two flavours of row appear under each work-type
- * section:
- *
- *   1. **Aggregated ingredient prep** — for ingredient-shaped work
- *      (Slice tomatoes, Sanitise lettuce, Weigh-up chicken) we group
- *      by `(ingredientId, workType, leadOffset)` across every recipe
- *      consuming that ingredient. Five sandwiches that all need tomato
- *      sliced today collapse to a single "Slice tomatoes — 17 (Club +5,
- *      BLT +7, Caprese +5)" row.
- *
- *   2. **Per-recipe stage work** — for recipe-shaped work (bake,
- *      assemble, pack, etc.) we keep one row per recipe so the team
- *      knows what they're cooking / assembling / packing.
- *
- * Cross-day pivot: today's view also includes prep-ahead work for
- * tomorrow (`leadOffset: -1`) and the day after (`leadOffset: -2`), so
- * the night-shift weighing for tomorrow's chicken sandwiches lands in
- * today's Weigh-up section labelled "for tomorrow".
- */
+/** Pick the bench a stage should run on. Prefer the recipe's routed
+ *  primary bench when it can do the work; otherwise the first online
+ *  bench that handles this work type and carries any required equipment. */
+function benchForStage(
+  workType: WorkType,
+  requiresEquipment: Equipment[],
+  benches: Bench[],
+  primaryBench: Bench | undefined,
+): string {
+  const eligible = (b: Bench) =>
+    benchWorkTypes(b).includes(workType) &&
+    requiresEquipment.every(e => benchEquipment(b).includes(e));
+  if (primaryBench && eligible(primaryBench)) return primaryBench.name;
+  const match = benches.find(eligible);
+  if (match) return match.name;
+  return primaryBench?.name ?? 'Not routed';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Build recipe groups from the day's plan
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildRecipeGroups(plan: PlanLine[], benches: Bench[]): RecipeGroup[] {
+  const groups: RecipeGroup[] = [];
+
+  for (const line of plan) {
+    if (line.effectivePlanned <= 0) continue;
+    const recipe = line.recipe;
+    const planned = line.effectivePlanned;
+    const primaryBench = line.primaryBench;
+
+    const compMap = new Map<RecipeId, ComponentNode>();
+    const componentOrder: RecipeId[] = [];
+    const ensureComp = (rid: RecipeId): ComponentNode => {
+      let c = compMap.get(rid);
+      if (!c) {
+        const isSubRecipe = rid !== recipe.id;
+        const r = rid === recipe.id ? recipe : getRecipe(rid);
+        c = {
+          recipeId: rid,
+          name: r?.name ?? rid,
+          isSubRecipe,
+          ingredients: [],
+          tasks: [],
+        };
+        compMap.set(rid, c);
+        componentOrder.push(rid);
+      }
+      return c;
+    };
+
+    // Parent first, then sub-recipes — keeps the on-sheet reading order.
+    ensureComp(recipe.id);
+    const subRecipeIds = (recipe.subRecipes ?? []).map(s => s.recipeId);
+    for (const rid of subRecipeIds) ensureComp(rid);
+
+    // ── Ingredients ─────────────────────────────────────────────────────
+    // Every ingredient consumed by the recipe + its sub-recipes, with the
+    // resolved prep work as tags. We read raw usage (not the prep-only
+    // aggregation) so ingredients with no prep work still appear on the
+    // weigh-up sheet.
+    for (const rid of [recipe.id, ...subRecipeIds]) {
+      const comp = ensureComp(rid);
+      for (const usage of ingredientUsageFor(rid)) {
+        const ingredient = getIngredient(usage.ingredientId);
+        const prep = componentPrepWork(usage.prepWorkOverride, ingredient);
+        const prepTags = orderWorkTypes(
+          Array.from(new Set(prep.map(p => p.workType))),
+        );
+        const existing = comp.ingredients.find(i => i.ingredientId === usage.ingredientId);
+        if (existing) {
+          existing.totalQty += usage.quantityPerUnit * planned;
+          for (const t of prepTags) if (!existing.prepTags.includes(t)) existing.prepTags.push(t);
+          existing.prepTags = orderWorkTypes(existing.prepTags);
+        } else {
+          comp.ingredients.push({
+            ingredientId: usage.ingredientId,
+            name: ingredient?.name ?? usage.ingredientId,
+            totalQty: usage.quantityPerUnit * planned,
+            unit: usage.unit,
+            prepTags,
+          });
+        }
+      }
+    }
+
+    // ── Tasks (workflow stages) ─────────────────────────────────────────
+    const addStages = (rid: RecipeId, workflowId: string | undefined) => {
+      if (!workflowId) return;
+      const wf = getWorkflow(workflowId);
+      if (!wf) return;
+      const comp = ensureComp(rid);
+      for (const stage of wf.stages) {
+        const wt = stageWorkType(stage);
+        const reqEq = stage.requiresEquipment ?? [];
+        comp.tasks.push({
+          stageId: stage.id,
+          label: stage.label,
+          workType: wt,
+          benchName: benchForStage(wt, reqEq, benches, primaryBench),
+          equipment: reqEq,
+          durationMinutes: stage.durationMinutes ?? 0,
+        });
+      }
+    };
+    addStages(recipe.id, recipe.workflowId);
+    for (const sub of recipe.subRecipes ?? []) {
+      const subRec = getRecipe(sub.recipeId);
+      addStages(sub.recipeId, subRec?.workflowId);
+    }
+
+    // Sort rows within each component for a stable, readable sheet.
+    for (const comp of compMap.values()) {
+      comp.ingredients.sort((a, b) => b.totalQty - a.totalQty);
+      comp.tasks.sort((a, b) => {
+        const oa = WORK_TYPE_ORDER.indexOf(a.workType);
+        const ob = WORK_TYPE_ORDER.indexOf(b.workType);
+        if (oa !== ob) return oa - ob;
+        return a.label.localeCompare(b.label);
+      });
+    }
+
+    const components = componentOrder.map(rid => compMap.get(rid)!);
+    groups.push({
+      recipeId: recipe.id,
+      recipeName: recipe.name,
+      category: recipe.category,
+      plannedUnits: planned,
+      itemId: line.item.id,
+      primaryBenchName: primaryBench?.name,
+      components,
+      hasIngredients: components.some(c => c.ingredients.length > 0),
+      hasTasks: components.some(c => c.tasks.length > 0),
+    });
+  }
+
+  groups.sort((a, b) => {
+    if (a.category !== b.category) return a.category.localeCompare(b.category);
+    return a.recipeName.localeCompare(b.recipeName);
+  });
+  return groups;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// View
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function RunSheetView({
   siteId,
   date,
@@ -160,39 +267,31 @@ export default function RunSheetView({
   siteId: SiteId;
   date: string;
 }) {
-  // We need three days of plan to materialise today's same-day work plus
-  // tomorrow's leadOffset=-1 work plus day-after's leadOffset=-2 work.
-  // `usePlan` hooks must be called unconditionally at the top level.
-  const planToday = usePlan(siteId, date);
-  const planTomorrow = usePlan(siteId, dayOffset(1, date));
-  const planDayAfter = usePlan(siteId, dayOffset(2, date));
+  const plan = usePlan(siteId, date);
+  const [view, setView] = useState<ViewMode>('ingredients');
 
-  const sections = useMemo(
-    () => buildSections([
-      { date, plan: planToday, runOnLeadOffset: 0 },
-      { date: dayOffset(1, date), plan: planTomorrow, runOnLeadOffset: -1 },
-      { date: dayOffset(2, date), plan: planDayAfter, runOnLeadOffset: -2 },
-    ]),
-    [date, planToday, planTomorrow, planDayAfter],
+  const benches = useMemo(
+    () => benchesAt(siteId).filter(b => b.online),
+    [siteId],
+  );
+  const groups = useMemo(() => buildRecipeGroups(plan, benches), [plan, benches]);
+
+  const ingredientGroups = groups.filter(g => g.hasIngredients);
+  const taskGroups = groups.filter(g => g.hasTasks);
+  const visibleGroups = view === 'ingredients' ? ingredientGroups : taskGroups;
+
+  const totalRecipes = groups.length;
+  const totalSubRecipes = groups.reduce(
+    (a, g) => a + g.components.filter(c => c.isSubRecipe).length,
+    0,
   );
 
-  // Suggested benches per work type — derived from `benchWorkTypes` (and
-  // intersected with any equipment requirements that show up in the
-  // section).
-  const benchesByWorkType = useMemo(() => {
-    const benches = benchesAt(siteId).filter(b => b.online);
-    const map = new Map<WorkType, Bench[]>();
-    for (const wt of WORK_TYPE_ORDER) {
-      map.set(wt, benches.filter(b => benchWorkTypes(b).includes(wt)));
-    }
-    return map;
-  }, [siteId]);
+  const handlePrint = () => {
+    const siteName = getSite(siteId)?.name ?? siteId;
+    printRunSheet(view, visibleGroups, date, siteName);
+  };
 
-  const presentWorkTypes = WORK_TYPE_ORDER.filter(
-    wt => (sections.byWorkType.get(wt)?.totalRows() ?? 0) > 0,
-  );
-
-  if (presentWorkTypes.length === 0) {
+  if (totalRecipes === 0) {
     return (
       <div style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -200,697 +299,440 @@ export default function RunSheetView({
         </div>
         <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>
           Nothing planned for {date} yet — once a plan exists for this day it
-          will appear here grouped by stage.
+          will appear here broken down by recipe and sub-recipe.
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '24px 32px 64px', display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Run-sheet toolbar — single-action right now so the launcher
-          sits on its own row, aligned with the rest of the run sheet's
-          left margin. */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <StepperLauncher siteId={siteId} date={date} variant="ghost" />
-      </div>
-      <DayShapeHeader
-        sections={sections}
-        presentWorkTypes={presentWorkTypes}
-        date={date}
-      />
-
-      {presentWorkTypes.map(wt => (
-        <StageCard
-          key={wt}
-          workType={wt}
-          section={sections.byWorkType.get(wt)!}
-          benches={pickBenchesForSection(
-            benchesByWorkType.get(wt) ?? [],
-            sections.byWorkType.get(wt)!.equipmentNeeded,
-          )}
+    <div style={{ padding: '16px 24px 48px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Compact toolbar — switcher + summary on the left, actions right.
+          Merged into a single sticky bar to keep vertical space tight. */}
+      <div
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 5,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+          flexWrap: 'wrap',
+          padding: '10px 14px',
+          background: 'var(--color-bg-surface)',
+          border: '1px solid var(--color-border-subtle)',
+          borderRadius: 'var(--radius-card)',
+        }}
+      >
+        <ViewSwitcher
+          view={view}
+          onChange={setView}
+          ingredientCount={ingredientGroups.length}
+          taskCount={taskGroups.length}
         />
-      ))}
+        <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontFamily: 'var(--font-primary)' }}>
+          {visibleGroups.length} recipe{visibleGroups.length === 1 ? '' : 's'}
+          {totalSubRecipes > 0 && (
+            <> · {totalSubRecipes} sub-recipe{totalSubRecipes === 1 ? '' : 's'}</>
+          )}
+          {view === 'ingredients' ? ' · weigh-up quantities' : ' · benches & assignment'}
+        </span>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            type="button"
+            onClick={handlePrint}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 7,
+              padding: '8px 14px',
+              borderRadius: 8,
+              border: '1px solid var(--color-border-subtle)',
+              background: 'var(--color-bg-surface)',
+              color: 'var(--color-text-primary)',
+              fontSize: 13,
+              fontWeight: 700,
+              fontFamily: 'var(--font-primary)',
+              cursor: 'pointer',
+            }}
+            title={`Print the ${view === 'ingredients' ? 'ingredients & quantities' : 'task assignment'} sheet`}
+          >
+            <Printer size={15} />
+            Print
+          </button>
+          <StepperLauncher siteId={siteId} date={date} variant="ghost" />
+        </div>
+      </div>
+
+      {/* Recipe cards tile into columns on wide screens to cut scrolling. */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(440px, 1fr))',
+          gap: 12,
+          alignItems: 'start',
+        }}
+      >
+        {visibleGroups.map(group => (
+          <RecipeCard key={group.recipeId + group.itemId} group={group} view={view} />
+        ))}
+      </div>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Aggregation
+// View switcher (segmented control)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** A single aggregated row for an ingredient-shaped piece of prep work. */
-type IngredientRow = {
-  kind: 'ingredient';
-  key: string;                 // `${ingredientId}|${workType}|${leadOffset}`
-  ingredientId: IngredientId;
-  ingredient: Ingredient | undefined;
-  workType: WorkType;
-  /** -2/-1/0 — controls the "for tomorrow / for two days out" label. */
-  leadOffset: -2 | -1 | 0;
-  /** Total quantity across all sources, in the ingredient's canonical unit. */
-  totalQty: number;
-  unit: 'g' | 'ml' | 'unit';
-  /** Estimated hands-on time for the aggregated quantity, derived from
-   *  `WORK_TYPE_PACE`. Computed lazily after totalQty is known. */
-  estimatedMinutes: number;
-  /** Per-recipe contributions — how much of this prep comes from each
-   *  recipe's planned units. Sorted by contribution descending. */
-  sources: Array<{
-    sourceRecipeId: RecipeId;
-    sourceRecipeName: string;
-    sourcePlannedUnits: number;
-    contributedQty: number;
-  }>;
-};
-
-/** A per-recipe stage-derived row — one per (recipe, stage) hitting today. */
-type StageRow = {
-  kind: 'stage';
-  key: string;                 // `${recipeId}|${stageId}|${planDate}`
-  recipeId: RecipeId;
-  recipeName: string;
-  category: string;
-  workType: WorkType;
-  leadOffset: -2 | -1 | 0;
-  /** The plan date that drove this row — for "for tomorrow" labelling. */
-  planDate: string;
-  effectivePlanned: number;
-  primaryBenchName: string | undefined;
-  itemId: string;              // for deep-linking back to /production/amounts
-  requiresEquipment: Equipment[];
-  /** Authored stage duration (minutes per batch). Falls back to the
-   *  per-work-type `MIN_ROW_MINUTES` if the stage doesn't carry one. */
-  estimatedMinutes: number;
-};
-
-type RunSheetRow = IngredientRow | StageRow;
-
-type SectionData = {
-  ingredientRows: IngredientRow[];
-  stageRows: StageRow[];
-  /** Set of equipment any row in this section needs — used to filter
-   *  the suggested-benches list down to actually-eligible benches. */
-  equipmentNeeded: Set<Equipment>;
-  totalRows: () => number;
-  totalUnits: () => number;
-  /** Sum of all rows' `estimatedMinutes` — drives the "team time ~Xh"
-   *  badge in the section header so the kitchen can plan staffing. */
-  totalMinutes: () => number;
-};
-
-type Sections = {
-  byWorkType: Map<WorkType, SectionData>;
-  totalAggregatedTasks: number;
-  totalRecipeStageRows: number;
-  totalUnits: number;
-  /** True when at least one row has leadOffset != 0 — drives the
-   *  "shifted in time" callout in the header. */
-  hasCrossDayWork: boolean;
-};
-
-function buildSections(
-  inputs: Array<{ date: string; plan: PlanLine[]; runOnLeadOffset: -2 | -1 | 0 }>,
-): Sections {
-  const byWorkType = new Map<WorkType, SectionData>();
-  function ensure(wt: WorkType): SectionData {
-    let s = byWorkType.get(wt);
-    if (!s) {
-      s = {
-        ingredientRows: [],
-        stageRows: [],
-        equipmentNeeded: new Set<Equipment>(),
-        totalRows: () => (s!.ingredientRows.length + s!.stageRows.length),
-        totalUnits: () => (
-          s!.ingredientRows.reduce((a, r) => a + r.totalQty, 0)
-          + s!.stageRows.reduce((a, r) => a + r.effectivePlanned, 0)
-        ),
-        totalMinutes: () => (
-          s!.ingredientRows.reduce((a, r) => a + r.estimatedMinutes, 0)
-          + s!.stageRows.reduce((a, r) => a + r.estimatedMinutes, 0)
-        ),
-      };
-      byWorkType.set(wt, s);
-    }
-    return s;
-  }
-
-  // Bucket ingredient rows by (ingredientId, workType, leadOffset). The
-  // map is per work type so we can collapse cleanly into the section.
-  const ingredientBuckets = new Map<WorkType, Map<string, IngredientRow>>();
-
-  let hasCrossDayWork = false;
-
-  for (const { date: planDate, plan, runOnLeadOffset } of inputs) {
-    for (const line of plan) {
-      if (line.effectivePlanned <= 0) continue;
-      const recipe = line.recipe;
-
-      // ── Stage-derived rows ──────────────────────────────────────────
-      // Walk the recipe's own workflow + sub-recipe workflows. A stage
-      // contributes a row to today only if its leadOffset matches the
-      // offset at which this plan date sits relative to today.
-      const visitedWorkflows = new Set<string>();
-      const allWorkflowIds: string[] = [];
-      if (recipe.workflowId) allWorkflowIds.push(recipe.workflowId);
-      for (const sub of recipe.subRecipes ?? []) {
-        const subRec = getRecipe(sub.recipeId);
-        if (subRec?.workflowId) allWorkflowIds.push(subRec.workflowId);
-      }
-      for (const wfId of allWorkflowIds) {
-        if (visitedWorkflows.has(wfId)) continue;
-        visitedWorkflows.add(wfId);
-        const wf = getWorkflow(wfId);
-        if (!wf) continue;
-        for (const stage of wf.stages) {
-          if (stage.leadOffset !== runOnLeadOffset) continue;
-          const wt = stageWorkType(stage);
-          if (runOnLeadOffset !== 0) hasCrossDayWork = true;
-          const section = ensure(wt);
-          const reqEq = stage.requiresEquipment ?? [];
-          for (const eq of reqEq) section.equipmentNeeded.add(eq);
-          section.stageRows.push({
-            kind: 'stage',
-            key: `${recipe.id}|${stage.id}|${planDate}`,
-            recipeId: recipe.id,
-            recipeName: recipe.name,
-            category: recipe.category,
-            workType: wt,
-            leadOffset: stage.leadOffset,
-            planDate,
-            effectivePlanned: line.effectivePlanned,
-            primaryBenchName: line.primaryBench?.name,
-            itemId: line.item.id,
-            requiresEquipment: reqEq,
-            estimatedMinutes: Math.max(MIN_ROW_MINUTES, stage.durationMinutes ?? 0),
-          });
-        }
-      }
-
-      // ── Aggregated ingredient prep ──────────────────────────────────
-      // Walk every consumed ingredient's effective prep work (master
-      // defaults + overrides resolved by `recipeIngredientPrep`). Each
-      // entry contributes `quantityPerUnit × effectivePlanned` to the
-      // shared bucket for (ingredientId, workType, leadOffset).
-      const ingredientPrep = recipeIngredientPrep(recipe);
-      for (const entry of ingredientPrep) {
-        const lo = (entry.prep.leadOffset ?? 0) as -2 | -1 | 0;
-        if (lo !== runOnLeadOffset) continue;
-        if (lo !== 0) hasCrossDayWork = true;
-        const wt = entry.prep.workType;
-        const section = ensure(wt);
-        let bucketsForWt = ingredientBuckets.get(wt);
-        if (!bucketsForWt) {
-          bucketsForWt = new Map();
-          ingredientBuckets.set(wt, bucketsForWt);
-        }
-        const bucketKey = `${entry.ingredientId}|${wt}|${lo}`;
-        let bucket = bucketsForWt.get(bucketKey);
-        if (!bucket) {
-          bucket = {
-            kind: 'ingredient',
-            key: bucketKey,
-            ingredientId: entry.ingredientId,
-            ingredient: entry.ingredient,
-            workType: wt,
-            leadOffset: lo,
-            totalQty: 0,
-            unit: entry.unit,
-            estimatedMinutes: 0,
-            sources: [],
-          };
-          bucketsForWt.set(bucketKey, bucket);
-          section.ingredientRows.push(bucket);
-        }
-        const contributed = entry.quantityPerUnit * line.effectivePlanned;
-        bucket.totalQty += contributed;
-        // Source attribution — combine same-recipe entries so a recipe
-        // with multiple usages of the same ingredient (rare) folds.
-        const existingSrc = bucket.sources.find(s => s.sourceRecipeId === recipe.id);
-        if (existingSrc) {
-          existingSrc.contributedQty += contributed;
-        } else {
-          bucket.sources.push({
-            sourceRecipeId: recipe.id,
-            sourceRecipeName: recipe.name,
-            sourcePlannedUnits: line.effectivePlanned,
-            contributedQty: contributed,
-          });
-        }
-      }
-    }
-  }
-
-  // Sort sources within each ingredient bucket; sort stage rows within
-  // each section by category then name; sort ingredient rows by total
-  // qty desc so the biggest mise-en-place tasks lead the section.
-  // Also finalise the per-row time estimate now that totals are known.
-  for (const section of byWorkType.values()) {
-    for (const row of section.ingredientRows) {
-      row.sources.sort((a, b) => b.contributedQty - a.contributedQty);
-      row.estimatedMinutes = ingredientRowMinutes(row.workType, row.totalQty);
-    }
-    section.ingredientRows.sort((a, b) => b.totalQty - a.totalQty);
-    section.stageRows.sort((a, b) => {
-      if (a.category !== b.category) return a.category.localeCompare(b.category);
-      return a.recipeName.localeCompare(b.recipeName);
-    });
-  }
-
-  let totalAggregatedTasks = 0;
-  let totalRecipeStageRows = 0;
-  let totalUnits = 0;
-  for (const section of byWorkType.values()) {
-    totalAggregatedTasks += section.ingredientRows.length;
-    totalRecipeStageRows += section.stageRows.length;
-    totalUnits += section.totalUnits();
-  }
-
-  return {
-    byWorkType,
-    totalAggregatedTasks,
-    totalRecipeStageRows,
-    totalUnits,
-    hasCrossDayWork,
-  };
-}
-
-function pickBenchesForSection(benches: Bench[], equipmentNeeded: Set<Equipment>): Bench[] {
-  if (equipmentNeeded.size === 0) return benches;
-  const needed = Array.from(equipmentNeeded);
-  return benches.filter((b) => {
-    const eq = benchEquipment(b);
-    return needed.every((e) => eq.includes(e));
-  });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Day-shape header
-// ─────────────────────────────────────────────────────────────────────────────
-
-function DayShapeHeader({
-  sections,
-  presentWorkTypes,
-  date,
+function ViewSwitcher({
+  view,
+  onChange,
+  ingredientCount,
+  taskCount,
 }: {
-  sections: Sections;
-  presentWorkTypes: WorkType[];
-  date: string;
+  view: ViewMode;
+  onChange: (v: ViewMode) => void;
+  ingredientCount: number;
+  taskCount: number;
 }) {
-  const totalMinutes = presentWorkTypes.reduce(
-    (a, wt) => a + (sections.byWorkType.get(wt)?.totalMinutes() ?? 0),
-    0,
-  );
+  const tabs: Array<{ id: ViewMode; label: string; count: number }> = [
+    { id: 'ingredients', label: 'Ingredients & quantities', count: ingredientCount },
+    { id: 'tasks', label: 'Task assignment', count: taskCount },
+  ];
   return (
-    <header
+    <div
+      role="tablist"
+      aria-label="Run sheet view"
       style={{
-        background: '#ffffff',
-        border: '1px solid var(--color-border-subtle)',
-        borderRadius: 'var(--radius-card)',
-        padding: 20,
         display: 'flex',
-        flexDirection: 'column',
-        gap: 14,
+        background: 'var(--color-bg-hover)',
+        borderRadius: '100px',
+        padding: '3px',
+        width: 'fit-content',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
-        <h1
-          style={{
-            margin: 0,
-            fontSize: 18,
-            fontWeight: 700,
-            color: 'var(--color-text-primary)',
-            fontFamily: 'var(--font-primary)',
-            letterSpacing: '-0.01em',
-          }}
-        >
-          Day plan by stage
-        </h1>
-        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-          {presentWorkTypes.length} stage{presentWorkTypes.length === 1 ? '' : 's'} ·{' '}
-          {sections.totalAggregatedTasks.toLocaleString('en-GB')} mise tasks ·{' '}
-          {sections.totalRecipeStageRows.toLocaleString('en-GB')} recipe stages
-        </span>
-        {totalMinutes > 0 && (
-          <span
+      {tabs.map(tab => {
+        const active = tab.id === view;
+        return (
+          <button
+            key={tab.id}
+            role="tab"
+            aria-selected={active}
+            type="button"
+            onClick={() => onChange(tab.id)}
             style={{
+              padding: '8px 18px',
+              borderRadius: '100px',
+              border: 'none',
+              fontSize: '13px',
+              fontWeight: 600,
+              fontFamily: 'var(--font-primary)',
+              cursor: 'pointer',
+              background: active ? 'var(--color-accent-active)' : 'transparent',
+              color: active ? '#fff' : 'var(--color-text-secondary)',
+              transition: 'all 0.15s',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 4,
-              fontSize: 11,
-              fontWeight: 700,
-              color: 'var(--color-text-secondary)',
-              fontFamily: 'var(--font-primary)',
-              fontVariantNumeric: 'tabular-nums',
-              padding: '4px 10px',
-              borderRadius: 100,
-              background: 'var(--color-bg-hover)',
-              whiteSpace: 'nowrap',
+              gap: 8,
             }}
-            title="Total estimated hands-on time across every section today"
           >
-            <Clock size={12} color="var(--color-text-muted)" />
-            ~{formatDuration(totalMinutes)} hands-on
-          </span>
-        )}
-        {sections.hasCrossDayWork && (
-          <span
-            style={{
-              marginLeft: 'auto',
-              fontSize: 11,
-              fontWeight: 700,
-              color: 'var(--color-warning)',
-              background: 'rgba(241,180,52,0.16)',
-              padding: '4px 9px',
-              borderRadius: 100,
-              fontFamily: 'var(--font-primary)',
-              letterSpacing: '0.02em',
-              whiteSpace: 'nowrap',
-            }}
-            title={`Today (${date}) includes prep-ahead work for tomorrow and the day after`}
-          >
-            Includes prep-ahead work
-          </span>
-        )}
-      </div>
+            {tab.label}
+            <ViewTabBadge count={tab.count} active={active} />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
-      <nav style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {presentWorkTypes.map(wt => {
-          const section = sections.byWorkType.get(wt)!;
-          const total = section.totalRows();
-          return (
-            <a
-              key={wt}
-              href={`#stage-${wt}`}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '5px 10px',
-                borderRadius: 100,
-                background: 'var(--color-bg-surface)',
-                border: '1px solid var(--color-border-subtle)',
-                textDecoration: 'none',
-                fontFamily: 'var(--font-primary)',
-              }}
-            >
-              <WorkTypeChip workType={wt} size="xs" />
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-                {total} task{total === 1 ? '' : 's'}
-              </span>
-            </a>
-          );
-        })}
-      </nav>
-    </header>
+/** Count badge matching the standard production tab badge (see
+ *  `AmountsView` mode tabs). */
+function ViewTabBadge({ count, active }: { count: number; active: boolean }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: '18px',
+        height: '18px',
+        padding: '0 5px',
+        borderRadius: '100px',
+        fontSize: '12px',
+        fontWeight: 700,
+        background: active ? 'rgba(255,255,255,0.25)' : 'var(--color-border-subtle)',
+        color: active ? '#fff' : 'var(--color-text-secondary)',
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      {count}
+    </span>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Stage card — one section per WorkType, with two flavoured row groups
+// Work-type tag — colored chip for "what should happen"
 // ─────────────────────────────────────────────────────────────────────────────
 
-function StageCard({
-  workType,
-  section,
-  benches,
-}: {
-  workType: WorkType;
-  section: SectionData;
-  benches: Bench[];
-}) {
+function WorkTag({ workType }: { workType: WorkType }) {
   const tone = WORK_TYPE_COLORS[workType];
-  const ingredientCount = section.ingredientRows.length;
-  const stageCount = section.stageRows.length;
-  const allRows: RunSheetRow[] = [
-    ...section.ingredientRows,
-    ...section.stageRows,
-  ];
-  const equipmentList = Array.from(section.equipmentNeeded);
-  const totalMinutes = section.totalMinutes();
-  // If every row in this section is prep-ahead (-1/-2) the work happens
-  // on the previous evening's close-down rather than today's morning
-  // window. We pick the lead-offset of the *first* row (rows are
-  // homogenous within a section in practice — sections shift together).
-  const dominantLeadOffset = allRows[0]
-    ? (allRows[0].kind === 'ingredient' ? allRows[0].leadOffset : allRows[0].leadOffset)
-    : 0;
-  const timeWindow = windowFor(workType, dominantLeadOffset);
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '2px 8px',
+        borderRadius: 100,
+        background: tone.bg,
+        color: tone.color,
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: '0.02em',
+        fontFamily: 'var(--font-primary)',
+        whiteSpace: 'nowrap',
+        lineHeight: 1.3,
+      }}
+      title={`${WORK_TYPE_LABELS[workType]} — what should happen to this ingredient`}
+    >
+      {WORK_TYPE_LABELS[workType]}
+    </span>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Recipe card — shared shell for both views
+// ─────────────────────────────────────────────────────────────────────────────
+
+function RecipeCard({ group, view }: { group: RecipeGroup; view: ViewMode }) {
+  const components = group.components.filter(c =>
+    view === 'ingredients' ? c.ingredients.length > 0 : c.tasks.length > 0,
+  );
+  const showComponentLabels = components.length > 1;
+
   return (
     <section
-      id={`stage-${workType}`}
       style={{
         background: '#ffffff',
         border: '1px solid var(--color-border-subtle)',
-        borderLeft: `4px solid ${tone.color}`,
         borderRadius: 'var(--radius-card)',
-        padding: 0,
         display: 'flex',
         flexDirection: 'column',
-        scrollMarginTop: 130,
       }}
     >
       <header
         style={{
-          padding: '16px 20px',
+          padding: '9px 14px',
           display: 'flex',
           alignItems: 'center',
-          gap: 12,
+          gap: 10,
           flexWrap: 'wrap',
           borderBottom: '1px solid var(--color-border-subtle)',
-          background: tone.bg,
+          background: 'var(--color-bg-hover)',
+          borderTopLeftRadius: 'var(--radius-card)',
+          borderTopRightRadius: 'var(--radius-card)',
         }}
       >
         <h2
           style={{
             margin: 0,
-            fontSize: 15,
+            fontSize: 14,
             fontWeight: 700,
             color: 'var(--color-text-primary)',
             fontFamily: 'var(--font-primary)',
-            letterSpacing: '0.01em',
           }}
         >
-          {WORK_TYPE_LABELS[workType]}
+          {group.recipeName}
         </h2>
-        <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-          {ingredientCount > 0 && (
-            <>
-              {ingredientCount} mise task{ingredientCount === 1 ? '' : 's'}
-              {stageCount > 0 && ' · '}
-            </>
-          )}
-          {stageCount > 0 && (
-            <>{stageCount} recipe stage{stageCount === 1 ? '' : 's'}</>
-          )}
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            color: 'var(--color-text-muted)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+          }}
+        >
+          {group.category}
         </span>
-
-        {/* Time-of-day window for this section — derived from
-            `windowFor(workType, leadOffset)`. Pulls double duty as a
-            scheduling cue ("do between 06:30 and 08:00") and as a
-            phase label ("Open shift", "Close-down"). */}
         <span
           style={{
             display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '4px 10px',
-            borderRadius: 100,
-            background: '#fff',
-            border: '1px solid var(--color-border-subtle)',
-            fontSize: 11,
-            fontFamily: 'var(--font-primary)',
+            alignItems: 'baseline',
+            gap: 4,
+            fontSize: 13,
+            fontWeight: 700,
             color: 'var(--color-text-secondary)',
-            whiteSpace: 'nowrap',
+            fontFamily: 'var(--font-primary)',
+            fontVariantNumeric: 'tabular-nums',
           }}
-          title={`Suggested time window for ${WORK_TYPE_LABELS[workType].toLowerCase()} work — based on Pret kitchen norms`}
         >
-          <Clock size={12} color="var(--color-text-muted)" />
-          <span style={{ fontWeight: 700, color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-            {timeWindow.from}–{timeWindow.to}
+          ×{group.plannedUnits.toLocaleString('en-GB')}
+          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            units
           </span>
-          <span style={{ color: 'var(--color-text-muted)' }}>·</span>
-          <span style={{ fontWeight: 600 }}>{timeWindow.label}</span>
         </span>
-
-        {/* Section team-time roll-up — sum of every row's
-            estimated minutes. Helps a chef budget staff. */}
-        {totalMinutes > 0 && (
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: 'var(--color-text-secondary)',
-              fontFamily: 'var(--font-primary)',
-              fontVariantNumeric: 'tabular-nums',
-              whiteSpace: 'nowrap',
-            }}
-            title="Sum of every row's estimated hands-on time in this section"
-          >
-            ~{formatDuration(totalMinutes)} hands-on
-          </span>
-        )}
-
-        {equipmentList.length > 0 && (
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              flexWrap: 'wrap',
-              fontSize: 10.5,
-              color: 'var(--color-text-secondary)',
-              fontFamily: 'var(--font-primary)',
-            }}
-            title="Equipment required by stages in this section"
-          >
-            <span style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)' }}>
-              Equipment
-            </span>
-            {equipmentList.map((eq) => (
-              <span
-                key={eq}
-                style={{
-                  padding: '2px 7px',
-                  borderRadius: 100,
-                  background: '#fff',
-                  border: '1px solid var(--color-border-subtle)',
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: '0.02em',
-                  color: 'var(--color-text-secondary)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {EQUIPMENT_LABELS[eq]}
-              </span>
-            ))}
-          </span>
-        )}
-
-        {benches.length > 0 && (
+        {view === 'tasks' && group.primaryBenchName && (
           <span
             style={{
               marginLeft: 'auto',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
               fontSize: 11,
               color: 'var(--color-text-muted)',
               fontFamily: 'var(--font-primary)',
-              flexWrap: 'wrap',
             }}
-            title={
-              equipmentList.length > 0
-                ? 'Benches at this site that can handle this work AND have the required equipment'
-                : 'Benches at this site that can handle this kind of work'
-            }
           >
-            <span style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Benches
-            </span>
-            <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-              {benches.map(b => b.name).join(' · ')}
-            </span>
+            <span style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Routed to </span>
+            <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600 }}>{group.primaryBenchName}</span>
           </span>
         )}
       </header>
 
-      <div role="list" style={{ display: 'flex', flexDirection: 'column' }}>
-        {allRows.map((row, i) => (
-          <RunSheetRowView
-            key={row.key}
-            row={row}
-            isLast={i === allRows.length - 1}
-          />
+      {view === 'tasks' && (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1.7fr) 54px minmax(0, 1fr) minmax(0, 1fr)',
+            gap: 10,
+            padding: '4px 14px',
+            borderBottom: '1px solid var(--color-border-subtle)',
+          }}
+        >
+          {['Task', 'Units', 'Bench', 'Who'].map((h, i) => (
+            <span
+              key={h}
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                color: 'var(--color-text-muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                textAlign: i === 1 ? 'right' : 'left',
+              }}
+            >
+              {h}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {components.map((comp, ci) => (
+          <div key={comp.recipeId}>
+            {showComponentLabels && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '4px 14px',
+                  background: 'rgba(0, 28, 53, 0.03)',
+                  borderTop: ci === 0 ? 'none' : '1px solid var(--color-border-subtle)',
+                  borderBottom: '1px solid var(--color-border-subtle)',
+                }}
+              >
+                {comp.isSubRecipe ? (
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: 'var(--color-accent-mid)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    <Layers size={11} />
+                    Sub-recipe
+                  </span>
+                ) : (
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: 'var(--color-text-muted)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    Base recipe
+                  </span>
+                )}
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                  {comp.name}
+                </span>
+              </div>
+            )}
+
+            {view === 'ingredients'
+              ? comp.ingredients.map((ing, i) => (
+                  <IngredientRowView
+                    key={ing.ingredientId}
+                    row={ing}
+                    isLast={ci === components.length - 1 && i === comp.ingredients.length - 1}
+                  />
+                ))
+              : comp.tasks.map((task, i) => (
+                  <TaskRowView
+                    key={task.stageId + i}
+                    row={task}
+                    units={group.plannedUnits}
+                    isLast={ci === components.length - 1 && i === comp.tasks.length - 1}
+                  />
+                ))}
+          </div>
         ))}
       </div>
     </section>
   );
 }
 
-function RunSheetRowView({ row, isLast }: { row: RunSheetRow; isLast: boolean }) {
-  if (row.kind === 'ingredient') {
-    return <IngredientRowView row={row} isLast={isLast} />;
-  }
-  return <StageRowView row={row} isLast={isLast} />;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Aggregated ingredient row — "Slice tomatoes — 17 (Club +5, BLT +7)"
+// Ingredient row — name + tags on the left, quantity on the right
 // ─────────────────────────────────────────────────────────────────────────────
 
-function IngredientRowView({ row, isLast }: { row: IngredientRow; isLast: boolean }) {
-  const ingredientName = row.ingredient?.name ?? row.ingredientId;
-  const sourceCount = row.sources.length;
-  const forLabel = row.leadOffset === 0
-    ? null
-    : row.leadOffset === -1
-      ? 'For tomorrow'
-      : 'For 2 days out';
-
+function IngredientRowView({ row, isLast }: { row: IngredientLine; isLast: boolean }) {
   return (
     <div
       role="listitem"
       style={{
         display: 'grid',
-        gridTemplateColumns: 'minmax(0, 2.4fr) 110px minmax(0, 2fr)',
-        gap: 14,
+        gridTemplateColumns: 'minmax(0, 1fr) 130px',
+        gap: 12,
         alignItems: 'center',
-        padding: '12px 20px',
+        padding: '6px 14px',
         borderBottom: isLast ? 'none' : '1px solid var(--color-border-subtle)',
-        background: '#ffffff',
       }}
     >
-      <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <div style={{ minWidth: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
         <span
           style={{
-            fontSize: 13,
-            fontWeight: 700,
+            fontSize: 12.5,
+            fontWeight: 600,
             color: 'var(--color-text-primary)',
             fontFamily: 'var(--font-primary)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
           }}
         >
-          {ingredientName}
+          {row.name}
         </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              color: 'var(--color-accent-mid)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}
-            title={`Aggregated across ${sourceCount} recipe${sourceCount === 1 ? '' : 's'}`}
-          >
-            Mise · across {sourceCount} recipe{sourceCount === 1 ? '' : 's'}
+        {row.prepTags.length > 0 ? (
+          <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4 }}>
+            {row.prepTags.map(t => (
+              <WorkTag key={t} workType={t} />
+            ))}
           </span>
-          <DurationPill minutes={row.estimatedMinutes} />
-          {forLabel && (
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                color: 'var(--color-warning)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-              }}
-              title="Prep-ahead — done now for a future day's plan"
-            >
-              · {forLabel}
-            </span>
-          )}
-        </div>
+        ) : (
+          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+            No prep
+          </span>
+        )}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end', gap: 4 }}>
         <span
           style={{
-            fontSize: 16,
+            fontSize: 14,
             fontWeight: 800,
             color: 'var(--color-text-primary)',
             fontVariantNumeric: 'tabular-nums',
@@ -900,224 +742,265 @@ function IngredientRowView({ row, isLast }: { row: IngredientRow; isLast: boolea
         >
           {formatQty(row.totalQty, row.unit)}
         </span>
-        <span
-          style={{
-            fontSize: 9,
-            fontWeight: 700,
-            color: 'var(--color-text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}
-        >
-          total {row.unit === 'unit' ? 'units' : row.unit}
-        </span>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            color: 'var(--color-text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}
-        >
-          For
-        </span>
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: 'var(--color-text-secondary)',
-            lineHeight: 1.4,
-          }}
-        >
-          {row.sources
-            .slice(0, 4)
-            .map((s) => `${s.sourceRecipeName} +${formatQty(s.contributedQty, row.unit)}`)
-            .join(', ')}
-          {row.sources.length > 4 && ` +${row.sources.length - 4} more`}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function formatQty(q: number, unit: 'g' | 'ml' | 'unit'): string {
-  if (unit === 'unit') return Math.round(q).toLocaleString('en-GB');
-  // For mass / volume convert to kg/L when large enough.
-  if (q >= 1000) {
-    const v = q / 1000;
-    return `${v.toLocaleString('en-GB', { maximumFractionDigits: 1 })}${unit === 'g' ? 'kg' : 'L'}`;
-  }
-  return `${Math.round(q).toLocaleString('en-GB')}${unit}`;
-}
-
-/** Tiny clock-icon pill used on every Run sheet row to surface the
- *  estimated hands-on minutes. Inline so it sits naturally beside the
- *  category / mise label without wrapping awkwardly. */
-function DurationPill({ minutes }: { minutes: number }) {
-  if (minutes <= 0) return null;
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 4,
-        padding: '2px 7px',
-        borderRadius: 100,
-        background: 'var(--color-bg-hover)',
-        color: 'var(--color-text-secondary)',
-        fontSize: 10,
-        fontWeight: 700,
-        letterSpacing: '0.02em',
-        fontFamily: 'var(--font-primary)',
-        fontVariantNumeric: 'tabular-nums',
-        whiteSpace: 'nowrap',
-        lineHeight: 1.1,
-      }}
-      title="Estimated hands-on time at the suggested kitchen pace"
-    >
-      <Clock size={10} />
-      ~{formatDuration(minutes)}
-    </span>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Per-recipe stage row (kept from the original Run sheet, with a
-// "for tomorrow" suffix when leadOffset != 0)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function StageRowView({ row, isLast }: { row: StageRow; isLast: boolean }) {
-  const todayHref = `/production/amounts#row-${row.itemId}`;
-  const forLabel = row.leadOffset === 0
-    ? null
-    : row.leadOffset === -1
-      ? 'For tomorrow'
-      : 'For 2 days out';
-
-  return (
-    <a
-      role="listitem"
-      href={todayHref}
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 2.4fr) 110px minmax(0, 2fr) 24px',
-        gap: 14,
-        alignItems: 'center',
-        padding: '12px 20px',
-        borderBottom: isLast ? 'none' : '1px solid var(--color-border-subtle)',
-        textDecoration: 'none',
-        color: 'inherit',
-        background: '#ffffff',
-        transition: 'background 120ms ease',
-      }}
-      onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
-      onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; }}
-    >
-      <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span
-          style={{
-            fontSize: 13,
-            fontWeight: 700,
-            color: 'var(--color-text-primary)',
-            fontFamily: 'var(--font-primary)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {row.recipeName}
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        {row.unit === 'unit' && (
           <span
             style={{
-              fontSize: 10,
+              fontSize: 9,
               fontWeight: 700,
               color: 'var(--color-text-muted)',
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
             }}
           >
-            {row.category} · Recipe stage
+            units
           </span>
-          <DurationPill minutes={row.estimatedMinutes} />
-          {forLabel && (
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Task row — task + tag, units, bench, who
+// ─────────────────────────────────────────────────────────────────────────────
+
+function TaskRowView({ row, units, isLast }: { row: TaskLine; units: number; isLast: boolean }) {
+  return (
+    <div
+      role="listitem"
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1.7fr) 54px minmax(0, 1fr) minmax(0, 1fr)',
+        gap: 10,
+        alignItems: 'center',
+        padding: '6px 14px',
+        borderBottom: isLast ? 'none' : '1px solid var(--color-border-subtle)',
+      }}
+    >
+      <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span
+          style={{
+            fontSize: 12.5,
+            fontWeight: 600,
+            color: 'var(--color-text-primary)',
+            fontFamily: 'var(--font-primary)',
+          }}
+        >
+          {row.label}
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <WorkTag workType={row.workType} />
+          {row.durationMinutes > 0 && (
             <span
               style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
                 fontSize: 10,
                 fontWeight: 700,
-                color: 'var(--color-warning)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
+                color: 'var(--color-text-secondary)',
+                fontVariantNumeric: 'tabular-nums',
               }}
             >
-              · {forLabel}
+              <Clock size={10} />~{formatDuration(row.durationMinutes)}
             </span>
           )}
-          {row.requiresEquipment.length > 0 && (
-            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-              · {row.requiresEquipment.map((e) => EQUIPMENT_LABELS[e]).join(', ')}
+          {row.equipment.length > 0 && (
+            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-muted)' }}>
+              · {row.equipment.map(e => EQUIPMENT_LABELS[e]).join(', ')}
             </span>
           )}
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
-        <span
-          style={{
-            fontSize: 16,
-            fontWeight: 800,
-            color: 'var(--color-text-primary)',
-            fontVariantNumeric: 'tabular-nums',
-            fontFamily: 'var(--font-primary)',
-            lineHeight: 1.1,
-          }}
-        >
-          {row.effectivePlanned.toLocaleString('en-GB')}
-        </span>
-        <span
-          style={{
-            fontSize: 9,
-            fontWeight: 700,
-            color: 'var(--color-text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}
-        >
-          units
-        </span>
-      </div>
+      <span
+        style={{
+          textAlign: 'right',
+          fontSize: 14,
+          fontWeight: 800,
+          color: 'var(--color-text-primary)',
+          fontVariantNumeric: 'tabular-nums',
+          fontFamily: 'var(--font-primary)',
+        }}
+      >
+        {units.toLocaleString('en-GB')}
+      </span>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, overflow: 'hidden' }}>
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            color: 'var(--color-text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}
-        >
-          Primary bench
-        </span>
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: 'var(--color-text-secondary)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {row.primaryBenchName ?? 'Not routed'}
-        </span>
-      </div>
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: row.benchName === 'Not routed' ? 'var(--color-text-muted)' : 'var(--color-text-secondary)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+        title={`Bench · ${row.benchName}`}
+      >
+        {row.benchName}
+      </span>
 
-      <ChevronRight size={14} color="var(--color-text-muted)" />
-    </a>
+      <span
+        style={{
+          fontSize: 11.5,
+          fontWeight: 600,
+          color: 'var(--color-text-muted)',
+          borderBottom: '1px dashed var(--color-border-subtle)',
+          paddingBottom: 1,
+          minHeight: 16,
+        }}
+        title="Assign a person on the printed sheet"
+      >
+        Unassigned
+      </span>
+    </div>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Print — opens a popup with a clean A4 sheet of the active view
+// ─────────────────────────────────────────────────────────────────────────────
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function printRunSheet(view: ViewMode, groups: RecipeGroup[], date: string, siteName: string) {
+  if (typeof window === 'undefined') return;
+  const html = buildPrintHTML(view, groups, date, siteName);
+  const w = window.open('', '_blank', 'width=900,height=1100');
+  if (!w) {
+    const blobUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    window.location.assign(blobUrl);
+    return;
+  }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  w.onload = () => {
+    w.focus();
+    setTimeout(() => {
+      w.print();
+      w.onafterprint = () => w.close();
+    }, 60);
+  };
+}
+
+function buildPrintHTML(view: ViewMode, groups: RecipeGroup[], date: string, siteName: string): string {
+  const title = view === 'ingredients' ? 'Ingredients & quantities' : 'Task assignment';
+  const printedAt = new Date().toLocaleString('en-GB', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const sections = groups
+    .map(group => {
+      const comps = group.components.filter(c =>
+        view === 'ingredients' ? c.ingredients.length > 0 : c.tasks.length > 0,
+      );
+      const showLabels = comps.length > 1;
+      const compBlocks = comps
+        .map(comp => {
+          const labelRow = showLabels
+            ? `<tr class="comp-row"><td colspan="${view === 'ingredients' ? 3 : 4}">${
+                comp.isSubRecipe ? 'Sub-recipe · ' : 'Base recipe · '
+              }${escapeHtml(comp.name)}</td></tr>`
+            : '';
+          if (view === 'ingredients') {
+            const rows = comp.ingredients
+              .map(
+                ing => `<tr>
+                  <td class="name">${escapeHtml(ing.name)}</td>
+                  <td class="tags">${
+                    ing.prepTags.length
+                      ? ing.prepTags.map(t => `<span class="tag">${escapeHtml(WORK_TYPE_LABELS[t])}</span>`).join(' ')
+                      : '<span class="muted">No prep</span>'
+                  }</td>
+                  <td class="qty">${escapeHtml(formatQty(ing.totalQty, ing.unit))}</td>
+                </tr>`,
+              )
+              .join('');
+            return labelRow + rows;
+          }
+          const rows = comp.tasks
+            .map(
+              task => `<tr>
+                <td class="name">${escapeHtml(task.label)} <span class="tag">${escapeHtml(WORK_TYPE_LABELS[task.workType])}</span></td>
+                <td class="qty">${group.plannedUnits.toLocaleString('en-GB')}</td>
+                <td class="bench">${escapeHtml(task.benchName)}</td>
+                <td class="who"></td>
+              </tr>`,
+            )
+            .join('');
+          return labelRow + rows;
+        })
+        .join('');
+
+      const head =
+        view === 'ingredients'
+          ? `<thead><tr><th class="c-name">Ingredient</th><th class="c-tags">What to do</th><th class="c-qty">Quantity</th></tr></thead>`
+          : `<thead><tr><th class="c-name">Task</th><th class="c-qty">Units</th><th class="c-bench">Bench</th><th class="c-who">Who</th></tr></thead>`;
+
+      return `<section class="recipe">
+        <header class="recipe-head">
+          <h2>${escapeHtml(group.recipeName)}</h2>
+          <span class="rmeta">${escapeHtml(group.category)} · <strong>×${group.plannedUnits.toLocaleString('en-GB')}</strong> units</span>
+        </header>
+        <table>${head}<tbody>${compBlocks}</tbody></table>
+      </section>`;
+    })
+    .join('');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Run sheet · ${escapeHtml(title)} · ${escapeHtml(date)}</title>
+  <style>
+    @page { size: A4; margin: 14mm 12mm; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #fff; color: #001C35; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11pt; line-height: 1.4; }
+    h1, h2 { margin: 0; font-weight: 700; }
+    header.page-head { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #001C35; padding-bottom: 8px; margin-bottom: 16px; }
+    .page-head h1 { font-size: 18pt; letter-spacing: -0.2px; }
+    .page-head .meta { text-align: right; font-size: 9pt; color: #6b7280; line-height: 1.5; }
+    section.recipe { page-break-inside: avoid; break-inside: avoid; margin-bottom: 18px; }
+    .recipe-head { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #cbd5e1; padding: 6px 0 4px; margin-bottom: 4px; }
+    .recipe-head h2 { font-size: 13pt; }
+    .recipe-head .rmeta { font-size: 9.5pt; color: #475569; }
+    table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+    th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+    th { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; font-weight: 700; }
+    td.name { font-weight: 600; }
+    td.qty { text-align: right; font-weight: 700; font-feature-settings: 'tnum'; font-size: 11pt; }
+    td.bench { color: #475569; }
+    td.who { border-bottom: 1px solid #94a3b8; }
+    .c-qty { text-align: right; width: 90px; }
+    .c-bench { width: 22%; }
+    .c-who { width: 22%; }
+    .c-tags { width: 40%; }
+    tr.comp-row td { background: #f5f4f2; font-size: 8.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; padding: 4px 8px; }
+    .tag { display: inline-block; font-size: 8pt; font-weight: 700; color: #4a6cb5; border: 1px solid #d7def0; border-radius: 100px; padding: 1px 7px; margin: 1px 2px 1px 0; }
+    .muted { color: #94a3b8; font-style: italic; }
+    .footer { margin-top: 18px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 8pt; color: #94a3b8; display: flex; justify-content: space-between; }
+  </style>
+</head>
+<body>
+  <header class="page-head">
+    <h1>Run sheet · ${escapeHtml(title)}</h1>
+    <div class="meta">${escapeHtml(siteName)}<br/>For ${escapeHtml(date)}<br/>Printed ${escapeHtml(printedAt)}</div>
+  </header>
+  ${sections}
+  <div class="footer"><span>${escapeHtml(title)}</span><span>${groups.length} recipes</span></div>
+</body>
+</html>`;
 }

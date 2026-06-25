@@ -100,12 +100,15 @@ const RUN_PRODUCTION_PREFIXES = [
 ];
 
 function productionGroupForPath(pathname: string, isBurgerKing: boolean): 'run' | 'plan' {
-  // Burger King's crew line lives at /production/board and is a live
-  // run-floor surface (not the Pret "Benches" planning board), so it
-  // stays in the Run group for that persona only.
+  // Burger King's live run-floor surfaces — the crew line (/production/board)
+  // and the live orders feed (/production/orders) — stay in the Run group for
+  // that persona (they're floor monitoring, not the Pret planning board).
   if (
     isBurgerKing &&
-    (pathname === '/production/board' || pathname.startsWith('/production/board/'))
+    (pathname === '/production/board' ||
+      pathname.startsWith('/production/board/') ||
+      pathname === '/production/orders' ||
+      pathname.startsWith('/production/orders/'))
   ) {
     return 'run';
   }
@@ -139,6 +142,7 @@ const SPOKE_SUB_TABS: SubTab[] = [
 // hub concerns that don't map to a single-restaurant flame-broiler line).
 const BK_RUN_TABS: SubTab[] = [
   { id: 'board',   label: 'Crew line', href: '/production/board' },
+  { id: 'orders',  label: 'Orders',    href: '/production/orders' },
   { id: 'amounts', label: 'Today',     href: '/production/amounts' },
 ];
 
@@ -176,12 +180,17 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
 
   // Header copy — what kind of view the manager is on. Swaps with the
   // strip so the chrome reflects the mental mode they're in.
+  const isBkOrders =
+    isBurgerKing &&
+    (pathname === '/production/orders' || pathname.startsWith('/production/orders/'));
   const headerLabel = isSpoke
     ? 'Production'
     : isBurgerKing
-      ? productionGroup === 'run'
-        ? 'Kitchen line'
-        : 'Drop plan'
+      ? isBkOrders
+        ? 'Live orders'
+        : productionGroup === 'run'
+          ? 'Kitchen line'
+          : 'Drop plan'
       : productionGroup === 'run'
         ? 'Run production'
         : 'Plan production';

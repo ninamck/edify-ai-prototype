@@ -129,17 +129,19 @@ type RecutEvent = {
   /** Demo minutes after start when this fires. */
   atOffset: number;
   message: string;
+  /** Short label for the "on the radar" ribbon (what's coming). */
+  radarLabel: string;
   tone: RecutTone;
   /** Optional temporary demand surge applied when the event fires. */
   surge?: { recipeId: RecipeId; multiplier: number; forMinutes: number };
 };
 
 const RECUT_SCRIPT: RecutEvent[] = [
-  { atOffset: 4, message: 'Lunch rush building — broiler cooking ahead on Whoppers', tone: 'cook-ahead', surge: { recipeId: 'bk-whopper-patty', multiplier: 1.5, forMinutes: 20 } },
-  { atOffset: 16, message: 'Large mobile order just landed (24 burgers) — dropping 2 trays of Juniors', tone: 'cook-ahead', surge: { recipeId: 'bk-junior-patty', multiplier: 2.1, forMinutes: 12 } },
-  { atOffset: 30, message: 'Coach party flagged by Quinn for 13:15 — getting chicken ahead', tone: 'cook-ahead', surge: { recipeId: 'bk-chicken-fillet', multiplier: 2.4, forMinutes: 18 } },
-  { atOffset: 46, message: 'Rush easing — holding back so nothing gets binned', tone: 'ease-off' },
-  { atOffset: 60, message: 'Steady trade — cooking to the cabinet, no waste so far', tone: 'info' },
+  { atOffset: 4, message: 'Lunch rush building — broiler cooking ahead on Whoppers', radarLabel: 'Whopper rush', tone: 'cook-ahead', surge: { recipeId: 'bk-whopper-patty', multiplier: 1.5, forMinutes: 20 } },
+  { atOffset: 16, message: 'Large mobile order just landed (24 burgers) — dropping 2 trays of Juniors', radarLabel: 'Mobile order · 24', tone: 'cook-ahead', surge: { recipeId: 'bk-junior-patty', multiplier: 2.1, forMinutes: 12 } },
+  { atOffset: 30, message: 'Coach party flagged by Quinn for 13:15 — getting chicken ahead', radarLabel: 'Coach party 13:15', tone: 'cook-ahead', surge: { recipeId: 'bk-chicken-fillet', multiplier: 2.4, forMinutes: 18 } },
+  { atOffset: 46, message: 'Rush easing — holding back so nothing gets binned', radarLabel: 'Rush easing', tone: 'ease-off' },
+  { atOffset: 60, message: 'Steady trade — cooking to the cabinet, no waste so far', radarLabel: 'Steady trade', tone: 'info' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -161,7 +163,10 @@ type CookingBatch = {
   readyAtMin: number;
 };
 
-type Surge = { recipeId: RecipeId; multiplier: number; untilMin: number };
+type Surge = { recipeId: RecipeId; multiplier: number; startMin: number; untilMin: number };
+
+/** One fired Quinn call, kept in a running log so the line can show recency. */
+export type RecutLogEntry = { id: number; message: string; tone: RecutTone; atMin: number };
 
 type SimState = {
   nowMin: number;
@@ -174,8 +179,15 @@ type SimState = {
   surges: Surge[];
   firedRecuts: Set<number>;
   recut: { id: number; message: string; tone: RecutTone; atMin: number } | null;
+  /** Every fired re-cut, oldest first. */
+  recutLog: RecutLogEntry[];
   seq: number;
 };
+
+/** How long after a predicted surge fires we badge its drops "Called it". */
+const SURGE_LANDED_WINDOW_MIN = 6;
+/** How far ahead the "on the radar" ribbon looks for upcoming Quinn calls. */
+const RADAR_LOOKAHEAD_MIN = 30;
 
 function initialState(): SimState {
   const start = BK_DEMO_START_MIN;
@@ -208,6 +220,7 @@ function initialState(): SimState {
     surges: [],
     firedRecuts: new Set(),
     recut: null,
+    recutLog: [],
     seq: 0,
   };
 }
@@ -219,6 +232,24 @@ function surgeMultiplier(state: SimState, recipeId: RecipeId): number {
     if (s.recipeId === recipeId && state.nowMin < s.untilMin) mult *= s.multiplier;
   }
   return mult;
+}
+
+/**
+ * True if a recipe has an active surge that fired *recently* — i.e. the
+ * predicted order has just landed. Drives the "Called it" badge that closes
+ * the loop on Quinn's anticipation.
+ */
+function surgeLandedRecently(state: SimState, recipeId: RecipeId): boolean {
+  for (const s of state.surges) {
+    if (
+      s.recipeId === recipeId &&
+      state.nowMin < s.untilMin &&
+      state.nowMin - s.startMin <= SURGE_LANDED_WINDOW_MIN
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Held units of a recipe that are still within their hold (sellable). */
@@ -259,6 +290,7 @@ function advance(prev: SimState, stepMin: number): SimState {
     lastDropWindow: { ...prev.lastDropWindow },
     surges: prev.surges.filter(s => prev.nowMin < s.untilMin),
     firedRecuts: new Set(prev.firedRecuts),
+    recutLog: [...prev.recutLog],
   };
   state.nowMin = prev.nowMin + stepMin;
   const now = state.nowMin;
@@ -270,10 +302,12 @@ function advance(prev: SimState, stepMin: number): SimState {
     if (now >= fireAt && !state.firedRecuts.has(i)) {
       state.firedRecuts.add(i);
       state.recut = { id: i, message: ev.message, tone: ev.tone, atMin: now };
+      state.recutLog.push({ id: i, message: ev.message, tone: ev.tone, atMin: now });
       if (ev.surge) {
         state.surges.push({
           recipeId: ev.surge.recipeId,
           multiplier: ev.surge.multiplier,
+          startMin: now,
           untilMin: now + ev.surge.forMinutes,
         });
       }
@@ -414,10 +448,21 @@ export type DropItem = {
   readyInMin: number | null;
   /** Demand is surging right now (Quinn cooking ahead) — highlight it. */
   surged: boolean;
+  /** A predicted surge just landed for this recipe — badge it "Called it". */
+  surgeLanded: boolean;
   /** Started by the crew from the stepper (vs auto-dropped by the loop). */
   crew?: boolean;
   /** Live wall-clock seconds left for a crew-started cook (mm:ss on the card). */
   liveSeconds?: number | null;
+};
+
+/** An upcoming Quinn call on the "on the radar" ribbon. */
+export type RadarItem = {
+  id: number;
+  label: string;
+  tone: RecutTone;
+  /** Demo minutes until it fires. */
+  minsUntil: number;
 };
 
 export type CrewLoopSnapshot = {
@@ -425,6 +470,10 @@ export type CrewLoopSnapshot = {
   nowHHMM: string;
   playing: boolean;
   recut: { id: number; message: string; tone: RecutTone; atMin: number } | null;
+  /** Fired Quinn calls, newest first — drives the persistent Quinn strip. */
+  recutLog: RecutLogEntry[];
+  /** Quinn calls coming up within the lookahead window, soonest first. */
+  radar: RadarItem[];
   stations: StationSnapshot[];
   wasteTotal: number;
   soldTotal: number;
@@ -546,6 +595,7 @@ function buildSnapshot(state: SimState, playing: boolean): CrewLoopSnapshot {
       cookMinutes: cfg.cookMinutes,
       readyInMin,
       surged: surgeMultiplier(state, recipeId) > 1.01,
+      surgeLanded: surgeLandedRecently(state, recipeId),
     };
   };
 
@@ -604,11 +654,26 @@ function buildSnapshot(state: SimState, playing: boolean): CrewLoopSnapshot {
       expired: b.expiresAtMin <= state.nowMin,
     }));
 
+  // ── Quinn presence: fired log (newest first) + upcoming radar ───────────
+  const recutLog: RecutLogEntry[] = [...state.recutLog].reverse();
+  const radar: RadarItem[] = [];
+  for (let i = 0; i < RECUT_SCRIPT.length; i += 1) {
+    if (state.firedRecuts.has(i)) continue;
+    const ev = RECUT_SCRIPT[i];
+    const minsUntil = BK_DEMO_START_MIN + ev.atOffset - state.nowMin;
+    if (minsUntil > 0 && minsUntil <= RADAR_LOOKAHEAD_MIN) {
+      radar.push({ id: i, label: ev.radarLabel, tone: ev.tone, minsUntil });
+    }
+  }
+  radar.sort((a, b) => a.minsUntil - b.minsUntil);
+
   return {
     nowMin: state.nowMin,
     nowHHMM: minutesToHHMM(Math.min(state.nowMin, 24 * 60 - 1)),
     playing,
     recut: state.recut,
+    recutLog,
+    radar,
     stations,
     wasteTotal: state.wasteTotal,
     soldTotal: state.soldTotal,

@@ -765,6 +765,9 @@ export const PRET_BENCHES: Bench[] = [
     runs: [
       { id: 'r1', label: 'P1', startTime: '06:00', durationMinutes: 120 },
       { id: 'r2', label: 'P2', startTime: '10:30', durationMinutes: 90 },
+      // P3 — afternoon top-up so the build bench matches the bakery's P3 and
+      // every batch tab on this site shows a full set of benches.
+      { id: 'r3', label: 'P3', startTime: '14:00', durationMinutes: 90 },
     ],
   },
   {
@@ -779,14 +782,9 @@ export const PRET_BENCHES: Bench[] = [
     primaryMode: 'increment',
   },
 
-  // ─── site-spoke-south (receives from hub — minimal kit) ───────────────────
-  {
-    id: 'bench-south-counter',
-    siteId: 'site-spoke-south',
-    name: 'Front counter',
-    capabilities: ['front-of-house'],
-    online: true,
-  },
+  // ─── site-spoke-south (Fitzroy Espresso) ─────────────────────────────────
+  // Its Bench 1/2/3 are generated alongside the other spokes in the spoke
+  // production build-out below (see SPOKE_PRODUCTION_SITES).
 
   // ─── site-hybrid-airport (Heathrow T5) — 4 benches ────────────────────────
   {
@@ -825,6 +823,8 @@ export const PRET_BENCHES: Bench[] = [
     primaryMode: 'run',
     runs: [
       { id: 'r1', label: 'P1', startTime: '05:00', durationMinutes: 120 },
+      // P2 — midday filling refresh so prep is populated on the P2 tab.
+      { id: 'r2', label: 'P2', startTime: '10:30', durationMinutes: 90 },
     ],
   },
   {
@@ -837,7 +837,9 @@ export const PRET_BENCHES: Bench[] = [
     online: true,
     primaryMode: 'run',
     runs: [
-      { id: 'r1', label: 'P1', startTime: '04:00', durationMinutes: 60 },
+      { id: 'r1', label: 'P1', startTime: '04:00', durationMinutes: 90 },
+      // P2 — midday intake/chill top-up so Bench 3 is populated on the P2 tab.
+      { id: 'r2', label: 'P2', startTime: '10:30', durationMinutes: 90 },
     ],
   },
 
@@ -898,6 +900,8 @@ export const PRET_BENCHES: Bench[] = [
     primaryMode: 'run',
     runs: [
       { id: 'r1', label: 'P1', startTime: '05:00', durationMinutes: 120 },
+      // P2 — midday filling refresh so prep is populated on the P2 tab.
+      { id: 'r2', label: 'P2', startTime: '10:30', durationMinutes: 90 },
     ],
   },
 ];
@@ -1620,6 +1624,29 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
     cadence: { intervalMinutes: 120, startTime: '11:00', endTime: '16:00', quinnProposed: true },
     preferredBenchId: 'bench-north-hot-shelf',
   },
+  // Hot-shelf top-ups so Bench 3 carries a full ≥10 recipe range like the
+  // hub benches — two more smoothies + the second soup in the rotation.
+  {
+    id: 'pi-north-green-smoothie',
+    siteId: 'site-standalone-north', recipeId: 'prec-green-smoothie', skuId: 'sku-green-smoothie',
+    mode: 'increment', batchSize: 1,
+    cadence: { intervalMinutes: 90, startTime: '08:00', endTime: '16:00', quinnProposed: true },
+    preferredBenchId: 'bench-north-hot-shelf',
+  },
+  {
+    id: 'pi-north-strawberry-banana-smoothie',
+    siteId: 'site-standalone-north', recipeId: 'prec-strawberry-banana-smoothie', skuId: 'sku-strawberry-banana-smoothie',
+    mode: 'increment', batchSize: 1,
+    cadence: { intervalMinutes: 90, startTime: '08:00', endTime: '16:00', quinnProposed: true },
+    preferredBenchId: 'bench-north-hot-shelf',
+  },
+  {
+    id: 'pi-north-tomato-basil-soup',
+    siteId: 'site-standalone-north', recipeId: 'prec-tomato-basil-soup', skuId: 'sku-tomato-basil-soup',
+    mode: 'increment', batchSize: 1,
+    cadence: { intervalMinutes: 120, startTime: '11:00', endTime: '16:00', quinnProposed: true },
+    preferredBenchId: 'bench-north-hot-shelf',
+  },
 
   // ─── site-hybrid-airport (Heathrow T5) — 4 benches ───────────────────────
   // Hot shelf (increment) — primary commuter bench
@@ -1652,12 +1679,59 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
     cadence: { intervalMinutes: 30, startTime: '06:00', endTime: '20:00', quinnProposed: true },
     preferredBenchId: 'bench-airport-hot-shelf',
   },
+  // Hot-shelf top-ups — drinks, porridge & soup so Bench 1 carries a full
+  // ≥10 recipe range for the commuter floor.
+  {
+    id: 'pi-airport-iced-coffee',
+    siteId: 'site-hybrid-airport', recipeId: 'prec-iced-coffee', skuId: 'sku-iced-coffee',
+    mode: 'increment', batchSize: 1,
+    cadence: { intervalMinutes: 60, startTime: '07:00', endTime: '18:00', quinnProposed: true },
+    preferredBenchId: 'bench-airport-hot-shelf',
+  },
+  {
+    id: 'pi-airport-porridge',
+    siteId: 'site-hybrid-airport', recipeId: 'prec-porridge', skuId: 'sku-porridge',
+    mode: 'increment', batchSize: 4,
+    cadence: { intervalMinutes: 45, startTime: '05:00', endTime: '10:30', quinnProposed: true },
+    preferredBenchId: 'bench-airport-hot-shelf',
+  },
+  {
+    id: 'pi-airport-mango-smoothie',
+    siteId: 'site-hybrid-airport', recipeId: 'prec-mango-smoothie', skuId: 'sku-mango-smoothie',
+    mode: 'increment', batchSize: 1,
+    cadence: { intervalMinutes: 60, startTime: '08:00', endTime: '17:00', quinnProposed: true },
+    preferredBenchId: 'bench-airport-hot-shelf',
+  },
+  {
+    id: 'pi-airport-green-smoothie',
+    siteId: 'site-hybrid-airport', recipeId: 'prec-green-smoothie', skuId: 'sku-green-smoothie',
+    mode: 'increment', batchSize: 1,
+    cadence: { intervalMinutes: 60, startTime: '08:00', endTime: '17:00', quinnProposed: true },
+    preferredBenchId: 'bench-airport-hot-shelf',
+  },
+  {
+    id: 'pi-airport-strawberry-banana-smoothie',
+    siteId: 'site-hybrid-airport', recipeId: 'prec-strawberry-banana-smoothie', skuId: 'sku-strawberry-banana-smoothie',
+    mode: 'increment', batchSize: 1,
+    cadence: { intervalMinutes: 90, startTime: '08:00', endTime: '17:00', quinnProposed: true },
+    preferredBenchId: 'bench-airport-hot-shelf',
+  },
+  {
+    id: 'pi-airport-chicken-soup',
+    siteId: 'site-hybrid-airport', recipeId: 'prec-chicken-soup', skuId: 'sku-chicken-soup',
+    mode: 'increment', batchSize: 1,
+    cadence: { intervalMinutes: 120, startTime: '11:00', endTime: '16:00', quinnProposed: true },
+    preferredBenchId: 'bench-airport-hot-shelf',
+  },
   // Sandwich & salad build (run)
   { id: 'pi-airport-club',         siteId: 'site-hybrid-airport', recipeId: 'prec-club-sandwich',         skuId: 'sku-club-sandwich',         mode: 'run', batchSize: 8,  preferredBenchId: 'bench-airport-build', targetMinutes: 8 },
   { id: 'pi-airport-egg-mayo-sw',  siteId: 'site-hybrid-airport', recipeId: 'prec-egg-mayo-sandwich',     skuId: 'sku-egg-mayo-sandwich',     mode: 'run', batchSize: 8,  preferredBenchId: 'bench-airport-build', targetMinutes: 6 },
   { id: 'pi-airport-chicken-avo',  siteId: 'site-hybrid-airport', recipeId: 'prec-chicken-avo-sandwich',  skuId: 'sku-chicken-avo-sandwich',  mode: 'run', batchSize: 8,  preferredBenchId: 'bench-airport-build', targetMinutes: 7 },
   { id: 'pi-airport-salad',        siteId: 'site-hybrid-airport', recipeId: 'prec-salad-bowl',            skuId: 'sku-salad-bowl',            mode: 'run', batchSize: 6,  preferredBenchId: 'bench-airport-build', targetMinutes: 5 },
   { id: 'pi-airport-yogurt-pot',   siteId: 'site-hybrid-airport', recipeId: 'prec-yogurt-pot',            skuId: 'sku-yogurt-pot',            mode: 'run', batchSize: 6,  preferredBenchId: 'bench-airport-build', targetMinutes: 4 },
+  // Build-bench top-ups so Bench 2 carries a full ≥10 sandwich range.
+  { id: 'pi-airport-tuna-sw',      siteId: 'site-hybrid-airport', recipeId: 'prec-tuna-sandwich',         skuId: 'sku-tuna-sandwich',         mode: 'run', batchSize: 8,  preferredBenchId: 'bench-airport-build', targetMinutes: 7 },
+  { id: 'pi-airport-ham-cheese-bag', siteId: 'site-hybrid-airport', recipeId: 'prec-ham-cheese-baguette', skuId: 'sku-ham-cheese-baguette',  mode: 'run', batchSize: 8,  preferredBenchId: 'bench-airport-build', targetMinutes: 7 },
   // Salad + snack pots (variable — built to demand through the day so
   // the floor can dial up VP as commuter footfall flexes). Same shape
   // as the standalone-north build bench: small batches, no fixed run
@@ -1672,6 +1746,17 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
   // Cold chain intake (run) — receives from hub-central each morning
   { id: 'pi-airport-eod-chicken-prep', siteId: 'site-hybrid-airport', recipeId: 'prec-eod-chicken-prep', skuId: 'sku-eod-chicken-prep', mode: 'run', batchSize: 2, preferredBenchId: 'bench-airport-cold-chain' },
   { id: 'pi-airport-eod-dough-prep',   siteId: 'site-hybrid-airport', recipeId: 'prec-eod-dough-prep',   skuId: 'sku-eod-dough-prep',   mode: 'run', batchSize: 4, preferredBenchId: 'bench-airport-cold-chain' },
+  // Cold grab-and-go finished goods held on the cold-chain bench so Bench 3
+  // carries a full ≥10 recipe range — wraps, a cold sandwich and chilled pots
+  // that live in the same fridge run as the morning intake.
+  { id: 'pi-airport-hummus-wrap',     siteId: 'site-hybrid-airport', recipeId: 'prec-hummus-wrap',           skuId: 'sku-hummus-wrap',           mode: 'run', batchSize: 6, preferredBenchId: 'bench-airport-cold-chain', targetMinutes: 6 },
+  { id: 'pi-airport-falafel-wrap',    siteId: 'site-hybrid-airport', recipeId: 'prec-falafel-slaw-wrap',     skuId: 'sku-falafel-slaw-wrap',     mode: 'run', batchSize: 6, preferredBenchId: 'bench-airport-cold-chain', targetMinutes: 6 },
+  { id: 'pi-airport-coronation-wrap', siteId: 'site-hybrid-airport', recipeId: 'prec-coronation-chicken-wrap', skuId: 'sku-coronation-chicken-wrap', mode: 'run', batchSize: 6, preferredBenchId: 'bench-airport-cold-chain', targetMinutes: 6 },
+  { id: 'pi-airport-crayfish',        siteId: 'site-hybrid-airport', recipeId: 'prec-crayfish-rocket',       skuId: 'sku-crayfish-rocket',       mode: 'run', batchSize: 6, preferredBenchId: 'bench-airport-cold-chain', targetMinutes: 7 },
+  { id: 'pi-airport-super-club-salad',siteId: 'site-hybrid-airport', recipeId: 'prec-super-club-salad',      skuId: 'sku-super-club-salad',      mode: 'run', batchSize: 6, preferredBenchId: 'bench-airport-cold-chain', targetMinutes: 5 },
+  { id: 'pi-airport-bircher-pot',     siteId: 'site-hybrid-airport', recipeId: 'prec-bircher-pot',           skuId: 'sku-bircher-pot',           mode: 'run', batchSize: 6, preferredBenchId: 'bench-airport-cold-chain', targetMinutes: 4 },
+  { id: 'pi-airport-mango-pot',       siteId: 'site-hybrid-airport', recipeId: 'prec-mango-pot',             skuId: 'sku-mango-pot',             mode: 'run', batchSize: 6, preferredBenchId: 'bench-airport-cold-chain', targetMinutes: 4 },
+  { id: 'pi-airport-protein-pot',     siteId: 'site-hybrid-airport', recipeId: 'prec-protein-pot',           skuId: 'sku-protein-pot',           mode: 'run', batchSize: 6, preferredBenchId: 'bench-airport-cold-chain', targetMinutes: 4 },
 
   // ─── site-hybrid-hub-gatwick (producing hybrid) ───────────────────────────
   // Bakery oven (run) — the viennoiserie + bread range it bakes both for its
@@ -1694,6 +1779,10 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
   { id: 'pi-gatwick-salad',         siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-salad-bowl',           skuId: 'sku-salad-bowl',           mode: 'variable', batchSize: 1, preferredBenchId: 'bench-gatwick-build' },
   { id: 'pi-gatwick-chicken-caesar',siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-chicken-caesar',       skuId: 'sku-chicken-caesar',       mode: 'variable', batchSize: 1, preferredBenchId: 'bench-gatwick-build' },
   { id: 'pi-gatwick-grain-bowl',    siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-med-grain-bowl',       skuId: 'sku-med-grain-bowl',       mode: 'variable', batchSize: 1, preferredBenchId: 'bench-gatwick-build' },
+  // Build-bench top-ups so Bench 2 carries a full ≥10 own-floor range.
+  { id: 'pi-gatwick-tuna-sw',       siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-tuna-sandwich',        skuId: 'sku-tuna-sandwich',        mode: 'variable', batchSize: 6, preferredBenchId: 'bench-gatwick-build' },
+  { id: 'pi-gatwick-ham-cheese-bag',siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-ham-cheese-baguette',  skuId: 'sku-ham-cheese-baguette',  mode: 'variable', batchSize: 4, preferredBenchId: 'bench-gatwick-build' },
+  { id: 'pi-gatwick-fruit-pot',     siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-fruit-pot',            skuId: 'sku-fruit-pot',            mode: 'variable', batchSize: 1, preferredBenchId: 'bench-gatwick-build' },
   // Hot shelf (increment) — own-floor refresh items.
   {
     id: 'pi-gatwick-coffee',
@@ -1721,6 +1810,50 @@ export const PRET_PRODUCTION_ITEMS: ProductionItem[] = [
     siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-ham-cheese-toastie', skuId: 'sku-ham-cheese-toastie',
     mode: 'increment', batchSize: 4,
     cadence: { intervalMinutes: 30, startTime: '06:00', endTime: '20:00', quinnProposed: true },
+    preferredBenchId: 'bench-gatwick-hot-shelf',
+  },
+  // Hot-shelf top-ups — drinks, porridge & soup so Bench 3 carries a full
+  // ≥10 recipe range for the own-floor refresh.
+  {
+    id: 'pi-gatwick-iced-coffee',
+    siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-iced-coffee', skuId: 'sku-iced-coffee',
+    mode: 'increment', batchSize: 1,
+    cadence: { intervalMinutes: 60, startTime: '07:00', endTime: '18:00', quinnProposed: true },
+    preferredBenchId: 'bench-gatwick-hot-shelf',
+  },
+  {
+    id: 'pi-gatwick-porridge',
+    siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-porridge', skuId: 'sku-porridge',
+    mode: 'increment', batchSize: 4,
+    cadence: { intervalMinutes: 45, startTime: '05:00', endTime: '10:30', quinnProposed: true },
+    preferredBenchId: 'bench-gatwick-hot-shelf',
+  },
+  {
+    id: 'pi-gatwick-mango-smoothie',
+    siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-mango-smoothie', skuId: 'sku-mango-smoothie',
+    mode: 'increment', batchSize: 1,
+    cadence: { intervalMinutes: 60, startTime: '08:00', endTime: '17:00', quinnProposed: true },
+    preferredBenchId: 'bench-gatwick-hot-shelf',
+  },
+  {
+    id: 'pi-gatwick-green-smoothie',
+    siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-green-smoothie', skuId: 'sku-green-smoothie',
+    mode: 'increment', batchSize: 1,
+    cadence: { intervalMinutes: 60, startTime: '08:00', endTime: '17:00', quinnProposed: true },
+    preferredBenchId: 'bench-gatwick-hot-shelf',
+  },
+  {
+    id: 'pi-gatwick-strawberry-banana-smoothie',
+    siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-strawberry-banana-smoothie', skuId: 'sku-strawberry-banana-smoothie',
+    mode: 'increment', batchSize: 1,
+    cadence: { intervalMinutes: 90, startTime: '08:00', endTime: '17:00', quinnProposed: true },
+    preferredBenchId: 'bench-gatwick-hot-shelf',
+  },
+  {
+    id: 'pi-gatwick-chicken-soup',
+    siteId: 'site-hybrid-hub-gatwick', recipeId: 'prec-chicken-soup', skuId: 'sku-chicken-soup',
+    mode: 'increment', batchSize: 1,
+    cadence: { intervalMinutes: 120, startTime: '11:00', endTime: '16:00', quinnProposed: true },
     preferredBenchId: 'bench-gatwick-hot-shelf',
   },
   // Prep bench (run) — a small filling set it makes locally.
@@ -1788,6 +1921,144 @@ for (const it of PRET_PRODUCTION_ITEMS) {
     !VP_EXCLUDED_RECIPES.has(it.recipeId)
   ) {
     it.variableProduction = true;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Spoke production build-out — every spoke gets Bench 1 / 2 / 3
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Spokes were originally modelled as receive-only counters (a single
+// front-of-house bench). To give every site a consistent three-bench
+// production layout — Bench 1 bakery, Bench 2 sandwich/salad build, Bench 3
+// hot shelf — we generate the benches and a full recipe range for each spoke
+// here rather than hand-authoring ~30 rows per site.
+//
+// The recipes reuse the central hub range, so their forecasts resolve
+// through the hub-linked fallback in `forecastFor` (scaled by the spoke's
+// salesFactor) and render with a planned quantity on the bench board without
+// needing per-spoke forecast rows. Bench 1/2 are single-run so the whole
+// range shows together; Bench 3 is an increment hot shelf (flat list).
+const SPOKE_PRODUCTION_SITES: SiteId[] = [
+  'site-spoke-south',
+  'site-spoke-east',
+  'site-spoke-west',
+  'site-spoke-gatwick-a',
+  'site-spoke-gatwick-b',
+];
+
+/** Recipe + sku pairs laid out per spoke bench. */
+const SPOKE_BAKERY_RANGE: Array<{ recipeId: RecipeId; skuId: SkuId; batchSize: number }> = [
+  { recipeId: 'prec-croissant',            skuId: 'sku-croissant',            batchSize: 8 },
+  { recipeId: 'prec-pain-au-chocolat',     skuId: 'sku-pain-au-choc',         batchSize: 8 },
+  { recipeId: 'prec-almond-croissant',     skuId: 'sku-almond-croissant',     batchSize: 6 },
+  { recipeId: 'prec-cinnamon-swirl',       skuId: 'sku-cinnamon-swirl',       batchSize: 6 },
+  { recipeId: 'prec-granary',              skuId: 'sku-granary',              batchSize: 8 },
+  { recipeId: 'prec-baguette',             skuId: 'sku-baguette',             batchSize: 6 },
+  { recipeId: 'prec-blueberry-muffin',     skuId: 'sku-blueberry-muffin',     batchSize: 6 },
+  { recipeId: 'prec-banana-bread',         skuId: 'sku-banana-bread',         batchSize: 8 },
+  { recipeId: 'prec-brownie',              skuId: 'sku-brownie',              batchSize: 8 },
+  { recipeId: 'prec-oat-raisin-cookie',    skuId: 'sku-oat-raisin-cookie',    batchSize: 6 },
+  { recipeId: 'prec-salted-caramel-cookie',skuId: 'sku-salted-caramel-cookie',batchSize: 6 },
+];
+const SPOKE_BUILD_RANGE: Array<{ recipeId: RecipeId; skuId: SkuId; batchSize: number }> = [
+  { recipeId: 'prec-club-sandwich',        skuId: 'sku-club-sandwich',        batchSize: 6 },
+  { recipeId: 'prec-egg-mayo-sandwich',    skuId: 'sku-egg-mayo-sandwich',    batchSize: 6 },
+  { recipeId: 'prec-tuna-sandwich',        skuId: 'sku-tuna-sandwich',        batchSize: 6 },
+  { recipeId: 'prec-ham-cheese-baguette',  skuId: 'sku-ham-cheese-baguette',  batchSize: 4 },
+  { recipeId: 'prec-chicken-avo-sandwich', skuId: 'sku-chicken-avo-sandwich', batchSize: 6 },
+  { recipeId: 'prec-hummus-wrap',          skuId: 'sku-hummus-wrap',          batchSize: 4 },
+  { recipeId: 'prec-salad-bowl',           skuId: 'sku-salad-bowl',           batchSize: 4 },
+  { recipeId: 'prec-chicken-caesar',       skuId: 'sku-chicken-caesar',       batchSize: 4 },
+  { recipeId: 'prec-med-grain-bowl',       skuId: 'sku-med-grain-bowl',       batchSize: 4 },
+  { recipeId: 'prec-fruit-pot',            skuId: 'sku-fruit-pot',            batchSize: 4 },
+  { recipeId: 'prec-yogurt-pot',           skuId: 'sku-yogurt-pot',           batchSize: 4 },
+  { recipeId: 'prec-granola-pot',          skuId: 'sku-granola-pot',          batchSize: 4 },
+];
+const SPOKE_HOT_RANGE: Array<{ recipeId: RecipeId; skuId: SkuId; batchSize: number; cadence: IncrementCadence }> = [
+  { recipeId: 'prec-brewed-coffee',       skuId: 'sku-brewed-coffee',       batchSize: 1, cadence: { intervalMinutes: 45, startTime: '06:30', endTime: '19:00', quinnProposed: true } },
+  { recipeId: 'prec-iced-coffee',         skuId: 'sku-iced-coffee',         batchSize: 1, cadence: { intervalMinutes: 90, startTime: '10:00', endTime: '17:00', quinnProposed: true } },
+  { recipeId: 'prec-hot-croissant',       skuId: 'sku-hot-croissant',       batchSize: 4, cadence: { intervalMinutes: 30, startTime: '07:00', endTime: '11:00', quinnProposed: true } },
+  { recipeId: 'prec-porridge',            skuId: 'sku-porridge',            batchSize: 2, cadence: { intervalMinutes: 60, startTime: '07:00', endTime: '10:30', quinnProposed: true } },
+  { recipeId: 'prec-mango-smoothie',      skuId: 'sku-mango-smoothie',      batchSize: 1, cadence: { intervalMinutes: 60, startTime: '08:00', endTime: '17:00', quinnProposed: true } },
+  { recipeId: 'prec-green-smoothie',      skuId: 'sku-green-smoothie',      batchSize: 1, cadence: { intervalMinutes: 90, startTime: '08:00', endTime: '16:00', quinnProposed: true } },
+  { recipeId: 'prec-ham-cheese-toastie',  skuId: 'sku-ham-cheese-toastie',  batchSize: 2, cadence: { intervalMinutes: 45, startTime: '11:00', endTime: '16:00', quinnProposed: true } },
+  { recipeId: 'prec-chicken-soup',        skuId: 'sku-chicken-soup',        batchSize: 1, cadence: { intervalMinutes: 120, startTime: '11:00', endTime: '16:00', quinnProposed: true } },
+  { recipeId: 'prec-tomato-basil-soup',   skuId: 'sku-tomato-basil-soup',   batchSize: 1, cadence: { intervalMinutes: 120, startTime: '11:00', endTime: '16:00', quinnProposed: true } },
+  { recipeId: 'prec-sausage-roll',        skuId: 'sku-sausage-roll',        batchSize: 6, cadence: { intervalMinutes: 45, startTime: '08:00', endTime: '17:00', quinnProposed: true } },
+];
+
+for (const siteId of SPOKE_PRODUCTION_SITES) {
+  // Short, unique slug for ids: 'site-spoke-gatwick-a' → 'gatwick-a'.
+  const slug = siteId.replace('site-spoke-', '');
+  const bakeryId: BenchId = `bench-${slug}-bakery`;
+  const buildId: BenchId = `bench-${slug}-build`;
+  const hotId: BenchId = `bench-${slug}-hot-shelf`;
+
+  PRET_BENCHES.push(
+    {
+      id: bakeryId,
+      siteId,
+      name: 'Bench 1',
+      capabilities: ['oven', 'proofing'],
+      equipment: ['oven', 'proofer'],
+      batchRules: { min: 4, max: 12, multipleOf: 2 },
+      online: true,
+      primaryMode: 'run',
+      runs: [
+        { id: 'r1', label: 'P1', startTime: '05:30', durationMinutes: 120 },
+        { id: 'r2', label: 'P2', startTime: '10:30', durationMinutes: 90 },
+      ],
+    },
+    {
+      id: buildId,
+      siteId,
+      name: 'Bench 2',
+      capabilities: ['assemble', 'pack'],
+      workTypes: ['assemble', 'pack', 'label'],
+      equipment: ['prep-table'],
+      online: true,
+      primaryMode: 'run',
+      runs: [
+        { id: 'r1', label: 'P1', startTime: '06:30', durationMinutes: 120 },
+        { id: 'r2', label: 'P2', startTime: '11:00', durationMinutes: 90 },
+      ],
+    },
+    {
+      id: hotId,
+      siteId,
+      name: 'Bench 3',
+      capabilities: ['oven', 'prep'],
+      workTypes: ['bake', 'grill'],
+      equipment: ['oven', 'panini-press'],
+      batchRules: { min: 2, max: 10, multipleOf: 2 },
+      online: true,
+      primaryMode: 'increment',
+    },
+  );
+
+  for (const r of SPOKE_BAKERY_RANGE) {
+    PRET_PRODUCTION_ITEMS.push({
+      id: `pi-${slug}-${r.recipeId.replace('prec-', '')}`,
+      siteId, recipeId: r.recipeId, skuId: r.skuId,
+      mode: 'run', batchSize: r.batchSize, preferredBenchId: bakeryId,
+    });
+  }
+  for (const r of SPOKE_BUILD_RANGE) {
+    PRET_PRODUCTION_ITEMS.push({
+      id: `pi-${slug}-${r.recipeId.replace('prec-', '')}`,
+      siteId, recipeId: r.recipeId, skuId: r.skuId,
+      mode: 'run', batchSize: r.batchSize, preferredBenchId: buildId,
+      variableProduction: true,
+    });
+  }
+  for (const r of SPOKE_HOT_RANGE) {
+    PRET_PRODUCTION_ITEMS.push({
+      id: `pi-${slug}-${r.recipeId.replace('prec-', '')}`,
+      siteId, recipeId: r.recipeId, skuId: r.skuId,
+      mode: 'increment', batchSize: r.batchSize, cadence: r.cadence,
+      preferredBenchId: hotId,
+    });
   }
 }
 
@@ -2276,6 +2547,9 @@ export const PRET_FORECAST: DemandForecastEntry[] = [
   { siteId: 'site-standalone-north', skuId: 'sku-mango-smoothie',      date: DEMO_TODAY, projectedUnits: 9,  byPhase: { morning: 3,  midday: 4,  afternoon: 2  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
   { siteId: 'site-standalone-north', skuId: 'sku-ham-cheese-toastie',  date: DEMO_TODAY, projectedUnits: 14, byPhase: { morning: 0,  midday: 10, afternoon: 4  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
   { siteId: 'site-standalone-north', skuId: 'sku-chicken-soup',        date: DEMO_TODAY, projectedUnits: 4,  byPhase: { morning: 0,  midday: 3,  afternoon: 1  }, signals: [{ signal: 'sales-history', weight: 1, note: '2L batches' }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-green-smoothie',      date: DEMO_TODAY, projectedUnits: 8,  byPhase: { morning: 3,  midday: 3,  afternoon: 2  }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-strawberry-banana-smoothie', date: DEMO_TODAY, projectedUnits: 8, byPhase: { morning: 3, midday: 3, afternoon: 2 }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
+  { siteId: 'site-standalone-north', skuId: 'sku-tomato-basil-soup',   date: DEMO_TODAY, projectedUnits: 4,  byPhase: { morning: 0,  midday: 3,  afternoon: 1  }, signals: [{ signal: 'sales-history', weight: 1, note: '2L batches' }], status: 'confirmed' },
 ];
 
 export type PlannedInstance = {
@@ -5925,6 +6199,47 @@ export const PRET_INGREDIENTS: Ingredient[] = [
     // that starts from midday once the next day's plan is confirmed.
     defaultPrepWork: [{ workType: 'mise', leadOffset: -1 }],
   },
+
+  // ─── Extended pantry / bakery / produce set ──────────────────────────
+  // Added so the bakery sweets, breads and the remaining sandwiches /
+  // salads in the day's plan carry real ingredient breakdowns on the Run
+  // sheet. These deliberately have NO stock entry (PRET_INGREDIENT_STOCK)
+  // so they never introduce a stock-cap — keeping the butter/egg/flour
+  // bottleneck demo on the Today screen unchanged.
+  { id: 'ing-sugar',     name: 'Caster sugar',     canonicalUnit: 'g',   category: 'pantry',  defaultPrepWork: [{ workType: 'weigh-up' }] },
+  { id: 'ing-cinnamon',  name: 'Ground cinnamon',  canonicalUnit: 'g',   category: 'pantry',  defaultPrepWork: [{ workType: 'weigh-up' }] },
+  { id: 'ing-oats',      name: 'Rolled oats',      canonicalUnit: 'g',   category: 'pantry',  defaultPrepWork: [{ workType: 'weigh-up' }] },
+  { id: 'ing-raisin',    name: 'Raisins',          canonicalUnit: 'g',   category: 'pantry',  defaultPrepWork: [{ workType: 'weigh-up' }] },
+  { id: 'ing-caramel',   name: 'Salted caramel',   canonicalUnit: 'g',   category: 'pantry' },
+  { id: 'ing-choc-chips', name: 'Chocolate chips', canonicalUnit: 'g',   category: 'pantry',  defaultPrepWork: [{ workType: 'weigh-up' }] },
+  { id: 'ing-olive-oil', name: 'Olive oil',        canonicalUnit: 'ml',  category: 'pantry' },
+  { id: 'ing-chickpea',  name: 'Chickpeas',        canonicalUnit: 'g',   category: 'pantry',  defaultPrepWork: [{ workType: 'mise' }] },
+  // Produce — washed/sliced like the other fresh items.
+  { id: 'ing-blueberry', name: 'Blueberries',      canonicalUnit: 'g',   category: 'produce', defaultPrepWork: [{ workType: 'wash' }] },
+  { id: 'ing-banana',    name: 'Bananas',          canonicalUnit: 'unit', category: 'produce', defaultPrepWork: [{ workType: 'slice' }] },
+  { id: 'ing-rosemary',  name: 'Rosemary',         canonicalUnit: 'g',   category: 'produce', defaultPrepWork: [{ workType: 'wash' }] },
+  { id: 'ing-basil',     name: 'Fresh basil',      canonicalUnit: 'g',   category: 'produce', defaultPrepWork: [{ workType: 'wash' }] },
+  {
+    id: 'ing-spinach',
+    name: 'Baby spinach',
+    canonicalUnit: 'g',
+    category: 'produce',
+    defaultPrepWork: [{ workType: 'wash', leadOffset: -1 }],
+  },
+  // Dairy — sliced fresh, no sanitise.
+  { id: 'ing-mozzarella', name: 'Mozzarella',      canonicalUnit: 'g',   category: 'dairy',   defaultPrepWork: [{ workType: 'slice' }] },
+  { id: 'ing-feta',      name: 'Feta',             canonicalUnit: 'g',   category: 'dairy' },
+  // Turkey — like roast chicken, weighed up and butchered the day before.
+  {
+    id: 'ing-turkey',
+    name: 'Roast turkey breast',
+    canonicalUnit: 'g',
+    category: 'protein',
+    defaultPrepWork: [
+      { workType: 'weigh-up', leadOffset: -1 },
+      { workType: 'butcher', leadOffset: -1 },
+    ],
+  },
 ];
 
 export type IngredientUsage = {
@@ -6114,6 +6429,64 @@ export const PRET_INGREDIENT_USAGE: IngredientUsage[] = [
   { recipeId: 'prec-grilled-halloumi',       ingredientId: 'ing-halloumi',     quantityPerUnit: 600, unit: 'g'    },
   { recipeId: 'prec-chargrilled-veg',        ingredientId: 'ing-pepper',       quantityPerUnit: 4,   unit: 'unit' },
   { recipeId: 'prec-chargrilled-veg',        ingredientId: 'ing-red-onion',    quantityPerUnit: 2,   unit: 'unit' },
+
+  // ─── Bakery sweets & breads ───────────────────────────────────────────
+  // Wired so every planned bakery line carries a real weigh-up breakdown
+  // on the Run sheet. Uses the uncapped extended pantry set (sugar, oats,
+  // choc chips…) plus flour (stock is generous) — no butter/egg, so the
+  // Today screen's stock-cap demo is untouched.
+  { recipeId: 'prec-cinnamon-swirl',         ingredientId: 'ing-flour',        quantityPerUnit: 80,  unit: 'g'    },
+  { recipeId: 'prec-cinnamon-swirl',         ingredientId: 'ing-sugar',        quantityPerUnit: 25,  unit: 'g'    },
+  { recipeId: 'prec-cinnamon-swirl',         ingredientId: 'ing-cinnamon',     quantityPerUnit: 5,   unit: 'g'    },
+  { recipeId: 'prec-focaccia',               ingredientId: 'ing-flour',        quantityPerUnit: 180, unit: 'g'    },
+  { recipeId: 'prec-focaccia',               ingredientId: 'ing-olive-oil',    quantityPerUnit: 20,  unit: 'ml'   },
+  { recipeId: 'prec-focaccia',               ingredientId: 'ing-rosemary',     quantityPerUnit: 3,   unit: 'g'    },
+  { recipeId: 'prec-blueberry-muffin',       ingredientId: 'ing-flour',        quantityPerUnit: 70,  unit: 'g'    },
+  { recipeId: 'prec-blueberry-muffin',       ingredientId: 'ing-sugar',        quantityPerUnit: 35,  unit: 'g'    },
+  { recipeId: 'prec-blueberry-muffin',       ingredientId: 'ing-blueberry',    quantityPerUnit: 30,  unit: 'g'    },
+  { recipeId: 'prec-banana-bread',           ingredientId: 'ing-flour',        quantityPerUnit: 60,  unit: 'g'    },
+  { recipeId: 'prec-banana-bread',           ingredientId: 'ing-sugar',        quantityPerUnit: 30,  unit: 'g'    },
+  { recipeId: 'prec-banana-bread',           ingredientId: 'ing-banana',       quantityPerUnit: 0.5, unit: 'unit' },
+  { recipeId: 'prec-brownie',                ingredientId: 'ing-flour',        quantityPerUnit: 40,  unit: 'g'    },
+  { recipeId: 'prec-brownie',                ingredientId: 'ing-sugar',        quantityPerUnit: 45,  unit: 'g'    },
+  { recipeId: 'prec-brownie',                ingredientId: 'ing-choc-chips',   quantityPerUnit: 30,  unit: 'g'    },
+  { recipeId: 'prec-oat-raisin-cookie',      ingredientId: 'ing-oats',         quantityPerUnit: 30,  unit: 'g'    },
+  { recipeId: 'prec-oat-raisin-cookie',      ingredientId: 'ing-flour',        quantityPerUnit: 25,  unit: 'g'    },
+  { recipeId: 'prec-oat-raisin-cookie',      ingredientId: 'ing-sugar',        quantityPerUnit: 20,  unit: 'g'    },
+  { recipeId: 'prec-oat-raisin-cookie',      ingredientId: 'ing-raisin',       quantityPerUnit: 15,  unit: 'g'    },
+  { recipeId: 'prec-salted-caramel-cookie',  ingredientId: 'ing-flour',        quantityPerUnit: 35,  unit: 'g'    },
+  { recipeId: 'prec-salted-caramel-cookie',  ingredientId: 'ing-sugar',        quantityPerUnit: 25,  unit: 'g'    },
+  { recipeId: 'prec-salted-caramel-cookie',  ingredientId: 'ing-caramel',      quantityPerUnit: 12,  unit: 'g'    },
+  { recipeId: 'prec-pain-aux-raisins',       ingredientId: 'ing-flour',        quantityPerUnit: 70,  unit: 'g'    },
+  { recipeId: 'prec-pain-aux-raisins',       ingredientId: 'ing-raisin',       quantityPerUnit: 18,  unit: 'g'    },
+  { recipeId: 'prec-pain-aux-raisins',       ingredientId: 'ing-sugar',        quantityPerUnit: 15,  unit: 'g'    },
+  { recipeId: 'prec-double-choc-cookie',     ingredientId: 'ing-flour',        quantityPerUnit: 35,  unit: 'g'    },
+  { recipeId: 'prec-double-choc-cookie',     ingredientId: 'ing-sugar',        quantityPerUnit: 22,  unit: 'g'    },
+  { recipeId: 'prec-double-choc-cookie',     ingredientId: 'ing-choc-chips',   quantityPerUnit: 28,  unit: 'g'    },
+  { recipeId: 'prec-spinach-feta-roll',      ingredientId: 'ing-flour',        quantityPerUnit: 90,  unit: 'g'    },
+  { recipeId: 'prec-spinach-feta-roll',      ingredientId: 'ing-spinach',      quantityPerUnit: 40,  unit: 'g'    },
+  { recipeId: 'prec-spinach-feta-roll',      ingredientId: 'ing-feta',         quantityPerUnit: 35,  unit: 'g'    },
+  { recipeId: 'prec-sourdough-loaf',         ingredientId: 'ing-flour',        quantityPerUnit: 400, unit: 'g'    },
+
+  // ─── Remaining savoury components & assemblies ────────────────────────
+  { recipeId: 'prec-roast-turkey-breast',    ingredientId: 'ing-turkey',       quantityPerUnit: 1700, unit: 'g'   },
+  { recipeId: 'prec-crispy-bacon',           ingredientId: 'ing-bacon',        quantityPerUnit: 500, unit: 'g'    },
+  { recipeId: 'prec-hummus',                 ingredientId: 'ing-chickpea',     quantityPerUnit: 700, unit: 'g'    },
+  { recipeId: 'prec-hummus',                 ingredientId: 'ing-olive-oil',    quantityPerUnit: 120, unit: 'ml'   },
+  { recipeId: 'prec-bacon-egg-baguette',     ingredientId: 'ing-bacon',        quantityPerUnit: 40,  unit: 'g'    },
+  { recipeId: 'prec-bacon-egg-baguette',     ingredientId: 'ing-mixed-leaves', quantityPerUnit: 15,  unit: 'g'    },
+  { recipeId: 'prec-coronation-chicken-wrap',ingredientId: 'ing-mixed-leaves', quantityPerUnit: 25,  unit: 'g'    },
+  { recipeId: 'prec-coronation-chicken-wrap',ingredientId: 'ing-red-onion',    quantityPerUnit: 0.2, unit: 'unit' },
+  { recipeId: 'prec-caprese-baguette',       ingredientId: 'ing-mozzarella',   quantityPerUnit: 60,  unit: 'g'    },
+  { recipeId: 'prec-caprese-baguette',       ingredientId: 'ing-tomato',       quantityPerUnit: 1,   unit: 'unit' },
+  { recipeId: 'prec-caprese-baguette',       ingredientId: 'ing-basil',        quantityPerUnit: 5,   unit: 'g'    },
+  { recipeId: 'prec-falafel-slaw-wrap',      ingredientId: 'ing-falafel',      quantityPerUnit: 70,  unit: 'g'    },
+  { recipeId: 'prec-falafel-slaw-wrap',      ingredientId: 'ing-mixed-leaves', quantityPerUnit: 30,  unit: 'g'    },
+  { recipeId: 'prec-falafel-slaw-wrap',      ingredientId: 'ing-red-onion',    quantityPerUnit: 0.2, unit: 'unit' },
+  { recipeId: 'prec-salad-bowl',             ingredientId: 'ing-mixed-leaves', quantityPerUnit: 80,  unit: 'g'    },
+  { recipeId: 'prec-salad-bowl',             ingredientId: 'ing-cucumber',     quantityPerUnit: 0.4, unit: 'unit' },
+  { recipeId: 'prec-salad-bowl',             ingredientId: 'ing-tomato',       quantityPerUnit: 1,   unit: 'unit' },
+  { recipeId: 'prec-salad-bowl',             ingredientId: 'ing-pepper',       quantityPerUnit: 0.3, unit: 'unit' },
 ];
 
 export type IngredientStock = {

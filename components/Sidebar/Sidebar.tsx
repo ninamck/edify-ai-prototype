@@ -24,6 +24,7 @@ import {
   Activity as ActivityIcon,
   BarChart3,
   Boxes,
+  Sparkles,
 } from 'lucide-react';
 
 import NavGroup from './NavGroup';
@@ -310,10 +311,17 @@ export default function Sidebar() {
             onClick={() => router.push('/cogs')}
           />
           <NavItem
+            label="AI forecast"
+            icon={Sparkles}
+            compact={compact}
+            active={is('/forecast/ai-demo')}
+            onClick={() => router.push('/forecast/ai-demo')}
+          />
+          <NavItem
             label="Forecast demand"
             icon={LineChart}
             compact={compact}
-            active={is('/forecast')}
+            active={pathname === '/forecast'}
             onClick={() => router.push('/forecast')}
           />
           <NavItem

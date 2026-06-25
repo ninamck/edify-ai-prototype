@@ -13,7 +13,7 @@
  *  - No benches in the Pret sense; it has flame-broiler + build *stations*
  *    that drop fresh batches on a fixed 15-minute cadence ("increment" mode).
  *  - The things that get planned + dropped + held are the COOK COMPONENTS
- *    (beef patties, chicken fillet, bacon, cheese-melted patties) — these
+ *    (beef patties, chicken fillet, bacon) — these
  *    are what the crew screen counts in / out of the holding cabinet. The
  *    assembled burgers (Whopper, Cheeseburger, …) live in the menu/recipe
  *    library and pull those components, but aren't separately "dropped".
@@ -159,18 +159,6 @@ export const BK_WORKFLOWS: Record<WorkflowId, ProductionWorkflow> = {
     ],
     edges: [{ from: 'bk-bacon-cook', to: 'bk-bacon-hold' }],
   },
-  'wf-bk-cheese': {
-    id: 'wf-bk-cheese',
-    stages: [
-      { id: 'bk-cheese-place', label: 'Cap patty with cheese', capability: 'assemble', workType: 'assemble', leadOffset: 0, durationMinutes: 1 },
-      { id: 'bk-cheese-melt', label: 'Melt under salamander', capability: 'oven', workType: 'grill', requiresEquipment: ['panini-press'], leadOffset: 0, durationMinutes: 2 },
-      { id: 'bk-cheese-hold', label: 'Move to holding cabinet', capability: 'pack', workType: 'pack', leadOffset: 0, durationMinutes: 1 },
-    ],
-    edges: [
-      { from: 'bk-cheese-place', to: 'bk-cheese-melt' },
-      { from: 'bk-cheese-melt', to: 'bk-cheese-hold' },
-    ],
-  },
   'wf-bk-angus': {
     id: 'wf-bk-angus',
     stages: [
@@ -286,18 +274,6 @@ export const BK_RECIPES: ProductionRecipe[] = [
     defaultMode: 'increment',
   },
   {
-    id: 'bk-cheese-melt',
-    name: 'Cheese-topped patty',
-    category: 'Sandwich',
-    shelfLifeMinutes: 15,
-    batchRules: { min: 2, max: 18, multipleOf: 1 },
-    skuId: 'sku-bk-cheese-melt',
-    allowCarryOver: false,
-    selectionTags: ['core', 'midday', 'afternoon'],
-    workflowId: 'wf-bk-cheese',
-    defaultMode: 'increment',
-  },
-  {
     id: 'bk-angus-patty',
     name: 'Angus steakhouse patty',
     category: 'Sandwich',
@@ -323,7 +299,7 @@ export const BK_RECIPES: ProductionRecipe[] = [
   },
 
   // ─── Assembled menu (library only — built to order, pull components) ──────
-  // ~20 menu items over the 7 cook components. The patty / bacon / cheese
+  // ~20 menu items over the 6 cook components. The patty / bacon / cheese
   // counts are the build — the kitchen never plans these, only the components.
 
   // Whopper (¼lb flame-grilled) line — 1 / 2 / 3 patty + cheese & bacon
@@ -337,12 +313,12 @@ export const BK_RECIPES: ProductionRecipe[] = [
   bkAssembled('bk-triple-whopper', 'Triple Whopper', [{ recipeId: 'bk-whopper-patty', quantityPerUnit: 3 }]),
   bkAssembled('bk-whopper-jr', 'Whopper Jr', [{ recipeId: 'bk-junior-patty', quantityPerUnit: 1 }]),
 
-  // Cheeseburger line (2oz patty, cheese melted = cheese-melt component)
+  // Cheeseburger line (2oz junior patty — cheese is added during the build)
   bkAssembled('bk-hamburger', 'Hamburger', [{ recipeId: 'bk-junior-patty', quantityPerUnit: 1 }]),
-  bkAssembled('bk-cheeseburger', 'Cheeseburger', [{ recipeId: 'bk-cheese-melt', quantityPerUnit: 1 }]),
-  bkAssembled('bk-double-cheeseburger', 'Double Cheeseburger', [{ recipeId: 'bk-cheese-melt', quantityPerUnit: 2 }]),
+  bkAssembled('bk-cheeseburger', 'Cheeseburger', [{ recipeId: 'bk-junior-patty', quantityPerUnit: 1 }]),
+  bkAssembled('bk-double-cheeseburger', 'Double Cheeseburger', [{ recipeId: 'bk-junior-patty', quantityPerUnit: 2 }]),
   bkAssembled('bk-bacon-double-cheese', 'Bacon Double Cheeseburger', [
-    { recipeId: 'bk-cheese-melt', quantityPerUnit: 2 },
+    { recipeId: 'bk-junior-patty', quantityPerUnit: 2 },
     { recipeId: 'bk-bacon', quantityPerUnit: 2 },
   ]),
 
@@ -390,7 +366,6 @@ export const BK_PRODUCTION_ITEMS: ProductionItem[] = [
   { id: 'pi-bk-junior-patty',  siteId: BK_SITE_ID, recipeId: 'bk-junior-patty',  skuId: 'sku-bk-junior-patty',  mode: 'increment', batchSize: 16, cadence: { ...BK_CADENCE }, preferredBenchId: BK_BROILER_ID, targetMinutes: 6 },
   { id: 'pi-bk-chicken-fillet',siteId: BK_SITE_ID, recipeId: 'bk-chicken-fillet',skuId: 'sku-bk-chicken-fillet',mode: 'increment', batchSize: 8,  cadence: { ...BK_CADENCE }, preferredBenchId: BK_BROILER_ID, targetMinutes: 8 },
   { id: 'pi-bk-bacon',         siteId: BK_SITE_ID, recipeId: 'bk-bacon',         skuId: 'sku-bk-bacon',         mode: 'increment', batchSize: 10, cadence: { ...BK_CADENCE }, preferredBenchId: BK_BROILER_ID, targetMinutes: 5 },
-  { id: 'pi-bk-cheese-melt',   siteId: BK_SITE_ID, recipeId: 'bk-cheese-melt',   skuId: 'sku-bk-cheese-melt',   mode: 'increment', batchSize: 10, cadence: { ...BK_CADENCE }, preferredBenchId: BK_ASSEMBLY_ID, targetMinutes: 3 },
   { id: 'pi-bk-angus-patty',   siteId: BK_SITE_ID, recipeId: 'bk-angus-patty',   skuId: 'sku-bk-angus-patty',   mode: 'increment', batchSize: 8,  cadence: { ...BK_CADENCE }, preferredBenchId: BK_BROILER_ID,  targetMinutes: 8 },
   { id: 'pi-bk-plant-patty',   siteId: BK_SITE_ID, recipeId: 'bk-plant-patty',   skuId: 'sku-bk-plant-patty',   mode: 'increment', batchSize: 6,  cadence: { ...BK_CADENCE }, preferredBenchId: BK_BROILER_ID,  targetMinutes: 6 },
 ];
@@ -404,7 +379,6 @@ export const BK_FORECAST: DemandForecastEntry[] = [
   { siteId: BK_SITE_ID, skuId: 'sku-bk-junior-patty',   date: '', projectedUnits: 280, byPhase: { morning: 40, midday: 150, afternoon: 90 }, signals: [{ signal: 'sales-history', weight: 0.8 }, { signal: 'online-orders', weight: 0.2, note: 'Delivery mix high at lunch' }], status: 'confirmed' },
   { siteId: BK_SITE_ID, skuId: 'sku-bk-chicken-fillet', date: '', projectedUnits: 120, byPhase: { morning: 14, midday: 64, afternoon: 42 },  signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
   { siteId: BK_SITE_ID, skuId: 'sku-bk-bacon',          date: '', projectedUnits: 70,  byPhase: { morning: 12, midday: 40, afternoon: 18 },  signals: [{ signal: 'sales-history', weight: 1, note: 'Bacon King + add-ons' }], status: 'confirmed' },
-  { siteId: BK_SITE_ID, skuId: 'sku-bk-cheese-melt',    date: '', projectedUnits: 200, byPhase: { morning: 28, midday: 110, afternoon: 62 }, signals: [{ signal: 'sales-history', weight: 0.7 }, { signal: 'weather', weight: 0.3 }], status: 'confirmed' },
   { siteId: BK_SITE_ID, skuId: 'sku-bk-angus-patty',    date: '', projectedUnits: 90,  byPhase: { morning: 10, midday: 48, afternoon: 32 },  signals: [{ signal: 'sales-history', weight: 0.7, note: 'Gourmet Kings range' }, { signal: 'event', weight: 0.3 }], status: 'confirmed' },
   { siteId: BK_SITE_ID, skuId: 'sku-bk-plant-patty',    date: '', projectedUnits: 60,  byPhase: { morning: 8,  midday: 34, afternoon: 18 },  signals: [{ signal: 'sales-history', weight: 1, note: 'Plant-based mix ~8%' }], status: 'confirmed' },
 ];
@@ -434,8 +408,6 @@ export const BK_INGREDIENT_USAGE: IngredientUsage[] = [
   { recipeId: 'bk-junior-patty',   ingredientId: 'ing-bk-beef',    quantityPerUnit: 1, unit: 'unit' },
   { recipeId: 'bk-chicken-fillet', ingredientId: 'ing-bk-chicken', quantityPerUnit: 1, unit: 'unit' },
   { recipeId: 'bk-bacon',          ingredientId: 'ing-bk-bacon',   quantityPerUnit: 1, unit: 'unit' },
-  { recipeId: 'bk-cheese-melt',    ingredientId: 'ing-bk-beef',    quantityPerUnit: 1, unit: 'unit' },
-  { recipeId: 'bk-cheese-melt',    ingredientId: 'ing-bk-cheese',  quantityPerUnit: 1, unit: 'unit' },
   { recipeId: 'bk-angus-patty',    ingredientId: 'ing-bk-angus',   quantityPerUnit: 1, unit: 'unit' },
   { recipeId: 'bk-plant-patty',    ingredientId: 'ing-bk-plant',   quantityPerUnit: 1, unit: 'unit' },
 ];
@@ -466,13 +438,6 @@ export const BK_STATIONS: BkStation[] = [
     accent: '#d62300', // BK flame red
     recipeIds: ['bk-whopper-patty', 'bk-junior-patty', 'bk-angus-patty', 'bk-plant-patty', 'bk-chicken-fillet', 'bk-bacon'],
   },
-  {
-    id: BK_ASSEMBLY_ID,
-    name: 'Build & cheese',
-    caption: 'Cheese-melt & assembly',
-    accent: '#f5a623', // BK amber
-    recipeIds: ['bk-cheese-melt'],
-  },
 ];
 
 /** Map a recipe id to the station that cooks it. */
@@ -497,7 +462,6 @@ export const BK_HOLDER_SEED: BkHolderSeed[] = [
   { recipeId: 'bk-junior-patty',   count: 10, cookedMinAgo: 11 },
   { recipeId: 'bk-chicken-fillet', count: 5,  cookedMinAgo: 9 },
   { recipeId: 'bk-bacon',          count: 6,  cookedMinAgo: 14 },
-  { recipeId: 'bk-cheese-melt',    count: 4,  cookedMinAgo: 5 },
   { recipeId: 'bk-angus-patty',    count: 3,  cookedMinAgo: 8 },
   { recipeId: 'bk-plant-patty',    count: 2,  cookedMinAgo: 7 },
 ];
@@ -533,11 +497,6 @@ export const BK_CREW_STEPS: Record<RecipeId, BkCrewStep[]> = {
   'bk-bacon': [
     { label: 'Grill', detail: 'Lay rashers on the flat-top', seconds: 240, workType: 'grill' },
     { label: 'Hold', detail: 'Move to the bacon slot', seconds: 20, workType: 'pack' },
-  ],
-  'bk-cheese-melt': [
-    { label: 'Cap', detail: 'Cheese slice onto a held patty', seconds: 20, workType: 'assemble' },
-    { label: 'Melt', detail: 'Under the salamander until glossy', seconds: 120, workType: 'grill' },
-    { label: 'Hold', detail: 'Cheese-melt slot — bin at 15 min', seconds: 20, workType: 'pack' },
   ],
   'bk-angus-patty': [
     { label: 'Load', detail: 'Lay thick Angus patties on the broiler', seconds: 20, workType: 'portion' },

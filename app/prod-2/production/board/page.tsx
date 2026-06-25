@@ -96,14 +96,18 @@ export default function ProductionBoardPage() {
     }));
   }, [site.id]);
 
-  // Switching sites can leave runTab pointing at a label the new site
-  // doesn't have (e.g. switching from a P3-using site back to one with
-  // only R1/R2). Reset to 'all' so the board doesn't silently render an
-  // empty board.
+  // The board opens on the first scheduled run (P1). Recipes are balanced
+  // across each bench's runs so no single batch reads near-empty.
+  const defaultRun = useMemo<RunTabId>(() => runTabs[0]?.id ?? 'all', [runTabs]);
+
+  // Keep a valid concrete run selected at all times: seed on first render and
+  // recover whenever a site switch leaves the selection pointing at a run the
+  // new site doesn't have. Sites with no scheduled runs hide the selector and
+  // keep the 'all' sentinel.
   useEffect(() => {
-    if (runTab === 'all') return;
-    if (!runTabs.some(t => t.id === runTab)) setRunTab('all');
-  }, [runTab, runTabs]);
+    if (runTabs.length === 0) return;
+    if (!runTabs.some(t => t.id === runTab)) setRunTab(defaultRun);
+  }, [runTab, runTabs, defaultRun]);
 
   // Clear focus when switching site so stale ids don't resolve on the wrong graph.
   useEffect(() => {
@@ -252,11 +256,6 @@ export default function ProductionBoardPage() {
               flexWrap: 'wrap',
             }}
           >
-            <RunPill
-              label="All"
-              active={runTab === 'all'}
-              onClick={() => setRunTab('all')}
-            />
             {runTabs.map(t => (
               <RunPill
                 key={t.id}

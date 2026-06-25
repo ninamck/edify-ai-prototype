@@ -397,7 +397,11 @@ export default function BenchCardBoard({
       ? cards
       : cards.filter(c => c.bench.primaryMode === modeFilter);
     if (runFilter === 'all') return byMode;
-    return byMode.filter(c => (c.bench.runs?.length ?? 0) > 0);
+    // Keep run-scheduled benches (they render a per-batch view, or a "no recipes
+    // for this batch" placeholder) and increment/make-to-order benches (no run
+    // schedule — they stay fully visible across every batch tab). Only a bench
+    // with neither a run schedule nor an increment mode drops out.
+    return byMode.filter(c => (c.bench.runs?.length ?? 0) > 0 || c.bench.primaryMode === 'increment');
   }, [cards, modeFilter, runFilter]);
 
   return (
@@ -515,7 +519,11 @@ function BenchCard({
   const visibleModeGroups = useMemo(() => {
     if (runFilter === 'all') return card.modeGroups;
     return card.modeGroups.filter(g =>
-      !g.isPrimary || g.runBuckets?.some(b => b.run.label === runFilter)
+      // Secondary off-mode tails always show. A primary group shows if it has a
+      // matching run bucket, OR if it isn't batch-scheduled at all (an
+      // increment/make-to-order bench) — those run all day, so they stay fully
+      // visible under every batch tab rather than disappearing.
+      !g.isPrimary || (g.runBuckets ? g.runBuckets.some(b => b.run.label === runFilter) : true)
     );
   }, [card.modeGroups, runFilter]);
   const allRows = useMemo(() => card.modeGroups.flatMap(g => g.rows), [card.modeGroups]);

@@ -1492,7 +1492,7 @@ export const BK_LIBRARY_RECIPES: Recipe[] = BK_RECIPES.map((r) => {
         ? 'component'
         : 'standalone';
   // Assembled burgers are the sellable POS items; cook components (patties,
-  // cheese-melt, …) are made-to-hold and consumed by assemblies.
+  // chicken, bacon, …) are made-to-hold and consumed by assemblies.
   const sellable = kind === 'assembly';
   const dineIn = sellable ? 5.99 : 0;
   const ingredientCost = sellable ? Math.round(dineIn * 0.32 * 100) / 100 : 0;

@@ -293,11 +293,51 @@ export function bucketRowsIntoRuns(
 
   if (buckets.length === 0) return buckets;
 
-  for (const row of rows) {
-    const idx = pickRunIndex(row, runs, policy);
+  const addRow = (idx: number, row: RowData) => {
     const bucket = buckets[idx] ?? buckets[0];
     bucket.rows.push(row);
     bucket.productionMins += row.estMinutes;
+  };
+
+  // Spread recipes across every run except a genuine deep-overnight run,
+  // which stays reserved for first-order long-ferment items. An early-morning
+  // bulk build (e.g. a 04:45 P1) is NOT reserved — it's prime production time
+  // and shares the day's recipes.
+  const dayRunIdxs = runs
+    .map((_, i) => i)
+    .filter(i => !isReservedNightRun(runs[i].startTime, policy));
+  const nightIdx = runs.findIndex(r => isReservedNightRun(r.startTime, policy));
+
+  // Pass 1 — pin first-order SKUs to the night run (when one exists).
+  // Everything else is a day row we balance below.
+  const dayRows: RowData[] = [];
+  for (const row of rows) {
+    if (nightIdx !== -1 && policy.firstOrder.includes(row.line.item.skuId)) {
+      addRow(nightIdx, row);
+    } else {
+      dayRows.push(row);
+    }
+  }
+
+  if (dayRunIdxs.length <= 1) {
+    // Single day run — everything lands there.
+    const only = dayRunIdxs[0] ?? 0;
+    for (const row of dayRows) addRow(only, row);
+  } else {
+    // Multiple day runs — order rows morning-heavy → afternoon-heavy, then
+    // split into contiguous, count-balanced chunks across the runs. This
+    // keeps the early bake in the first run and the lunch build later while
+    // guaranteeing each run gets a fair share of recipes (no near-empty runs
+    // that read as "not filled out" on the board).
+    const sorted = [...dayRows]
+      .map((row, i) => ({ row, i, score: phaseSpreadScore(row) }))
+      .sort((a, b) => a.score - b.score || a.i - b.i);
+    const n = sorted.length;
+    const k = dayRunIdxs.length;
+    sorted.forEach(({ row }, i) => {
+      const chunk = Math.min(Math.floor((i * k) / n), k - 1);
+      addRow(dayRunIdxs[chunk], row);
+    });
   }
 
   for (const bucket of buckets) {
@@ -305,6 +345,35 @@ export function bucketRowsIntoRuns(
   }
 
   return buckets.filter(b => b.rows.length > 0);
+}
+
+/**
+ * A run is "reserved night" — used only for first-order long-ferment items —
+ * when it sits in the deep overnight window (nightStart .. 04:00). Early-morning
+ * bulk builds (e.g. a 04:45 P1) are NOT reserved: they're prime production time
+ * and share the day's recipes, so the board never shows a near-empty early run.
+ */
+function isReservedNightRun(startTime: string, policy: NightShiftPolicy): boolean {
+  if (!isNightShiftHHMM(startTime, policy)) return false;
+  const DEEP_NIGHT_END_MINS = 4 * 60;
+  const start = hhmmToMins(startTime);
+  const nightStart = hhmmToMins(policy.nightStart);
+  return start >= nightStart || start < DEEP_NIGHT_END_MINS;
+}
+
+/**
+ * Demand-phase score in roughly [-1, 1]: negative = morning-leaning,
+ * positive = afternoon-leaning. Used to order recipes before splitting them
+ * evenly across a bench's day runs.
+ */
+function phaseSpreadScore(row: RowData): number {
+  const p = row.line.forecast?.byPhase;
+  if (!p) {
+    const tags = row.line.recipe.selectionTags ?? [];
+    return tags.includes('morning') || tags.includes('breakfast') ? -1 : 1;
+  }
+  const total = p.morning + p.midday + p.afternoon || 1;
+  return (p.afternoon - p.morning) / total;
 }
 
 export function pickRunIndex(
