@@ -16,6 +16,7 @@
 
 import {
   forecastFor,
+  forecastSellableItemsAt,
   getRecipe,
   productionItemsAt,
   getSite,
@@ -58,8 +59,10 @@ export type ForecastRow = {
 export function buildForecastRows(siteId: SiteId, dates: string[]): ForecastRow[] {
   const skuToRecipe = new Map<SkuId, ProductionRecipe>();
 
-  // Direct producers — the site's own ProductionItem list.
-  for (const item of productionItemsAt(siteId)) {
+  // Direct producers — the site's own ProductionItem list. Menu-aware, so BK
+  // lists its sellable menu (Whoppers/fries/drinks) rather than the cook
+  // components; every other site is unchanged.
+  for (const item of forecastSellableItemsAt(siteId)) {
     const recipe = getRecipe(item.recipeId);
     if (recipe) skuToRecipe.set(item.skuId, recipe);
   }

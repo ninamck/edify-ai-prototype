@@ -144,66 +144,51 @@ function FreshnessHero({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 24,
+        gap: 14,
         flexWrap: 'wrap',
-        background: 'linear-gradient(135deg, #1f7a4d 0%, #2fa36b 100%)',
-        color: '#fff',
-        borderRadius: 16,
-        padding: '18px 22px',
-        boxShadow: '0 14px 36px rgba(47,163,107,0.26)',
+        background: '#fff',
+        border: '1px solid var(--color-border-subtle)',
+        borderRadius: 12,
+        padding: '9px 16px',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flex: '1 1 320px', minWidth: 260 }}>
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 46,
-            height: 46,
-            borderRadius: 12,
-            background: 'rgba(255,255,255,0.18)',
-            flexShrink: 0,
-          }}
-        >
-          <Leaf size={24} />
-        </span>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.85 }}>
-            Served fresh today
-          </div>
-          <div style={{ fontSize: 44, fontWeight: 900, lineHeight: 1.02, fontVariantNumeric: 'tabular-nums' }}>
-            {freshPct.toFixed(1)}%
-          </div>
-          <div style={{ fontSize: 13, opacity: 0.92 }}>
-            {burgers.toLocaleString()} burgers out the door · avg {avgAge.toFixed(1)} min off the grill
-          </div>
-        </div>
-      </div>
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 7,
+          fontSize: 10.5,
+          fontWeight: 800,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          color: 'var(--color-text-muted)',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        <Leaf size={15} color={FRESH} /> Served fresh
+      </span>
+      <span style={{ fontSize: 22, fontWeight: 900, color: FRESH, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+        {freshPct.toFixed(0)}%
+      </span>
 
-      <div style={{ display: 'flex', gap: 14, background: 'rgba(255,255,255,0.14)', borderRadius: 12, padding: '12px 16px' }}>
-        <HeroStat label="Avg freshness" value={`${avgAge.toFixed(1)} min`} sub="since grilled" />
-        <span style={{ width: 1, background: 'rgba(255,255,255,0.25)' }} />
-        <HeroStat label="Pan Holding Unit" value={`${cabinetUnits}`} sub={`held · oldest ${cabinetOldest}m`} />
-      </div>
+      <span style={{ width: 1, height: 22, background: 'var(--color-border-subtle)' }} />
 
-      <div style={{ flexBasis: '100%', fontSize: 12.5, opacity: 0.9, lineHeight: 1.5 }}>
-        Every order is pulled oldest-first from the Pan Holding Unit, so nothing sits past its hold — and Quinn keeps the unit topped
-        to the next 15 minutes of demand, so stock is always there and always fresh. Anything that would go out tired is remade to order.
-      </div>
+      <MiniStat value={`${avgAge.toFixed(1)} min`} label="avg off the grill" />
+      <MiniStat value={burgers.toLocaleString()} label="burgers served" />
+      <MiniStat value={`${cabinetUnits}`} label={`in PHU · oldest ${cabinetOldest}m`} />
     </section>
   );
 }
 
-function HeroStat({ label, value, sub }: { label: string; value: string; sub: string }) {
+function MiniStat({ value, label }: { value: string; label: string }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 110 }}>
-      <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', opacity: 0.8 }}>
-        {label}
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 5, whiteSpace: 'nowrap' }}>
+      <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+        {value}
       </span>
-      <span style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{value}</span>
-      <span style={{ fontSize: 11, opacity: 0.78 }}>{sub}</span>
-    </div>
+      <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>{label}</span>
+    </span>
   );
 }
 
@@ -285,10 +270,20 @@ function ChannelLane({
         </span>
       </div>
 
-      {/* Live feed — one card per order */}
-      <div style={{ maxHeight: 560, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, padding: 14, background: '#f6f7f9' }}>
+      {/* Live feed — order cards, two across */}
+      <div
+        style={{
+          maxHeight: 560,
+          overflowY: 'auto',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: 10,
+          padding: 14,
+          background: '#f6f7f9',
+        }}
+      >
         {orders.length === 0 ? (
-          <div style={{ padding: '24px 4px', fontSize: 13, color: 'var(--color-text-muted)', textAlign: 'center' }}>
+          <div style={{ gridColumn: '1 / -1', padding: '24px 4px', fontSize: 13, color: 'var(--color-text-muted)', textAlign: 'center' }}>
             No orders yet — press Play.
           </div>
         ) : (

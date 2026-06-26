@@ -28,6 +28,10 @@ import {
   BK_BENCHES,
   BK_FORECAST,
   BK_INGREDIENTS,
+  BK_MENU_FORECAST,
+  BK_MENU_ITEMS,
+  BK_MENU_PRICES,
+  BK_MENU_RECIPES,
   BK_PRODUCTION_ITEMS,
   BK_RECIPES,
   BK_SITES,
@@ -5569,11 +5573,39 @@ export function getBench(id: BenchId): Bench | undefined {
 }
 
 export function getRecipe(id: RecipeId): ProductionRecipe | undefined {
-  return PRET_RECIPES.find(r => r.id === id) ?? BK_RECIPES.find(r => r.id === id);
+  return (
+    PRET_RECIPES.find(r => r.id === id) ??
+    BK_RECIPES.find(r => r.id === id) ??
+    BK_MENU_RECIPES.find(r => r.id === id)
+  );
 }
 
 export function getProductionItem(id: ProductionItemId): ProductionItem | undefined {
-  return PRET_PRODUCTION_ITEMS.find(p => p.id === id) ?? BK_PRODUCTION_ITEMS.find(p => p.id === id);
+  return (
+    PRET_PRODUCTION_ITEMS.find(p => p.id === id) ??
+    BK_PRODUCTION_ITEMS.find(p => p.id === id) ??
+    BK_MENU_ITEMS.find(p => p.id === id)
+  );
+}
+
+/**
+ * Sellable menu items a forecast surface should walk for a site.
+ *
+ * Burger King's `productionItemsAt` only returns the ~6 cook COMPONENTS (what
+ * the crew screen drops + holds). The /forecast surface instead wants the
+ * sellable MENU (Whoppers, fries, drinks…), so when a site carries a menu
+ * layer we return that. Everything else (Pret, and any non-forecast caller)
+ * keeps using `productionItemsAt` untouched — so the crew loop, prep sheet
+ * and sales/drop paths are unaffected.
+ */
+export function forecastSellableItemsAt(siteId: SiteId): ProductionItem[] {
+  const menu = BK_MENU_ITEMS.filter(p => p.siteId === siteId);
+  return menu.length > 0 ? menu : productionItemsAt(siteId);
+}
+
+/** À la carte menu price (SGD) for a sellable SKU, if it has one. */
+export function menuPriceFor(skuId: SkuId): number | undefined {
+  return BK_MENU_PRICES[skuId];
 }
 
 export function getWorkflow(id: WorkflowId): ProductionWorkflow | undefined {
@@ -5829,7 +5861,7 @@ export const DOW_MULTIPLIER: Record<DayOfWeek, number> = {
  * `bkFixtures` with a blank date (it can't import the value without forming
  * a runtime cycle), so we stamp the anchor date here once.
  */
-const BK_FORECAST_ANCHORED: DemandForecastEntry[] = BK_FORECAST.map(f => ({
+const BK_FORECAST_ANCHORED: DemandForecastEntry[] = [...BK_FORECAST, ...BK_MENU_FORECAST].map(f => ({
   ...f,
   date: DEMO_TODAY,
 }));

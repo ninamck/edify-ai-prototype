@@ -14,7 +14,7 @@
  */
 
 import { useMemo } from 'react';
-import { Cloud, ShoppingBag, Coins, Users, Info } from 'lucide-react';
+import { Cloud, ShoppingBag, Coins, Users, Info, Clock, Bike, CalendarDays, TrendingUp, SlidersHorizontal } from 'lucide-react';
 import type { SiteId } from '@/components/Production/fixtures';
 import { dayOfWeek } from '@/components/Production/fixtures';
 import {
@@ -27,6 +27,8 @@ import {
   narrateForwardWhy,
   PHASE_LABEL,
   SIGNAL_LABEL,
+  type AggregatedSignal,
+  type ChannelSplit,
   type DayTotals,
   type Phase,
 } from './economics';
@@ -60,6 +62,10 @@ export default function ForwardForecastCard({
   const signals = useMemo(() => aggregateForwardSignals(siteId, date), [siteId, date]);
   const mix = useMemo(() => channelMixFor(siteId, date), [siteId, date]);
   const isOverridden = Math.abs(multiplier - 1) > 0.005;
+  const insights = useMemo(
+    () => buildForwardInsights({ totals, signals, mix, date, isOverridden, multiplier }),
+    [totals, signals, mix, date, isOverridden, multiplier],
+  );
 
   const phases: Phase[] = ['morning', 'midday', 'afternoon'];
   const maxPhaseRevenue = Math.max(
@@ -200,6 +206,58 @@ export default function ForwardForecastCard({
           )}
         </div>
       </div>
+
+      {/* Edify insights — turns the forecast signals into a few concrete,
+          act-on-it callouts for the day. */}
+      {insights.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <h3 style={subheading}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <EdifyMark size={13} color="var(--color-accent-active)" /> Edify insights
+            </span>
+          </h3>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {insights.map(ins => {
+              const tone = INSIGHT_TONE[ins.tone];
+              return (
+                <div
+                  key={ins.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 10,
+                    padding: '10px 12px',
+                    background: 'var(--color-bg-hover)',
+                    border: '1px solid var(--color-border-subtle)',
+                    borderRadius: 10,
+                  }}
+                >
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 26,
+                      height: 26,
+                      borderRadius: 7,
+                      background: tone.bg,
+                      color: tone.fg,
+                      flexShrink: 0,
+                      marginTop: 1,
+                    }}
+                  >
+                    {ins.icon}
+                  </span>
+                  <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--color-text-primary)' }}>
+                    <strong style={{ fontWeight: 700 }}>{ins.lead}.</strong>{' '}
+                    <span style={{ color: 'var(--color-text-secondary)' }}>{ins.body}</span>
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Phase split */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -429,6 +487,127 @@ function ChannelLegend({
 function signalIcon(signal: string) {
   if (signal === 'weather') return <Cloud size={12} />;
   return null;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Edify insights — derive a few act-on-it callouts from the day's forecast
+// ────────────────────────────────────────────────────────────────────────────
+
+type InsightTone = 'accent' | 'success' | 'warning' | 'info';
+type Insight = { id: string; tone: InsightTone; icon: React.ReactNode; lead: string; body: string };
+
+const INSIGHT_TONE: Record<InsightTone, { fg: string; bg: string }> = {
+  accent: { fg: 'var(--color-accent-active)', bg: 'rgba(0, 28, 53, 0.06)' },
+  success: { fg: 'var(--color-success)', bg: 'rgba(31, 157, 87, 0.10)' },
+  warning: { fg: 'var(--color-warning)', bg: 'rgba(241, 180, 52, 0.16)' },
+  info: { fg: 'var(--color-info)', bg: 'rgba(3, 105, 161, 0.10)' },
+};
+
+/** Turn the forecast totals + signals + channel mix into 3–4 concrete nudges. */
+function buildForwardInsights(p: {
+  totals: DayTotals;
+  signals: AggregatedSignal[];
+  mix: ChannelSplit;
+  date: string;
+  isOverridden: boolean;
+  multiplier: number;
+}): Insight[] {
+  const { totals, signals, mix, date, isOverridden, multiplier } = p;
+  const dow = dayOfWeek(date);
+  const out: Insight[] = [];
+
+  // Manual override — call it out first so it's never a surprise.
+  if (isOverridden) {
+    const pct = Math.round((multiplier - 1) * 100);
+    out.push({
+      id: 'override',
+      tone: 'warning',
+      icon: <SlidersHorizontal size={14} />,
+      lead: 'Manual override on',
+      body: `You've set today ${pct > 0 ? '+' : ''}${pct}% vs Edify's baseline — drops will still be paced to this total.`,
+    });
+  }
+
+  // Peak phase — where the day concentrates.
+  const phaseList: Phase[] = ['morning', 'midday', 'afternoon'];
+  const peak = phaseList.reduce((a, b) => (totals.byPhase[b].revenue > totals.byPhase[a].revenue ? b : a));
+  const peakPct = Math.round((totals.byPhase[peak].revenue / Math.max(1, totals.revenue)) * 100);
+  out.push({
+    id: 'peak',
+    tone: 'accent',
+    icon: <Clock size={14} />,
+    lead: `${PHASE_LABEL[peak]} is the peak`,
+    body: `${peakPct}% of the day's revenue (${formatCurrency(totals.byPhase[peak].revenue)}) lands ${phaseHours(peak)} — have the cabinet full before it hits.`,
+  });
+
+  // Channel — flag delivery when it's a real share, else speed-of-service.
+  const deliveryPct = Math.round(mix.delivery * 100);
+  if (deliveryPct >= 18) {
+    out.push({
+      id: 'delivery',
+      tone: 'success',
+      icon: <Bike size={14} />,
+      lead: 'Home delivery runs hot',
+      body: `~${deliveryPct}% of orders come through delivery apps today — keep the dispatch lane clear and expect stacked app orders at lunch.`,
+    });
+  } else {
+    const takeawayPct = Math.round(mix.takeaway * 100);
+    out.push({
+      id: 'channel',
+      tone: 'success',
+      icon: <Bike size={14} />,
+      lead: 'Counter & drive-thru lead',
+      body: `${takeawayPct}% of orders are takeaway — front-of-line throughput is what protects speed-of-service today.`,
+    });
+  }
+
+  // Top non-baseline signal — the thing that makes today different.
+  const topSig = signals.find(s => s.signal !== 'sales-history');
+  if (topSig && topSig.share >= 0.1) {
+    const sigPct = Math.round(topSig.share * 100);
+    out.push({
+      id: 'signal',
+      tone: 'warning',
+      icon: topSig.signal === 'weather' ? <Cloud size={14} /> : <CalendarDays size={14} />,
+      lead: `${topSig.label} in play`,
+      body: `${topSig.note ?? topSig.label} is adding ~${sigPct}% on top of the usual ${dow} — cook ahead on the busy lines so you don't miss sales.`,
+    });
+  } else {
+    const topPct = Math.round((signals[0]?.share ?? 1) * 100);
+    out.push({
+      id: 'confidence',
+      tone: 'info',
+      icon: <TrendingUp size={14} />,
+      lead: `Stable read for ${dow}`,
+      body: `Anchored to your ${topPct}% sales-history pattern — a predictable day with low surprise risk.`,
+    });
+  }
+
+  return out.slice(0, 4);
+}
+
+/** The Edify logo mark, tinted via CSS mask (same asset the sidebar uses). */
+function EdifyMark({ size, color }: { size: number; color: string }) {
+  return (
+    <span
+      role="img"
+      aria-label="Edify"
+      style={{
+        display: 'block',
+        width: Math.round(size * 0.58),
+        height: size,
+        backgroundColor: color,
+        WebkitMaskImage: 'url(/edify-logo.svg)',
+        maskImage: 'url(/edify-logo.svg)',
+        WebkitMaskRepeat: 'no-repeat',
+        maskRepeat: 'no-repeat',
+        WebkitMaskPosition: 'center',
+        maskPosition: 'center',
+        WebkitMaskSize: 'contain',
+        maskSize: 'contain',
+      }}
+    />
+  );
 }
 
 function phaseHours(p: Phase): string {

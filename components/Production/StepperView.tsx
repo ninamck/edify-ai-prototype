@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Flame,
   Pause,
   Play,
   Settings,
@@ -18,6 +19,7 @@ import {
   Boxes,
 } from 'lucide-react';
 import { usePlan, type PlanLine } from './PlanStore';
+import PretCrewLineDisplay from './PretCrewLineDisplay';
 import {
   benchesAt,
   PRET_INGREDIENT_USAGE,
@@ -261,6 +263,10 @@ export default function StepperView({ open, onClose, siteId, date = DEMO_TODAY }
 
   const [selectedBenchId, setSelectedBenchId] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  // Hot-production line — the crew "batch clock" screen (toasties / melts /
+  // soups). Opened from the picker's "Hot production" entry, or by picking an
+  // increment (hot-shelf) bench. Replaces the recipe walk-through entirely.
+  const [hotMode, setHotMode] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [startedAt, setStartedAt] = useState<string | null>(null);
@@ -296,6 +302,7 @@ export default function StepperView({ open, onClose, siteId, date = DEMO_TODAY }
     if (open) return;
     setSelectedBenchId(null);
     setSelectedRunId(null);
+    setHotMode(false);
     setStepIndex(0);
     setCompletedIds(new Set());
     setStartedAt(null);
@@ -426,8 +433,9 @@ export default function StepperView({ open, onClose, siteId, date = DEMO_TODAY }
     ? runsForSelectedBench.findIndex(r => r.id === selectedRunId) + 1
     : null;
 
-  const headerSubtitle =
-    selectedBench && selectedRunId
+  const headerSubtitle = hotMode
+    ? `Hot production line | ${formatDateLong(date)}`
+    : selectedBench && selectedRunId
       ? `Production ${runIndex} | Bench ${benchPosition} | ${formatDateLong(date)}`
       : 'Open stepper';
 
@@ -490,12 +498,14 @@ export default function StepperView({ open, onClose, siteId, date = DEMO_TODAY }
             date={date}
             onClose={onClose}
             onChangeSelection={
-              selectedBenchId && selectedRunId
-                ? () => {
-                    setSelectedBenchId(null);
-                    setSelectedRunId(null);
-                  }
-                : null
+              hotMode
+                ? () => setHotMode(false)
+                : selectedBenchId && selectedRunId
+                  ? () => {
+                      setSelectedBenchId(null);
+                      setSelectedRunId(null);
+                    }
+                  : null
             }
           />
 
@@ -503,15 +513,18 @@ export default function StepperView({ open, onClose, siteId, date = DEMO_TODAY }
             style={{
               flex: 1,
               minHeight: 0,
-              padding: '12px 16px 16px',
+              padding: hotMode ? 0 : '12px 16px 16px',
               display: 'flex',
             }}
           >
-            {!selectedBenchId || !selectedRunId ? (
+            {hotMode ? (
+              <PretCrewLineDisplay siteId={siteId} />
+            ) : !selectedBenchId || !selectedRunId ? (
               <PickerScreen
                 benches={benches}
                 lines={lines}
                 onPick={startStepper}
+                onOpenHot={() => setHotMode(true)}
               />
             ) : totalRecipes === 0 ? (
               <EmptyState
@@ -703,12 +716,17 @@ function PickerScreen({
   benches,
   lines,
   onPick,
+  onOpenHot,
 }: {
   benches: Bench[];
   lines: PlanLine[];
   onPick: (benchId: string, runId: string) => void;
+  /** Open the hot-production crew line (the batch-clock screen). */
+  onOpenHot: () => void;
 }) {
   const [pickedBenchId, setPickedBenchId] = useState<string | null>(null);
+  // Hot-shelf benches run as a live crew line, not a recipe walk-through.
+  const hasHotBench = benches.some(b => b.primaryMode === 'increment');
 
   // Pre-compute "recipes on this bench" counts so each bench tile can
   // tell the user how much work it actually has today. Otherwise an
@@ -768,8 +786,55 @@ function PickerScreen({
         scheduled run.
       </p>
 
+      {hasHotBench && (
+        <button
+          type="button"
+          onClick={onOpenHot}
+          style={{
+            marginTop: 20,
+            textAlign: 'left',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            width: '100%',
+            padding: '16px 18px',
+            borderRadius: 14,
+            border: '1.5px solid #f1c7ab',
+            background: 'linear-gradient(90deg, #fff4ec, #ffffff)',
+            cursor: 'pointer',
+            fontFamily: 'var(--font-primary)',
+          }}
+        >
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              background: '#c2410c',
+              color: '#ffffff',
+              flexShrink: 0,
+            }}
+          >
+            <Flame size={22} />
+          </span>
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, flex: 1 }}>
+            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--color-text-primary)' }}>
+              Hot production line
+            </span>
+            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+              Live batch clock for the hot shelf — toasties, melts, soups & warm bakes on a 30-minute
+              cadence.
+            </span>
+          </span>
+          <ChevronRight size={18} color="#c2410c" />
+        </button>
+      )}
+
       <div style={{ marginTop: 22 }}>
-        <SectionLabel>1. Bench</SectionLabel>
+        <SectionLabel>{hasHotBench ? 'Or pick a bench' : '1. Bench'}</SectionLabel>
         <div
           style={{
             display: 'grid',
@@ -790,7 +855,9 @@ function PickerScreen({
               <button
                 key={bench.id}
                 type="button"
-                onClick={() => setPickedBenchId(bench.id)}
+                onClick={() =>
+                  bench.primaryMode === 'increment' ? onOpenHot() : setPickedBenchId(bench.id)
+                }
                 style={{
                   textAlign: 'left',
                   border: `1.5px solid ${active ? 'var(--color-bg-nav)' : 'var(--color-border)'}`,

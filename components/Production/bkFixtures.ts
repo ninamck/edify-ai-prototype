@@ -184,6 +184,19 @@ export const BK_WORKFLOWS: Record<WorkflowId, ProductionWorkflow> = {
       { from: 'bk-plant-broil', to: 'bk-plant-hold' },
     ],
   },
+  // Fryer chain — fries / nuggets / onion rings drop in a basket and hold hot.
+  'wf-bk-fry': {
+    id: 'wf-bk-fry',
+    stages: [
+      { id: 'bk-fry-basket', label: 'Drop the basket', capability: 'prep', workType: 'portion', leadOffset: 0, durationMinutes: 1 },
+      { id: 'bk-fry-cook', label: 'Fry to golden', capability: 'oven', workType: 'grill', leadOffset: 0, durationMinutes: 3 },
+      { id: 'bk-fry-hold', label: 'Salt & hold', capability: 'pack', workType: 'pack', leadOffset: 0, durationMinutes: 1 },
+    ],
+    edges: [
+      { from: 'bk-fry-basket', to: 'bk-fry-cook' },
+      { from: 'bk-fry-cook', to: 'bk-fry-hold' },
+    ],
+  },
   // Assembled burgers are built to order at the counter — a single quick step.
   'wf-bk-assemble': {
     id: 'wf-bk-assemble',
@@ -298,6 +311,70 @@ export const BK_RECIPES: ProductionRecipe[] = [
     defaultMode: 'increment',
   },
 
+  // ─── Chicken & fish line (its own crew screen) ───────────────────────────
+  {
+    id: 'bk-grilled-chicken',
+    name: 'Grilled chicken fillet',
+    category: 'Sandwich',
+    shelfLifeMinutes: 30,
+    batchRules: { min: 2, max: 16, multipleOf: 2 },
+    skuId: 'sku-bk-grilled-chicken',
+    allowCarryOver: false,
+    selectionTags: ['core', 'midday', 'afternoon'],
+    workflowId: 'wf-bk-chicken',
+    defaultMode: 'increment',
+  },
+  {
+    id: 'bk-fish',
+    name: 'Fish fillet',
+    category: 'Sandwich',
+    shelfLifeMinutes: 25,
+    batchRules: { min: 2, max: 12, multipleOf: 2 },
+    skuId: 'sku-bk-fish',
+    allowCarryOver: false,
+    selectionTags: ['core', 'midday', 'afternoon'],
+    workflowId: 'wf-bk-chicken',
+    defaultMode: 'increment',
+  },
+
+  // ─── Sides line (its own crew screen) ────────────────────────────────────
+  {
+    id: 'bk-fries',
+    name: 'Fries',
+    category: 'Snack',
+    shelfLifeMinutes: 12,
+    batchRules: { min: 6, max: 36, multipleOf: 6 },
+    skuId: 'sku-bk-fries',
+    allowCarryOver: false,
+    selectionTags: ['core', 'midday', 'afternoon'],
+    workflowId: 'wf-bk-fry',
+    defaultMode: 'increment',
+  },
+  {
+    id: 'bk-nuggets',
+    name: 'Chicken nuggets',
+    category: 'Snack',
+    shelfLifeMinutes: 20,
+    batchRules: { min: 6, max: 36, multipleOf: 6 },
+    skuId: 'sku-bk-nuggets',
+    allowCarryOver: false,
+    selectionTags: ['core', 'midday', 'afternoon'],
+    workflowId: 'wf-bk-fry',
+    defaultMode: 'increment',
+  },
+  {
+    id: 'bk-onion-rings',
+    name: 'Onion rings',
+    category: 'Snack',
+    shelfLifeMinutes: 18,
+    batchRules: { min: 4, max: 24, multipleOf: 4 },
+    skuId: 'sku-bk-onion-rings',
+    allowCarryOver: false,
+    selectionTags: ['core', 'midday', 'afternoon'],
+    workflowId: 'wf-bk-fry',
+    defaultMode: 'increment',
+  },
+
   // ─── Assembled menu (library only — built to order, pull components) ──────
   // ~20 menu items over the 6 cook components. The patty / bacon / cheese
   // counts are the build — the kitchen never plans these, only the components.
@@ -368,6 +445,13 @@ export const BK_PRODUCTION_ITEMS: ProductionItem[] = [
   { id: 'pi-bk-bacon',         siteId: BK_SITE_ID, recipeId: 'bk-bacon',         skuId: 'sku-bk-bacon',         mode: 'increment', batchSize: 10, cadence: { ...BK_CADENCE }, preferredBenchId: BK_BROILER_ID, targetMinutes: 5 },
   { id: 'pi-bk-angus-patty',   siteId: BK_SITE_ID, recipeId: 'bk-angus-patty',   skuId: 'sku-bk-angus-patty',   mode: 'increment', batchSize: 8,  cadence: { ...BK_CADENCE }, preferredBenchId: BK_BROILER_ID,  targetMinutes: 8 },
   { id: 'pi-bk-plant-patty',   siteId: BK_SITE_ID, recipeId: 'bk-plant-patty',   skuId: 'sku-bk-plant-patty',   mode: 'increment', batchSize: 6,  cadence: { ...BK_CADENCE }, preferredBenchId: BK_BROILER_ID,  targetMinutes: 6 },
+  // Chicken & fish line
+  { id: 'pi-bk-grilled-chicken', siteId: BK_SITE_ID, recipeId: 'bk-grilled-chicken', skuId: 'sku-bk-grilled-chicken', mode: 'increment', batchSize: 8,  cadence: { ...BK_CADENCE }, preferredBenchId: BK_BROILER_ID, targetMinutes: 8 },
+  { id: 'pi-bk-fish',            siteId: BK_SITE_ID, recipeId: 'bk-fish',            skuId: 'sku-bk-fish',            mode: 'increment', batchSize: 6,  cadence: { ...BK_CADENCE }, preferredBenchId: BK_BROILER_ID, targetMinutes: 6 },
+  // Sides line
+  { id: 'pi-bk-fries',         siteId: BK_SITE_ID, recipeId: 'bk-fries',         skuId: 'sku-bk-fries',         mode: 'increment', batchSize: 24, cadence: { ...BK_CADENCE }, preferredBenchId: BK_BROILER_ID, targetMinutes: 4 },
+  { id: 'pi-bk-nuggets',       siteId: BK_SITE_ID, recipeId: 'bk-nuggets',       skuId: 'sku-bk-nuggets',       mode: 'increment', batchSize: 18, cadence: { ...BK_CADENCE }, preferredBenchId: BK_BROILER_ID, targetMinutes: 4 },
+  { id: 'pi-bk-onion-rings',   siteId: BK_SITE_ID, recipeId: 'bk-onion-rings',   skuId: 'sku-bk-onion-rings',   mode: 'increment', batchSize: 12, cadence: { ...BK_CADENCE }, preferredBenchId: BK_BROILER_ID, targetMinutes: 4 },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -381,7 +465,153 @@ export const BK_FORECAST: DemandForecastEntry[] = [
   { siteId: BK_SITE_ID, skuId: 'sku-bk-bacon',          date: '', projectedUnits: 70,  byPhase: { morning: 12, midday: 40, afternoon: 18 },  signals: [{ signal: 'sales-history', weight: 1, note: 'Bacon King + add-ons' }], status: 'confirmed' },
   { siteId: BK_SITE_ID, skuId: 'sku-bk-angus-patty',    date: '', projectedUnits: 90,  byPhase: { morning: 10, midday: 48, afternoon: 32 },  signals: [{ signal: 'sales-history', weight: 0.7, note: 'Gourmet Kings range' }, { signal: 'event', weight: 0.3 }], status: 'confirmed' },
   { siteId: BK_SITE_ID, skuId: 'sku-bk-plant-patty',    date: '', projectedUnits: 60,  byPhase: { morning: 8,  midday: 34, afternoon: 18 },  signals: [{ signal: 'sales-history', weight: 1, note: 'Plant-based mix ~8%' }], status: 'confirmed' },
+  // Chicken & fish line
+  { siteId: BK_SITE_ID, skuId: 'sku-bk-grilled-chicken', date: '', projectedUnits: 90, byPhase: { morning: 12, midday: 48, afternoon: 30 }, signals: [{ signal: 'sales-history', weight: 0.8, note: 'Tendergrill range' }, { signal: 'online-orders', weight: 0.2 }], status: 'confirmed' },
+  { siteId: BK_SITE_ID, skuId: 'sku-bk-fish',            date: '', projectedUnits: 35, byPhase: { morning: 5,  midday: 18, afternoon: 12 }, signals: [{ signal: 'sales-history', weight: 1, note: "Fish'n'Crisp" }], status: 'confirmed' },
+  // Sides line
+  { siteId: BK_SITE_ID, skuId: 'sku-bk-fries',         date: '', projectedUnits: 260, byPhase: { morning: 36, midday: 132, afternoon: 92 }, signals: [{ signal: 'sales-history', weight: 0.9, note: 'Attaches to most meals' }, { signal: 'online-orders', weight: 0.1 }], status: 'confirmed' },
+  { siteId: BK_SITE_ID, skuId: 'sku-bk-nuggets',       date: '', projectedUnits: 120, byPhase: { morning: 16, midday: 60,  afternoon: 44 }, signals: [{ signal: 'sales-history', weight: 1, note: 'Shareboxes + kids' }], status: 'confirmed' },
+  { siteId: BK_SITE_ID, skuId: 'sku-bk-onion-rings',   date: '', projectedUnits: 70,  byPhase: { morning: 9,  midday: 35,  afternoon: 26 }, signals: [{ signal: 'sales-history', weight: 1 }], status: 'confirmed' },
 ];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Menu forecast layer — the *sellable* menu (what's on the wall), separate
+// from the cook-component model above.
+//
+// The crew screen / drop plan only ever care about the ~6 cook COMPONENTS
+// (patties, chicken, bacon). But the /forecast surface speaks operator
+// language — "how many Whoppers, fries, drinks will we sell today" — so it
+// reads this menu list instead. These items are forecast-only: they are NOT
+// added to `BK_PRODUCTION_ITEMS`, so they never reach the broiler/cabinet
+// loop or the prep sheet.
+//
+// Prices are à la carte single prices (SGD) off the in-store menu board.
+// Demand is a synthesised, weekday-typical mix: Whoppers / Cheeseburgers /
+// fries / drinks high, premium Angus + fish low.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type BkMenuDef = {
+  /** Recipe id stem — sku becomes `sku-${id}`, item `pi-${id}`. */
+  id: string;
+  name: string;
+  category: ProductionRecipe['category'];
+  /** À la carte single price, SGD. */
+  price: number;
+  /** Projected units for the demo day. */
+  units: number;
+  /** Phase weights [morning, midday, afternoon]; defaults to a lunch-peak. */
+  phase?: [number, number, number];
+  signals?: { signal: DemandForecastEntry['signals'][number]['signal']; weight: number; note?: string }[];
+};
+
+/** Default lunch-peaked daypart split for a high-street BK. */
+const BK_MENU_PHASE_DEFAULT: [number, number, number] = [0.15, 0.5, 0.35];
+const BK_MENU_SIGNAL_DEFAULT: BkMenuDef['signals'] = [
+  { signal: 'sales-history', weight: 1, note: '4-week median for this weekday' },
+];
+
+/**
+ * Source-of-truth menu. Everything below (recipes, sellable items, forecast,
+ * price map) is derived from this so the four views can never drift.
+ */
+const BK_MENU_DEFS: BkMenuDef[] = [
+  // ─── Beef ────────────────────────────────────────────────────────────────
+  { id: 'bk-m-western-whopper', name: 'Western Whopper', category: 'Sandwich', price: 8.9, units: 70, signals: [{ signal: 'sales-history', weight: 0.7 }, { signal: 'event', weight: 0.3, note: 'Westfield footfall peak' }] },
+  { id: 'bk-m-whopper-cheese', name: 'Whopper with Cheese', category: 'Sandwich', price: 7.9, units: 60 },
+  { id: 'bk-m-whopper', name: 'Whopper', category: 'Sandwich', price: 7.4, units: 95, signals: [{ signal: 'sales-history', weight: 0.8 }, { signal: 'event', weight: 0.2, note: 'Westfield footfall peak' }] },
+  { id: 'bk-m-mushroom-swiss', name: 'Mushroom Swiss', category: 'Sandwich', price: 4.9, units: 45 },
+  { id: 'bk-m-bbq-turkey-bacon', name: 'BBQ Turkey Bacon', category: 'Sandwich', price: 4.9, units: 35 },
+  { id: 'bk-m-western-whopper-jr', name: 'Western Whopper Jr', category: 'Sandwich', price: 5.4, units: 40 },
+  { id: 'bk-m-whopper-jr', name: 'Whopper Jr', category: 'Sandwich', price: 5.0, units: 80 },
+  { id: 'bk-m-cheeseburger', name: 'Cheeseburger', category: 'Sandwich', price: 3.3, units: 110, signals: [{ signal: 'sales-history', weight: 0.8 }, { signal: 'online-orders', weight: 0.2, note: 'Delivery value mix' }] },
+  { id: 'bk-m-hamburger', name: 'Hamburger', category: 'Sandwich', price: 3.0, units: 70 },
+
+  // ─── The Ultimate Selection ───────────────────────────────────────────────
+  { id: 'bk-m-ult-angus-mushroom', name: 'Ultimate Angus Mushroom Swiss', category: 'Sandwich', price: 9.9, units: 22 },
+  { id: 'bk-m-ult-angus-bbq', name: 'Ultimate Angus Classic BBQ', category: 'Sandwich', price: 8.5, units: 20 },
+  { id: 'bk-m-ult-tendercrisp', name: 'Ultimate Tendercrisp Chicken', category: 'Sandwich', price: 7.5, units: 30 },
+
+  // ─── Chicken / Fish ───────────────────────────────────────────────────────
+  { id: 'bk-m-mushroom-tendergrill', name: 'Mushroom Swiss Tendergrill Chicken', category: 'Sandwich', price: 6.4, units: 25 },
+  { id: 'bk-m-tendergrill', name: 'Tendergrill Chicken', category: 'Sandwich', price: 6.1, units: 45 },
+  { id: 'bk-m-tendercrisp', name: 'Tendercrisp Chicken', category: 'Sandwich', price: 6.1, units: 55 },
+  { id: 'bk-m-long-chicken', name: 'Long Chicken', category: 'Sandwich', price: 5.3, units: 70, signals: [{ signal: 'sales-history', weight: 0.8 }, { signal: 'online-orders', weight: 0.2, note: 'Delivery value mix' }] },
+  { id: 'bk-m-fried-chicken-2pc', name: '2pcs Fried Chicken', category: 'Sandwich', price: 6.2, units: 40 },
+  { id: 'bk-m-fish-n-crisp', name: "Fish'n'Crisp", category: 'Sandwich', price: 3.75, units: 35 },
+
+  // ─── Sides ────────────────────────────────────────────────────────────────
+  { id: 'bk-m-nuggets-6', name: 'BK Nuggets (6pc)', category: 'Snack', price: 4.9, units: 120 },
+  { id: 'bk-m-onion-rings', name: 'Onion Rings', category: 'Snack', price: 3.2, units: 70 },
+  { id: 'bk-m-fries', name: 'Fries (medium)', category: 'Snack', price: 2.9, units: 260, signals: [{ signal: 'sales-history', weight: 0.9 }, { signal: 'online-orders', weight: 0.1, note: 'Attaches to most meals' }] },
+  { id: 'bk-m-cheesy-fries', name: 'Cheesy Fries', category: 'Snack', price: 3.7, units: 60 },
+
+  // ─── Salad ────────────────────────────────────────────────────────────────
+  { id: 'bk-m-salad-set', name: 'Salad Set with Dressing', category: 'Salad', price: 4.0, units: 18 },
+
+  // ─── Desserts ─────────────────────────────────────────────────────────────
+  { id: 'bk-m-sundae-pie', name: "Hershey's Sundae Pie", category: 'Bakery', price: 3.0, units: 40, phase: [0.08, 0.42, 0.5] },
+  { id: 'bk-m-sundae', name: 'Sundae', category: 'Bakery', price: 1.9, units: 70, phase: [0.08, 0.42, 0.5] },
+  { id: 'bk-m-taro-pie', name: 'Taro Pie', category: 'Bakery', price: 1.5, units: 55, phase: [0.08, 0.42, 0.5] },
+  { id: 'bk-m-vanilla-cone', name: 'Vanilla Cone', category: 'Bakery', price: 0.8, units: 90, phase: [0.06, 0.4, 0.54] },
+
+  // ─── Beverages ────────────────────────────────────────────────────────────
+  { id: 'bk-m-soft-drink', name: 'Soft Drink', category: 'Beverage', price: 2.4, units: 380, signals: [{ signal: 'sales-history', weight: 0.9 }, { signal: 'online-orders', weight: 0.1, note: 'Attaches to most meals' }] },
+  { id: 'bk-m-iced-tea', name: 'Iced Tea', category: 'Beverage', price: 3.0, units: 60 },
+  { id: 'bk-m-sjora', name: 'Sjora', category: 'Beverage', price: 3.3, units: 45 },
+  { id: 'bk-m-iced-milo', name: 'Iced Milo', category: 'Beverage', price: 3.3, units: 40 },
+  { id: 'bk-m-dasani', name: 'Dasani Water', category: 'Beverage', price: 2.4, units: 50 },
+  { id: 'bk-m-coffee', name: 'Coffee', category: 'Beverage', price: 2.4, units: 35, phase: [0.45, 0.3, 0.25] },
+  { id: 'bk-m-hot-chocolate', name: 'Hot Chocolate', category: 'Beverage', price: 3.9, units: 20, phase: [0.45, 0.3, 0.25] },
+];
+
+/** Split a day's units across phases on integer counts that sum exactly. */
+function bkPhaseSplit(units: number, w: [number, number, number]) {
+  const morning = Math.round(units * w[0]);
+  const midday = Math.round(units * w[1]);
+  const afternoon = units - morning - midday;
+  return { morning, midday, afternoon };
+}
+
+export const BK_MENU_RECIPES: ProductionRecipe[] = BK_MENU_DEFS.map(d => ({
+  id: d.id,
+  name: d.name,
+  category: d.category,
+  shelfLifeMinutes: null,
+  skuId: `sku-${d.id}`,
+  allowCarryOver: false,
+  selectionTags: ['core', 'midday', 'afternoon'],
+  workflowId: 'wf-bk-assemble',
+  defaultMode: 'variable',
+}));
+
+/**
+ * Sellable menu items for the forecast surfaces. These intentionally live in
+ * their OWN array (not `BK_PRODUCTION_ITEMS`) so the crew loop / prep sheet
+ * never see them — they only feed `/forecast`.
+ */
+export const BK_MENU_ITEMS: ProductionItem[] = BK_MENU_DEFS.map(d => ({
+  id: `pi-${d.id}`,
+  siteId: BK_SITE_ID,
+  recipeId: d.id,
+  skuId: `sku-${d.id}`,
+  mode: 'variable',
+  batchSize: 1,
+}));
+
+export const BK_MENU_FORECAST: DemandForecastEntry[] = BK_MENU_DEFS.map(d => ({
+  siteId: BK_SITE_ID,
+  skuId: `sku-${d.id}`,
+  date: '',
+  projectedUnits: d.units,
+  byPhase: bkPhaseSplit(d.units, d.phase ?? BK_MENU_PHASE_DEFAULT),
+  signals: d.signals ?? BK_MENU_SIGNAL_DEFAULT,
+  status: 'confirmed',
+}));
+
+/** À la carte single price (SGD) keyed by sellable SKU. */
+export const BK_MENU_PRICES: Record<string, number> = Object.fromEntries(
+  BK_MENU_DEFS.map(d => [`sku-${d.id}`, d.price]),
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Ingredients (for the recipe library + crew stepper component lists)
@@ -416,7 +646,11 @@ export const BK_INGREDIENT_USAGE: IngredientUsage[] = [
 // Stations view — drives the crew NOW / NEXT / HAVE screen
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type BkStationId = typeof BK_BROILER_ID | typeof BK_ASSEMBLY_ID;
+/** Station ids double as the crew "line" (screen) ids — one screen per area. */
+export const BK_CHICKEN_ID = 'bk-line-chicken';
+export const BK_SIDES_ID = 'bk-line-sides';
+
+export type BkStationId = string;
 
 export type BkStation = {
   id: BkStationId;
@@ -430,17 +664,44 @@ export type BkStation = {
   recipeIds: RecipeId[];
 };
 
-export const BK_STATIONS: BkStation[] = [
+/**
+ * Burger King runs three distinct crew screens — one per cook area. Each line
+ * is its own NOW / NEXT / cabinet view; the crew display switches between them
+ * from the demo controls. The component model above feeds all three from the
+ * same simulated loop, so each screen shows only its own items.
+ */
+export const BK_LINES: BkStation[] = [
   {
     id: BK_BROILER_ID,
-    name: 'Broiler',
-    caption: 'Flame-grill — patties, chicken & bacon',
+    name: 'Burgers',
+    caption: 'Flame broiler — beef patties & bacon',
     accent: '#d62300', // BK flame red
-    recipeIds: ['bk-whopper-patty', 'bk-junior-patty', 'bk-angus-patty', 'bk-plant-patty', 'bk-chicken-fillet', 'bk-bacon'],
+    recipeIds: ['bk-whopper-patty', 'bk-junior-patty', 'bk-angus-patty', 'bk-plant-patty', 'bk-bacon'],
+  },
+  {
+    id: BK_CHICKEN_ID,
+    name: 'Chicken & fish',
+    caption: 'Crispy & grilled chicken, fish',
+    accent: '#e0851b', // golden fry
+    recipeIds: ['bk-chicken-fillet', 'bk-grilled-chicken', 'bk-fish'],
+  },
+  {
+    id: BK_SIDES_ID,
+    name: 'Sides',
+    caption: 'Fryer — fries, nuggets & onion rings',
+    accent: '#2f6fed', // cool blue, distinct from the hot lines
+    recipeIds: ['bk-fries', 'bk-nuggets', 'bk-onion-rings'],
   },
 ];
 
-/** Map a recipe id to the station that cooks it. */
+/**
+ * Stations are the same three groupings — kept as a named export because the
+ * crew-loop snapshot and card accents key off "the station that cooks this
+ * recipe". (Pre-multi-screen this was a single Broiler station.)
+ */
+export const BK_STATIONS: BkStation[] = BK_LINES;
+
+/** Map a recipe id to the station/line that cooks it. */
 export function bkStationForRecipe(recipeId: RecipeId): BkStation | undefined {
   return BK_STATIONS.find(s => s.recipeIds.includes(recipeId));
 }
@@ -464,6 +725,13 @@ export const BK_HOLDER_SEED: BkHolderSeed[] = [
   { recipeId: 'bk-bacon',          count: 6,  cookedMinAgo: 14 },
   { recipeId: 'bk-angus-patty',    count: 3,  cookedMinAgo: 8 },
   { recipeId: 'bk-plant-patty',    count: 2,  cookedMinAgo: 7 },
+  // Chicken & fish line
+  { recipeId: 'bk-grilled-chicken', count: 4, cookedMinAgo: 7 },
+  { recipeId: 'bk-fish',            count: 3, cookedMinAgo: 9 },
+  // Sides line
+  { recipeId: 'bk-fries',           count: 16, cookedMinAgo: 3 },
+  { recipeId: 'bk-nuggets',         count: 10, cookedMinAgo: 5 },
+  { recipeId: 'bk-onion-rings',     count: 6,  cookedMinAgo: 6 },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -507,5 +775,30 @@ export const BK_CREW_STEPS: Record<RecipeId, BkCrewStep[]> = {
     { label: 'Load', detail: 'Separate zone — avoid cross-contact', seconds: 20, workType: 'portion' },
     { label: 'Flame-broil', detail: 'Through the broiler', seconds: 240, workType: 'grill' },
     { label: 'Hold', detail: 'Stack in the cabinet — Plant slot', seconds: 25, workType: 'pack' },
+  ],
+  'bk-grilled-chicken': [
+    { label: 'Lay out', detail: 'Lay marinated fillets on the grill', seconds: 20, workType: 'portion' },
+    { label: 'Grill', detail: 'Grill until 75°C core', seconds: 360, workType: 'grill' },
+    { label: 'Hold', detail: 'Move to the grilled-chicken slot', seconds: 30, workType: 'pack' },
+  ],
+  'bk-fish': [
+    { label: 'Lay out', detail: 'Drop fish fillets into the fryer basket', seconds: 20, workType: 'portion' },
+    { label: 'Fry', detail: 'Fry until golden / 75°C core', seconds: 240, workType: 'grill' },
+    { label: 'Drain & hold', detail: 'Drain, move to the fish slot', seconds: 30, workType: 'pack' },
+  ],
+  'bk-fries': [
+    { label: 'Drop basket', detail: 'Fill a basket, drop into the fryer', seconds: 15, workType: 'portion' },
+    { label: 'Fry', detail: 'Fry to golden', seconds: 180, workType: 'grill' },
+    { label: 'Salt & hold', detail: 'Salt, move to the fry station — serve fast', seconds: 20, workType: 'pack' },
+  ],
+  'bk-nuggets': [
+    { label: 'Drop basket', detail: 'Count nuggets into the basket', seconds: 15, workType: 'portion' },
+    { label: 'Fry', detail: 'Fry until 75°C core', seconds: 200, workType: 'grill' },
+    { label: 'Hold', detail: 'Move to the nuggets slot', seconds: 20, workType: 'pack' },
+  ],
+  'bk-onion-rings': [
+    { label: 'Drop basket', detail: 'Fill a basket with rings', seconds: 15, workType: 'portion' },
+    { label: 'Fry', detail: 'Fry to golden', seconds: 180, workType: 'grill' },
+    { label: 'Salt & hold', detail: 'Salt, move to the rings slot', seconds: 20, workType: 'pack' },
   ],
 };

@@ -24,6 +24,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import {
   DEMO_TODAY,
   dayOfWeek,
+  siteBrand,
   type ProductionRecipe,
   type SiteId,
 } from '@/components/Production/fixtures';
@@ -38,6 +39,25 @@ const CATEGORY_ORDER: ProductionRecipe['category'][] = [
   'Beverage',
 ];
 
+// Burger King speaks a different menu language than Pret. The forecast SKUs
+// reuse the shared category enum, so we relabel + reorder the filter pills for
+// the BK brand only. (Pret keeps the enum values as-is.)
+const BK_CATEGORY_ORDER: ProductionRecipe['category'][] = [
+  'Sandwich',
+  'Snack',
+  'Beverage',
+  'Bakery',
+  'Salad',
+];
+
+const BK_CATEGORY_LABEL: Record<ProductionRecipe['category'], string> = {
+  Sandwich: 'Burgers & chicken',
+  Snack: 'Sides',
+  Beverage: 'Drinks',
+  Bakery: 'Desserts',
+  Salad: 'Salads',
+};
+
 const MODE_LABEL: Record<string, string> = {
   run: 'RUN',
   variable: 'VAR',
@@ -45,6 +65,12 @@ const MODE_LABEL: Record<string, string> = {
 };
 
 type CategoryFilter = 'All' | ProductionRecipe['category'];
+
+/** Brand-aware label for a category filter (BK menu language; Pret = enum). */
+function categoryLabel(c: CategoryFilter, brand: string): string {
+  if (c === 'All') return 'All';
+  return brand === 'bk' ? BK_CATEGORY_LABEL[c] : c;
+}
 
 type Selection = {
   skuId: string;
@@ -98,12 +124,14 @@ export default function HorizonGrid({
   onOverride,
 }: Props) {
   const [category, setCategory] = useState<CategoryFilter>('All');
+  const brand = siteBrand(siteId);
 
   const presentCategories = useMemo(() => {
     const set = new Set<ProductionRecipe['category']>();
     for (const r of rows) set.add(r.category);
-    return CATEGORY_ORDER.filter(c => set.has(c));
-  }, [rows]);
+    const order = brand === 'bk' ? BK_CATEGORY_ORDER : CATEGORY_ORDER;
+    return order.filter(c => set.has(c));
+  }, [rows, brand]);
 
   const filteredRows = useMemo(() => {
     return category === 'All' ? rows : rows.filter(r => r.category === category);
@@ -177,7 +205,7 @@ export default function HorizonGrid({
                   whiteSpace: 'nowrap',
                 }}
               >
-                {c}
+                {categoryLabel(c, brand)}
                 <span
                   style={{
                     minWidth: 16,
@@ -381,7 +409,7 @@ function RowGroup({
                 flexShrink: 0,
               }}
             >
-              {row.category}
+              {categoryLabel(row.category, siteBrand(siteId))}
             </span>
           </div>
         </td>

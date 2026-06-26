@@ -44,7 +44,6 @@ import {
   SlidersHorizontal,
   ChevronDown,
   Trash2,
-  Sparkles,
   Radar,
   Check,
 } from 'lucide-react';
@@ -67,7 +66,7 @@ import {
 import StepperViewBK from './StepperViewBK';
 import QtyStepper, { getStepperValueStyle } from './QtyStepper';
 import { getRecipe } from './fixtures';
-import { bkStationForRecipe, BK_CREW_STEPS, BK_STATIONS } from './bkFixtures';
+import { bkStationForRecipe, BK_CREW_STEPS, BK_LINES, type BkStation } from './bkFixtures';
 import type { RecipeId, SiteId } from './fixtures';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -184,16 +183,17 @@ const PALETTES: Record<Mode, Palette> = {
 const ThemeContext = createContext<Palette>(PALETTES.dark);
 const useTheme = () => useContext(ThemeContext);
 
-// Every component the line can cook, for the manual "add a large order" picker.
+// Every component a line can cook, for the manual "add a large order" picker —
+// scoped to the active line so the order matches the screen you're on.
 type OrderRecipe = { recipeId: RecipeId; name: string; stationName: string; accent: string };
-const ORDER_RECIPES: OrderRecipe[] = BK_STATIONS.flatMap(st =>
-  st.recipeIds.map(rid => ({
+function orderRecipesForLine(line: BkStation): OrderRecipe[] {
+  return line.recipeIds.map(rid => ({
     recipeId: rid,
     name: getRecipe(rid)?.name ?? rid,
-    stationName: st.name,
-    accent: st.accent,
-  })),
-);
+    stationName: line.name,
+    accent: line.accent,
+  }));
+}
 
 export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId }) {
   const loop = useCrewLoop();
@@ -204,7 +204,17 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
   const [mode, setMode] = useState<Mode>('light');
   const [orderOpen, setOrderOpen] = useState(false);
   const [orderQtys, setOrderQtys] = useState<Record<string, number>>({});
+  // Which crew screen is showing. BK runs three: Burgers / Chicken & fish /
+  // Sides — switched from the demo controls.
+  const [lineId, setLineId] = useState<string>(BK_LINES[0].id);
   const pal = PALETTES[mode];
+
+  const line = BK_LINES.find(l => l.id === lineId) ?? BK_LINES[0];
+  const lineRecipes = new Set<RecipeId>(line.recipeIds);
+  const inLine = (recipeId: RecipeId) => lineRecipes.has(recipeId);
+  const orderRecipes = orderRecipesForLine(line);
+  // "Sold today" scoped to the items on this screen.
+  const lineSold = line.recipeIds.reduce((a, rid) => a + (loop.soldByRecipe[rid] ?? 0), 0);
   const cook = (recipeId: RecipeId, qty = 1) => {
     setStepperRecipe(recipeId);
     setCookQty(qty);
@@ -215,7 +225,7 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
   // cooking cue; once it lands ('done') it drops straight into the CABINET and
   // ages on its hold-life. These are layered on top of the auto-driven loop.
   const crewCooking: DropItem[] = timers
-    .filter(t => t.status !== 'done')
+    .filter(t => t.status !== 'done' && inLine(t.recipeId))
     .map(t => {
       const recipe = getRecipe(t.recipeId);
       const st = bkStationForRecipe(t.recipeId);
@@ -241,7 +251,7 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
   // grace window — mirroring the auto-loop's waste behaviour.
   const CREW_WASTE_GRACE_MIN = 20;
   const crewCabinet: HeldDisplay[] = timers
-    .filter(t => t.status === 'done')
+    .filter(t => t.status === 'done' && inLine(t.recipeId))
     .map(t => {
       const recipe = getRecipe(t.recipeId);
       const shelfLifeMin = recipe?.shelfLifeMinutes ?? 20;
@@ -264,13 +274,16 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
   // de-duped so a recipe shows once. These render in the "Drop now" area with
   // a cooking cue; when a cook finishes it drops straight into the cabinet.
   const crewCookingIds = new Set(crewCooking.map(i => i.recipeId));
-  const cooking = [...crewCooking, ...loop.cooking.filter(c => !crewCookingIds.has(c.recipeId))];
+  const cooking = [
+    ...crewCooking,
+    ...loop.cooking.filter(c => inLine(c.recipeId) && !crewCookingIds.has(c.recipeId)),
+  ];
   const cookingIds = new Set(cooking.map(i => i.recipeId));
   // Shortfall still needing a cook — anything not already cooking. These get a
   // Start button.
-  const toStart = loop.dropNow.filter(d => !cookingIds.has(d.recipeId));
+  const toStart = loop.dropNow.filter(d => inLine(d.recipeId) && !cookingIds.has(d.recipeId));
   // Waste-now items lead the cabinet, then freshest-expiring first.
-  const cabinet = [...crewCabinet, ...loop.cabinet].sort((a, b) => {
+  const cabinet = [...crewCabinet, ...loop.cabinet.filter(c => inLine(c.recipeId))].sort((a, b) => {
     if (a.expired !== b.expired) return a.expired ? -1 : 1;
     return a.expiresInMin - b.expiresInMin;
   });
@@ -297,7 +310,7 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
   // Quinn's re-cuts). Stacks onto an in-flight cook if one's already broiling.
   const addLargeOrder = () => {
     let added = false;
-    for (const r of ORDER_RECIPES) {
+    for (const r of orderRecipes) {
       const qty = orderQtys[r.recipeId] ?? 0;
       if (qty <= 0) continue;
       const { seconds, stepId } = cookStepFor(r.recipeId);
@@ -353,17 +366,27 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
             borderBottom: `1px solid ${pal.border}`,
           }}
         >
-          <Flame size={18} color={pal.accent} />
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: line.accent, flexShrink: 0 }} />
           <span
             style={{
               fontSize: 13,
-              fontWeight: 700,
+              fontWeight: 800,
               letterSpacing: '0.04em',
               textTransform: 'uppercase',
-              color: pal.textSecondary,
+              color: pal.text,
             }}
           >
-            Kitchen line
+            {line.name}
+          </span>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: pal.textFaint,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            line
           </span>
           <span style={{ fontSize: 20, fontWeight: 800, fontVariantNumeric: 'tabular-nums', marginLeft: 4 }}>
             {loop.nowHHMM}
@@ -401,6 +424,8 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
             onReset={resetAll}
             fullscreen={fullscreen}
             onToggleFullscreen={() => setFullscreen(f => !f)}
+            lineId={lineId}
+            onSelectLine={setLineId}
           />
         </div>
 
@@ -490,7 +515,7 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
         >
           {/* CABINET — the hero of this screen: what's ready to serve right
               now. Cooks land here the moment they finish. */}
-          <CabinetSection cabinet={cabinet} />
+          <CabinetSection cabinet={cabinet} sold={lineSold} />
 
           {(toStart.length > 0 || cooking.length > 0) && (
             <Section
@@ -520,11 +545,11 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
             hint="Expected demand next 15 min — pace for it"
             tone="muted"
           >
-            {loop.nextDrop.length === 0 ? (
+            {loop.nextDrop.filter(item => inLine(item.recipeId)).length === 0 ? (
               <Empty>Quiet window ahead</Empty>
             ) : (
               <CardGrid>
-                {loop.nextDrop.map(item => (
+                {loop.nextDrop.filter(item => inLine(item.recipeId)).map(item => (
                   <DropCard
                     key={item.id}
                     item={item}
@@ -568,6 +593,8 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
 
         <AddOrderModal
           open={orderOpen}
+          recipes={orderRecipes}
+          lineName={line.name}
           qtys={orderQtys}
           onBump={bumpOrderQty}
           onConfirm={addLargeOrder}
@@ -788,7 +815,7 @@ function DropCard({
           <span
             title={
               item.surgeLanded
-                ? 'Quinn predicted this surge — the order just landed'
+                ? 'Edify predicted this surge — the order just landed'
                 : 'Demand surging — cooking ahead'
             }
             style={{
@@ -872,6 +899,8 @@ function DropCard({
 
 function AddOrderModal({
   open,
+  recipes,
+  lineName,
   qtys,
   onBump,
   onConfirm,
@@ -879,6 +908,8 @@ function AddOrderModal({
   onClose,
 }: {
   open: boolean;
+  recipes: OrderRecipe[];
+  lineName: string;
   qtys: Record<string, number>;
   onBump: (recipeId: RecipeId, delta: number) => void;
   onConfirm: () => void;
@@ -889,8 +920,8 @@ function AddOrderModal({
   if (!open) return null;
   const accent = pal.accentSolid;
 
-  const total = ORDER_RECIPES.reduce((a, r) => a + (qtys[r.recipeId] ?? 0), 0);
-  const recipeCount = ORDER_RECIPES.filter(r => (qtys[r.recipeId] ?? 0) > 0).length;
+  const total = recipes.reduce((a, r) => a + (qtys[r.recipeId] ?? 0), 0);
+  const recipeCount = recipes.filter(r => (qtys[r.recipeId] ?? 0) > 0).length;
 
   return (
     <div
@@ -923,7 +954,7 @@ function AddOrderModal({
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '24px 24px 12px' }}>
           <div style={{ flex: 1 }}>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Add a large order</h2>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Add a large order · {lineName}</h2>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6b7280' }}>
               Set how many of each — they all drop onto the line at once and land in the cabinet
               when cooked.
@@ -961,7 +992,7 @@ function AddOrderModal({
             gap: 10,
           }}
         >
-          {ORDER_RECIPES.map(r => {
+          {recipes.map(r => {
             const qty = qtys[r.recipeId] ?? 0;
             const active = qty > 0;
             return (
@@ -1116,7 +1147,7 @@ function AddOrderModal({
   );
 }
 
-function CabinetSection({ cabinet }: { cabinet: HeldDisplay[] }) {
+function CabinetSection({ cabinet, sold }: { cabinet: HeldDisplay[]; sold: number }) {
   const pal = useTheme();
   const fresh = cabinet.filter(h => !h.expired);
   const total = fresh.reduce((a, h) => a + h.count, 0);
@@ -1146,6 +1177,23 @@ function CabinetSection({ cabinet }: { cabinet: HeldDisplay[] }) {
           {total}
         </span>
         <span style={{ fontSize: 12, color: pal.textFaint }}>ready to serve</span>
+        <span
+          title="Burgers sold from the line so far today"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'baseline',
+            gap: 5,
+            marginLeft: 4,
+            fontSize: 12,
+            fontWeight: 700,
+            color: pal.textSecondary,
+          }}
+        >
+          <span style={{ fontSize: 15, fontWeight: 900, fontVariantNumeric: 'tabular-nums', color: pal.green }}>
+            {sold.toLocaleString('en-GB')}
+          </span>
+          sold today
+        </span>
         {wasteCount > 0 && (
           <span
             style={{
@@ -1318,7 +1366,7 @@ function QuinnStrip({ recutLog, radar }: { recutLog: RecutLogEntry[]; radar: Rad
     <div style={{ borderBottom: `1px solid ${pal.border}`, background: pal.surfaceSubtle }}>
       {/* Current call */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 22px', position: 'relative' }}>
-        <QuinnOrb pal={pal} />
+        <EdifyOrb pal={pal} />
         <span
           style={{
             fontSize: 11,
@@ -1329,7 +1377,7 @@ function QuinnStrip({ recutLog, radar }: { recutLog: RecutLogEntry[]; radar: Rad
             whiteSpace: 'nowrap',
           }}
         >
-          Quinn
+          Edify
         </span>
         <span
           style={{
@@ -1415,14 +1463,18 @@ function QuinnStrip({ recutLog, radar }: { recutLog: RecutLogEntry[]; radar: Rad
       {/* On the radar */}
       {radar.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 22px 9px', flexWrap: 'wrap' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: pal.textMuted, whiteSpace: 'nowrap' }}>
-            <Radar size={13} /> On the radar
+          <span
+            title="Edify predicts from history — what the POS has actually done at this slot on past comparable days. Not foreknowledge of one-off events."
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: pal.textMuted, whiteSpace: 'nowrap' }}
+          >
+            <Radar size={13} /> Edify expects · from history
           </span>
           {radar.map(item => {
             const rs = toneStyles[item.tone];
             return (
               <span
                 key={item.id}
+                title={`Based on ${item.basis}`}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -1439,8 +1491,9 @@ function QuinnStrip({ recutLog, radar }: { recutLog: RecutLogEntry[]; radar: Rad
               >
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: rs.fg }} />
                 {item.label}
+                <span style={{ color: pal.textMuted, fontWeight: 600 }}>· {item.basis}</span>
                 <span style={{ color: pal.textMuted, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                  in {item.minsUntil}m
+                  · in {item.minsUntil}m
                 </span>
               </span>
             );
@@ -1451,8 +1504,8 @@ function QuinnStrip({ recutLog, radar }: { recutLog: RecutLogEntry[]; radar: Rad
   );
 }
 
-/** Small Quinn identity orb — accent gradient + spark. */
-function QuinnOrb({ pal }: { pal: Palette }) {
+/** Small Edify identity orb — accent disc carrying the Edify logo mark. */
+function EdifyOrb({ pal }: { pal: Palette }) {
   return (
     <span
       style={{
@@ -1463,12 +1516,28 @@ function QuinnOrb({ pal }: { pal: Palette }) {
         height: 26,
         borderRadius: '50%',
         background: pal.accentSolid,
-        color: pal.onAccent,
         flexShrink: 0,
         boxShadow: `0 0 0 3px ${pal.accentChipBg}`,
       }}
     >
-      <Sparkles size={14} />
+      <span
+        role="img"
+        aria-label="Edify"
+        style={{
+          display: 'block',
+          width: 9,
+          height: 15,
+          backgroundColor: pal.onAccent,
+          WebkitMaskImage: 'url(/edify-logo.svg)',
+          maskImage: 'url(/edify-logo.svg)',
+          WebkitMaskRepeat: 'no-repeat',
+          maskRepeat: 'no-repeat',
+          WebkitMaskPosition: 'center',
+          maskPosition: 'center',
+          WebkitMaskSize: 'contain',
+          maskSize: 'contain',
+        }}
+      />
     </span>
   );
 }
@@ -1532,6 +1601,8 @@ function DemoMenu({
   onReset,
   fullscreen,
   onToggleFullscreen,
+  lineId,
+  onSelectLine,
 }: {
   mode: Mode;
   onToggleMode: () => void;
@@ -1543,6 +1614,8 @@ function DemoMenu({
   onReset: () => void;
   fullscreen: boolean;
   onToggleFullscreen: () => void;
+  lineId: string;
+  onSelectLine: (id: string) => void;
 }) {
   const pal = useTheme();
   const [open, setOpen] = useState(false);
@@ -1567,7 +1640,7 @@ function DemoMenu({
               top: 'calc(100% + 8px)',
               right: 0,
               zIndex: 41,
-              minWidth: 220,
+              minWidth: 230,
               padding: 6,
               borderRadius: 12,
               background: pal.surface,
@@ -1578,6 +1651,28 @@ function DemoMenu({
               gap: 2,
             }}
           >
+            <MenuLabel>Crew screen</MenuLabel>
+            {BK_LINES.map(l => (
+              <MenuItem
+                key={l.id}
+                icon={
+                  <span
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      background: l.accent,
+                      boxShadow: lineId === l.id ? `0 0 0 3px ${l.accent}33` : 'none',
+                    }}
+                  />
+                }
+                label={l.name}
+                trailing={lineId === l.id ? <Check size={15} color={pal.green} /> : undefined}
+                onClick={() => onSelectLine(l.id)}
+              />
+            ))}
+
+            <MenuDivider />
             <MenuLabel>Step the clock</MenuLabel>
             <MenuItem icon={<Plus size={15} />} label="+5 min" disabled={atEnd} onClick={onStep5} />
             <MenuItem
@@ -1646,11 +1741,13 @@ function MenuItem({
   label,
   onClick,
   disabled,
+  trailing,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  trailing?: React.ReactNode;
 }) {
   const pal = useTheme();
   return (
@@ -1684,6 +1781,7 @@ function MenuItem({
     >
       <span style={{ display: 'inline-flex', color: pal.textSecondary }}>{icon}</span>
       {label}
+      {trailing && <span style={{ marginLeft: 'auto', display: 'inline-flex' }}>{trailing}</span>}
     </button>
   );
 }

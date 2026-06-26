@@ -131,17 +131,24 @@ type RecutEvent = {
   message: string;
   /** Short label for the "on the radar" ribbon (what's coming). */
   radarLabel: string;
+  /**
+   * Why Quinn expects it — the learned pattern from history. Quinn can't know
+   * about a one-off future event before it happens; it predicts from what the
+   * POS has actually done at this slot on past comparable days.
+   */
+  basis: string;
   tone: RecutTone;
   /** Optional temporary demand surge applied when the event fires. */
   surge?: { recipeId: RecipeId; multiplier: number; forMinutes: number };
 };
 
 const RECUT_SCRIPT: RecutEvent[] = [
-  { atOffset: 4, message: 'Lunch rush building — broiler cooking ahead on Whoppers', radarLabel: 'Whopper rush', tone: 'cook-ahead', surge: { recipeId: 'bk-whopper-patty', multiplier: 1.5, forMinutes: 20 } },
-  { atOffset: 16, message: 'Large mobile order just landed (24 burgers) — dropping 2 trays of Juniors', radarLabel: 'Mobile order · 24', tone: 'cook-ahead', surge: { recipeId: 'bk-junior-patty', multiplier: 2.1, forMinutes: 12 } },
-  { atOffset: 30, message: 'Coach party flagged by Quinn for 13:15 — getting chicken ahead', radarLabel: 'Coach party 13:15', tone: 'cook-ahead', surge: { recipeId: 'bk-chicken-fillet', multiplier: 2.4, forMinutes: 18 } },
-  { atOffset: 46, message: 'Rush easing — holding back so nothing gets binned', radarLabel: 'Rush easing', tone: 'ease-off' },
-  { atOffset: 60, message: 'Steady trade — cooking to the cabinet, no waste so far', radarLabel: 'Steady trade', tone: 'info' },
+  { atOffset: 4, message: 'Lunch building right on cue — same curve as the last 4 Fridays. Cooking Whoppers ahead.', radarLabel: 'Whopper lunch peak', basis: 'last 4 Fridays', tone: 'cook-ahead', surge: { recipeId: 'bk-whopper-patty', multiplier: 1.5, forMinutes: 20 } },
+  { atOffset: 16, message: 'App orders usually jump about now (last Friday, same slot) — dropping 2 trays of Juniors ahead.', radarLabel: 'App order bump', basis: 'last Fri, this slot', tone: 'cook-ahead', surge: { recipeId: 'bk-junior-patty', multiplier: 2.1, forMinutes: 12 } },
+  { atOffset: 24, message: 'Fries always spike with the lunch meals (every weekday) — keeping the fryer ahead.', radarLabel: 'Fries spike', basis: 'every weekday lunch', tone: 'cook-ahead', surge: { recipeId: 'bk-fries', multiplier: 1.8, forMinutes: 16 } },
+  { atOffset: 30, message: 'Chicken Royale picks up around now most days (last 2 weeks) — getting fillets ahead.', radarLabel: 'Royale pickup', basis: 'last 2 weeks, ~13:00', tone: 'cook-ahead', surge: { recipeId: 'bk-chicken-fillet', multiplier: 2.4, forMinutes: 18 } },
+  { atOffset: 46, message: 'Rush easing — same as last week\u2019s tail. Holding back so nothing gets binned.', radarLabel: 'Rush eases', basis: 'last week\u2019s curve', tone: 'ease-off' },
+  { atOffset: 60, message: 'Steady afternoon trade — cooking to the cabinet, no waste so far.', radarLabel: 'Steady trade', basis: 'typical afternoon', tone: 'info' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -175,6 +182,8 @@ type SimState = {
   sellCarry: Record<RecipeId, number>;
   wasteTotal: number;
   soldTotal: number;
+  /** Units sold today per recipe — drives the per-line "sold today" stat. */
+  soldByRecipe: Record<RecipeId, number>;
   lastDropWindow: Record<RecipeId, number>;
   surges: Surge[];
   firedRecuts: Set<number>;
@@ -204,9 +213,11 @@ function initialState(): SimState {
     };
   });
   const sellCarry: Record<RecipeId, number> = {};
+  const soldByRecipe: Record<RecipeId, number> = {};
   const lastDropWindow: Record<RecipeId, number> = {};
   for (const cfg of Object.values(RECIPE_CONFIG)) {
     sellCarry[cfg.recipeId] = 0;
+    soldByRecipe[cfg.recipeId] = 0;
     lastDropWindow[cfg.recipeId] = -1;
   }
   return {
@@ -216,6 +227,7 @@ function initialState(): SimState {
     sellCarry,
     wasteTotal: 0,
     soldTotal: 0,
+    soldByRecipe,
     lastDropWindow,
     surges: [],
     firedRecuts: new Set(),
@@ -287,6 +299,7 @@ function advance(prev: SimState, stepMin: number): SimState {
     holder: prev.holder.map(b => ({ ...b })),
     cooking: prev.cooking.map(b => ({ ...b })),
     sellCarry: { ...prev.sellCarry },
+    soldByRecipe: { ...prev.soldByRecipe },
     lastDropWindow: { ...prev.lastDropWindow },
     surges: prev.surges.filter(s => prev.nowMin < s.untilMin),
     firedRecuts: new Set(prev.firedRecuts),
@@ -352,6 +365,7 @@ function advance(prev: SimState, stepMin: number): SimState {
       batch.count -= take;
       sellWhole -= take;
       state.soldTotal += take;
+      state.soldByRecipe[cfg.recipeId] = (state.soldByRecipe[cfg.recipeId] ?? 0) + take;
     }
   }
 
@@ -460,6 +474,8 @@ export type DropItem = {
 export type RadarItem = {
   id: number;
   label: string;
+  /** The learned pattern Quinn is predicting from (e.g. "last 4 Fridays"). */
+  basis: string;
   tone: RecutTone;
   /** Demo minutes until it fires. */
   minsUntil: number;
@@ -477,6 +493,8 @@ export type CrewLoopSnapshot = {
   stations: StationSnapshot[];
   wasteTotal: number;
   soldTotal: number;
+  /** Units sold today per recipe — for per-line totals. */
+  soldByRecipe: Record<RecipeId, number>;
   // ── Drop-clock view ──────────────────────────────────────────────────────
   /** Minutes until the next 15-min drop boundary. */
   minsToNextDrop: number;
@@ -662,7 +680,7 @@ function buildSnapshot(state: SimState, playing: boolean): CrewLoopSnapshot {
     const ev = RECUT_SCRIPT[i];
     const minsUntil = BK_DEMO_START_MIN + ev.atOffset - state.nowMin;
     if (minsUntil > 0 && minsUntil <= RADAR_LOOKAHEAD_MIN) {
-      radar.push({ id: i, label: ev.radarLabel, tone: ev.tone, minsUntil });
+      radar.push({ id: i, label: ev.radarLabel, basis: ev.basis, tone: ev.tone, minsUntil });
     }
   }
   radar.sort((a, b) => a.minsUntil - b.minsUntil);
@@ -677,6 +695,7 @@ function buildSnapshot(state: SimState, playing: boolean): CrewLoopSnapshot {
     stations,
     wasteTotal: state.wasteTotal,
     soldTotal: state.soldTotal,
+    soldByRecipe: state.soldByRecipe,
     minsToNextDrop,
     dropIntervalMin: BK_DROP_INTERVAL_MIN,
     nextDropHHMM: minutesToHHMM(Math.min(nextWin, 24 * 60 - 1)),

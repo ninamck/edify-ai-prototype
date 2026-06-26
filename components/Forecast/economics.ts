@@ -20,8 +20,10 @@
 import {
   dayOfWeek,
   forecastFor,
+  forecastSellableItemsAt,
   getRecipe,
   getSite,
+  menuPriceFor,
   productionItemsAt,
   PRET_RECIPES,
   type DemandSignal,
@@ -78,6 +80,9 @@ function getRecipeBySku(skuId: SkuId): ProductionRecipe | undefined {
  * a tuna sandwich aren't priced identically.
  */
 export function unitPriceFor(skuId: SkuId): number {
+  // Authored menu price (e.g. BK à la carte) always wins when present.
+  const menu = menuPriceFor(skuId);
+  if (menu != null) return menu;
   const recipe = getRecipeBySku(skuId);
   const category = recipe?.category ?? 'Sandwich';
   const base = CATEGORY_BASE_PRICE[category];
@@ -90,6 +95,8 @@ export function unitPriceFor(skuId: SkuId): number {
  * SKU id. Used in hot paths that already have the recipe in hand.
  */
 function unitPriceForRecipe(skuId: SkuId, recipe: ProductionRecipe): number {
+  const menu = menuPriceFor(skuId);
+  if (menu != null) return menu;
   const base = CATEGORY_BASE_PRICE[recipe.category];
   const wobble = 0.85 + seededNoise(`price|${skuId}`) * 0.3;
   return Math.round(base * wobble * 100) / 100;
@@ -132,7 +139,7 @@ export type Channel = 'takeaway' | 'eatIn' | 'delivery';
 export const CHANNEL_LABEL: Record<Channel, string> = {
   takeaway: 'Takeaway',
   eatIn: 'Eat-in',
-  delivery: 'Delivery',
+  delivery: 'Home delivery',
 };
 
 export type ChannelSplit = {
@@ -696,7 +703,9 @@ type SellableSku = { skuId: SkuId; recipe: ProductionRecipe };
  */
 function sellableSkusForSite(siteId: SiteId): SellableSku[] {
   const out = new Map<SkuId, SellableSku>();
-  for (const item of productionItemsAt(siteId)) {
+  // Menu-aware: BK returns its sellable menu (Whoppers/fries/drinks); every
+  // other site falls back to its production items, unchanged.
+  for (const item of forecastSellableItemsAt(siteId)) {
     const recipe = getRecipe(item.recipeId);
     if (recipe) out.set(item.skuId, { skuId: item.skuId, recipe });
   }

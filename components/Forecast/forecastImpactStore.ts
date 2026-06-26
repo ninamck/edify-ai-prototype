@@ -9,7 +9,7 @@
  *
  *   • AI         — Edify's signal-weighted forecast. It cooks to the live
  *                  per-15-min demand curve and reacts to Quinn's intra-day
- *                  re-cuts (a mobile order lands, a coach party is flagged),
+ *                  re-cuts (learned demand patterns from past comparable days),
  *                  cooking ahead just before a surge and easing off after it.
  *   • Baseline   — the "old way": a flat par. The kitchen drops the same
  *                  steady number every window — the day's average — with no
@@ -123,6 +123,11 @@ const ECON: Record<string, { price: number; cost: number }> = {
   'bk-bacon': { price: 1.5, cost: 0.45 },
   'bk-angus-patty': { price: 6.49, cost: 1.8 },
   'bk-plant-patty': { price: 5.49, cost: 1.6 },
+  'bk-grilled-chicken': { price: 4.99, cost: 1.3 },
+  'bk-fish': { price: 4.49, cost: 1.2 },
+  'bk-fries': { price: 1.99, cost: 0.35 },
+  'bk-nuggets': { price: 3.49, cost: 0.9 },
+  'bk-onion-rings': { price: 2.49, cost: 0.6 },
 };
 
 const RECIPE_CONFIG: Record<RecipeId, RecipeConfig> = (() => {
@@ -171,10 +176,10 @@ type RecutEvent = {
 };
 
 const RECUT_SCRIPT: RecutEvent[] = [
-  { atOffset: 4, message: 'Lunch rush building — cooking ahead on Whoppers', tone: 'cook-ahead', surge: { recipeId: 'bk-whopper-patty', multiplier: 1.6, forMinutes: 22 } },
-  { atOffset: 16, message: 'Large mobile order just landed (24 burgers) — dropping 2 trays of Juniors', tone: 'cook-ahead', surge: { recipeId: 'bk-junior-patty', multiplier: 2.2, forMinutes: 14 } },
-  { atOffset: 30, message: 'Coach party flagged for 13:15 — getting chicken ahead', tone: 'cook-ahead', surge: { recipeId: 'bk-chicken-fillet', multiplier: 2.5, forMinutes: 18 } },
-  { atOffset: 46, message: 'Rush easing — holding back so nothing gets binned', tone: 'ease-off' },
+  { atOffset: 4, message: 'Lunch building like the last 4 Fridays — cooking ahead on Whoppers', tone: 'cook-ahead', surge: { recipeId: 'bk-whopper-patty', multiplier: 1.6, forMinutes: 22 } },
+  { atOffset: 16, message: 'App orders usually jump now (last Friday, same slot) — dropping 2 trays of Juniors', tone: 'cook-ahead', surge: { recipeId: 'bk-junior-patty', multiplier: 2.2, forMinutes: 14 } },
+  { atOffset: 30, message: 'Chicken Royale picks up around now most days (last 2 weeks) — getting fillets ahead', tone: 'cook-ahead', surge: { recipeId: 'bk-chicken-fillet', multiplier: 2.5, forMinutes: 18 } },
+  { atOffset: 46, message: 'Rush easing — same as last week\u2019s tail. Holding back so nothing gets binned', tone: 'ease-off' },
   { atOffset: 64, message: 'Steady trade — cooking to the cabinet, no waste', tone: 'info' },
 ];
 

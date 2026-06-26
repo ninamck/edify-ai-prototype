@@ -115,7 +115,7 @@ export default function AiForecastImpact() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
         <StrategyCard
           title="AI forecast"
-          subtitle="Edify — cooks to the live curve"
+          subtitle="Edify — dynamically changes the forecast through the day"
           accent={AI_ACCENT}
           icon={<Sparkles size={16} />}
           score={loop.ai}
@@ -135,7 +135,7 @@ export default function AiForecastImpact() {
       <LossBar ai={loop.ai.totalLoss} baseline={loop.baseline.totalLoss} />
 
       <p style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6, margin: 0 }}>
-        Both lines face the exact same footfall — including the mid-rush surges Quinn flags.
+        Both lines face the exact same footfall — including the mid-rush surges Edify flags.
         The only difference is how much each chose to cook. Waste is valued at food cost;
         missed sales at menu price. Step the clock to watch the gap open as the rush builds and eases.
       </p>
@@ -260,10 +260,10 @@ function RecutBanner({ recut }: { recut: { message: string; tone: RecutTone } | 
           flexShrink: 0,
         }}
       >
-        <Sparkles size={14} /> Quinn · {s.label}
+        <EdifyMark size={14} color={s.fg} /> Edify · {s.label}
       </span>
       <span style={{ fontSize: 14, color: 'var(--color-text-primary)', fontWeight: 500 }}>
-        {recut ? recut.message : 'Press play — Quinn will re-cut the plan as the day unfolds.'}
+        {recut ? recut.message : 'Press play — Edify will re-cut the plan as the day unfolds.'}
       </span>
     </div>
   );
@@ -455,6 +455,30 @@ function ghostBtn(disabled: boolean): React.CSSProperties {
     fontFamily: 'var(--font-primary)',
     cursor: disabled ? 'default' : 'pointer',
   };
+}
+
+/** The Edify logo mark, tinted via CSS mask (same asset the sidebar uses). */
+function EdifyMark({ size, color }: { size: number; color: string }) {
+  return (
+    <span
+      role="img"
+      aria-label="Edify"
+      style={{
+        display: 'block',
+        width: Math.round(size * 0.58),
+        height: size,
+        backgroundColor: color,
+        WebkitMaskImage: 'url(/edify-logo.svg)',
+        maskImage: 'url(/edify-logo.svg)',
+        WebkitMaskRepeat: 'no-repeat',
+        maskRepeat: 'no-repeat',
+        WebkitMaskPosition: 'center',
+        maskPosition: 'center',
+        WebkitMaskSize: 'contain',
+        maskSize: 'contain',
+      }}
+    />
+  );
 }
 
 /** Hex (#rrggbb) + alpha → rgba() string. */

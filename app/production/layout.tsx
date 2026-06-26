@@ -100,15 +100,18 @@ const RUN_PRODUCTION_PREFIXES = [
 ];
 
 function productionGroupForPath(pathname: string, isBurgerKing: boolean): 'run' | 'plan' {
-  // Burger King's live run-floor surfaces — the crew line (/production/board)
-  // and the live orders feed (/production/orders) — stay in the Run group for
-  // that persona (they're floor monitoring, not the Pret planning board).
+  // Burger King's live run-floor surfaces — the crew line (/production/board),
+  // the live orders feed (/production/orders) and the prep sheet
+  // (/production/prep) — stay in the Run group for that persona (they're
+  // floor surfaces, not the Pret planning board).
   if (
     isBurgerKing &&
     (pathname === '/production/board' ||
       pathname.startsWith('/production/board/') ||
       pathname === '/production/orders' ||
-      pathname.startsWith('/production/orders/'))
+      pathname.startsWith('/production/orders/') ||
+      pathname === '/production/prep' ||
+      pathname.startsWith('/production/prep/'))
   ) {
     return 'run';
   }
@@ -143,6 +146,7 @@ const SPOKE_SUB_TABS: SubTab[] = [
 const BK_RUN_TABS: SubTab[] = [
   { id: 'board',   label: 'Crew line', href: '/production/board' },
   { id: 'orders',  label: 'Orders',    href: '/production/orders' },
+  { id: 'prep',    label: 'Prep',      href: '/production/prep' },
   { id: 'amounts', label: 'Today',     href: '/production/amounts' },
 ];
 
@@ -183,14 +187,19 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
   const isBkOrders =
     isBurgerKing &&
     (pathname === '/production/orders' || pathname.startsWith('/production/orders/'));
+  const isBkPrep =
+    isBurgerKing &&
+    (pathname === '/production/prep' || pathname.startsWith('/production/prep/'));
   const headerLabel = isSpoke
     ? 'Production'
     : isBurgerKing
       ? isBkOrders
         ? 'Live orders'
-        : productionGroup === 'run'
-          ? 'Kitchen line'
-          : 'Drop plan'
+        : isBkPrep
+          ? 'Prep sheet'
+          : productionGroup === 'run'
+            ? 'Kitchen line'
+            : 'Drop plan'
       : productionGroup === 'run'
         ? 'Run production'
         : 'Plan production';
