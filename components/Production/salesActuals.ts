@@ -18,10 +18,12 @@ import {
   carryOverFor,
   demandBiasFor,
   forecastFor,
+  forecastSellableItemsAt,
   getRecipe,
   getSite,
   productionItemsAt,
   type AmountsLine,
+  type ProductionItem,
   type SiteId,
 } from './fixtures';
 import { hhmmToMinutes } from './time';
@@ -39,7 +41,11 @@ import { hhmmToMinutes } from './time';
  * and scales it by the spoke's `salesFactor`, so the per-recipe forecast
  * here is the spoke's projected counter sales for the day.
  */
-function amountsForSalesActuals(siteId: SiteId, date: string): AmountsLine[] {
+function amountsForSalesActuals(
+  siteId: SiteId,
+  date: string,
+  menuAware = false,
+): AmountsLine[] {
   const site = getSite(siteId);
   const isHubLinked =
     !!site?.hubId &&
@@ -47,11 +53,38 @@ function amountsForSalesActuals(siteId: SiteId, date: string): AmountsLine[] {
       site.type === 'HYBRID' ||
       (site.type === 'STANDALONE' && site.linkType === 'linked'));
   if (!site || !isHubLinked) {
+    // Standalone / hub sites bake their own menu. Some brands (e.g. Burger
+    // King) sell a menu that is distinct from the cook COMPONENTS they
+    // produce — Whoppers/fries vs. patties. The forecast grid already
+    // speaks this sellable-menu language, so when `menuAware` is set we
+    // build a row per sellable SKU instead of per production item, keeping
+    // the hourly drawer in step with the grid. Pret (no distinct menu)
+    // falls through to the richer production amounts unchanged.
+    if (menuAware) {
+      const prodSkus = new Set(productionItemsAt(siteId).map(p => p.skuId));
+      const sellable = forecastSellableItemsAt(siteId);
+      if (sellable.some(s => !prodSkus.has(s.skuId))) {
+        return thinLinesForItems(siteId, date, sellable);
+      }
+    }
     return amountsForSiteOnDate(siteId, date);
   }
 
   const hubId = site.hubId!;
-  const items = productionItemsAt(hubId);
+  return thinLinesForItems(siteId, date, productionItemsAt(hubId));
+}
+
+/**
+ * Build lightweight sales lines (forecast + recipe only, no bench/dispatch
+ * enrichment) for a set of items at a site. Used for sites whose sales
+ * surfaces walk a different SKU set than `amountsForSiteOnDate` — hub-linked
+ * spokes and menu-aware standalones.
+ */
+function thinLinesForItems(
+  siteId: SiteId,
+  date: string,
+  items: ProductionItem[],
+): AmountsLine[] {
   const seen = new Set<string>();
   const lines: AmountsLine[] = [];
   for (const item of items) {
@@ -254,8 +287,18 @@ export type SalesByRecipeData = {
   totalForecastDay: number;
 };
 
-export function buildHourlySalesByRecipe(siteId: SiteId, date: string, nowHHMM: string): SalesByRecipeData {
-  const lines = amountsForSalesActuals(siteId, date);
+export function buildHourlySalesByRecipe(
+  siteId: SiteId,
+  date: string,
+  nowHHMM: string,
+  /**
+   * When set, walk the site's sellable menu rather than its production
+   * items (matters for brands like BK whose menu differs from its cook
+   * components). Lets the hourly drawer match the forecast grid's SKUs.
+   */
+  menuAware = false,
+): SalesByRecipeData {
+  const lines = amountsForSalesActuals(siteId, date, menuAware);
   const nowMins = hhmmToMinutes(nowHHMM);
 
   const rows: RecipeSalesRow[] = [];

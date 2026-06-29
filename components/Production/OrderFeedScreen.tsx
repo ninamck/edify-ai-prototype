@@ -119,7 +119,7 @@ export default function OrderFeedScreen() {
           icon={<Store size={17} />}
           title="In-store"
           subtitle="Kiosk · Front counter · Drive-thru"
-          accent="#d62300"
+          accent="#e8730a"
         />
       </div>
     </div>
@@ -219,8 +219,9 @@ function ChannelLane({
         boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
       }}
     >
-      {/* Lane header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '14px 18px', borderBottom: '1px solid var(--color-border-subtle)' }}>
+      {/* Lane header — softly tinted with the channel accent so the column
+          reads by colour at a glance without the heavy filled bar. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '14px 18px', background: hexA(accent, 0.12), borderBottom: `1px solid ${hexA(accent, 0.18)}` }}>
         <span
           style={{
             display: 'inline-flex',
@@ -229,7 +230,7 @@ function ChannelLane({
             width: 34,
             height: 34,
             borderRadius: 10,
-            background: hexA(accent, 0.1),
+            background: hexA(accent, 0.18),
             color: accent,
             flexShrink: 0,
           }}
@@ -237,7 +238,7 @@ function ChannelLane({
           {icon}
         </span>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--color-text-primary)' }}>{title}</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: accent }}>{title}</div>
           <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>{subtitle}</div>
         </div>
         <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
@@ -257,8 +258,8 @@ function ChannelLane({
           alignItems: 'center',
           gap: 10,
           padding: '9px 18px',
-          background: 'var(--color-bg-hover)',
-          borderBottom: '1px solid var(--color-border-subtle)',
+          background: hexA(accent, 0.08),
+          borderBottom: `1px solid ${hexA(accent, 0.18)}`,
         }}
       >
         <Leaf size={14} color={FRESH} />
@@ -279,7 +280,7 @@ function ChannelLane({
           gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
           gap: 10,
           padding: 14,
-          background: '#f6f7f9',
+          background: hexA(accent, 0.05),
         }}
       >
         {orders.length === 0 ? (
@@ -287,14 +288,14 @@ function ChannelLane({
             No orders yet — press Play.
           </div>
         ) : (
-          orders.map(o => <OrderCard key={o.id} order={o} />)
+          orders.map(o => <OrderCard key={o.id} order={o} accent={accent} />)
         )}
       </div>
     </section>
   );
 }
 
-function OrderCard({ order }: { order: Order }) {
+function OrderCard({ order, accent }: { order: Order; accent: string }) {
   const tier = TIER_STYLE[order.tier];
   const items = order.lines.map(l => `${l.qty}× ${l.name}`).join('  ·  ');
   return (
@@ -305,7 +306,8 @@ function OrderCard({ order }: { order: Order }) {
         gap: 8,
         padding: '11px 13px 11px 14px',
         background: '#fff',
-        border: '1px solid var(--color-border-subtle)',
+        // Channel-tinted border reinforces which lane the order belongs to.
+        border: `1px solid ${hexA(accent, 0.18)}`,
         borderRadius: 12,
         // Freshness rail — reads the freshness state down the column at a glance.
         borderLeft: `4px solid ${tier.color}`,
@@ -319,9 +321,9 @@ function OrderCard({ order }: { order: Order }) {
         <span
           style={{
             fontSize: 11.5,
-            fontWeight: 700,
-            color: 'var(--color-text-secondary)',
-            background: 'var(--color-bg-hover)',
+            fontWeight: 800,
+            color: accent,
+            background: hexA(accent, 0.12),
             borderRadius: 100,
             padding: '3px 10px',
             whiteSpace: 'nowrap',

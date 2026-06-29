@@ -8,13 +8,14 @@
  * work-type tags ("Sanitise", "Slice", "Portion"), and quantities on the
  * right. The veg that dresses every burger is prepped by station:
  *
- *   • Sanitise — tomatoes (wash, sanitise, slice)
- *   • Chop     — lettuce, onions, gherkins (cut to spec)
- *   • Prep     — lettuce, onions, gherkins (portion + fill the line)
+ *   • Sanitise — tomatoes, lettuce (wash + sanitise soak)
+ *   • Chop     — tomatoes, lettuce, onions, gherkins (cut to spec)
+ *   • Prep     — tomatoes, lettuce, onions, gherkins (portion + fill the line)
  *
- * Each row shows how many of today's menu items that prep amount dresses,
- * derived from the live forecast (BK_FORECAST) — so the crew can see the prep
- * is sized to the day. Tasks tick off; per-station + overall progress track.
+ * Each row shows the raw amount to prep (e.g. 340 slices / 9 kg) plus the
+ * container target, and how many of today's menu items that amount dresses —
+ * all derived from the live forecast (BK_FORECAST) so the prep is sized to the
+ * day. Tasks tick off; per-station + overall progress track.
  */
 
 import { useState } from 'react';
@@ -61,6 +62,38 @@ function coverageFor(veg: VegKey): number {
   return Math.round(n / 5) * 5;
 }
 
+// Raw quantity to actually prep, derived from the forecast coverage × a
+// per-burger yield. This is "how much of the thing to do" (e.g. slice 340
+// tomatoes), as opposed to the container target ("8 pans"). Moves with the
+// forecast like the coverage does.
+const VEG_AMOUNT: Record<VegKey, { perBurger: number; unit: 'slices' | 'kg'; round: number }> = {
+  tomato: { perBurger: 1.4, unit: 'slices', round: 10 }, // ~1.4 slices per build
+  lettuce: { perBurger: 0.013, unit: 'kg', round: 0.5 }, // ~13 g shredded per build
+  onion: { perBurger: 0.009, unit: 'kg', round: 0.5 }, // ~9 g diced per build
+  gherkin: { perBurger: 2, unit: 'slices', round: 20 }, // ~2 slices per build
+};
+
+const SLICES_PER_TOMATO = 16;
+
+// Amount to prep for a given task. Most stations measure in the veg's base
+// unit (slices / kg), but the sanitise station handles produce whole —
+// tomatoes aren't sliced until Chop — so a task can opt into a whole-unit
+// readout via `amountAs: 'whole'`.
+function amountFor(task: PrepTask): string {
+  if (task.veg === 'tomato' && task.amountAs === 'whole') {
+    const slices = coverageFor('tomato') * VEG_AMOUNT.tomato.perBurger;
+    const whole = Math.max(10, Math.round(slices / SLICES_PER_TOMATO / 10) * 10);
+    return `${whole.toLocaleString('en-GB')} whole`;
+  }
+  const cfg = VEG_AMOUNT[task.veg];
+  const raw = coverageFor(task.veg) * cfg.perBurger;
+  const rounded = Math.max(cfg.round, Math.round(raw / cfg.round) * cfg.round);
+  if (cfg.unit === 'kg') {
+    return `${rounded.toLocaleString('en-GB', { maximumFractionDigits: 1 })} kg`;
+  }
+  return `${rounded.toLocaleString('en-GB')} ${cfg.unit}`;
+}
+
 function linesFor(veg: VegKey): string {
   return Object.keys(VEG_ATTACH[veg])
     .filter(rid => (DAY_UNITS[rid] ?? 0) > 0)
@@ -71,7 +104,7 @@ function linesFor(veg: VegKey): string {
 // ── Prep plan ────────────────────────────────────────────────────────────────
 
 type PrepTag = { label: string; workType: WorkType };
-type PrepTask = { id: string; item: string; veg: VegKey; step: string; target: string; tags: PrepTag[] };
+type PrepTask = { id: string; item: string; veg: VegKey; step: string; target: string; tags: PrepTag[]; amountAs?: 'whole' };
 type PrepStation = { id: string; name: string; caption: string; icon: React.ComponentType<{ size?: number }>; accent: string; tasks: PrepTask[] };
 
 const PREP_PLAN: PrepStation[] = [
@@ -86,12 +119,23 @@ const PREP_PLAN: PrepStation[] = [
         id: 'san-tom',
         item: 'Tomatoes',
         veg: 'tomato',
-        step: 'Wash, sanitise (90s soak), then slice 5mm',
+        step: 'Wash, sanitise (90s soak), drain',
         target: '8 pans',
+        amountAs: 'whole',
         tags: [
           { label: 'Wash', workType: 'wash' },
           { label: 'Sanitise', workType: 'sanitise' },
-          { label: 'Slice', workType: 'slice' },
+        ],
+      },
+      {
+        id: 'san-let',
+        item: 'Lettuce',
+        veg: 'lettuce',
+        step: 'Rinse leaves, sanitise (90s soak), spin dry',
+        target: '6 pans',
+        tags: [
+          { label: 'Wash', workType: 'wash' },
+          { label: 'Sanitise', workType: 'sanitise' },
         ],
       },
     ],
@@ -103,6 +147,7 @@ const PREP_PLAN: PrepStation[] = [
     icon: Scissors,
     accent: '#2f6df6',
     tasks: [
+      { id: 'chop-tom', item: 'Tomatoes', veg: 'tomato', step: 'Sliced 5mm', target: '8 pans', tags: [{ label: 'Slice', workType: 'slice' }] },
       { id: 'chop-let', item: 'Lettuce', veg: 'lettuce', step: 'Shredded 4mm', target: '6 pans', tags: [{ label: 'Shred', workType: 'slice' }] },
       { id: 'chop-oni', item: 'Onions', veg: 'onion', step: 'Diced 6mm', target: '4 pans', tags: [{ label: 'Dice', workType: 'slice' }] },
       { id: 'chop-ghe', item: 'Gherkins', veg: 'gherkin', step: 'Sliced 3mm', target: '5 tubs', tags: [{ label: 'Slice', workType: 'slice' }] },
@@ -115,6 +160,7 @@ const PREP_PLAN: PrepStation[] = [
     icon: Layers,
     accent: '#7a5af5',
     tasks: [
+      { id: 'prep-tom', item: 'Tomatoes', veg: 'tomato', step: 'Fill line trays + 1 backup', target: '3 + 1', tags: [{ label: 'Portion', workType: 'portion' }] },
       { id: 'prep-let', item: 'Lettuce', veg: 'lettuce', step: 'Fill line dispensers + 2 backups', target: '2 + 2', tags: [{ label: 'Portion', workType: 'portion' }] },
       { id: 'prep-oni', item: 'Onions', veg: 'onion', step: 'Portion into line tubs', target: '4 tubs', tags: [{ label: 'Portion', workType: 'portion' }] },
       { id: 'prep-ghe', item: 'Gherkins', veg: 'gherkin', step: 'Top up line caddy', target: '1 caddy', tags: [{ label: 'Fill', workType: 'portion' }] },
@@ -343,10 +389,10 @@ function TaskRow({ task, checked, onToggle, isLast }: { task: PrepTask; checked:
         </span>
       </span>
 
-      {/* Right: amount + forecast coverage */}
-      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
-        <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-          {task.target}
+      {/* Right: raw amount to do → container target → forecast coverage */}
+      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+        <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+          {amountFor(task)}
         </span>
         <span
           title={`Dresses today's forecast: ${linesFor(task.veg)}`}

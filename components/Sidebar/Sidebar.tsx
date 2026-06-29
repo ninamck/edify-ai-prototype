@@ -310,13 +310,16 @@ export default function Sidebar() {
             active={is('/cogs')}
             onClick={() => router.push('/cogs')}
           />
-          <NavItem
+          {/* AI forecast demo (/forecast/ai-demo) is hidden for now — the
+              head-to-head isn't nailed yet, so we keep it out of the nav. The
+              page still exists; re-add this NavItem to bring it back. */}
+          {/* <NavItem
             label="AI forecast"
             icon={Sparkles}
             compact={compact}
             active={is('/forecast/ai-demo')}
             onClick={() => router.push('/forecast/ai-demo')}
-          />
+          /> */}
           <NavItem
             label="Forecast demand"
             icon={LineChart}

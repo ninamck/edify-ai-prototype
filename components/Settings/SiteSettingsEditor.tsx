@@ -112,9 +112,20 @@ export default function SiteSettingsEditor({
     setSavedSummary(null);
   }, [siteId, overlay]);
 
-  useEffect(() => {
-    onTabChange?.(activeTab);
-  }, [activeTab, onTabChange]);
+  // Tab → URL mirroring happens in the tab click handler (`selectTab`),
+  // never in an effect. Driving navigation from an effect that depends on
+  // the host's `onTabChange` callback creates a feedback loop: each
+  // `router.replace` produces a fresh `useSearchParams()` object, which
+  // rebuilds `onTabChange`, which refires the effect, which navigates
+  // again — pinning the main thread. Mirroring on explicit user intent
+  // keeps it a one-shot.
+  const selectTab = useCallback(
+    (tab: SettingsTabId) => {
+      setActiveTab(tab);
+      onTabChange?.(tab);
+    },
+    [onTabChange],
+  );
 
   const stagedCounts = useMemo(() => countOverrides(staged), [staged]);
   const stagedDiffCount = useMemo(() => {
@@ -254,7 +265,7 @@ export default function SiteSettingsEditor({
             <button
               key={t.id}
               type="button"
-              onClick={() => setActiveTab(t.id)}
+              onClick={() => selectTab(t.id)}
               style={{
                 padding: '8px 12px',
                 borderRadius: 8,

@@ -27,13 +27,15 @@ function Inner() {
   const initialTab: SettingsTabId =
     queryTab && TAB_IDS.includes(queryTab) ? queryTab : 'general';
 
+  // Stable across renders: depends only on `router`, never on the
+  // per-render `useSearchParams()` object. `tab` is the only query
+  // parameter this surface owns, so rebuilding the string from it alone
+  // is lossless and keeps this callback referentially stable.
   const setTab = useCallback(
     (tab: SettingsTabId) => {
-      const sp = new URLSearchParams(params.toString());
-      sp.set('tab', tab);
-      router.replace(`/production/settings?${sp.toString()}`);
+      router.replace(`/production/settings?tab=${tab}`);
     },
-    [router, params],
+    [router],
   );
 
   return (

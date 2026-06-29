@@ -25,6 +25,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  BK_BROILER_ID,
   BK_DEMO_START_MIN,
   BK_DROP_INTERVAL_MIN,
   BK_HOLDER_SEED,
@@ -67,6 +68,23 @@ const DAY_TOTAL: Record<RecipeId, number> = (() => {
   return out;
 })();
 
+/**
+ * Recipes on the lower-volume lines (Chicken & fish, Sides). The broiler line
+ * is busy on Whopper/Junior volume + Quinn's surges alone, but these lines
+ * would otherwise go quiet between batches and leave their crew screens empty.
+ */
+const CONTINUOUS_LINE_RECIPES: Set<RecipeId> = new Set(
+  BK_STATIONS.filter(s => s.id !== BK_BROILER_ID).flatMap(s => s.recipeIds),
+);
+
+/**
+ * Per-window demand floor for those lines so they always have something
+ * selling → a fresh batch to drop → live Drop now / Coming up sections right
+ * across the service, instead of stalling out once the seed cabinet covers a
+ * quiet window. The real curve still wins whenever it's busier than this.
+ */
+const CONTINUOUS_FLOOR_PER_WINDOW = 3;
+
 /** Forecast units for a recipe across the 15-min window starting at `startMin`. */
 function demandForWindow(recipeId: RecipeId, startMin: number): number {
   const dayTotal = DAY_TOTAL[recipeId] ?? 0;
@@ -76,7 +94,15 @@ function demandForWindow(recipeId: RecipeId, startMin: number): number {
   for (let m = Math.max(startMin, BK_SERVICE_START_MIN); m < end; m += 1) {
     share += intensityAt(m);
   }
-  return (dayTotal * share) / TOTAL_INTENSITY;
+  const demand = (dayTotal * share) / TOTAL_INTENSITY;
+  if (
+    CONTINUOUS_LINE_RECIPES.has(recipeId) &&
+    startMin >= BK_SERVICE_START_MIN &&
+    startMin < BK_SERVICE_END_MIN
+  ) {
+    return Math.max(demand, CONTINUOUS_FLOOR_PER_WINDOW);
+  }
+  return demand;
 }
 
 /** Start minute of the 15-min window containing `min`. */

@@ -66,7 +66,7 @@ import {
 import StepperViewBK from './StepperViewBK';
 import QtyStepper, { getStepperValueStyle } from './QtyStepper';
 import { getRecipe } from './fixtures';
-import { bkStationForRecipe, BK_CREW_STEPS, BK_LINES, type BkStation } from './bkFixtures';
+import { bkStationForRecipe, BK_BROILER_ID, BK_CREW_STEPS, BK_LINES, type BkStation } from './bkFixtures';
 import type { RecipeId, SiteId } from './fixtures';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -517,26 +517,30 @@ export default function CrewLineDisplay({ siteId: _siteId }: { siteId: SiteId })
               now. Cooks land here the moment they finish. */}
           <CabinetSection cabinet={cabinet} sold={lineSold} />
 
-          {(toStart.length > 0 || cooking.length > 0) && (
+          {(toStart.length > 0 || cooking.length > 0 || line.id !== BK_BROILER_ID) && (
             <Section
               label="Drop now"
               tone={toStart.length > 0 ? 'urgent' : undefined}
               hint="Hit Start — it moves to the cabinet when it's cooked"
             >
-              <CardGrid>
-                {toStart.map(item => (
-                  <DropCard
-                    key={item.id}
-                    item={item}
-                    variant="start"
-                    onCook={cook}
-                    onStart={startCook}
-                  />
-                ))}
-                {cooking.map(item => (
-                  <DropCard key={item.id} item={item} variant="cooking" onCook={cook} />
-                ))}
-              </CardGrid>
+              {toStart.length === 0 && cooking.length === 0 ? (
+                <Empty>Cabinet covered · next drop {loop.nextDropHHMM}</Empty>
+              ) : (
+                <CardGrid>
+                  {toStart.map(item => (
+                    <DropCard
+                      key={item.id}
+                      item={item}
+                      variant="start"
+                      onCook={cook}
+                      onStart={startCook}
+                    />
+                  ))}
+                  {cooking.map(item => (
+                    <DropCard key={item.id} item={item} variant="cooking" onCook={cook} />
+                  ))}
+                </CardGrid>
+              )}
             </Section>
           )}
 
@@ -832,8 +836,7 @@ function DropCard({
               flexShrink: 0,
             }}
           >
-            {item.surgeLanded ? <Check size={12} /> : null}
-            {item.surgeLanded ? 'Called it' : 'Ahead'}
+            Ahead
           </span>
         )}
 
@@ -1298,7 +1301,6 @@ function CabinetCard({ held }: { held: HeldDisplay }) {
           >
             <Trash2 size={13} /> WASTE NOW
           </span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: pal.urgent }}>hold&apos;s up</span>
         </div>
       ) : (
         // Freshness bar + time left — quiet, but legible at a glance.
@@ -1467,7 +1469,7 @@ function QuinnStrip({ recutLog, radar }: { recutLog: RecutLogEntry[]; radar: Rad
             title="Edify predicts from history — what the POS has actually done at this slot on past comparable days. Not foreknowledge of one-off events."
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: pal.textMuted, whiteSpace: 'nowrap' }}
           >
-            <Radar size={13} /> Edify expects · from history
+            <Radar size={13} /> Edify expects
           </span>
           {radar.map(item => {
             const rs = toneStyles[item.tone];
@@ -1491,9 +1493,8 @@ function QuinnStrip({ recutLog, radar }: { recutLog: RecutLogEntry[]; radar: Rad
               >
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: rs.fg }} />
                 {item.label}
-                <span style={{ color: pal.textMuted, fontWeight: 600 }}>· {item.basis}</span>
                 <span style={{ color: pal.textMuted, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                  · in {item.minsUntil}m
+                  · {item.minsUntil}m
                 </span>
               </span>
             );

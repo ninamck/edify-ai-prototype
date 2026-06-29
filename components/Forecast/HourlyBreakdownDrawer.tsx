@@ -131,7 +131,7 @@ function DrawerBody({
 }) {
   const nowHHMM = useMemo(() => effectiveNowHHMM(date), [date]);
   const data = useMemo(
-    () => buildHourlySalesByRecipe(siteId, date, nowHHMM),
+    () => buildHourlySalesByRecipe(siteId, date, nowHHMM, true),
     [siteId, date, nowHHMM],
   );
   const row = useMemo(
