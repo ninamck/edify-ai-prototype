@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { FlaskConical, ChevronDown } from 'lucide-react';
 import { USERS, getRoleRules } from '@/components/Approvals/approvalsStore';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+import { isDemoBuild } from '@/lib/demoConfig';
 import { useFranchise, type FranchiseViewMode } from '@/components/Franchise/FranchiseContext';
 import { BRIEFING_ROLES } from '@/components/briefing';
 import type { BriefingRole } from '@/components/briefing';
@@ -43,6 +44,10 @@ type Props = {
 
 export default function DemoControls({ variant = 'floating', extraSection }: Props) {
   const pathname = usePathname() ?? '';
+
+  // Customer-facing demo builds never expose the internal demo controls
+  // (brand/version/acting-as switches).
+  if (isDemoBuild) return null;
 
   // The floating mount yields control to whichever inline mount lives in
   // the route's own header — otherwise both render and we end up with

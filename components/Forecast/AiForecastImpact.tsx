@@ -12,6 +12,7 @@
  * full-day saving as the headline. Driven entirely by `forecastImpactStore`.
  */
 
+import { useEffect, useRef } from 'react';
 import {
   Play,
   Pause,
@@ -29,8 +30,10 @@ import {
   type StrategyScore,
   type RecutTone,
 } from './forecastImpactStore';
+import { demoCustomer } from '@/lib/demoConfig';
+import { track } from '@/components/Analytics/Analytics';
 
-const AI_ACCENT = '#2f6df6';
+const AI_ACCENT = demoCustomer.accent;
 const BASE_ACCENT = '#9aa3b2';
 const WASTE_COLOR = '#e0533d';
 const MISS_COLOR = '#d99a1c';
@@ -39,6 +42,47 @@ const SAVE_COLOR = '#2fa36b';
 export default function AiForecastImpact() {
   const loop = useForecastImpact();
   const proj = loop.projectedFullDay;
+
+  // Time spent on the forecast demo surface — the headline engagement signal.
+  useEffect(() => {
+    const start = Date.now();
+    track('Forecast demo opened');
+    return () => {
+      track('Forecast demo closed', {
+        seconds_on_surface: Math.round((Date.now() - start) / 1000),
+      });
+    };
+  }, []);
+
+  // Fire once when the replay reaches the end, carrying the money outcome so
+  // "did they see the full AI-vs-fixed-par result" is answerable in Mixpanel.
+  const completedRef = useRef(false);
+  useEffect(() => {
+    if (loop.atEnd && !completedRef.current) {
+      completedRef.current = true;
+      track('Forecast service completed', {
+        projected_saving_gbp: Math.round(proj.saved),
+        waste_avoided_gbp: Math.round(proj.baseline.wasteCost - proj.ai.wasteCost),
+        sales_rescued_gbp: Math.round(proj.baseline.missedRevenue - proj.ai.missedRevenue),
+      });
+    }
+    if (!loop.atEnd) completedRef.current = false; // reset lets it fire again
+  }, [loop.atEnd, proj]);
+
+  const handleToggle = () => {
+    track(loop.playing ? 'Forecast demo paused' : 'Forecast demo played', {
+      at: loop.nowHHMM,
+    });
+    loop.togglePlay();
+  };
+  const handleStep = () => {
+    track('Forecast demo stepped', { at: loop.nowHHMM });
+    loop.stepToNextDrop();
+  };
+  const handleReset = () => {
+    track('Forecast demo reset');
+    loop.reset();
+  };
 
   return (
     <div
@@ -57,7 +101,7 @@ export default function AiForecastImpact() {
       {/* Hero — projected full-day saving */}
       <section
         style={{
-          background: `linear-gradient(135deg, ${AI_ACCENT} 0%, #6a4df6 100%)`,
+          background: `linear-gradient(135deg, ${AI_ACCENT} 0%, ${shade(AI_ACCENT, 0.82)} 100%)`,
           color: '#fff',
           borderRadius: 18,
           padding: '22px 26px',
@@ -65,7 +109,7 @@ export default function AiForecastImpact() {
           alignItems: 'center',
           gap: 28,
           flexWrap: 'wrap',
-          boxShadow: '0 18px 44px rgba(47,109,246,0.28)',
+          boxShadow: `0 18px 44px ${hexA(AI_ACCENT, 0.28)}`,
         }}
       >
         <div style={{ flex: '1 1 320px', minWidth: 260 }}>
@@ -103,9 +147,9 @@ export default function AiForecastImpact() {
         atEnd={loop.atEnd}
         nowHHMM={loop.nowHHMM}
         progress={loop.progress}
-        onToggle={loop.togglePlay}
-        onStep={loop.stepToNextDrop}
-        onReset={loop.reset}
+        onToggle={handleToggle}
+        onStep={handleStep}
+        onReset={handleReset}
       />
 
       {/* Quinn re-cut feed */}
@@ -150,7 +194,7 @@ function HeaderRow() {
         AI forecast — live impact
       </h1>
       <span style={{ fontSize: 13.5, color: 'var(--color-text-secondary)' }}>
-        Burger King · Stratford — lunch service, replayed
+        {demoCustomer.demoSiteLabel}
       </span>
     </div>
   );
@@ -479,6 +523,16 @@ function EdifyMark({ size, color }: { size: number; color: string }) {
       }}
     />
   );
+}
+
+/** Darken (factor < 1) or lighten a hex colour toward black, keeping #rrggbb. */
+function shade(hex: string, factor: number): string {
+  const h = hex.replace('#', '');
+  const r = Math.round(parseInt(h.slice(0, 2), 16) * factor);
+  const g = Math.round(parseInt(h.slice(2, 4), 16) * factor);
+  const b = Math.round(parseInt(h.slice(4, 6), 16) * factor);
+  const to2 = (n: number) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
+  return `#${to2(r)}${to2(g)}${to2(b)}`;
 }
 
 /** Hex (#rrggbb) + alpha → rgba() string. */

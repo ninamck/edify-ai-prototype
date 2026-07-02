@@ -6,6 +6,7 @@ import { FranchiseProvider } from "@/components/Franchise/FranchiseContext";
 import { SiteSettingsStoreProvider } from "@/components/Settings/siteSettingsStore";
 import { NightShiftPolicyProvider } from "@/components/Settings/nightShiftPolicyStore";
 import { CompanyContextProvider } from "@/components/Settings/companyContextStore";
+import Analytics from "@/components/Analytics/Analytics";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -26,6 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${poppins.variable} h-full`}>
       <body className="h-full">
+        <Analytics />
         <ActiveSiteProvider>
           <FranchiseProvider>
             <SiteSettingsStoreProvider>
