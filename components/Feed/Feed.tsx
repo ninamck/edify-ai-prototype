@@ -10,7 +10,6 @@ import {
   Mic,
   ChevronDown,
   ChefHat,
-  BarChart3,
   ShieldCheck,
   CheckCircle2,
   AlertCircle,
@@ -22,7 +21,6 @@ import {
   RotateCw,
   MessageSquare,
   Clock,
-  Truck,
   X,
   Paperclip,
   FileText,
@@ -50,6 +48,7 @@ import { COMMAND_REGISTRY, getCommand } from '@/components/Feed/commands/registr
 import { useCommandRunner } from '@/components/Feed/commands/useCommandRunner';
 import SlashMenu from '@/components/Feed/commands/SlashMenu';
 import TaskHistoryList from '@/components/Feed/TaskHistoryList';
+import { PROMPT_CHIPS } from '@/components/Feed/suggestedPrompts';
 import TaskHistoryDrawer from '@/components/Feed/TaskHistoryDrawer';
 import { logEntry as logHistoryEntry, getTasks as getHistoryTasks, updateTask as updateHistoryTask } from '@/components/Feed/taskHistoryStore';
 import { ACTIVITY_REPLAY_KEY, type ActivityReplayIntent } from '@/components/Activity/ActivityPage';
@@ -180,50 +179,6 @@ function getGhostSuggestion(value: string): string {
   }
   return '';
 }
-
-const PROMPT_CHIPS: {
-  label: string;
-  icon: typeof ChefHat;
-  text: string;
-  /** Bespoke flows that don't route through the chat-command runner —
-   *  the recipe builder wizard and the data-integrity audit each have
-   *  their own dedicated start function. */
-  action?: 'recipe' | 'integrity';
-  /** Chat-command id (see `components/Feed/commands/registry.ts`).
-   *  When set, the chip launches that command's wizard via the runner,
-   *  same path as the slash menu and `+` popover. */
-  commandId?: string;
-}[] = [
-  {
-    label: 'New recipe',
-    icon: ChefHat,
-    text: "I'm releasing avocado toast on the new menu — target 25% food cost.",
-    action: 'recipe',
-  },
-  {
-    label: 'Update recipe',
-    icon: ChefHat,
-    text: '',
-    commandId: 'recipe-edit',
-  },
-  {
-    label: 'Update suppliers',
-    icon: Truck,
-    text: '',
-    commandId: 'supplier',
-  },
-  {
-    label: 'Food cost',
-    icon: BarChart3,
-    text: 'Help me understand our food cost % vs target for this week.',
-  },
-  {
-    label: 'Check data integrity',
-    icon: ShieldCheck,
-    text: '',
-    action: 'integrity',
-  },
-];
 
 // Commands intentionally hidden from the in-chat menus. The parser still
 // recognises them (so /waste and natural language like "waste 3 muffins"
