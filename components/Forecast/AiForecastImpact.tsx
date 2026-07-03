@@ -120,7 +120,7 @@ export default function AiForecastImpact() {
             {gbp(proj.saved)}
           </div>
           <div style={{ fontSize: 15, opacity: 0.92, marginTop: 4 }}>
-            saved vs cooking to a fixed par — less binned, fewer sales missed.
+            saved vs making to a fixed par — less binned, fewer sales missed.
           </div>
         </div>
         <div
@@ -180,7 +180,7 @@ export default function AiForecastImpact() {
 
       <p style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6, margin: 0 }}>
         Both lines face the exact same footfall — including the mid-rush surges Edify flags.
-        The only difference is how much each chose to cook. Waste is valued at food cost;
+        The only difference is how much each chose to make. Waste is valued at unit cost;
         missed sales at menu price. Step the clock to watch the gap open as the rush builds and eases.
       </p>
     </div>
@@ -382,7 +382,7 @@ function StrategyCard({
         </div>
 
         <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-          {score.sold.toLocaleString()} sold · {score.produced.toLocaleString()} cooked
+          {score.sold.toLocaleString()} sold · {score.produced.toLocaleString()} made
         </div>
 
         {/* Top contributors */}

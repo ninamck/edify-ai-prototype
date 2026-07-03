@@ -4,8 +4,7 @@
  * forecastImpactStore — the "AI forecast vs the old way" head-to-head.
  *
  * This is the engine behind the headline forecast demo. It runs the *same*
- * Burger King lunch service twice, against identical real demand, with two
- * different production strategies:
+ * service twice, against identical real demand, with two production strategies:
  *
  *   • AI         — Edify's signal-weighted forecast. It cooks to the live
  *                  per-15-min demand curve and reacts to Quinn's intra-day
@@ -17,92 +16,81 @@
  *
  * Both strategies face the SAME real footfall (including surges — real demand
  * is real demand whether or not you predicted it). The only thing that differs
- * is how much each chose to cook. The divergence is the whole point:
+ * is how much each chose to make. The divergence is the whole point:
  *
  *   • At the peak / during a surge the flat par runs dry → MISSED SALES.
- *   • Once the rush eases the flat par keeps cooking → WASTE (binned units).
+ *   • Once the rush eases the flat par keeps making → WASTE (binned units).
  *   • The AI tracks the curve, so it does far less of both.
  *
- * We surface three things the room can read instantly:
- *   • £ the AI saved so far today (waste avoided + sales rescued)
- *   • a live, side-by-side scoreboard that diverges as the clock advances
- *   • a projected full-day figure (a deterministic fast-forward of the whole
- *     service for both strategies), so the headline lands before you step.
- *
- * Self-contained: it reuses only the BK *fixtures* (day totals, batch rules,
- * shelf life, holder seed) and re-derives the demand curve locally, so it
- * never touches the crew-line `crewLoopStore`.
+ * The dataset (items, demand curve, cabinet seed, re-cut script, service clock)
+ * is supplied by `forecastDemoData` and swaps per customer — burgers for the
+ * internal build, drinks for a customer demo — without touching this engine.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  BK_DEMO_START_MIN,
-  BK_DROP_INTERVAL_MIN,
-  BK_HOLDER_SEED,
-  BK_PRODUCTION_ITEMS,
-  BK_SERVICE_END_MIN,
-  BK_SERVICE_START_MIN,
-  BK_FORECAST,
-} from '@/components/Production/bkFixtures';
-import { getRecipe, getWorkflow } from '@/components/Production/fixtures';
-import type { RecipeId } from '@/components/Production/fixtures';
 import { minutesToHHMM } from '@/components/Production/time';
+import { FORECAST_DEMO, type RecutTone } from './forecastDemoData';
+
+export type { RecutTone };
+
+/** Item ids are opaque strings supplied by the dataset. */
+type ItemId = string;
+
+const SERVICE_START = FORECAST_DEMO.serviceStartMin;
+const SERVICE_END = FORECAST_DEMO.serviceEndMin;
+const DEMO_START = FORECAST_DEMO.demoStartMin;
+const DROP_INTERVAL = FORECAST_DEMO.dropIntervalMin;
+const ITEMS = FORECAST_DEMO.items;
+const PEAKS = FORECAST_DEMO.peaks;
+const BASE_INTENSITY = FORECAST_DEMO.baseIntensity;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Demand model — identical twin-peak curve to the crew line, kept local so this
-// engine has no dependency on the crew-loop internals.
+// Demand model — a base level plus one Gaussian per configured peak.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function intensityAt(min: number): number {
-  const lunch = Math.exp(-(((min - 750) / 70) ** 2)); // ~12:30 peak
-  const dinner = Math.exp(-(((min - 1110) / 80) ** 2)); // ~18:30 peak
-  const base = 0.25;
-  return base + lunch + 0.75 * dinner;
+  let v = BASE_INTENSITY;
+  for (const p of PEAKS) v += p.weight * Math.exp(-(((min - p.centre) / p.width) ** 2));
+  return v;
 }
 
 const TOTAL_INTENSITY = (() => {
   let sum = 0;
-  for (let m = BK_SERVICE_START_MIN; m < BK_SERVICE_END_MIN; m += 1) sum += intensityAt(m);
+  for (let m = SERVICE_START; m < SERVICE_END; m += 1) sum += intensityAt(m);
   return sum;
 })();
 
-const DAY_TOTAL: Record<RecipeId, number> = (() => {
-  const out: Record<RecipeId, number> = {};
-  for (const item of BK_PRODUCTION_ITEMS) {
-    const f = BK_FORECAST.find(x => x.skuId === item.skuId);
-    out[item.recipeId] = f?.projectedUnits ?? 0;
-  }
+const DAY_TOTAL: Record<ItemId, number> = (() => {
+  const out: Record<ItemId, number> = {};
+  for (const item of ITEMS) out[item.id] = item.dayTotal;
   return out;
 })();
 
-/** Forecast units for a recipe across the 15-min window starting at `startMin`. */
-function demandForWindow(recipeId: RecipeId, startMin: number): number {
-  const dayTotal = DAY_TOTAL[recipeId] ?? 0;
+/** Forecast units for an item across the 15-min window starting at `startMin`. */
+function demandForWindow(itemId: ItemId, startMin: number): number {
+  const dayTotal = DAY_TOTAL[itemId] ?? 0;
   if (dayTotal === 0) return 0;
   let share = 0;
-  const end = Math.min(startMin + BK_DROP_INTERVAL_MIN, BK_SERVICE_END_MIN);
-  for (let m = Math.max(startMin, BK_SERVICE_START_MIN); m < end; m += 1) {
+  const end = Math.min(startMin + DROP_INTERVAL, SERVICE_END);
+  for (let m = Math.max(startMin, SERVICE_START); m < end; m += 1) {
     share += intensityAt(m);
   }
   return (dayTotal * share) / TOTAL_INTENSITY;
 }
 
 function windowStart(min: number): number {
-  const offset = min - BK_SERVICE_START_MIN;
-  return BK_SERVICE_START_MIN + Math.floor(offset / BK_DROP_INTERVAL_MIN) * BK_DROP_INTERVAL_MIN;
+  const offset = min - SERVICE_START;
+  return SERVICE_START + Math.floor(offset / DROP_INTERVAL) * DROP_INTERVAL;
 }
 
-const WINDOW_COUNT = Math.max(
-  1,
-  Math.round((BK_SERVICE_END_MIN - BK_SERVICE_START_MIN) / BK_DROP_INTERVAL_MIN),
-);
+const WINDOW_COUNT = Math.max(1, Math.round((SERVICE_END - SERVICE_START) / DROP_INTERVAL));
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Per-recipe config + economics
+// Per-item config + economics
 // ─────────────────────────────────────────────────────────────────────────────
 
-type RecipeConfig = {
-  recipeId: RecipeId;
+type ItemConfig = {
+  itemId: ItemId;
   name: string;
   multipleOf: number;
   cookMinutes: number;
@@ -111,54 +99,31 @@ type RecipeConfig = {
   flatPar: number;
   /** Average sell price — drives "missed sales" (lost revenue). */
   price: number;
-  /** Food cost per unit — drives "waste" (money in the bin). */
+  /** Cost per unit — drives "waste" (money in the bin). */
   cost: number;
 };
 
-/** Eyeballed BK-ish economics (£). Not load-bearing; tune freely per estate. */
-const ECON: Record<string, { price: number; cost: number }> = {
-  'bk-whopper-patty': { price: 5.49, cost: 1.4 },
-  'bk-junior-patty': { price: 3.49, cost: 0.8 },
-  'bk-chicken-fillet': { price: 4.99, cost: 1.3 },
-  'bk-bacon': { price: 1.5, cost: 0.45 },
-  'bk-angus-patty': { price: 6.49, cost: 1.8 },
-  'bk-plant-patty': { price: 5.49, cost: 1.6 },
-  'bk-grilled-chicken': { price: 4.99, cost: 1.3 },
-  'bk-fish': { price: 4.49, cost: 1.2 },
-  'bk-fries': { price: 1.99, cost: 0.35 },
-  'bk-nuggets': { price: 3.49, cost: 0.9 },
-  'bk-onion-rings': { price: 2.49, cost: 0.6 },
-};
-
-const RECIPE_CONFIG: Record<RecipeId, RecipeConfig> = (() => {
-  const out: Record<RecipeId, RecipeConfig> = {};
-  for (const item of BK_PRODUCTION_ITEMS) {
-    const recipe = getRecipe(item.recipeId);
-    if (!recipe) continue;
-    const wf = getWorkflow(recipe.workflowId);
-    const cookMinutes = wf
-      ? Math.max(1, wf.stages.reduce((a, s) => a + s.durationMinutes, 0))
-      : 4;
-    const multipleOf = recipe.batchRules?.multipleOf ?? 2;
-    const dayTotal = DAY_TOTAL[item.recipeId] ?? 0;
-    const avgPerWindow = dayTotal / WINDOW_COUNT;
+const ITEM_CONFIG: Record<ItemId, ItemConfig> = (() => {
+  const out: Record<ItemId, ItemConfig> = {};
+  for (const item of ITEMS) {
+    const multipleOf = item.multipleOf;
+    const avgPerWindow = item.dayTotal / WINDOW_COUNT;
     const flatPar = Math.max(multipleOf, Math.round(avgPerWindow / multipleOf) * multipleOf);
-    const econ = ECON[item.recipeId] ?? { price: 4.5, cost: 1.2 };
-    out[item.recipeId] = {
-      recipeId: item.recipeId,
-      name: recipe.name,
+    out[item.id] = {
+      itemId: item.id,
+      name: item.name,
       multipleOf,
-      cookMinutes,
-      shelfLifeMin: recipe.shelfLifeMinutes ?? 20,
+      cookMinutes: item.cookMinutes,
+      shelfLifeMin: item.shelfLifeMin,
       flatPar,
-      price: econ.price,
-      cost: econ.cost,
+      price: item.price,
+      cost: item.cost,
     };
   }
   return out;
 })();
 
-const ALL_RECIPES = Object.values(RECIPE_CONFIG);
+const ALL_ITEMS = Object.values(ITEM_CONFIG);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Quinn re-cut script — the intra-day signals the AI reacts to (and the
@@ -166,22 +131,7 @@ const ALL_RECIPES = Object.values(RECIPE_CONFIG);
 // drop decisions anticipate them.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type RecutTone = 'info' | 'cook-ahead' | 'ease-off';
-
-type RecutEvent = {
-  atOffset: number;
-  message: string;
-  tone: RecutTone;
-  surge?: { recipeId: RecipeId; multiplier: number; forMinutes: number };
-};
-
-const RECUT_SCRIPT: RecutEvent[] = [
-  { atOffset: 4, message: 'Lunch building like the last 4 Fridays — cooking ahead on Whoppers', tone: 'cook-ahead', surge: { recipeId: 'bk-whopper-patty', multiplier: 1.6, forMinutes: 22 } },
-  { atOffset: 16, message: 'App orders usually jump now (last Friday, same slot) — dropping 2 trays of Juniors', tone: 'cook-ahead', surge: { recipeId: 'bk-junior-patty', multiplier: 2.2, forMinutes: 14 } },
-  { atOffset: 30, message: 'Chicken Royale picks up around now most days (last 2 weeks) — getting fillets ahead', tone: 'cook-ahead', surge: { recipeId: 'bk-chicken-fillet', multiplier: 2.5, forMinutes: 18 } },
-  { atOffset: 46, message: 'Rush easing — same as last week\u2019s tail. Holding back so nothing gets binned', tone: 'ease-off' },
-  { atOffset: 64, message: 'Steady trade — cooking to the cabinet, no waste', tone: 'info' },
-];
+const RECUTS = FORECAST_DEMO.recuts;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Simulation state — one RunState per strategy, shared demand + surges
@@ -191,26 +141,26 @@ export type StrategyId = 'ai' | 'baseline';
 
 type HeldBatch = {
   id: string;
-  recipeId: RecipeId;
+  itemId: ItemId;
   count: number;
   expiresAtMin: number;
 };
 
-type CookingBatch = { recipeId: RecipeId; qty: number; readyAtMin: number };
+type CookingBatch = { itemId: ItemId; qty: number; readyAtMin: number };
 
 type RunState = {
   holder: HeldBatch[];
   cooking: CookingBatch[];
-  sellCarry: Record<RecipeId, number>;
-  lastDropWindow: Record<RecipeId, number>;
+  sellCarry: Record<ItemId, number>;
+  lastDropWindow: Record<ItemId, number>;
   produced: number;
   sold: number;
-  wasteUnits: Record<RecipeId, number>;
-  missedUnits: Record<RecipeId, number>;
+  wasteUnits: Record<ItemId, number>;
+  missedUnits: Record<ItemId, number>;
   seq: number;
 };
 
-type Surge = { recipeId: RecipeId; multiplier: number; untilMin: number };
+type Surge = { itemId: ItemId; multiplier: number; untilMin: number };
 
 type SimState = {
   nowMin: number;
@@ -222,15 +172,15 @@ type SimState = {
 };
 
 function emptyRun(): RunState {
-  const sellCarry: Record<RecipeId, number> = {};
-  const lastDropWindow: Record<RecipeId, number> = {};
-  const wasteUnits: Record<RecipeId, number> = {};
-  const missedUnits: Record<RecipeId, number> = {};
-  for (const cfg of ALL_RECIPES) {
-    sellCarry[cfg.recipeId] = 0;
-    lastDropWindow[cfg.recipeId] = -1;
-    wasteUnits[cfg.recipeId] = 0;
-    missedUnits[cfg.recipeId] = 0;
+  const sellCarry: Record<ItemId, number> = {};
+  const lastDropWindow: Record<ItemId, number> = {};
+  const wasteUnits: Record<ItemId, number> = {};
+  const missedUnits: Record<ItemId, number> = {};
+  for (const cfg of ALL_ITEMS) {
+    sellCarry[cfg.itemId] = 0;
+    lastDropWindow[cfg.itemId] = -1;
+    wasteUnits[cfg.itemId] = 0;
+    missedUnits[cfg.itemId] = 0;
   }
   return {
     holder: [],
@@ -245,15 +195,15 @@ function emptyRun(): RunState {
   };
 }
 
-/** Seed a run's cabinet from the shared BK holder seed (both start identical). */
+/** Seed a run's cabinet from the shared holder seed (both start identical). */
 function seedRun(run: RunState, startMin: number): void {
-  run.holder = BK_HOLDER_SEED.map((seed, i) => {
-    const cfg = RECIPE_CONFIG[seed.recipeId];
+  run.holder = FORECAST_DEMO.holderSeed.map((seed, i) => {
+    const cfg = ITEM_CONFIG[seed.itemId];
     const shelf = cfg?.shelfLifeMin ?? 20;
     const cookedAtMin = startMin - seed.cookedMinAgo;
     return {
       id: `${i}-seed`,
-      recipeId: seed.recipeId,
+      itemId: seed.itemId,
       count: seed.count,
       expiresAtMin: cookedAtMin + shelf,
     };
@@ -261,7 +211,7 @@ function seedRun(run: RunState, startMin: number): void {
 }
 
 function initialState(): SimState {
-  const start = BK_DEMO_START_MIN;
+  const start = DEMO_START;
   const ai = emptyRun();
   const baseline = emptyRun();
   seedRun(ai, start);
@@ -278,22 +228,22 @@ function initialState(): SimState {
 
 const WASTE_GRACE_MIN = 10;
 
-function surgeMultiplier(state: SimState, recipeId: RecipeId): number {
+function surgeMultiplier(state: SimState, itemId: ItemId): number {
   let mult = 1;
   for (const s of state.surges) {
-    if (s.recipeId === recipeId && state.nowMin < s.untilMin) mult *= s.multiplier;
+    if (s.itemId === itemId && state.nowMin < s.untilMin) mult *= s.multiplier;
   }
   return mult;
 }
 
-function heldOf(run: RunState, recipeId: RecipeId, nowMin: number): number {
+function heldOf(run: RunState, itemId: ItemId, nowMin: number): number {
   return run.holder
-    .filter(b => b.recipeId === recipeId && b.expiresAtMin > nowMin)
+    .filter(b => b.itemId === itemId && b.expiresAtMin > nowMin)
     .reduce((a, b) => a + b.count, 0);
 }
 
-function cookingOf(run: RunState, recipeId: RecipeId): number {
-  return run.cooking.filter(b => b.recipeId === recipeId).reduce((a, b) => a + b.qty, 0);
+function cookingOf(run: RunState, itemId: ItemId): number {
+  return run.cooking.filter(b => b.itemId === itemId).reduce((a, b) => a + b.qty, 0);
 }
 
 function roundToMultiple(n: number, multiple: number): number {
@@ -315,23 +265,23 @@ function cloneRun(run: RunState): RunState {
 
 /**
  * Advance a single strategy's run by one demo-minute against the shared real
- * demand. `decideDrop` returns how many units to start cooking at a window
+ * demand. `decideDrop` returns how many units to start making at a window
  * boundary (0 = don't drop this window).
  */
 function stepRun(
   run: RunState,
   nowMin: number,
-  realPerMin: (recipeId: RecipeId) => number,
-  decideDrop: (run: RunState, cfg: RecipeConfig, nowMin: number) => number,
+  realPerMin: (itemId: ItemId) => number,
+  decideDrop: (run: RunState, cfg: ItemConfig, nowMin: number) => number,
 ): void {
   // 1. Finished cooks → cabinet.
   const stillCooking: CookingBatch[] = [];
   for (const cook of run.cooking) {
     if (cook.readyAtMin <= nowMin) {
-      const cfg = RECIPE_CONFIG[cook.recipeId];
+      const cfg = ITEM_CONFIG[cook.itemId];
       run.holder.push({
         id: `${run.seq++}-b`,
-        recipeId: cook.recipeId,
+        itemId: cook.itemId,
         count: cook.qty,
         expiresAtMin: cook.readyAtMin + (cfg?.shelfLifeMin ?? 20),
       });
@@ -342,13 +292,13 @@ function stepRun(
   run.cooking = stillCooking;
 
   // 2. Sell against real demand (oldest fresh first). Unmet demand = missed.
-  for (const cfg of ALL_RECIPES) {
-    let toSell = realPerMin(cfg.recipeId) + (run.sellCarry[cfg.recipeId] ?? 0);
+  for (const cfg of ALL_ITEMS) {
+    const toSell = realPerMin(cfg.itemId) + (run.sellCarry[cfg.itemId] ?? 0);
     let want = Math.floor(toSell);
-    run.sellCarry[cfg.recipeId] = toSell - want;
+    run.sellCarry[cfg.itemId] = toSell - want;
     if (want <= 0) continue;
     const batches = run.holder
-      .filter(b => b.recipeId === cfg.recipeId && b.expiresAtMin > nowMin)
+      .filter(b => b.itemId === cfg.itemId && b.expiresAtMin > nowMin)
       .sort((a, b) => a.expiresAtMin - b.expiresAtMin);
     for (const batch of batches) {
       if (want <= 0) break;
@@ -358,7 +308,7 @@ function stepRun(
       run.sold += take;
     }
     // Anything still wanted after draining the cabinet is a lost sale.
-    if (want > 0) run.missedUnits[cfg.recipeId] += want;
+    if (want > 0) run.missedUnits[cfg.itemId] += want;
   }
 
   // 3. Bin anything past its hold (after a short grace).
@@ -366,7 +316,7 @@ function stepRun(
   for (const batch of run.holder) {
     if (batch.count <= 0) continue;
     if (batch.expiresAtMin + WASTE_GRACE_MIN <= nowMin) {
-      run.wasteUnits[batch.recipeId] += batch.count;
+      run.wasteUnits[batch.itemId] += batch.count;
     } else {
       survivors.push(batch);
     }
@@ -375,34 +325,34 @@ function stepRun(
 
   // 4. Drops — once per cadence window.
   const winStart = windowStart(nowMin);
-  if (nowMin >= BK_SERVICE_START_MIN && nowMin <= BK_SERVICE_END_MIN) {
-    for (const cfg of ALL_RECIPES) {
-      if (run.lastDropWindow[cfg.recipeId] === winStart) continue;
+  if (nowMin >= SERVICE_START && nowMin <= SERVICE_END) {
+    for (const cfg of ALL_ITEMS) {
+      if (run.lastDropWindow[cfg.itemId] === winStart) continue;
       const qty = decideDrop(run, cfg, nowMin);
       if (qty > 0) {
-        run.cooking.push({ recipeId: cfg.recipeId, qty, readyAtMin: nowMin + cfg.cookMinutes });
+        run.cooking.push({ itemId: cfg.itemId, qty, readyAtMin: nowMin + cfg.cookMinutes });
         run.produced += qty;
       }
-      run.lastDropWindow[cfg.recipeId] = winStart;
+      run.lastDropWindow[cfg.itemId] = winStart;
     }
   }
 }
 
 /** AI strategy: cover net need for the next window, surge-aware. */
 function aiDrop(state: SimState) {
-  return (run: RunState, cfg: RecipeConfig, nowMin: number): number => {
+  return (run: RunState, cfg: ItemConfig, nowMin: number): number => {
     const winStart = windowStart(nowMin);
     const upcoming =
-      demandForWindow(cfg.recipeId, winStart + BK_DROP_INTERVAL_MIN) *
-      surgeMultiplier(state, cfg.recipeId);
-    const net = upcoming - heldOf(run, cfg.recipeId, nowMin) - cookingOf(run, cfg.recipeId);
+      demandForWindow(cfg.itemId, winStart + DROP_INTERVAL) *
+      surgeMultiplier(state, cfg.itemId);
+    const net = upcoming - heldOf(run, cfg.itemId, nowMin) - cookingOf(run, cfg.itemId);
     return net > 0 ? Math.max(cfg.multipleOf, roundToMultiple(net, cfg.multipleOf)) : 0;
   };
 }
 
 /** Baseline strategy: drop the same flat par every window, blind to the day. */
-function baselineDrop(cfg: RecipeConfig): number {
-  // Cook the flat par regardless of curve or surge — the "set it and forget
+function baselineDrop(cfg: ItemConfig): number {
+  // Make the flat par regardless of curve or surge — the "set it and forget
   // it" plan a manager writes once in the morning and never revisits.
   return cfg.flatPar;
 }
@@ -419,15 +369,15 @@ function advance(prev: SimState, stepMin: number): SimState {
 
   for (let m = prev.nowMin + 1; m <= state.nowMin; m += 1) {
     // Fire scheduled re-cuts (and apply their surges to real demand).
-    for (let i = 0; i < RECUT_SCRIPT.length; i += 1) {
-      const ev = RECUT_SCRIPT[i];
-      const fireAt = BK_DEMO_START_MIN + ev.atOffset;
+    for (let i = 0; i < RECUTS.length; i += 1) {
+      const ev = RECUTS[i];
+      const fireAt = DEMO_START + ev.atOffset;
       if (m >= fireAt && !state.firedRecuts.has(i)) {
         state.firedRecuts.add(i);
         state.recut = { id: i, message: ev.message, tone: ev.tone, atMin: m };
         if (ev.surge) {
           state.surges.push({
-            recipeId: ev.surge.recipeId,
+            itemId: ev.surge.itemId,
             multiplier: ev.surge.multiplier,
             untilMin: m + ev.surge.forMinutes,
           });
@@ -436,9 +386,9 @@ function advance(prev: SimState, stepMin: number): SimState {
     }
 
     const tmp: SimState = { ...state, nowMin: m };
-    const realPerMin = (recipeId: RecipeId) =>
-      (demandForWindow(recipeId, windowStart(m)) / BK_DROP_INTERVAL_MIN) *
-      surgeMultiplier(tmp, recipeId);
+    const realPerMin = (itemId: ItemId) =>
+      (demandForWindow(itemId, windowStart(m)) / DROP_INTERVAL) *
+      surgeMultiplier(tmp, itemId);
 
     stepRun(state.ai, m, realPerMin, aiDrop(tmp));
     stepRun(state.baseline, m, realPerMin, (_run, cfg) => baselineDrop(cfg));
@@ -456,15 +406,15 @@ export type StrategyScore = {
   sold: number;
   wasteUnits: number;
   missedUnits: number;
-  /** £ of food binned. */
+  /** £ of stock binned. */
   wasteCost: number;
   /** £ of sales lost to empty cabinets. */
   missedRevenue: number;
   /** wasteCost + missedRevenue — total money left on the table. */
   totalLoss: number;
-  /** Per-recipe breakdown for the detail rows. */
+  /** Per-item breakdown for the detail rows. */
   perRecipe: Array<{
-    recipeId: RecipeId;
+    recipeId: string;
     name: string;
     wasteUnits: number;
     missedUnits: number;
@@ -478,16 +428,16 @@ function scoreRun(run: RunState): StrategyScore {
   let missedRevenue = 0;
   let wasteUnits = 0;
   let missedUnits = 0;
-  const perRecipe = ALL_RECIPES.map(cfg => {
-    const w = run.wasteUnits[cfg.recipeId] ?? 0;
-    const mu = run.missedUnits[cfg.recipeId] ?? 0;
+  const perRecipe = ALL_ITEMS.map(cfg => {
+    const w = run.wasteUnits[cfg.itemId] ?? 0;
+    const mu = run.missedUnits[cfg.itemId] ?? 0;
     const wc = w * cfg.cost;
     const mr = mu * cfg.price;
     wasteUnits += w;
     missedUnits += mu;
     wasteCost += wc;
     missedRevenue += mr;
-    return { recipeId: cfg.recipeId, name: cfg.name, wasteUnits: w, missedUnits: mu, wasteCost: wc, missedRevenue: mr };
+    return { recipeId: cfg.itemId, name: cfg.name, wasteUnits: w, missedUnits: mu, wasteCost: wc, missedRevenue: mr };
   }).sort((a, b) => b.wasteCost + b.missedRevenue - (a.wasteCost + a.missedRevenue));
   return {
     produced: run.produced,
@@ -517,20 +467,20 @@ export type ForecastImpactSnapshot = {
   projectedFullDay: { ai: StrategyScore; baseline: StrategyScore; saved: number };
 };
 
-/** The live demo runs from the demo start to the dinner lull so both the
- *  surge (missed sales) and the easing (waste) phases are visible. */
-const DEMO_END_MIN = Math.min(BK_SERVICE_END_MIN, BK_DEMO_START_MIN + 150);
+/** The live demo runs from the demo start to the lull so both the surge
+ *  (missed sales) and the easing (waste) phases are visible. */
+const DEMO_END_MIN = Math.min(SERVICE_END, DEMO_START + 150);
 
 function buildSnapshot(state: SimState, playing: boolean): ForecastImpactSnapshot {
   const ai = scoreRun(state.ai);
   const baseline = scoreRun(state.baseline);
-  const span = Math.max(1, DEMO_END_MIN - BK_DEMO_START_MIN);
+  const span = Math.max(1, DEMO_END_MIN - DEMO_START);
   return {
     nowMin: state.nowMin,
     nowHHMM: minutesToHHMM(Math.min(state.nowMin, 24 * 60 - 1)),
     playing,
     atEnd: state.nowMin >= DEMO_END_MIN,
-    progress: Math.max(0, Math.min(1, (state.nowMin - BK_DEMO_START_MIN) / span)),
+    progress: Math.max(0, Math.min(1, (state.nowMin - DEMO_START) / span)),
     recut: state.recut,
     ai,
     baseline,
@@ -542,8 +492,8 @@ function buildSnapshot(state: SimState, playing: boolean): ForecastImpactSnapsho
 /** Deterministic fast-forward of the entire service for both strategies. */
 const PROJECTED_FULL_DAY: { ai: StrategyScore; baseline: StrategyScore; saved: number } = (() => {
   let s = initialState();
-  while (s.nowMin < BK_SERVICE_END_MIN) {
-    s = advance(s, BK_DROP_INTERVAL_MIN);
+  while (s.nowMin < SERVICE_END) {
+    s = advance(s, DROP_INTERVAL);
   }
   const ai = scoreRun(s.ai);
   const baseline = scoreRun(s.baseline);
@@ -608,7 +558,7 @@ export function useForecastImpact(): ForecastImpact {
     step: (min: number) => advanceBy(min),
     stepToNextDrop: () => {
       const now = stateRef.current.nowMin;
-      const next = windowStart(now) + BK_DROP_INTERVAL_MIN;
+      const next = windowStart(now) + DROP_INTERVAL;
       advanceBy(Math.max(1, next - now));
     },
   };
