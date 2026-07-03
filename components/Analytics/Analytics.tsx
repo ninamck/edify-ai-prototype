@@ -32,6 +32,16 @@ function ensureInit(): boolean {
     api_host: API_HOST,
     persistence: 'localStorage',
     track_pageview: false, // we handle route changes ourselves
+    // Autocapture clicks/inputs/scroll so we see interactions we didn't
+    // hand-instrument. Pageview is disabled here because we emit our own
+    // route-aware 'Page viewed' event below (avoids double-counting).
+    autocapture: {
+      pageview: false,
+      click: true,
+      input: true,
+      submit: true,
+      scroll: true,
+    },
   });
   mixpanel.register({
     customer: DEMO_CUSTOMER_ID,
