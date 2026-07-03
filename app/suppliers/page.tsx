@@ -106,9 +106,9 @@ export default function SuppliersPage() {
   const suggestions = tab === 'suppliers'
     ? [
         { label: 'Add a new supplier', seed: 'Add a new supplier' },
-        { label: 'Mark Agility unavailable', seed: 'Mark Agility unavailable' },
-        { label: 'Update Almarai cut-off to 14:00', seed: 'Update Almarai cutoff to 14:00' },
-        { label: 'Adjust all Bidvest prices +5%', seed: 'Bidvest price +5' },
+        { label: 'Mark CHAGEE Tea Supply Co. unavailable', seed: 'Mark CHAGEE Tea Supply Co. unavailable' },
+        { label: 'Update Fresh Dairy Direct cut-off to 14:00', seed: 'Update Fresh Dairy Direct cutoff to 14:00' },
+        { label: 'Adjust all Monin Syrups UK prices +5%', seed: 'Monin Syrups UK price +5' },
         { label: 'Find duplicate products', seed: 'Find duplicates' },
       ]
     : [

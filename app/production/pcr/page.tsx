@@ -10,6 +10,7 @@ import {
   DEMO_TODAY,
   benchesAt,
   getProductionItem,
+  getSite,
   SEEDED_SIGNED_PCR_DRAFTS_BY_SITE,
   SEEDED_FAILED_PCR_DRAFTS_BY_SITE,
   type BenchId,
@@ -17,6 +18,7 @@ import {
   type BatchStatus,
   type SiteId,
 } from '@/components/Production/fixtures';
+import { CHAGEE_PCR_NOW_HHMM } from '@/components/Production/chageeFixtures';
 import { hhmmToMinutes } from '@/components/Production/time';
 import { useProductionSite } from '@/components/Production/ProductionSiteContext';
 
@@ -59,9 +61,15 @@ export default function PCRQueuePage() {
   //   start <= now < end   -> 'in-progress' (excluded from queue)
   //   start > now          -> 'planned'     (excluded from queue, but shown
   //                                          as upcoming on the timeline)
+  // CHAGEE is an afternoon/evening tea bar, so the Pret morning "now" (07:30)
+  // would leave its whole brew day still "planned". Read a mid-afternoon clock
+  // for the flagship instead, matching the brew line, so finished batches land
+  // in the awaiting queue.
+  const nowHHMM = getSite(siteId)?.brand === 'chagee' ? CHAGEE_PCR_NOW_HHMM : DEMO_NOW_HHMM;
+
   const board = useBoardPlan(siteId, DEMO_TODAY);
   const allSiteBatches: ProductionBatch[] = useMemo(() => {
-    const nowMins = hhmmToMinutes(DEMO_NOW_HHMM);
+    const nowMins = hhmmToMinutes(nowHHMM);
     return board.plannedInstances
       .filter(pi => pi.date === DEMO_TODAY)
       .filter(pi => {

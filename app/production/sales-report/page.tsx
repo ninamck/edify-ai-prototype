@@ -31,6 +31,16 @@ import {
   ChevronDown,
   Lightbulb,
 } from 'lucide-react';
+import {
+  Area,
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import {
   DEMO_TODAY,
@@ -358,72 +368,143 @@ function KPICard({
   );
 }
 
+type TrendPoint = {
+  date: string;
+  label: string;
+  sold: number;
+  forecast: number;
+  variancePct: number;
+};
+
 function DailyTrend({ days }: { days: DaySummary[] }) {
+  const data: TrendPoint[] = days.map(d => ({
+    date: d.date,
+    label: formatHumanDate(d.date),
+    sold: d.sold,
+    forecast: d.forecast,
+    variancePct: d.variancePct,
+  }));
+
+  // Pad the top of the axis so the line never kisses the ceiling.
   const peak = Math.max(1, ...days.flatMap(d => [d.sold, d.forecast]));
+  const yMax = Math.ceil((peak * 1.1) / 50) * 50;
+
   return (
     <div style={{ padding: '24px 32px 32px', display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', gap: 18, fontSize: 11, color: 'var(--color-text-muted)' }}>
-        <LegendDot color="var(--color-text-secondary)" label="Sold" />
-        <LegendDot color="var(--color-border)" label="Forecast" />
+        <LegendSwatch color="var(--color-accent-active)" label="Sold" />
+        <LegendSwatch color="var(--color-text-muted)" label="Forecast" dashed />
       </div>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', height: 140 }}>
-        {days.map(d => (
-          <DayBars key={d.date} day={d} peak={peak} />
-        ))}
+      <div style={{ width: '100%', height: 240 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={data} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
+            <defs>
+              <linearGradient id="soldFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--color-accent-active)" stopOpacity={0.22} />
+                <stop offset="100%" stopColor="var(--color-accent-active)" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke="var(--color-border-subtle)" vertical={false} />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
+              tickLine={false}
+              axisLine={{ stroke: 'var(--color-border)' }}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
+              tickLine={false}
+              axisLine={false}
+              domain={[0, yMax]}
+              width={44}
+              allowDecimals={false}
+            />
+            <Tooltip content={<TrendTooltip />} cursor={{ stroke: 'var(--color-border)', strokeDasharray: '3 3' }} />
+            <Area
+              type="monotone"
+              dataKey="forecast"
+              name="Forecast"
+              stroke="var(--color-text-muted)"
+              strokeWidth={2}
+              strokeDasharray="4 3"
+              fill="none"
+              dot={{ r: 2, fill: 'var(--color-text-muted)' }}
+              activeDot={{ r: 4 }}
+            />
+            <Area
+              type="monotone"
+              dataKey="sold"
+              name="Sold"
+              stroke="var(--color-accent-active)"
+              strokeWidth={2.5}
+              fill="url(#soldFill)"
+              dot={{ r: 3, fill: 'var(--color-accent-active)' }}
+              activeDot={{ r: 5 }}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );
 }
 
-function DayBars({ day, peak }: { day: DaySummary; peak: number }) {
-  const soldH = Math.round((day.sold / peak) * 100);
-  const fcH = Math.round((day.forecast / peak) * 100);
-  const tone = varianceTone(day.variancePct, true);
-  const soldColor =
+function TrendTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: TrendPoint }>;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const point = payload[0]?.payload;
+  if (!point) return null;
+  const tone = varianceTone(point.variancePct, true);
+  const varColor =
     tone === 'good' ? 'var(--color-success)' :
     tone === 'bad' ? 'var(--color-error)' :
     'var(--color-text-secondary)';
   return (
-    <div style={{ flex: 1, minWidth: 50, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-      <span style={{ fontSize: 11, fontWeight: 700, color: soldColor }}>
-        {formatSignedPct(day.variancePct)}
-      </span>
-      <div style={{ flex: 1, width: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 3 }}>
-        <div
-          title={`Sold: ${day.sold}`}
-          style={{
-            width: '40%',
-            maxWidth: 22,
-            height: `${Math.max(2, soldH)}%`,
-            background: soldColor,
-            borderRadius: '2px 2px 0 0',
-          }}
-        />
-        <div
-          title={`Forecast: ${day.forecast}`}
-          style={{
-            width: '40%',
-            maxWidth: 22,
-            height: `${Math.max(2, fcH)}%`,
-            background: 'var(--color-border)',
-            borderRadius: '2px 2px 0 0',
-          }}
-        />
-      </div>
-      <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textAlign: 'center', fontWeight: 600 }}>
-        {formatHumanDate(day.date)}
-      </div>
-      <div style={{ fontSize: 10, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-        {day.sold} / {day.forecast}
+    <div
+      style={{
+        background: 'var(--color-bg-surface, #ffffff)',
+        border: '1px solid var(--color-border-subtle)',
+        borderRadius: 'var(--radius-card, 8px)',
+        padding: '10px 12px',
+        boxShadow: '0 4px 12px rgba(12,20,44,0.10)',
+        fontSize: 12,
+        minWidth: 150,
+      }}
+    >
+      <div style={{ fontWeight: 700, marginBottom: 6, color: 'var(--color-text-primary)' }}>{point.label}</div>
+      <TooltipRow color="var(--color-accent-active)" label="Sold" value={point.sold} />
+      <TooltipRow color="var(--color-text-muted)" label="Forecast" value={point.forecast} />
+      <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--color-border-subtle)', fontWeight: 700, color: varColor }}>
+        {formatSignedPct(point.variancePct)} vs forecast
       </div>
     </div>
   );
 }
 
-function LegendDot({ color, label }: { color: string; label: string }) {
+function TooltipRow({ color, label, value }: { color: string; label: string; value: number }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+      <span style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }} />
+      <span style={{ color: 'var(--color-text-secondary)', flex: 1 }}>{label}</span>
+      <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-primary)' }}>{value}</span>
+    </div>
+  );
+}
+
+function LegendSwatch({ color, label, dashed }: { color: string; label: string; dashed?: boolean }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <span style={{ width: 8, height: 8, borderRadius: 2, background: color }} />
+      <span
+        style={{
+          width: 14,
+          height: 0,
+          borderTop: `2px ${dashed ? 'dashed' : 'solid'} ${color}`,
+        }}
+      />
       {label}
     </span>
   );

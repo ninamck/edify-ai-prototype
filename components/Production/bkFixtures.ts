@@ -36,7 +36,7 @@ import type {
 } from './fixtures';
 
 /** Brand discriminator shared with the fixture `Site` type. */
-export type Brand = 'pret' | 'bk';
+export type Brand = 'pret' | 'bk' | 'chagee';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Demo clock — Burger King runs its own lunch-rush scenario so the crew

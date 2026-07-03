@@ -7,6 +7,7 @@ import { SiteSettingsStoreProvider } from "@/components/Settings/siteSettingsSto
 import { NightShiftPolicyProvider } from "@/components/Settings/nightShiftPolicyStore";
 import { CompanyContextProvider } from "@/components/Settings/companyContextStore";
 import Analytics from "@/components/Analytics/Analytics";
+import { isDemoBuild, demoCustomer } from "@/lib/demoConfig";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -15,7 +16,7 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "Edify",
+  title: isDemoBuild ? demoCustomer.name : "Edify",
   description: "Hospitality operations platform",
 };
 

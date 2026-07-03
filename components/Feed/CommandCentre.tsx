@@ -7,6 +7,10 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
+import { isDemoBuild, demoCustomer } from '@/lib/demoConfig';
+
+/** Fallback site label — the customer name on a gated demo build. */
+const DEFAULT_SITE_LABEL = isDemoBuild ? demoCustomer.name : 'Fitzroy Espresso';
 
 export type CommandCentreVariant = 'store' | 'chain' | 'finance';
 
@@ -144,7 +148,7 @@ const QUINN_ACTIONS = [
   },
 ];
 
-export default function CommandCentre({ variant, siteLabel = 'Fitzroy Espresso', embedded = false }: CommandCentreProps) {
+export default function CommandCentre({ variant, siteLabel = DEFAULT_SITE_LABEL, embedded = false }: CommandCentreProps) {
   const outerMargin = embedded ? 0 : '0 20px 20px';
 
 

@@ -5,6 +5,7 @@ import { ChevronDown, Download, FileText, Layers, LayoutGrid, ListChecks, Scale,
 import BenchCardBoard from '@/components/Production/BenchCardBoard';
 import BenchBalanceView from '@/components/Production/BenchBalanceView';
 import CrewLineDisplay from '@/components/Production/CrewLineDisplay';
+import ChageeBrewLine from '@/components/Production/ChageeBrewLine';
 import BatchDetailPanel from '@/components/Production/BatchDetailPanel';
 import CadenceDetailPanel from '@/components/Production/CadenceDetailPanel';
 import BenchIngredientsPanel from '@/components/Production/BenchIngredientsPanel';
@@ -172,6 +173,13 @@ export default function ProductionBoardPage() {
   // by the live holding cabinet, not the Pret bench board.
   if (site.brand === 'bk') {
     return <CrewLineDisplay siteId={site.id} />;
+  }
+
+  // CHAGEE is a fresh-brew tea bar: its make surface is the brew line — a
+  // back-scheduled clock that says WHEN to start each tea (some ~2h) and HOW
+  // MUCH to make for the forecast, plus what's brewing and fresh in the urns.
+  if (site.brand === 'chagee') {
+    return <ChageeBrewLine siteId={site.id} />;
   }
 
   return (

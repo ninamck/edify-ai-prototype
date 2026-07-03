@@ -47,7 +47,7 @@ export default function AssistedOrderingLayout({ children }: { children: React.R
           }}
         >
           <div style={{ minWidth: 0, maxWidth: '240px' }}>
-            <SiteSwitcher siteName="Fitzroy Espresso" compact={false} />
+            <SiteSwitcher siteName="CHAGEE — Flagship" compact={false} />
           </div>
 
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -59,7 +59,7 @@ export default function AssistedOrderingLayout({ children }: { children: React.R
                 letterSpacing: '0.01em',
               }}
             >
-              Suggested Ordering
+              Predictive Ordering
             </span>
           </div>
 

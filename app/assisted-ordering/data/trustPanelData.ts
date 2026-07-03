@@ -3,66 +3,67 @@ import type { Ingredient, SuggestedOrderLine, RecurringOrderLine, TrustPanelData
 // ─── Hero stories (verbatim from Ed's call) ───────────────────────────────────
 
 const TRUST_PANEL_OVERRIDES: Record<string, TrustPanelData> = {
-  // Recommendation matches the usual pattern — the comforting case
-  'line-chicken': {
-    history: {
-      dayOfWeek: 'Thursdays',
-      points: [
-        { date: '2 May', qty: 11 },
-        { date: '9 May', qty: 12 },
-        { date: '16 May', qty: 13 },
-        { date: '23 May', qty: 12 },
-      ],
-      unit: 'kg',
-      average: 12,
-    },
-    consumption: {
-      value: 15,
-      unit: 'kg',
-      window: 'over the next 2 days, until Saturday delivery',
-      driver: 'based on forecast × recipe usage',
-    },
-  },
-
-  // Recommendation higher than usual — forecast spike
-  'line-oatmilk': {
-    history: {
-      dayOfWeek: 'Thursdays',
-      points: [
-        { date: '2 May', qty: 8 },
-        { date: '9 May', qty: 7 },
-        { date: '16 May', qty: 9 },
-        { date: '23 May', qty: 8 },
-      ],
-      unit: 'L',
-      average: 8,
-    },
-    consumption: {
-      value: 14,
-      unit: 'L',
-      window: 'over the next 3 days, until Monday delivery',
-      driver: 'based on forecast × recipe usage',
-    },
-  },
-
-  // Recommendation lower than usual — softer weekend
-  'rec-croissants': {
+  // Recommendation matches the usual pattern — the comforting case.
+  // Jasmine green is the everyday staple: steady week on week.
+  'line-jasmine': {
     history: {
       dayOfWeek: 'Fridays',
       points: [
-        { date: '2 May', qty: 5 },
-        { date: '9 May', qty: 5 },
-        { date: '16 May', qty: 6 },
-        { date: '23 May', qty: 4 },
+        { date: '4 Apr', qty: 3.0 },
+        { date: '11 Apr', qty: 3.2 },
+        { date: '18 Apr', qty: 3.1 },
+        { date: '23 Apr', qty: 3.0 },
       ],
-      unit: 'boxes',
+      unit: 'kg',
+      average: 3.1,
+    },
+    consumption: {
+      value: 3.2,
+      unit: 'kg',
+      window: 'over the next 2 days, until Friday delivery',
+      driver: 'based on forecast × recipe usage',
+    },
+  },
+
+  // Recommendation higher than usual — oat-milk lattes trending up.
+  'line-oatmilk': {
+    history: {
+      dayOfWeek: 'Fridays',
+      points: [
+        { date: '4 Apr', qty: 8 },
+        { date: '11 Apr', qty: 9 },
+        { date: '18 Apr', qty: 11 },
+        { date: '23 Apr', qty: 13 },
+      ],
+      unit: 'L',
+      average: 10,
+    },
+    consumption: {
+      value: 15,
+      unit: 'L',
+      window: 'over the next 2 days, until Friday delivery',
+      driver: 'oat-milk drinks up ~40% this fortnight',
+    },
+  },
+
+  // Recommendation lower than usual — straws over-ordered on the standing order.
+  'rec-straws': {
+    history: {
+      dayOfWeek: 'This week',
+      points: [
+        { date: '4 Apr', qty: 5 },
+        { date: '11 Apr', qty: 5 },
+        { date: '18 Apr', qty: 6 },
+        { date: '23 Apr', qty: 5 },
+      ],
+      unit: 'packs',
       average: 5,
     },
     consumption: {
-      value: 4,
-      unit: 'boxes',
-      window: 'tomorrow, daily delivery',
-      driver: 'based on forecast × recipe usage',
+      value: 5,
+      unit: 'packs',
+      window: 'this week, weekly delivery',
+      driver: 'based on forecast × drinks mix',
     },
   },
 };

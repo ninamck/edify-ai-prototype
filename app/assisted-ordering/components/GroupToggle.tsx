@@ -20,10 +20,8 @@ export default function GroupToggle({ value, onChange }: Props) {
       aria-label="Group orders by"
       style={{
         display: 'inline-flex',
-        borderRadius: '9px',
-        background: 'var(--color-bg-hover)',
-        padding: '3px',
-        gap: '2px',
+        flexWrap: 'wrap',
+        gap: '6px',
       }}
     >
       {OPTIONS.map((opt) => {
@@ -36,18 +34,17 @@ export default function GroupToggle({ value, onChange }: Props) {
             aria-checked={active}
             onClick={() => onChange(opt.value)}
             style={{
-              padding: '5px 12px',
-              borderRadius: '7px',
-              border: 'none',
-              background: active ? 'var(--color-bg-surface)' : 'transparent',
-              color: active ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+              padding: '5px 11px',
+              borderRadius: '100px',
+              border: active ? 'none' : '1px solid var(--color-border)',
+              background: active ? 'var(--color-accent-active)' : '#fff',
+              color: active ? '#F4F1EC' : 'var(--color-text-secondary)',
               fontSize: '12px',
-              fontWeight: active ? 600 : 400,
+              fontWeight: 600,
               fontFamily: 'var(--font-primary)',
               cursor: 'pointer',
-              boxShadow: active ? '0 1px 4px rgba(0, 28, 53,0.12)' : 'none',
-              transition: 'all 0.15s ease',
               whiteSpace: 'nowrap',
+              transition: 'all 0.15s ease',
             }}
           >
             {opt.label}

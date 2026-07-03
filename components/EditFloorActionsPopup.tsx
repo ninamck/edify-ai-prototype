@@ -90,7 +90,7 @@ export const SITE_DESTINATIONS: SiteDestination[] = [
   { id: 'plan-production', label: 'Plan production', iconKey: 'CalendarClock', href: '/plan-production', group: 'Make, plan & dispatch' },
   { id: 'production-summary', label: 'View production summary', iconKey: 'ClipboardList', href: '/production-summary', group: 'Make, plan & dispatch' },
   { id: 'dispatch', label: 'Dispatch to stores', iconKey: 'Send', href: '/dispatch', group: 'Make, plan & dispatch' },
-  { id: 'review-orders', label: 'Review suggested orders', iconKey: 'ShoppingCart', href: '/assisted-ordering', group: 'Stock & ordering' },
+  { id: 'review-orders', label: 'Predictive ordering', iconKey: 'ShoppingCart', href: '/assisted-ordering', group: 'Stock & ordering' },
   { id: 'count-stock', label: 'Stocktake', iconKey: 'PackageSearch', href: '/stock', group: 'Stock & ordering' },
   { id: 'match-invoices', label: 'Match invoices', iconKey: 'FileCheck', href: '/invoices', group: 'Stock & ordering' },
   { id: 'order-history', label: 'View order history', iconKey: 'Clock', href: '/order-history', group: 'Stock & ordering' },

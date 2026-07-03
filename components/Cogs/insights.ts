@@ -29,15 +29,15 @@ export function rowHasInsight(varPct: number, insightId?: string): boolean {
 /** One-line "why we think this is happening" for the top-variances board.
  *  Keyed by the scripted insightId; rows without one fall back to a heuristic. */
 const VARIANCE_REASONS: Record<string, string> = {
-  avocado: 'New avocado recipe not yet costed, plus likely unlogged waste',
-  'smoked-salmon': 'Short delivery — invoiced for more than was received',
-  'house-red-wine': 'Bottle count down more than sales — over-measures or breakage',
-  'sourdough-loaf': 'Staff sandwiches not rung into the till',
-  'chicken-breast': 'Portions made heavier than the recipe',
-  'basil-leaves': 'Fresh herb spoiling faster than the recipe allows',
-  'oat-milk': 'Free-poured when frothing coffee',
-  'whole-milk': 'Steamed-milk over-pour when frothing',
-  'bagel-vegan': 'Baked to a tray count, not to forecast',
+  avocado: 'New pearl drink not yet costed, plus likely unlogged cooked-pearl waste',
+  'smoked-salmon': 'Short delivery — invoiced for more leaf than was received',
+  'house-red-wine': 'Syrup down more than sales — free-poured pumps or spillage',
+  'sourdough-loaf': 'Staff milk teas not rung into the till',
+  'chicken-breast': 'Leaf ladled heavier than the recipe',
+  'basil-leaves': 'Fresh purée spoiling faster than the recipe allows',
+  'oat-milk': 'Free-poured when building milk teas',
+  'whole-milk': 'Milk over-pour when building milk teas',
+  'bagel-vegan': 'Batch-prepped to a standing par, not to forecast',
   'beans-red-kidney': 'Scoops not weighed to spec',
 };
 
@@ -80,25 +80,25 @@ export function getVarianceAction(rowId: string): CogsRowAction | undefined {
  *  short bullet lines (one point each) so the popover stays scannable. */
 const ROW_INSIGHTS: Record<string, string> = {
   avocado:
-    '- **Biggest variance** this period\n- Used 128 kg vs 52 kg recipe\n- New avocado dish not yet costed + unlogged waste\n- **Fix:** cost the new recipe, log waste, recount',
+    '- **Biggest variance** this period\n- Used 128 kg vs 52 kg recipe\n- New pearl drink not yet costed + unlogged waste\n- **Fix:** cost the new recipe, log cooked-pearl waste, recount',
   'smoked-salmon':
-    '- +25% over recipe (+£154)\n- Stock lower than the invoice says\n- Likely a short delivery\n- **Fix:** check delivery vs invoice, raise credit',
+    '- +25% over recipe (+£154)\n- Leaf stock lower than the invoice says\n- Likely a short delivery\n- **Fix:** check delivery vs invoice, raise credit',
   'house-red-wine':
-    '- +25% over recipe (+£78)\n- Bottles down more than sales\n- Over-measures or breakage\n- **Fix:** use measures, log breakages',
+    '- +25% over recipe (+£78)\n- Syrup down more than sales\n- Free-poured pumps or spillage\n- **Fix:** use a dosing pump, log spillage',
   'sourdough-loaf':
-    '- +16% over recipe (+£40)\n- Used more than sales explain\n- Staff sandwiches not rung in\n- **Fix:** ring in staff food / comps',
+    '- +16% over recipe (+£40)\n- Used more than sales explain\n- Staff milk teas not rung in\n- **Fix:** ring in staff drinks / comps',
   'bagel-vegan':
-    '- +12.2% over recipe (50 units)\n- Baking to tray count, not forecast\n- **Fix:** trim standing par ~15%',
+    '- +12.2% over recipe (50 portions)\n- Batch-prepping to a par, not forecast\n- **Fix:** trim standing par ~15%',
   'basil-leaves':
-    '- +31.6% over recipe (£18.60)\n- Fresh herb spoiling before use\n- **Fix:** order smaller, more often',
+    '- +31.6% over recipe (£18.60)\n- Fresh purée spoiling before use\n- **Fix:** order smaller, more often',
   'beans-red-kidney':
     '- +18.8% over recipe (£7.20)\n- Scoops not weighed to spec\n- Spot-check portioning',
   'whole-milk':
-    '- +9.6% over recipe\n- Steamed-milk waste on the bar (8 L)\n- Watch the espresso bar',
+    '- +9.6% over recipe\n- Milk over-pour on the bar (8 L)\n- Watch the milk-tea station',
   'oat-milk':
-    '- +18.8% over recipe\n- Free-pour on flat whites\n- **Fix:** marked pitcher line',
+    '- +18.8% over recipe\n- Free-pour on milk teas\n- **Fix:** marked pitcher line',
   'chicken-breast':
-    '- +16% over recipe (+£117)\n- Made heavier than recipe + trim loss\n- **Fix:** weigh portions vs recipe card',
+    '- +16% over recipe (+£117)\n- Ladled heavier than recipe + brew loss\n- **Fix:** weigh leaf doses vs recipe card',
 };
 
 /** Returns the authored narrative for a variance row, or a generated
@@ -131,28 +131,28 @@ export const COGS_PATTERNS: CogsPattern[] = [
     id: 'uncosted-recipe',
     title: 'A new recipe not yet costed is the #1 driver',
     detail:
-      'Avocado alone accounts for ~£320 of the gap — a new avocado dish is selling but its recipe isn\u2019t costed yet, so theoretical under-counts it, and some avocado waste went unlogged. Cost the recipe and the variance largely closes.',
+      'Tapioca pearls alone account for ~£320 of the gap — a new pearl drink is selling but its recipe isn\u2019t costed yet, so theoretical under-counts it, and some cooked-pearl waste went unlogged. Cost the recipe and the variance largely closes.',
     severity: 'high',
   },
   {
     id: 'short-deliveries',
     title: 'Deliveries not matching invoices',
     detail:
-      'Smoked Salmon is 25% over recipe because stock on hand is lower than the invoice claims — a classic short delivery. Checking goods-in against invoices and raising credits recovers spend that otherwise reads as kitchen variance.',
+      'Orchid oolong leaf is 25% over recipe because stock on hand is lower than the invoice claims — a classic short delivery. Checking goods-in against invoices and raising credits recovers spend that otherwise reads as bar variance.',
     severity: 'medium',
   },
   {
     id: 'free-pour',
-    title: 'Plant milks consistently over-poured',
+    title: 'Milks consistently over-poured',
     detail:
-      'Oat (+18.8%) and whole milk (+9.6%) over-run recipe three weeks running on the espresso bar — a free-pour habit, not a data issue.',
+      'Oat (+18.8%) and whole milk (+9.6%) over-run recipe three weeks running on the milk-tea station — a free-pour habit, not a data issue.',
     severity: 'medium',
   },
   {
     id: 'protein-portioning',
-    title: 'Protein portions creeping up',
+    title: 'Premium leaf doses creeping up',
     detail:
-      'Chicken (+16%) is being made heavier than the recipe on hot sandwiches. Protein is the highest-value variance per gram, so a portioning spot-check pays back fastest.',
+      'Aged pu\u2019er (+16%) is being ladled heavier than the recipe on milk teas. Premium leaf is the highest-value variance per gram, so a dosing spot-check pays back fastest.',
     severity: 'low',
   },
 ];
@@ -185,10 +185,10 @@ export const COGS_INSIGHT_CARDS: CogsInsightCard[] = [
   {
     id: 'avocado-recipe',
     severity: 'high',
-    title: 'New avocado recipe not yet costed',
+    title: 'New pearl drink recipe not yet costed',
     diagnosis:
-      'Actual usage (128 kg) is well above the 52 kg theoretical, because a new avocado dish is selling but its recipe isn\u2019t costed in the library yet \u2014 so theory under-counts it. Some avocado waste (browning) also went unlogged.',
-    action: 'Cost the new avocado recipe in the library, log the waste, then recount the avocado bin before locking the stocktake.',
+      'Actual usage (128 kg) is well above the 52 kg theoretical, because a new pearl-topped drink is selling but its recipe isn\u2019t costed in the library yet \u2014 so theory under-counts it. Some cooked-pearl waste (over-batching, discarded past hold time) also went unlogged.',
+    action: 'Cost the new pearl drink recipe in the library, log the cooked-pearl waste, then recount the pearl bin before locking the stocktake.',
     impactDh: 319.2,
     kind: 'Setup',
     rowIds: ['avocado'],
@@ -197,9 +197,9 @@ export const COGS_INSIGHT_CARDS: CogsInsightCard[] = [
   {
     id: 'salmon-short-delivery',
     severity: 'high',
-    title: 'Smoked salmon short delivery',
+    title: 'Orchid oolong leaf short delivery',
     diagnosis:
-      'Salmon is 25% over recipe because the stock on hand is lower than the delivery note and invoice claim \u2014 the case looks like a short delivery, so the missing cost reads as kitchen usage.',
+      'Orchid oolong leaf is 25% over recipe because the stock on hand is lower than the delivery note and invoice claim \u2014 the case looks like a short delivery, so the missing cost reads as bar usage.',
     action: 'Check goods-in against the invoice and raise a supplier credit for the shortfall.',
     impactDh: 154.0,
     kind: 'Data fix',
@@ -209,10 +209,10 @@ export const COGS_INSIGHT_CARDS: CogsInsightCard[] = [
   {
     id: 'milk-free-pour',
     severity: 'medium',
-    title: 'Milk over-poured when frothing coffee',
+    title: 'Milk over-poured when building milk teas',
     diagnosis:
-      'Oat (+18.8%) and whole milk (+9.6%) run over recipe every week \u2014 too much milk poured when frothing/steaming for coffees, not a data error.',
-    action: 'Add a marked pour line to the milk pitchers and brief baristas; typically recovers ~10% of the variance.',
+      'Oat (+18.8%) and whole milk (+9.6%) run over recipe every week \u2014 too much milk poured when finishing milk teas, not a data error.',
+    action: 'Add a marked pour line to the milk pitchers and brief the bar; typically recovers ~10% of the variance.',
     impactDh: 67.65,
     kind: 'Operations',
     rowIds: ['oat-milk', 'whole-milk'],
@@ -220,10 +220,10 @@ export const COGS_INSIGHT_CARDS: CogsInsightCard[] = [
   {
     id: 'protein-portioning',
     severity: 'medium',
-    title: 'Protein portions creeping up',
+    title: 'Premium leaf doses creeping up',
     diagnosis:
-      'Chicken is 16% over theoretical \u2014 the largest protein variance \u2014 from making hot sandwiches heavier than the recipe plus trim yield loss.',
-    action: 'Weigh a sample of hot sandwiches against the recipe card and re-brief the line.',
+      'Aged pu\u2019er is 16% over theoretical \u2014 the largest premium-leaf variance \u2014 from ladling milk teas heavier than the recipe plus brew yield loss.',
+    action: 'Weigh a sample of leaf doses against the recipe card and re-brief the bar.',
     impactDh: 117.0,
     kind: 'Operations',
     rowIds: ['chicken-breast'],
@@ -231,10 +231,10 @@ export const COGS_INSIGHT_CARDS: CogsInsightCard[] = [
   {
     id: 'wine-shrinkage',
     severity: 'medium',
-    title: 'House wine down more than sales',
+    title: 'Brown sugar syrup down more than sales',
     diagnosis:
-      'House Red is 25% over recipe \u2014 bottle count dropped more than the till explains. That points to free-poured measures, comps, or unlogged breakage at the bar rather than a data error.',
-    action: 'Pour to a measure, log breakages, and ring in any comps so usage and sales line up.',
+      'Brown sugar syrup is 25% over recipe \u2014 the count dropped more than the till explains. That points to free-poured pumps, comps, or unlogged spillage at the bar rather than a data error.',
+    action: 'Pour to a dosing pump, log spillage, and ring in any comps so usage and sales line up.',
     impactDh: 78.0,
     kind: 'Operations',
     rowIds: ['house-red-wine'],
@@ -242,10 +242,10 @@ export const COGS_INSIGHT_CARDS: CogsInsightCard[] = [
   {
     id: 'sourdough-staff',
     severity: 'low',
-    title: 'Sourdough used beyond sales',
+    title: 'Bold black leaf used beyond sales',
     diagnosis:
-      'Sourdough runs 16% over recipe \u2014 more loaves are going out than menu sales explain, typically staff sandwiches and comps that never hit the till.',
-    action: 'Ring staff food and comps through the till (at zero price) so they leave the variance.',
+      'Bold black tea leaf runs 16% over recipe \u2014 more is going out than menu sales explain, typically staff milk teas and comps that never hit the till.',
+    action: 'Ring staff drinks and comps through the till (at zero price) so they leave the variance.',
     impactDh: 40.0,
     kind: 'Operations',
     rowIds: ['sourdough-loaf'],
@@ -253,10 +253,10 @@ export const COGS_INSIGHT_CARDS: CogsInsightCard[] = [
   {
     id: 'basil-spoilage',
     severity: 'low',
-    title: 'Basil spoiling faster than the recipe',
+    title: 'Peach purée spoiling faster than the recipe',
     diagnosis:
-      'Basil Leaves runs 31.6% over recipe \u2014 a fast-perishing fresh herb being binned before it\u2019s used, so usage outruns what the menu mix predicts.',
-    action: 'Order basil in smaller, more frequent drops and prep to order to cut spoilage.',
+      'Peach purée runs 31.6% over recipe \u2014 a fast-perishing fresh ingredient being binned before it\u2019s used, so usage outruns what the menu mix predicts.',
+    action: 'Order peach purée in smaller, more frequent drops and open to order to cut spoilage.',
     impactDh: 18.6,
     kind: 'Operations',
     rowIds: ['basil-leaves'],
@@ -301,7 +301,7 @@ export function getCogsChatAnswer(question: string): CogsChatAnswer {
 
   if (q.includes('biggest') || q.includes('largest') || q.includes('worst')) {
     return {
-      text: `The biggest single discrepancy is **Avocado** — about **£320** of unfavourable variance. Actual usage (128 kg) far outruns the 52 kg theoretical because a **new avocado dish isn't costed in the recipe library yet**, so theory under-counts it, and some avocado waste went unlogged. Cost the recipe, log the waste and recount before locking. Next worst is **Smoked Salmon** (+£154) — stock is lower than the invoice, a likely short delivery.`,
+      text: `The biggest single discrepancy is **Tapioca Pearls** — about **£320** of unfavourable variance. Actual usage (128 kg) far outruns the 52 kg theoretical because a **new pearl drink isn't costed in the recipe library yet**, so theory under-counts it, and some cooked-pearl waste went unlogged. Cost the recipe, log the waste and recount before locking. Next worst is **Orchid Oolong Leaf** (+£154) — stock is lower than the invoice, a likely short delivery.`,
       rowIds: ['avocado', 'smoked-salmon'],
     };
   }
@@ -311,54 +311,54 @@ export function getCogsChatAnswer(question: string): CogsChatAnswer {
     !q.includes('item')
   ) {
     return {
-      text: `Actual COGS is **${COGS_SUMMARY.actualPct.toFixed(1)}%** vs a theoretical **${COGS_SUMMARY.theoreticalPct.toFixed(1)}%** — that's **+${COGS_SUMMARY.variancePp.toFixed(1)}pp**, or about **£${fmt(COGS_SUMMARY.varianceCost)}** unfavourable. **Food** is the driver (31.5% vs 28% target). Roughly three causes, in order: a new uncosted recipe (Avocado), a supplier short delivery (Salmon), and over-portioning on milks and protein.`,
+      text: `Actual COGS is **${COGS_SUMMARY.actualPct.toFixed(1)}%** vs a theoretical **${COGS_SUMMARY.theoreticalPct.toFixed(1)}%** — that's **+${COGS_SUMMARY.variancePp.toFixed(1)}pp**, or about **£${fmt(COGS_SUMMARY.varianceCost)}** unfavourable. **Beverage** is the driver (26.0% vs 23.0% target). Roughly three causes, in order: a new uncosted recipe (pearls), a supplier short delivery (orchid oolong leaf), and over-pour on milks and premium leaf.`,
     };
   }
 
   if (q.includes('portion') || q.includes('over-pour') || q.includes('over pour') || q.includes('item')) {
     return {
-      text: `The clearest over-portioning lines are **Oat Milk (+18.8%)**, **Chicken Breast (+16%)**, **Vegan bagels (+12.2%)** and **Whole Milk (+9.6%)**. Milks are free-pour on the bar; chicken is made heavier than the recipe on hot sandwiches; bagels look like baking to a tray count rather than forecast. A marked pitcher line and a portioning spot-check recover most of it.`,
+      text: `The clearest over-portioning lines are **Barista Oat Milk (+18.8%)**, **Aged Pu'er Leaf (+16%)**, **Grass Jelly (+12.2%)** and **Fresh Whole Milk (+9.6%)**. Milks are free-pour on the bar; pu'er is ladled heavier than the recipe on milk teas; grass jelly looks batch-prepped to a par rather than forecast. A marked pitcher line and a dosing spot-check recover most of it.`,
       rowIds: ['oat-milk', 'chicken-breast', 'bagel-vegan-multigrain', 'whole-milk'],
     };
   }
 
   if (q.includes('check first') || q.includes('priorit') || q.includes('what should') || q.includes('action')) {
     return {
-      text: `In priority order: **1)** Cost the new **Avocado** recipe in the library and recount it — that's the single biggest number. **2)** Check the **Smoked Salmon** delivery against the invoice and raise a credit. **3)** Pour **House Red** to a measure and ring in staff sandwiches. The first two are data/setup fixes, not kitchen problems, and clear most of the gap.`,
+      text: `In priority order: **1)** Cost the new **pearl drink** recipe in the library and recount the pearls — that's the single biggest number. **2)** Check the **Orchid Oolong Leaf** delivery against the invoice and raise a credit. **3)** Dose **Brown Sugar Syrup** to a pump and ring in staff drinks. The first two are data/setup fixes, not bar problems, and clear most of the gap.`,
       rowIds: ['avocado', 'smoked-salmon', 'house-red-wine'],
     };
   }
 
   if (q.includes('transfer')) {
     return {
-      text: `Transfers are clean this period — no one-sided movements driving the gap. The biggest items are a **new Avocado recipe that isn't costed yet** and a **Smoked Salmon short delivery**. Both are data/setup fixes rather than kitchen or transfer problems.`,
+      text: `Transfers are clean this period — no one-sided movements driving the gap. The biggest items are a **new pearl drink recipe that isn't costed yet** and an **Orchid Oolong Leaf short delivery**. Both are data/setup fixes rather than bar or transfer problems.`,
       rowIds: ['avocado', 'smoked-salmon'],
     };
   }
 
-  if (q.includes('deliver') || q.includes('invoice') || q.includes('supplier') || q.includes('match') || q.includes('salmon')) {
+  if (q.includes('deliver') || q.includes('invoice') || q.includes('supplier') || q.includes('match') || q.includes('salmon') || q.includes('leaf') || q.includes('oolong')) {
     return {
-      text: `Two supply-side issues stand out. **Smoked Salmon** is +£154 over recipe because stock on hand is below the invoice — a likely **short delivery** to check against goods-in and credit. Separately, several **POS sale items aren't matched to a recipe**, so ~£140 of cost lands in Unassigned. Both are data fixes, not kitchen problems.`,
+      text: `Two supply-side issues stand out. **Orchid Oolong Leaf** is +£154 over recipe because stock on hand is below the invoice — a likely **short delivery** to check against goods-in and credit. Separately, several **POS sale items aren't matched to a recipe**, so ~£140 of cost lands in Unassigned. Both are data fixes, not bar problems.`,
       rowIds: ['smoked-salmon'],
     };
   }
 
   if (q.includes('waste')) {
     return {
-      text: `Logged waste is modest this period (**£${fmt(COGS_CLASS_TOTALS.waste)}** total, mostly steamed milk on the bar and a little produce). The one watch-out is **avocado and basil**, where some spoilage looks unlogged — but the variance is dominated by a new uncosted recipe and portioning, not bin loss.`,
+      text: `Logged waste is modest this period (**£${fmt(COGS_CLASS_TOTALS.waste)}** total, mostly milk on the bar and a little fruit). The one watch-out is **pearls and peach purée**, where some spoilage looks unlogged — but the variance is dominated by a new uncosted recipe and over-pour, not bin loss.`,
     };
   }
 
-  if (q.includes('beverage') || q.includes('milk') || q.includes('coffee') || q.includes('drink')) {
+  if (q.includes('beverage') || q.includes('milk') || q.includes('tea') || q.includes('drink')) {
     return {
-      text: `Beverage actual is **25%** vs **21.5%** theoretical. It's all free-pour: **Oat Milk +18.8%** and **Whole Milk +9.6%**. Coffee beans are basically on spec (+2.8%). A marked pitcher line on the bar is the single highest-ROI fix here.`,
+      text: `Beverage actual is **26.0%** vs **23.0%** theoretical. Most of it is free-pour: **Barista Oat Milk +18.8%** and **Fresh Whole Milk +9.6%**. Roasted oolong leaf is basically on spec (+2.8%). A marked pitcher line on the bar is the single highest-ROI fix here.`,
       rowIds: ['oat-milk', 'whole-milk'],
     };
   }
 
   if (q.includes('summar') || q.includes('story') || q.includes('overview') || q.includes('explain')) {
     return {
-      text: `This period actual COGS landed at **${COGS_SUMMARY.actualPct.toFixed(1)}%** against a **${COGS_SUMMARY.theoreticalPct.toFixed(1)}%** theoretical — **£${fmt(COGS_SUMMARY.varianceCost)}** unfavourable. The headline isn't the kitchen: **roughly two-thirds of the gap is data/setup** (a new Avocado recipe not yet costed and a Smoked Salmon short delivery). The genuine operational slice is **milk over-pour, wine measures and protein portions**. Fix the data issues first, then run a portioning spot-check.`,
+      text: `This period actual COGS landed at **${COGS_SUMMARY.actualPct.toFixed(1)}%** against a **${COGS_SUMMARY.theoreticalPct.toFixed(1)}%** theoretical — **£${fmt(COGS_SUMMARY.varianceCost)}** unfavourable. The headline isn't the bar: **roughly two-thirds of the gap is data/setup** (a new pearl drink recipe not yet costed and an Orchid Oolong Leaf short delivery). The genuine operational slice is **milk over-pour, syrup measures and premium-leaf doses**. Fix the data issues first, then run a dosing spot-check.`,
     };
   }
 

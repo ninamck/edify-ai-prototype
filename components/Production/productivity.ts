@@ -21,6 +21,7 @@ import {
   PRET_PLAN,
   PRET_USERS,
   PRET_BENCHES,
+  CHAGEE_PRODUCTION_BATCHES,
   getBench,
   getProductionItem,
   getRecipe,
@@ -169,10 +170,20 @@ export type SiteProductivity = {
   batches: BatchProductivity[];
 };
 
+/**
+ * Every completed-batch source across brands. PRET's batches live on its
+ * authored plan; CHAGEE runs a live brew cadence so its week of finished
+ * work is synthesised in fixtures. Both flow through the same pipeline.
+ */
+const ALL_PRODUCTION_BATCHES: ProductionBatch[] = [
+  ...PRET_PLAN.batches,
+  ...CHAGEE_PRODUCTION_BATCHES,
+];
+
 /** Pull batches for a site within a date range. Includes completed + reviewed + failed. */
 function batchesForSiteOnDates(siteId: SiteId, dates: string[]): ProductionBatch[] {
   const dateSet = new Set(dates);
-  return PRET_PLAN.batches.filter(b => {
+  return ALL_PRODUCTION_BATCHES.filter(b => {
     if (!dateSet.has(b.date)) return false;
     const item = getProductionItem(b.productionItemId);
     return item?.siteId === siteId;

@@ -34,6 +34,13 @@ const OPERATORS_BY_SITE: Record<SiteId, string[]> = {
     'Carla Mendes',
     'Yusuf Demir',
   ],
+  'chagee-flagship': [
+    'Mei Ling Chen',
+    'Arun Prakash',
+    'Sofia Marchetti',
+    'Kwame Mensah',
+    'Yuki Tanaka',
+  ],
 };
 
 const FALLBACK = ['Manager on shift'];

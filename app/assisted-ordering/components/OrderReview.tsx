@@ -1123,6 +1123,27 @@ const FORECAST_CARDS: ForecastCardData[] = [
     covers: 38,
     comparison: '+11% vs last Sat',
   },
+  {
+    label: 'Sunday',
+    date: 'Sun 13 Apr',
+    netSales: 1050,
+    covers: 34,
+    comparison: '+8% vs last Sun',
+  },
+  {
+    label: 'Monday',
+    date: 'Mon 14 Apr',
+    netSales: 690,
+    covers: 22,
+    comparison: '−4% vs last Mon',
+  },
+  {
+    label: 'Tuesday',
+    date: 'Tue 15 Apr',
+    netSales: 760,
+    covers: 25,
+    comparison: '+3% vs last Tue',
+  },
 ];
 
 function ForecastCard({ card, hero }: { card: ForecastCardData; hero: boolean }) {
@@ -1290,7 +1311,7 @@ export default function OrderReview({
             </div>
           </div>
 
-          {/* Forecast net sales — today + next 2 days */}
+          {/* Forecast net sales — today + next 5 days (horizontally scrollable) */}
           <div
             style={{
               display: 'flex',
@@ -1401,7 +1422,7 @@ export default function OrderReview({
                           gap: '6px',
                         }}
                       >
-                        <span>📦</span> Arriving {date}
+                        <span>📦</span> Will arrive {date}
                       </span>
                       <span
                         style={{

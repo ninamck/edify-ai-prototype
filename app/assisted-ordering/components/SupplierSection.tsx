@@ -104,7 +104,7 @@ export default function SupplierSection({
                 fontFamily: 'var(--font-primary)',
               }}
             >
-              <span>📦 Arriving {order.deliveryDate}</span>
+              <span>📦 Will arrive {order.deliveryDate}</span>
               <span>·</span>
               <span>Order by {supplier.cutOffTime}</span>
               {urgent && (

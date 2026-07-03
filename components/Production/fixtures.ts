@@ -38,6 +38,25 @@ import {
   BK_WORKFLOWS,
 } from './bkFixtures';
 import type { Brand } from './bkFixtures';
+import {
+  CHAGEE_BENCHES,
+  CHAGEE_BREW_ID,
+  CHAGEE_BREW_STAFF,
+  CHAGEE_FORECAST,
+  CHAGEE_INGREDIENTS,
+  CHAGEE_INGREDIENT_USAGE,
+  CHAGEE_MENU_FORECAST,
+  CHAGEE_MENU_ITEMS,
+  CHAGEE_MENU_PRICES,
+  CHAGEE_MENU_RECIPES,
+  CHAGEE_PCR_INSTANCES,
+  CHAGEE_PRODUCTION_ITEMS,
+  CHAGEE_RECIPES,
+  CHAGEE_SITES,
+  CHAGEE_TOPPING_STAFF,
+  CHAGEE_USERS,
+  CHAGEE_WORKFLOWS,
+} from './chageeFixtures';
 
 export type { Brand };
 
@@ -2592,7 +2611,7 @@ export type ProductionBatch = {
   actualQty: number;
   status: BatchStatus;
   /** When failed, the reason. */
-  failureReason?: 'burnt' | 'under-proofed' | 'allergen-cross-contact' | 'equipment' | 'other';
+  failureReason?: 'burnt' | 'under-proofed' | 'allergen-cross-contact' | 'equipment' | 'over-steeped' | 'other';
   /**
    * Employee who ran the batch. Captured when the staffer hits "Start" on
    * the bench card; surfaced in PCR queue and the productivity report
@@ -3587,7 +3606,93 @@ export const EXTRA_PRODUCTION_INSTANCES_BY_SITE: Record<SiteId, PlannedInstance[
     arr.push(pi);
     out[siteId] = arr;
   }
+  // CHAGEE brews on a live cadence, so the board planner won't schedule its
+  // increment items as instances. Splice the hand-authored PCR batches in here
+  // instead, anchoring their placeholder date to today's demo date.
+  out['chagee-flagship'] = CHAGEE_PCR_INSTANCES.map(pi => ({ ...pi, date: DEMO_TODAY }));
   return out as Record<SiteId, PlannedInstance[]>;
+})();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHAGEE completed batches — powers the Productivity report.
+//
+// CHAGEE runs on a live brew cadence, so there are no hand-authored batch
+// records like PRET_PLAN.batches. We synthesise a deterministic week of
+// finished work here: every tea base and topping (the components that feed
+// the finished drinks) brewed twice (brew bar) or prepped once (topping
+// station) per day, assigned to the crew, with actual bench-times that vary
+// by each staffer's pace so the leaderboard and per-batch deltas mean
+// something. Deterministic (no RNG) so the demo is stable across reloads.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const CHAGEE_PRODUCTION_BATCHES: ProductionBatch[] = (() => {
+  const toMin = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + m;
+  };
+  const toHHMM = (mins: number) => {
+    const v = Math.max(0, Math.round(mins));
+    return `${String(Math.floor(v / 60)).padStart(2, '0')}:${String(v % 60).padStart(2, '0')}`;
+  };
+  // Per-staffer pace multiplier vs target (<1 faster, >1 slower). Gives the
+  // leaderboard a clear top performer (Mei Ling) and someone to coach (Arun).
+  const skill: Record<string, number> = {
+    'user-cg-1': 0.88, // Mei Ling — tea master, quick
+    'user-cg-2': 1.16, // Arun — still learning the urns
+    'user-cg-3': 0.98, // Sofia — steady
+    'user-cg-4': 1.06, // Yuki — a touch slow on toppings
+  };
+  const DAYS = 7;
+  const CUTOFF_TODAY = toMin('16:30'); // today's later brews haven't happened yet
+  const out: ProductionBatch[] = [];
+
+  for (let dayIdx = 0; dayIdx < DAYS; dayIdx++) {
+    const date = dayOffset(-dayIdx);
+    const isToday = dayIdx === 0;
+    CHAGEE_PRODUCTION_ITEMS.forEach((item, itemIdx) => {
+      const isBrew = item.preferredBenchId === CHAGEE_BREW_ID;
+      const benchId = item.preferredBenchId ?? CHAGEE_BREW_ID;
+      const staff = isBrew ? CHAGEE_BREW_STAFF : CHAGEE_TOPPING_STAFF;
+      // Brew staples run twice a day; toppings are a single morning prep.
+      const starts = isBrew ? ['10:20', '15:30'] : ['09:40'];
+
+      starts.forEach((baseStart, batchIdx) => {
+        const startMin = toMin(baseStart) + itemIdx * 4 + batchIdx * 6;
+        if (isToday && startMin > CUTOFF_TODAY) return; // not brewed yet today
+
+        const qty = item.batchSize;
+        const target = item.targetMinutes ?? 10;
+        const workerId = staff[(dayIdx + itemIdx + batchIdx) % staff.length];
+        const jitter = (((dayIdx * 7 + itemIdx * 3 + batchIdx) % 7) - 3) * 0.015;
+        const factor = (skill[workerId] ?? 1) * (1 + jitter);
+        const actual = Math.max(4, target * factor);
+
+        // Sparse, believable failures: an over-steeped pu'er now and then,
+        // plus the occasional scrapped batch elsewhere.
+        const failed =
+          (item.recipeId === 'cg-aged-puer' && dayIdx % 3 === 1 && batchIdx === 1) ||
+          (dayIdx * 5 + itemIdx * 2 + batchIdx) % 19 === 0;
+
+        const batch: ProductionBatch = {
+          id: `cg-batch-${item.id}-${date}-${batchIdx}`,
+          productionItemId: item.id,
+          benchId,
+          date,
+          startTime: toHHMM(startMin),
+          endTime: toHHMM(startMin + actual),
+          actualQty: qty,
+          status: failed ? 'failed' : isToday ? 'complete' : 'reviewed',
+          assignedUserId: workerId,
+        };
+        if (failed) {
+          batch.failureReason = item.recipeId === 'cg-aged-puer' ? 'over-steeped' : 'other';
+        }
+        out.push(batch);
+      });
+    });
+  }
+
+  return out;
 })();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3715,6 +3820,38 @@ export const SEEDED_SIGNED_PCR_DRAFTS_BY_SITE: Record<SiteId, SeededPCRDraft[]> 
       signedAt: `${DEMO_TODAY}T05:46:00Z`,
     },
   ],
+  'chagee-flagship': [
+    {
+      batchId: 'pcr-pi-cg-pcr-redbean-1445',
+      made: 20,
+      rejected: 0,
+      madeBy: 'Sofia Marchetti',
+      qualityCheck: 'pass',
+      labelCheck: null,
+      signedBy: 'Kwame Mensah (Manager)',
+      signedAt: `${DEMO_TODAY}T15:10:00Z`,
+    },
+    {
+      batchId: 'pcr-pi-cg-pcr-jasmine-1450',
+      made: 40,
+      rejected: 0,
+      madeBy: 'Mei Ling Chen',
+      qualityCheck: 'pass',
+      labelCheck: null,
+      signedBy: 'Kwame Mensah (Manager)',
+      signedAt: `${DEMO_TODAY}T15:06:00Z`,
+    },
+    {
+      batchId: 'pcr-pi-cg-pcr-boba-1505',
+      made: 40,
+      rejected: 2, // two scoops under-cooked, pulled — batch still passed
+      madeBy: 'Arun Prakash',
+      qualityCheck: 'pass',
+      labelCheck: null,
+      signedBy: 'Kwame Mensah (Manager)',
+      signedAt: `${DEMO_TODAY}T15:24:00Z`,
+    },
+  ],
 } as Record<SiteId, SeededPCRDraft[]>;
 
 /**
@@ -3748,6 +3885,18 @@ export const SEEDED_FAILED_PCR_DRAFTS_BY_SITE: Record<SiteId, SeededPCRDraft[]> 
     },
   ],
   'site-hybrid-airport': [],
+  'chagee-flagship': [
+    {
+      batchId: 'pcr-pi-cg-pcr-puer-1500',
+      made: 20,
+      rejected: 20,
+      madeBy: 'Yuki Tanaka',
+      qualityCheck: 'fail', // over-steeped — astringent, bitter finish
+      labelCheck: null,
+      signedBy: 'Kwame Mensah (Manager)',
+      signedAt: `${DEMO_TODAY}T15:26:00Z`,
+    },
+  ],
 } as Record<SiteId, SeededPCRDraft[]>;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -5560,7 +5709,11 @@ export const DEMO_CURRENT_USER_ID: UserId = 'user-manager-central';
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function getSite(id: SiteId): Site | undefined {
-  return PRET_SITES.find(s => s.id === id) ?? BK_SITES.find(s => s.id === id);
+  return (
+    PRET_SITES.find(s => s.id === id) ??
+    BK_SITES.find(s => s.id === id) ??
+    CHAGEE_SITES.find(s => s.id === id)
+  );
 }
 
 /** Brand of a site, defaulting to Pret when the field is unset. */
@@ -5569,14 +5722,20 @@ export function siteBrand(siteId: SiteId): Brand {
 }
 
 export function getBench(id: BenchId): Bench | undefined {
-  return PRET_BENCHES.find(b => b.id === id) ?? BK_BENCHES.find(b => b.id === id);
+  return (
+    PRET_BENCHES.find(b => b.id === id) ??
+    BK_BENCHES.find(b => b.id === id) ??
+    CHAGEE_BENCHES.find(b => b.id === id)
+  );
 }
 
 export function getRecipe(id: RecipeId): ProductionRecipe | undefined {
   return (
     PRET_RECIPES.find(r => r.id === id) ??
     BK_RECIPES.find(r => r.id === id) ??
-    BK_MENU_RECIPES.find(r => r.id === id)
+    BK_MENU_RECIPES.find(r => r.id === id) ??
+    CHAGEE_RECIPES.find(r => r.id === id) ??
+    CHAGEE_MENU_RECIPES.find(r => r.id === id)
   );
 }
 
@@ -5584,7 +5743,9 @@ export function getProductionItem(id: ProductionItemId): ProductionItem | undefi
   return (
     PRET_PRODUCTION_ITEMS.find(p => p.id === id) ??
     BK_PRODUCTION_ITEMS.find(p => p.id === id) ??
-    BK_MENU_ITEMS.find(p => p.id === id)
+    BK_MENU_ITEMS.find(p => p.id === id) ??
+    CHAGEE_PRODUCTION_ITEMS.find(p => p.id === id) ??
+    CHAGEE_MENU_ITEMS.find(p => p.id === id)
   );
 }
 
@@ -5599,17 +5760,17 @@ export function getProductionItem(id: ProductionItemId): ProductionItem | undefi
  * and sales/drop paths are unaffected.
  */
 export function forecastSellableItemsAt(siteId: SiteId): ProductionItem[] {
-  const menu = BK_MENU_ITEMS.filter(p => p.siteId === siteId);
+  const menu = [...BK_MENU_ITEMS, ...CHAGEE_MENU_ITEMS].filter(p => p.siteId === siteId);
   return menu.length > 0 ? menu : productionItemsAt(siteId);
 }
 
-/** À la carte menu price (SGD) for a sellable SKU, if it has one. */
+/** À la carte menu price for a sellable SKU, if it has one. */
 export function menuPriceFor(skuId: SkuId): number | undefined {
-  return BK_MENU_PRICES[skuId];
+  return BK_MENU_PRICES[skuId] ?? CHAGEE_MENU_PRICES[skuId];
 }
 
 export function getWorkflow(id: WorkflowId): ProductionWorkflow | undefined {
-  return PRET_WORKFLOWS[id] ?? BK_WORKFLOWS[id];
+  return PRET_WORKFLOWS[id] ?? BK_WORKFLOWS[id] ?? CHAGEE_WORKFLOWS[id];
 }
 
 /**
@@ -5621,7 +5782,7 @@ export function getWorkflow(id: WorkflowId): ProductionWorkflow | undefined {
 export type WorkflowResolver = (id: WorkflowId) => ProductionWorkflow | undefined;
 
 /** Static fallback — reads PRET_WORKFLOWS, then the BK workflow set. */
-const staticWorkflowResolver: WorkflowResolver = (id) => PRET_WORKFLOWS[id] ?? BK_WORKFLOWS[id];
+const staticWorkflowResolver: WorkflowResolver = (id) => PRET_WORKFLOWS[id] ?? BK_WORKFLOWS[id] ?? CHAGEE_WORKFLOWS[id];
 
 let activeWorkflowResolver: WorkflowResolver = staticWorkflowResolver;
 
@@ -5764,11 +5925,11 @@ export function recipeIngredientPrep(recipe: ProductionRecipe): RecipeIngredient
 }
 
 export function getUser(id: UserId): User | undefined {
-  return PRET_USERS.find(u => u.id === id);
+  return PRET_USERS.find(u => u.id === id) ?? CHAGEE_USERS.find(u => u.id === id);
 }
 
 export function benchesAt(siteId: SiteId): Bench[] {
-  const benches = [...PRET_BENCHES, ...BK_BENCHES].filter(b => b.siteId === siteId);
+  const benches = [...PRET_BENCHES, ...BK_BENCHES, ...CHAGEE_BENCHES].filter(b => b.siteId === siteId);
   // Surface the prep bench last so every bench board reads "Bench 1..N" then
   // "Prep bench". Stable partition — keeps the relative order of all other
   // benches untouched.
@@ -5777,7 +5938,7 @@ export function benchesAt(siteId: SiteId): Bench[] {
 }
 
 export function productionItemsAt(siteId: SiteId): ProductionItem[] {
-  return [...PRET_PRODUCTION_ITEMS, ...BK_PRODUCTION_ITEMS].filter(p => p.siteId === siteId);
+  return [...PRET_PRODUCTION_ITEMS, ...BK_PRODUCTION_ITEMS, ...CHAGEE_PRODUCTION_ITEMS].filter(p => p.siteId === siteId);
 }
 
 /**
@@ -5861,7 +6022,12 @@ export const DOW_MULTIPLIER: Record<DayOfWeek, number> = {
  * `bkFixtures` with a blank date (it can't import the value without forming
  * a runtime cycle), so we stamp the anchor date here once.
  */
-const BK_FORECAST_ANCHORED: DemandForecastEntry[] = [...BK_FORECAST, ...BK_MENU_FORECAST].map(f => ({
+const BK_FORECAST_ANCHORED: DemandForecastEntry[] = [
+  ...BK_FORECAST,
+  ...BK_MENU_FORECAST,
+  ...CHAGEE_FORECAST,
+  ...CHAGEE_MENU_FORECAST,
+].map(f => ({
   ...f,
   date: DEMO_TODAY,
 }));
@@ -6592,11 +6758,15 @@ export function demandBiasFor(skuId: SkuId): number {
 }
 
 export function getIngredient(id: IngredientId): Ingredient | undefined {
-  return PRET_INGREDIENTS.find(i => i.id === id) ?? BK_INGREDIENTS.find(i => i.id === id);
+  return (
+    PRET_INGREDIENTS.find(i => i.id === id) ??
+    BK_INGREDIENTS.find(i => i.id === id) ??
+    CHAGEE_INGREDIENTS.find(i => i.id === id)
+  );
 }
 
 export function ingredientUsageFor(recipeId: RecipeId): IngredientUsage[] {
-  return PRET_INGREDIENT_USAGE.filter(u => u.recipeId === recipeId);
+  return [...PRET_INGREDIENT_USAGE, ...CHAGEE_INGREDIENT_USAGE].filter(u => u.recipeId === recipeId);
 }
 
 export function ingredientStockFor(siteId: SiteId, ingredientId: IngredientId): IngredientStock | undefined {

@@ -1525,6 +1525,63 @@ export const BK_LIBRARY_RECIPES: Recipe[] = BK_RECIPES.map((r) => {
   } as Recipe;
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CHAGEE library entries — derived from the CHAGEE production fixtures the same
+// way BK's are, tagged `brand: 'chagee'` so the recipes page shows the tea menu
+// only when the CHAGEE persona is active. Assembled drinks are the sellable POS
+// items; brewed bases + toppings are made-to-hold components they pull from.
+// Prices come from the authored menu board (CHAGEE_MENU_PRICES, GBP).
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { CHAGEE_RECIPES, CHAGEE_MENU_PRICES } from '@/components/Production/chageeFixtures';
+
+const CHAGEE_CONSUMED_IDS: Set<string> = new Set(
+  CHAGEE_RECIPES.flatMap((r) => r.subRecipes?.map((s) => s.recipeId) ?? []),
+);
+
+export const CHAGEE_LIBRARY_RECIPES: Recipe[] = CHAGEE_RECIPES.map((r) => {
+  const kind: RecipeKind =
+    r.subRecipes && r.subRecipes.length > 0
+      ? 'assembly'
+      : CHAGEE_CONSUMED_IDS.has(r.id)
+        ? 'component'
+        : 'standalone';
+  // Assembled drinks are the sellable POS items; brewed bases + prepped
+  // toppings are made-to-hold and consumed by the drinks.
+  const sellable = kind === 'assembly';
+  const menuPrice = CHAGEE_MENU_PRICES[`sku-${r.id}`] ?? 0;
+  const dineIn = sellable ? (menuPrice || 4.8) : 0;
+  // Tea carries a strong gross margin — ingredient cost ~24% of the sell price.
+  const ingredientCost = sellable ? Math.round(dineIn * 0.24 * 100) / 100 : 0;
+  return {
+    id: r.id,
+    name: r.name,
+    category: r.category as RecipeCategory,
+    brand: 'chagee',
+    ingredientCost,
+    priceDineIn: dineIn,
+    priceTakeaway: dineIn,
+    priceDelivery: sellable ? Math.round((dineIn + 0.8) * 100) / 100 : 0,
+    marginPct: sellable ? Math.round(((dineIn - ingredientCost) / dineIn) * 100) : 0,
+    status: 'Active' as RecipeStatus,
+    flag: null,
+    ingredients: [],
+    posLinked: sellable,
+    production: {
+      visibility: 'Kitchen' as const,
+      shelfLifeMinutes: r.shelfLifeMinutes,
+      prepTimeSeconds: null,
+    },
+    kind,
+    subRecipes: r.subRecipes?.map((s) => ({
+      recipeId: s.recipeId,
+      quantityPerUnit: s.quantityPerUnit,
+      unit: s.unit,
+    })),
+    workflowId: r.workflowId,
+  } as Recipe;
+});
+
 export const ALL_LIBRARY_RECIPES: Recipe[] = [
   ...FITZROY_RECIPES.map((s): Recipe => withIngredientsV2({
     ...migrateLegacySeed(s),
@@ -1532,6 +1589,7 @@ export const ALL_LIBRARY_RECIPES: Recipe[] = [
   })),
   ...PRET_LIBRARY_RECIPES,
   ...BK_LIBRARY_RECIPES,
+  ...CHAGEE_LIBRARY_RECIPES,
 ];
 
 /** Inverse of subRecipes: which recipes consume this one. */

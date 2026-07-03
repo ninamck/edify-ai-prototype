@@ -4,22 +4,23 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Banknote, ChevronDown, PiggyBank, ShoppingBag } from 'lucide-react';
 import { gbp } from './format';
+import { COGS_SITE_NAME } from './fixtures';
 
 /**
- * Daily Flash Report — one trading day at the COGS hub. Mirrors the real
- * Edify flash report (net sales hero, metrics, margin cards, labour
+ * Daily Flash Report — one trading day at the CHAGEE flagship. Mirrors the
+ * real Edify flash report (net sales hero, metrics, margin cards, labour
  * breakdown, sales-vs-labour chart) with mock figures that reconcile with
- * the weekly COGS fixtures (£51,000 net sales, 27.8% actual COGS).
+ * the weekly COGS fixtures (£51,000 net sales, 25.4% actual COGS).
  */
 
 const FLASH_DAY_LABEL = 'Wednesday, Jan 07 2026';
 
 const FLASH = {
   netSales: 7610.0,
-  atv: 8.65,
+  atv: 5.35,
   discounts: 112.4,
   waste: 38.2,
-  costOfSalesPct: 27.8,
+  costOfSalesPct: 25.4,
   labourCost: 1930.0,
   labourHours: 142,
   hourlyHours: 128,
@@ -165,7 +166,7 @@ export default function DailyFlashReport() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Day label */}
       <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-muted)' }}>
-        {FLASH_DAY_LABEL} · Pret Hub Kitchen
+        {FLASH_DAY_LABEL} · {COGS_SITE_NAME}
       </div>
 
       {/* Net sales hero + metrics */}

@@ -26,7 +26,7 @@ type MobileTaskItem = {
 
 function commonTasks(): MobileTaskItem[] {
   return [
-    { id: 'review-orders', icon: ShoppingCart, label: 'Review orders', badge: 3, route: '/assisted-ordering' },
+    { id: 'review-orders', icon: ShoppingCart, label: 'Predictive ordering', badge: 3, route: '/assisted-ordering' },
     { id: 'transfer-stock', icon: ArrowLeftRight, label: 'Transfer stock', route: '/' },
     { id: 'count-stock', icon: PackageSearch, label: 'Stocktake', route: '/stock' },
     { id: 'match-invoices', icon: FileCheck, label: 'Match invoices', badge: needsReviewCount() || undefined, route: '/invoices' },

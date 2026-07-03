@@ -2,6 +2,30 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { GATE_COOKIE, expectedGateToken } from '@/lib/demoGate';
 
 /**
+ * True on a gated customer (e.g. Chagee) build. Mirrors `isDemoBuild` in
+ * `lib/demoConfig` but read straight from the env so the edge middleware
+ * has no client-module dependency.
+ */
+const IS_DEMO_BUILD =
+  !!process.env.NEXT_PUBLIC_DEMO_CUSTOMER &&
+  process.env.NEXT_PUBLIC_DEMO_CUSTOMER !== 'edify';
+
+/**
+ * Routes that only make sense on the internal Edify build — alternate demo
+ * "versions", the franchise-admin demo, other-client mock-ups and internal
+ * audit pages. On a single-client customer build these are dead ends, so we
+ * bounce them back to the home shell rather than leak them to the customer.
+ */
+const DEMO_BLOCKED_PREFIXES = [
+  '/mvp-1',
+  '/prod-2',
+  '/franchise',
+  '/mockup-blue',
+  '/viz-explorations',
+  '/components-audit',
+];
+
+/**
  * Passcode gate for the customer demo build.
  *
  * No-op unless `DEMO_GATE_PASSCODE` is set, so dev and the internal build
@@ -10,10 +34,19 @@ import { GATE_COOKIE, expectedGateToken } from '@/lib/demoGate';
  * with the gate API and framework/static assets — see the matcher below).
  */
 export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  // Single-client build: hide the internal-only / other-client routes.
+  if (IS_DEMO_BUILD && DEMO_BLOCKED_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/';
+    url.search = '';
+    return NextResponse.redirect(url);
+  }
+
   const expected = await expectedGateToken();
   if (!expected) return NextResponse.next(); // gate disabled
 
-  const { pathname } = req.nextUrl;
   if (pathname.startsWith('/welcome') || pathname.startsWith('/api/gate')) {
     return NextResponse.next();
   }

@@ -10,7 +10,7 @@ import { gbp } from './format';
  * Line Level COGs — every POS sold item for the period with its matched
  * recipe, unit cost and margin. Two rows are deliberately unmatched
  * ("Missing") so the demo ties back to the Edify insights: the new
- * avocado dish that isn't costed yet, and POS items with no recipe map.
+ * pearl/peach drink that isn't costed yet, and POS items with no recipe map.
  */
 
 type SoldItemRow = {
@@ -24,19 +24,19 @@ type SoldItemRow = {
 };
 
 const ROWS: SoldItemRow[] = [
-  { id: 'flat-white', soldItem: 'Flat White \u2013 Regular', recipe: 'Flat White', klass: 'Beverage', unitsSold: 1412, unitCost: 0.48, unitPrice: 3.6 },
-  { id: 'oat-flat-white', soldItem: 'Oat Flat White \u2013 Regular', recipe: 'Flat White (Oat)', klass: 'Beverage', unitsSold: 642, unitCost: 0.61, unitPrice: 3.95 },
-  { id: 'latte', soldItem: 'Latte \u2013 Regular', recipe: 'Latte', klass: 'Beverage', unitsSold: 1186, unitCost: 0.52, unitPrice: 3.75 },
-  { id: 'americano', soldItem: 'Americano \u2013 Regular', recipe: 'Americano', klass: 'Beverage', unitsSold: 978, unitCost: 0.31, unitPrice: 3.1 },
-  { id: 'avocado-smash', soldItem: 'Avocado Smash on Sourdough', recipe: null, klass: null, unitsSold: 322, unitCost: 0, unitPrice: 6.95 },
-  { id: 'chicken-caesar', soldItem: 'Chicken Caesar Baguette', recipe: 'Chicken Caesar Baguette', klass: 'Food', unitsSold: 486, unitCost: 2.14, unitPrice: 5.95 },
-  { id: 'salmon-bagel', soldItem: 'Smoked Salmon Bagel', recipe: 'Smoked Salmon Bagel', klass: 'Food', unitsSold: 298, unitCost: 2.86, unitPrice: 6.5 },
-  { id: 'vegan-bagel', soldItem: 'Vegan Multigrain Bagel', recipe: 'Vegan Bagel & Spread', klass: 'Food', unitsSold: 354, unitCost: 0.92, unitPrice: 3.95 },
-  { id: 'banana-bread', soldItem: 'Banana Bread \u2013 Slice', recipe: 'Banana Loaf X1', klass: 'Food', unitsSold: 412, unitCost: 0.74, unitPrice: 3.25 },
-  { id: 'sourdough-toast', soldItem: 'Sourdough Toast & Jam', recipe: 'Sourdough Toast', klass: 'Food', unitsSold: 268, unitCost: 0.68, unitPrice: 3.5 },
-  { id: 'soup', soldItem: 'Soup of the Day', recipe: null, klass: null, unitsSold: 186, unitCost: 0, unitPrice: 4.75 },
-  { id: 'house-red', soldItem: 'House Red \u2013 175ml', recipe: 'House Red Wine', klass: 'Beverage', unitsSold: 224, unitCost: 1.52, unitPrice: 6.0 },
-  { id: 'keepcup', soldItem: 'Edify KeepCup (Store)', recipe: 'KeepCup (Retail)', klass: 'Retail', unitsSold: 14, unitCost: 8.24, unitPrice: 13.27 },
+  { id: 'jasmine-green', soldItem: 'Boya Juexian \u00b7 Jasmine Green Milk Tea', recipe: 'Jasmine Green Milk Tea', klass: 'Beverage', unitsSold: 1180, unitCost: 1.15, unitPrice: 4.8 },
+  { id: 'orchid-oolong', soldItem: 'Bai Ya Qi Lan \u00b7 Orchid Oolong Milk Tea', recipe: 'Orchid Oolong Milk Tea', klass: 'Beverage', unitsSold: 940, unitCost: 1.18, unitPrice: 4.8 },
+  { id: 'bold-black', soldItem: 'Guo Se Tian Xiang \u00b7 Bold Black Milk Tea', recipe: 'Bold Black Milk Tea', klass: 'Beverage', unitsSold: 1320, unitCost: 1.06, unitPrice: 4.6 },
+  { id: 'roasted-oolong', soldItem: 'Roasted Oolong Milk Tea', recipe: 'Roasted Oolong Milk Tea', klass: 'Beverage', unitsSold: 760, unitCost: 1.08, unitPrice: 4.6 },
+  { id: 'aged-puer', soldItem: "Aged Pu'er Milk Tea", recipe: "Aged Pu'er Milk Tea", klass: 'Beverage', unitsSold: 540, unitCost: 1.25, unitPrice: 5.0 },
+  { id: 'jasmine-pearls', soldItem: 'Boya Juexian with Pearls', recipe: 'Jasmine Green Milk Tea + Pearls', klass: 'Beverage', unitsSold: 880, unitCost: 1.35, unitPrice: 5.4 },
+  { id: 'orchid-pearls', soldItem: 'Bai Ya Qi Lan with Pearls', recipe: 'Orchid Oolong Milk Tea + Pearls', klass: 'Beverage', unitsSold: 610, unitCost: 1.38, unitPrice: 5.4 },
+  { id: 'black-red-bean', soldItem: 'Bold Black Milk Tea with Red Bean', recipe: 'Bold Black Milk Tea + Red Bean', klass: 'Beverage', unitsSold: 470, unitCost: 1.46, unitPrice: 5.6 },
+  { id: 'sunset-peach', soldItem: 'Sunset Peach Oolong', recipe: null, klass: null, unitsSold: 312, unitCost: 0, unitPrice: 5.2 },
+  { id: 'ruby-grapefruit', soldItem: 'Ruby Grapefruit Green Tea', recipe: 'Ruby Grapefruit Green Tea', klass: 'Beverage', unitsSold: 398, unitCost: 1.3, unitPrice: 5.2 },
+  { id: 'osmanthus-special', soldItem: 'Osmanthus Oolong \u2013 Seasonal Special', recipe: null, klass: null, unitsSold: 168, unitCost: 0, unitPrice: 5.4 },
+  { id: 'mochi-doughnut', soldItem: 'Brown Sugar Mochi Doughnut', recipe: 'Mochi Doughnut', klass: 'Food', unitsSold: 286, unitCost: 0.82, unitPrice: 2.95 },
+  { id: 'ceramic-cup', soldItem: 'CHAGEE Ceramic Cup (Store)', recipe: 'Ceramic Cup (Retail)', klass: 'Retail', unitsSold: 22, unitCost: 7.2, unitPrice: 12.0 },
 ];
 
 const TH: React.CSSProperties = {

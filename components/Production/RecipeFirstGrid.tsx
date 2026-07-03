@@ -596,14 +596,12 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today', locke
    *  the production-type toggle while planning, matching their Run view. */
   const showFilterControls = !isPlanSurface || suppliesSpokes || hasRetailFloor;
 
-  // Production-type tabs (All / Run / VP / Hot Prod) are meaningful for any
-  // self-producing persona — the only personas with VP / Hot Prod variety —
-  // on BOTH Plan and Today, so the manager can narrow the table to one
-  // production type while planning as well as during the live shift.
-  // Auto-hides for pure HUB (no retail floor / mode variety).
-  // Burger King is hot-production only, so the All / Run / VP / Hot Prod
-  // filter is meaningless there — hide it (and the stepper launcher below).
-  const showModeFilter = hasRetailFloor && !isBKSite;
+  // Production-type tabs (All / Batch / VP / Hot Prod) are disabled — the
+  // filter added clutter without pulling its weight, so the table always
+  // shows every production type. `modeFilter` stays 'all', keeping the
+  // downstream filter + badge logic inert. Flip back to
+  // `hasRetailFloor && !isBKSite` to restore the control.
+  const showModeFilter = false;
 
   // Sold-so-far lookup — keyed by skuId so we can join against grid
   // rows. Drives the "Avail now" cell (planned − sold). Builds once

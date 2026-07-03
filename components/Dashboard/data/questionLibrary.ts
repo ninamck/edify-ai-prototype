@@ -9,7 +9,7 @@ export type QuestionSegment =
   | 'labour'
   | 'waste'
   | 'production'
-  | 'padel';
+  | 'drinks';
 
 export type ProductionSubsegment =
   | 'general'
@@ -33,7 +33,7 @@ export const SEGMENT_LABELS: Record<QuestionSegment, string> = {
   labour: 'Labour',
   waste: 'Waste',
   production: 'Production',
-  padel: 'Padel & cafe',
+  drinks: 'Drinks & brew line',
 };
 
 export const PRODUCTION_SUBSEGMENT_LABELS: Record<ProductionSubsegment, string> = {
@@ -44,7 +44,7 @@ export const PRODUCTION_SUBSEGMENT_LABELS: Record<ProductionSubsegment, string> 
   efficiency: 'Efficiency',
 };
 
-export const SEGMENT_ORDER: QuestionSegment[] = ['sales', 'cogs', 'labour', 'waste', 'production', 'padel'];
+export const SEGMENT_ORDER: QuestionSegment[] = ['sales', 'drinks', 'cogs', 'labour', 'waste', 'production'];
 export const PRODUCTION_SUBSEGMENT_ORDER: ProductionSubsegment[] = [
   'general',
   'produced-v-sold',
@@ -159,7 +159,7 @@ export const QUESTION_LIBRARY: QuestionEntry[] = [
   {
     id: 'sales-what-were-sales-during-the',
     segment: 'sales',
-    text: 'What were sales during the breakfast vs lunch vs afternoon daypart?',
+    text: 'What were sales during the morning vs lunch vs afternoon daypart?',
     suggestedChartId: 'daypart',
   },
   {
@@ -219,7 +219,7 @@ export const QUESTION_LIBRARY: QuestionEntry[] = [
   {
     id: 'cogs-how-much-did-coffee-bean',
     segment: 'cogs',
-    text: 'How much did coffee bean costs change after our last supplier review?',
+    text: 'How much did tea leaf costs change after our last supplier review?',
     suggestedChartId: 'waste-kpi',
   },
   {
@@ -237,7 +237,7 @@ export const QUESTION_LIBRARY: QuestionEntry[] = [
   {
     id: 'cogs-what-is-the-ingredient-cost',
     segment: 'cogs',
-    text: 'What is the ingredient cost breakdown for our signature latte?',
+    text: 'What is the ingredient cost breakdown for our signature milk tea?',
     suggestedChartId: 'eatin',
   },
   {
@@ -351,7 +351,7 @@ export const QUESTION_LIBRARY: QuestionEntry[] = [
   {
     id: 'labour-which-role-type-accounts-for',
     segment: 'labour',
-    text: 'Which role type accounts for the most labour cost — barista, shift lead, or manager?',
+    text: 'Which role type accounts for the most labour cost — tea artist, shift lead, or manager?',
     suggestedChartId: 'eatin',
   },
   {
@@ -483,7 +483,7 @@ export const QUESTION_LIBRARY: QuestionEntry[] = [
   {
     id: 'waste-what-is-the-waste-rate',
     segment: 'waste',
-    text: 'What is the waste rate for our fresh pastry range?',
+    text: 'What is the waste rate for our fresh bakery range (egg tarts, mochi, buns)?',
     suggestedChartId: 'waste-kpi',
   },
   {
@@ -1235,132 +1235,140 @@ export const QUESTION_LIBRARY: QuestionEntry[] = [
     suggestedChartId: 'waste-top10',
   },
 
-  // ── Padel & cafe ─────────────────────────────────────────────────
-  // Curated for a padel-club operator that also runs cafes on site.
+  // ── Drinks & brew line ───────────────────────────────────────────
+  // Curated for CHAGEE — tea-house drink mix, boba/topping attach and the
+  // brew-line planning that decides how much of each base to steep.
   {
-    id: 'padel-which-courts-and-slots-below-historical',
-    segment: 'padel',
-    text: 'Which courts and slots are running below historical fill this month?',
+    id: 'drinks-top-selling-milk-teas',
+    segment: 'drinks',
+    text: 'Which milk teas are selling best across all sites this week?',
+    suggestedChartId: 'waste-top10',
   },
   {
-    id: 'padel-which-clubs-occupancy-dropped-most',
-    segment: 'padel',
-    text: 'Which clubs had the biggest occupancy drop this week?',
+    id: 'drinks-boba-attach-rate',
+    segment: 'drinks',
+    text: 'What is the boba and topping attach rate per drink, by site?',
+    suggestedChartId: 'eatin',
   },
   {
-    id: 'padel-peak-hours-by-day-this-month',
-    segment: 'padel',
-    text: 'What are the peak court hours by day of the week this month?',
+    id: 'drinks-iced-vs-hot-by-hour',
+    segment: 'drinks',
+    text: 'How does the iced vs hot drink split change through the day?',
+    suggestedChartId: 'hour',
   },
   {
-    id: 'padel-no-show-rate-by-slot',
-    segment: 'padel',
-    text: 'Which slots have the highest no-show rate over the last 30 days?',
+    id: 'drinks-bases-run-out-before-peak',
+    segment: 'drinks',
+    text: 'Which tea bases run out before the afternoon peak?',
+    suggestedChartId: 'oos-pareto',
   },
   {
-    id: 'padel-cancellation-by-club',
-    segment: 'padel',
-    text: 'How does the cancellation rate compare across clubs?',
+    id: 'drinks-brewed-vs-sold',
+    segment: 'drinks',
+    text: 'How much tea did we brew vs cups actually sold per base yesterday?',
+    suggestedChartId: 'produced-sold',
   },
   {
-    id: 'padel-new-vs-returning-this-week',
-    segment: 'padel',
-    text: 'How many new vs returning players booked this week?',
+    id: 'drinks-topping-usage-today',
+    segment: 'drinks',
+    text: 'Which toppings are used most on the topping station today?',
+    suggestedChartId: 'waste-top10',
   },
   {
-    id: 'padel-players-at-risk-of-lapsing',
-    segment: 'padel',
-    text: 'Which players are at risk of lapsing in the next two weeks?',
+    id: 'drinks-seasonal-vs-core',
+    segment: 'drinks',
+    text: 'How are seasonal drinks performing against the core menu?',
+    suggestedChartId: 'waste-trend-stacked',
   },
   {
-    id: 'padel-lapsed-players-where-else-they-play',
-    segment: 'padel',
-    text: 'Where do lapsed Manchester players also play, and how far away?',
+    id: 'drinks-fruit-tea-warm-days',
+    segment: 'drinks',
+    text: 'Does fruit tea share rise on warmer days, and by how much?',
+    suggestedChartId: 'growth',
   },
   {
-    id: 'padel-coach-utilisation',
-    segment: 'padel',
-    text: 'Which coaches are over- or under-booked, and where?',
+    id: 'drinks-oat-milk-mix',
+    segment: 'drinks',
+    text: 'What share of milk teas are made with oat milk vs dairy?',
+    suggestedChartId: 'eatin',
   },
   {
-    id: 'padel-coach-classes-attendance',
-    segment: 'padel',
-    text: 'Which coach classes drove the most repeat bookings last month?',
+    id: 'drinks-avg-drinks-per-order',
+    segment: 'drinks',
+    text: 'What is the average number of drinks per order, by site?',
+    suggestedChartId: 'labour',
   },
   {
-    id: 'padel-cafe-attach-rate-by-club',
-    segment: 'padel',
-    text: 'What is the cafe attach rate per booking, by club?',
+    id: 'drinks-loyalty-app-share',
+    segment: 'drinks',
+    text: 'What share of drink sales comes from the CHAGEE app?',
+    suggestedChartId: 'eatin',
   },
   {
-    id: 'padel-cafe-spend-after-session',
-    segment: 'padel',
-    text: 'What is the average cafe spend after a 90-minute session?',
+    id: 'drinks-new-drink-since-launch',
+    segment: 'drinks',
+    text: 'How is the latest new drink performing since launch?',
+    suggestedChartId: 'trend',
   },
   {
-    id: 'padel-cafe-best-selling-weekend-mornings',
-    segment: 'padel',
-    text: 'Top selling cafe items on weekend mornings, by club?',
+    id: 'drinks-sugar-ice-customisation',
+    segment: 'drinks',
+    text: 'What are the most common sugar and ice level choices?',
+    suggestedChartId: 'waste-category-treemap',
   },
   {
-    id: 'padel-cafe-coffee-vs-cold-drinks',
-    segment: 'padel',
-    text: 'Coffee vs cold drinks split by site this month?',
+    id: 'drinks-large-cup-upsell',
+    segment: 'drinks',
+    text: 'How often do customers upsize to the large cup, by site?',
+    suggestedChartId: 'labour-pct',
   },
   {
-    id: 'padel-food-revenue-per-booking',
-    segment: 'padel',
-    text: 'F&B revenue per booking, ranked across clubs?',
+    id: 'drinks-steep-time-adherence',
+    segment: 'drinks',
+    text: 'Which sites are brewing tea to the correct steep time?',
+    suggestedChartId: 'labour-pct',
   },
   {
-    id: 'padel-dwell-time-after-booking',
-    segment: 'padel',
-    text: 'How long do players stay on site after their booking ends?',
+    id: 'drinks-matcha-demand-trend',
+    segment: 'drinks',
+    text: 'How is matcha demand trending over the last 12 weeks?',
+    suggestedChartId: 'trend',
   },
   {
-    id: 'padel-compare-manchester-stockport-evenings',
-    segment: 'padel',
-    text: 'How does Manchester compare to Stockport on weekday evenings?',
+    id: 'drinks-slowest-drinks-at-peak',
+    segment: 'drinks',
+    text: 'Which drinks slow the line most during the peak?',
+    suggestedChartId: 'waste-top10',
   },
   {
-    id: 'padel-pricing-where-to-lift-price',
-    segment: 'padel',
-    text: 'Where could we lift price-per-hour without hurting bookings?',
+    id: 'drinks-brewed-tea-discarded',
+    segment: 'drinks',
+    text: 'How much brewed tea is discarded past its hold time each day?',
+    suggestedChartId: 'waste-kpi',
   },
   {
-    id: 'padel-discount-impact-on-occupancy',
-    segment: 'padel',
-    text: 'What was the occupancy lift after the last off-peak discount?',
+    id: 'drinks-cheese-foam-attach',
+    segment: 'drinks',
+    text: 'What is the cheese foam attach rate on fruit teas?',
+    suggestedChartId: 'eatin',
   },
   {
-    id: 'padel-weather-impact-on-cafe',
-    segment: 'padel',
-    text: 'How does rain affect cafe revenue on Sundays?',
+    id: 'drinks-repeat-favourites-app',
+    segment: 'drinks',
+    text: 'Which drinks have the highest repeat-purchase rate among app members?',
+    suggestedChartId: 'waste-top10',
   },
   {
-    id: 'padel-forward-pipeline-vs-typical',
-    segment: 'padel',
-    text: 'How is the forward 14-day pipeline tracking vs typical?',
+    id: 'drinks-daypart-drink-mix',
+    segment: 'drinks',
+    text: 'How does the drink mix change between morning, lunch and evening?',
+    suggestedChartId: 'daypart',
   },
   {
-    id: 'padel-app-vs-web-booking-mix',
-    segment: 'padel',
-    text: 'iOS vs Android vs web booking mix, by club?',
-  },
-  {
-    id: 'padel-membership-tier-revenue',
-    segment: 'padel',
-    text: 'Which membership tier drives the most court revenue?',
-  },
-  {
-    id: 'padel-top-players-by-spend',
-    segment: 'padel',
-    text: 'Who are our top 20 players by 90-day spend?',
-  },
-  {
-    id: 'padel-tournament-impact-on-bookings',
-    segment: 'padel',
-    text: 'What is the bookings uplift on weekends with a tournament running?',
+    id: 'drinks-signature-index-by-site',
+    segment: 'drinks',
+    text: 'Which sites over-index on signature milk teas vs the network?',
+    suggestedChartId: 'growth',
   },
 ];
 
@@ -1368,7 +1376,7 @@ export function countsBySegment(
   visibleIds?: ReadonlySet<string>,
 ): Record<QuestionSegment, number> {
   const out: Record<QuestionSegment, number> = {
-    sales: 0, cogs: 0, labour: 0, waste: 0, production: 0, padel: 0,
+    sales: 0, cogs: 0, labour: 0, waste: 0, production: 0, drinks: 0,
   };
   for (const q of QUESTION_LIBRARY) {
     if (visibleIds && !visibleIds.has(q.id)) continue;

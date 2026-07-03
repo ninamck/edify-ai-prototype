@@ -265,7 +265,7 @@ export default function Sidebar() {
             history. They don't match invoices or own credit notes — those
             sit at the estate level. */}
         <NavGroup title="Stock & ordering" compact={compact}>
-          <NavItem label="Review suggested orders" icon={ShoppingCart} compact={compact} badge={3} active={is('/assisted-ordering')} onClick={() => router.push('/assisted-ordering')} />
+          <NavItem label="Predictive ordering" icon={ShoppingCart} compact={compact} badge={3} active={is('/assisted-ordering')} onClick={() => router.push('/assisted-ordering')} />
           {/* "Manage stock" covers the four sub-views of /stock:
               Needs attention, All items, Stocktake (the count flow), and
               Stocktake history. Previously split across two sidebar items

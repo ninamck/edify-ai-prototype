@@ -25,6 +25,8 @@ import {
 
 import type { Brand } from '@/components/Production/bkFixtures';
 import { BK_SITE_ID } from '@/components/Production/bkFixtures';
+import { CHAGEE_SITE_ID } from '@/components/Production/chageeFixtures';
+import { isDemoBuild } from '@/lib/demoConfig';
 
 export type ActiveSiteType = 'HUB' | 'SPOKE' | 'HYBRID' | 'HYBRID_HUB' | 'STANDALONE' | 'ALL';
 
@@ -49,7 +51,21 @@ export type ActiveSite = {
 
 const STORAGE_KEY = 'edify.activeSiteId';
 
-export const ACTIVE_SITES: ActiveSite[] = [
+/** CHAGEE — the single-client tea-store persona. */
+const CHAGEE_PERSONA: ActiveSite = {
+  id: CHAGEE_SITE_ID,
+  name: 'CHAGEE — Flagship',
+  type: 'STANDALONE',
+  brand: 'chagee',
+  // Standalone fresh-brew tea bar: no hub, no dispatch. Plan = how much of
+  // each tea base / topping to brew per 20 min; Make = the crew line reading
+  // the holding urns live. Pins its production-fixture site explicitly.
+  productionSiteId: CHAGEE_SITE_ID,
+  caption: 'CHAGEE · Fresh-brew tea bar',
+};
+
+/** The internal (Edify) multi-brand persona set — Pret estate + Burger King. */
+const INTERNAL_ACTIVE_SITES: ActiveSite[] = [
   {
     id: 'all-sites',
     name: 'All sites',
@@ -115,7 +131,17 @@ export const ACTIVE_SITES: ActiveSite[] = [
   },
 ];
 
-const DEFAULT_ACTIVE_SITE_ID = 'fitzroy-espresso';
+/**
+ * On a gated customer (Chagee) build, the site switcher collapses to the single
+ * Chagee flagship — every other brand/persona is removed so the whole app runs
+ * as a single-client tea store. The internal Edify build keeps the full
+ * multi-brand set (with Chagee available at the end for testing).
+ */
+export const ACTIVE_SITES: ActiveSite[] = isDemoBuild
+  ? [CHAGEE_PERSONA]
+  : [...INTERNAL_ACTIVE_SITES, CHAGEE_PERSONA];
+
+const DEFAULT_ACTIVE_SITE_ID = isDemoBuild ? CHAGEE_PERSONA.id : 'fitzroy-espresso';
 
 type ActiveSiteContextValue = {
   sites: ActiveSite[];
@@ -140,6 +166,8 @@ type ActiveSiteContextValue = {
   brand: Brand;
   /** True when the active persona is the Burger King restaurant. */
   isBurgerKing: boolean;
+  /** True when the active persona is the CHAGEE tea store. */
+  isChagee: boolean;
   /** Explicit production-fixture site id for the persona, when it pins one. */
   productionSiteId?: string;
 };
@@ -189,6 +217,7 @@ export function ActiveSiteProvider({ children }: { children: React.ReactNode }) 
       isAllSites: activeSite.type === 'ALL',
       brand: activeSite.brand ?? 'pret',
       isBurgerKing: (activeSite.brand ?? 'pret') === 'bk',
+      isChagee: (activeSite.brand ?? 'pret') === 'chagee',
       productionSiteId: activeSite.productionSiteId,
     };
   }, [activeSiteId, setActiveSiteId]);
@@ -216,6 +245,7 @@ export function useActiveSite(): ActiveSiteContextValue {
       isAllSites: fallback.type === 'ALL',
       brand: fallback.brand ?? 'pret',
       isBurgerKing: (fallback.brand ?? 'pret') === 'bk',
+      isChagee: (fallback.brand ?? 'pret') === 'chagee',
       productionSiteId: fallback.productionSiteId,
     };
   }

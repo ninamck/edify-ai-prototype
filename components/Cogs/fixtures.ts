@@ -1,15 +1,17 @@
 /**
- * COGS demo fixtures — a single self-producing site ("Pret Hub Kitchen")
+ * COGS demo fixtures — a single CHAGEE tea bar ("CHAGEE — Flagship")
  * over one stocktake period. Mirrors the shape of the real Edify COGS
  * dashboard (Single Site COGs + COGs Variance), but with a coherent,
  * non-zero story so the theoretical-vs-actual gauges and the AI insight
  * narratives have something meaningful to explain.
  *
- * Currency is GBP (£). All money values are pre-rounded; percentages are
- * derived so the table footers always reconcile.
+ * The mix is beverage-heavy (tea drinks dominate sales, with strong gross
+ * margins), a small food/snack line, packaging under General and cleaning
+ * under Other. Currency is GBP (£). All money values are pre-rounded;
+ * percentages are derived so the table footers always reconcile.
  */
 
-export const COGS_SITE_NAME = 'Pret Hub Kitchen';
+export const COGS_SITE_NAME = 'CHAGEE — Flagship';
 
 export const COGS_PERIOD = {
   openingLabel: 'Dec 31, 2025',
@@ -52,48 +54,48 @@ const CLASS_INPUTS: CogsClassInput[] = [
   {
     id: 'beverage',
     productClass: 'Beverage',
-    openingStock: 2400.0,
-    purchases: 3600.0,
+    openingStock: 3000.0,
+    purchases: 8600.0,
     transfersIn: 0,
     transfersOut: 0,
-    waste: 70.0,
-    closingStock: 2250.0,
-    sales: 15000.0,
-    theoreticalPct: 21.5,
+    waste: 120.0,
+    closingStock: 2760.0,
+    sales: 34000.0,
+    theoreticalPct: 23.0,
   },
   {
     id: 'food',
     productClass: 'Food',
-    openingStock: 9800.0,
-    purchases: 9700.0,
-    transfersIn: 200.0,
-    transfersOut: 750.0,
-    waste: 190.0,
-    closingStock: 9500.0,
-    sales: 30000.0,
-    theoreticalPct: 28.0,
+    openingStock: 2600.0,
+    purchases: 3200.0,
+    transfersIn: 60.0,
+    transfersOut: 220.0,
+    waste: 90.0,
+    closingStock: 2340.0,
+    sales: 12000.0,
+    theoreticalPct: 27.0,
   },
   {
     id: 'general',
     productClass: 'General',
-    openingStock: 850.0,
-    purchases: 780.0,
+    openingStock: 700.0,
+    purchases: 640.0,
     transfersIn: 0,
-    transfersOut: 50.0,
-    waste: 12.0,
-    closingStock: 780.0,
-    sales: 5000.0,
-    theoreticalPct: 15.0,
+    transfersOut: 40.0,
+    waste: 8.0,
+    closingStock: 660.0,
+    sales: 4000.0,
+    theoreticalPct: 14.0,
   },
   {
     id: 'other',
     productClass: 'Other',
-    openingStock: 190.0,
-    purchases: 75.0,
+    openingStock: 150.0,
+    purchases: 70.0,
     transfersIn: 0,
     transfersOut: 0,
     waste: 6.0,
-    closingStock: 175.0,
+    closingStock: 140.0,
     sales: 1000.0,
     theoreticalPct: 8.0,
   },
@@ -101,11 +103,11 @@ const CLASS_INPUTS: CogsClassInput[] = [
     id: 'unassigned',
     productClass: 'Unassigned',
     openingStock: 0,
-    purchases: 140.0,
+    purchases: 120.0,
     transfersIn: 0,
     transfersOut: 0,
     waste: 0,
-    closingStock: 30.0,
+    closingStock: 25.0,
     sales: 0,
     theoreticalPct: 0,
   },
@@ -221,8 +223,8 @@ export type CogsVarianceRow = {
 export const COGS_VARIANCE_ROWS: CogsVarianceRow[] = [
   {
     id: 'apple-green-julienne',
-    name: 'Apple Green Julienne',
-    productClass: 'Food',
+    name: 'Jasmine Green Tea Leaf',
+    productClass: 'Beverage',
     packType: 'Pack',
     unitCost: 3.25,
     openingStock: 0,
@@ -241,8 +243,8 @@ export const COGS_VARIANCE_ROWS: CogsVarianceRow[] = [
   },
   {
     id: 'smoked-salmon',
-    name: 'Smoked Salmon Sliced',
-    productClass: 'Food',
+    name: "Orchid Oolong (Bai Ya Qi Lan) Leaf",
+    productClass: 'Beverage',
     packType: 'Pack',
     unitCost: 22.0,
     openingStock: 6,
@@ -262,7 +264,7 @@ export const COGS_VARIANCE_ROWS: CogsVarianceRow[] = [
   },
   {
     id: 'house-red-wine',
-    name: 'House Red Wine 75cl',
+    name: 'Brown Sugar Syrup 1L',
     productClass: 'Beverage',
     packType: 'Bottle',
     unitCost: 6.5,
@@ -283,9 +285,9 @@ export const COGS_VARIANCE_ROWS: CogsVarianceRow[] = [
   },
   {
     id: 'sourdough-loaf',
-    name: 'Sourdough Loaf',
-    productClass: 'Food',
-    packType: 'Each',
+    name: 'Bold Black Tea Leaf',
+    productClass: 'Beverage',
+    packType: 'Pack',
     unitCost: 1.6,
     openingStock: 40,
     purchases: 220,
@@ -304,8 +306,8 @@ export const COGS_VARIANCE_ROWS: CogsVarianceRow[] = [
   },
   {
     id: 'avocado',
-    name: 'Avocado',
-    productClass: 'Food',
+    name: 'Tapioca Pearls',
+    productClass: 'Beverage',
     packType: 'Kilogram',
     unitCost: 4.2,
     openingStock: 18,
@@ -325,7 +327,7 @@ export const COGS_VARIANCE_ROWS: CogsVarianceRow[] = [
   },
   {
     id: 'avocado-cheese-croissant',
-    name: 'Avocado and Cheese hot croissant',
+    name: 'Brown Sugar Mochi Doughnut',
     productClass: 'Food',
     packType: 'Each',
     unitCost: 1.95,
@@ -345,9 +347,9 @@ export const COGS_VARIANCE_ROWS: CogsVarianceRow[] = [
   },
   {
     id: 'bagel-vegan-multigrain',
-    name: 'Bagel Vegan Multi Grain 60g',
-    productClass: 'Food',
-    packType: 'Each',
+    name: 'Grass Jelly Topping (prepared)',
+    productClass: 'Beverage',
+    packType: 'Portion',
     unitCost: 0.45,
     openingStock: 240,
     purchases: 350,
@@ -366,7 +368,7 @@ export const COGS_VARIANCE_ROWS: CogsVarianceRow[] = [
   },
   {
     id: 'baguette-selection-platter',
-    name: 'Baguette Selection Platter',
+    name: 'Boba Party Box (catering)',
     productClass: 'Food',
     packType: 'Each',
     unitCost: 12.5,
@@ -386,7 +388,7 @@ export const COGS_VARIANCE_ROWS: CogsVarianceRow[] = [
   },
   {
     id: 'banana',
-    name: 'Banana',
+    name: 'Fresh Ruby Grapefruit',
     productClass: 'Food',
     packType: 'Kilogram',
     unitCost: 1.1,
@@ -406,8 +408,8 @@ export const COGS_VARIANCE_ROWS: CogsVarianceRow[] = [
   },
   {
     id: 'basil-leaves-sanitized',
-    name: 'Basil Leaves Sanitized',
-    productClass: 'Food',
+    name: 'Peach Purée',
+    productClass: 'Beverage',
     packType: 'Pack',
     unitCost: 3.1,
     openingStock: 6,
@@ -427,8 +429,8 @@ export const COGS_VARIANCE_ROWS: CogsVarianceRow[] = [
   },
   {
     id: 'beans-red-kidney',
-    name: 'Beans Red Kidney',
-    productClass: 'Food',
+    name: 'Adzuki Red Bean',
+    productClass: 'Beverage',
     packType: 'Jar',
     unitCost: 1.2,
     openingStock: 18,
@@ -448,7 +450,7 @@ export const COGS_VARIANCE_ROWS: CogsVarianceRow[] = [
   },
   {
     id: 'whole-milk',
-    name: 'Whole Milk 1L',
+    name: 'Fresh Whole Milk 1L',
     productClass: 'Beverage',
     packType: 'Each',
     unitCost: 0.95,
@@ -469,7 +471,7 @@ export const COGS_VARIANCE_ROWS: CogsVarianceRow[] = [
   },
   {
     id: 'oat-milk',
-    name: 'Oat Milk Barista 1L',
+    name: 'Barista Oat Milk 1L',
     productClass: 'Beverage',
     packType: 'Each',
     unitCost: 1.4,
@@ -490,7 +492,7 @@ export const COGS_VARIANCE_ROWS: CogsVarianceRow[] = [
   },
   {
     id: 'arabica-beans',
-    name: 'Arabica Coffee Beans 1kg',
+    name: 'Roasted Oolong Leaf 1kg',
     productClass: 'Beverage',
     packType: 'Kilogram',
     unitCost: 14,
@@ -510,8 +512,8 @@ export const COGS_VARIANCE_ROWS: CogsVarianceRow[] = [
   },
   {
     id: 'chicken-breast',
-    name: 'Chicken Breast Fillet',
-    productClass: 'Food',
+    name: "Aged Pu'er Leaf",
+    productClass: 'Beverage',
     packType: 'Kilogram',
     unitCost: 6.5,
     openingStock: 10,
@@ -531,8 +533,8 @@ export const COGS_VARIANCE_ROWS: CogsVarianceRow[] = [
   },
   {
     id: 'cheddar-block',
-    name: 'Mature Cheddar Block 2kg',
-    productClass: 'Food',
+    name: 'Non-Dairy Creamer 2kg',
+    productClass: 'Beverage',
     packType: 'Each',
     unitCost: 17,
     openingStock: 14,
@@ -551,9 +553,9 @@ export const COGS_VARIANCE_ROWS: CogsVarianceRow[] = [
   },
   {
     id: 'takeaway-cup-12oz',
-    name: 'Takeaway Cup 12oz (sleeve)',
+    name: 'Sealed Cup + Lid 500ml',
     productClass: 'General',
-    packType: 'Sleeve',
+    packType: 'Case',
     unitCost: 4.5,
     openingStock: 40,
     purchases: 120,

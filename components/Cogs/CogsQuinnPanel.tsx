@@ -7,6 +7,7 @@ import { Send, X } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import EdifyMarkThinking from '@/components/EdifyMark/EdifyMarkThinking';
 import { renderMarkdownLite } from './markdownLite';
+import { COGS_SITE_NAME } from './fixtures';
 import { COGS_PATTERNS, COGS_SUGGESTED_QUESTIONS, getCogsChatAnswer } from './insights';
 
 type ChatMessage = {
@@ -17,8 +18,7 @@ type ChatMessage = {
   rowIds?: string[];
 };
 
-const GREETING =
-  "I've read this period's stocktake for Pret Hub Kitchen. Ask me where the COGS variance is coming from and I'll point you at the lines that matter.";
+const GREETING = `I've read this period's stocktake for ${COGS_SITE_NAME}. Ask me where the COGS variance is coming from and I'll point you at the lines that matter.`;
 
 export default function CogsQuinnPanel({
   open,
@@ -175,7 +175,7 @@ export default function CogsQuinnPanel({
                     Edify · COGS analyst
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                    Pret Hub Kitchen · this period
+                    {COGS_SITE_NAME} · this period
                   </div>
                 </div>
                 <button

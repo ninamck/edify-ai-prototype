@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { PlaySquare } from 'lucide-react';
 import StepperView from './StepperView';
 import { DEMO_TODAY, type SiteId } from './fixtures';
+import { isDemoBuild } from '@/lib/demoConfig';
 
 /**
  * Toolbar button that opens the production Stepper for the current site
@@ -29,6 +30,11 @@ export default function StepperLauncher({
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
+
+  // Hidden on customer demo builds — the stepper walkthrough is an internal
+  // affordance that adds toolbar clutter to the demo. Still available on the
+  // internal Edify build. Remove this guard to restore it everywhere.
+  if (isDemoBuild) return null;
 
   const solid: React.CSSProperties = {
     background: 'var(--color-bg-nav)',

@@ -235,7 +235,7 @@ export default function MobileHamburgerDrawer({
             {/* Stock & ordering */}
             <SectionDivider label="Stock & ordering" />
             <div style={{ padding: '0 8px' }}>
-              <DrawerNavItem icon={ShoppingCart} label="Review suggested orders" badge={3} onClick={() => go('/assisted-ordering')} />
+              <DrawerNavItem icon={ShoppingCart} label="Predictive ordering" badge={3} onClick={() => go('/assisted-ordering')} />
               <DrawerNavItem icon={Box} label="Manage stock" onClick={() => go('/stock')} />
               <DrawerNavItem icon={FileCheck} label="Match invoices" badge={needsReviewCount() || undefined} onClick={() => go('/invoices')} />
               <DrawerNavItem icon={Clock} label="View order history" onClick={() => go('/')} />

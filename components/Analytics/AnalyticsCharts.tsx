@@ -92,13 +92,13 @@ const OK = '#166534';
 // ── Data ──────────────────────────────────────────────────────────────────────
 
 const WEEKLY_SALES = [
-  { site: 'Fitzroy', current: 52.4, prior: 49.3 },
-  { site: 'City Ctr', current: 47.1, prior: 48.0 },
-  { site: 'Riverside', current: 45.8, prior: 41.2 },
+  { site: 'Soho', current: 52.4, prior: 49.3 },
+  { site: 'Westfield', current: 47.1, prior: 48.0 },
+  { site: 'Camden', current: 45.8, prior: 41.2 },
   { site: 'Canary', current: 41.3, prior: 40.1 },
   { site: 'Shoreditch', current: 43.6, prior: 42.9 },
   { site: 'Kings X', current: 44.2, prior: 43.0 },
-  { site: 'S. Yarra', current: 37.6, prior: 35.5 },
+  { site: 'Stratford', current: 37.6, prior: 35.5 },
 ];
 
 // Same week as WEEKLY_SALES, but rolled up estate-wide and broken down per day.
@@ -148,49 +148,49 @@ const WEEKLY_TREND = [
 ];
 
 const SITE_MOM_GROWTH = [
-  { site: 'Riverside', growth: 9.4 },
+  { site: 'Camden', growth: 9.4 },
   { site: 'Shoreditch', growth: 6.1 },
-  { site: 'Fitzroy', growth: 4.8 },
+  { site: 'Soho', growth: 4.8 },
   { site: 'Kings X', growth: 3.2 },
   { site: 'Canary', growth: 2.1 },
-  { site: 'S. Yarra', growth: 1.4 },
-  { site: 'City Ctr', growth: -0.8 },
+  { site: 'Stratford', growth: 1.4 },
+  { site: 'Westfield', growth: -0.8 },
 ];
 
 const REVPAR_LABOUR = [
-  { site: 'Fitzroy', rplh: 48.2 },
+  { site: 'Soho', rplh: 48.2 },
   { site: 'Kings X', rplh: 44.6 },
-  { site: 'Riverside', rplh: 42.1 },
+  { site: 'Camden', rplh: 42.1 },
   { site: 'Shoreditch', rplh: 39.4 },
-  { site: 'S. Yarra', rplh: 37.8 },
-  { site: 'City Ctr', rplh: 35.2 },
+  { site: 'Stratford', rplh: 37.8 },
+  { site: 'Westfield', rplh: 35.2 },
   { site: 'Canary', rplh: 31.8 },
 ];
 
 const COGS_BUDGET_VAR = [
-  { site: 'City Ctr', var: 2.1 },
+  { site: 'Westfield', var: 2.1 },
   { site: 'Canary', var: 1.8 },
   { site: 'Shoreditch', var: 1.4 },
-  { site: 'S. Yarra', var: 0.6 },
-  { site: 'Riverside', var: -0.2 },
-  { site: 'Fitzroy', var: -0.5 },
+  { site: 'Stratford', var: 0.6 },
+  { site: 'Camden', var: -0.2 },
+  { site: 'Soho', var: -0.5 },
   { site: 'Kings X', var: -0.9 },
 ];
 
 const CHANNEL_SPLIT = [
-  { channel: 'Eat-in',    value: 142, colour: 'var(--color-accent-deep)' },
+  { channel: 'In-store',  value: 142, colour: 'var(--color-accent-deep)' },
   { channel: 'Takeaway',  value: 128, colour: 'var(--color-accent-mid)' },
   { channel: 'Delivery',  value: 42,  colour: '#B45309' },
 ];
 
 const DAYPART_BY_SITE = [
-  { site: 'Fitzroy',    breakfast: 22.1, lunch: 18.4, afternoon: 11.9 },
-  { site: 'City Ctr',   breakfast: 14.2, lunch: 22.6, afternoon: 10.3 },
-  { site: 'Riverside',  breakfast: 18.0, lunch: 16.4, afternoon: 11.4 },
+  { site: 'Soho',       breakfast: 22.1, lunch: 18.4, afternoon: 11.9 },
+  { site: 'Westfield',  breakfast: 14.2, lunch: 22.6, afternoon: 10.3 },
+  { site: 'Camden',     breakfast: 18.0, lunch: 16.4, afternoon: 11.4 },
   { site: 'Shoreditch', breakfast: 15.2, lunch: 17.8, afternoon: 10.6 },
   { site: 'Kings X',    breakfast: 17.4, lunch: 16.1, afternoon: 10.7 },
   { site: 'Canary',     breakfast: 12.1, lunch: 18.9, afternoon: 10.3 },
-  { site: 'S. Yarra',   breakfast: 14.8, lunch: 13.2, afternoon: 9.6 },
+  { site: 'Stratford',  breakfast: 14.8, lunch: 13.2, afternoon: 9.6 },
 ];
 
 const LFL_WEEK = [
@@ -204,46 +204,46 @@ const LFL_WEEK = [
 ];
 
 const TOP_WASTED = [
-  { item: 'Blueberry muffin',      waste: 142, units: 48 },
-  { item: 'Ham & cheese baguette', waste: 118, units: 24 },
-  { item: 'Almond croissant',      waste: 96,  units: 32 },
-  { item: 'Oat flat white',        waste: 84,  units: 42 },
-  { item: 'Chicken salad bowl',    waste: 78,  units: 16 },
-  { item: 'Caramel slice',         waste: 64,  units: 26 },
-  { item: 'Pain au chocolat',      waste: 56,  units: 24 },
-  { item: 'Berry smoothie',        waste: 48,  units: 16 },
-  { item: 'Chocolate cookie',      waste: 42,  units: 28 },
-  { item: 'Vegan wrap',            waste: 38,  units: 12 },
+  { item: 'Egg tart',            waste: 142, units: 48 },
+  { item: 'Cooked tapioca',      waste: 118, units: 24 },
+  { item: 'Matcha mochi',        waste: 96,  units: 32 },
+  { item: 'Wintermelon tea',     waste: 84,  units: 42 },
+  { item: 'Grass jelly',         waste: 78,  units: 16 },
+  { item: 'Red bean bun',        waste: 64,  units: 26 },
+  { item: 'Pineapple cake',      waste: 56,  units: 24 },
+  { item: 'Mango fruit tea',     waste: 48,  units: 16 },
+  { item: 'Brown sugar syrup',   waste: 42,  units: 28 },
+  { item: 'Cheese foam',         waste: 38,  units: 12 },
 ];
 
 // Top ingredients by spend, estate-wide month-to-date. Volume figures (kg /
 // litres) line up roughly with realistic per-site monthly throughput across
-// a 7-site cafe estate.
+// a 7-site CHAGEE estate.
 const TOP_INGREDIENTS_BY_COST = [
-  { item: 'Whole milk',          cost: 4820, volume: '2,410 L' },
-  { item: 'Espresso beans',      cost: 3140, volume: '184 kg' },
-  { item: 'Oat milk',            cost: 1860, volume: '780 L' },
-  { item: 'Brioche & pastries',  cost: 1420, volume: '6,200 units' },
-  { item: 'Cured meats',         cost: 1280, volume: '128 kg' },
+  { item: 'Fresh milk',          cost: 4820, volume: '2,410 L' },
+  { item: 'Jasmine tea leaf',    cost: 3140, volume: '184 kg' },
+  { item: 'Tapioca pearls',      cost: 1860, volume: '780 kg' },
+  { item: 'Fruit purée & syrup', cost: 1420, volume: '6,200 units' },
+  { item: 'Oat milk',            cost: 1280, volume: '640 L' },
 ];
 
 const PRODUCED_SOLD = [
-  { item: 'Blueberry muffin',      produced: 48, sold: 32 },
-  { item: 'Ham & cheese baguette', produced: 36, sold: 24 },
-  { item: 'Almond croissant',      produced: 32, sold: 22 },
-  { item: 'Chicken salad bowl',    produced: 28, sold: 18 },
-  { item: 'Caramel slice',         produced: 30, sold: 22 },
-  { item: 'Oat porridge pot',      produced: 16, sold: 22 },
-  { item: 'Green juice',           produced: 12, sold: 18 },
+  { item: 'Cooked tapioca',   produced: 48, sold: 32 },
+  { item: 'Egg tart',         produced: 36, sold: 24 },
+  { item: 'Matcha mochi',     produced: 32, sold: 22 },
+  { item: 'Grass jelly',      produced: 28, sold: 18 },
+  { item: 'Red bean bun',     produced: 30, sold: 22 },
+  { item: 'Cheese foam',      produced: 16, sold: 22 },
+  { item: 'Aiyu jelly',       produced: 12, sold: 18 },
 ];
 
 const LABOUR_PCT = [
-  { site: 'Fitzroy',    actual: 24.1 },
+  { site: 'Soho',       actual: 24.1 },
   { site: 'Kings X',    actual: 25.8 },
-  { site: 'Riverside',  actual: 26.8 },
+  { site: 'Camden',     actual: 26.8 },
   { site: 'Shoreditch', actual: 27.1 },
-  { site: 'S. Yarra',   actual: 29.5 },
-  { site: 'City Ctr',   actual: 30.2 },
+  { site: 'Stratford',  actual: 29.5 },
+  { site: 'Westfield',  actual: 30.2 },
   { site: 'Canary',     actual: 33.4 },
 ];
 const LABOUR_TARGET = 28;
@@ -253,12 +253,12 @@ const LABOUR_TARGET = 28;
 // City Ctr lands at 32.1% actual, etc.
 const COGS_PCT = [
   { site: 'Kings X',    actual: 29.1 },
-  { site: 'Fitzroy',    actual: 29.5 },
-  { site: 'Riverside',  actual: 29.8 },
-  { site: 'S. Yarra',   actual: 30.6 },
+  { site: 'Soho',       actual: 29.5 },
+  { site: 'Camden',     actual: 29.8 },
+  { site: 'Stratford',  actual: 30.6 },
   { site: 'Shoreditch', actual: 31.4 },
   { site: 'Canary',     actual: 31.8 },
-  { site: 'City Ctr',   actual: 32.1 },
+  { site: 'Westfield',  actual: 32.1 },
 ];
 const COGS_TARGET = 30;
 
@@ -278,27 +278,27 @@ const WASTE_HEATMAP: number[][] = [
 
 // Pareto: items OOS before end of trading (count of OOS events)
 const OOS_PARETO = [
-  { item: 'Almond croissant',  events: 38 },
-  { item: 'Blueberry muffin',  events: 32 },
-  { item: 'Oat flat white',    events: 24 },
-  { item: 'Ham & cheese baguette', events: 18 },
-  { item: 'Green juice',       events: 14 },
-  { item: 'Chicken salad bowl', events: 10 },
-  { item: 'Pain au chocolat',  events: 8 },
-  { item: 'Caramel slice',     events: 6 },
-  { item: 'Berry smoothie',    events: 5 },
-  { item: 'Vegan wrap',        events: 3 },
+  { item: 'Taro Milk Tea',      events: 38 },
+  { item: 'Brown Sugar Boba',   events: 32 },
+  { item: 'Wintermelon tea',    events: 24 },
+  { item: 'Cooked tapioca',     events: 18 },
+  { item: 'Aiyu jelly',         events: 14 },
+  { item: 'Grass jelly',        events: 10 },
+  { item: 'Egg tart',           events: 8 },
+  { item: 'Matcha mochi',       events: 6 },
+  { item: 'Mango fruit tea',    events: 5 },
+  { item: 'Cheese foam',        events: 3 },
 ];
 
 // Actual vs scheduled labour hours per site (this week)
 const LABOUR_HOURS = [
-  { site: 'Fitzroy',    scheduled: 412, actual: 398 },
-  { site: 'City Ctr',   scheduled: 380, actual: 428 },
-  { site: 'Riverside',  scheduled: 344, actual: 352 },
+  { site: 'Soho',       scheduled: 412, actual: 398 },
+  { site: 'Westfield',  scheduled: 380, actual: 428 },
+  { site: 'Camden',     scheduled: 344, actual: 352 },
   { site: 'Shoreditch', scheduled: 320, actual: 336 },
   { site: 'Kings X',    scheduled: 296, actual: 288 },
   { site: 'Canary',     scheduled: 282, actual: 318 },
-  { site: 'S. Yarra',   scheduled: 258, actual: 266 },
+  { site: 'Stratford',  scheduled: 258, actual: 266 },
 ];
 
 // Waste KPI: total this week + 8-week sparkline
@@ -327,12 +327,12 @@ const WASTE_TREND_STACKED = [
 
 // Prod adherence (% hitting plan) × availability failures (count) per site
 const PROD_AVAIL_SCATTER = [
-  { site: 'Fitzroy',    adherence: 94, failures: 3,  sales: 52 },
+  { site: 'Soho',       adherence: 94, failures: 3,  sales: 52 },
   { site: 'Kings X',    adherence: 91, failures: 5,  sales: 44 },
-  { site: 'Riverside',  adherence: 88, failures: 7,  sales: 46 },
+  { site: 'Camden',     adherence: 88, failures: 7,  sales: 46 },
   { site: 'Shoreditch', adherence: 85, failures: 9,  sales: 44 },
-  { site: 'S. Yarra',   adherence: 82, failures: 12, sales: 38 },
-  { site: 'City Ctr',   adherence: 76, failures: 18, sales: 47 },
+  { site: 'Stratford',  adherence: 82, failures: 12, sales: 38 },
+  { site: 'Westfield',  adherence: 76, failures: 18, sales: 47 },
   { site: 'Canary',     adherence: 71, failures: 22, sales: 41 },
 ];
 
@@ -341,27 +341,27 @@ const WASTE_TREEMAP = {
   name: 'Estate waste',
   children: [
     {
-      name: 'Food',
+      name: 'Toppings',
       children: [
-        { name: 'Pastries',  size: 480 },
-        { name: 'Sandwiches', size: 340 },
-        { name: 'Salads',    size: 220 },
-        { name: 'Hot food',  size: 140 },
+        { name: 'Tapioca',    size: 480 },
+        { name: 'Jellies',    size: 340 },
+        { name: 'Cheese foam', size: 220 },
+        { name: 'Pudding',    size: 140 },
       ],
     },
     {
-      name: 'Drink',
+      name: 'Tea & dairy',
       children: [
-        { name: 'Milk',        size: 280 },
-        { name: 'Cold drinks', size: 180 },
-        { name: 'Coffee',      size: 120 },
+        { name: 'Milk',       size: 280 },
+        { name: 'Brewed tea', size: 180 },
+        { name: 'Syrups',     size: 120 },
       ],
     },
     {
-      name: 'Packaging',
+      name: 'Bakery',
       children: [
-        { name: 'Cups',       size: 90 },
-        { name: 'Containers', size: 40 },
+        { name: 'Egg tarts',  size: 90 },
+        { name: 'Mochi',      size: 40 },
       ],
     },
   ],
@@ -651,7 +651,7 @@ export function DaypartChart() {
           contentStyle={TOOLTIP_STYLE}
         />
         <Legend iconType="circle" wrapperStyle={{ fontSize: 12, fontFamily: 'var(--font-primary)' }} />
-        <Bar dataKey="breakfast" name="Breakfast"  stackId="day" fill={ACCENT}      radius={[3, 0, 0, 3]} />
+        <Bar dataKey="breakfast" name="Morning"    stackId="day" fill={ACCENT}      radius={[3, 0, 0, 3]} />
         <Bar dataKey="lunch"     name="Lunch"      stackId="day" fill={ACCENT_MID} />
         <Bar dataKey="afternoon" name="Afternoon"  stackId="day" fill="#B45309"     radius={[0, 3, 3, 0]} />
       </BarChart>
@@ -1179,15 +1179,15 @@ export function ProdAvailScatterChart() {
   );
 }
 
-const LEAF_CATEGORY: Record<string, 'Food' | 'Drink' | 'Packaging'> = {
-  Pastries: 'Food', Sandwiches: 'Food', Salads: 'Food', 'Hot food': 'Food',
-  Milk: 'Drink', 'Cold drinks': 'Drink', Coffee: 'Drink',
-  Cups: 'Packaging', Containers: 'Packaging',
+const LEAF_CATEGORY: Record<string, 'Toppings' | 'Tea & dairy' | 'Bakery'> = {
+  Tapioca: 'Toppings', Jellies: 'Toppings', 'Cheese foam': 'Toppings', Pudding: 'Toppings',
+  Milk: 'Tea & dairy', 'Brewed tea': 'Tea & dairy', Syrups: 'Tea & dairy',
+  'Egg tarts': 'Bakery', Mochi: 'Bakery',
 };
 const CATEGORY_FILL: Record<string, string> = {
-  Food: 'rgba(0, 28, 53, 0.92)',
-  Drink: 'rgba(0, 28, 53, 0.68)',
-  Packaging: 'rgba(180, 83, 9, 0.82)',
+  Toppings: 'rgba(0, 28, 53, 0.92)',
+  'Tea & dairy': 'rgba(0, 28, 53, 0.68)',
+  Bakery: 'rgba(180, 83, 9, 0.82)',
 };
 const TREEMAP_TOTAL = WASTE_TREEMAP.children.reduce(
   (s, c) => s + c.children.reduce((ss, cc) => ss + cc.size, 0),
@@ -1292,11 +1292,11 @@ const NET_SALES_YESTERDAY = {
 };
 
 const TOP_SELLERS_YESTERDAY = [
-  { item: 'Flat white',        units: 312, revenue: 1248 },
-  { item: 'Almond croissant',  units: 184, revenue: 736 },
-  { item: 'Bacon roll',        units: 168, revenue: 924 },
-  { item: 'Oat latte',         units: 142, revenue: 568 },
-  { item: 'Avocado smash',     units: 96,  revenue: 768 },
+  { item: 'Jasmine Green Milk Tea', units: 312, revenue: 2074 },
+  { item: 'Taro Milk Tea',          units: 184, revenue: 1288 },
+  { item: 'Brown Sugar Boba',       units: 168, revenue: 1176 },
+  { item: 'Peach Oolong',           units: 142, revenue: 923 },
+  { item: 'Matcha Latte',           units: 96,  revenue: 720 },
 ];
 
 const HOURLY_SALES_LABOUR = [
@@ -1322,45 +1322,45 @@ const DISCOUNTS_VOIDS_REFUNDS = [
 ];
 
 const WASTE_TOP5_YESTERDAY = [
-  { item: 'Blueberry muffin',      waste: 38, units: 12 },
-  { item: 'Almond croissant',      waste: 28, units: 9 },
-  { item: 'Ham & cheese baguette', waste: 22, units: 5 },
-  { item: 'Oat flat white',        waste: 18, units: 9 },
-  { item: 'Caramel slice',         waste: 14, units: 6 },
+  { item: 'Egg tart',          waste: 38, units: 12 },
+  { item: 'Cooked tapioca',    waste: 28, units: 9 },
+  { item: 'Matcha mochi',      waste: 22, units: 5 },
+  { item: 'Grass jelly',       waste: 18, units: 9 },
+  { item: 'Cheese foam',       waste: 14, units: 6 },
 ];
 
 const DELIVERIES_BY_SUPPLIER = [
-  { supplier: 'Bidfood',         yesterday: 1280, wtd: 4860 },
-  { supplier: 'Bunn Coffee',     yesterday: 720,  wtd: 2940 },
-  { supplier: 'Brakes',          yesterday: 540,  wtd: 2210 },
-  { supplier: 'Müller Dairy',    yesterday: 410,  wtd: 1820 },
+  { supplier: 'CHAGEE Tea',      yesterday: 1280, wtd: 4860 },
+  { supplier: 'Bubble Toppings', yesterday: 720,  wtd: 2940 },
+  { supplier: 'Monin Syrups',    yesterday: 540,  wtd: 2210 },
+  { supplier: 'Fresh Dairy',     yesterday: 410,  wtd: 1820 },
   { supplier: 'Local Bakehouse', yesterday: 280,  wtd: 1180 },
 ];
 
 const DELIVERY_ISSUES = [
   {
-    supplier: 'Bidfood',
-    item: 'Cucumbers (5kg)',
+    supplier: 'CHAGEE Tea Supply',
+    item: 'Jasmine green leaf 5kg',
     type: 'Credit note',
     severity: 'high' as const,
     detail: 'Damaged on arrival · £42 credit raised',
   },
   {
-    supplier: 'Brakes',
-    item: 'Whole-leaf rocket',
+    supplier: 'Bubble Toppings',
+    item: 'Tapioca pearls 3kg',
     type: 'Short delivery',
     severity: 'medium' as const,
     detail: '3 of 6 cases delivered · awaiting top-up',
   },
   {
-    supplier: 'Bunn Coffee',
-    item: 'Decaf espresso 1kg',
+    supplier: 'Monin Syrups UK',
+    item: 'Brown sugar syrup 1L',
     type: 'Order edit',
     severity: 'low' as const,
     detail: 'Qty changed 12 → 8 by supplier',
   },
   {
-    supplier: 'Müller Dairy',
+    supplier: 'Fresh Dairy Direct',
     item: 'Oat milk 1L',
     type: 'Substitution',
     severity: 'low' as const,
@@ -1369,11 +1369,11 @@ const DELIVERY_ISSUES = [
 ];
 
 const GROSS_MARGIN_PRODUCTS = [
-  { item: 'Filter coffee',     gmPct: 88, revenue: 612 },
-  { item: 'Espresso',          gmPct: 84, revenue: 480 },
-  { item: 'Flat white',        gmPct: 78, revenue: 1248 },
-  { item: 'Iced tea',          gmPct: 76, revenue: 280 },
-  { item: 'Almond croissant',  gmPct: 64, revenue: 736 },
+  { item: 'Pure jasmine tea',  gmPct: 88, revenue: 612 },
+  { item: 'Oolong tea',        gmPct: 84, revenue: 480 },
+  { item: 'Jasmine Milk Tea',  gmPct: 78, revenue: 1248 },
+  { item: 'Peach fruit tea',   gmPct: 76, revenue: 280 },
+  { item: 'Egg tart',          gmPct: 64, revenue: 736 },
 ];
 
 // Bottom of the menu by gross margin %. Sorted ascending so the worst item
@@ -1381,19 +1381,19 @@ const GROSS_MARGIN_PRODUCTS = [
 // "lowest margin" question. Revenue is monthly (estate-wide) so the
 // tooltip can show how exposed each line really is.
 const LOW_GM_ITEMS = [
-  { item: 'Avocado smash on sourdough', gmPct: 38, revenue: 4820 },
-  { item: 'Smoked salmon bagel',        gmPct: 42, revenue: 3860 },
-  { item: 'Chicken Caesar salad',       gmPct: 44, revenue: 5280 },
-  { item: 'Beef brisket sandwich',      gmPct: 47, revenue: 3120 },
-  { item: 'Granola & berry bowl',       gmPct: 51, revenue: 2960 },
+  { item: 'Brown Sugar Boba (large)',  gmPct: 38, revenue: 4820 },
+  { item: 'Taro Milk Tea + pudding',   gmPct: 42, revenue: 3860 },
+  { item: 'Mango fruit tea + jelly',   gmPct: 44, revenue: 5280 },
+  { item: 'Cheese foam matcha',        gmPct: 47, revenue: 3120 },
+  { item: 'Red bean milk tea',         gmPct: 51, revenue: 2960 },
 ];
 
 const INGREDIENT_PRICE_CHANGES = [
-  { ingredient: 'Butter (unsalted)',     deltaPct: 18.4 },
-  { ingredient: 'Cocoa powder',          deltaPct: 12.1 },
-  { ingredient: 'Whole milk',            deltaPct: 6.8 },
-  { ingredient: 'Avocado',               deltaPct: -4.2 },
-  { ingredient: 'Olive oil (extra virgin)', deltaPct: -7.6 },
+  { ingredient: 'Tapioca pearls',    deltaPct: 18.4 },
+  { ingredient: 'Fruit purée',       deltaPct: 12.1 },
+  { ingredient: 'Fresh milk',        deltaPct: 6.8 },
+  { ingredient: 'Jasmine tea leaf',  deltaPct: -4.2 },
+  { ingredient: 'Oat milk',          deltaPct: -7.6 },
 ];
 
 export function NetSalesYesterdayChart() {
@@ -1989,47 +1989,47 @@ export const ANALYTICS_CONFIG: Record<AnalyticsChartId, {
   sales: {
     label: 'Total sales by site — last week',
     chartLabel: 'Here\'s total sales by site for last week, compared against the prior week:',
-    reasoning: 'Fitzroy led the estate at **£52.4k**, up 6.2% week-on-week. Riverside showed the biggest jump (+11.2%), driven by extended trading hours. City Centre was the only site to soften slightly (-0.9%). The estate total came in at **£312k**, 3.8% ahead of the prior week — driven primarily by a strong Saturday across all sites.',
+    reasoning: 'Soho led the estate at **£52.4k**, up 6.2% week-on-week. Camden showed the biggest jump (+11.2%), driven by extended trading hours. Westfield was the only site to soften slightly (-0.9%). The estate total came in at **£312k**, 3.8% ahead of the prior week — driven primarily by a strong Saturday across all sites.',
   },
   'sales-by-day': {
     label: 'Total sales by day — last week',
     chartLabel: 'Here\'s the same week broken down per day, estate-wide, against the prior week:',
-    reasoning: '**Saturday led the week at £56.6k**, with Friday close behind at £53.8k — together those two days drove ~35% of last week\'s revenue. The biggest week-on-week growth came on **Wednesday (+£2.5k)** and **Thursday (+£2.2k)**, which suggests the midweek lunchtime push is starting to land. **Sunday is the only day that softened (-£1.2k)** — likely the cooler weather. The weekend stays the leverage point: keep an eye on Saturday staffing — you ran lean two weekends ago and missed the peak.',
+    reasoning: '**Saturday led the week at £56.6k**, with Friday close behind at £53.8k — together those two days drove ~35% of last week\'s revenue. The biggest week-on-week growth came on **Wednesday (+£2.5k)** and **Thursday (+£2.2k)**, which suggests the midweek afternoon boba push is starting to land. **Sunday is the only day that softened (-£1.2k)** — likely the cooler weather dampening iced-tea demand. The weekend stays the leverage point: keep an eye on Saturday staffing — you ran lean two weekends ago and missed the peak.',
   },
   hour: {
     label: 'Revenue by hour — weekday average',
     chartLabel: 'Here\'s average revenue by hour of day across weekdays, estate-wide:',
-    reasoning: 'The **8–9am slot** is your highest-revenue hour, averaging **£2,840/day** across the estate — about 18% of total weekday revenue. A secondary peak at **12–1pm** contributes £2,210/day. Revenue drops sharply after 3pm. Consider scheduling staffing and production tightly around these two peaks rather than spreading evenly across the day.',
+    reasoning: 'The **2–3pm slot** is your highest-revenue hour, averaging **£2,840/day** across the estate — about 18% of total weekday revenue. A secondary peak at **12–1pm** contributes £2,210/day. Unlike a café, demand builds through the afternoon as iced teas and boba pull hardest. Consider scheduling staffing and brew-line prep tightly around the afternoon peak rather than spreading evenly across the day.',
   },
   trend: {
     label: 'Revenue trend — last 12 weeks',
     chartLabel: 'Here\'s estate revenue over the last 12 weeks:',
-    reasoning: 'Revenue has grown **14.2%** over the 12-week window, from £268k in week 1 to **£312k** in the most recent week. The trend shows steady upward momentum, with a notable acceleration in weeks 8–10 — likely driven by the seasonal upturn and the Riverside site reopening. Week 4 was the only dip; worth understanding what was different that period.',
+    reasoning: 'Revenue has grown **14.2%** over the 12-week window, from £268k in week 1 to **£312k** in the most recent week. The trend shows steady upward momentum, with a notable acceleration in weeks 8–10 — likely driven by the seasonal fruit-tea range and the Camden site reopening. Week 4 was the only dip; worth understanding what was different that period.',
   },
   growth: {
     label: 'Month-on-month growth by site',
     chartLabel: 'Here\'s month-on-month revenue growth by site:',
-    reasoning: '**Riverside** has shown the strongest growth at **+9.4%**, driven by the renovated espresso bar and extended trading hours. Shoreditch follows at +6.1%. **City Centre is the only site in slight decline (-0.8%)** — worth investigating footfall and competitor activity in that area before the next trading period.',
+    reasoning: '**Camden** has shown the strongest growth at **+9.4%**, driven by the refreshed brew line and extended trading hours. Shoreditch follows at +6.1%. **Westfield is the only site in slight decline (-0.8%)** — worth investigating footfall and competitor activity in that area before the next trading period.',
   },
   labour: {
     label: 'Revenue per labour hour by site',
     chartLabel: 'Here\'s revenue per labour hour across each site:',
-    reasoning: '**Fitzroy leads at £48.20/labour hour**, reflecting high average transaction value and efficient shift scheduling. Kings Cross follows closely at £44.60. **Canary Wharf is lowest at £31.80** — this site has a longer operating window with a late evening period that dilutes the metric. Consider reviewing rostering there.',
+    reasoning: '**Soho leads at £48.20/labour hour**, reflecting high average transaction value and efficient shift scheduling. King\'s Cross follows closely at £44.60. **Canary is lowest at £31.80** — this site has a longer operating window with a late evening period that dilutes the metric. Consider reviewing rostering there.',
   },
   cogs: {
     label: 'COGS variance vs budget by site',
     chartLabel: 'Here\'s COGS variance against budget, averaged over the last 8 weeks per site:',
-    reasoning: 'Three sites are **consistently over COGS budget**: City Centre (+2.1%), Canary Wharf (+1.8%), and Shoreditch (+1.4%). Fitzroy and Kings Cross remain within target. The main driver across over-budget sites is dairy and produce variance — suggesting supplier pricing drift or yield issues worth investigating with your ops team.',
+    reasoning: 'Three sites are **consistently over COGS budget**: Westfield (+2.1%), Canary (+1.8%), and Shoreditch (+1.4%). Soho and King\'s Cross remain within target. The main driver across over-budget sites is milk and topping variance — suggesting supplier pricing drift or over-portioning worth investigating with your ops team.',
   },
   eatin: {
-    label: 'Sales split · eat-in v takeaway v delivery',
+    label: 'Sales split · in-store v takeaway v delivery',
     chartLabel: 'Here\'s the channel split on this week\'s estate revenue:',
-    reasoning: '**Eat-in leads at £142k (45%)**, takeaway close behind at £128k (41%), and delivery contributes £42k (14%). Delivery margin nets out lower after aggregator fees — on an after-fee basis, eat-in and takeaway together deliver ~94% of cash margin. Keep an eye on the delivery share trending up on rainy days.',
+    reasoning: '**In-store leads at £142k (45%)**, takeaway close behind at £128k (41%), and delivery contributes £42k (14%). Delivery margin nets out lower after aggregator fees — on an after-fee basis, in-store and takeaway together deliver ~94% of cash margin. Keep an eye on the delivery share trending up on rainy days.',
   },
   daypart: {
     label: 'Revenue by daypart · per site',
-    chartLabel: 'Here\'s revenue per site split by breakfast, lunch, and afternoon:',
-    reasoning: '**Fitzroy is breakfast-heavy (43% of daily revenue)** — the commuter crowd. **City Centre is the opposite**: lunch makes up 48% of the day. Canary Wharf and Kings Cross are the most balanced. Use this split when you\'re sizing production runs and rostering — a breakfast-heavy site is more sensitive to 7am open-ready than an afternoon-heavy site.',
+    chartLabel: 'Here\'s revenue per site split by morning, lunch, and afternoon:',
+    reasoning: '**Soho is afternoon-heavy (43% of daily revenue)** — the after-work and student crowd. **Westfield is the opposite**: lunch makes up 48% of the day. Canary and King\'s Cross are the most balanced. Use this split when you\'re sizing brew-line runs and rostering — an afternoon-heavy site needs bases and tapioca ready before 1pm, not at open.',
   },
   lfl: {
     label: 'This week v same week last year',
@@ -2039,62 +2039,62 @@ export const ANALYTICS_CONFIG: Record<AnalyticsChartId, {
   'waste-top10': {
     label: 'Top 10 most wasted items · network',
     chartLabel: 'Here are the 10 items driving the most waste £ across the network (last 30 days):',
-    reasoning: '**Blueberry muffin tops the list at £142** — 48 units wasted, largely from over-production on Mondays. The top three items alone account for 38% of network waste £. Oat flat white is the highest-volume drink waste (42 units) despite sitting at #4 by £. Focus production planning on the top 5 — tightening sell-through by 10% there would save ~£50/day across the estate.',
+    reasoning: '**Egg tart tops the list at £142** — 48 units wasted, largely from over-baking on Mondays. The top three items alone account for 38% of network waste £. Cooked tapioca is the highest-risk topping (short 4-hour hold) despite sitting at #2 by £. Focus production planning on the top 5 — tightening sell-through by 10% there would save ~£50/day across the estate.',
   },
   'produced-sold': {
     label: 'Produced v sold · yesterday',
     chartLabel: 'Here\'s produced (hollow) versus sold (filled) per item yesterday, ordered by gap size:',
-    reasoning: 'Biggest overproduction was **blueberry muffin (made 48, sold 32)** — a 16-unit gap worth ~£48 in waste risk. The bottom two rows are the opposite story: **oat porridge pot and green juice both sold more than were made** (16 vs 22, 12 vs 18), which means lost sales. Bring morning prep down for muffins, nudge up for oat porridge and juice.',
+    reasoning: 'Biggest overproduction was **cooked tapioca (made 48, sold 32)** — a 16-unit gap worth ~£48 in waste risk given the short hold time. The bottom two rows are the opposite story: **cheese foam and aiyu jelly both sold more than were made** (16 vs 22, 12 vs 18), which means lost sales. Bring morning prep down for tapioca, nudge up for cheese foam and aiyu jelly.',
   },
   'labour-pct': {
     label: 'Labour % of sales · vs target',
     chartLabel: 'Here\'s labour as a % of sales by site this month, compared to the 28% target:',
-    reasoning: 'Four sites are at or under the **28% target** — Fitzroy is the leanest at 24.1%. **Canary Wharf is the biggest miss at 33.4%** (5.4 points over), followed by City Centre at 30.2%. The main drivers: Canary\'s late-evening roster and City Centre\'s weekend over-staffing. Two tactical shifts (clip the late hour at Canary, cut one weekend shift at City Centre) should close most of the gap.',
+    reasoning: 'Four sites are at or under the **28% target** — Soho is the leanest at 24.1%. **Canary is the biggest miss at 33.4%** (5.4 points over), followed by Westfield at 30.2%. The main drivers: Canary\'s late-evening roster and Westfield\'s weekend over-staffing. Two tactical shifts (clip the late hour at Canary, cut one weekend shift at Westfield) should close most of the gap.',
   },
   'cogs-pct': {
     label: 'COGS % of revenue · by site',
     chartLabel: 'Here\'s COGS as a % of revenue by site this month, compared to the 30% target:',
-    reasoning: 'Estate-wide COGS is running at **30.6% of revenue this month** — 0.6 points over the 30% target. **Three sites are over budget**: City Centre (32.1%), Canary Wharf (31.8%), and Shoreditch (31.4%). **Kings Cross is the leanest at 29.1%**, with Fitzroy and Riverside also inside target. The main drivers across over-budget sites are dairy and produce variance — supplier pricing drift and yield issues are worth checking with your ops team.',
+    reasoning: 'Estate-wide COGS is running at **30.6% of revenue this month** — 0.6 points over the 30% target. **Three sites are over budget**: Westfield (32.1%), Canary (31.8%), and Shoreditch (31.4%). **King\'s Cross is the leanest at 29.1%**, with Soho and Camden also inside target. The main drivers across over-budget sites are milk and topping variance — supplier pricing drift and over-portioning are worth checking with your ops team.',
   },
   'cogs-top-ingredients': {
     label: 'Top 5 ingredients by cost · this month',
     chartLabel: 'Here are the 5 ingredients driving the most cost across the estate this month:',
-    reasoning: '**Whole milk is by far the biggest line at £4,820** — about 36% of the top-5 spend, driven by 2,410L of throughput. **Espresso beans follow at £3,140** (184kg). Together those two ingredients account for nearly 60% of the top-5 cost. **Oat milk has climbed to £1,860 (£2.38/L)** and is the line most worth pressure-testing — even a 10% supplier discount or a switch to a cheaper alt-milk default would save ~£190/month estate-wide. Brioche & pastries (£1,420) and cured meats (£1,280) round out the top 5 — both stable month-on-month and harder to flex without changing the menu.',
+    reasoning: '**Fresh milk is by far the biggest line at £4,820** — about 36% of the top-5 spend, driven by 2,410L of throughput. **Jasmine tea leaf follows at £3,140** (184kg). Together those two ingredients account for nearly 60% of the top-5 cost. **Tapioca pearls have climbed to £1,860** and is the line most worth pressure-testing — even a 10% supplier discount or tighter batch sizing would save ~£190/month estate-wide. Fruit purée & syrup (£1,420) and oat milk (£1,280) round out the top 5 — both stable month-on-month and harder to flex without changing the menu.',
   },
   'waste-heatmap': {
     label: 'Waste heatmap · day × hour',
     chartLabel: 'Here\'s where waste is happening, day-of-week by hour (last 4 weeks, £):',
-    reasoning: 'The hot spot is unmistakable: **Saturday 5pm (£46) and Friday 5pm (£42)** are the two worst cells, with Monday 5pm close behind. The **last hour of trading drives ~28% of total weekly waste** across the estate. Tightening production cut-offs 90 minutes before close on Fri/Sat/Mon would save ~£110/week. Morning cells (6–10am) are cool — no real waste signal there.',
+    reasoning: 'The hot spot is unmistakable: **Saturday 5pm (£46) and Friday 5pm (£42)** are the two worst cells, with Monday 5pm close behind. The **last hour of trading drives ~28% of total weekly waste** across the estate — mostly cooked tapioca and brewed bases past their hold time. Tightening brew-line cut-offs 90 minutes before close on Fri/Sat/Mon would save ~£110/week. Morning cells (6–10am) are cool — no real waste signal there.',
   },
   'oos-pareto': {
     label: 'Out-of-stock Pareto · items driving stockouts',
     chartLabel: 'Here are the items driving OOS events, with cumulative share:',
-    reasoning: '**Four items drive 73% of all OOS events** — almond croissant, blueberry muffin, oat flat white, and ham & cheese baguette. The cumulative line crosses 80% at the fifth item (green juice). Everything beyond that is long tail. Put the top 4 on a tighter replenishment trigger (e.g. second batch at 11am) and availability failures would drop materially without touching the rest of the range.',
+    reasoning: '**Four items drive 73% of all OOS events** — Taro Milk Tea, Brown Sugar Boba, wintermelon tea, and cooked tapioca. The cumulative line crosses 80% at the fifth item (aiyu jelly). Everything beyond that is long tail. Put the top 4 on a tighter replenishment trigger (e.g. second tapioca batch at 1pm) and availability failures would drop materially without touching the rest of the range.',
   },
   'labour-hours': {
     label: 'Actual vs scheduled labour hours · this week',
     chartLabel: 'Here\'s actual labour hours vs scheduled, per site this week:',
-    reasoning: 'Three sites are **meaningfully over schedule**: City Centre (+48h, +12.6%), Canary (+36h, +12.8%), Shoreditch (+16h, +5.0%). Fitzroy and Kings X both came in **under schedule** (less overtime, shifts released early). The City Centre and Canary overruns are the bulk of this week\'s labour budget miss — worth a manager debrief on why the extra hours were needed.',
+    reasoning: 'Three sites are **meaningfully over schedule**: Westfield (+48h, +12.6%), Canary (+36h, +12.8%), Shoreditch (+16h, +5.0%). Soho and King\'s X both came in **under schedule** (less overtime, shifts released early). The Westfield and Canary overruns are the bulk of this week\'s labour budget miss — worth a manager debrief on why the extra hours were needed.',
   },
   'waste-kpi': {
     label: 'Total waste this week · estate',
     chartLabel: 'Here\'s total recorded waste across the estate this week:',
-    reasoning: 'Total recorded waste for the past 7 days is **£1,842**, down **8.4% on the prior week** (£2,011) and **14% below the 8-week average**. The trend has been steadily improving since the production planning tightening in week 6. Keep going — another 10% reduction would bring total below £1,700 and unlock the monthly COGS % target.',
+    reasoning: 'Total recorded waste for the past 7 days is **£1,842**, down **8.4% on the prior week** (£2,011) and **14% below the 8-week average**. The trend has been steadily improving since the brew-line planning tightening in week 6. Keep going — another 10% reduction would bring total below £1,700 and unlock the monthly COGS % target.',
   },
   'waste-trend-stacked': {
     label: 'Waste trend · 12 weeks by reason',
     chartLabel: 'Here\'s estate waste over the last 12 weeks, stacked by reason:',
-    reasoning: 'Total waste has fallen **~45% over 12 weeks** (£2,220 → £1,320). The biggest improvement is in **overproduction** (down from £1,040 to £580) — credit the production planning targets introduced in week 6. Expired stock is also trending down. **Spoilage is the flattest line** — the remaining cold-chain / storage issue is where the next 10% lives.',
+    reasoning: 'Total waste has fallen **~45% over 12 weeks** (£2,220 → £1,320). The biggest improvement is in **overproduction** (down from £1,040 to £580) — credit the brew-line planning targets introduced in week 6. Expired stock is also trending down. **Spoilage is the flattest line** — the remaining cold-chain / topping-hold issue is where the next 10% lives.',
   },
   'prod-avail-scatter': {
     label: 'Production adherence × availability failures',
     chartLabel: 'Here\'s each site plotted by production plan adherence vs availability failures (bubble size = sales):',
-    reasoning: 'The correlation is **strong and negative** — sites that stick to their production plan run out of stock less often. Fitzroy (94% adherence, 3 failures) and Canary (71%, 22 failures) are the two poles. The **lower-right cluster** (City Centre, Canary) is where the operational effort should go — each 5 percentage points of adherence correlates with ~4 fewer OOS events per month.',
+    reasoning: 'The correlation is **strong and negative** — sites that stick to their brew-line plan run out of stock less often. Soho (94% adherence, 3 failures) and Canary (71%, 22 failures) are the two poles. The **lower-right cluster** (Westfield, Canary) is where the operational effort should go — each 5 percentage points of adherence correlates with ~4 fewer OOS events per month.',
   },
   'waste-category-treemap': {
     label: 'Waste by category · nested',
     chartLabel: 'Here\'s estate waste broken down by category and item type:',
-    reasoning: '**Food dominates at 62%** of estate waste £, led by pastries (£480) and sandwiches (£340). **Drink is 33%** — milk alone accounts for £280 (stock rotation gap in the walk-in). **Packaging is just 5%** — not where the cost lives. Focus: tighten pastry production and fix milk stock-rotation; everything else is noise.',
+    reasoning: '**Toppings dominate at 62%** of estate waste £, led by tapioca (£480) and jellies (£340). **Tea & dairy is 33%** — milk alone accounts for £280 (stock rotation gap in the walk-in). **Bakery is just 5%** — not where the cost lives. Focus: tighten tapioca batch sizing and fix milk stock-rotation; everything else is noise.',
   },
   'labour-day-radial': {
     label: 'Labour cost % by day of week',
@@ -2108,49 +2108,49 @@ export const ANALYTICS_CONFIG: Record<AnalyticsChartId, {
     reasoning: 'Yesterday\'s net sales came in at **£18,420**, up **6.7%** on the prior day (£17,260) and the strongest day of the past week. The trend is gently positive: 5 of the last 7 days have come in above the 7-day mean. Week-to-date net sales are running at £92,380.',
   },
   'top-sellers-yesterday': {
-    label: 'Top selling items · yesterday',
-    chartLabel: 'Here are the top 5 selling items by units sold yesterday:',
-    reasoning: '**Flat white led the day at 312 units (£1,248)** — about 24% of all hot drink volume. Almond croissant and bacon roll round out the top three. Avocado smash is the standout £-per-unit item: 96 units sold but £768 in revenue (£8 ATV). Use this list to anchor the next production plan and to spot-check stock cover for tomorrow morning.',
+    label: 'Top selling drinks · yesterday',
+    chartLabel: 'Here are the top 5 selling drinks by units sold yesterday:',
+    reasoning: '**Jasmine Green Milk Tea led the day at 312 units (£2,074)** — about 24% of all drink volume. Taro Milk Tea and Brown Sugar Boba round out the top three. Matcha Latte is the standout £-per-unit item: 96 units sold but £720 in revenue (£7.50 ATV). Use this list to anchor the next brew-line plan and to spot-check base and topping cover for tomorrow.',
   },
   'hourly-sales-labour': {
     label: 'Sales by hour · vs labour',
     chartLabel: 'Here are sales by hour yesterday with labour cost overlaid:',
-    reasoning: 'The **8–9am peak (£2,120)** carried the day, with a secondary lunch peak at noon (£1,820). Labour cost tracked sales reasonably well except in the **3–5pm window**, where £56–£28/hr labour kept running while sales fell from £720 to £360 — that\'s the leanest opportunity to pull a shift. Morning ramp from 7–8am could absorb a little more labour without hurting revenue per hour.',
+    reasoning: 'The **afternoon peak (£2,120)** carried the day, with a secondary lunch peak at noon (£1,820). Labour cost tracked sales reasonably well except in the **6–8pm window**, where labour kept running while sales fell away — that\'s the leanest opportunity to pull a shift. The midday ramp could absorb a little more labour without hurting revenue per hour.',
   },
   'discounts-voids-refunds': {
     label: 'Discounts, voids & refunds · yesterday',
     chartLabel: 'Here\'s yesterday\'s reduction value broken down by discounts, voids, and refunds:',
-    reasoning: 'Total reductions came to **£592** (about 3.2% of net sales). **Discounts dominate at £312 across 48 transactions** — mostly the standing 10% staff discount and three loyalty redemptions. Voids (£184 / 21 txns) are running slightly above your normal baseline — worth a quick look at the till audit. Refunds (£96 / 7) are within tolerance.',
+    reasoning: 'Total reductions came to **£592** (about 3.2% of net sales). **Discounts dominate at £312 across 48 transactions** — mostly the standing 10% staff discount and three app-loyalty redemptions. Voids (£184 / 21 txns) are running slightly above your normal baseline — worth a quick look at the till audit. Refunds (£96 / 7) are within tolerance.',
   },
   'waste-top5-yesterday': {
     label: 'Top 5 wasted items · yesterday',
     chartLabel: 'Here are the 5 items driving the most waste £ yesterday:',
-    reasoning: '**Blueberry muffin (£38, 12 units)** topped the list again — same pattern we saw last Monday. The top 3 items together account for £88 of the £120 wasted yesterday (73%). Tightening the muffin and almond-croissant production trigger by 6 units each would have cut yesterday\'s waste by roughly half without hurting availability.',
+    reasoning: '**Egg tart (£38, 12 units)** topped the list again — same pattern we saw last Monday. The top 3 items together account for £88 of the £120 wasted yesterday (73%). Tightening the egg-tart bake and tapioca batch trigger by 6 units each would have cut yesterday\'s waste by roughly half without hurting availability.',
   },
   'deliveries-by-supplier': {
     label: 'Deliveries by supplier · yesterday + WTD',
     chartLabel: 'Here are yesterday\'s deliveries by supplier alongside the week-to-date totals:',
-    reasoning: 'Yesterday\'s deliveries totalled **£3,230** across 5 suppliers. **Bidfood was the largest drop at £1,280**, on plan with the standard Tuesday produce/dairy run. Week-to-date is **£13,010**, pacing ~£300 ahead of the equivalent point last week. Bunn Coffee\'s WTD is up sharply (+22%) on the back of the espresso machine refit at Riverside.',
+    reasoning: 'Yesterday\'s deliveries totalled **£3,230** across 5 suppliers. **CHAGEE Tea was the largest drop at £1,280**, on plan with the standard midweek leaf run. Week-to-date is **£13,010**, pacing ~£300 ahead of the equivalent point last week. Bubble Toppings\' WTD is up sharply (+22%) on the back of the seasonal boba promotion at Camden.',
   },
   'delivery-issues': {
     label: 'Delivery issues · open',
     chartLabel: 'Here are the delivery exceptions raised on yesterday\'s drops:',
-    reasoning: 'Four exceptions are open across yesterday\'s deliveries. The one to action today is the **Bidfood credit note (£42, damaged cucumbers)** — confirm the credit has landed before week-end. The Brakes short-delivery on rocket needs a top-up call this morning so lunch service isn\'t affected. The Bunn order edit and Müller substitution are informational only.',
+    reasoning: 'Four exceptions are open across yesterday\'s deliveries. The one to action today is the **CHAGEE Tea Supply credit note (£42, damaged jasmine leaf)** — confirm the credit has landed before week-end. The Bubble Toppings short-delivery on tapioca needs a top-up call this morning so the afternoon peak isn\'t affected. The Monin order edit and Fresh Dairy substitution are informational only.',
   },
   'gross-margin-products': {
     label: 'Highest gross margin products · yesterday',
     chartLabel: 'Here are yesterday\'s top products by gross margin %:',
-    reasoning: 'The hot-drink core is doing the heavy lifting on margin: **filter coffee at 88%, espresso at 84%, flat white at 78%**. Together they delivered ~£2,340 of yesterday\'s revenue at a combined 82% GM. Almond croissant is the lowest-GM item in the top 5 at 64% — still healthy, but worth keeping an eye on as butter prices climb.',
+    reasoning: 'The pure-tea core is doing the heavy lifting on margin: **pure jasmine tea at 88%, oolong at 84%, Jasmine Milk Tea at 78%**. Together they delivered ~£2,340 of yesterday\'s revenue at a combined 82% GM. Egg tart is the lowest-GM item in the top 5 at 64% — still healthy, but worth keeping an eye on as butter prices climb.',
   },
   'low-gross-margin-items': {
     label: 'Lowest gross margin menu items',
     chartLabel: 'Here are the 5 menu items with the lowest gross margin this month:',
-    reasoning: '**Avocado smash on sourdough is the worst margin on the menu at 38%** — and it\'s far from a marginal seller (£4,820 MTD), so this is the line where a price tweak or recipe change moves real money. Smoked salmon bagel (42%) and Chicken Caesar salad (44%) are the next two; the salad in particular pulls high revenue (£5,280) at a thin margin, making it the second-biggest opportunity. **A 2-point margin lift across the bottom three would add roughly £280/month at current sales mix.** Beef brisket and granola bowl round out the bottom 5 but trade lower volume, so they\'re less of a priority.',
+    reasoning: '**Brown Sugar Boba (large) is the worst margin on the menu at 38%** — and it\'s far from a marginal seller (£4,820 MTD), so this is the line where a price tweak or portion change moves real money. Taro Milk Tea + pudding (42%) and Mango fruit tea + jelly (44%) are the next two; the mango in particular pulls high revenue (£5,280) at a thin margin, making it the second-biggest opportunity. **A 2-point margin lift across the bottom three would add roughly £280/month at current sales mix.** Cheese foam matcha and red bean milk tea round out the bottom 5 but trade lower volume, so they\'re less of a priority.',
   },
   'ingredient-price-changes': {
     label: 'Top ingredient price changes',
     chartLabel: 'Here are the 5 ingredients with the biggest cost movement vs the prior month:',
-    reasoning: '**Butter is up 18.4%** — the single biggest input-cost move this period and it touches every pastry recipe. Cocoa powder is up 12.1% (mostly hot chocolate and brownies). Two ingredients have moved in your favour: avocado is down 4.2% and extra-virgin olive oil is down 7.6%. Net effect on the menu mix is roughly **+0.4 points of food-cost %** unless one of the big two gets repriced.',
+    reasoning: '**Tapioca pearls are up 18.4%** — the single biggest input-cost move this period and it touches every boba drink. Fruit purée is up 12.1% (mostly the fruit-tea range). Two ingredients have moved in your favour: jasmine tea leaf is down 4.2% and oat milk is down 7.6%. Net effect on the menu mix is roughly **+0.4 points of drink-cost %** unless one of the big two gets repriced.',
   },
   // ── Dunkin (CSV-backed; only used by the Dunkin persona) ────────────────────
   ...DUNKIN_ANALYTICS_CONFIG,

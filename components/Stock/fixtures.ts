@@ -1459,6 +1459,239 @@ function defaultGroupsFor(siteId: string, items: StockItem[]): ItemGroup[] {
   ];
 }
 
+// ─── CHAGEE · single-client tea-bar snapshot ─────────────────────────────────
+// A standalone fresh-brew tea bar (see components/Production/chageeFixtures.ts).
+// The active persona uses site id 'chagee-flagship', which has no entry in the
+// Fitzroy-flavoured data above — so /stock silently fell back to the coffee
+// hub. The block below gives that persona its own tea-bar catalogue without
+// touching any of the Fitzroy sites/templates (still used by the internal
+// Edify build).
+//
+// Item ingredient names deliberately mirror CHAGEE_INGREDIENTS in
+// chageeFixtures.ts so the tea bar reads the same across Production + Stock.
+// Kept as plain strings here (rather than importing from Production) so this
+// Stock fixture stays self-contained.
+
+// Tea-specific supplier roster — separate from the coffee-side SUPPLIERS so
+// filters read cleanly ("Yunnan Leaf Imports" never collides with Bidvest).
+const CHAGEE_SUPPLIERS = {
+  teaImporter: { id: 'sup-cg-tea',       name: 'Yunnan Leaf Imports',   leadTimeDays: 4 },
+  dairy:       { id: 'sup-cg-dairy',     name: 'City Fresh Dairy',      leadTimeDays: 1 },
+  toppings:    { id: 'sup-cg-toppings',  name: 'Pearl & Bean Supply',   leadTimeDays: 3 },
+  fruit:       { id: 'sup-cg-fruit',     name: 'Orient Purée Co.',      leadTimeDays: 2 },
+  packaging:   { id: 'sup-cg-pack',      name: 'CupWorks Packaging',    leadTimeDays: 5 },
+  inHouse:     { id: 'sup-cg-in-house',  name: '(in-house)',            leadTimeDays: 0 },
+} as const satisfies Record<string, SupplierRef>;
+
+// The tea-bar catalogue. Same ItemTemplate / buildItem shape SHARED_TEMPLATES
+// uses, so these realise into full StockItems via the same path ESPRESSO_ITEMS
+// takes. Loose-leaf teas sit in Beverage (Bar) like the coffee-side espresso
+// beans; toppings/syrups in Pantry; milk in Dairy; cups in Packaging; fresh
+// fruit in Produce. Two recipe-mode sub-recipes model the prepped bar bases.
+const CHAGEE_TEMPLATES: ItemTemplate[] = [
+  // ─── Loose-leaf teas (Bar) ─────────────────────────────────────────
+  { baseId: 'jasmine-leaf',  name: 'Jasmine green tea leaf',            variant: 'Loose-leaf 1kg',   category: 'Beverage', unit: 'kg', alts: ['g', 'bags'], conv: { bags: 1 }, recipes: 6, baseStock: 8,  par: 10, unitPrice: 22.00, supplier: CHAGEE_SUPPLIERS.teaImporter },
+  { baseId: 'orchid-oolong', name: 'Orchid oolong (Bai Ya Qi Lan) leaf',variant: 'Loose-leaf 1kg',   category: 'Beverage', unit: 'kg', alts: ['g', 'bags'], conv: { bags: 1 }, recipes: 4, baseStock: 5,  par: 7,  unitPrice: 34.00, supplier: CHAGEE_SUPPLIERS.teaImporter },
+  { baseId: 'roasted-oolong',name: 'Roasted oolong leaf',               variant: 'Loose-leaf 1kg',   category: 'Beverage', unit: 'kg', alts: ['g', 'bags'], conv: { bags: 1 }, recipes: 4, baseStock: 4,  par: 6,  unitPrice: 28.00, supplier: CHAGEE_SUPPLIERS.teaImporter },
+  { baseId: 'bold-black',    name: 'Bold black tea leaf',               variant: 'Loose-leaf 1kg',   category: 'Beverage', unit: 'kg', alts: ['g', 'bags'], conv: { bags: 1 }, recipes: 3, baseStock: 5,  par: 6,  unitPrice: 18.00, supplier: CHAGEE_SUPPLIERS.teaImporter },
+  { baseId: 'aged-puer',     name: "Aged pu'er leaf",                   variant: 'Aged cake 357g',   category: 'Beverage', unit: 'kg', alts: ['g', 'cakes'], conv: { cakes: 0.357 }, recipes: 2, baseStock: 2, par: 3, unitPrice: 45.00, supplier: CHAGEE_SUPPLIERS.teaImporter },
+
+  // ─── Dairy ─────────────────────────────────────────────────────────
+  { baseId: 'whole-milk',    name: 'Fresh whole milk',                  variant: '2L bottle',        category: 'Dairy', unit: 'L', alts: ['mL', 'bottles'], conv: { bottles: 2 }, recipes: 9, baseStock: 28, par: 34, unitPrice: 0.85, supplier: CHAGEE_SUPPLIERS.dairy },
+
+  // ─── Toppings / syrups (Dry Store) ─────────────────────────────────
+  { baseId: 'tapioca-dry',   name: 'Tapioca pearls (dry)',              variant: 'Black boba 3kg bag',category: 'Pantry', unit: 'kg', alts: ['g', 'bags'], conv: { bags: 3 }, recipes: 5, baseStock: 12, par: 15, unitPrice: 3.20, supplier: CHAGEE_SUPPLIERS.toppings },
+  { baseId: 'brown-sugar',   name: 'Brown sugar syrup',                 variant: '2.5L bottle',      category: 'Pantry', unit: 'L', alts: ['mL', 'bottles'], conv: { bottles: 2.5 }, recipes: 7, baseStock: 10, par: 12, unitPrice: 2.80, supplier: CHAGEE_SUPPLIERS.toppings },
+  { baseId: 'red-bean',      name: 'Adzuki red beans',                  variant: 'Dried 1kg bag',    category: 'Pantry', unit: 'kg', alts: ['g', 'bags'], conv: { bags: 1 }, recipes: 2, baseStock: 6, par: 8, unitPrice: 4.50, supplier: CHAGEE_SUPPLIERS.toppings },
+  { baseId: 'grass-jelly',   name: 'Grass jelly powder',                variant: '1kg tub',          category: 'Pantry', unit: 'kg', alts: ['g', 'tubs'], conv: { tubs: 1 }, recipes: 2, baseStock: 4, par: 5, unitPrice: 9.00, supplier: CHAGEE_SUPPLIERS.toppings },
+
+  // ─── Fruit purées (Dry Store) + fresh fruit (Kitchen) ──────────────
+  { baseId: 'peach-puree',   name: 'Peach purée',                       variant: '1L bottle',        category: 'Pantry', unit: 'L', alts: ['mL', 'bottles'], conv: { bottles: 1 }, recipes: 2, baseStock: 6, par: 8, unitPrice: 6.50, supplier: CHAGEE_SUPPLIERS.fruit },
+  { baseId: 'lychee-puree',  name: 'Lychee purée',                      variant: '1L bottle',        category: 'Pantry', unit: 'L', alts: ['mL', 'bottles'], conv: { bottles: 1 }, recipes: 2, baseStock: 5, par: 7, unitPrice: 7.20, supplier: CHAGEE_SUPPLIERS.fruit },
+  { baseId: 'grapefruit',    name: 'Ruby grapefruit',                   variant: 'Fresh, loose',     category: 'Produce', unit: 'units', alts: ['kg'], conv: { kg: 3 }, recipes: 2, baseStock: 24, par: 30, unitPrice: 0.55, supplier: CHAGEE_SUPPLIERS.fruit },
+
+  // ─── Packaging (Dry Store) ─────────────────────────────────────────
+  { baseId: 'cup-500',       name: 'Sealed cup + lid 500ml',            variant: 'PET + dome lid, sleeve of 50', category: 'Packaging', unit: 'units', alts: ['sleeves'], conv: { sleeves: 50 }, recipes: 0, baseStock: 900, par: 1200, unitPrice: 0.09, supplier: CHAGEE_SUPPLIERS.packaging },
+
+  // ─── Prepped bar bases (recipe-mode sub-recipes) ───────────────────
+  // No POS / theoretical — brewed + held on the bar, consumed by drinks.
+  { baseId: 'jasmine-base',  name: 'Jasmine green tea base',            variant: 'Bar sub-recipe',   type: 'sub-recipe', category: 'Prepared', unit: 'L', alts: ['mL', 'servings'], conv: { servings: 0.35 }, recipes: 5, baseStock: 8, par: 12, unitPrice: 0.42, supplier: CHAGEE_SUPPLIERS.inHouse, recipeMode: true },
+  { baseId: 'cooked-boba',   name: 'Cooked tapioca pearls',             variant: 'Bar sub-recipe',   type: 'sub-recipe', category: 'Prepared', unit: 'kg', alts: ['g', 'portions'], conv: { portions: 0.03 }, recipes: 4, baseStock: 3, par: 4, unitPrice: 3.60, supplier: CHAGEE_SUPPLIERS.inHouse, recipeMode: true },
+];
+
+// Hand-curated edge-case rows so the attention / stocktake demos have a
+// story on day one (mirrors STOCK_ITEMS' full-object shape). These carry
+// their own ids so they never collide with the buildItem-generated ids
+// (`cg-<baseId>`) below.
+const CHAGEE_STOCK_ITEMS: StockItem[] = [
+  // ─── Stockout — Product (fast-moving topping running dry) ────────────
+  {
+    id: 'cg-tapioca-low',
+    unitPrice: 3.20,
+    name: 'Tapioca pearls (dry)',
+    variant: 'Black boba 3kg bag',
+    type: 'product',
+    category: 'Pantry',
+    linkedRecipeCount: 5,
+    stockUnit: 'kg',
+    alternateUnits: ['g', 'bags'],
+    unitConversions: { bags: 3 },
+    currentStock: 1.5,
+    parLevel: 15,
+    parConfirmed: true,
+    stockDataAgeDays: 1,
+    salesVelocity7d: 2.8,
+    supplierId: 'sup-cg-toppings',
+    supplierName: 'Pearl & Bean Supply',
+    supplierLeadTimeDays: 3,
+    posDataAvailable: true,
+    theoreticalStock: 1.7,
+    confidenceScore: 'high',
+    confidenceFactors: {
+      stocktake: 'fresh', pos: 'active', par: 'confirmed', variance: 'stable',
+    },
+    movements: [
+      mv('m-cg-tap-1', 'sale',      hoursAgo(2), -0.9, 'POS usage · pearl drinks'),
+      mv('m-cg-tap-2', 'sale',      hoursAgo(6), -1.2, 'POS usage · afternoon rush'),
+      mv('m-cg-tap-3', 'delivery',  daysAgo(3),   6,   'GRN #CG-118 · Pearl & Bean', 'grn-cg-118'),
+    ],
+  },
+  // ─── Variance — Product (signature leaf, counted short) ─────────────
+  {
+    id: 'cg-jasmine-var',
+    unitPrice: 22.00,
+    name: 'Jasmine green tea leaf',
+    variant: 'Loose-leaf 1kg',
+    type: 'product',
+    category: 'Beverage',
+    linkedRecipeCount: 6,
+    stockUnit: 'kg',
+    alternateUnits: ['g', 'bags'],
+    unitConversions: { bags: 1 },
+    currentStock: 2.1,
+    parLevel: 10,
+    parConfirmed: false,
+    stockDataAgeDays: 2,
+    salesVelocity7d: 0.3,
+    supplierId: 'sup-cg-tea',
+    supplierName: 'Yunnan Leaf Imports',
+    supplierLeadTimeDays: 4,
+    posDataAvailable: true,
+    theoreticalStock: 3.6,
+    confidenceScore: 'low',
+    confidenceFactors: {
+      stocktake: 'aging', pos: 'active', par: 'suggested', variance: 'high',
+    },
+    movements: [
+      mv('m-cg-jas-1', 'stocktake', daysAgo(2), -1.5, 'Counted 2.1 kg vs theoretical 3.6 kg — 42% gap'),
+      mv('m-cg-jas-2', 'sale',      daysAgo(2), -0.3, 'POS usage · Boya Juexian'),
+      mv('m-cg-jas-3', 'delivery',  daysAgo(5),  3,   'GRN #CG-104 · Yunnan Leaf', 'grn-cg-104'),
+    ],
+  },
+  // ─── Stockout — Packaging (cups low into a busy service) ─────────────
+  {
+    id: 'cg-cup-low',
+    unitPrice: 0.09,
+    name: 'Sealed cup + lid 500ml',
+    variant: 'PET + dome lid, sleeve of 50',
+    type: 'product',
+    category: 'Packaging',
+    linkedRecipeCount: 0,
+    stockUnit: 'units',
+    alternateUnits: ['sleeves'],
+    unitConversions: { sleeves: 50 },
+    currentStock: 120,
+    parLevel: 1200,
+    parConfirmed: true,
+    stockDataAgeDays: 1,
+    salesVelocity7d: 180,
+    supplierId: 'sup-cg-pack',
+    supplierName: 'CupWorks Packaging',
+    supplierLeadTimeDays: 5,
+    posDataAvailable: true,
+    theoreticalStock: 150,
+    confidenceScore: 'high',
+    confidenceFactors: {
+      stocktake: 'fresh', pos: 'active', par: 'confirmed', variance: 'stable',
+    },
+    movements: [
+      mv('m-cg-cup-1', 'sale',     hoursAgo(3), -160, 'Usage · service'),
+      mv('m-cg-cup-2', 'delivery', daysAgo(4),   500, 'GRN #CG-092 · CupWorks (1 box)', 'grn-cg-092'),
+    ],
+  },
+];
+
+// Realise the tea catalogue the same way ESPRESSO_ITEMS does — hand-curated
+// edge cases first, then the expanded templates at a 1.0 multiplier / fresh
+// counts (single flagship, no estate scaling to reason about).
+const CHAGEE_ITEMS: StockItem[] = [
+  ...CHAGEE_STOCK_ITEMS,
+  ...CHAGEE_TEMPLATES.map(t =>
+    buildItem(t, { sitePrefix: 'cg', stockMul: 1.0, ageDays: 1, confidence: 'high' }),
+  ),
+];
+
+// Per-line breakdown for the tea bar's needs-review section count, so the
+// review-and-submit surface renders the counted lines + counter notes.
+// References the hand-curated edge-case item ids above.
+const CHAGEE_REVIEW_LINES: StocktakeLine[] = [
+  {
+    id: 'st-cg-2-l1',
+    itemId: 'cg-jasmine-var',
+    itemName: 'Jasmine green tea leaf',
+    itemVariant: 'Loose-leaf 1kg',
+    category: 'Beverage',
+    stockUnit: 'kg',
+    unitPrice: 22.00,
+    counts: { kg: 2.1 },
+    countedQty: 2.1,
+    theoreticalAtCount: 3.6,
+    note: 'Two part-bags open on the bar — likely over-scooped on the morning brews. No waste log raised.',
+  },
+  {
+    id: 'st-cg-2-l2',
+    itemId: 'cg-tapioca-low',
+    itemName: 'Tapioca pearls (dry)',
+    itemVariant: 'Black boba 3kg bag',
+    category: 'Pantry',
+    stockUnit: 'kg',
+    unitPrice: 3.20,
+    counts: { kg: 1.5 },
+    countedQty: 1.5,
+    theoreticalAtCount: 1.7,
+    note: 'Down to the last part-bag — reorder went in this morning, arriving in 3 days.',
+  },
+  {
+    id: 'st-cg-2-l3',
+    itemId: 'cg-cup-low',
+    itemName: 'Sealed cup + lid 500ml',
+    itemVariant: 'PET + dome lid, sleeve of 50',
+    category: 'Packaging',
+    stockUnit: 'units',
+    unitPrice: 0.09,
+    counts: { sleeves: 2, units: 20 },
+    countedQty: 120,
+    theoreticalAtCount: 260,
+    note: 'Only two full sleeves plus a part sleeve on hand — a box may still be in the back stockroom.',
+  },
+];
+
+// Stocktake history — a fresh full count, a needs-review tea-bar section
+// count carrying the lines above, and a clean count last week. CHAGEE crew
+// names (not the Fitzroy/Pret personas).
+const CHAGEE_HISTORY: StocktakeRecord[] = [
+  stocktake('st-cg-1', daysAgo(1), 'Mei-Ling Tan', 'Full count',    62, 3, 'completed',
+    { netVarianceValue: -24 }),
+  stocktake('st-cg-2', daysAgo(3), 'Wen Zhao',     'Section count', 14, 3, 'needs-review',
+    {
+      sectionName: 'Tea bar',
+      netVarianceValue: -46,
+      lines: CHAGEE_REVIEW_LINES,
+    }),
+  stocktake('st-cg-3', daysAgo(9), 'Mei-Ling Tan', 'Full count',    60, 2, 'completed',
+    { netVarianceValue: -12 }),
+];
+
 export const ESTATE_SITES: SiteStockSnapshot[] = [
   {
     siteId: 'fitzroy-espresso',
@@ -1491,5 +1724,17 @@ export const ESTATE_SITES: SiteStockSnapshot[] = [
     items: ISLINGTON_ITEMS,
     stocktakeHistory: ISLINGTON_HISTORY,
     itemGroups: defaultGroupsFor('fitzroy-islington', ISLINGTON_ITEMS),
+  },
+  {
+    // CHAGEE single-client build — the active persona's site
+    // (chagee-flagship). String kept inline rather than importing
+    // CHAGEE_SITE_ID from Production so this Stock fixture stays
+    // self-contained; it must stay in sync with CHAGEE_SITE_ID.
+    siteId: 'chagee-flagship',
+    siteName: 'CHAGEE — Flagship',
+    siteCaption: 'Fresh-brew tea bar',
+    items: CHAGEE_ITEMS,
+    stocktakeHistory: CHAGEE_HISTORY,
+    itemGroups: defaultGroupsFor('chagee-flagship', CHAGEE_ITEMS),
   },
 ];

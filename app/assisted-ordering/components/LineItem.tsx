@@ -316,6 +316,13 @@ export default function LineItem({
               color: 'var(--color-text-secondary)',
               fontFamily: 'var(--font-primary)',
               whiteSpace: 'nowrap',
+              // Fixed width so every row's unit label reserves the same space —
+              // this keeps the steppers to its left vertically aligned no matter
+              // how long the unit name is ("1kg bag" vs "case of 6 × 2L").
+              width: '96px',
+              flexShrink: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
             }}
           >
             {product.unitName}

@@ -86,6 +86,24 @@ const SELF_PRODUCING_PLAN_TABS: SubTab[] = [
   // { id: 'site-settings',   label: 'Settings',          href: '/production/settings' },
 ];
 
+// CHAGEE is a fresh-brew tea bar. Its make surface is the brew line
+// (/production/board) — a live-floor screen like BK's crew line — so it sits
+// in the Run group, not Plan. Otherwise its strips mirror the self-producing
+// sets: Run = live floor, Plan = shaping ahead + retro.
+const CHAGEE_RUN_TABS: SubTab[] = [
+  { id: 'board',           label: 'Brew line',         href: '/production/board' },
+  { id: 'amounts',         label: 'Today',             href: '/production/amounts' },
+  { id: 'run-sheet',       label: 'Run sheet',         href: '/production/run-sheet' },
+  { id: 'pcr',             label: 'PCR queue',         href: '/production/pcr' },
+  { id: 'sales',           label: 'Live sales',        href: '/production/sales' },
+];
+
+const CHAGEE_PLAN_TABS: SubTab[] = [
+  { id: 'plan',            label: 'Plan',              href: '/production/plan' },
+  { id: 'productivity',    label: 'Productivity',      href: '/production/productivity' },
+  { id: 'sales-report',    label: 'Sales vs forecast', href: '/production/sales-report' },
+];
+
 /** Run-group prefixes — drives the Run/Plan tab-strip swap for
  *  self-producing personas, and lets the site selector hide on the run
  *  / today views (where mid-shift site swaps lose context). Benches
@@ -99,7 +117,11 @@ const RUN_PRODUCTION_PREFIXES = [
   '/production/sales',
 ];
 
-function productionGroupForPath(pathname: string, isBurgerKing: boolean): 'run' | 'plan' {
+function productionGroupForPath(
+  pathname: string,
+  isBurgerKing: boolean,
+  isChagee: boolean,
+): 'run' | 'plan' {
   // Burger King's live run-floor surfaces — the crew line (/production/board),
   // the live orders feed (/production/orders) and the prep sheet
   // (/production/prep) — stay in the Run group for that persona (they're
@@ -113,6 +135,11 @@ function productionGroupForPath(pathname: string, isBurgerKing: boolean): 'run' 
       pathname === '/production/prep' ||
       pathname.startsWith('/production/prep/'))
   ) {
+    return 'run';
+  }
+  // CHAGEE's board is the brew line — a live-floor surface like BK's crew
+  // line, not a Pret planning board — so it belongs in the Run group too.
+  if (isChagee && (pathname === '/production/board' || pathname.startsWith('/production/board/'))) {
     return 'run';
   }
   return RUN_PRODUCTION_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))
@@ -158,7 +185,7 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
   const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
   const router = useRouter();
   const pathname = usePathname();
-  const { isSpoke, isHybrid, isStandalone, isProducingHybrid, isBurgerKing } = useActiveSite();
+  const { isSpoke, isHybrid, isStandalone, isProducingHybrid, isBurgerKing, isChagee } = useActiveSite();
 
   // Persona drives the tab set. Every baking persona (Hub, Standalone,
   // Hybrid, producing HYBRID_HUB) now gets a Run/Plan split so the chrome
@@ -167,20 +194,24 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
   // so they keep their single strip. Burger King gets its own trimmed
   // hot-production strips (crew line + drop plan).
   const isSelfProducing = isHybrid || isStandalone || isProducingHybrid;
-  const productionGroup = productionGroupForPath(pathname, isBurgerKing);
+  const productionGroup = productionGroupForPath(pathname, isBurgerKing, isChagee);
   const subTabs = isBurgerKing
     ? productionGroup === 'run'
       ? BK_RUN_TABS
       : BK_PLAN_TABS
-    : isSpoke
-      ? SPOKE_SUB_TABS
-      : isSelfProducing
-        ? productionGroup === 'run'
-          ? SELF_PRODUCING_RUN_TABS
-          : SELF_PRODUCING_PLAN_TABS
-        : productionGroup === 'run'
-          ? HUB_RUN_TABS
-          : HUB_PLAN_TABS;
+    : isChagee
+      ? productionGroup === 'run'
+        ? CHAGEE_RUN_TABS
+        : CHAGEE_PLAN_TABS
+      : isSpoke
+        ? SPOKE_SUB_TABS
+        : isSelfProducing
+          ? productionGroup === 'run'
+            ? SELF_PRODUCING_RUN_TABS
+            : SELF_PRODUCING_PLAN_TABS
+          : productionGroup === 'run'
+            ? HUB_RUN_TABS
+            : HUB_PLAN_TABS;
 
   // Header copy — what kind of view the manager is on. Swaps with the
   // strip so the chrome reflects the mental mode they're in.
@@ -190,6 +221,8 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
   const isBkPrep =
     isBurgerKing &&
     (pathname === '/production/prep' || pathname.startsWith('/production/prep/'));
+  const isChageeBrewLine =
+    isChagee && (pathname === '/production/board' || pathname.startsWith('/production/board/'));
   const headerLabel = isSpoke
     ? 'Production'
     : isBurgerKing
@@ -200,9 +233,11 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
           : productionGroup === 'run'
             ? 'Kitchen line'
             : 'Drop plan'
-      : productionGroup === 'run'
-        ? 'Run production'
-        : 'Plan production';
+      : isChageeBrewLine
+        ? 'Brew line'
+        : productionGroup === 'run'
+          ? 'Run production'
+          : 'Plan production';
 
   return (
     <HubOperatorProviders>

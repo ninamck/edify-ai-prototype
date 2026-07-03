@@ -56,7 +56,7 @@ export default function NotificationPanel({
             margin: 0,
           }}
         >
-          Suggested Ordering
+          Predictive Ordering
         </h1>
         <p
           style={{
@@ -171,7 +171,7 @@ export default function NotificationPanel({
                   flexWrap: 'wrap',
                 }}
               >
-                <span>📦 Arriving {order.deliveryDate}</span>
+                <span>📦 Will arrive {order.deliveryDate}</span>
                 <span>·</span>
                 <span>{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
                 {urgent && (

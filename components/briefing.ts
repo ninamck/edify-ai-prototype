@@ -1,4 +1,8 @@
 import type { CommandCentreVariant } from '@/components/Feed/CommandCentre';
+import { isDemoBuild, demoCustomer } from '@/lib/demoConfig';
+
+/** Site label used in persona greetings — the customer name on a demo build. */
+const GREETING_SITE_LABEL = isDemoBuild ? demoCustomer.name : 'Fitzroy Espresso';
 
 export type BriefingRole = 'ed' | 'cheryl' | 'gm' | 'playtomic' | 'dunkin' | 'pilot' | 'culinary' | 'plato';
 
@@ -23,6 +27,21 @@ export const BRIEFING_ROLES: { id: BriefingRole; label: string; short: string }[
   { id: 'plato', label: 'Platō Coffee', short: 'Platō' },
 ];
 
+/**
+ * Other-client demo personas that must never surface on a single-client
+ * (Chagee) build — these each render a different company's dashboard.
+ */
+const CLIENT_DEMO_ROLES: BriefingRole[] = ['playtomic', 'dunkin', 'culinary', 'plato', 'pilot'];
+
+/**
+ * Roles a persona switcher should offer. On the internal Edify build that's
+ * everything; on a gated customer build it collapses to the in-store personas
+ * (Manager / Admin / Employee) so no other client's dashboard is reachable.
+ */
+export const VISIBLE_BRIEFING_ROLES = isDemoBuild
+  ? BRIEFING_ROLES.filter(r => !CLIENT_DEMO_ROLES.includes(r.id))
+  : BRIEFING_ROLES;
+
 /** One-line greeting for the top bar (matches timeline persona copy). */
 export function morningGreetingLine(role: BriefingRole): string {
   switch (role) {
@@ -31,7 +50,7 @@ export function morningGreetingLine(role: BriefingRole): string {
     case 'cheryl':
       return 'Good morning, Cheryl.';
     case 'gm':
-      return 'Good morning — Fitzroy Espresso';
+      return `Good morning — ${GREETING_SITE_LABEL}`;
     case 'playtomic':
       return 'Good morning — Coffee & Co (UK)';
     case 'dunkin':
@@ -57,7 +76,7 @@ export function timeAwareGreeting(role: BriefingRole): string {
     case 'cheryl':
       return `Good ${tod}, Cheryl.`;
     case 'gm':
-      return `Good ${tod} — Fitzroy Espresso`;
+      return `Good ${tod} — ${GREETING_SITE_LABEL}`;
     case 'playtomic':
       return `Good ${tod} — Coffee & Co (UK)`;
     case 'dunkin':

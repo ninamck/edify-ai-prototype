@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Menu, Check, ChevronDown } from 'lucide-react';
-import { BRIEFING_ROLES, type BriefingRole } from '@/components/briefing';
+import { BRIEFING_ROLES, VISIBLE_BRIEFING_ROLES, type BriefingRole } from '@/components/briefing';
 
 export default function MobileTopBar({
   siteName,
@@ -150,7 +150,7 @@ export default function MobileTopBar({
               zIndex: 150,
             }}
           >
-            {BRIEFING_ROLES.map((r) => {
+            {VISIBLE_BRIEFING_ROLES.map((r) => {
               const isActive = r.id === role;
               return (
                 <button

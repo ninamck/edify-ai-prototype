@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { gbp } from './format';
+import { COGS_CLASS_TOTALS, COGS_SITE_NAME, COGS_SUMMARY } from './fixtures';
 
 /**
- * Consolidated COGs — one row per site across the estate for the stocktake
- * period. The hub row reconciles with the Single Site fixtures (£51,000
- * net sales, £14,200 actual, £12,455 theoretical); the spokes are mock but
- * plausible, with one favourable site so the colour-coding reads.
+ * Consolidated COGs — one row per site for the stocktake period. This is a
+ * single-site CHAGEE demo, so there is one flagship row that reconciles
+ * exactly with the Single Site fixtures (net sales, actual, theoretical and
+ * waste all read straight off COGS_SUMMARY / COGS_CLASS_TOTALS).
  */
 
 type SiteRow = {
@@ -23,62 +24,12 @@ type SiteRow = {
 
 const SITE_ROWS: SiteRow[] = [
   {
-    id: 'hub',
-    site: 'Pret Hub Kitchen',
-    netSales: 51000,
-    actualCost: 14200,
-    theoCost: 12455,
-    wasteCost: 278,
-    openingSt: '31/12/2025',
-    closingSt: '07/01/2026',
-  },
-  {
-    id: 'fitzroy',
-    site: 'Fitzroy Espresso',
-    netSales: 15300,
-    actualCost: 3964,
-    theoCost: 3825,
-    wasteCost: 92,
-    openingSt: '31/12/2025',
-    closingSt: '07/01/2026',
-  },
-  {
-    id: 'shoreditch',
-    site: 'Shoreditch East',
-    netSales: 22950,
-    actualCost: 5852,
-    theoCost: 5738,
-    wasteCost: 134,
-    openingSt: '31/12/2025',
-    closingSt: '07/01/2026',
-  },
-  {
-    id: 'notting-hill',
-    site: 'Notting Hill West',
-    netSales: 20400,
-    actualCost: 5061,
-    theoCost: 5100,
-    wasteCost: 118,
-    openingSt: '31/12/2025',
-    closingSt: '07/01/2026',
-  },
-  {
-    id: 'islington',
-    site: 'Islington North',
-    netSales: 18750,
-    actualCost: 5213,
-    theoCost: 4688,
-    wasteCost: 217,
-    openingSt: '30/12/2025',
-    closingSt: '07/01/2026',
-  },
-  {
-    id: 'heathrow',
-    site: 'Heathrow T5',
-    netSales: 34200,
-    actualCost: 8930,
-    theoCost: 8550,
-    wasteCost: 256,
+    id: 'flagship',
+    site: COGS_SITE_NAME,
+    netSales: COGS_SUMMARY.totalNetSales,
+    actualCost: Math.round(COGS_SUMMARY.actualCogs),
+    theoCost: Math.round(COGS_SUMMARY.theoreticalCogs),
+    wasteCost: Math.round(COGS_CLASS_TOTALS.waste),
     openingSt: '31/12/2025',
     closingSt: '07/01/2026',
   },
@@ -150,7 +101,7 @@ export default function ConsolidatedCogs() {
         }}
       >
         <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-          6 sites · this stocktake period
+          {SITE_ROWS.length} site · this stocktake period
         </span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)' }}>Show Waste</span>
