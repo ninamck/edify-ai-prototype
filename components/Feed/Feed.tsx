@@ -1817,11 +1817,11 @@ const CHAGEE_TEA_SWAP = {
   },
   master: {
     name: 'Whole Tea Leaves',
-    note: 'currently supplied by Meadow Tea Supply — Golden Leaf becomes the new source',
+    note: 'currently supplied by CHAGEE Tea Supply Co. — Golden Leaf becomes the new source',
   },
   recipe: {
     name: 'Jasmine Green Milk Tea (Signature)',
-    oldIngredient: 'Jasmine Tea Leaves — Loose Grade B · Meadow Tea Supply',
+    oldIngredient: 'Jasmine Green Tea Leaf 1kg · CHAGEE Tea Supply Co.',
     newIngredient: 'Whole Tea Leaves — Jasmine Green Grade A · Golden Leaf',
     qtyNote: '12g per serve · unchanged',
     oldCost: '£0.14',
@@ -2093,31 +2093,37 @@ function ChageeTeaRecipeCard({
 
 // ─── Stock-take review demo ───────────────────────────────────────────────────
 //
-// Scripted two-step flow: "update my stock takes — review all the
+// Scripted three-step flow: "update my stock takes — review all the
 // products that aren't in a stock area". Step 1 lists the unassigned
 // products and lets the operator tick which ones to add; step 2 picks
-// the storage area they should live in. Generic (default-profile)
-// mock data — nothing is written to the product or stock-take stores.
+// the franchises in scope; step 3 assigns each product a storage
+// area. CHAGEE-branded mock data — product and supplier names mirror
+// the branch's supplier fixtures, and the franchise estate reuses the
+// tea-swap flow's list so the two demos tell one story. Nothing is
+// written to the product or stock-take stores.
 
 const STOCK_TAKE_REVIEW = {
-  // `suggestedArea` seeds the per-product picker on step 2 — Quinn's
+  // Franchise estate — shared with the tea-swap flow so both demos
+  // describe the same CHAGEE footprint.
+  sites: CHAGEE_TEA_SWAP.franchises,
+  // `suggestedArea` seeds the per-product picker on step 3 — Quinn's
   // best guess from the product type, which the operator can change.
   products: [
-    { id: 'espresso-beans', name: 'Espresso Beans — House Blend', supplier: 'Riverbank Roasters', pack: '6 × 1kg', lastDelivery: 'Tue 30 Jun', suggestedArea: 'dry-store' },
-    { id: 'oat-milk', name: 'Oat Milk — Barista Edition', supplier: 'Minor Figures', pack: '12 × 1L', lastDelivery: 'Thu 2 Jul', suggestedArea: 'dry-store' },
-    { id: 'sourdough', name: 'Sourdough Loaf — Sliced', supplier: 'Northside Bakery', pack: '10 loaves', lastDelivery: 'Fri 3 Jul', suggestedArea: 'freezer' },
-    { id: 'bacon', name: 'Smoked Streaky Bacon', supplier: 'Meadow Farm', pack: '4 × 2.5kg', lastDelivery: 'Mon 29 Jun', suggestedArea: 'walk-in' },
-    { id: 'avocados', name: 'Avocados — Ready to Eat', supplier: 'Fresh Direct', pack: '2 × 24', lastDelivery: 'Thu 2 Jul', suggestedArea: 'walk-in' },
-    { id: 'maple-syrup', name: 'Maple Syrup — Grade A', supplier: 'Fresh Direct', pack: '6 × 1L', lastDelivery: 'Fri 26 Jun', suggestedArea: 'dry-store' },
-    { id: 'takeaway-cups', name: '12oz Takeaway Cups', supplier: 'PackRight', pack: '10 × 500', lastDelivery: 'Wed 1 Jul', suggestedArea: 'packaging' },
-    { id: 'napkins', name: 'Recycled Napkins', supplier: 'PackRight', pack: '20 × 250', lastDelivery: 'Wed 1 Jul', suggestedArea: 'packaging' },
+    { id: 'oolong-roasted', name: 'Roasted Oolong Leaf 1kg', supplier: 'CHAGEE Tea Supply Co.', pack: '6 × 1kg', lastDelivery: 'Tue 30 Jun', suggestedArea: 'dry-store' },
+    { id: 'black-bold', name: 'Bold Black Tea Leaf 1kg', supplier: 'CHAGEE Tea Supply Co.', pack: '6 × 1kg', lastDelivery: 'Tue 30 Jun', suggestedArea: 'dry-store' },
+    { id: 'whole-milk', name: 'Fresh Whole Milk 2L', supplier: 'Fresh Dairy Direct', pack: '6 × 2L', lastDelivery: 'Fri 3 Jul', suggestedArea: 'walk-in' },
+    { id: 'tapioca', name: 'Tapioca Pearls (dry) 3kg', supplier: 'Bubble Toppings Ltd', pack: '4 × 3kg', lastDelivery: 'Mon 29 Jun', suggestedArea: 'dry-store' },
+    { id: 'grass-jelly', name: 'Grass Jelly Powder 1kg', supplier: 'Bubble Toppings Ltd', pack: '10 × 1kg', lastDelivery: 'Mon 29 Jun', suggestedArea: 'dry-store' },
+    { id: 'brown-sugar', name: 'Brown Sugar Syrup 2L', supplier: 'Monin Syrups UK', pack: '6 × 2L', lastDelivery: 'Wed 1 Jul', suggestedArea: 'syrup-station' },
+    { id: 'lychee-puree', name: 'Lychee Purée 1L', supplier: 'Monin Syrups UK', pack: '6 × 1L', lastDelivery: 'Wed 1 Jul', suggestedArea: 'walk-in' },
+    { id: 'sealed-cups', name: 'Sealed Cup + Lid 500ml', supplier: 'Packaging Solutions Ltd', pack: '10 × 500', lastDelivery: 'Thu 2 Jul', suggestedArea: 'packaging' },
   ],
   areas: [
-    { id: 'dry-store', name: 'Dry Store', items: 52 },
-    { id: 'walk-in', name: 'Walk-in Fridge', items: 38 },
-    { id: 'freezer', name: 'Freezer', items: 21 },
-    { id: 'front-of-house', name: 'Front of House', items: 27 },
-    { id: 'packaging', name: 'Packaging Store', items: 14 },
+    { id: 'dry-store', name: 'Dry Store', items: 34 },
+    { id: 'walk-in', name: 'Walk-in Chiller', items: 26 },
+    { id: 'syrup-station', name: 'Syrup Station', items: 18 },
+    { id: 'front-counter', name: 'Front Counter', items: 22 },
+    { id: 'packaging', name: 'Packaging Store', items: 12 },
   ],
 };
 
@@ -2236,10 +2242,12 @@ function StockReviewCard({
   );
 }
 
-/** Step 2 — choose which sites the stock-take update applies to.
- *  Multi-select pills, all sites pre-selected. Storage areas come
- *  after this step (they can differ site to site, so the operator
- *  needs to know the scope first). */
+/** Step 2 — choose which franchises the stock-take update applies
+ *  to. Multi-select pills, all franchises pre-selected. Storage
+ *  areas come after this step (they can differ site to site, so the
+ *  operator needs to know the scope first). Uses the CHAGEE
+ *  franchise estate (`STOCK_TAKE_REVIEW.sites`), not the top-bar
+ *  site list — the demo build only registers the flagship there. */
 function StockSitesCard({
   sites,
   onToggleSite,
@@ -2253,17 +2261,17 @@ function StockSitesCard({
   confirmed: boolean;
   onConfirm: () => void;
 }) {
-  const allOn = sites.size === ALL_SUPPLIER_SITES.length;
+  const allOn = sites.size === STOCK_TAKE_REVIEW.sites.length;
   return (
     <div style={{ ...DEMO_CARD_SHELL, opacity: confirmed ? 0.85 : 1 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
         <Package size={15} strokeWidth={1.9} color="var(--color-text-muted)" />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            Which sites?
+            Which franchises?
           </div>
           <div style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
-            The products join the stock take at the selected sites
+            The products join the stock take at the selected franchises
           </div>
         </div>
         {confirmed && (
@@ -2278,7 +2286,7 @@ function StockSitesCard({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
           <div style={{ ...DEMO_SECTION_LABEL, marginBottom: 0 }}>
             <EdifyMark size={11} />
-            Sites
+            Franchises
           </div>
           <button
             type="button"
@@ -2290,7 +2298,7 @@ function StockSitesCard({
           </button>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-          {ALL_SUPPLIER_SITES.map((site) => {
+          {STOCK_TAKE_REVIEW.sites.map((site) => {
             const on = sites.has(site);
             return (
               <button
@@ -2319,8 +2327,8 @@ function StockSitesCard({
       </div>
 
       <DemoCtaButton
-        label={`Continue with ${sites.size} site${sites.size === 1 ? '' : 's'}`}
-        doneLabel="Sites selected"
+        label={`Continue with ${sites.size} franchise${sites.size === 1 ? '' : 's'}`}
+        doneLabel="Franchises selected"
         confirmed={confirmed}
         disabled={sites.size === 0}
         onClick={onConfirm}
@@ -6811,7 +6819,8 @@ export default function Feed({
     const summaryText =
       `I've been through your product catalogue — ` +
       `**${STOCK_TAKE_REVIEW.products.length} products** aren't assigned to a storage area, ` +
-      `so they're never counted on a stock take. Mostly recent additions. ` +
+      `so they're never counted on a stock take. Mostly recent additions from ` +
+      `CHAGEE Tea Supply Co., Bubble Toppings and Monin. ` +
       `Here's the list — untick anything you don't want counted, ` +
       `then confirm and I'll ask where they live.`;
     const summaryId = `q-stock-summary-${Date.now()}`;
@@ -6846,7 +6855,7 @@ export default function Feed({
     const thinkingId = `q-stock-thinking2-${Date.now()}`;
     const sitesCardId = `q-stock-sites-${Date.now()}`;
     setStockSitesConfirmed((prev) => ({ ...prev, [sitesCardId]: false }));
-    setStockSitesSelected((prev) => ({ ...prev, [sitesCardId]: new Set(ALL_SUPPLIER_SITES) }));
+    setStockSitesSelected((prev) => ({ ...prev, [sitesCardId]: new Set(STOCK_TAKE_REVIEW.sites) }));
     setStockSitesProducts((prev) => ({ ...prev, [sitesCardId]: picked.map((p) => p.id) }));
 
     setMessages((prev) => [
@@ -6856,9 +6865,9 @@ export default function Feed({
 
     const bridgeText =
       `**${picked.length} product${picked.length === 1 ? '' : 's'}** to add. ` +
-      `Which sites does this apply to? All of them are selected — ` +
+      `Which franchises does this apply to? All ${STOCK_TAKE_REVIEW.sites.length} are selected — ` +
       `untick any that shouldn't change, and I'll sort storage areas next ` +
-      `(they can differ site to site).`;
+      `(they can differ franchise to franchise).`;
     const bridgeId = `q-stock-bridge-${Date.now()}`;
     window.setTimeout(() => {
       setMessages((prev) => {
@@ -6882,7 +6891,7 @@ export default function Feed({
    *  the storage-area card after a thinking beat. */
   function confirmStockSites(cardId: string) {
     if (stockSitesConfirmed[cardId]) return;
-    const sites = [...(stockSitesSelected[cardId] ?? new Set(ALL_SUPPLIER_SITES))];
+    const sites = [...(stockSitesSelected[cardId] ?? new Set(STOCK_TAKE_REVIEW.sites))];
     if (sites.length === 0) return;
     setStockSitesConfirmed((prev) => ({ ...prev, [cardId]: true }));
 
@@ -6905,12 +6914,12 @@ export default function Feed({
       { id: thinkingId, role: 'quinn', text: '', msgType: 'cmd-thinking' },
     ]);
 
-    const allSites = sites.length === ALL_SUPPLIER_SITES.length;
+    const allSites = sites.length === STOCK_TAKE_REVIEW.sites.length;
     const bridgeText =
-      `${allSites ? 'All' : ''} **${sites.length} site${sites.length === 1 ? '' : 's'}** it is. ` +
+      `${allSites ? 'All' : ''} **${sites.length} franchise${sites.length === 1 ? '' : 's'}** it is. ` +
       `Last thing — where does each product live? I've suggested a storage ` +
       `area for each based on the product type; change any that are wrong, ` +
-      `then confirm and they'll join those count sheets at every selected site.`;
+      `then confirm and they'll join those count sheets at every selected franchise.`;
     const bridgeId = `q-stock-bridge2-${Date.now()}`;
     window.setTimeout(() => {
       setMessages((prev) => {
@@ -6952,10 +6961,10 @@ export default function Feed({
 
     const count = productIds.length;
     const siteCount = (stockAreaSites[cardId] ?? []).length;
-    const allSites = siteCount === ALL_SUPPLIER_SITES.length;
+    const allSites = siteCount === STOCK_TAKE_REVIEW.sites.length;
     const siteBlurb = allSites
-      ? `across **all ${siteCount} sites**`
-      : `across **${siteCount} site${siteCount === 1 ? '' : 's'}**`;
+      ? `across **all ${siteCount} franchises**`
+      : `across **${siteCount} franchise${siteCount === 1 ? '' : 's'}**`;
     const doneText =
       `**Done!** ${count} product${count === 1 ? '' : 's'} added to your ` +
       `storage areas ${siteBlurb} — ${breakdown}. They'll appear on those ` +
@@ -6963,7 +6972,7 @@ export default function Feed({
       `an opening count so variances track properly from day one.`;
     logHistoryEntry({
       kind: 'chat',
-      title: `Added ${count} products to ${byArea.size} storage area${byArea.size === 1 ? '' : 's'} at ${siteCount} site${siteCount === 1 ? '' : 's'}`,
+      title: `Added ${count} products to ${byArea.size} storage area${byArea.size === 1 ? '' : 's'} at ${siteCount} franchise${siteCount === 1 ? '' : 's'}`,
       subtitle: 'Stock take · storage areas',
     });
     setMessages((prev) => [
@@ -7993,11 +8002,11 @@ export default function Feed({
         )}
         {m.msgType === 'stock-sites' && (
           <StockSitesCard
-            sites={stockSitesSelected[m.id] ?? new Set(ALL_SUPPLIER_SITES)}
+            sites={stockSitesSelected[m.id] ?? new Set(STOCK_TAKE_REVIEW.sites)}
             confirmed={!!stockSitesConfirmed[m.id]}
             onToggleSite={(site) => {
               setStockSitesSelected((prev) => {
-                const cur = new Set(prev[m.id] ?? new Set(ALL_SUPPLIER_SITES));
+                const cur = new Set(prev[m.id] ?? new Set(STOCK_TAKE_REVIEW.sites));
                 if (cur.has(site)) cur.delete(site);
                 else cur.add(site);
                 return { ...prev, [m.id]: cur };
@@ -8006,7 +8015,7 @@ export default function Feed({
             onToggleAll={(allOn) => {
               setStockSitesSelected((prev) => ({
                 ...prev,
-                [m.id]: allOn ? new Set(ALL_SUPPLIER_SITES) : new Set<string>(),
+                [m.id]: allOn ? new Set(STOCK_TAKE_REVIEW.sites) : new Set<string>(),
               }));
             }}
             onConfirm={() => confirmStockSites(m.id)}
