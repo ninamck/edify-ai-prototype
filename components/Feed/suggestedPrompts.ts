@@ -9,7 +9,7 @@
  * brand by adding a case to `CHIPS_BY_CUSTOMER`.
  */
 
-import { ChefHat, Truck, BarChart3, ShieldCheck, type LucideIcon } from 'lucide-react';
+import { ChefHat, Truck, ClipboardList, ShieldCheck, type LucideIcon } from 'lucide-react';
 import { demoCustomer } from '@/lib/demoConfig';
 
 export type PromptChip = {
@@ -19,8 +19,11 @@ export type PromptChip = {
   text: string;
   /** Bespoke flows that don't route through the chat-command runner —
    *  the recipe builder wizard and the data-integrity audit each have
-   *  their own dedicated start function. */
-  action?: 'recipe' | 'integrity';
+   *  their own dedicated start function.
+   *    • 'recipe'     — jump straight into the builder, seeded from `text`.
+   *    • 'recipe-ask' — ask "what kind of recipe?" first (using `text` as
+   *                     the question), then seed the builder from the reply. */
+  action?: 'recipe' | 'recipe-ask' | 'integrity';
   /** Chat-command id (see `components/Feed/commands/registry.ts`).
    *  When set, the chip launches that command's wizard via the runner,
    *  same path as the slash menu and `+` popover. */
@@ -38,8 +41,8 @@ const DEFAULT_CHIPS: PromptChip[] = [
   {
     label: 'Update recipe',
     icon: ChefHat,
-    text: '',
-    commandId: 'recipe-edit',
+    text: 'Sure — what kind of recipe would you like to update? Type the dish and I’ll pull it up.',
+    action: 'recipe-ask',
   },
   {
     label: 'Update suppliers',
@@ -48,9 +51,9 @@ const DEFAULT_CHIPS: PromptChip[] = [
     commandId: 'supplier',
   },
   {
-    label: 'Food cost',
-    icon: BarChart3,
-    text: 'Help me understand our food cost % vs target for this week.',
+    label: 'Update stock takes',
+    icon: ClipboardList,
+    text: "Can you update my stock takes? Review all the products that aren't in a stock area.",
   },
   {
     label: 'Check data integrity',
@@ -60,42 +63,11 @@ const DEFAULT_CHIPS: PromptChip[] = [
   },
 ];
 
-/** CHAGEE tea-house scenario. Same flows, tea-house phrasing. */
-const CHAGEE_CHIPS: PromptChip[] = [
-  {
-    label: 'New drink',
-    icon: ChefHat,
-    text: "I'm adding a Brown Sugar Boba Milk Tea to the menu — target 22% drink cost.",
-    action: 'recipe',
-  },
-  {
-    label: 'Update recipe',
-    icon: ChefHat,
-    text: '',
-    commandId: 'recipe-edit',
-  },
-  {
-    label: 'Update suppliers',
-    icon: Truck,
-    text: '',
-    commandId: 'supplier',
-  },
-  {
-    label: 'Drink cost',
-    icon: BarChart3,
-    text: 'Help me understand our drink cost % vs target for this week.',
-  },
-  {
-    label: 'Check data integrity',
-    icon: ShieldCheck,
-    text: '',
-    action: 'integrity',
-  },
-];
-
-const CHIPS_BY_CUSTOMER: Record<string, PromptChip[]> = {
-  chagee: CHAGEE_CHIPS,
-};
+// Per-brand chip overrides. Currently empty on purpose — every build
+// (internal and the Chagee demo) uses the default recipe/food-cost
+// wording. To brand the chips for a customer again, add an entry, e.g.
+// `chagee: CHAGEE_CHIPS`, and PROMPT_CHIPS will pick it up at runtime.
+const CHIPS_BY_CUSTOMER: Record<string, PromptChip[]> = {};
 
 /** The suggested chips for the active build. Falls back to the default set. */
 export const PROMPT_CHIPS: PromptChip[] =

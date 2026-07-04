@@ -633,89 +633,122 @@ export interface SupplierArgs {
   field?: SupplierField;
   /** New value as a string (the card normalises it to the right type). */
   value?: string;
+  /** All fields mentioned in the sentence, when there's more than one
+   *  ("update Agility lead time and MOV to 3 days and £350"). The
+   *  card multi-selects these and pre-fills each value. `field`/
+   *  `value` still carry the first hit for backwards compatibility. */
+  fields?: { field: SupplierField; value?: string }[];
 }
 
 export function parseSupplier(text: string): CommandIntent | null {
-  // Either a /supplier slash or a supplier-set sentence.
-  if (!/^\s*(\/supplier\b|set\b|change\b|update\b)/i.test(text) || !SUPPLIER_KEYWORDS.test(text)) {
+  // A /supplier slash, or a supplier-set sentence. The verb can sit
+  // behind conversational filler ("I want to update…", "can you
+  // change…") — the supplier keyword gate keeps this from
+  // over-triggering.
+  if (!/^\s*\/supplier\b/i.test(text) && !/\b(set|change|update)\b/i.test(text)) {
     return null;
   }
+  if (!SUPPLIER_KEYWORDS.test(text)) return null;
 
   const suppliers = snapshotSuppliers().suppliers;
 
   const lower = text.toLowerCase();
-  let field: SupplierField | undefined;
-  if (/cut[- ]?off/.test(lower))             field = 'cutOffTime';
-  else if (/lead\s*time/.test(lower))        field = 'leadTimeDays';
-  else if (/mov|minimum\s*order/.test(lower)) field = 'minimumOrderValue';
-  else if (/delivery\s*days?/.test(lower))   field = 'deliveryDays';
-  else if (/email/.test(lower))              field = 'email';
-  else if (/phone/.test(lower))              field = 'phone';
 
-  // Value extraction
-  let value: string | undefined;
-  if (field === 'cutOffTime') {
-    const m = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i);
-    if (m) {
+  // Detect every field mentioned, not just the first — operators
+  // often batch edits ("lead time and minimum order value…").
+  const detected: SupplierField[] = [];
+  if (/cut[- ]?off/.test(lower))              detected.push('cutOffTime');
+  if (/lead\s*time/.test(lower))              detected.push('leadTimeDays');
+  if (/\bmov\b|minimum\s*order/.test(lower))  detected.push('minimumOrderValue');
+  if (/delivery\s*days?/.test(lower))         detected.push('deliveryDays');
+  if (/email/.test(lower))                    detected.push('email');
+  if (/phone/.test(lower))                    detected.push('phone');
+
+  // Per-field value extraction. Each field looks for its own
+  // signature pattern so several values can coexist in one sentence
+  // ("…to 3 days and £350").
+  const valueOf = (f: SupplierField): string | undefined => {
+    if (f === 'cutOffTime') {
+      const m = text.match(/\b(\d{1,2})(?::(\d{2}))\s*(am|pm)?\b/i) ?? text.match(/\b(\d{1,2})()\s*(am|pm)\b/i);
+      if (!m) return undefined;
       let hours = Number(m[1]);
       const mins = m[2] ? Number(m[2]) : 0;
       if (m[3]?.toLowerCase() === 'pm' && hours < 12) hours += 12;
       if (m[3]?.toLowerCase() === 'am' && hours === 12) hours = 0;
-      value = `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+      return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
     }
-  } else if (field === 'leadTimeDays') {
-    const m = text.match(/(\d+)\s*(?:day|days|d)\b/i) ?? text.match(/(\d+)\b/);
-    if (m) value = m[1];
-  } else if (field === 'minimumOrderValue') {
-    const v = extractPrice(text);
-    if (v !== null) value = String(v);
-    else {
-      const m = text.match(/£?\s*(\d+)/);
-      if (m) value = m[1];
+    if (f === 'leadTimeDays') {
+      // Prefer a "3 days"-style number; fall back to a bare number
+      // that isn't a £ amount.
+      const m = text.match(/(\d+)\s*(?:day|days|d)\b/i) ?? text.match(/(?<!£\s?)\b(\d+)\b/);
+      return m?.[1];
     }
-  } else if (field === 'deliveryDays') {
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const hit = days.filter((d) => new RegExp(`\\b${d}|${d.toLowerCase()}day`, 'i').test(text));
-    if (hit.length > 0) value = hit.join(',');
-  } else if (field === 'email') {
-    const m = text.match(/[\w._-]+@[\w.-]+/);
-    if (m) value = m[0];
-  } else if (field === 'phone') {
-    const m = text.match(/[+\d][\d\s-]{6,}/);
-    if (m) value = m[0].trim();
-  }
+    if (f === 'minimumOrderValue') {
+      const m = text.match(/£\s*(\d+(?:\.\d+)?)/);
+      if (m) return m[1];
+      const v = extractPrice(text);
+      return v !== null ? String(v) : undefined;
+    }
+    if (f === 'deliveryDays') {
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const hit = days.filter((d) => new RegExp(`\\b${d}|${d.toLowerCase()}day`, 'i').test(text));
+      return hit.length > 0 ? hit.join(',') : undefined;
+    }
+    if (f === 'email') {
+      return text.match(/[\w._-]+@[\w.-]+/)?.[0];
+    }
+    // phone
+    return text.match(/[+\d][\d\s-]{6,}/)?.[0]?.trim();
+  };
 
-  // Supplier name fuzzy-match: look for "to <name>" / "for <name>" /
-  // strip the verbs and keywords and try the rest.
-  let supplierName: string | undefined;
-  const forMatch = text.match(/\b(?:for|on|to)\s+(?:the\s+)?(.+?)(?:\s+to\b|\s+at\b|$)/i);
-  if (forMatch) supplierName = forMatch[1].trim();
-  if (!supplierName) {
-    const stripped = text
-      .replace(/^\s*(set|change|update|\/supplier)\s*/i, '')
-      .replace(SUPPLIER_KEYWORDS, ' ')
-      .replace(/\b(to|at|of|for|the|by)\b/gi, ' ')
-      .replace(/\d+(?::\d+)?(?:\s*(?:am|pm|days?|d|min|mins))?/gi, ' ')
-      .replace(/£\d+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (stripped.length > 1) supplierName = stripped;
-  }
+  const fields = detected.map((f) => ({ field: f, value: valueOf(f) }));
+  const field = fields[0]?.field;
+  const value = fields[0]?.value;
 
+  // Supplier resolution. First try direct containment — the catalogue
+  // names are distinctive enough ("agility", "borough") that a plain
+  // substring hit beats fuzzy heuristics on conversational sentences.
   let supplierId: string | undefined;
+  let supplierName: string | undefined;
   let ambiguous: AmbiguityChoice[] | undefined;
-  if (supplierName) {
-    const best = pickBest(suppliers, (s) => Math.max(matchScore(s.name, supplierName!), matchScore(s.shortCode ?? '', supplierName!)));
-    if (best) {
-      supplierId = best.item.id;
-      supplierName = best.item.shortCode ?? best.item.name;
-      if (best.runners.length > 0 && best.score < 0.85) {
-        ambiguous = [best.item, ...best.runners].map((s) => ({
-          id: s.id,
-          label: s.shortCode ?? s.name,
-          sublabel: s.categories.join(', '),
-          args: { supplierId: s.id, supplierName: s.shortCode ?? s.name, field, value },
-        }));
+
+  const direct = suppliers.find(
+    (s) =>
+      (s.shortCode && lower.includes(s.shortCode.toLowerCase())) ||
+      lower.includes(s.name.toLowerCase()),
+  );
+  if (direct) {
+    supplierId = direct.id;
+    supplierName = direct.shortCode ?? direct.name;
+  } else {
+    // Fuzzy fallback: "for <name>" / "on <name>", else strip the verbs
+    // and keywords and try what's left.
+    const forMatch = text.match(/\b(?:for|on|to)\s+(?:the\s+)?(.+?)(?:\s+to\b|\s+at\b|$)/i);
+    if (forMatch) supplierName = forMatch[1].trim();
+    if (!supplierName) {
+      const stripped = text
+        .replace(/^\s*(set|change|update|\/supplier)\s*/i, '')
+        .replace(SUPPLIER_KEYWORDS, ' ')
+        .replace(/\b(to|at|of|for|the|by)\b/gi, ' ')
+        .replace(/\d+(?::\d+)?(?:\s*(?:am|pm|days?|d|min|mins))?/gi, ' ')
+        .replace(/£\d+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (stripped.length > 1) supplierName = stripped;
+    }
+    if (supplierName) {
+      const best = pickBest(suppliers, (s) => Math.max(matchScore(s.name, supplierName!), matchScore(s.shortCode ?? '', supplierName!)));
+      if (best) {
+        supplierId = best.item.id;
+        supplierName = best.item.shortCode ?? best.item.name;
+        if (best.runners.length > 0 && best.score < 0.85) {
+          ambiguous = [best.item, ...best.runners].map((s) => ({
+            id: s.id,
+            label: s.shortCode ?? s.name,
+            sublabel: s.categories.join(', '),
+            args: { supplierId: s.id, supplierName: s.shortCode ?? s.name, field, value, fields },
+          }));
+        }
       }
     }
   }
@@ -727,7 +760,7 @@ export function parseSupplier(text: string): CommandIntent | null {
 
   return {
     commandId: 'supplier',
-    args: { supplierId, supplierName, field, value } as Record<string, unknown>,
+    args: { supplierId, supplierName, field, value, fields } as Record<string, unknown>,
     ambiguous,
     confidence,
   };

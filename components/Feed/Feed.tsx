@@ -334,6 +334,11 @@ type ChatMsg = {
 const WORKSPACE_MSG_TYPES = new Set<string>([
   'new-supplier-import',
   'product-sheet-import',
+  'chagee-tea-supplier',
+  'chagee-tea-recipe',
+  'stock-review',
+  'stock-sites',
+  'storage-area',
   'pos-match-suggestions',
   'recipe-card',
   'cogs-target',
@@ -451,6 +456,8 @@ function kindBadgeColor(kind: IngredientCatalogueRow['kind']): { bg: string; fg:
 
 const RECIPE_GREETING =
   "Hey, happy to add this to the menu. Have you got a target food-cost % in mind?";
+const RECIPE_ASK_MSG =
+  "Sure — what kind of recipe would you like to update? Type the dish and I\u2019ll pull it up.";
 const RECIPE_COST_MSG =
   "Here's the cost build-up and what the price needs to be to hit your target food cost. Tap a swap to see how the price moves:";
 const RECIPE_COGS_TARGET_MSG =
@@ -679,6 +686,7 @@ function RecipeCardEditor({
       borderRadius: '10px',
       border: '1px solid var(--color-border-subtle)',
       overflow: 'hidden',
+      background: '#fff',
     }}>
       <div style={{
         padding: '10px 14px',
@@ -1082,6 +1090,7 @@ function CogsTargetPicker({
         fontFamily: 'var(--font-primary)',
       }}
     >
+      <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: '10px' }}>Target food cost %</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
         {presets.map((pct) => {
           const active = pct === value;
@@ -1158,8 +1167,8 @@ function CogsTargetPicker({
           disabled={disabled}
           onClick={onConfirm}
           style={{
-            padding: '7px 16px',
-            borderRadius: '100px',
+            padding: '8px 14px',
+            borderRadius: '10px',
             border: 'none',
             background: 'var(--color-accent-active)',
             color: '#fff',
@@ -1167,7 +1176,6 @@ function CogsTargetPicker({
             fontWeight: 600,
             fontFamily: 'var(--font-primary)',
             cursor: disabled ? 'not-allowed' : 'pointer',
-            boxShadow: '0 2px 8px rgba(34,68,68,0.22)',
           }}
         >
           Use {value}% target
@@ -1194,7 +1202,11 @@ function PackagingPicker({ options, selected, onToggle, onConfirm, onSkip }: {
       borderRadius: '10px',
       border: '1px solid var(--color-border-subtle)',
       overflow: 'hidden',
+      background: '#fff',
     }}>
+      <div style={{ padding: '10px 14px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Packaging</span>
+      </div>
       {options.map((pkg, i) => {
         const isSelected = selected.has(pkg.id);
         return (
@@ -1275,14 +1287,14 @@ function PackagingPicker({ options, selected, onToggle, onConfirm, onSkip }: {
           type="button"
           onClick={onSkip}
           style={{
-            padding: '7px 16px',
-            borderRadius: '100px',
+            padding: '8px 14px',
+            borderRadius: '10px',
             border: '1px solid var(--color-border)',
             background: '#fff',
             fontSize: '12px',
             fontWeight: 600,
             fontFamily: 'var(--font-primary)',
-            color: 'var(--color-text-secondary)',
+            color: 'var(--color-text-primary)',
             cursor: 'pointer',
           }}
         >
@@ -1293,8 +1305,8 @@ function PackagingPicker({ options, selected, onToggle, onConfirm, onSkip }: {
             type="button"
             onClick={onConfirm}
             style={{
-              padding: '7px 16px',
-              borderRadius: '100px',
+              padding: '8px 14px',
+              borderRadius: '10px',
               border: 'none',
               background: 'var(--color-accent-active)',
               fontSize: '12px',
@@ -1302,7 +1314,6 @@ function PackagingPicker({ options, selected, onToggle, onConfirm, onSkip }: {
               fontFamily: 'var(--font-primary)',
               color: '#fff',
               cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(34,68,68,0.25)',
             }}
           >
             Add selected ({selected.size})
@@ -1315,7 +1326,7 @@ function PackagingPicker({ options, selected, onToggle, onConfirm, onSkip }: {
 
 function SiteSelectionCard({ selected, onToggle, onConfirm }: { selected: Set<string>; onToggle: (id: string) => void; onConfirm: () => void }) {
   return (
-    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden' }}>
+    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden', background: '#fff' }}>
       <div style={{ padding: '9px 14px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Select Sites</span>
         <button
@@ -1365,7 +1376,7 @@ function SiteSelectionCard({ selected, onToggle, onConfirm }: { selected: Set<st
           type="button"
           onClick={onConfirm}
           disabled={selected.size === 0}
-          style={{ padding: '7px 18px', borderRadius: '100px', border: 'none', background: selected.size > 0 ? 'var(--color-accent-active)' : 'var(--color-bg-hover)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: selected.size > 0 ? '#fff' : 'var(--color-text-muted)', cursor: selected.size > 0 ? 'pointer' : 'not-allowed', boxShadow: selected.size > 0 ? '0 2px 8px rgba(34,68,68,0.25)' : 'none' }}
+          style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: selected.size > 0 ? 'var(--color-accent-active)' : 'var(--color-bg-hover)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: selected.size > 0 ? '#fff' : 'var(--color-text-muted)', cursor: selected.size > 0 ? 'pointer' : 'not-allowed' }}
         >
           Confirm sites
         </button>
@@ -1381,7 +1392,7 @@ function AllergenCard({ confirmed, detected, onToggle, onConfirm }: {
   onConfirm: () => void;
 }) {
   return (
-    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden' }}>
+    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden', background: '#fff' }}>
       <div style={{ padding: '10px 14px', background: 'var(--color-warning-light)', borderBottom: '1px solid var(--color-warning-border)', display: 'flex', alignItems: 'center', gap: '8px' }}>
         <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-warning)' }}>Allergens</span>
         <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-warning)', marginLeft: 'auto' }}>
@@ -1437,7 +1448,7 @@ function AllergenCard({ confirmed, detected, onToggle, onConfirm }: {
         <button
           type="button"
           onClick={onConfirm}
-          style={{ padding: '7px 18px', borderRadius: '100px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer', boxShadow: '0 2px 8px rgba(34,68,68,0.25)' }}
+          style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer' }}
         >
           Confirm allergens ({confirmed.size})
         </button>
@@ -1630,8 +1641,8 @@ function ProductSheetImportCard({
             gap: '8px',
             padding: '8px 10px',
             borderRadius: '10px',
-            background: 'rgba(40,175,201,0.08)',
-            border: '1px solid rgba(40,175,201,0.20)',
+            background: '#fff',
+            border: '1.5px solid var(--color-accent-active)',
           }}
         >
           <Package size={14} strokeWidth={1.9} color="var(--color-accent-active)" />
@@ -1698,12 +1709,12 @@ function ProductSheetImportCard({
                 style={{
                   padding: '5px 12px',
                   borderRadius: '999px',
-                  border: on ? '1.5px solid var(--color-accent-active)' : '1.5px solid var(--color-border)',
-                  background: on ? 'rgba(40,175,201,0.10)' : '#fff',
+                  border: on ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)',
+                  background: on ? 'var(--color-accent-active)' : '#fff',
                   fontSize: '12px',
                   fontWeight: on ? 700 : 500,
                   fontFamily: 'var(--font-primary)',
-                  color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                  color: on ? '#fff' : 'var(--color-text-secondary)',
                   cursor: confirmed ? 'not-allowed' : 'pointer',
                   transition: 'background 0.12s ease, border-color 0.12s ease',
                 }}
@@ -1772,6 +1783,648 @@ function DetailRow({ label, value }: { label: string; value: string }) {
       >
         {value}
       </div>
+    </div>
+  );
+}
+
+// ─── Chagee tea-leaf swap demo ────────────────────────────────────────────────
+//
+// Fully scripted two-step flow for the Chagee franchise scenario:
+// "update a recipe across all my franchises to use whole tea leaves
+// from a new supplier — here's their product list". Step 1 adds the
+// supplier + product (mock — nothing is written to the stores), step
+// 2 swaps the ingredient on the recipe across the selected
+// franchises. All data below is display-only mock data.
+
+const CHAGEE_TEA_SWAP = {
+  fileName: 'golden-leaf-supplier-list.pdf',
+  supplier: {
+    name: 'Yunnan Golden Leaf Tea Co.',
+    shortCode: 'Golden Leaf',
+    contact: 'orders@goldenleaf-tea.com',
+    cutOff: '14:00',
+    leadTime: '5 days',
+    minOrder: '£500',
+    deliveryDays: 'Mon, Thu',
+  },
+  product: {
+    name: 'Whole Tea Leaves — Jasmine Green Grade A',
+    category: 'Tea',
+    pack: '4 × 5kg · £180.00',
+    pricePerUom: '£9.00 / kg',
+    vat: '0%',
+    allergens: 'None',
+  },
+  master: {
+    name: 'Whole Tea Leaves',
+    note: 'currently supplied by Meadow Tea Supply — Golden Leaf becomes the new source',
+  },
+  recipe: {
+    name: 'Jasmine Green Milk Tea (Signature)',
+    oldIngredient: 'Jasmine Tea Leaves — Loose Grade B · Meadow Tea Supply',
+    newIngredient: 'Whole Tea Leaves — Jasmine Green Grade A · Golden Leaf',
+    qtyNote: '12g per serve · unchanged',
+    oldCost: '£0.14',
+    newCost: '£0.11',
+    costDelta: '−21% per serve',
+  },
+  franchises: [
+    'Westfield London',
+    'Oxford Circus',
+    'Soho',
+    'Camden Market',
+    'Battersea',
+    'Canary Wharf',
+    'Kingston',
+    'Croydon',
+    'Manchester Arndale',
+    'Birmingham Bullring',
+    'Leeds Trinity',
+    'Glasgow Buchanan',
+  ],
+};
+
+const DEMO_SECTION_LABEL: React.CSSProperties = {
+  fontSize: '10.5px',
+  fontWeight: 700,
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase',
+  color: 'var(--color-text-muted)',
+  marginBottom: '6px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+};
+
+const DEMO_CARD_SHELL: React.CSSProperties = {
+  marginTop: '8px',
+  borderRadius: '14px',
+  background: '#fff',
+  border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.12))',
+  boxShadow: '0 4px 16px rgba(0, 28, 53, 0.08)',
+  overflow: 'hidden',
+  fontFamily: 'var(--font-primary)',
+};
+
+function DemoCtaButton({ label, doneLabel, confirmed, disabled, onClick }: {
+  label: string;
+  doneLabel: string;
+  confirmed: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const off = confirmed || disabled;
+  return (
+    <div style={{ padding: '10px 14px', borderTop: '1px solid var(--color-border-subtle)', display: 'flex', justifyContent: 'flex-end', background: 'rgba(0,28,53,0.02)' }}>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={off}
+        style={{
+          padding: '8px 18px',
+          borderRadius: '10px',
+          border: 'none',
+          background: off ? 'rgba(0,28,53,0.08)' : 'var(--color-accent-active)',
+          fontSize: '12.5px',
+          fontWeight: 700,
+          fontFamily: 'var(--font-primary)',
+          color: off ? 'var(--color-text-muted)' : '#fff',
+          cursor: off ? 'not-allowed' : 'pointer',
+        }}
+      >
+        {confirmed ? doneLabel : label}
+      </button>
+    </div>
+  );
+}
+
+/** Step 1 — the parsed supplier + their whole-tea-leaves product. */
+function ChageeTeaSupplierCard({ confirmed, onConfirm }: { confirmed: boolean; onConfirm: () => void }) {
+  const d = CHAGEE_TEA_SWAP;
+  return (
+    <div style={{ ...DEMO_CARD_SHELL, opacity: confirmed ? 0.85 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <FileText size={15} strokeWidth={1.9} color="var(--color-text-muted)" />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+            Adding new supplier + product
+          </div>
+          <div style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
+            Parsed in 1.4s · {d.fileName}
+          </div>
+        </div>
+        {confirmed && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', fontWeight: 700, color: '#15803D' }}>
+            <CheckCircle2 size={13} strokeWidth={2.2} />
+            Added
+          </span>
+        )}
+      </div>
+
+      <div style={{ padding: '10px 14px 4px' }}>
+        <div style={DEMO_SECTION_LABEL}>
+          <EdifyMark size={11} />
+          Supplier details
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: '12.5px' }}>
+          <DetailRow label="Supplier" value={d.supplier.name} />
+          <DetailRow label="Contact" value={d.supplier.contact} />
+          <DetailRow label="Order cut-off" value={d.supplier.cutOff} />
+          <DetailRow label="Lead time" value={d.supplier.leadTime} />
+          <DetailRow label="Minimum order" value={d.supplier.minOrder} />
+          <DetailRow label="Delivery days" value={d.supplier.deliveryDays} />
+        </div>
+      </div>
+
+      <div style={{ padding: '10px 14px 4px', borderTop: '1px solid var(--color-border-subtle)', marginTop: '10px' }}>
+        <div style={DEMO_SECTION_LABEL}>
+          <EdifyMark size={11} />
+          Product
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: '12.5px' }}>
+          <DetailRow label="Product" value={d.product.name} />
+          <DetailRow label="Category" value={d.product.category} />
+          <DetailRow label="Pack" value={d.product.pack} />
+          <DetailRow label="Price per uom" value={d.product.pricePerUom} />
+          <DetailRow label="VAT" value={d.product.vat} />
+          <DetailRow label="Allergens" value={d.product.allergens} />
+        </div>
+      </div>
+
+      <div style={{ padding: '10px 14px' }}>
+        <div style={DEMO_SECTION_LABEL}>
+          <EdifyMark size={11} />
+          Master product
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: '10px', background: '#fff', border: '1.5px solid var(--color-accent-active)' }}>
+          <Package size={14} strokeWidth={1.9} color="var(--color-accent-active)" />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+              Matched to <strong>{d.master.name}</strong> master
+            </div>
+            <div style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
+              {d.master.note}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <DemoCtaButton
+        label="Add supplier + product"
+        doneLabel="Added to catalogue"
+        confirmed={confirmed}
+        onClick={onConfirm}
+      />
+    </div>
+  );
+}
+
+/** Step 2 — the recipe ingredient swap across franchises. */
+function ChageeTeaRecipeCard({
+  franchises,
+  onToggleFranchise,
+  onToggleAll,
+  confirmed,
+  onConfirm,
+}: {
+  franchises: Set<string>;
+  onToggleFranchise: (f: string) => void;
+  onToggleAll: (all: boolean) => void;
+  confirmed: boolean;
+  onConfirm: () => void;
+}) {
+  const d = CHAGEE_TEA_SWAP;
+  const allOn = franchises.size === d.franchises.length;
+  return (
+    <div style={{ ...DEMO_CARD_SHELL, opacity: confirmed ? 0.85 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <ChefHat size={15} strokeWidth={1.9} color="var(--color-text-muted)" />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+            Update recipe — {d.recipe.name}
+          </div>
+          <div style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
+            Ingredient swap · whole tea leaves
+          </div>
+        </div>
+        {confirmed && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', fontWeight: 700, color: '#15803D' }}>
+            <CheckCircle2 size={13} strokeWidth={2.2} />
+            Updated
+          </span>
+        )}
+      </div>
+
+      <div style={{ padding: '10px 14px' }}>
+        <div style={DEMO_SECTION_LABEL}>
+          <EdifyMark size={11} />
+          Ingredient swap
+        </div>
+        <div style={{ padding: '10px 12px', borderRadius: '10px', border: '1.5px solid var(--color-accent-active)', background: '#fff' }}>
+          <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', textDecoration: 'line-through' }}>
+            {d.recipe.oldIngredient}
+          </div>
+          <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--color-text-primary)', marginTop: '4px' }}>
+            → {d.recipe.newIngredient}
+          </div>
+          <div style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '4px' }}>
+            {d.recipe.qtyNote}
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: '12.5px', marginTop: '10px' }}>
+          <DetailRow label="Cost per serve" value={`${d.recipe.oldCost} → ${d.recipe.newCost}`} />
+          <DetailRow label="Impact" value={d.recipe.costDelta} />
+        </div>
+      </div>
+
+      <div style={{ padding: '10px 14px', borderTop: '1px solid var(--color-border-subtle)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+          <div style={{ ...DEMO_SECTION_LABEL, marginBottom: 0 }}>
+            Which franchises?
+          </div>
+          <button
+            type="button"
+            onClick={() => onToggleAll(!allOn)}
+            disabled={confirmed}
+            style={{ padding: '3px 10px', borderRadius: '999px', border: '1px solid var(--color-border-subtle)', background: '#fff', fontSize: '11px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-text-secondary)', cursor: confirmed ? 'not-allowed' : 'pointer' }}
+          >
+            {allOn ? 'None' : 'All'}
+          </button>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {CHAGEE_TEA_SWAP.franchises.map((site) => {
+            const on = franchises.has(site);
+            return (
+              <button
+                key={site}
+                type="button"
+                onClick={() => onToggleFranchise(site)}
+                disabled={confirmed}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: '999px',
+                  border: on ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)',
+                  background: on ? 'var(--color-accent-active)' : '#fff',
+                  fontSize: '12px',
+                  fontWeight: on ? 700 : 500,
+                  fontFamily: 'var(--font-primary)',
+                  color: on ? '#fff' : 'var(--color-text-secondary)',
+                  cursor: confirmed ? 'not-allowed' : 'pointer',
+                  transition: 'background 0.12s ease, border-color 0.12s ease',
+                }}
+              >
+                {site}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <DemoCtaButton
+        label={`Update recipe across ${franchises.size} franchise${franchises.size === 1 ? '' : 's'}`}
+        doneLabel="Recipe updated"
+        confirmed={confirmed}
+        disabled={franchises.size === 0}
+        onClick={onConfirm}
+      />
+    </div>
+  );
+}
+
+// ─── Stock-take review demo ───────────────────────────────────────────────────
+//
+// Scripted two-step flow: "update my stock takes — review all the
+// products that aren't in a stock area". Step 1 lists the unassigned
+// products and lets the operator tick which ones to add; step 2 picks
+// the storage area they should live in. Generic (default-profile)
+// mock data — nothing is written to the product or stock-take stores.
+
+const STOCK_TAKE_REVIEW = {
+  // `suggestedArea` seeds the per-product picker on step 2 — Quinn's
+  // best guess from the product type, which the operator can change.
+  products: [
+    { id: 'espresso-beans', name: 'Espresso Beans — House Blend', supplier: 'Riverbank Roasters', pack: '6 × 1kg', lastDelivery: 'Tue 30 Jun', suggestedArea: 'dry-store' },
+    { id: 'oat-milk', name: 'Oat Milk — Barista Edition', supplier: 'Minor Figures', pack: '12 × 1L', lastDelivery: 'Thu 2 Jul', suggestedArea: 'dry-store' },
+    { id: 'sourdough', name: 'Sourdough Loaf — Sliced', supplier: 'Northside Bakery', pack: '10 loaves', lastDelivery: 'Fri 3 Jul', suggestedArea: 'freezer' },
+    { id: 'bacon', name: 'Smoked Streaky Bacon', supplier: 'Meadow Farm', pack: '4 × 2.5kg', lastDelivery: 'Mon 29 Jun', suggestedArea: 'walk-in' },
+    { id: 'avocados', name: 'Avocados — Ready to Eat', supplier: 'Fresh Direct', pack: '2 × 24', lastDelivery: 'Thu 2 Jul', suggestedArea: 'walk-in' },
+    { id: 'maple-syrup', name: 'Maple Syrup — Grade A', supplier: 'Fresh Direct', pack: '6 × 1L', lastDelivery: 'Fri 26 Jun', suggestedArea: 'dry-store' },
+    { id: 'takeaway-cups', name: '12oz Takeaway Cups', supplier: 'PackRight', pack: '10 × 500', lastDelivery: 'Wed 1 Jul', suggestedArea: 'packaging' },
+    { id: 'napkins', name: 'Recycled Napkins', supplier: 'PackRight', pack: '20 × 250', lastDelivery: 'Wed 1 Jul', suggestedArea: 'packaging' },
+  ],
+  areas: [
+    { id: 'dry-store', name: 'Dry Store', items: 52 },
+    { id: 'walk-in', name: 'Walk-in Fridge', items: 38 },
+    { id: 'freezer', name: 'Freezer', items: 21 },
+    { id: 'front-of-house', name: 'Front of House', items: 27 },
+    { id: 'packaging', name: 'Packaging Store', items: 14 },
+  ],
+};
+
+/** Step 1 — review the products missing a storage area and tick
+ *  which ones to add to the stock take. */
+function StockReviewCard({
+  selected,
+  onToggle,
+  onToggleAll,
+  confirmed,
+  onConfirm,
+}: {
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+  onToggleAll: (all: boolean) => void;
+  confirmed: boolean;
+  onConfirm: () => void;
+}) {
+  const d = STOCK_TAKE_REVIEW;
+  const allOn = selected.size === d.products.length;
+  return (
+    <div style={{ ...DEMO_CARD_SHELL, opacity: confirmed ? 0.85 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <Package size={15} strokeWidth={1.9} color="var(--color-text-muted)" />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+            Products missing a storage area
+          </div>
+          <div style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
+            {d.products.length} products aren&apos;t counted on any stock take
+          </div>
+        </div>
+        {confirmed && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', fontWeight: 700, color: '#15803D' }}>
+            <CheckCircle2 size={13} strokeWidth={2.2} />
+            Selected
+          </span>
+        )}
+      </div>
+
+      <div style={{ padding: '10px 14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+          <div style={{ ...DEMO_SECTION_LABEL, marginBottom: 0 }}>
+            <EdifyMark size={11} />
+            Choose products to add
+          </div>
+          <button
+            type="button"
+            onClick={() => onToggleAll(!allOn)}
+            disabled={confirmed}
+            style={{ padding: '3px 10px', borderRadius: '999px', border: '1px solid var(--color-border-subtle)', background: '#fff', fontSize: '11px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-text-secondary)', cursor: confirmed ? 'not-allowed' : 'pointer' }}
+          >
+            {allOn ? 'None' : 'All'}
+          </button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {d.products.map((p) => {
+            const on = selected.has(p.id);
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => onToggle(p.id)}
+                disabled={confirmed}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '8px 10px',
+                  borderRadius: '10px',
+                  border: on ? '1.5px solid var(--color-accent-active)' : '1.5px solid var(--color-border-subtle)',
+                  background: '#fff',
+                  textAlign: 'left',
+                  fontFamily: 'var(--font-primary)',
+                  cursor: confirmed ? 'not-allowed' : 'pointer',
+                  transition: 'border-color 0.12s ease',
+                }}
+              >
+                <span
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    borderRadius: '5px',
+                    flexShrink: 0,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: on ? 'none' : '1.5px solid var(--color-border)',
+                    background: on ? 'var(--color-accent-active)' : '#fff',
+                  }}
+                >
+                  {on && <Check size={12} strokeWidth={3} color="#fff" />}
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                    {p.name}
+                  </span>
+                  <span style={{ display: 'block', fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
+                    {p.supplier} · {p.pack} · last delivery {p.lastDelivery}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <DemoCtaButton
+        label={`Add ${selected.size} product${selected.size === 1 ? '' : 's'} to stock take`}
+        doneLabel="Products selected"
+        confirmed={confirmed}
+        disabled={selected.size === 0}
+        onClick={onConfirm}
+      />
+    </div>
+  );
+}
+
+/** Step 2 — choose which sites the stock-take update applies to.
+ *  Multi-select pills, all sites pre-selected. Storage areas come
+ *  after this step (they can differ site to site, so the operator
+ *  needs to know the scope first). */
+function StockSitesCard({
+  sites,
+  onToggleSite,
+  onToggleAll,
+  confirmed,
+  onConfirm,
+}: {
+  sites: Set<string>;
+  onToggleSite: (site: string) => void;
+  onToggleAll: (all: boolean) => void;
+  confirmed: boolean;
+  onConfirm: () => void;
+}) {
+  const allOn = sites.size === ALL_SUPPLIER_SITES.length;
+  return (
+    <div style={{ ...DEMO_CARD_SHELL, opacity: confirmed ? 0.85 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <Package size={15} strokeWidth={1.9} color="var(--color-text-muted)" />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+            Which sites?
+          </div>
+          <div style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
+            The products join the stock take at the selected sites
+          </div>
+        </div>
+        {confirmed && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', fontWeight: 700, color: '#15803D' }}>
+            <CheckCircle2 size={13} strokeWidth={2.2} />
+            Selected
+          </span>
+        )}
+      </div>
+
+      <div style={{ padding: '10px 14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+          <div style={{ ...DEMO_SECTION_LABEL, marginBottom: 0 }}>
+            <EdifyMark size={11} />
+            Sites
+          </div>
+          <button
+            type="button"
+            onClick={() => onToggleAll(!allOn)}
+            disabled={confirmed}
+            style={{ padding: '3px 10px', borderRadius: '999px', border: '1px solid var(--color-border-subtle)', background: '#fff', fontSize: '11px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-text-secondary)', cursor: confirmed ? 'not-allowed' : 'pointer' }}
+          >
+            {allOn ? 'None' : 'All'}
+          </button>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {ALL_SUPPLIER_SITES.map((site) => {
+            const on = sites.has(site);
+            return (
+              <button
+                key={site}
+                type="button"
+                onClick={() => onToggleSite(site)}
+                disabled={confirmed}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: '999px',
+                  border: on ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)',
+                  background: on ? 'var(--color-accent-active)' : '#fff',
+                  fontSize: '12px',
+                  fontWeight: on ? 700 : 500,
+                  fontFamily: 'var(--font-primary)',
+                  color: on ? '#fff' : 'var(--color-text-secondary)',
+                  cursor: confirmed ? 'not-allowed' : 'pointer',
+                  transition: 'background 0.12s ease, border-color 0.12s ease',
+                }}
+              >
+                {site}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <DemoCtaButton
+        label={`Continue with ${sites.size} site${sites.size === 1 ? '' : 's'}`}
+        doneLabel="Sites selected"
+        confirmed={confirmed}
+        disabled={sites.size === 0}
+        onClick={onConfirm}
+      />
+    </div>
+  );
+}
+
+/** Step 3 — assign each chosen product to a storage area. Rows come
+ *  pre-filled with Quinn's suggestion (`suggestedArea`); the operator
+ *  can re-pick per product. The CTA stays disabled until every
+ *  product has an area. */
+function StorageAreaCard({
+  productIds,
+  choices,
+  onPickArea,
+  confirmed,
+  onConfirm,
+}: {
+  productIds: string[];
+  choices: Record<string, string>;
+  onPickArea: (productId: string, areaId: string) => void;
+  confirmed: boolean;
+  onConfirm: () => void;
+}) {
+  const d = STOCK_TAKE_REVIEW;
+  const rows = d.products.filter((p) => productIds.includes(p.id));
+  const allAssigned = rows.every((p) => !!choices[p.id]);
+  return (
+    <div style={{ ...DEMO_CARD_SHELL, opacity: confirmed ? 0.85 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <Package size={15} strokeWidth={1.9} color="var(--color-text-muted)" />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+            Choose storage areas
+          </div>
+          <div style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
+            I&apos;ve suggested an area for each product — adjust any, then confirm
+          </div>
+        </div>
+        {confirmed && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', fontWeight: 700, color: '#15803D' }}>
+            <CheckCircle2 size={13} strokeWidth={2.2} />
+            Added
+          </span>
+        )}
+      </div>
+
+      <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {rows.map((p) => (
+          <div
+            key={p.id}
+            style={{
+              padding: '8px 10px',
+              borderRadius: '10px',
+              border: '1.5px solid var(--color-border-subtle)',
+              background: '#fff',
+            }}
+          >
+            <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+              {p.name}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '6px' }}>
+              {d.areas.map((a) => {
+                const on = choices[p.id] === a.id;
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => onPickArea(p.id, a.id)}
+                    disabled={confirmed}
+                    style={{
+                      padding: '4px 11px',
+                      borderRadius: '999px',
+                      border: on ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)',
+                      background: on ? 'var(--color-accent-active)' : '#fff',
+                      fontSize: '11.5px',
+                      fontWeight: on ? 700 : 500,
+                      fontFamily: 'var(--font-primary)',
+                      color: on ? '#fff' : 'var(--color-text-secondary)',
+                      cursor: confirmed ? 'not-allowed' : 'pointer',
+                      transition: 'background 0.12s ease, border-color 0.12s ease',
+                    }}
+                  >
+                    {a.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <DemoCtaButton
+        label={
+          allAssigned
+            ? `Add ${rows.length} product${rows.length === 1 ? '' : 's'} to storage areas`
+            : 'Assign an area to every product'
+        }
+        doneLabel="Added to storage areas"
+        confirmed={confirmed}
+        disabled={!allAssigned}
+        onClick={onConfirm}
+      />
     </div>
   );
 }
@@ -2014,7 +2667,7 @@ function SupplierProductEditPanel({
       style={{
         padding: '10px 14px 12px',
         borderTop: '1px dashed var(--color-border-subtle)',
-        background: 'rgba(40,175,201,0.04)',
+        background: 'rgba(0,28,53,0.015)',
       }}
     >
       <div
@@ -2226,11 +2879,11 @@ function SupplierProductEditPanel({
                   border: on
                     ? '1px solid var(--color-accent-active)'
                     : '1px solid var(--color-border-subtle)',
-                  background: on ? 'rgba(40,175,201,0.14)' : '#fff',
+                  background: on ? 'var(--color-accent-active)' : '#fff',
                   fontSize: '11px',
                   fontWeight: on ? 700 : 500,
                   fontFamily: 'var(--font-primary)',
-                  color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                  color: on ? '#fff' : 'var(--color-text-secondary)',
                   cursor: confirmed ? 'not-allowed' : 'pointer',
                 }}
               >
@@ -2350,7 +3003,7 @@ function POSMatchSuggestionsCard({
             width: 26,
             height: 26,
             borderRadius: 8,
-            background: 'rgba(40,175,201,0.12)',
+            background: 'rgba(0,28,53,0.06)',
             flexShrink: 0,
           }}
         >
@@ -2469,8 +3122,7 @@ function POSMatchSuggestionsCard({
                         ? 'var(--color-accent-active)'
                         : 'var(--color-border-subtle)'
                     }`,
-                    background:
-                      confidence === 'high' ? 'rgba(40,175,201,0.10)' : '#fff',
+                    background: '#fff',
                   }}
                 >
                   {confidence === 'high' ? 'High' : 'Likely'}
@@ -2792,8 +3444,8 @@ function NewSupplierImportCard({
             gap: '8px',
             padding: '8px 10px',
             borderRadius: '10px',
-            background: 'rgba(40,175,201,0.08)',
-            border: '1px solid rgba(40,175,201,0.20)',
+            background: '#fff',
+            border: '1.5px solid var(--color-accent-active)',
           }}
         >
           <Package size={14} strokeWidth={1.9} color="var(--color-accent-active)" />
@@ -2892,7 +3544,7 @@ function NewSupplierImportCard({
                     style={{
                       borderBottom:
                         i < products.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
-                      background: isOpen ? 'rgba(40,175,201,0.05)' : '#fff',
+                      background: isOpen ? 'rgba(0,28,53,0.03)' : '#fff',
                     }}
                   >
                     {/* Summary row — the whole row is the click target
@@ -3052,12 +3704,12 @@ function NewSupplierImportCard({
                 style={{
                   padding: '5px 12px',
                   borderRadius: '999px',
-                  border: on ? '1.5px solid var(--color-accent-active)' : '1.5px solid var(--color-border)',
-                  background: on ? 'rgba(40,175,201,0.10)' : '#fff',
+                  border: on ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)',
+                  background: on ? 'var(--color-accent-active)' : '#fff',
                   fontSize: '12px',
                   fontWeight: on ? 700 : 500,
                   fontFamily: 'var(--font-primary)',
-                  color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                  color: on ? '#fff' : 'var(--color-text-secondary)',
                   cursor: confirmed ? 'not-allowed' : 'pointer',
                   transition: 'background 0.12s ease, border-color 0.12s ease',
                 }}
@@ -3117,11 +3769,14 @@ function NewSupplierImportCard({
 
 // ─── Production flow components ──────────────────────────────────────────────
 
-function PillPicker({ options, selected, onSelect, onConfirm }: { options: string[]; selected: string; onSelect: (o: string) => void; onConfirm: () => void }) {
+function PillPicker({ title, options, selected, onSelect, onConfirm }: { title: string; options: string[]; selected: string; onSelect: (o: string) => void; onConfirm: () => void }) {
   const [customVal, setCustomVal] = useState('');
   const isCustomSelected = selected !== '' && !options.includes(selected);
   return (
     <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden', background: '#fff' }}>
+      <div style={{ padding: '10px 14px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{title}</span>
+      </div>
       <div style={{ padding: '12px 14px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
         {options.map(opt => {
           const on = selected === opt && !isCustomSelected;
@@ -3140,7 +3795,7 @@ function PillPicker({ options, selected, onSelect, onConfirm }: { options: strin
         />
       </div>
       <div style={{ padding: '0 14px 12px', display: 'flex', justifyContent: 'flex-end' }}>
-        <button type="button" onClick={onConfirm} style={{ padding: '7px 18px', borderRadius: '100px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer', boxShadow: '0 2px 8px rgba(34,68,68,0.25)' }}>
+        <button type="button" onClick={onConfirm} style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer' }}>
           Confirm
         </button>
       </div>
@@ -3152,6 +3807,9 @@ function BatchAndCarryCard({ settings, onUpdate, onConfirm }: { settings: ProdSe
   const btnStyle: React.CSSProperties = { width: '28px', height: '28px', borderRadius: '8px', border: '1px solid var(--color-border)', background: '#fff', fontFamily: 'var(--font-primary)', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-primary)', flexShrink: 0 };
   return (
     <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden', background: '#fff' }}>
+      <div style={{ padding: '10px 14px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Batch &amp; carry-over</span>
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0', borderBottom: '1px solid var(--color-border-subtle)' }}>
         {[{ label: 'Min batch', key: 'batchMin' as const }, { label: 'Max batch', key: 'batchMax' as const }].map(({ label, key }, i) => (
           <div key={key} style={{ padding: '12px 14px', borderRight: i === 0 ? '1px solid var(--color-border-subtle)' : 'none' }}>
@@ -3203,7 +3861,7 @@ function BatchAndCarryCard({ settings, onUpdate, onConfirm }: { settings: ProdSe
         </div>
       </div>
       <div style={{ padding: '10px 14px', display: 'flex', justifyContent: 'flex-end' }}>
-        <button type="button" onClick={onConfirm} style={{ padding: '7px 18px', borderRadius: '100px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer', boxShadow: '0 2px 8px rgba(34,68,68,0.25)' }}>
+        <button type="button" onClick={onConfirm} style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer' }}>
           Confirm
         </button>
       </div>
@@ -3214,6 +3872,9 @@ function BatchAndCarryCard({ settings, onUpdate, onConfirm }: { settings: ProdSe
 function CategoryClosingCard({ settings, onUpdate, onConfirm }: { settings: ProdSettings; onUpdate: (u: Partial<ProdSettings>) => void; onConfirm: () => void }) {
   return (
     <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden', background: '#fff' }}>
+      <div style={{ padding: '10px 14px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Category &amp; closing</span>
+      </div>
       <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
         <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Recipe category</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -3233,7 +3894,7 @@ function CategoryClosingCard({ settings, onUpdate, onConfirm }: { settings: Prod
         </div>
       </div>
       <div style={{ padding: '10px 14px', display: 'flex', justifyContent: 'flex-end' }}>
-        <button type="button" onClick={onConfirm} style={{ padding: '7px 18px', borderRadius: '100px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer', boxShadow: '0 2px 8px rgba(34,68,68,0.25)' }}>
+        <button type="button" onClick={onConfirm} style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer' }}>
           Confirm
         </button>
       </div>
@@ -3255,10 +3916,10 @@ function ProductionSummaryCard({ settings }: { settings: ProdSettings }) {
     { label: 'Stop production', value: settings.closingRange === 'No limit' ? 'No limit' : `${settings.closingRange} before close` },
   ];
   return (
-    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-success-border)', overflow: 'hidden', background: 'var(--color-success-light)' }}>
-      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--color-success-border)', display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(21,128,61,0.06)' }}>
+    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden', background: '#fff' }}>
+      <div style={{ padding: '10px 14px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: '8px' }}>
         <span style={{ fontSize: '14px' }}>✓</span>
-        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-success)' }}>Production plan configured</span>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Production plan configured</span>
       </div>
       <div style={{ padding: '10px 14px', background: '#fff' }}>
         {rows.map((row, i) => (
@@ -3275,10 +3936,10 @@ function ProductionSummaryCard({ settings }: { settings: ProdSettings }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ActionButton({ label, onClick }: { label: string; onClick: () => void }) {
-  // End-of-flow confirmation — a single calm pill. The previous
-  // dashed "NEXT STEP" call-out box was overbearing; the button on
-  // its own (right-aligned, brand fill, check icon) is enough to
-  // read as the primary action without shouting at the operator.
+  // End-of-flow confirmation — the app-standard primary button
+  // (rounded rect, brand fill, no drop shadow) so it matches every
+  // other primary action in the prototype rather than reading as a
+  // shoutier one-off. Right-aligned with a check icon.
   return (
     <div
       style={{
@@ -3295,9 +3956,9 @@ function ActionButton({ label, onClick }: { label: string; onClick: () => void }
         style={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: '8px',
-          padding: '10px 18px',
-          borderRadius: '100px',
+          gap: '7px',
+          padding: '8px 14px',
+          borderRadius: '10px',
           border: 'none',
           background: 'var(--color-accent-active)',
           color: '#fff',
@@ -3305,18 +3966,6 @@ function ActionButton({ label, onClick }: { label: string; onClick: () => void }
           fontWeight: 600,
           fontFamily: 'var(--font-primary)',
           cursor: 'pointer',
-          boxShadow: '0 2px 8px rgba(34,68,68,0.25)',
-          transition: 'transform 0.12s ease, box-shadow 0.12s ease',
-        }}
-        onMouseEnter={(e) => {
-          const el = e.currentTarget;
-          el.style.transform = 'translateY(-1px)';
-          el.style.boxShadow = '0 4px 12px rgba(34,68,68,0.3)';
-        }}
-        onMouseLeave={(e) => {
-          const el = e.currentTarget;
-          el.style.transform = 'translateY(0)';
-          el.style.boxShadow = '0 2px 8px rgba(34,68,68,0.25)';
         }}
       >
         <CheckCircle2 size={14} strokeWidth={2.4} />
@@ -3762,8 +4411,8 @@ function ChatBubble({
                           gap: '6px',
                           padding: '4px 9px 4px 7px',
                           borderRadius: '999px',
-                          background: 'rgba(40,175,201,0.10)',
-                          border: '1px solid rgba(40,175,201,0.30)',
+                          background: '#fff',
+                          border: '1px solid var(--color-border, rgba(0,28,53,0.18))',
                         }}
                       >
                         <FileText size={12} strokeWidth={1.9} color="var(--color-accent-active)" />
@@ -4027,8 +4676,8 @@ function ClaudeComposer({
               gap: '6px',
               padding: '5px 8px 5px 10px',
               borderRadius: '999px',
-              background: 'rgba(40,175,201,0.10)',
-              border: '1px solid rgba(40,175,201,0.30)',
+              background: '#fff',
+              border: '1px solid var(--color-border, rgba(0,28,53,0.18))',
               maxWidth: '100%',
               minWidth: 0,
             }}
@@ -5130,6 +5779,10 @@ export default function Feed({
   const initialComposerWrapperRef = useRef<HTMLDivElement>(null);
   const dockComposerWrapperRef = useRef<HTMLDivElement>(null);
   const [recipeFlow, setRecipeFlow] = useState(0);
+  /** "Update recipe" suggestion asks which recipe first; while true the
+   *  next composer message is treated as the recipe name and seeded into
+   *  the builder (see sendMessage) rather than routed normally. */
+  const [awaitingRecipeName, setAwaitingRecipeName] = useState(false);
   const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>(INITIAL_RECIPE_INGREDIENTS);
   /** Per-card site selections for the chat-driven "import product
    *  from sheet" flow. Keyed by the card's message id so multiple
@@ -5160,6 +5813,33 @@ export default function Feed({
    *  the operator's decision. Lets the operator step through, undo,
    *  or pick up later without losing state on re-render. */
   const [posMatchDecisions, setPosMatchDecisions] = useState<Record<string, Record<string, 'applied' | 'skipped'>>>({});
+  /** Chagee tea-swap demo flow state — per-card confirmation flags
+   *  and the franchise selection on the recipe step. Keyed by card
+   *  message id, mirroring the other import flows. */
+  const [chageeSupplierConfirmed, setChageeSupplierConfirmed] = useState<Record<string, boolean>>({});
+  const [chageeRecipeConfirmed, setChageeRecipeConfirmed] = useState<Record<string, boolean>>({});
+  const [chageeFranchises, setChageeFranchises] = useState<Record<string, Set<string>>>({});
+  /** Stock-take review demo flow state — per-card confirmation
+   *  flags, the product selection on the review step, and the
+   *  per-product storage-area choices on step 2. Keyed by card
+   *  message id. `stockAreaProducts` carries the step-1 selection
+   *  (product ids) through to the step-2 card; `stockAreaChoice` maps
+   *  productId → areaId inside each card, pre-seeded from Quinn's
+   *  suggestions. */
+  const [stockReviewSelected, setStockReviewSelected] = useState<Record<string, Set<string>>>({});
+  const [stockReviewConfirmed, setStockReviewConfirmed] = useState<Record<string, boolean>>({});
+  /** Site-selection step (between product review and storage areas).
+   *  `stockSitesProducts` carries the step-1 product ids through this
+   *  card to the storage-area step. */
+  const [stockSitesSelected, setStockSitesSelected] = useState<Record<string, Set<string>>>({});
+  const [stockSitesConfirmed, setStockSitesConfirmed] = useState<Record<string, boolean>>({});
+  const [stockSitesProducts, setStockSitesProducts] = useState<Record<string, string[]>>({});
+  const [stockAreaChoice, setStockAreaChoice] = useState<Record<string, Record<string, string>>>({});
+  const [stockAreaConfirmed, setStockAreaConfirmed] = useState<Record<string, boolean>>({});
+  const [stockAreaProducts, setStockAreaProducts] = useState<Record<string, string[]>>({});
+  /** Sites chosen on the previous step — carried to the storage-area
+   *  card so the final receipt can say how many sites were updated. */
+  const [stockAreaSites, setStockAreaSites] = useState<Record<string, string[]>>({});
   /** Snapshot of existing match overrides so we can skip POS buttons
    *  that have already been linked (either by Sync & match, by a
    *  previous chat suggestion, or by hand on the Item matching page). */
@@ -5261,6 +5941,9 @@ export default function Feed({
       setAnalyticsType(null);
       setAnalyticsStep(0);
       setInput('');
+      // A pending "what kind of recipe?" ask mustn't swallow the next
+      // message once the user has moved on to a different command.
+      setAwaitingRecipeName(false);
     },
   });
 
@@ -5282,6 +5965,7 @@ export default function Feed({
     setAnalyticsType(null);
     setAnalyticsStep(0);
     setInput('');
+    setAwaitingRecipeName(false);
     // Tasks recorded after the snapshot feature shipped carry a full
     // thread. Older entries (or any task that never got snapshotted)
     // fall back to a synthesised stub built from the metadata so the
@@ -5676,7 +6360,20 @@ export default function Feed({
     ]);
   }
 
-  function startRecipeFlow(seedText?: string, opts?: { userEcho?: string }) {
+  /** Ask which recipe before opening the builder. Used by the "Update
+   *  recipe" suggestion: Quinn posts the question, the composer stays
+   *  live, and the operator's reply is picked up in sendMessage
+   *  (`awaitingRecipeName`) and seeded into startRecipeFlow. */
+  function startRecipeAsk(question?: string) {
+    setChatMinimized(false);
+    setChatStarted(true);
+    setRecipeFlow(0);
+    const q = question && question.trim().length > 0 ? question.trim() : RECIPE_ASK_MSG;
+    setMessages([{ id: `q-recipe-ask-${Date.now()}`, role: 'quinn', text: q }]);
+    setAwaitingRecipeName(true);
+  }
+
+  function startRecipeFlow(seedText?: string, opts?: { userEcho?: string; append?: boolean }) {
     setChatMinimized(false);
     setChatStarted(true);
     const resolved = seedText ? findTemplateByName(seedText) : null;
@@ -5708,10 +6405,15 @@ export default function Feed({
       const userMsgId = `u-recipe-seed-${Date.now()}`;
       const thinkingId = `q-recipe-thinking-${Date.now()}`;
       const greetingId = `q-greeting-${Date.now()}`;
-      setMessages([
+      const seedMsgs: ChatMsg[] = [
         { id: userMsgId, role: 'user', text: echo },
         { id: thinkingId, role: 'quinn', text: '', msgType: 'cmd-thinking' },
-      ]);
+      ];
+      // `append` keeps a preceding exchange (e.g. the "which recipe?"
+      // question from startRecipeAsk) in the transcript instead of
+      // resetting to a fresh thread.
+      if (opts?.append) setMessages((prev) => [...prev, ...seedMsgs]);
+      else setMessages(seedMsgs);
 
       // 5s "thinking" hold → swap to the streaming greeting.
       window.setTimeout(() => {
@@ -5928,6 +6630,346 @@ export default function Feed({
         commandRunner.startProductSwapFromSheet(args);
       }, streamingDurationMs + 400);
     }, 3500);
+  }
+
+  /** Chagee demo — "update a recipe across all my franchises with a
+   *  different ingredient from a new supplier… it's for our whole tea
+   *  leaves". Detects the tea-leaf phrasing (or the franchise +
+   *  supplier + recipe combination) and runs the scripted two-step
+   *  flow. Checked BEFORE the generic supplier/product importers so
+   *  "add the new supplier and the product" in the same breath
+   *  doesn't get hijacked by those. */
+  function detectChageeTeaSwap(text: string): boolean {
+    const lower = text.toLowerCase().trim();
+    if (!lower) return false;
+    const teaLeaves = /\btea\s+leaves\b/.test(lower);
+    const franchise = /\bfranchises?\b/.test(lower);
+    const supplier = /\b(?:supplier|vendor)\b/.test(lower);
+    const recipe = /\brecipe\b/.test(lower);
+    if (teaLeaves && (supplier || recipe || franchise)) return true;
+    return franchise && supplier && recipe;
+  }
+
+  /** Kick the Chagee flow: user echo with the supplier-list chip,
+   *  a thinking hold, Quinn's parse summary, then the step-1 card
+   *  (supplier + product). Step 2 is pushed by
+   *  `confirmChageeSupplier` once step 1 is confirmed. */
+  function startChageeTeaSwap(opts: { fileName: string | null; userText: string }) {
+    setChatMinimized(false);
+    setChatStarted(true);
+    setAttachedFileName(null);
+
+    const fileName = opts.fileName ?? CHAGEE_TEA_SWAP.fileName;
+    const userMsgId = `u-chagee-${Date.now()}`;
+    const thinkingId = `q-chagee-thinking-${Date.now()}`;
+    const cardId = `q-chagee-supplier-${Date.now()}`;
+
+    setChageeSupplierConfirmed((prev) => ({ ...prev, [cardId]: false }));
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: userMsgId,
+        role: 'user',
+        text: opts.userText,
+        attachmentName: fileName,
+      },
+      { id: thinkingId, role: 'quinn', text: '', msgType: 'cmd-thinking' },
+    ]);
+
+    const summaryText =
+      `Got it — three things to do here: add **${CHAGEE_TEA_SWAP.supplier.name}** as a supplier, ` +
+      `bring in their **${CHAGEE_TEA_SWAP.product.name}**, then swap it into ` +
+      `**${CHAGEE_TEA_SWAP.recipe.name}** across your franchises. ` +
+      `I've parsed **${fileName}** — here's the supplier and product first. ` +
+      `Confirm and I'll line up the recipe change.`;
+    const summaryId = `q-chagee-summary-${Date.now()}`;
+    window.setTimeout(() => {
+      setMessages((prev) => {
+        const without = prev.filter((m) => m.id !== thinkingId);
+        return [
+          ...without,
+          { id: summaryId, role: 'quinn', text: summaryText, streaming: true },
+        ];
+      });
+      const streamMs = summaryText.length * 18;
+      window.setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          { id: cardId, role: 'quinn', text: '', msgType: 'chagee-tea-supplier' },
+        ]);
+      }, streamMs + 400);
+    }, 5000);
+  }
+
+  /** Step 1 confirmed — mark the supplier card done, then push the
+   *  recipe-update card after a thinking beat. Mock only: nothing is
+   *  written to the suppliers/products stores. */
+  function confirmChageeSupplier(cardId: string) {
+    if (chageeSupplierConfirmed[cardId]) return;
+    setChageeSupplierConfirmed((prev) => ({ ...prev, [cardId]: true }));
+
+    const thinkingId = `q-chagee-thinking2-${Date.now()}`;
+    const recipeCardId = `q-chagee-recipe-${Date.now()}`;
+    setChageeRecipeConfirmed((prev) => ({ ...prev, [recipeCardId]: false }));
+    setChageeFranchises((prev) => ({ ...prev, [recipeCardId]: new Set(CHAGEE_TEA_SWAP.franchises) }));
+
+    setMessages((prev) => [
+      ...prev,
+      { id: thinkingId, role: 'quinn', text: '', msgType: 'cmd-thinking' },
+    ]);
+
+    const bridgeText =
+      `**${CHAGEE_TEA_SWAP.supplier.shortCode}** and their whole tea leaves are in. ` +
+      `Now the recipe — **${CHAGEE_TEA_SWAP.recipe.name}** uses the old leaves at every franchise. ` +
+      `Here's the swap; all ${CHAGEE_TEA_SWAP.franchises.length} franchises are selected, ` +
+      `untick any that should stay on the old supplier.`;
+    const bridgeId = `q-chagee-bridge-${Date.now()}`;
+    window.setTimeout(() => {
+      setMessages((prev) => {
+        const without = prev.filter((m) => m.id !== thinkingId);
+        return [
+          ...without,
+          { id: bridgeId, role: 'quinn', text: bridgeText, streaming: true },
+        ];
+      });
+      const streamMs = bridgeText.length * 18;
+      window.setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          { id: recipeCardId, role: 'quinn', text: '', msgType: 'chagee-tea-recipe' },
+        ]);
+      }, streamMs + 400);
+    }, 2200);
+  }
+
+  /** Step 2 confirmed — wrap up with a success message and a history
+   *  entry. */
+  function confirmChageeRecipe(cardId: string) {
+    if (chageeRecipeConfirmed[cardId]) return;
+    setChageeRecipeConfirmed((prev) => ({ ...prev, [cardId]: true }));
+
+    const count = (chageeFranchises[cardId] ?? new Set(CHAGEE_TEA_SWAP.franchises)).size;
+    const doneText =
+      `**Done!** ${CHAGEE_TEA_SWAP.recipe.name} now uses ` +
+      `**${CHAGEE_TEA_SWAP.product.name}** from ${CHAGEE_TEA_SWAP.supplier.shortCode} ` +
+      `across **${count} franchise${count === 1 ? '' : 's'}**. ` +
+      `Cost per serve drops ${CHAGEE_TEA_SWAP.recipe.oldCost} → ${CHAGEE_TEA_SWAP.recipe.newCost}, ` +
+      `and ordering switches to ${CHAGEE_TEA_SWAP.supplier.shortCode} from the next cycle ` +
+      `(cut-off ${CHAGEE_TEA_SWAP.supplier.cutOff}, ${CHAGEE_TEA_SWAP.supplier.leadTime} lead).`;
+    logHistoryEntry({
+      kind: 'chat',
+      title: `Updated ${CHAGEE_TEA_SWAP.recipe.name} across ${count} franchises`,
+      subtitle: `New supplier · ${CHAGEE_TEA_SWAP.supplier.shortCode}`,
+    });
+    setMessages((prev) => [
+      ...prev,
+      { id: `q-chagee-done-${Date.now()}`, role: 'quinn', text: doneText, streaming: true },
+    ]);
+  }
+
+  /** Stock-take review demo — "update my stock takes… review all the
+   *  products that aren't in a stock area". Detects stock-take /
+   *  stock-area / storage-area phrasing and runs the scripted
+   *  two-step flow. Checked BEFORE parseCommand so the word "stock"
+   *  doesn't get hijacked by the stock-count command. */
+  function detectStockTakeReview(text: string): boolean {
+    const lower = text.toLowerCase().trim();
+    if (!lower) return false;
+    const stockTake = /\bstock\s*-?\s*takes?\b/.test(lower);
+    const area = /\b(?:stock|storage)\s+areas?\b/.test(lower);
+    const review = /\b(?:review|update|check|tidy|sort)\b/.test(lower);
+    if (area) return true;
+    return stockTake && review;
+  }
+
+  /** Kick the stock-take flow: user echo, a thinking hold, Quinn's
+   *  review summary, then the step-1 card (products missing a
+   *  storage area). Step 2 is pushed by `confirmStockReview` once
+   *  the selection is confirmed. */
+  function startStockTakeReview(opts: { userText: string }) {
+    setChatMinimized(false);
+    setChatStarted(true);
+    setAttachedFileName(null);
+
+    const userMsgId = `u-stock-${Date.now()}`;
+    const thinkingId = `q-stock-thinking-${Date.now()}`;
+    const cardId = `q-stock-review-${Date.now()}`;
+
+    setStockReviewConfirmed((prev) => ({ ...prev, [cardId]: false }));
+    setStockReviewSelected((prev) => ({
+      ...prev,
+      [cardId]: new Set(STOCK_TAKE_REVIEW.products.map((p) => p.id)),
+    }));
+
+    setMessages((prev) => [
+      ...prev,
+      { id: userMsgId, role: 'user', text: opts.userText },
+      { id: thinkingId, role: 'quinn', text: '', msgType: 'cmd-thinking' },
+    ]);
+
+    const summaryText =
+      `I've been through your product catalogue — ` +
+      `**${STOCK_TAKE_REVIEW.products.length} products** aren't assigned to a storage area, ` +
+      `so they're never counted on a stock take. Mostly recent additions. ` +
+      `Here's the list — untick anything you don't want counted, ` +
+      `then confirm and I'll ask where they live.`;
+    const summaryId = `q-stock-summary-${Date.now()}`;
+    window.setTimeout(() => {
+      setMessages((prev) => {
+        const without = prev.filter((m) => m.id !== thinkingId);
+        return [
+          ...without,
+          { id: summaryId, role: 'quinn', text: summaryText, streaming: true },
+        ];
+      });
+      const streamMs = summaryText.length * 18;
+      window.setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          { id: cardId, role: 'quinn', text: '', msgType: 'stock-review' },
+        ]);
+      }, streamMs + 400);
+    }, 5000);
+  }
+
+  /** Step 1 confirmed — carry the selection through to the
+   *  site-selection card after a thinking beat. Mock only: nothing is
+   *  written to the product or stock-take stores. */
+  function confirmStockReview(cardId: string) {
+    if (stockReviewConfirmed[cardId]) return;
+    const sel = stockReviewSelected[cardId] ?? new Set(STOCK_TAKE_REVIEW.products.map((p) => p.id));
+    if (sel.size === 0) return;
+    setStockReviewConfirmed((prev) => ({ ...prev, [cardId]: true }));
+
+    const picked = STOCK_TAKE_REVIEW.products.filter((p) => sel.has(p.id));
+    const thinkingId = `q-stock-thinking2-${Date.now()}`;
+    const sitesCardId = `q-stock-sites-${Date.now()}`;
+    setStockSitesConfirmed((prev) => ({ ...prev, [sitesCardId]: false }));
+    setStockSitesSelected((prev) => ({ ...prev, [sitesCardId]: new Set(ALL_SUPPLIER_SITES) }));
+    setStockSitesProducts((prev) => ({ ...prev, [sitesCardId]: picked.map((p) => p.id) }));
+
+    setMessages((prev) => [
+      ...prev,
+      { id: thinkingId, role: 'quinn', text: '', msgType: 'cmd-thinking' },
+    ]);
+
+    const bridgeText =
+      `**${picked.length} product${picked.length === 1 ? '' : 's'}** to add. ` +
+      `Which sites does this apply to? All of them are selected — ` +
+      `untick any that shouldn't change, and I'll sort storage areas next ` +
+      `(they can differ site to site).`;
+    const bridgeId = `q-stock-bridge-${Date.now()}`;
+    window.setTimeout(() => {
+      setMessages((prev) => {
+        const without = prev.filter((m) => m.id !== thinkingId);
+        return [
+          ...without,
+          { id: bridgeId, role: 'quinn', text: bridgeText, streaming: true },
+        ];
+      });
+      const streamMs = bridgeText.length * 18;
+      window.setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          { id: sitesCardId, role: 'quinn', text: '', msgType: 'stock-sites' },
+        ]);
+      }, streamMs + 400);
+    }, 2200);
+  }
+
+  /** Step 2 confirmed — carry the products + chosen sites through to
+   *  the storage-area card after a thinking beat. */
+  function confirmStockSites(cardId: string) {
+    if (stockSitesConfirmed[cardId]) return;
+    const sites = [...(stockSitesSelected[cardId] ?? new Set(ALL_SUPPLIER_SITES))];
+    if (sites.length === 0) return;
+    setStockSitesConfirmed((prev) => ({ ...prev, [cardId]: true }));
+
+    const productIds = stockSitesProducts[cardId] ?? [];
+    const picked = STOCK_TAKE_REVIEW.products.filter((p) => productIds.includes(p.id));
+    const thinkingId = `q-stock-thinking3-${Date.now()}`;
+    const areaCardId = `q-stock-area-${Date.now()}`;
+    setStockAreaConfirmed((prev) => ({ ...prev, [areaCardId]: false }));
+    // Pre-seed every product with Quinn's suggested area — the card
+    // renders these as already-selected pills the operator can change.
+    setStockAreaChoice((prev) => ({
+      ...prev,
+      [areaCardId]: Object.fromEntries(picked.map((p) => [p.id, p.suggestedArea])),
+    }));
+    setStockAreaProducts((prev) => ({ ...prev, [areaCardId]: productIds }));
+    setStockAreaSites((prev) => ({ ...prev, [areaCardId]: sites }));
+
+    setMessages((prev) => [
+      ...prev,
+      { id: thinkingId, role: 'quinn', text: '', msgType: 'cmd-thinking' },
+    ]);
+
+    const allSites = sites.length === ALL_SUPPLIER_SITES.length;
+    const bridgeText =
+      `${allSites ? 'All' : ''} **${sites.length} site${sites.length === 1 ? '' : 's'}** it is. ` +
+      `Last thing — where does each product live? I've suggested a storage ` +
+      `area for each based on the product type; change any that are wrong, ` +
+      `then confirm and they'll join those count sheets at every selected site.`;
+    const bridgeId = `q-stock-bridge2-${Date.now()}`;
+    window.setTimeout(() => {
+      setMessages((prev) => {
+        const without = prev.filter((m) => m.id !== thinkingId);
+        return [
+          ...without,
+          { id: bridgeId, role: 'quinn', text: bridgeText, streaming: true },
+        ];
+      });
+      const streamMs = bridgeText.length * 18;
+      window.setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          { id: areaCardId, role: 'quinn', text: '', msgType: 'storage-area' },
+        ]);
+      }, streamMs + 400);
+    }, 2200);
+  }
+
+  /** Step 3 confirmed — wrap up with a success message and a history
+   *  entry. */
+  function confirmStorageArea(cardId: string) {
+    if (stockAreaConfirmed[cardId]) return;
+    const choices = stockAreaChoice[cardId] ?? {};
+    const productIds = stockAreaProducts[cardId] ?? [];
+    if (!productIds.every((id) => !!choices[id])) return;
+    setStockAreaConfirmed((prev) => ({ ...prev, [cardId]: true }));
+
+    // Group the assignments by area for the receipt: "4 to Dry
+    // Store, 2 to Walk-in Fridge, 2 to Packaging Store".
+    const byArea = new Map<string, number>();
+    for (const id of productIds) {
+      byArea.set(choices[id], (byArea.get(choices[id]) ?? 0) + 1);
+    }
+    const breakdown = STOCK_TAKE_REVIEW.areas
+      .filter((a) => byArea.has(a.id))
+      .map((a) => `**${byArea.get(a.id)} to ${a.name}**`)
+      .join(', ');
+
+    const count = productIds.length;
+    const siteCount = (stockAreaSites[cardId] ?? []).length;
+    const allSites = siteCount === ALL_SUPPLIER_SITES.length;
+    const siteBlurb = allSites
+      ? `across **all ${siteCount} sites**`
+      : `across **${siteCount} site${siteCount === 1 ? '' : 's'}**`;
+    const doneText =
+      `**Done!** ${count} product${count === 1 ? '' : 's'} added to your ` +
+      `storage areas ${siteBlurb} — ${breakdown}. They'll appear on those ` +
+      `count sheets from your next stock take, and I've flagged them for ` +
+      `an opening count so variances track properly from day one.`;
+    logHistoryEntry({
+      kind: 'chat',
+      title: `Added ${count} products to ${byArea.size} storage area${byArea.size === 1 ? '' : 's'} at ${siteCount} site${siteCount === 1 ? '' : 's'}`,
+      subtitle: 'Stock take · storage areas',
+    });
+    setMessages((prev) => [
+      ...prev,
+      { id: `q-stock-done-${Date.now()}`, role: 'quinn', text: doneText, streaming: true },
+    ]);
   }
 
   /** Did the user just ask to onboard a new supplier (with their
@@ -6543,6 +7585,34 @@ export default function Feed({
     setChatMinimized(false);
     setInput('');
 
+    // Recipe-name answer — the "Update recipe" suggestion asks "what kind
+    // of recipe?" first (startRecipeAsk), then routes the operator's reply
+    // into the recipe builder seeded with whatever they named. `append`
+    // keeps the question + answer in the transcript.
+    //
+    // Escape hatch: if the "reply" is actually a fully-formed command
+    // ("update Agility lead time to 3 days and MOV to £350"), the
+    // operator has moved on — route it like any other message instead
+    // of force-feeding it to the recipe builder as a recipe name.
+    if (awaitingRecipeName) {
+      setAwaitingRecipeName(false);
+      if (explicitChart === undefined && !tableOpts && detectChageeTeaSwap(text)) {
+        startChageeTeaSwap({ fileName: attachedFileName, userText: text });
+        return;
+      }
+      if (explicitChart === undefined && !tableOpts && detectStockTakeReview(text)) {
+        startStockTakeReview({ userText: text });
+        return;
+      }
+      const escaped = explicitChart === undefined && !tableOpts ? parseCommand(text) : null;
+      if (escaped && escaped.confidence >= 0.8) {
+        commandRunner.runCommand(escaped, { userText: text });
+        return;
+      }
+      startRecipeFlow(text, { userEcho: text, append: true });
+      return;
+    }
+
     // "Note:" capture — a note the operator jots from the composer's
     // "Note for Edify" quick action. Logs straight to the notebook
     // (/notebook) and gets a short Edify confirmation, skipping the
@@ -6581,6 +7651,29 @@ export default function Feed({
     // sheet importer so an attached bean sheet lands here. Mocks the
     // sheet filename when the operator described it in words but didn't
     // actually paperclip anything.
+    // Chagee tea-leaf demo — the "new supplier + product + recipe
+    // swap across franchises" scenario. Checked before every other
+    // importer because its phrasing ("add the new supplier and the
+    // product then update the recipe") would otherwise trip the
+    // generic supplier/product detectors.
+    if (explicitChart === undefined && !tableOpts) {
+      if (detectChageeTeaSwap(text)) {
+        startChageeTeaSwap({ fileName: attachedFileName, userText: text });
+        return;
+      }
+    }
+
+    // Stock-take review demo — "update my stock takes, review the
+    // products that aren't in a stock area". Checked before
+    // parseCommand because "stock" phrasing would otherwise trip the
+    // generic stock-count command.
+    if (explicitChart === undefined && !tableOpts) {
+      if (detectStockTakeReview(text)) {
+        startStockTakeReview({ userText: text });
+        return;
+      }
+    }
+
     if (explicitChart === undefined && !tableOpts) {
       if (detectProductSwapAcrossRecipes(text)) {
         const fileName = attachedFileName ?? 'riverbank-roasters-beans.pdf';
@@ -6850,6 +7943,89 @@ export default function Feed({
   function renderWorkspaceCard(m: ChatMsg): ReactNode {
     return (
       <>
+        {m.msgType === 'chagee-tea-supplier' && (
+          <ChageeTeaSupplierCard
+            confirmed={!!chageeSupplierConfirmed[m.id]}
+            onConfirm={() => confirmChageeSupplier(m.id)}
+          />
+        )}
+        {m.msgType === 'chagee-tea-recipe' && (
+          <ChageeTeaRecipeCard
+            franchises={chageeFranchises[m.id] ?? new Set(CHAGEE_TEA_SWAP.franchises)}
+            confirmed={!!chageeRecipeConfirmed[m.id]}
+            onToggleFranchise={(site) => {
+              setChageeFranchises((prev) => {
+                const cur = new Set(prev[m.id] ?? new Set(CHAGEE_TEA_SWAP.franchises));
+                if (cur.has(site)) cur.delete(site);
+                else cur.add(site);
+                return { ...prev, [m.id]: cur };
+              });
+            }}
+            onToggleAll={(allOn) => {
+              setChageeFranchises((prev) => ({
+                ...prev,
+                [m.id]: allOn ? new Set(CHAGEE_TEA_SWAP.franchises) : new Set<string>(),
+              }));
+            }}
+            onConfirm={() => confirmChageeRecipe(m.id)}
+          />
+        )}
+        {m.msgType === 'stock-review' && (
+          <StockReviewCard
+            selected={stockReviewSelected[m.id] ?? new Set(STOCK_TAKE_REVIEW.products.map((p) => p.id))}
+            confirmed={!!stockReviewConfirmed[m.id]}
+            onToggle={(id) => {
+              setStockReviewSelected((prev) => {
+                const cur = new Set(prev[m.id] ?? new Set(STOCK_TAKE_REVIEW.products.map((p) => p.id)));
+                if (cur.has(id)) cur.delete(id);
+                else cur.add(id);
+                return { ...prev, [m.id]: cur };
+              });
+            }}
+            onToggleAll={(allOn) => {
+              setStockReviewSelected((prev) => ({
+                ...prev,
+                [m.id]: allOn ? new Set(STOCK_TAKE_REVIEW.products.map((p) => p.id)) : new Set<string>(),
+              }));
+            }}
+            onConfirm={() => confirmStockReview(m.id)}
+          />
+        )}
+        {m.msgType === 'stock-sites' && (
+          <StockSitesCard
+            sites={stockSitesSelected[m.id] ?? new Set(ALL_SUPPLIER_SITES)}
+            confirmed={!!stockSitesConfirmed[m.id]}
+            onToggleSite={(site) => {
+              setStockSitesSelected((prev) => {
+                const cur = new Set(prev[m.id] ?? new Set(ALL_SUPPLIER_SITES));
+                if (cur.has(site)) cur.delete(site);
+                else cur.add(site);
+                return { ...prev, [m.id]: cur };
+              });
+            }}
+            onToggleAll={(allOn) => {
+              setStockSitesSelected((prev) => ({
+                ...prev,
+                [m.id]: allOn ? new Set(ALL_SUPPLIER_SITES) : new Set<string>(),
+              }));
+            }}
+            onConfirm={() => confirmStockSites(m.id)}
+          />
+        )}
+        {m.msgType === 'storage-area' && (
+          <StorageAreaCard
+            productIds={stockAreaProducts[m.id] ?? []}
+            choices={stockAreaChoice[m.id] ?? {}}
+            confirmed={!!stockAreaConfirmed[m.id]}
+            onPickArea={(productId, areaId) => {
+              setStockAreaChoice((prev) => ({
+                ...prev,
+                [m.id]: { ...(prev[m.id] ?? {}), [productId]: areaId },
+              }));
+            }}
+            onConfirm={() => confirmStorageArea(m.id)}
+          />
+        )}
         {m.msgType === 'new-supplier-import' && (() => {
                           let parsed: { data: ExtractedSupplierSheet } | null = null;
                           try {
@@ -7136,6 +8312,7 @@ export default function Feed({
                         )}
                         {m.msgType === 'prod-prep' && productionFlow === 2 && (
                           <PillPicker
+                            title="Prep time"
                             options={PREP_TIME_OPTIONS}
                             selected={prodSettings.prepTime}
                             onSelect={(v) => setProdSettings(s => ({ ...s, prepTime: v }))}
@@ -7144,6 +8321,7 @@ export default function Feed({
                         )}
                         {m.msgType === 'prod-shelf' && productionFlow === 4 && (
                           <PillPicker
+                            title="Shelf life"
                             options={SHELF_LIFE_OPTIONS}
                             selected={prodSettings.shelfLife}
                             onSelect={(v) => setProdSettings(s => ({ ...s, shelfLife: v }))}
@@ -7861,6 +9039,8 @@ export default function Feed({
                           onClick={() => {
                             if (chip.action === 'recipe') {
                               startRecipeFlow(chip.text);
+                            } else if (chip.action === 'recipe-ask') {
+                              startRecipeAsk(chip.text);
                             } else if (chip.action === 'integrity') {
                               startIntegrityCheck();
                             } else if (chip.commandId) {
@@ -8020,8 +9200,8 @@ export default function Feed({
                               alignItems: 'center',
                               gap: '6px',
                               marginTop: '10px',
-                              padding: '7px 14px',
-                              borderRadius: '100px',
+                              padding: '8px 14px',
+                              borderRadius: '10px',
                               border: 'none',
                               background: 'var(--color-accent-active)',
                               color: '#fff',
@@ -8029,7 +9209,6 @@ export default function Feed({
                               fontWeight: 600,
                               fontFamily: 'var(--font-primary)',
                               cursor: 'pointer',
-                              boxShadow: '0 2px 8px rgba(34,68,68,0.22)',
                             }}
                           >
                             <LayoutDashboard size={13} strokeWidth={2} />
@@ -8050,10 +9229,10 @@ export default function Feed({
                     )}
                     {recipeFlow === 18 && (
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', maxWidth: '88%' }}>
-                        <button type="button" onClick={skipProductionOffer} style={{ padding: '8px 18px', borderRadius: '100px', border: '1.5px solid var(--color-border)', background: '#fff', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
+                        <button type="button" onClick={skipProductionOffer} style={{ padding: '8px 14px', borderRadius: '10px', border: '1px solid var(--color-border)', background: '#fff', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-text-primary)', cursor: 'pointer' }}>
                           Not now
                         </button>
-                        <button type="button" onClick={startProductionFlow} style={{ padding: '8px 18px', borderRadius: '100px', border: 'none', background: 'var(--color-accent-active)', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer', boxShadow: '0 2px 8px rgba(34,68,68,0.25)' }}>
+                        <button type="button" onClick={startProductionFlow} style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: 'var(--color-accent-active)', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer' }}>
                           Yes, set it up
                         </button>
                       </div>
@@ -8117,9 +9296,8 @@ export default function Feed({
                 maxWidth: '780px',
                 minHeight: 0,
                 borderLeft: '1px solid var(--color-border-subtle)',
-                // Soft warm neutral — NOT --color-bg-nav, which is the
-                // dark navy sidebar colour in this theme.
-                background: '#F7F6F3',
+                // Warm cream — the workspace canvas behind every card.
+                background: '#F9F4F0',
                 display: 'flex',
                 flexDirection: 'column',
               }}>
