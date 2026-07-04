@@ -511,12 +511,15 @@ function EmptyState() {
 
 function useSubscribedTasks(): Task[] {
   const [, setTick] = useState(0);
+  // Server-rendered HTML is always the empty state (no localStorage),
+  // so the FIRST client render must match it or React throws a
+  // hydration mismatch. We stay empty until the mount effect flips
+  // `hydrated`, then read the real store.
+  const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
     const unsub = subscribeTasks(() => setTick((n) => n + 1));
-    // Re-render once on mount so SSR-hydrated empty state catches up
-    // with localStorage after rehydration in the store.
-    setTick((n) => n + 1);
+    setHydrated(true);
     return unsub;
   }, []);
-  return getTasks();
+  return hydrated ? getTasks() : [];
 }

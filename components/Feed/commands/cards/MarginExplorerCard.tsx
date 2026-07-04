@@ -116,6 +116,7 @@ export default function MarginExplorerCard({
         borderRadius: '10px',
         border: '1px solid var(--color-border-subtle)',
         overflow: 'hidden',
+        background: '#fff',
         fontFamily: 'var(--font-primary)',
       }}
     >
@@ -512,8 +513,8 @@ export default function MarginExplorerCard({
             onClick={onConfirm}
             style={{
               alignSelf: 'flex-end',
-              padding: '8px 18px',
-              borderRadius: '100px',
+              padding: '8px 14px',
+              borderRadius: '10px',
               border: 'none',
               background: 'var(--color-accent-active)',
               color: '#fff',
@@ -521,7 +522,6 @@ export default function MarginExplorerCard({
               fontWeight: 600,
               fontFamily: 'var(--font-primary)',
               cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(34,68,68,0.25)',
             }}
           >
             Lock in £{srpExAtTarget.toFixed(2)}

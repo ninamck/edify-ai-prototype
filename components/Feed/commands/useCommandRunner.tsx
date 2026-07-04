@@ -352,8 +352,12 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       commandId: string;
       cardMsgType: string;
       cardArgs: Record<string, unknown>;
+      /** Override the thinking-dots duration (default ~900ms). Longer
+       *  pauses sell "the AI is actually working" on flows that parse
+       *  a whole sentence into a prefilled card. */
+      thinkingMs?: number;
     }) => {
-      const THINKING_MS = 900;
+      const THINKING_MS = opts.thinkingMs ?? 900;
       const POST_STREAM_MS = 350;
       const PER_CHAR_MS = 18;
       const STREAM_MIN_MS = 700;
@@ -597,10 +601,49 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         return;
       }
 
+      // Supplier updates parsed straight from a sentence get the full
+      // staged reveal: a long thinking pause (the "AI is reading your
+      // message" beat), a streamed confirmation line, then the card —
+      // which animates its own fields filling in (see
+      // SupplierFieldCard's intro animation).
+      if (intent.commandId === 'supplier') {
+        const supplierName = intent.args.supplierName as string | undefined;
+        const fields = intent.args.fields as { field: SupplierField; value?: string }[] | undefined;
+        const withValues = (fields ?? []).filter((f) => f.value);
+        if (supplierName && withValues.length > 0) {
+          const label: Record<SupplierField, string> = {
+            cutOffTime: 'order cut-off',
+            leadTimeDays: 'lead time',
+            minimumOrderValue: 'minimum order',
+            deliveryDays: 'delivery days',
+            email: 'email',
+            phone: 'phone',
+          };
+          const display = (f: { field: SupplierField; value?: string }): string => {
+            if (f.field === 'leadTimeDays') return `${f.value} day${f.value === '1' ? '' : 's'}`;
+            if (f.field === 'minimumOrderValue') return `£${f.value}`;
+            if (f.field === 'deliveryDays') return (f.value ?? '').split(',').join(', ');
+            return f.value ?? '';
+          };
+          const parts = withValues.map((f) => `${label[f.field]} → ${display(f)}`);
+          const listed = parts.length > 1
+            ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+            : parts[0];
+          pushResponseFlow({
+            text: `I've filled in ${listed} for **${supplierName}** — check it over and hit ${withValues.length > 1 ? 'Save changes' : 'Save change'} when you're happy.`,
+            commandId: cmd.id,
+            cardMsgType: cmd.cardMsgType,
+            cardArgs: intent.args,
+            thinkingMs: 7500,
+          });
+          return;
+        }
+      }
+
       pushCard(cmd.id, cmd.cardMsgType, intent.args);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pushAmbiguity, pushCard, pushQuinn, pushUserEcho, setChatMinimized, setChatStarted],
+    [pushAmbiguity, pushCard, pushQuinn, pushResponseFlow, pushUserEcho, setChatMinimized, setChatStarted],
   );
 
   // ── Recipe-edit wizard ───────────────────────────────────────────
@@ -1499,16 +1542,21 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       final: {
         supplierId: string;
         supplierName: string;
-        field: SupplierField;
-        valueRaw: string;
-        valueNormalised: string | number | DayOfWeek[];
-        previousValue: string | number | DayOfWeek[] | undefined;
+        changes: {
+          field: SupplierField;
+          valueRaw: string;
+          valueNormalised: string | number | DayOfWeek[];
+          previousValue: string | number | DayOfWeek[] | undefined;
+        }[];
       },
     ) => {
       const supplier = findSupplier(final.supplierId);
-      if (!supplier) return;
+      if (!supplier || final.changes.length === 0) return;
       const before = supplier;
-      const next: Supplier = { ...supplier, [final.field]: final.valueNormalised } as Supplier;
+      let next: Supplier = { ...supplier };
+      for (const c of final.changes) {
+        next = { ...next, [c.field]: c.valueNormalised } as Supplier;
+      }
       upsertSupplier(next);
 
       const labels: Record<SupplierField, string> = {
@@ -1520,20 +1568,24 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         phone: 'Phone',
       };
 
-      let display: string;
-      if (final.field === 'deliveryDays' && Array.isArray(final.valueNormalised)) {
-        display = (final.valueNormalised as DayOfWeek[]).join(', ');
-      } else if (final.field === 'leadTimeDays') {
-        const n = Number(final.valueNormalised);
-        display = `${n} day${n === 1 ? '' : 's'}`;
-      } else if (final.field === 'minimumOrderValue') {
-        display = `£${final.valueNormalised}`;
-      } else {
-        display = String(final.valueNormalised);
-      }
+      const displayOf = (c: (typeof final.changes)[number]): string => {
+        if (c.field === 'deliveryDays' && Array.isArray(c.valueNormalised)) {
+          return (c.valueNormalised as DayOfWeek[]).join(', ');
+        }
+        if (c.field === 'leadTimeDays') {
+          const n = Number(c.valueNormalised);
+          return `${n} day${n === 1 ? '' : 's'}`;
+        }
+        if (c.field === 'minimumOrderValue') return `£${c.valueNormalised}`;
+        return String(c.valueNormalised);
+      };
+
+      const headline = final.changes
+        .map((c) => `${labels[c.field]} · ${displayOf(c)}`)
+        .join('  ·  ');
 
       const receipt: CommandReceipt = {
-        headline: `${labels[final.field]} · ${display}`,
+        headline,
         detail: `Saved on ${final.supplierName}`,
         href: `/suppliers/${final.supplierId}`,
         hrefLabel: 'Open supplier',
@@ -1546,7 +1598,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         changes: diffSupplier({ final }),
         commandIntent: {
           commandId: 'supplier',
-          cardMsgType: 'cmd-supplier-field',
+          cardMsgType: 'cmd-supplier-card',
           args: { ...final },
         },
       });
@@ -2251,13 +2303,25 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       return null;
     }
     if (commandId === 'supplier') {
-      const prev = args.previousValue;
-      if (prev === undefined || prev === null) return null;
+      const changes = args.changes as
+        | {
+            field: SupplierField;
+            valueRaw: string;
+            valueNormalised: string | number | DayOfWeek[];
+            previousValue: string | number | DayOfWeek[] | undefined;
+          }[]
+        | undefined;
+      if (!changes?.length) return null;
+      // Only invertible when every edited field had a prior value.
+      if (changes.some((c) => c.previousValue === undefined || c.previousValue === null)) return null;
       return {
         ...args,
-        valueNormalised: prev,
-        valueRaw: String(prev),
-        previousValue: args.valueNormalised,
+        changes: changes.map((c) => ({
+          ...c,
+          valueNormalised: c.previousValue!,
+          valueRaw: Array.isArray(c.previousValue) ? c.previousValue.join(', ') : String(c.previousValue),
+          previousValue: c.valueNormalised,
+        })),
       };
     }
     if (commandId === 'recipe-edit') {

@@ -29,24 +29,24 @@ export function diffSupplier(args: {
   final: {
     supplierId: string;
     supplierName: string;
-    field: SupplierField;
-    valueRaw: string;
-    valueNormalised: string | number | DayOfWeek[];
-    previousValue: string | number | DayOfWeek[] | undefined;
+    changes: {
+      field: SupplierField;
+      valueRaw: string;
+      valueNormalised: string | number | DayOfWeek[];
+      previousValue: string | number | DayOfWeek[] | undefined;
+    }[];
   };
 }): ChangeRecord[] {
   const { final } = args;
-  return [
-    {
-      entityType: 'supplier',
-      entityId: final.supplierId,
-      entityLabel: final.supplierName,
-      fieldPath: final.field,
-      fieldLabel: FIELD_LABELS[final.field],
-      before: final.previousValue ?? null,
-      after: final.valueNormalised,
-      unit: FIELD_UNITS[final.field],
-      valueKind: FIELD_KIND[final.field],
-    },
-  ];
+  return final.changes.map((c) => ({
+    entityType: 'supplier',
+    entityId: final.supplierId,
+    entityLabel: final.supplierName,
+    fieldPath: c.field,
+    fieldLabel: FIELD_LABELS[c.field],
+    before: c.previousValue ?? null,
+    after: c.valueNormalised,
+    unit: FIELD_UNITS[c.field],
+    valueKind: FIELD_KIND[c.field],
+  }));
 }
