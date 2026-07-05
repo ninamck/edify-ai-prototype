@@ -8,13 +8,8 @@ import {
   useSuppliers, useProducts, useMasterProducts,
   upsertMasterProduct, genId,
 } from '@/components/Suppliers/store';
-import {
-  TOP_NAV_BAR_PADDING,
-  TOP_NAV_PILL_ACTIVE,
-  TOP_NAV_PILL_BASE,
-  TOP_NAV_PILL_GAP,
-  TOP_NAV_PILL_IDLE_TRANSPARENT,
-} from '@/components/Production/topNavStyles';
+import AreaTopBar from '@/components/TopBar/AreaTopBar';
+import DemoControls from '@/components/DemoControls/DemoControls';
 import SuppliersTable from '@/components/Suppliers/SuppliersTable';
 import MasterProductsTable from '@/components/Suppliers/MasterProductsTable';
 import BulkActionBar from '@/components/Suppliers/BulkActionBar';
@@ -121,77 +116,49 @@ export default function SuppliersPage() {
 
   return (
     <div style={{ fontFamily: 'var(--font-primary)' }}>
-      {/* Sticky sub-tabs — Suppliers / Master products. Lives at the top
-          of the page (not inside the centered content container) so it
-          reads as a sub-nav directly under the layout header, matching
-          the Manage menu and Production tab strips 1:1. Tab state stays
-          local to this page because it drives the table below.
+      {/* Single top bar — site switcher · "Suppliers & Products" title ·
+          Suppliers / Master products tabs, with Ask Edify + demo
+          controls pinned right. Tab state stays local to this page
+          because it drives the table below, so the page renders the
+          bar rather than the layout (same split as Stock and COGS).
 
-          The right-aligned "Ask Quinn" pill replaces the old SuppliersHero
-          card — it's the single, persistent entry point into the agent
+          The "Ask Edify" pill replaces the old SuppliersHero card —
+          it's the single, persistent entry point into the agent
           sidebar. The starter prompts (suggestions) now live inside
           QuinnSheet itself so the page chrome stays quiet. */}
-      <nav
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 150,
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          gap: TOP_NAV_PILL_GAP,
-          padding: TOP_NAV_BAR_PADDING,
-          borderBottom: '1px solid var(--color-border-subtle)',
-          background: '#ffffff',
-          overflowX: 'auto',
+      <AreaTopBar
+        title="Suppliers & Products"
+        siteName="Fitzroy Espresso"
+        ariaLabel="Suppliers sections"
+        stateTabs={{
+          items: [
+            { id: 'suppliers', label: 'Suppliers' },
+            { id: 'masters', label: 'Master products' },
+          ],
+          value: tab,
+          onChange: id => { setTab(id as Tab); clearSelection(); },
         }}
-      >
-        <TabButton label="Suppliers" active={tab === 'suppliers'} onClick={() => { setTab('suppliers'); clearSelection(); }} />
-        <TabButton label="Master products" active={tab === 'masters'} onClick={() => { setTab('masters'); clearSelection(); }} />
-
-        <div style={{ flex: 1 }} />
-
-        <button
-          onClick={() => openQuinnGlobal()}
-          style={askQuinnButtonStyle}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-accent-active-hover, var(--color-accent-active))'; e.currentTarget.style.opacity = '0.92'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--color-accent-active)'; e.currentTarget.style.opacity = '1'; }}
-        >
-          <EdifyMark size={13} /> Ask Edify
-        </button>
-      </nav>
+        rightSlot={
+          <>
+            <button
+              onClick={() => openQuinnGlobal()}
+              style={askQuinnButtonStyle}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-accent-active-hover, var(--color-accent-active))'; e.currentTarget.style.opacity = '0.92'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--color-accent-active)'; e.currentTarget.style.opacity = '1'; }}
+            >
+              <EdifyMark size={13} /> Ask Edify
+            </button>
+            <DemoControls variant="inline" />
+          </>
+        }
+        backTo="/"
+      />
 
       <div style={{ padding: '24px clamp(20px, 3vw, 40px) 120px', maxWidth: 1180, margin: '0 auto' }}>
-        {/* Title row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text-primary)', margin: 0, flex: 1 }}>
-            {tab === 'suppliers' ? 'Suppliers' : 'Master products'}
-          </h1>
-          {tab === 'suppliers' ? (
-            <>
-              <button
-                onClick={() => router.push('/suppliers/import')}
-                style={ghostButtonStyle}
-              >
-                <Upload size={14} strokeWidth={2.2} /> Import CSV
-              </button>
-              <button
-                onClick={() => openQuinnGlobal('Add a new supplier')}
-                style={primaryButtonStyle}
-              >
-                <Plus size={14} strokeWidth={2.2} /> Add supplier
-              </button>
-            </>
-          ) : (
-            <button onClick={createMaster} style={primaryButtonStyle}>
-              <Plus size={14} strokeWidth={2.2} /> Create Master Product
-            </button>
-          )}
-        </div>
-
         <SharedLibraryBanner noun={tab === 'suppliers' ? 'suppliers' : 'products'} />
 
-        {/* Search */}
+        {/* Toolbar — search left, actions right. The tab labels in the
+            top bar carry the section name, so no in-page heading. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
@@ -214,6 +181,29 @@ export default function SuppliersPage() {
               }}
             />
           </div>
+
+          <div style={{ flex: 1 }} />
+
+          {tab === 'suppliers' ? (
+            <>
+              <button
+                onClick={() => router.push('/suppliers/import')}
+                style={ghostButtonStyle}
+              >
+                <Upload size={14} strokeWidth={2.2} /> Import CSV
+              </button>
+              <button
+                onClick={() => openQuinnGlobal('Add a new supplier')}
+                style={primaryButtonStyle}
+              >
+                <Plus size={14} strokeWidth={2.2} /> Add supplier
+              </button>
+            </>
+          ) : (
+            <button onClick={createMaster} style={primaryButtonStyle}>
+              <Plus size={14} strokeWidth={2.2} /> Create Master Product
+            </button>
+          )}
         </div>
 
         {/* Table */}
@@ -252,20 +242,6 @@ export default function SuppliersPage() {
         suggestions={suggestions}
       />
     </div>
-  );
-}
-
-function TabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        ...TOP_NAV_PILL_BASE,
-        ...(active ? TOP_NAV_PILL_ACTIVE : TOP_NAV_PILL_IDLE_TRANSPARENT),
-      }}
-    >
-      {label}
-    </button>
   );
 }
 

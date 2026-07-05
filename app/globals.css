@@ -41,11 +41,13 @@
   --color-success-light:   #DCFCE7;
   --color-success-border:  #BBF7D0;
 
-  /* SEMANTIC — WARNING */
-  --color-warning:         #8A5A12;
-  --color-warning-light:   #F7F2E8;
-  --color-warning-bg:      #FAF7EF;
-  --color-warning-border:  #D6C4A4;
+  /* SEMANTIC — WARNING — amber accents, never dark-yellow-brown.
+     Body text on warning surfaces should stay --color-text-primary;
+     this colour is for accents, borders, badges and bold flags. */
+  --color-warning:         #D97706;
+  --color-warning-light:   #FBF4E4;
+  --color-warning-bg:      #F9F4F0;
+  --color-warning-border:  rgba(217, 119, 6, 0.45);
 
   /* SEMANTIC — ERROR */
   --color-error:           #B91C1C;

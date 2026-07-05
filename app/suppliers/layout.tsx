@@ -1,16 +1,21 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import Sidebar from '@/components/Sidebar/Sidebar';
-import SiteSwitcher from '@/components/Sidebar/SiteSwitcher';
+import AreaTopBar from '@/components/TopBar/AreaTopBar';
 import DemoControls from '@/components/DemoControls/DemoControls';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { useRouter } from 'next/navigation';
 
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
 
 export default function SuppliersLayout({ children }: { children: React.ReactNode }) {
   const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
-  const router = useRouter();
+  // The index page renders its own AreaTopBar so the Suppliers /
+  // Master products tabs (page-local state) can live inside the bar.
+  // Sub-pages (supplier detail, import, master product) still get the
+  // plain bar from here.
+  const pathname = usePathname();
+  const isIndex = pathname === '/suppliers';
 
   return (
     <div
@@ -34,57 +39,14 @@ export default function SuppliersLayout({ children }: { children: React.ReactNod
           overflow: 'hidden',
         }}
       >
-        <header
-          style={{
-            flexShrink: 0,
-            zIndex: 200,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px',
-            minHeight: '52px',
-            padding: '10px 16px 10px 12px',
-            borderBottom: '1px solid var(--color-border-subtle)',
-            background: '#ffffff',
-          }}
-        >
-          <div style={{ minWidth: 0, maxWidth: '240px' }}>
-            <SiteSwitcher siteName="Fitzroy Espresso" compact={false} />
-          </div>
-
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span
-              style={{
-                fontSize: '13px',
-                fontWeight: 700,
-                color: 'var(--color-text-primary)',
-                letterSpacing: '0.01em',
-              }}
-            >
-              Manage Suppliers
-            </span>
-          </div>
-
-          <div style={{ minWidth: 0, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }}>
-            <DemoControls variant="inline" />
-            <button
-              onClick={() => router.push('/')}
-              style={{
-                padding: '7px 14px',
-                borderRadius: '8px',
-                background: '#fff',
-                border: '1px solid var(--color-border)',
-                fontSize: '12px',
-                fontWeight: 600,
-                fontFamily: 'var(--font-primary)',
-                color: 'var(--color-text-secondary)',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              ← Home
-            </button>
-          </div>
-        </header>
+        {!isIndex && (
+          <AreaTopBar
+            title="Suppliers & Products"
+            siteName="Fitzroy Espresso"
+            rightSlot={<DemoControls variant="inline" />}
+            backTo="/"
+          />
+        )}
 
         <div
           style={{

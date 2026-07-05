@@ -91,10 +91,7 @@ export default function PosConnectionPage() {
   return (
     <div style={{ padding: '24px 24px 120px', maxWidth: 1120, margin: '0 auto', fontFamily: 'var(--font-primary)' }}>
       <div style={{ marginBottom: 6 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
-          POS connection
-        </h1>
-        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: 0 }}>
           Which till is Edify reading from, when did it last sync, and what came across the wire. Item
           matching and the 30-day sales rollup both depend on a healthy connection here.
         </p>

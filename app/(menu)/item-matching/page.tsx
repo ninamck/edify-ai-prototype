@@ -226,16 +226,13 @@ export default function ItemMatchingPage() {
   }, [rows]);
 
   return (
-    <div style={{ padding: '24px 24px 120px', maxWidth: 1180, margin: '0 auto', fontFamily: 'var(--font-primary)' }}>
+    <div style={{ padding: '24px 24px 120px', maxWidth: 1120, margin: '0 auto', fontFamily: 'var(--font-primary)' }}>
       <div style={{
         marginBottom: 6,
         display: 'flex', alignItems: 'flex-start', gap: 16,
       }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
-            Item matching
-          </h1>
-          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: 0 }}>
             Every POS button needs to point at a recipe, product, or master product so sales can deplete stock and roll into the
             forecast. Unmatched buttons here fire blind. <strong style={{ color: 'var(--color-text-primary)' }}>Source:</strong> {FITZROY_POS_INTAKE.source} · last sync 2 min ago
           </p>

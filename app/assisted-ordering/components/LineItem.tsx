@@ -316,6 +316,11 @@ export default function LineItem({
               color: 'var(--color-text-secondary)',
               fontFamily: 'var(--font-primary)',
               whiteSpace: 'nowrap',
+              // Fixed column so the qty steppers align vertically across rows
+              width: '100px',
+              flexShrink: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
             }}
           >
             {product.unitName}

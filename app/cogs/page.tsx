@@ -2,13 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import {
-  TOP_NAV_BAR_PADDING,
-  TOP_NAV_PILL_ACTIVE,
-  TOP_NAV_PILL_BASE,
-  TOP_NAV_PILL_GAP,
-  TOP_NAV_PILL_IDLE_TRANSPARENT,
-} from '@/components/Production/topNavStyles';
+import AreaTopBar from '@/components/TopBar/AreaTopBar';
 import SingleSiteCogs from '@/components/Cogs/SingleSiteCogs';
 import CogsVarianceTable from '@/components/Cogs/CogsVarianceTable';
 import CogsQuinnPanel from '@/components/Cogs/CogsQuinnPanel';
@@ -54,7 +48,7 @@ function DateChip({ label, value }: { label: string; value: string }) {
 }
 
 export default function CogsPage() {
-  const [tab, setTab] = useState<Tab>('single');
+  const [tab, setTab] = useState<Tab>('flash');
   const [netGross, setNetGross] = useState<'net' | 'gross'>('net');
   const [quinnOpen, setQuinnOpen] = useState(false);
   const [highlightRowIds, setHighlightRowIds] = useState<string[]>([]);
@@ -76,36 +70,19 @@ export default function CogsPage() {
 
   return (
     <>
-      {/* Tab strip. The site-wide top bar lives in the layout; this band
-          carries only the report's pages. */}
-      <nav
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 150,
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          gap: TOP_NAV_PILL_GAP,
-          padding: TOP_NAV_BAR_PADDING,
-          borderBottom: '1px solid var(--color-border-subtle)',
-          background: '#fff',
-          overflowX: 'auto',
+      {/* Single top bar — site switcher · "COGS" title · report tabs,
+          with Back pinned right. The tab state lives in this page, so
+          the bar renders here rather than in the layout. */}
+      <AreaTopBar
+        title="COGS"
+        ariaLabel="COGS reports"
+        stateTabs={{
+          items: TABS,
+          value: tab,
+          onChange: id => setTab(id as Tab),
         }}
-      >
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            style={{
-              ...TOP_NAV_PILL_BASE,
-              ...(tab === t.id ? TOP_NAV_PILL_ACTIVE : TOP_NAV_PILL_IDLE_TRANSPARENT),
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
+        backTo="/"
+      />
 
       {/* COGS-specific controls — sit on their own row beneath the tabs. */}
       <div

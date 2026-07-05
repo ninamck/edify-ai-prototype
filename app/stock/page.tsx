@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
+import AreaTopBar from '@/components/TopBar/AreaTopBar';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import HealthStrip from '@/components/Stock/HealthStrip';
 import AttentionList from '@/components/Stock/AttentionList';
@@ -17,10 +18,15 @@ import StocktakeList from '@/components/Stock/StocktakeList';
 import StocktakeReviewView from '@/components/Stock/StocktakeReviewView';
 import VoiceCountView from '@/components/Stock/VoiceCountView';
 import { ESTATE_SITES } from '@/components/Stock/fixtures';
+import WasteLogPicker from '@/components/Waste/WasteLogPicker';
+import WasteLogCard from '@/components/Waste/WasteLogCard';
+import { WASTE_REASONS, type WasteReasonId } from '@/components/Waste/wasteData';
+import { phaseFromHour } from '@/components/briefing';
 import {
   STOCK_LOCATION_ORDER,
   getStockStatus,
   locationForItem,
+  sortByUrgency,
   stockValue,
   summariseSite,
   summariseEstate,
@@ -31,24 +37,19 @@ import {
   type StocktakeRecord,
   type StocktakeStatus,
 } from '@/components/Stock/status';
-import {
-  TOP_NAV_BAR_PADDING,
-  TOP_NAV_PILL_ACTIVE,
-  TOP_NAV_PILL_BASE,
-  TOP_NAV_PILL_GAP,
-  TOP_NAV_PILL_IDLE_TRANSPARENT,
-} from '@/components/Production/topNavStyles';
-
-// Single sticky pill strip — matches Production / Manage menu so all the
-// managed areas of the app read as one system.
+// Single sticky top bar — mirrors the redesigned web-v2 TopBar: site
+// switcher chip on the left, a divider, the bold "Stock" area title,
+// then compact header tabs, with contextual actions pinned right.
 //
 // View shape follows the active persona:
-//   • All sites    → [Estate] · [Stocktake] (estate-wide read-only history)
-//   • Any one site → [Stocktake] · [Live stock levels]
+//   • All sites    → [Estate] · [Count] (estate-wide read-only history)
+//   • Any one site → [Count] · [Live levels] · [Waste] · [Transfers]
 //
-// Stocktake is the default landing surface for a site persona — it's
-// the workflow operators actively use day-to-day; "Live stock levels"
-// sits next to it as the comprehensive ledger reference.
+// Count (the stocktake workflow) is the default landing surface for a
+// site persona — it's the workflow operators actively use day-to-day;
+// "Live levels" sits next to it as the comprehensive ledger reference.
+// Waste and Transfers are placeholder surfaces so the tab set matches
+// the redesigned Manage-stock area.
 //
 // "Needs attention" no longer lives as its own tab — it's an always-
 // visible notification pill on the right of the nav strip
@@ -67,11 +68,11 @@ import {
 // Drilling into a tile from the Estate grid auto-switches the active
 // site to the clicked one, which naturally flips the view set to
 // site-level since `isAllSites` becomes false.
-type View = 'estate' | 'all' | 'stocktake';
+type View = 'estate' | 'all' | 'stocktake' | 'waste' | 'transfers';
 
 type Tab = { id: View; label: string };
 
-const SITE_VIEWS: ReadonlySet<View> = new Set(['all', 'stocktake']);
+const SITE_VIEWS: ReadonlySet<View> = new Set(['all', 'stocktake', 'waste', 'transfers']);
 
 // Local edit overrides — the prototype has no real backend, but the
 // user can still tweak "on hand" / "stock unit" from the table or
@@ -260,21 +261,23 @@ function StockPageInner() {
     selectView('stocktake');
   }
 
-  // Site-level tabs lead with the workflow surface ("Stocktake") —
-  // it's where operators actually do work day-to-day. "Live stock
-  // levels" follows as the comprehensive ledger reference. The
-  // decision-oriented "Needs attention" view used to sit first; it's
-  // now an always-visible drawer trigger on the right of the nav
-  // instead, so the count is reachable from whichever tab the
-  // operator is on.
+  // Site-level tabs lead with the workflow surface ("Count") — it's
+  // where operators actually do work day-to-day. "Live levels" follows
+  // as the comprehensive ledger reference, then the Waste and
+  // Transfers surfaces. Labels match the redesigned Manage-stock area
+  // in web-v2. The decision-oriented "Needs attention" view is an
+  // always-visible drawer trigger on the right of the bar, so the
+  // count is reachable from whichever tab the operator is on.
   const tabs: Tab[] = isAllSites
     ? [
         { id: 'estate',    label: 'Estate' },
-        { id: 'stocktake', label: 'Stocktake' },
+        { id: 'stocktake', label: 'Count' },
       ]
     : [
-        { id: 'stocktake', label: 'Stocktake' },
-        { id: 'all',       label: 'Live stock levels' },
+        { id: 'stocktake', label: 'Count' },
+        { id: 'all',       label: 'Live levels' },
+        { id: 'waste',     label: 'Waste' },
+        { id: 'transfers', label: 'Transfers' },
       ];
 
   // ── Stocktake derivations ──────────────────────────────────────────
@@ -285,10 +288,18 @@ function StockPageInner() {
   //   • availableLocations — drives the Area-count card's inline
   //     location-picker pills. Restricted to locations that actually
   //     have items at this site so we don't surface empty zones.
-  const flaggedItemCount = useMemo(
-    () => activeSiteItems.filter(i => getStockStatus(i) !== 'healthy').length,
+  // Alerts are capped at the three most urgent items — the badge in
+  // the top bar, the drawer, and the Quick count card all read off
+  // this same list so the number is consistent everywhere. The full
+  // flagged set stays visible in the Live levels table.
+  const attentionItems = useMemo(
+    () =>
+      sortByUrgency(
+        activeSiteItems.filter(i => getStockStatus(i) !== 'healthy'),
+      ).slice(0, 3),
     [activeSiteItems],
   );
+  const flaggedItemCount = attentionItems.length;
 
   // ── Needs-attention drawer ─────────────────────────────────────────
   // Triggered from the pill on the right of the nav strip. Right-
@@ -416,12 +427,9 @@ function StockPageInner() {
           countRecord: null,
         };
       case 'quick':
-        return {
-          countItems: activeSiteItems.filter(
-            i => getStockStatus(i) !== 'healthy',
-          ),
-          countRecord: null,
-        };
+        // Same capped list the attention badge advertises, so the
+        // count the operator lands in matches the number they clicked.
+        return { countItems: attentionItems, countRecord: null };
       case 'group': {
         const group = siteGroups.find(g => g.id === activeTarget.groupId);
         const ids = new Set(group?.itemIds ?? []);
@@ -431,7 +439,7 @@ function StockPageInner() {
         };
       }
     }
-  }, [activeTarget, activeSiteHistory, activeSiteItems, siteGroups]);
+  }, [activeTarget, activeSiteHistory, activeSiteItems, attentionItems, siteGroups]);
 
   // Variance-review submit handlers. The review view emits one event
   // per stock-affecting resolution (accept-count / log-waste) and a
@@ -482,58 +490,32 @@ function StockPageInner() {
 
   return (
     <>
-      {/* Sticky pill strip — mirrors Production / Manage menu (TOP_NAV_*
-          constants from `components/Production/topNavStyles.ts`). */}
-      <nav
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 150,
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          gap: TOP_NAV_PILL_GAP,
-          padding: TOP_NAV_BAR_PADDING,
-          borderBottom: '1px solid var(--color-border-subtle)',
-          background: '#ffffff',
-          overflowX: 'auto',
+      {/* Single top bar — site switcher · "Stock" title · view tabs,
+          with the attention pill + Back button pinned right. Active
+          state follows `pendingView` so the tab flips instantly on
+          click; the actual content swap is driven by `view` inside
+          the transition below. */}
+      <AreaTopBar
+        title="Stock"
+        ariaLabel="Manage stock sections"
+        stateTabs={{
+          items: tabs,
+          value: pendingView,
+          onChange: id => selectView(id as View),
         }}
-      >
-        {tabs.map(tab => {
-          // Active state follows `pendingView` so the pill flips
-          // instantly on click; the actual content swap is driven by
-          // `view` inside the transition below.
-          const active = pendingView === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => selectView(tab.id)}
-              style={{
-                ...TOP_NAV_PILL_BASE,
-                ...(active ? TOP_NAV_PILL_ACTIVE : TOP_NAV_PILL_IDLE_TRANSPARENT),
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-
-        {/* Right-aligned notification pill. Persona-gated to site-level
-            views — estate-wide doesn't have a single attention list to
-            show. Visually mirrors the QuinnTrigger pattern from the
-            Production header: navy pill with a white roundel inside
-            and a red count badge that lifts off the fill. */}
-        {!isAllSites && (
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+        rightSlot={
+          // Notification pill. Persona-gated to site-level views —
+          // estate-wide doesn't have a single attention list to show.
+          !isAllSites ? (
             <AttentionTrigger
               count={flaggedItemCount}
               open={attentionOpen}
               onClick={() => setAttentionOpen(o => !o)}
             />
-          </div>
-        )}
-      </nav>
+          ) : undefined
+        }
+        backTo="/"
+      />
 
       {/* Drawer lives at page level so it slides over the whole
           content surface. Lazy-rendered by AnimatePresence inside the
@@ -542,27 +524,48 @@ function StockPageInner() {
       {!isAllSites && (
         <AttentionDrawer
           open={attentionOpen}
-          count={flaggedItemCount}
-          items={activeSiteItems}
+          count={attentionItems.length}
+          items={attentionItems}
           onClose={() => setAttentionOpen(false)}
         />
       )}
 
-      <div
-        style={{
-          padding: '24px 28px 48px',
-          // 1200px keeps the chrome controlled but gives the
-          // Live stock levels table enough room to fit its full
-          // column set without the filter funnels overlapping the
-          // header labels (especially Category / Days cover /
-          // Recipes which all sit alongside their filter icon).
-          maxWidth: '1200px',
-          margin: '0 auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
-        }}
-      >
+      {/* Responsive page body — desktop keeps the roomy 28px gutters;
+          narrow layouts drop to 12px so the cards get the width back
+          (56px of fixed padding on a ~345px surface is a sixth of the
+          screen). Sized with a *container* query rather than a media
+          query so it responds to the width the page actually renders
+          at — a phone, a resized window, or a mobile preview frame
+          embedded in a desktop viewport all get the right gutters.
+          The wrapper div establishes the containment context because
+          an element can't query its own size. */}
+      <style>{`
+        .stock-page-container {
+          container-type: inline-size;
+          width: 100%;
+        }
+        .stock-page-body {
+          /* 1200px keeps the chrome controlled but gives the Live
+             stock levels table enough room to fit its full column set
+             without the filter funnels overlapping the header labels
+             (especially Category / Days cover / Recipes which all sit
+             alongside their filter icon). */
+          max-width: 1200px;
+          margin: 0 auto;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          padding: 24px 28px 48px;
+        }
+        @container (max-width: 700px) {
+          .stock-page-body {
+            padding: 16px 12px 40px;
+            gap: 12px;
+          }
+        }
+      `}</style>
+      <div className="stock-page-container">
+      <div className="stock-page-body">
         {view === 'estate' && isAllSites ? (
           <>
             <HealthStrip
@@ -644,7 +647,7 @@ function StockPageInner() {
               onCreateGroup={handleCreateGroup}
             />
           )
-        ) : (
+        ) : view === 'all' ? (
           <>
             <HealthStrip
               summary={siteSummary}
@@ -656,7 +659,46 @@ function StockPageInner() {
               onItemEdit={handleItemEdit}
             />
           </>
+        ) : view === 'waste' ? (
+          // The real log-waste flow (the same one the on-the-floor
+          // tasks open at /log-waste), embedded under the Stock tabs.
+          // WasteFlow parses the deep-link params and keeps the
+          // picker↔card navigation on /stock?tab=waste.
+          <WasteFlow searchParams={searchParams} />
+        ) : (
+          // Transfers — placeholder surface so the tab set matches
+          // the redesigned Manage-stock area. The real flow isn't
+          // part of this prototype iteration yet.
+          <div
+            style={{
+              padding: '48px 24px',
+              textAlign: 'center',
+              background: '#ffffff',
+              border: '1px solid var(--color-border-subtle)',
+              borderRadius: 12,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 15,
+                fontWeight: 700,
+                color: 'var(--color-text-primary)',
+              }}
+            >
+              Manage transfers
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                color: 'var(--color-text-muted)',
+                marginTop: 6,
+              }}
+            >
+              This surface isn&apos;t part of the prototype yet.
+            </div>
+          </div>
         )}
+      </div>
       </div>
 
       {/* See `drawerEverShown` above — the portal stays out of the
@@ -670,6 +712,56 @@ function StockPageInner() {
       )}
     </>
   );
+}
+
+// Keeps every picker↔card hop inside the Stock area so the top bar
+// and sidebar stay put — the standalone /log-waste route (used by the
+// on-the-floor tasks) keeps its own full-screen chrome.
+const buildStockWasteHref = (query: string) =>
+  query ? `/stock?tab=waste&${query}` : '/stock?tab=waste';
+
+/**
+ * The log-waste flow embedded in the Stock Waste tab. Same components
+ * and deep-link params as app/log-waste/page.tsx — `itemId` flips the
+ * picker into the single-item card, `queue`/`i` drive the multi-item
+ * sweep, `qty`/`reason` pre-fill a re-log.
+ */
+function WasteFlow({ searchParams }: { searchParams: URLSearchParams }) {
+  const itemId = searchParams.get('itemId');
+  const qtyParam = searchParams.get('qty');
+  const reasonParam = searchParams.get('reason');
+  const queueParam = searchParams.get('queue');
+  const iParam = searchParams.get('i');
+
+  let body: React.ReactNode;
+  if (itemId) {
+    const qty = qtyParam && Number.isFinite(+qtyParam) ? Math.max(0, +qtyParam) : 1;
+    const isValidReason = reasonParam && WASTE_REASONS.some(r => r.id === reasonParam);
+    const reason = isValidReason ? (reasonParam as WasteReasonId) : null;
+    const queue = queueParam ? queueParam.split(',').filter(Boolean) : undefined;
+    const queueIndex = iParam && Number.isFinite(+iParam) ? Math.max(0, +iParam) : 0;
+    body = (
+      <WasteLogCard
+        itemId={itemId}
+        initialQty={qty}
+        initialReason={reason}
+        queue={queue}
+        queueIndex={queueIndex}
+        buildHref={buildStockWasteHref}
+      />
+    );
+  } else {
+    body = (
+      <WasteLogPicker
+        phase={phaseFromHour(new Date().getHours())}
+        buildHref={buildStockWasteHref}
+      />
+    );
+  }
+
+  // The flow is designed as a narrow task surface (540px on the
+  // standalone route) — keep that width here so it reads the same.
+  return <div style={{ width: '100%', maxWidth: 540, margin: '0 auto' }}>{body}</div>;
 }
 
 /**
@@ -712,8 +804,8 @@ function AttentionTrigger({
         display: 'inline-flex',
         alignItems: 'center',
         gap: 8,
-        height: 44,
-        padding: '0 16px 0 10px',
+        height: 36,
+        padding: '0 14px 0 8px',
         borderRadius: 100,
         background: open ? 'var(--color-accent-deep)' : 'var(--color-accent-active)',
         border: '1px solid var(--color-accent-deep)',
@@ -728,8 +820,8 @@ function AttentionTrigger({
       <span
         aria-hidden
         style={{
-          width: 28,
-          height: 28,
+          width: 24,
+          height: 24,
           borderRadius: '50%',
           background: '#ffffff',
           color: 'var(--color-accent-active)',

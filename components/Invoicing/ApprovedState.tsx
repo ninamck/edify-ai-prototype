@@ -42,16 +42,21 @@ export default function ApprovedState({ invoice, onBackToInvoices }: ApprovedSta
       {/* Success banner */}
       <div
         style={{
-          background: 'var(--color-success-light)',
-          border: '1px solid var(--color-success-border)',
+          background: '#fff',
+          border: '1px solid var(--color-border-subtle)',
           borderRadius: '12px',
           padding: '24px',
           textAlign: 'center',
           marginBottom: '24px',
         }}
       >
-        <div style={{ fontSize: '36px', marginBottom: '8px' }}>✓</div>
-        <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-success)', margin: '0 0 4px' }}>
+        <div style={{
+          width: '48px', height: '48px', borderRadius: '50%', margin: '0 auto 10px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          border: '2px solid var(--color-success)', color: 'var(--color-success)',
+          fontSize: '24px', fontWeight: 700,
+        }}>✓</div>
+        <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>
           Invoice Approved
         </h2>
         <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', margin: 0 }}>

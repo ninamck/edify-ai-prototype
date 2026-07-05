@@ -45,10 +45,12 @@ export default function ModifierGroupsPage() {
 
   return (
     <div style={{ padding: '24px 24px 120px', maxWidth: '1120px', margin: '0 auto', fontFamily: 'var(--font-primary)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text-primary)', margin: 0, flex: 1 }}>
-          Modifier groups
-        </h1>
+      {/* Toolbar row — title lives in the area top bar; the summary
+          line holds the left side so the CTA stays pinned right. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: 0, flex: 1 }}>
+          Catalogue-level modifiers shared across recipes. Add an alt milk in one place — every coffee picks it up.
+        </p>
         <button
           onClick={handleAdd}
           style={{
@@ -61,9 +63,6 @@ export default function ModifierGroupsPage() {
           <Plus size={15} strokeWidth={2.2} /> New modifier group
         </button>
       </div>
-      <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '0 0 18px' }}>
-        Catalogue-level modifiers shared across recipes. Add an alt milk in one place — every coffee picks it up.
-      </p>
 
       <div
         style={{

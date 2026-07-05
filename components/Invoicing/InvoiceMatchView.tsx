@@ -16,7 +16,12 @@ import {
   invoiceGRNTotal,
   getDeliveryReconciledSubstitutions,
   getSuggestedGRN,
+  getCandidateGRNs,
+  CandidateGRNWithData,
+  resolveAmbiguousMatch,
+  setDuplicateConfirmed,
   getPOContextForInvoice,
+  getPOsForInvoice,
   POContextForInvoice,
   getAutoStatusNote,
   AutoStatusNote as AutoStatusNoteData,
@@ -36,12 +41,20 @@ import {
 } from '@/components/InvoicingRules/mockData';
 import Link from 'next/link';
 import { MOCK_POS, MOCK_COMPLETED_DELIVERIES, POLine } from '@/components/Receiving/mockData';
+import InvoiceDocDrawer from './InvoiceDocDrawer';
 
 interface InvoiceMatchViewProps {
   invoice: Invoice;
   onApprove: (approvedIds: string[]) => void;
   onBack: () => void;
 }
+
+// Variance highlight treatment — amber accents (bars, borders, badge fills)
+// carry the warning signal; the text itself stays neutral so it never needs a
+// dark legible yellow, which is what reads as brown.
+const VARIANCE_ACCENT = '#D97706';
+const VARIANCE_BADGE_BG = '#FBF4E4';
+const VARIANCE_BADGE_BG_ACTIVE = '#F6E9CD';
 
 const PRICE_OPTIONS: PriceResolution[] = ['Accept & Update Cost in Edify', 'Accept for this delivery', 'Dispute → Credit Note'];
 const QTY_OPTIONS: QtyResolution[] = ['Credit Note', 'Accept Short'];
@@ -80,7 +93,7 @@ function VarianceTypeChip({ type }: { type: MatchVariance['type'] }) {
 }
 
 function varianceShortLabel(variance: MatchVariance, priceDiff: number): string {
-  if (variance.type === 'price') return `${priceDiff > 0 ? '+' : ''}£${Math.abs(priceDiff).toFixed(2)} / unit`;
+  if (variance.type === 'price') return `${priceDiff > 0 ? '+' : ''}£${Math.abs(priceDiff).toFixed(2)}`;
   if (variance.type === 'over-invoice') return `+${variance.invoiceValue - variance.poValue} over`;
   return `${variance.invoiceValue > variance.grnValue ? '+' : ''}${variance.invoiceValue - variance.grnValue} unit${Math.abs(variance.invoiceValue - variance.grnValue) !== 1 ? 's' : ''}`;
 }
@@ -100,8 +113,9 @@ function varianceDetailText(variance: MatchVariance): string {
 export default function InvoiceMatchView({ invoice, onApprove, onBack }: InvoiceMatchViewProps) {
   const [resolutions, setResolutions] = useState<Record<string, AnyResolution>>({});
   const [showConfirm, setShowConfirm] = useState(false);
-  // Forces a re-render after mutating invoice lines in place via updateInvoiceLine.
-  const [, setEditBump] = useState(0);
+  // Forces a re-render after mutating the invoice in place (updateInvoiceLine,
+  // resolveAmbiguousMatch). Included in memo deps so derived data recomputes.
+  const [editBump, setEditBump] = useState(0);
   const bumpEdits = () => setEditBump(b => b + 1);
   // Auto-link the system-suggested GRN on mount. User can unlink from the chip banner if wrong.
   const initialSuggested = getSuggestedGRN(invoice);
@@ -110,7 +124,10 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
   );
 
   const suggestedGRN = getSuggestedGRN(invoice);
-  const poContexts = useMemo(() => getPOContextForInvoice(invoice), [invoice]);
+  // Ambiguous match — system found multiple plausible GRNs and won't guess.
+  const candidateGRNs = useMemo(() => getCandidateGRNs(invoice), [invoice, editBump]);
+  const needsManualMatch = invoice.status === 'Needs GRN Match' && candidateGRNs.length > 0;
+  const poContexts = useMemo(() => getPOContextForInvoice(invoice), [invoice, editBump]);
   const splitPOContexts = useMemo(() => poContexts.filter(c => c.totalInvoices > 1), [poContexts]);
   const siblingInvoicesAcrossPOs = useMemo(() => {
     const seen = new Set<string>();
@@ -125,12 +142,12 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
     return out;
   }, [splitPOContexts, invoice.id]);
 
-  const grns = useMemo(() => getGRNsForInvoice(invoice, linkedGRNs), [invoice, linkedGRNs]);
-  const grnTotal = useMemo(() => invoiceGRNTotal(invoice, linkedGRNs), [invoice, linkedGRNs]);
-  const unmatchedLines = useMemo(() => getUnmatchedInvoiceLines(invoice, linkedGRNs), [invoice, linkedGRNs]);
+  const grns = useMemo(() => getGRNsForInvoice(invoice, linkedGRNs), [invoice, linkedGRNs, editBump]);
+  const grnTotal = useMemo(() => invoiceGRNTotal(invoice, linkedGRNs), [invoice, linkedGRNs, editBump]);
+  const unmatchedLines = useMemo(() => getUnmatchedInvoiceLines(invoice, linkedGRNs), [invoice, linkedGRNs, editBump]);
   const deliverySubstitutions = useMemo(
     () => getDeliveryReconciledSubstitutions(invoice, linkedGRNs),
-    [invoice, linkedGRNs],
+    [invoice, linkedGRNs, editBump],
   );
   const varianceTotal = invoice.total - grnTotal;
 
@@ -182,10 +199,11 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
   const resolvedOrAuto = (v: MatchVariance) => !!resolutions[v.id] || autoAppliedIds.has(v.id);
   const allResolved = invoice.variances.length > 0 && invoice.variances.every(resolvedOrAuto);
   const noVariances = invoice.variances.length === 0;
-  const awaitingDelivery = grns.length === 0 && invoice.lines.length > 0 && invoice.status !== 'Parse Failed' && invoice.status !== 'Duplicate';
+  const awaitingDelivery = grns.length === 0 && invoice.lines.length > 0 && invoice.status !== 'Parse Failed' && invoice.status !== 'Duplicate' && !needsManualMatch;
   const [overrideDuplicate, setOverrideDuplicate] = useState(false);
   const isDuplicate = invoice.status === 'Duplicate';
-  const canApprove = (noVariances || allResolved) && !awaitingDelivery && (!isDuplicate || overrideDuplicate);
+  const duplicateConfirmed = !!invoice.duplicateConfirmed;
+  const canApprove = (noVariances || allResolved) && !awaitingDelivery && !needsManualMatch && (!isDuplicate || overrideDuplicate) && !duplicateConfirmed;
 
   // Sibling invoices on the same PO(s) that are clean-matched and can be bulk-approved in one click
   const approvableSiblings = useMemo(
@@ -219,13 +237,14 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
   const alternateSuggestion = useMemo(() => {
     if (!hasUnmatched) return null;
     if (autoLinkedGRN) return null;
+    if (needsManualMatch) return null; // the picker card owns GRN selection here
     const excluded = new Set([...linkedGRNs, ...dismissedGRNs, ...invoice.grnNumbers]);
     const candidate = MOCK_COMPLETED_DELIVERIES.find(g =>
       g.supplier === invoice.supplier &&
       !excluded.has(g.grnNumber)
     );
     return candidate ?? null;
-  }, [hasUnmatched, autoLinkedGRN, linkedGRNs, dismissedGRNs, invoice.supplier, invoice.grnNumbers]);
+  }, [hasUnmatched, autoLinkedGRN, needsManualMatch, linkedGRNs, dismissedGRNs, invoice.supplier, invoice.grnNumbers]);
 
   if (showConfirm) {
     return (
@@ -350,13 +369,6 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
       {/* Auto-generated status note — system-authored, based on invoice state */}
       <AutoStatusNoteCard invoice={invoice} />
 
-      {/* Colleague comment — free-form, human-written, separate from status */}
-      <InvoiceCommentSection
-        initialNote={invoice.note ?? ''}
-        initialAuthor={invoice.noteAuthor}
-        initialUpdatedAt={invoice.noteUpdatedAt}
-      />
-
       {/* PO context — running total when this invoice is one of several against a PO */}
       {splitPOContexts.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
@@ -366,6 +378,18 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
         </div>
       )}
 
+      {/* Ambiguous match — system found several plausible GRNs, reviewer picks (blocker — full card) */}
+      {needsManualMatch && (
+        <AmbiguousGRNPicker
+          invoice={invoice}
+          candidates={candidateGRNs}
+          onConfirm={(grnNumbers) => {
+            resolveAmbiguousMatch(invoice.id, grnNumbers);
+            bumpEdits();
+          }}
+        />
+      )}
+
       {/* Awaiting delivery — no GRN linked yet (blocker — full card) */}
       {awaitingDelivery && (
         <AwaitingDeliveryBanner invoice={invoice} />
@@ -373,7 +397,14 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
 
       {/* Duplicate detection — invoice references a PO that may already be closed (blocker — full card) */}
       {isDuplicate && (
-        <DuplicateInvoiceBanner invoice={invoice} overridden={overrideDuplicate} onOverride={() => setOverrideDuplicate(true)} />
+        <DuplicateInvoiceBanner
+          invoice={invoice}
+          overridden={overrideDuplicate}
+          onOverride={() => setOverrideDuplicate(true)}
+          confirmed={duplicateConfirmed}
+          onConfirmDuplicate={() => { setDuplicateConfirmed(invoice.id, true); bumpEdits(); }}
+          onUndoConfirm={() => { setDuplicateConfirmed(invoice.id, false); bumpEdits(); }}
+        />
       )}
 
       {/* Context chips — non-blocker signals collapsed into a pill row, expand on click */}
@@ -482,17 +513,27 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
       {invoice.variances.length > 0 && !hasUnmatched && (
         <div style={{ marginTop: '16px' }}>
           {allResolved ? (
-            <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'var(--color-success-light)', border: '1px solid var(--color-success-border)', fontSize: '13px', fontWeight: 600, color: 'var(--color-success)' }}>
+            <div style={{ padding: '12px 16px', borderRadius: '12px', background: '#fff', border: '1px solid var(--color-border-subtle)', borderLeft: '3px solid var(--color-success)', fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ color: 'var(--color-success)', fontWeight: 700 }}>✓</span>
               All variances resolved. Ready for approval.
             </div>
           ) : (
-            <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'var(--color-warning-light)', border: '1px solid var(--color-warning-border)', fontSize: '13px', fontWeight: 500, color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ padding: '12px 16px', borderRadius: '12px', background: VARIANCE_BADGE_BG, border: `1px solid ${VARIANCE_ACCENT}`, fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontWeight: 700 }}>{invoice.variances.filter(resolvedOrAuto).length} of {invoice.variances.length} variances resolved{autoAppliedIds.size > 0 ? ` (${autoAppliedIds.size} auto ✨)` : ''}</span>
-              <span>— click ⚠ on any highlighted row to resolve.</span>
+              <span>— click the amber badge on any highlighted row to resolve.</span>
             </div>
           )}
         </div>
       )}
+
+      {/* Colleague comment — free-form, human-written, separate from status */}
+      <div style={{ marginTop: '16px' }}>
+        <InvoiceCommentSection
+          initialNote={invoice.note ?? ''}
+          initialAuthor={invoice.noteAuthor}
+          initialUpdatedAt={invoice.noteUpdatedAt}
+        />
+      </div>
     </div>
   );
 }
@@ -850,6 +891,133 @@ function AISuggestionBanner({ suggestion, onDismiss }: { suggestion: ReturnType<
 
 /* ──────────── Awaiting Delivery Banner ──────────── */
 
+/* ──────────── Ambiguous GRN match — reviewer picks the delivery ──────────── */
+
+function AmbiguousGRNPicker({ invoice, candidates, onConfirm }: {
+  invoice: Invoice;
+  candidates: CandidateGRNWithData[];
+  onConfirm: (grnNumbers: string[]) => void;
+}) {
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const grnTotalOf = (c: CandidateGRNWithData) =>
+    c.grn.lines.reduce((s, l) => s + l.receivedQty * l.price, 0);
+
+  return (
+    <div style={{
+      padding: '18px 20px',
+      borderRadius: '12px',
+      background: VARIANCE_BADGE_BG,
+      border: `1px solid ${VARIANCE_ACCENT}`,
+      marginBottom: '20px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+        <span style={{ fontSize: '16px' }}>🔍</span>
+        <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--color-text-primary)' }}>
+          Which delivery does this invoice bill?
+        </span>
+      </div>
+      <p style={{ fontSize: '13px', color: 'var(--color-text-primary)', margin: '0 0 14px', lineHeight: 1.5 }}>
+        {invoice.invoiceNumber} doesn&rsquo;t quote a delivery note, and <strong>{candidates.length} deliveries</strong> from {invoice.supplier} fit it
+        {invoice.poNumbers && invoice.poNumbers.length > 0 ? <> — both received against <strong>{invoice.poNumbers.join(', ')}</strong> and still awaiting an invoice</> : null}.
+        The match won&rsquo;t run on a guess: pick the delivery this invoice covers.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '12px', marginBottom: '14px' }}>
+        {candidates.map(c => {
+          const isSelected = selected === c.grnNumber;
+          return (
+            <button
+              key={c.grnNumber}
+              onClick={() => setSelected(c.grnNumber)}
+              style={{
+                textAlign: 'left',
+                padding: '14px 16px',
+                borderRadius: '10px',
+                background: '#fff',
+                border: isSelected ? `2px solid ${VARIANCE_ACCENT}` : '1px solid var(--color-border)',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-primary)',
+                boxShadow: isSelected ? '0 2px 8px rgba(217,119,6,0.15)' : 'none',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span aria-hidden="true" style={{
+                    width: '16px', height: '16px', borderRadius: '50%', flexShrink: 0,
+                    border: isSelected ? `5px solid ${VARIANCE_ACCENT}` : '2px solid var(--color-border)',
+                    background: '#fff',
+                    display: 'inline-block',
+                  }} />
+                  <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--color-text-primary)' }}>{c.grn.grnNumber}</span>
+                </span>
+                <span style={{
+                  fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px',
+                  background: VARIANCE_BADGE_BG, border: `1px solid ${VARIANCE_ACCENT}`, color: 'var(--color-text-primary)',
+                }}>
+                  {c.confidence}% match
+                </span>
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginBottom: '10px' }}>
+                Received {c.grn.dateReceived} · {c.grn.receivedBy} · {c.grn.poNumbers.join(', ')}
+              </div>
+
+              {/* Line-by-line comparison vs the invoice */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '10px' }}>
+                {invoice.lines.map(il => {
+                  const gl = c.grn.lines.find(l => l.sku === il.sku);
+                  const received = gl?.receivedQty ?? 0;
+                  const matches = received === il.qty;
+                  return (
+                    <div key={il.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '12px' }}>
+                      <span style={{ color: 'var(--color-text-primary)' }}>{il.description}</span>
+                      <span style={{ whiteSpace: 'nowrap', fontWeight: 600, color: matches ? 'var(--color-success)' : VARIANCE_ACCENT }}>
+                        {matches
+                          ? `${il.qty} billed = ${received} received ✓`
+                          : `${il.qty} billed vs ${received} received`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', paddingTop: '8px', borderTop: '1px solid var(--color-border-subtle)' }}>
+                <span style={{ color: 'var(--color-text-secondary)' }}>GRN total vs invoice £{invoice.total.toFixed(2)}</span>
+                <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>£{grnTotalOf(c).toFixed(2)}</span>
+              </div>
+              <p style={{ fontSize: '11px', color: 'var(--color-text-secondary)', margin: '8px 0 0', lineHeight: 1.45 }}>
+                {c.reason}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        <button
+          disabled={!selected}
+          onClick={() => selected && onConfirm([selected])}
+          style={{
+            padding: '9px 18px',
+            borderRadius: '8px',
+            background: selected ? 'var(--color-accent-active)' : 'var(--color-bg-hover)',
+            color: selected ? '#fff' : 'var(--color-text-secondary)',
+            border: selected ? 'none' : '1px solid var(--color-border)',
+            fontSize: '13px', fontWeight: 700,
+            fontFamily: 'var(--font-primary)',
+            cursor: selected ? 'pointer' : 'not-allowed',
+          }}
+        >
+          {selected ? `Link ${selected} & run match` : 'Select a delivery to continue'}
+        </button>
+        <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+          Not one of these? Check <Link href="/receive" style={{ color: 'var(--color-accent-deep)', fontWeight: 600 }}>Receiving</Link> — the delivery may not be logged yet.
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function AwaitingDeliveryBanner({ invoice }: { invoice: Invoice }) {
   const [parked, setParked] = useState(invoice.parked ?? false);
   const poHint = invoice.poNumbers && invoice.poNumbers.length > 0 ? invoice.poNumbers.join(', ') : null;
@@ -914,8 +1082,57 @@ function AwaitingDeliveryBanner({ invoice }: { invoice: Invoice }) {
 
 /* ──────────── Duplicate Invoice Banner ──────────── */
 
-function DuplicateInvoiceBanner({ invoice, overridden, onOverride }: { invoice: Invoice; overridden: boolean; onOverride: () => void }) {
+function DuplicateInvoiceBanner({ invoice, overridden, onOverride, confirmed, onConfirmDuplicate, onUndoConfirm }: {
+  invoice: Invoice;
+  overridden: boolean;
+  onOverride: () => void;
+  confirmed: boolean;
+  onConfirmDuplicate: () => void;
+  onUndoConfirm: () => void;
+}) {
   const siblings = MOCK_INVOICES.filter(i => i.id !== invoice.id && i.invoiceNumber === invoice.invoiceNumber);
+
+  // Confirmed duplicate — resolved state: neutral card, invoice discarded
+  if (confirmed) {
+    return (
+      <div style={{
+        padding: '18px 20px',
+        borderRadius: '12px',
+        background: '#fff',
+        border: '1px solid var(--color-border-subtle)',
+        borderLeft: '3px solid var(--color-error)',
+        marginBottom: '20px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+          <span style={{ color: 'var(--color-error)', fontWeight: 700, fontSize: '14px' }}>✓</span>
+          <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--color-text-primary)' }}>
+            Confirmed duplicate — discarded
+          </span>
+        </div>
+        <p style={{ fontSize: '13px', color: 'var(--color-text-primary)', margin: '0 0 12px', lineHeight: 1.5 }}>
+          {invoice.invoiceNumber} has been removed from the review queue and will not sync to Xero.
+          {siblings.length > 0 ? <> The original invoice stays untouched.</> : null} {invoice.supplier} won&rsquo;t
+          be paid twice.
+        </p>
+        <button
+          onClick={onUndoConfirm}
+          style={{
+            padding: '8px 16px',
+            borderRadius: '8px',
+            background: 'transparent',
+            border: '1px solid var(--color-border)',
+            fontSize: '12px', fontWeight: 600,
+            fontFamily: 'var(--font-primary)',
+            color: 'var(--color-text-secondary)',
+            cursor: 'pointer',
+          }}
+        >
+          Undo — flagged this by mistake
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       padding: '18px 20px',
@@ -943,6 +1160,21 @@ function DuplicateInvoiceBanner({ invoice, overridden, onOverride }: { invoice: 
         ) : (
           <>
             <button
+              onClick={onConfirmDuplicate}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '8px',
+                background: 'var(--color-error)',
+                border: 'none',
+                fontSize: '12px', fontWeight: 700,
+                fontFamily: 'var(--font-primary)',
+                color: '#fff',
+                cursor: 'pointer',
+              }}
+            >
+              Confirm duplicate · discard
+            </button>
+            <button
               onClick={onOverride}
               style={{
                 padding: '8px 16px',
@@ -956,23 +1188,6 @@ function DuplicateInvoiceBanner({ invoice, overridden, onOverride }: { invoice: 
               }}
             >
               Not a duplicate · re-open PO
-            </button>
-            <button
-              disabled
-              title="Reject action not wired in prototype"
-              style={{
-                padding: '8px 16px',
-                borderRadius: '8px',
-                background: 'transparent',
-                border: '1px solid var(--color-border)',
-                fontSize: '12px', fontWeight: 600,
-                fontFamily: 'var(--font-primary)',
-                color: 'var(--color-text-secondary)',
-                cursor: 'not-allowed',
-                opacity: 0.7,
-              }}
-            >
-              Reject invoice
             </button>
           </>
         )}
@@ -1122,9 +1337,9 @@ function AutoStatusNoteCard({ invoice }: { invoice: Invoice }) {
   if (!note) return null;
   const toneStyles: Record<AutoStatusNoteData['tone'], { bg: string; border: string; icon: string; iconColor: string }> = {
     info:    { bg: 'var(--color-info-light)',    border: 'rgba(3,105,161,0.2)',      icon: 'ℹ',  iconColor: 'var(--color-info)' },
-    warning: { bg: 'var(--color-bg-surface)',    border: '#EA580C',                     icon: '⚠', iconColor: 'var(--color-warning)' },
+    warning: { bg: 'var(--color-bg-surface)',    border: 'var(--color-warning)',        icon: '⚠', iconColor: 'var(--color-warning)' },
     error:   { bg: 'var(--color-error-light)',   border: 'var(--color-error-border)',   icon: '⚠', iconColor: 'var(--color-error)' },
-    success: { bg: 'var(--color-success-light)', border: 'var(--color-success-border)', icon: '✓', iconColor: 'var(--color-success)' },
+    success: { bg: 'var(--color-bg-surface)',    border: 'var(--color-success-border)', icon: '✓', iconColor: 'var(--color-success)' },
     neutral: { bg: 'var(--color-bg-hover)',      border: 'var(--color-border-subtle)',  icon: 'ℹ',  iconColor: 'var(--color-text-secondary)' },
   };
   const s = toneStyles[note.tone];
@@ -1417,6 +1632,79 @@ function InvoiceCommentSection({ initialNote, initialAuthor, initialUpdatedAt }:
 
 /* ──────────── Split View ──────────── */
 
+/* ──────────── Document map strip ────────────
+   Answers "how many documents am I looking at?" before the user reads a single
+   line item. Counts are stated as numerals + words, never implied by layout. */
+
+const docMapChip: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: '5px',
+  padding: '2px 9px', borderRadius: '100px',
+  background: '#fff', border: '1px solid var(--color-border)',
+  fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap',
+  color: 'var(--color-text-primary)', lineHeight: 1.4,
+};
+
+function DocMapSegment({ count, noun, children }: { count: number; noun: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: '18px', fontWeight: 800, color: 'var(--color-text-primary)', lineHeight: 1 }}>{count}</span>
+      <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>
+        {noun}{count === 1 ? '' : 's'}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+function DocMapStrip({ invoices, currentInvoiceId, grns, poNumbers }: {
+  invoices: Invoice[];
+  currentInvoiceId: string;
+  grns: GRN[];
+  poNumbers: string[];
+}) {
+  const connector = <span aria-hidden="true" style={{ color: 'var(--color-text-secondary)', fontSize: '13px', opacity: 0.6 }}>⇄</span>;
+  const none = <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>none linked</span>;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap',
+      padding: '10px 16px',
+      background: 'var(--color-bg-subtle, #fafafa)',
+      borderBottom: '1px solid var(--color-border-subtle)',
+    }}>
+      <DocMapSegment count={invoices.length} noun="invoice">
+        {invoices.map(inv => {
+          const isCurrent = inv.id === currentInvoiceId;
+          const highlight = isCurrent && invoices.length > 1;
+          return (
+            <span
+              key={inv.id}
+              style={{
+                ...docMapChip,
+                ...(highlight ? { border: '1.5px solid var(--color-accent-active)', color: 'var(--color-accent-active)' } : {}),
+              }}
+            >
+              {inv.invoiceNumber}
+              {highlight && <span style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>· this one</span>}
+            </span>
+          );
+        })}
+      </DocMapSegment>
+      {connector}
+      <DocMapSegment count={grns.length} noun="GRN">
+        {grns.length === 0 ? none : grns.map(g => (
+          <span key={g.id} style={docMapChip} title={`Received ${g.dateReceived}`}>{g.grnNumber}</span>
+        ))}
+      </DocMapSegment>
+      {connector}
+      <DocMapSegment count={poNumbers.length} noun="PO">
+        {poNumbers.length === 0 ? none : poNumbers.map(po => (
+          <span key={po} style={docMapChip}>{po}</span>
+        ))}
+      </DocMapSegment>
+    </div>
+  );
+}
+
 function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, lineTaxRates, setLineRate, totalTax, anyTax, siblingInvoices, onLineEdit }: {
   invoice: Invoice;
   grns: GRN[];
@@ -1432,7 +1720,11 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
 }) {
   const [rightTab, setRightTab] = useState<'grn' | 'po'>('grn');
   const [expandedVariance, setExpandedVariance] = useState<string | null>(null);
-  const editable = invoice.editable === true;
+  const [showDoc, setShowDoc] = useState(false);
+  // Manual override: lets the reviewer edit every invoice field when the
+  // parse came through wrong, even on invoices that matched automatically.
+  const [manualEdit, setManualEdit] = useState(false);
+  const editable = invoice.editable === true || manualEdit;
 
   const commitQty = (lineId: string, current: number, raw: string) => {
     const n = parseFloat(raw);
@@ -1535,6 +1827,14 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
   const allGrnTotal = grnGroups.reduce((s, g) => s + g.lines.reduce((ss, l) => ss + l.lineTotal, 0), 0);
   const allPoTotal = grnGroups.reduce((s, g) => s + g.pos.reduce((ss, p) => ss + p.lines.reduce((sss, l) => sss + l.price * l.expectedQty, 0), 0), 0);
 
+  // Everything visible in this table, for the document map strip and "n of N" badges
+  const allInvoicesInView = useMemo(() => [invoice, ...siblingInvoices], [invoice, siblingInvoices]);
+  const allPONumbersInView = useMemo(() => Array.from(new Set([
+    ...grnGroups.flatMap(g => g.pos.map(p => p.poNumber)),
+    ...siblingInvoices.flatMap(s => getPOsForInvoice(s)),
+  ])), [grnGroups, siblingInvoices]);
+  const invoiceCountInView = allInvoicesInView.length;
+
   const RC = 6;
 
   const cell: React.CSSProperties = { padding: '8px 12px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: '12px' };
@@ -1559,11 +1859,11 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
         title={needsPrompt ? 'Set VAT — this line is not auto-categorised' : vatCategoryLabel(category)}
         style={{
           fontSize: '11px', fontFamily: 'var(--font-primary)',
-          border: needsPrompt ? '1.5px solid var(--color-warning)' : '1px solid var(--color-border)',
+          border: needsPrompt ? `1.5px solid ${VARIANCE_ACCENT}` : '1px solid var(--color-border)',
           borderRadius: '4px',
           padding: '2px 4px',
-          background: needsPrompt ? 'var(--color-warning-light)' : '#fff',
-          color: needsPrompt ? 'var(--color-warning)' : 'var(--color-text-primary)',
+          background: needsPrompt ? VARIANCE_BADGE_BG : '#fff',
+          color: 'var(--color-text-primary)',
           fontWeight: needsPrompt ? 700 : 400,
           cursor: 'pointer', outline: 'none',
         }}
@@ -1602,6 +1902,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
           background: 'rgba(16, 185, 129, 0.08)',
           color: 'var(--color-success)', fontWeight: 700, fontSize: '12px',
           fontFamily: 'var(--font-primary)', cursor: 'pointer', lineHeight: 1.3,
+          whiteSpace: 'nowrap',
         }}>
           {resolvedLabel}<Chevron open={isOpen} />
         </button>
@@ -1612,10 +1913,11 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
       <button onClick={toggle} title="Click to resolve" style={{
         display: 'inline-flex', alignItems: 'center', gap: '6px',
         padding: '4px 12px', borderRadius: '6px',
-        border: '1.5px solid var(--color-warning)',
-        background: isOpen ? 'rgba(217, 119, 6, 0.14)' : 'rgba(217, 119, 6, 0.08)',
-        color: 'var(--color-warning)', fontWeight: 700, fontSize: '12px',
+        border: `1.5px solid ${VARIANCE_ACCENT}`,
+        background: isOpen ? VARIANCE_BADGE_BG_ACTIVE : VARIANCE_BADGE_BG,
+        color: 'var(--color-text-primary)', fontWeight: 700, fontSize: '12px',
         fontFamily: 'var(--font-primary)', cursor: 'pointer', lineHeight: 1.3,
+        whiteSpace: 'nowrap',
       }}>
         {label}<Chevron open={isOpen} />
       </button>
@@ -1642,6 +1944,12 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
       `}</style>
 
       <div style={{ border: '1px solid var(--color-border-subtle)', borderRadius: '10px', overflow: 'hidden', background: '#fff', fontFamily: 'var(--font-primary)' }}>
+        <DocMapStrip
+          invoices={allInvoicesInView}
+          currentInvoiceId={invoice.id}
+          grns={allDisplayGRNs}
+          poNumbers={allPONumbersInView}
+        />
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontWeight: 500 }}>
 
           {/* ── Panel headers ── */}
@@ -1652,11 +1960,36 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--color-text-primary)' }}>Supplier Invoice</div>
-                    <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '2px' }}>{invoice.invoiceNumber} · {invoice.date}</div>
+                    <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+                      {invoice.invoiceNumber} · {invoice.date}
+                      {editable && (
+                        <span style={{ marginLeft: '8px', fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '100px', border: `1px solid ${VARIANCE_ACCENT}`, background: VARIANCE_BADGE_BG, color: 'var(--color-text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+                          Editing — match recalculates live
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <button style={{ padding: '5px 12px', borderRadius: '6px', background: 'transparent', border: '1px solid var(--color-border)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
-                    View PDF
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                    <button
+                      onClick={() => setManualEdit(e => !e)}
+                      title="Correct the invoice fields if the PDF parse came through wrong"
+                      style={{
+                        padding: '5px 12px', borderRadius: '6px',
+                        background: manualEdit ? 'var(--color-accent-active)' : 'transparent',
+                        border: manualEdit ? '1px solid var(--color-accent-active)' : '1px solid var(--color-border)',
+                        fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)',
+                        color: manualEdit ? '#fff' : 'var(--color-text-secondary)', cursor: 'pointer', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {manualEdit ? '✓ Done editing' : '✎ Edit invoice'}
+                    </button>
+                    <button
+                      onClick={() => setShowDoc(true)}
+                      style={{ padding: '5px 12px', borderRadius: '6px', background: 'transparent', border: '1px solid var(--color-border)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-text-secondary)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      View PDF
+                    </button>
+                  </div>
                 </div>
               </td>
               {/* GRN/PO panel header */}
@@ -1703,7 +2036,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
           </thead>
 
           {/* ── GRN groups (per-GRN section header labels invoice | GRN) ── */}
-          {rightTab === 'grn' && grnGroups.map(({ grn, lines, pos }) => {
+          {rightTab === 'grn' && grnGroups.map(({ grn, lines, pos }, groupIdx) => {
             const invGroupSkus = new Set(lines.map(l => l.sku));
             const invGroupTotal = invoice.lines.filter(il => invGroupSkus.has(il.sku)).reduce((s, l) => s + l.lineTotal, 0);
             const grnGroupTotal = lines.reduce((s, l) => s + l.lineTotal, 0);
@@ -1712,34 +2045,47 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
 
             return (
               <tbody key={grn.id}>
-                {/* Group section header (multi-GRN OR multi-invoice) — split invoice | GRN with divider through */}
+                {/* Group section header — the invoice identity shows once, on the first
+                    group; repeat headers keep that half blank white. The GRN half only
+                    carries a band when there are multiple GRNs. */}
                 {(multiGroup || siblingInvoices.length > 0) && (
                   <tr>
-                    <td colSpan={6} style={{ padding: '8px 14px', background: 'rgba(34, 68, 68, 0.06)', borderTop: '2px solid var(--color-accent-active)', borderBottom: '1px solid var(--color-border-subtle)', ...divider }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-accent-active)' }}>
-                          {invoice.invoiceNumber}
-                        </span>
-                        <span style={{ fontWeight: 500, fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-                          {invoice.date} · {invoice.supplier}
-                        </span>
-                        {siblingInvoices.length > 0 && (
-                          <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'var(--color-accent-active)', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                            This invoice
+                    {(groupIdx === 0 || siblingInvoices.length > 0) ? (
+                      <td colSpan={6} style={{ padding: '8px 14px', background: 'rgba(34, 68, 68, 0.06)', borderTop: '2px solid var(--color-accent-active)', borderBottom: '1px solid var(--color-border-subtle)', ...divider }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-accent-active)' }}>
+                            {invoice.invoiceNumber}
                           </span>
-                        )}
-                      </div>
-                    </td>
-                    <td colSpan={RC} style={{ padding: '8px 14px', background: 'rgba(34, 68, 68, 0.06)', borderTop: '2px solid var(--color-accent-active)', borderBottom: '1px solid var(--color-border-subtle)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-text-primary)' }}>
-                          {rightTab === 'grn' ? grn.grnNumber : (pos.length > 0 ? pos.map(p => p.poNumber).join(' + ') : 'No PO')}
-                        </span>
-                        <span style={{ fontWeight: 500, fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-                          {rightTab === 'grn' ? `Received ${grn.dateReceived} · ${grn.receivedBy}` : `via ${grn.grnNumber}`}
-                        </span>
-                      </div>
-                    </td>
+                          <span style={{ fontWeight: 500, fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+                            {invoice.date} · {invoice.supplier}
+                          </span>
+                          {siblingInvoices.length > 0 && (
+                            <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'var(--color-accent-active)', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                              Invoice 1 of {invoiceCountInView} · this one
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    ) : (
+                      <td colSpan={6} style={{ padding: '8px 14px', background: '#fff', borderBottom: '1px solid var(--color-border-subtle)', ...divider }} />
+                    )}
+                    {multiGroup ? (
+                      <td colSpan={RC} style={{ padding: '8px 14px', background: 'rgba(34, 68, 68, 0.06)', borderTop: '2px solid var(--color-accent-active)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'var(--color-text-primary)', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+                            GRN {groupIdx + 1} of {grns.length}
+                          </span>
+                          <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-text-primary)' }}>
+                            {rightTab === 'grn' ? grn.grnNumber : (pos.length > 0 ? pos.map(p => p.poNumber).join(' + ') : 'No PO')}
+                          </span>
+                          <span style={{ fontWeight: 500, fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+                            {rightTab === 'grn' ? `Received ${grn.dateReceived} · ${grn.receivedBy}` : `via ${grn.grnNumber}`}
+                          </span>
+                        </div>
+                      </td>
+                    ) : (
+                      <td colSpan={RC} style={{ padding: '8px 14px', background: '#fff', borderBottom: '1px solid var(--color-border-subtle)' }} />
+                    )}
                   </tr>
                 )}
 
@@ -1756,12 +2102,12 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const isResolved = !!variance && !!resolutions[variance.id];
                   const isCleared = isResolved || isAutoApplied;
                   const hasVar = (priceVar || variance?.type === 'qty') && !isCleared;
-                  const rowBg = hasVar ? 'var(--color-warning-bg)' : 'transparent';
-                  const leftAccent: React.CSSProperties = hasVar ? { boxShadow: 'inset 4px 0 0 var(--color-warning)' } : {};
+                  const rowBg = hasVar ? '#F9F4F0' : 'transparent';
+                  const leftAccent: React.CSSProperties = hasVar ? { boxShadow: `inset 4px 0 0 ${VARIANCE_ACCENT}` } : {};
                   const qtyDiff = variance?.type === 'qty' ? variance.invoiceValue - variance.grnValue : 0;
                   const varLabel = variance?.type === 'qty'
                     ? `${qtyDiff > 0 ? '+' : ''}${qtyDiff} unit${Math.abs(qtyDiff) !== 1 ? 's' : ''}`
-                    : `${priceDiff > 0 ? '+' : ''}£${Math.abs(priceDiff).toFixed(2)} / unit`;
+                    : `${priceDiff > 0 ? '+' : ''}£${Math.abs(priceDiff).toFixed(2)}`;
 
                   const dataRow = (
                     <tr key={grnLine.id} style={{ background: rowBg }}>
@@ -1781,10 +2127,10 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                         )}
                         <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{grnLine.sku}</div>
                       </td>
-                      <td style={{ ...cell, fontWeight: variance?.type === 'qty' && !isCleared ? 700 : 400, color: variance?.type === 'qty' && !isCleared ? 'var(--color-warning)' : undefined }}>
+                      <td style={{ ...cell, fontWeight: variance?.type === 'qty' && !isCleared ? 700 : 400 }}>
                         {editable && invLine ? <EditableQty lineId={invLine.id} value={invLine.qty} /> : (invLine?.qty ?? '—')}
                       </td>
-                      <td style={{ ...cell, fontWeight: priceVar && !isCleared ? 700 : 400, color: priceVar && !isCleared ? 'var(--color-warning)' : undefined }}>
+                      <td style={{ ...cell, fontWeight: priceVar && !isCleared ? 700 : 400 }}>
                         {editable && invLine ? <EditablePrice lineId={invLine.id} value={invLine.unitPrice} /> : (invLine ? `£${invLine.unitPrice.toFixed(2)}` : '—')}
                       </td>
                       <td style={{ ...cell, fontWeight: 600 }}>
@@ -1799,11 +2145,11 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                           : '—'}
                       </td>
                       <td style={{ ...cell, color: 'var(--color-text-secondary)', textAlign: 'center' }}>{grnLine.orderedQty}</td>
-                      <td style={{ ...cell, textAlign: 'center', fontWeight: (isShort || variance?.type === 'qty') && !isCleared ? 700 : 600, color: (isShort || variance?.type === 'qty') && !isCleared ? 'var(--color-warning)' : undefined }}>
+                      <td style={{ ...cell, textAlign: 'center', fontWeight: (isShort || variance?.type === 'qty') && !isCleared ? 700 : 600 }}>
                         {grnLine.receivedQty}
                         {isShort && <span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--color-text-secondary)', marginLeft: '4px' }}>of {grnLine.orderedQty}</span>}
                       </td>
-                      <td style={{ ...cell, fontWeight: priceVar && !isCleared ? 700 : 400, color: priceVar && !isCleared ? 'var(--color-warning)' : undefined }}>£{grnLine.unitPrice.toFixed(2)}</td>
+                      <td style={{ ...cell, fontWeight: priceVar && !isCleared ? 700 : 400 }}>£{grnLine.unitPrice.toFixed(2)}</td>
                       <td style={{ ...cell, fontWeight: 600 }}>£{grnLine.lineTotal.toFixed(2)}</td>
                       <td style={{ ...cell, color: 'var(--color-text-secondary)', fontWeight: 500 }}>
                         £{(grnLine.lineTotal * (invLine ? (lineTaxRates[invLine.id] ?? 10) : 10) / 100).toFixed(2)}
@@ -1827,8 +2173,8 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const detail = varianceDetailText(variance);
                   const impactLabel = variance.impact >= 0 ? `+£${variance.impact.toFixed(2)}` : `-£${Math.abs(variance.impact).toFixed(2)}`;
 
-                  const expandBg = isResolved ? 'rgba(16,185,129,0.03)' : 'var(--color-warning-bg)';
-                  const expandAccent = isResolved ? 'inset 3px 0 0 var(--color-success)' : 'inset 3px 0 0 var(--color-warning)';
+                  const expandBg = isResolved ? 'rgba(16,185,129,0.03)' : '#F9F4F0';
+                  const expandAccent = isResolved ? 'inset 3px 0 0 var(--color-success)' : `inset 3px 0 0 ${VARIANCE_ACCENT}`;
 
                   const expandRow = (
                     <tr key={`expand-${grnLine.id}`}>
@@ -1895,7 +2241,8 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
 
             return (
               <tbody>
-                {(multiGroup || siblingInvoices.length > 0) && (
+                {/* Single header row in this tab — invoice identity always shows here */}
+                {(siblingInvoices.length > 0 || allPoNumbers.length > 1) && (
                   <tr>
                     <td colSpan={6} style={{ padding: '8px 14px', background: 'rgba(34, 68, 68, 0.06)', borderTop: '2px solid var(--color-accent-active)', borderBottom: '1px solid var(--color-border-subtle)', ...divider }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -1907,18 +2254,25 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                         </span>
                         {siblingInvoices.length > 0 && (
                           <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'var(--color-accent-active)', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                            This invoice
+                            Invoice 1 of {invoiceCountInView} · this one
                           </span>
                         )}
                       </div>
                     </td>
-                    <td colSpan={RC} style={{ padding: '8px 14px', background: 'rgba(34, 68, 68, 0.06)', borderTop: '2px solid var(--color-accent-active)', borderBottom: '1px solid var(--color-border-subtle)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-text-primary)' }}>
-                          {allPoNumbers.length > 0 ? allPoNumbers.join(' + ') : 'No PO'}
-                        </span>
-                      </div>
-                    </td>
+                    {allPoNumbers.length > 1 ? (
+                      <td colSpan={RC} style={{ padding: '8px 14px', background: 'rgba(34, 68, 68, 0.06)', borderTop: '2px solid var(--color-accent-active)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'var(--color-text-primary)', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+                            {allPoNumbers.length} POs
+                          </span>
+                          <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-text-primary)' }}>
+                            {allPoNumbers.join(' + ')}
+                          </span>
+                        </div>
+                      </td>
+                    ) : (
+                      <td colSpan={RC} style={{ padding: '8px 14px', background: '#fff', borderBottom: '1px solid var(--color-border-subtle)' }} />
+                    )}
                   </tr>
                 )}
 
@@ -1934,8 +2288,8 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const isAutoApplied = !!variance && !!getAutoAppliedForVariance(variance.id);
                   const isResolved = !!variance && !!resolutions[variance.id];
                   const isCleared = isResolved || isAutoApplied;
-                  const rowBg = !priceMatch && !isCleared ? 'var(--color-warning-bg)' : 'transparent';
-                  const leftAccent: React.CSSProperties = !priceMatch && !isCleared ? { boxShadow: 'inset 4px 0 0 var(--color-warning)' } : {};
+                  const rowBg = !priceMatch && !isCleared ? '#F9F4F0' : 'transparent';
+                  const leftAccent: React.CSSProperties = !priceMatch && !isCleared ? { boxShadow: `inset 4px 0 0 ${VARIANCE_ACCENT}` } : {};
                   const overOnLine = poLine ? invLine.qty > poLine.expectedQty : false;
 
                   const dataRow = (
@@ -1959,7 +2313,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                       <td style={cell}>
                         {editable ? <EditableQty lineId={invLine.id} value={invLine.qty} /> : invLine.qty}
                       </td>
-                      <td style={{ ...cell, fontWeight: !priceMatch && !isCleared ? 700 : 400, color: !priceMatch && !isCleared ? 'var(--color-warning)' : undefined }}>
+                      <td style={{ ...cell, fontWeight: !priceMatch && !isCleared ? 700 : 400 }}>
                         {editable ? <EditablePrice lineId={invLine.id} value={invLine.unitPrice} /> : `£${invLine.unitPrice.toFixed(2)}`}
                       </td>
                       <td style={{ ...cell, fontWeight: 600 }}>£{invLine.lineTotal.toFixed(2)}</td>
@@ -1975,7 +2329,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                       <td style={{ ...cell, textAlign: 'center', color: isDeliverySubstitution ? 'var(--color-success)' : 'var(--color-text-secondary)', fontWeight: isDeliverySubstitution ? 700 : 500 }}>
                         {isDeliverySubstitution ? 'Alternative sent' : '—'}
                       </td>
-                      <td style={{ ...cell, fontWeight: !priceMatch && !isCleared ? 700 : 400, color: !priceMatch && !isCleared ? 'var(--color-warning)' : undefined }}>
+                      <td style={{ ...cell, fontWeight: !priceMatch && !isCleared ? 700 : 400 }}>
                         {poLine ? `£${poLine.price.toFixed(2)}` : '—'}
                       </td>
                       <td style={{ ...cell, fontWeight: 600 }}>{poLine ? `£${lineTotal.toFixed(2)}` : '—'}</td>
@@ -2006,8 +2360,8 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const detail = varianceDetailText(variance);
                   const impactLabel = variance.impact >= 0 ? `+£${variance.impact.toFixed(2)}` : `-£${Math.abs(variance.impact).toFixed(2)}`;
 
-                  const expandBgPo = isResolved ? 'rgba(16,185,129,0.03)' : 'var(--color-warning-bg)';
-                  const expandAccentPo = isResolved ? 'inset 3px 0 0 var(--color-success)' : 'inset 3px 0 0 var(--color-warning)';
+                  const expandBgPo = isResolved ? 'rgba(16,185,129,0.03)' : '#F9F4F0';
+                  const expandAccentPo = isResolved ? 'inset 3px 0 0 var(--color-success)' : `inset 3px 0 0 ${VARIANCE_ACCENT}`;
 
                   const expandRow = (
                     <tr key={`expand-po-${invLine.id}`}>
@@ -2071,8 +2425,12 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                       </div>
                       <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{il.sku}</div>
                     </td>
-                    <td style={cell}>{il.qty}</td>
-                    <td style={{ ...cell, color: priceVar ? 'var(--color-warning)' : undefined }}>£{il.unitPrice.toFixed(2)}</td>
+                    <td style={cell}>
+                      {editable ? <EditableQty lineId={il.id} value={il.qty} /> : il.qty}
+                    </td>
+                    <td style={{ ...cell, fontWeight: priceVar ? 700 : 400 }}>
+                      {editable ? <EditablePrice lineId={il.id} value={il.unitPrice} /> : `£${il.unitPrice.toFixed(2)}`}
+                    </td>
                     <td style={{ ...cell, fontWeight: 600 }}>£{il.lineTotal.toFixed(2)}</td>
                     <td style={{ ...cell }}>
                       <TaxSelect lineId={il.id} sku={il.sku} />
@@ -2090,7 +2448,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
           )}
 
           {/* ── Sibling invoice groups (editable — share same PO) ── */}
-          {siblingInvoices.map(sibling => {
+          {siblingInvoices.map((sibling, sibIdx) => {
             const sibGRNs = getGRNsForInvoice(sibling);
             const sibGRNLinesBySku = new Map<string, { orderedQty: number; receivedQty: number; unitPrice: number; lineTotal: number; grnNumber: string }>();
             sibGRNs.forEach(g => g.lines.forEach(gl => {
@@ -2116,6 +2474,9 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                 <tr>
                   <td colSpan={6} style={{ padding: '8px 14px', background: 'var(--color-bg-subtle, #fafafa)', borderTop: '2px solid var(--color-border)', borderBottom: '1px solid var(--color-border-subtle)', ...divider }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+                        Invoice {sibIdx + 2} of {invoiceCountInView}
+                      </span>
                       <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-text-primary)' }}>
                         {sibling.invoiceNumber}
                       </span>
@@ -2140,9 +2501,9 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                           fontWeight: 700,
                           padding: '2px 8px',
                           borderRadius: '999px',
-                          background: 'var(--color-success-light)',
+                          background: '#fff',
                           color: 'var(--color-success)',
-                          border: '1px solid rgba(16, 185, 129, 0.25)',
+                          border: '1.5px solid var(--color-success)',
                           textTransform: 'uppercase',
                           letterSpacing: '0.04em',
                         }}>
@@ -2258,6 +2619,8 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
           </tfoot>
         </table>
       </div>
+
+      {showDoc && <InvoiceDocDrawer invoice={invoice} onClose={() => setShowDoc(false)} />}
     </>
   );
 }
@@ -2334,7 +2697,7 @@ function VarianceCard({ variance, resolution, onResolve }: { variance: MatchVari
 /* ──────────── Match Summary Card ──────────── */
 
 function MatchSummaryCard({ label, value, sub, variant }: { label: string; value: string; sub: string; variant: 'default' | 'success' | 'error' | 'warning' }) {
-  const bg = variant === 'error' ? 'var(--color-error-light)' : variant === 'success' ? 'var(--color-success-light)' : variant === 'warning' ? 'var(--color-warning-light)' : '#fff';
+  const bg = variant === 'error' ? 'var(--color-error-light)' : variant === 'warning' ? 'var(--color-warning-light)' : '#fff';
   const border = variant === 'error' ? 'var(--color-error-border)' : variant === 'success' ? 'var(--color-success-border)' : variant === 'warning' ? 'var(--color-warning-border)' : 'var(--color-border-subtle)';
   const valueColor = variant === 'error' ? 'var(--color-error)' : variant === 'success' ? 'var(--color-success)' : variant === 'warning' ? 'var(--color-warning)' : 'var(--color-text-primary)';
 

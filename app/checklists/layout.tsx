@@ -1,7 +1,7 @@
 'use client';
 
 import Sidebar from '@/components/Sidebar/Sidebar';
-import SiteSwitcher from '@/components/Sidebar/SiteSwitcher';
+import AreaTopBar from '@/components/TopBar/AreaTopBar';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useRouter, usePathname } from 'next/navigation';
 
@@ -64,56 +64,11 @@ export default function ChecklistsLayout({ children }: { children: React.ReactNo
           overflow: 'hidden',
         }}
       >
-      <header
-        style={{
-          flexShrink: 0,
-          zIndex: 200,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-          minHeight: '52px',
-          padding: '10px 16px 10px 12px',
-          borderBottom: '1px solid var(--color-border-subtle)',
-          background: '#ffffff',
-        }}
-      >
-        <div style={{ minWidth: 0, maxWidth: '240px' }}>
-          <SiteSwitcher siteName="Fitzroy Espresso" compact={false} />
-        </div>
-
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span
-            style={{
-              fontSize: '13px',
-              fontWeight: 700,
-              color: 'var(--color-text-primary)',
-              letterSpacing: '0.01em',
-            }}
-          >
-            {title}
-          </span>
-        </div>
-
-        <div style={{ minWidth: 0, maxWidth: '240px', display: 'flex', justifyContent: 'flex-end' }}>
-          <button
-            onClick={handleBack}
-            style={{
-              padding: '7px 14px',
-              borderRadius: '8px',
-              background: '#fff',
-              border: '1px solid var(--color-border)',
-              fontSize: '12px',
-              fontWeight: 600,
-              fontFamily: 'var(--font-primary)',
-              color: 'var(--color-text-secondary)',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            ← Back
-          </button>
-        </div>
-      </header>
+      <AreaTopBar
+        title={title}
+        siteName="Fitzroy Espresso"
+        onBack={handleBack}
+      />
 
       <div
         style={{

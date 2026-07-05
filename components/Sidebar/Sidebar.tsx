@@ -11,10 +11,8 @@ import {
   Send,
   ShoppingCart,
   FileCheck,
-  Clock,
-  FileX,
+  List,
   Box,
-  ShieldCheck,
   Star,
   MapPin,
   Settings,
@@ -129,14 +127,17 @@ export default function Sidebar() {
   // which is fine for the prototype — operators rarely edit values
   // hard enough to flip an item across the healthy threshold mid-
   // session, and any drift resolves on next mount.
+  //
+  // Capped at 3 to match the /stock surface, which only ever alerts
+  // on the three most urgent items (top-bar pill, attention drawer,
+  // Quick count all read the same capped list).
   const stockAttentionCount = useMemo(() => {
     const tally = (items: { id: string }[]) =>
       items.reduce((n, item) => n + (getStockStatus(item as Parameters<typeof getStockStatus>[0]) !== 'healthy' ? 1 : 0), 0);
-    if (isAllSites) {
-      return ESTATE_SITES.reduce((n, site) => n + tally(site.items), 0);
-    }
-    const site = ESTATE_SITES.find(s => s.siteId === activeSiteId);
-    return site ? tally(site.items) : 0;
+    const raw = isAllSites
+      ? ESTATE_SITES.reduce((n, site) => n + tally(site.items), 0)
+      : tally(ESTATE_SITES.find(s => s.siteId === activeSiteId)?.items ?? []);
+    return Math.min(raw, 3);
   }, [isAllSites, activeSiteId]);
 
   return (
@@ -265,21 +266,27 @@ export default function Sidebar() {
             history. They don't match invoices or own credit notes — those
             sit at the estate level. */}
         <NavGroup title="Stock & ordering" compact={compact}>
-          <NavItem label="Review suggested orders" icon={ShoppingCart} compact={compact} badge={3} active={is('/assisted-ordering')} onClick={() => router.push('/assisted-ordering')} />
+          {/* "Orders" fronts the Predictive ordering area — suggested
+              orders plus the Review approvals tab. Badge sums the two
+              queues (3 suggested orders + pending approvals) so neither
+              signal is lost by the merge. */}
+          <NavItem
+            label="Orders"
+            icon={ShoppingCart}
+            compact={compact}
+            badge={3 + pendingApprovals || undefined}
+            active={is('/assisted-ordering') || is('/approvals')}
+            onClick={() => router.push('/assisted-ordering')}
+          />
           {/* "Manage stock" covers the four sub-views of /stock:
               Needs attention, All items, Stocktake (the count flow), and
               Stocktake history. Previously split across two sidebar items
               ("Monitor stock" + "Count stock") — folded into one so the
               operator doesn't route-hop between monitoring and counting. */}
           <NavItem label="Manage stock" icon={Box} compact={compact} badge={stockAttentionCount || undefined} active={is('/stock')} onClick={() => router.push('/stock')} />
-          {!isSpoke && (
-            <NavItem label="Match invoices" icon={FileCheck} compact={compact} badge={invoiceReviewCount || undefined} active={is('/invoices')} onClick={() => router.push('/invoices')} />
-          )}
-          <NavItem label="Review approvals" icon={ShieldCheck} compact={compact} badge={pendingApprovals || undefined} active={is('/approvals')} onClick={() => router.push('/approvals')} />
-          <NavItem label="View order history" icon={Clock} compact={compact} active={is('/order-history')} onClick={() => router.push('/order-history')} />
-          {!isSpoke && (
-            <NavItem label="Manage credit notes" icon={FileX} compact={compact} active={is('/credit-notes')} onClick={() => router.push('/credit-notes')} />
-          )}
+          {/* Deliveries area covers receiving and order history; Receive
+              delivery is the lead tab so the entry lands there. */}
+          <NavItem label="Deliveries" icon={List} compact={compact} active={is('/order-history') || is('/receive')} onClick={() => router.push('/receive')} />
         </NavGroup>
 
         {/* Group 3 — Performance (Manager+)
@@ -310,6 +317,19 @@ export default function Sidebar() {
             active={is('/cogs')}
             onClick={() => router.push('/cogs')}
           />
+          {/* Invoices — matching + credit notes live behind one entry;
+              the area's top bar carries the two tabs. Estate-level
+              surface, so spokes don't see it. */}
+          {!isSpoke && (
+            <NavItem
+              label="Invoices"
+              icon={FileCheck}
+              compact={compact}
+              badge={invoiceReviewCount || undefined}
+              active={is('/invoices') || is('/credit-notes')}
+              onClick={() => router.push('/invoices')}
+            />
+          )}
           {/* AI forecast demo (/forecast/ai-demo) is hidden for now — the
               head-to-head isn't nailed yet, so we keep it out of the nav. The
               page still exists; re-add this NavItem to bring it back. */}

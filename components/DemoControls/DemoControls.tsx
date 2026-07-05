@@ -42,6 +42,11 @@ type Props = {
   extraSection?: ReactNode;
 };
 
+// Demo controls only appear on the home screens. Each demo version has
+// its own home, and the panel's Version switcher is the only way to move
+// between them — so all three roots count as "home".
+const HOME_PATHS = new Set(['/', '', '/mvp-1', '/prod-2']);
+
 export default function DemoControls({ variant = 'floating', extraSection }: Props) {
   const pathname = usePathname() ?? '';
 
@@ -49,23 +54,9 @@ export default function DemoControls({ variant = 'floating', extraSection }: Pro
   // (brand/version/acting-as switches).
   if (isDemoBuild) return null;
 
-  // The floating mount yields control to whichever inline mount lives in
-  // the route's own header — otherwise both render and we end up with
-  // two triggers on the same screen. Inline mounts always render.
-  if (variant === 'floating') {
-    const isHome = pathname === '/' || pathname === '';
-    if (
-      isHome ||
-      pathname.startsWith('/mvp-1') ||
-      pathname.startsWith('/prod-2') ||
-      pathname.startsWith('/production') ||
-      pathname.startsWith('/recipes') ||
-      pathname.startsWith('/settings') ||
-      pathname.startsWith('/suppliers')
-    ) {
-      return null;
-    }
-  }
+  // Hidden everywhere except the home screens — inner pages keep their
+  // mounts (layouts pass this into their top bars) but render nothing.
+  if (!HOME_PATHS.has(pathname)) return null;
 
   return variant === 'inline' ? (
     <InlineDemoControls extraSection={extraSection} />

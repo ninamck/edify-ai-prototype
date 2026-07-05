@@ -49,9 +49,6 @@ export default function ApprovalsPageView() {
   if (!isManager) {
     return (
       <div style={{ fontFamily: 'var(--font-primary)' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 20px' }}>
-          Review Approvals
-        </h1>
         <div style={{
           padding: '32px',
           borderRadius: '12px',
@@ -71,10 +68,6 @@ export default function ApprovalsPageView() {
 
   return (
     <div style={{ fontFamily: 'var(--font-primary)' }}>
-      <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 20px' }}>
-        Review Approvals
-      </h1>
-
       {/* Summary line */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '14px', flexWrap: 'wrap', marginBottom: '20px', fontSize: '13px', color: 'var(--color-text-muted)' }}>
         <span>

@@ -12,12 +12,18 @@ import {
   type WasteReasonId,
 } from '@/components/Waste/wasteData';
 
+// Default link builder targets the standalone /log-waste route. Hosts
+// that embed the flow elsewhere (e.g. the Stock page's Waste tab) pass
+// their own builder so navigation stays on the host route.
+const defaultBuildHref = (query: string) => (query ? `/log-waste?${query}` : '/log-waste');
+
 export default function WasteLogCard({
   itemId,
   initialQty,
   initialReason,
   queue,
   queueIndex,
+  buildHref = defaultBuildHref,
 }: {
   itemId: string;
   initialQty: number;
@@ -26,6 +32,7 @@ export default function WasteLogCard({
   queue?: string[];
   /** 0-based index into queue for the item being logged now. */
   queueIndex?: number;
+  buildHref?: (query: string) => string;
 }) {
   const router = useRouter();
   const product = getProduct(itemId);
@@ -45,7 +52,7 @@ export default function WasteLogCard({
   if (!product) {
     return (
       <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-        Product not found. <button onClick={() => router.push('/log-waste')}>Back to picker</button>
+        Product not found. <button onClick={() => router.push(buildHref(''))}>Back to picker</button>
       </div>
     );
   }
@@ -55,14 +62,14 @@ export default function WasteLogCard({
   const multiUom = product.uomOptions.length > 1;
 
   function goPicker() {
-    router.push('/log-waste');
+    router.push(buildHref(''));
   }
 
   function goToQueueItem(nextIndex: number) {
     if (!queue) return;
     const nextId = queue[nextIndex];
     router.push(
-      `/log-waste?itemId=${encodeURIComponent(nextId)}&queue=${encodeURIComponent(queue.join(','))}&i=${nextIndex}`,
+      buildHref(`itemId=${encodeURIComponent(nextId)}&queue=${encodeURIComponent(queue.join(','))}&i=${nextIndex}`),
     );
   }
 

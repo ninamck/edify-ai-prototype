@@ -179,7 +179,8 @@ export default function ForecastPage() {
         gap: 16,
       }}
     >
-      {/* Scope tabs */}
+      {/* Scope tabs + day picker share one row — the page title lives
+          in the area top bar, so the controls lead the content. */}
       <div
         style={{
           display: 'flex',
@@ -188,17 +189,6 @@ export default function ForecastPage() {
           flexWrap: 'wrap',
         }}
       >
-        <h1
-          style={{
-            margin: 0,
-            fontSize: 20,
-            fontWeight: 700,
-            color: 'var(--color-text-primary)',
-            fontFamily: 'var(--font-primary)',
-          }}
-        >
-          Forecast
-        </h1>
         <Tabs
           options={[
             { id: 'forecast', label: 'Forecast' },
@@ -207,15 +197,13 @@ export default function ForecastPage() {
           value={scope}
           onChange={v => setScope(v as Scope)}
         />
+        <DayPickerRow
+          scope={scope}
+          offset={activeOffset}
+          activeDate={activeDate}
+          onSelectOffset={setActiveOffset}
+        />
       </div>
-
-      {/* Day picker — two quick pills + a calendar pill for any other date. */}
-      <DayPickerRow
-        scope={scope}
-        offset={activeOffset}
-        activeDate={activeDate}
-        onSelectOffset={setActiveOffset}
-      />
 
       {/* Hero card */}
       {scope === 'forecast' ? (
@@ -443,7 +431,9 @@ function DayPickerRow({
     scope === 'forecast' ? dayOffset(FORECAST_MAX_OFFSET) : dayOffset(0);
 
   return (
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+    // marginLeft auto pins the day pills to the right edge of the
+    // shared controls row, opposite the Forecast/Result switcher.
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginLeft: 'auto' }}>
       {quick.map(q => (
         <Pill
           key={q.id}

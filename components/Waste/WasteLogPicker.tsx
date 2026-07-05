@@ -19,7 +19,19 @@ import type { BriefingPhase } from '@/components/briefing';
 
 type TabId = 'log-new' | 'today' | 'last-7';
 
-export default function WasteLogPicker({ phase }: { phase: BriefingPhase }) {
+// Default link builder targets the standalone /log-waste route (the
+// on-the-floor task surface). Hosts that embed the flow elsewhere —
+// e.g. the Stock page's Waste tab — pass their own builder so the
+// picker↔card navigation stays on the host route.
+const defaultBuildHref = (query: string) => (query ? `/log-waste?${query}` : '/log-waste');
+
+export default function WasteLogPicker({
+  phase,
+  buildHref = defaultBuildHref,
+}: {
+  phase: BriefingPhase;
+  buildHref?: (query: string) => string;
+}) {
   const router = useRouter();
   const [tab, setTab] = useState<TabId>('log-new');
   const [query, setQuery] = useState('');
@@ -96,24 +108,24 @@ export default function WasteLogPicker({ phase }: { phase: BriefingPhase }) {
   }
 
   function pickOne(productId: string) {
-    router.push(`/log-waste?itemId=${encodeURIComponent(productId)}`);
+    router.push(buildHref(`itemId=${encodeURIComponent(productId)}`));
   }
 
   function startFlow() {
     if (selected.length === 0) return;
     if (selected.length === 1) {
-      router.push(`/log-waste?itemId=${encodeURIComponent(selected[0])}`);
+      router.push(buildHref(`itemId=${encodeURIComponent(selected[0])}`));
       return;
     }
     const queue = selected.join(',');
     router.push(
-      `/log-waste?itemId=${encodeURIComponent(selected[0])}&queue=${encodeURIComponent(queue)}&i=0`,
+      buildHref(`itemId=${encodeURIComponent(selected[0])}&queue=${encodeURIComponent(queue)}&i=0`),
     );
   }
 
   function relog(entry: LoggedEntry) {
     router.push(
-      `/log-waste?itemId=${encodeURIComponent(entry.productId)}&qty=${entry.qty}&reason=${entry.reasonId}`,
+      buildHref(`itemId=${encodeURIComponent(entry.productId)}&qty=${entry.qty}&reason=${entry.reasonId}`),
     );
   }
 

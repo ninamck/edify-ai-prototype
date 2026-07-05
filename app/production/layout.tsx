@@ -1,20 +1,13 @@
 'use client';
 
 import Sidebar from '@/components/Sidebar/Sidebar';
-import SiteSwitcher from '@/components/Sidebar/SiteSwitcher';
+import AreaTopBar from '@/components/TopBar/AreaTopBar';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { useRouter, usePathname } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import QuinnProductionPanel, { QuinnTrigger } from '@/components/Production/QuinnProductionPanel';
 import { RoleSwitcher } from '@/components/Production/RoleContext';
 import HubOperatorProviders from '@/components/Operator/HubOperatorProviders';
 import { DemoControlsSection } from '@/components/DemoControls/DemoControls';
-import {
-  TOP_NAV_BAR_PADDING,
-  TOP_NAV_PILL_ACTIVE,
-  TOP_NAV_PILL_BASE,
-  TOP_NAV_PILL_GAP,
-  TOP_NAV_PILL_IDLE_TRANSPARENT,
-} from '@/components/Production/topNavStyles';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import DemoControls from '@/components/DemoControls/DemoControls';
 import SpokeAdhocRequestCard from '@/components/Production/SpokeAdhocRequestCard';
@@ -156,7 +149,6 @@ const BK_PLAN_TABS: SubTab[] = [
 
 export default function ProductionLayout({ children }: { children: React.ReactNode }) {
   const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
-  const router = useRouter();
   const pathname = usePathname();
   const { isSpoke, isHybrid, isStandalone, isProducingHybrid, isBurgerKing } = useActiveSite();
 
@@ -238,132 +230,61 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
           minWidth: 0,
         }}
       >
-        {/* Top bar */}
-        <header
-          style={{
-            flexShrink: 0,
-            zIndex: 200,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 16,
-            minHeight: 52,
-            padding: '10px 16px 10px 12px',
-            borderBottom: '1px solid var(--color-border-subtle)',
-            background: '#ffffff',
-          }}
-        >
-          <div style={{ minWidth: 0, maxWidth: 240 }}>
-            <SiteSwitcher compact={false} />
-          </div>
-
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span
-              style={{
-                fontSize: 13,
-                fontWeight: 700,
-                color: 'var(--color-text-primary)',
-                letterSpacing: '0.01em',
-              }}
-            >
-              {headerLabel}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
-            <DemoControls
-              variant="inline"
-              extraSection={
-                <DemoControlsSection label="Production role">
-                  <RoleSwitcher />
-                </DemoControlsSection>
-              }
-            />
-            {/* Quinn lives in the header now; the floating bottom-right
-                trigger is suppressed below via `hideTrigger`. The Home
-                button was removed — sidebar handles cross-app nav. */}
-            <QuinnTrigger />
-          </div>
-        </header>
-
-        {/* Sub-tabs — pinned to the top of the viewport so it stays visible
-            as the rest of the page scrolls. Sized for tablet via the
-            shared TOP_NAV_* constants so this row and the site picker
-            below it stack as a single header band. */}
-        <nav
-          style={{
-            position: 'sticky',
-            top: 0,
-            zIndex: 150,
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            gap: TOP_NAV_PILL_GAP,
-            padding: TOP_NAV_BAR_PADDING,
-            borderBottom: '1px solid var(--color-border-subtle)',
-            background: '#ffffff',
-            overflowX: 'auto',
-          }}
-        >
-          {subTabs.map(tab => {
-            const active = pathname === tab.href || pathname.startsWith(tab.href + '/');
-            return (
-              <button
-                key={tab.id}
-                onClick={() => router.push(tab.href)}
-                style={{
-                  ...TOP_NAV_PILL_BASE,
-                  ...(active ? TOP_NAV_PILL_ACTIVE : TOP_NAV_PILL_IDLE_TRANSPARENT),
-                }}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-
-          {/* Right-aligned actions for the spoke persona. The ad-hoc
-              request trigger lives here on the Order page — it's the
-              spoke's only outbound action and pairs naturally with the
-              tab row. */}
-          {isSpoke && pathname.startsWith('/production/spokes') && (
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
-              <SpokeAdhocRequestCard
-                spokeId={SPOKE_PERSONA_SITE_ID}
-                hubId={SPOKE_PERSONA_HUB_ID}
-                recordedBy="Spoke manager"
-              />
-            </div>
-          )}
-
-          {/* Right-aligned slot. Two things live here:
-              1. The End production / Reopen control for Hub, Hybrid
-                 and Standalone personas while they're in the Run
-                 group (Today, Run sheet, Benches, PCR queue, Live
-                 sales). Mounted once at the layout level so the
-                 button is identical on every run sub-tab and the
-                 state survives navigation between them.
-              2. A `#production-nav-actions` portal target left in
-                 place for sub-page-owned actions that haven't yet
-                 been lifted up (e.g. the prod-2 AmountsView). New
-                 pages should prefer rendering directly here rather
-                 than portalling.
-              Spoke persona is excluded entirely; their spoke order
-              page already carries its own right-side action above. */}
-          {!(isSpoke && pathname.startsWith('/production/spokes')) && (
-            <div
-              id="production-nav-actions"
-              style={{
-                marginLeft: 'auto',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-              }}
-            >
-              {!isSpoke && productionGroup === 'run' && (
-                <RunNavEndProductionSlot />
+        {/* Single top bar — site switcher · mode title (Run / Plan
+            production) · persona-driven sub-tabs, with the persona
+            controls, Quinn and run actions pinned right. Matches the
+            redesigned area chrome. */}
+        <AreaTopBar
+          title={headerLabel}
+          tabs={subTabs}
+          rightSlot={
+            <>
+              {/* Spoke persona: the ad-hoc request trigger lives here on
+                  the Order page — it's the spoke's only outbound action. */}
+              {isSpoke && pathname.startsWith('/production/spokes') && (
+                <SpokeAdhocRequestCard
+                  spokeId={SPOKE_PERSONA_SITE_ID}
+                  hubId={SPOKE_PERSONA_HUB_ID}
+                  recordedBy="Spoke manager"
+                />
               )}
-            </div>
-          )}
-        </nav>
+
+              {/* Right slot. Two things live here:
+                  1. The End production / Reopen control for Hub, Hybrid
+                     and Standalone personas while they're in the Run
+                     group. Mounted once at the layout level so the
+                     button is identical on every run sub-tab and the
+                     state survives navigation between them.
+                  2. A `#production-nav-actions` portal target left in
+                     place for sub-page-owned actions that haven't yet
+                     been lifted up (e.g. the prod-2 AmountsView).
+                  Spoke persona is excluded; their spoke order page
+                  already carries its own right-side action above. */}
+              {!(isSpoke && pathname.startsWith('/production/spokes')) && (
+                <div
+                  id="production-nav-actions"
+                  style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                >
+                  {!isSpoke && productionGroup === 'run' && (
+                    <RunNavEndProductionSlot />
+                  )}
+                </div>
+              )}
+
+              <DemoControls
+                variant="inline"
+                extraSection={
+                  <DemoControlsSection label="Production role">
+                    <RoleSwitcher />
+                  </DemoControlsSection>
+                }
+              />
+              {/* Quinn lives in the header; the floating bottom-right
+                  trigger is suppressed below via `hideTrigger`. */}
+              <QuinnTrigger />
+            </>
+          }
+        />
 
         {/* Page body — flows in normal document scroll so the page itself
             scrolls rather than an inner container. */}

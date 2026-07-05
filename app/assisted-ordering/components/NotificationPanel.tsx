@@ -45,25 +45,14 @@ export default function NotificationPanel({
         padding: '32px 24px',
       }}
     >
-      {/* Header */}
+      {/* Header — title lives in the area top bar now; just the summary line */}
       <div>
-        <h1
-          style={{
-            fontSize: '22px',
-            fontWeight: 700,
-            color: 'var(--color-text-primary)',
-            fontFamily: 'var(--font-primary)',
-            margin: 0,
-          }}
-        >
-          Suggested Ordering
-        </h1>
         <p
           style={{
             fontSize: '14px',
             color: 'var(--color-text-secondary)',
             fontFamily: 'var(--font-primary)',
-            margin: '6px 0 0',
+            margin: 0,
           }}
         >
           {totalItems} items across {supplierCount} supplier{supplierCount !== 1 ? 's' : ''} — est. £{grandTotal.toFixed(0)}

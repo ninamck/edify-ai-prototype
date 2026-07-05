@@ -7,7 +7,8 @@ export type InvoiceMatchStatus =
   | 'Parse Failed'
   | 'Duplicate'
   | 'Approved'
-  | 'Matching in Progress';
+  | 'Matching in Progress'
+  | 'Needs GRN Match';
 
 export type PriceResolution = 'Accept & Update Cost in Edify' | 'Accept for this delivery' | 'Dispute → Credit Note';
 export type QtyResolution = 'Credit Note' | 'Accept Short';
@@ -150,6 +151,14 @@ export interface MatchVariance {
   impact: number;
 }
 
+// A GRN the system considered but couldn't confidently pick — used when
+// status is 'Needs GRN Match' and the reviewer has to choose manually.
+export interface CandidateGRN {
+  grnNumber: string;
+  confidence: number; // 0–100
+  reason: string;
+}
+
 export interface Invoice {
   id: string;
   invoiceNumber: string;
@@ -159,6 +168,7 @@ export interface Invoice {
   grnNumbers: string[];
   poNumbers?: string[];
   suggestedGRN?: string;
+  candidateGRNs?: CandidateGRN[];
   status: InvoiceMatchStatus;
   lines: InvoiceLine[];
   variances: MatchVariance[];
@@ -169,6 +179,9 @@ export interface Invoice {
   // True when this invoice was promoted from a parse-failed state via a GRN,
   // so the user can edit invoice line qty/price inline to match what the PDF shows.
   editable?: boolean;
+  // Reviewer confirmed this flagged invoice really is a duplicate — it's
+  // discarded from the review queue and will never sync.
+  duplicateConfirmed?: boolean;
 }
 
 export interface GRNMatchLine {
@@ -356,6 +369,80 @@ export const MOCK_INVOICES: Invoice[] = [
     ],
     variances: [],
   },
+  // ── Complex-flow demo: 3 invoices ⇄ 3 GRNs ⇄ 2 POs (PO-2920 + PO-2921).
+  //    One weekly Bidfood order, delivered in three drops, invoiced per drop.
+  //    INV-4471 carries a price variance so the reviewer has to step in. ──
+  {
+    id: 'inv-11',
+    invoiceNumber: 'INV-4470',
+    supplier: 'Bidfood',
+    date: '9 Apr 2026',
+    total: 145.00,
+    grnNumbers: ['GRN-1260'],
+    status: 'Approved',
+    lines: [
+      { id: 'il-40', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 25, unitPrice: 4.20, lineTotal: 105.00 },
+      { id: 'il-41', description: 'Oat milk 1L', sku: 'OM-1L', qty: 10, unitPrice: 4.00, lineTotal: 40.00 },
+    ],
+    variances: [],
+  },
+  {
+    id: 'inv-12',
+    invoiceNumber: 'INV-4471',
+    supplier: 'Bidfood',
+    date: '10 Apr 2026',
+    total: 351.00,
+    grnNumbers: ['GRN-1261'],
+    status: 'Variance',
+    lines: [
+      { id: 'il-42', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 15, unitPrice: 4.20, lineTotal: 63.00 },
+      { id: 'il-43', description: 'Oat milk 1L', sku: 'OM-1L', qty: 20, unitPrice: 4.20, lineTotal: 84.00 },
+      { id: 'il-44', description: 'Double cream 1L', sku: 'DC-1L', qty: 12, unitPrice: 8.00, lineTotal: 96.00 },
+      { id: 'il-45', description: 'Plain flour 10kg', sku: 'FLR-10', qty: 6, unitPrice: 18.00, lineTotal: 108.00 },
+    ],
+    variances: [
+      { id: 'v-20', itemName: 'Oat milk 1L', sku: 'OM-1L', type: 'price', invoiceValue: 4.20, grnValue: 4.00, poValue: 4.00, impact: 4.00 },
+    ],
+    note: 'Bidfood\u2019s oat milk price has crept up again \u2014 second time this month. Check with Priya before accepting.',
+    noteAuthor: 'Jordan',
+    noteUpdatedAt: 'today',
+  },
+  {
+    id: 'inv-13',
+    invoiceNumber: 'INV-4472',
+    supplier: 'Bidfood',
+    date: '11 Apr 2026',
+    total: 384.00,
+    grnNumbers: ['GRN-1262'],
+    status: 'Matched',
+    lines: [
+      { id: 'il-46', description: 'Espresso blend 1kg', sku: 'EB-1KG', qty: 12, unitPrice: 18.00, lineTotal: 216.00 },
+      { id: 'il-47', description: 'Takeaway cups 12oz', sku: 'TC-12', qty: 6, unitPrice: 28.00, lineTotal: 168.00 },
+    ],
+    variances: [],
+  },
+  // ── Ambiguous-match demo: invoice arrived with no PO or delivery-note
+  //    reference, and two near-identical drops (GRN-1270 / GRN-1271) landed a
+  //    day apart against PO-2925. The system won't guess — reviewer picks. ──
+  {
+    id: 'inv-14',
+    invoiceNumber: 'INV-4481',
+    supplier: 'Bidfood',
+    date: '13 Apr 2026',
+    total: 123.60,
+    grnNumbers: [],
+    poNumbers: ['PO-2925'],
+    status: 'Needs GRN Match',
+    candidateGRNs: [
+      { grnNumber: 'GRN-1270', confidence: 52, reason: 'Every invoice line matches what was received — 18× milk, 6× cream. Signed in by Ed Barry on 12 Apr.' },
+      { grnNumber: 'GRN-1271', confidence: 48, reason: 'Same products, but this drop was 2 milk short (16 received vs 18 billed). Signed in by Aisha Nguyen on 13 Apr.' },
+    ],
+    lines: [
+      { id: 'il-50', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 18, unitPrice: 4.20, lineTotal: 75.60 },
+      { id: 'il-51', description: 'Double cream 1L', sku: 'DC-1L', qty: 6, unitPrice: 8.00, lineTotal: 48.00 },
+    ],
+    variances: [],
+  },
 ];
 
 export function getGRNsForInvoice(invoice: Invoice, extraGRNs: string[] = []): GRN[] {
@@ -373,6 +460,99 @@ export function getGRNForInvoice(invoice: Invoice): GRN | null {
 export function getSuggestedGRN(invoice: Invoice): GRN | null {
   if (!invoice.suggestedGRN) return null;
   return MOCK_COMPLETED_DELIVERIES.find(g => g.grnNumber === invoice.suggestedGRN) ?? null;
+}
+
+export interface CandidateGRNWithData extends CandidateGRN {
+  grn: GRN;
+}
+
+export function getCandidateGRNs(invoice: Invoice): CandidateGRNWithData[] {
+  if (!invoice.candidateGRNs) return [];
+  return invoice.candidateGRNs
+    .map(c => {
+      const grn = MOCK_COMPLETED_DELIVERIES.find(g => g.grnNumber === c.grnNumber);
+      return grn ? { ...c, grn } : null;
+    })
+    .filter((c): c is CandidateGRNWithData => c !== null)
+    .sort((a, b) => b.confidence - a.confidence);
+}
+
+export interface ParsedInvoiceLine {
+  description: string;
+  sku: string;
+  qty: number;
+  unitPrice: number;
+}
+
+export interface ParsedInvoiceData {
+  supplier: string;
+  invoiceNumber: string;
+  date: string;
+  lines: ParsedInvoiceLine[];
+}
+
+// Creates an invoice from the upload flow's parsed data, links the chosen
+// GRN(s) and runs the three-way match. Idempotent per invoice number so
+// re-running the demo doesn't stack duplicates. Returns the invoice id.
+export function addUploadedInvoice(parsed: ParsedInvoiceData, grnNumbers: string[]): string {
+  const existing = MOCK_INVOICES.find(
+    i => i.invoiceNumber === parsed.invoiceNumber && i.supplier === parsed.supplier
+  );
+  if (existing) {
+    existing.lines = parsed.lines.map((l, idx) => ({
+      id: `il-${existing.id}-${idx}`,
+      description: l.description,
+      sku: l.sku,
+      qty: l.qty,
+      unitPrice: l.unitPrice,
+      lineTotal: l.qty * l.unitPrice,
+    }));
+    existing.grnNumbers = grnNumbers;
+    recomputeInvoiceVariances(existing.id);
+    return existing.id;
+  }
+  const id = `inv-up-${MOCK_INVOICES.length + 1}`;
+  const lines: InvoiceLine[] = parsed.lines.map((l, idx) => ({
+    id: `il-${id}-${idx}`,
+    description: l.description,
+    sku: l.sku,
+    qty: l.qty,
+    unitPrice: l.unitPrice,
+    lineTotal: l.qty * l.unitPrice,
+  }));
+  MOCK_INVOICES.push({
+    id,
+    invoiceNumber: parsed.invoiceNumber,
+    supplier: parsed.supplier,
+    date: parsed.date,
+    total: lines.reduce((s, l) => s + l.lineTotal, 0),
+    grnNumbers,
+    status: 'Matched',
+    lines,
+    variances: [],
+  });
+  recomputeInvoiceVariances(id);
+  return id;
+}
+
+// Reviewer confirms (or un-confirms) that a duplicate-flagged invoice really
+// is a duplicate. Confirmed duplicates drop out of the review queue and stay
+// visible only in the All tab, marked as discarded.
+export function setDuplicateConfirmed(invoiceId: string, confirmed: boolean): void {
+  const inv = MOCK_INVOICES.find(i => i.id === invoiceId);
+  if (!inv) return;
+  inv.duplicateConfirmed = confirmed;
+}
+
+// Reviewer resolves an ambiguous match by picking the GRN(s) manually.
+// Links them, clears the candidate list, and re-runs the three-way match
+// so status lands on Matched or Variance.
+export function resolveAmbiguousMatch(invoiceId: string, grnNumbers: string[]): void {
+  const inv = MOCK_INVOICES.find(i => i.id === invoiceId);
+  if (!inv) return;
+  inv.grnNumbers = grnNumbers;
+  inv.candidateGRNs = undefined;
+  recomputeInvoiceVariances(invoiceId);
 }
 
 export function getGRNMatchLines(invoice: Invoice, extraGRNs: string[] = []): GRNMatchLine[] {
@@ -692,6 +872,7 @@ export function getInvoiceStatusBadgeVariant(status: InvoiceMatchStatus): 'warni
     case 'Matched': return 'success';
     case 'Approved': return 'success';
     case 'Matching in Progress': return 'info';
+    case 'Needs GRN Match': return 'warning';
     default: return 'default';
   }
 }
@@ -712,12 +893,28 @@ export function getAutoStatusNote(invoice: Invoice): AutoStatusNote | null {
       reason: 'invoice.status=Parse Failed',
     };
   }
-  // Duplicate → blocker
+  // Duplicate → blocker (or resolved, once the reviewer confirms it)
   if (invoice.status === 'Duplicate') {
+    if (invoice.duplicateConfirmed) {
+      return {
+        text: `Confirmed duplicate — discarded from the review queue. It will not sync to Xero and ${invoice.supplier} won't be paid twice.`,
+        tone: 'neutral',
+        reason: 'invoice.duplicateConfirmed=true',
+      };
+    }
     return {
       text: `Possible duplicate — another invoice with the same number has already been processed. Verify with ${invoice.supplier} before proceeding.`,
       tone: 'error',
       reason: 'invoice.status=Duplicate',
+    };
+  }
+  // Ambiguous GRN match → reviewer must pick the delivery
+  if (invoice.status === 'Needs GRN Match') {
+    const count = invoice.candidateGRNs?.length ?? 0;
+    return {
+      text: `Couldn't auto-match — ${count} deliveries from ${invoice.supplier} fit this invoice and it carries no delivery-note reference. Pick the right GRN below to run the match.`,
+      tone: 'warning',
+      reason: 'invoice.status=Needs GRN Match',
     };
   }
   // Matching in progress → awaiting delivery
@@ -789,7 +986,10 @@ export function getAutoStatusNote(invoice: Invoice): AutoStatusNote | null {
 }
 
 export function needsReviewCount(): number {
-  return MOCK_INVOICES.filter(i => i.status === 'Variance' || i.status === 'Parse Failed' || i.status === 'Duplicate').length;
+  return MOCK_INVOICES.filter(i =>
+    (i.status === 'Variance' || i.status === 'Parse Failed' || i.status === 'Duplicate' || i.status === 'Needs GRN Match') &&
+    !i.duplicateConfirmed
+  ).length;
 }
 
 export function autoMatchedCount(): number {

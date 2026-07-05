@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import StatusBadge from '@/components/Receiving/StatusBadge';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import Link from 'next/link';
-import { MOCK_INVOICES, Invoice, InvoiceMatchStatus, needsReviewCount, autoMatchedCount, isSplitBillingInvoice, splitBillingCount, getPOsForInvoice, getInvoiceStatusBadgeVariant, getExternallySyncedIds } from './mockData';
+import { MOCK_INVOICES, Invoice, InvoiceMatchStatus, needsReviewCount, autoMatchedCount, isSplitBillingInvoice, splitBillingCount, getPOsForInvoice, getPOContextForInvoice, getInvoiceStatusBadgeVariant, getExternallySyncedIds } from './mockData';
 import { getCreditNotesForInvoice } from '@/components/CreditNotes/mockData';
 import { MOCK_PASS_THROUGH_INVOICES, PassThroughInvoice, PassThroughStatus, grandTotal, vatAmount } from '@/components/PassThrough/mockData';
 import { recordSync } from './syncLog';
@@ -19,11 +19,19 @@ function blockedReason(s: InvoiceMatchStatus): string | null {
     case 'Parse Failed': return 'Parse failed — re-upload or fix fields before syncing.';
     case 'Duplicate': return 'Possible duplicate — confirm not-a-duplicate first.';
     case 'Matching in Progress': return 'Awaiting delivery — no GRN yet.';
+    case 'Needs GRN Match': return 'Ambiguous match — pick the right GRN before syncing.';
     default: return null;
   }
 }
 
 type Tab = 'needs-review' | 'all' | 'approved' | 'split-billing' | 'pass-through';
+
+type GroupPos = 'first' | 'middle' | 'last' | null;
+
+interface DisplayRow {
+  invoice: Invoice;
+  groupPos: GroupPos;
+}
 
 interface InvoiceListProps {
   onViewInvoice: (id: string) => void;
@@ -111,7 +119,7 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
 
   const filtered = useMemo(() => {
     let list = MOCK_INVOICES;
-    if (tab === 'needs-review') list = list.filter(i => i.status === 'Variance' || i.status === 'Parse Failed' || i.status === 'Duplicate');
+    if (tab === 'needs-review') list = list.filter(i => (i.status === 'Variance' || i.status === 'Parse Failed' || i.status === 'Duplicate' || i.status === 'Needs GRN Match') && !i.duplicateConfirmed);
     else if (tab === 'approved') list = list.filter(i => i.status === 'Approved');
     else if (tab === 'split-billing') list = list.filter(isSplitBillingInvoice);
     if (search) {
@@ -124,7 +132,7 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
   const approvedCount = MOCK_INVOICES.filter(i => i.status === 'Approved').length;
   const passThroughCount = MOCK_PASS_THROUGH_INVOICES.length;
 
-  // POs with 2+ non-excluded invoices — each gets a distinct accent color so siblings visually group
+  // POs with 2+ non-excluded invoices — used to keep sibling invoices adjacent in the list
   const splitPOs = useMemo(() => {
     const counts = new Map<string, number>();
     for (const inv of MOCK_INVOICES) {
@@ -133,6 +141,30 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
     }
     return Array.from(counts.entries()).filter(([, c]) => c > 1).map(([po]) => po);
   }, []);
+
+  // Reorder so invoices sharing a split PO sit next to each other, and mark each
+  // row's position within its group so a bracket spine can span the siblings.
+  const displayRows = useMemo<DisplayRow[]>(() => {
+    const keyFor = (inv: Invoice): string | null => {
+      if (inv.status === 'Duplicate' || inv.status === 'Parse Failed') return null;
+      return getPOsForInvoice(inv).find(po => splitPOs.includes(po)) ?? null;
+    };
+    const emitted = new Set<string>();
+    const rows: DisplayRow[] = [];
+    for (const inv of filtered) {
+      if (emitted.has(inv.id)) continue;
+      const key = keyFor(inv);
+      const members = key ? filtered.filter(i => !emitted.has(i.id) && keyFor(i) === key) : [inv];
+      members.forEach((m, i) => {
+        emitted.add(m.id);
+        rows.push({
+          invoice: m,
+          groupPos: members.length < 2 ? null : i === 0 ? 'first' : i === members.length - 1 ? 'last' : 'middle',
+        });
+      });
+    }
+    return rows;
+  }, [filtered, splitPOs]);
 
   const syncableFiltered = useMemo(
     () => filtered.filter(inv => isSyncable(inv) && !locallySynced.has(inv.id)),
@@ -196,30 +228,6 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
 
   return (
     <div style={{ fontFamily: 'var(--font-primary)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
-          Invoices
-        </h1>
-        <Link
-          href="/invoices/settings"
-          style={{
-            padding: '9px 14px',
-            borderRadius: '8px',
-            background: '#fff',
-            border: '1px solid var(--color-border)',
-            fontSize: '13px',
-            fontWeight: 600,
-            fontFamily: 'var(--font-primary)',
-            color: 'var(--color-text-primary)',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
-            textDecoration: 'none',
-          }}
-        >
-          ⚙ Rules
-        </Link>
-      </div>
-
       {/* Summary line */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '14px', flexWrap: 'wrap', marginBottom: '16px', fontSize: '13px', color: 'var(--color-text-muted)' }}>
         <span>
@@ -231,6 +239,22 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
           <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{reviewCount}</span>
           {' '}need review
         </span>
+        <Link
+          href="/invoices/upload"
+          style={{
+            marginLeft: 'auto',
+            padding: '9px 18px',
+            borderRadius: '8px',
+            background: 'var(--color-accent-active)',
+            color: '#fff',
+            fontSize: '13px',
+            fontWeight: 700,
+            textDecoration: 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          + Upload invoice
+        </Link>
       </div>
 
       {/* Tabs */}
@@ -302,25 +326,45 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
             flex: '1 1 240px',
           }}
         />
-        {showSelectionUI && readyApprovedInvoices.length > 0 && (
-          <button
-            onClick={() => setPendingSync(readyApprovedInvoices)}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {showSelectionUI && readyApprovedInvoices.length > 0 && (
+            <button
+              onClick={() => setPendingSync(readyApprovedInvoices)}
+              style={{
+                padding: '9px 16px',
+                borderRadius: '8px',
+                background: 'var(--color-accent-active)',
+                color: '#fff',
+                border: 'none',
+                fontSize: '13px',
+                fontWeight: 700,
+                fontFamily: 'var(--font-primary)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Sync all approved ({readyApprovedInvoices.length})
+            </button>
+          )}
+          <Link
+            href="/invoices/settings"
             style={{
-              padding: '9px 16px',
+              padding: '9px 14px',
               borderRadius: '8px',
-              background: 'var(--color-accent-active)',
-              color: '#fff',
-              border: 'none',
+              background: '#fff',
+              border: '1px solid var(--color-border)',
               fontSize: '13px',
-              fontWeight: 700,
+              fontWeight: 600,
               fontFamily: 'var(--font-primary)',
+              color: 'var(--color-text-primary)',
               cursor: 'pointer',
               whiteSpace: 'nowrap',
+              textDecoration: 'none',
             }}
           >
-            Sync all approved ({readyApprovedInvoices.length})
-          </button>
-        )}
+            ⚙ Rules
+          </Link>
+        </div>
       </div>
 
       {/* Invoice table */}
@@ -418,7 +462,7 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
               </tr>
             </thead>
             <tbody>
-              {filtered.map(inv => (
+              {displayRows.map(({ invoice: inv, groupPos }) => (
                 <InvoiceRow
                   key={inv.id}
                   invoice={inv}
@@ -426,7 +470,7 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
                   isSyncing={syncing.has(inv.id)}
                   syncable={isSyncable(inv)}
                   selected={selected.has(inv.id)}
-                  splitPOs={splitPOs}
+                  groupPos={groupPos}
                   onToggle={() => toggleSelect(inv.id)}
                   onView={() => onViewInvoice(inv.id)}
                 />
@@ -442,9 +486,10 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
           style={{
             position: 'fixed', top: '72px', left: '50%',
             transform: 'translateX(-50%)',
-            background: 'var(--color-success-light)',
-            border: '1px solid var(--color-success-border)',
-            color: 'var(--color-success)',
+            background: '#fff',
+            border: '1px solid var(--color-border-subtle)',
+            borderLeft: '3px solid var(--color-success)',
+            color: 'var(--color-text-primary)',
             fontWeight: 700, fontSize: '13px',
             padding: '10px 18px',
             borderRadius: '8px',
@@ -453,7 +498,7 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
             display: 'flex', alignItems: 'center', gap: '8px',
           }}
         >
-          <span style={{ fontSize: '14px' }}>✓</span> {toast}
+          <span style={{ fontSize: '14px', color: 'var(--color-success)' }}>✓</span> {toast}
         </div>
       )}
 
@@ -680,30 +725,37 @@ function PassThroughRow({ invoice, onView }: { invoice: PassThroughInvoice; onVi
   );
 }
 
-const SPLIT_PO_PALETTE = [
-  { bar: '#224444', chipBg: 'rgba(34,68,68,0.09)',  chipText: '#224444', chipBorder: 'rgba(34,68,68,0.25)' },
-  { bar: '#0369A1', chipBg: 'rgba(3,105,161,0.09)', chipText: '#0369A1', chipBorder: 'rgba(3,105,161,0.25)' },
-  { bar: '#475569', chipBg: 'rgba(71,85,105,0.09)', chipText: '#475569', chipBorder: 'rgba(71,85,105,0.25)' },
-  { bar: '#6B21A8', chipBg: 'rgba(107,33,168,0.09)',chipText: '#6B21A8', chipBorder: 'rgba(107,33,168,0.25)' },
-];
-
-function colorForSplitPO(poNumber: string, splitPOs: string[]) {
-  const idx = splitPOs.indexOf(poNumber);
-  if (idx < 0) return null;
-  return SPLIT_PO_PALETTE[idx % SPLIT_PO_PALETTE.length];
+// Bracket spine — a single neutral vertical bar spanning sibling rows, with
+// caps at the first and last row so adjacent groups read as separate brackets.
+function GroupSpine({ pos }: { pos: GroupPos }) {
+  if (!pos) return null;
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        position: 'absolute',
+        left: '6px',
+        top: pos === 'first' ? '10px' : 0,
+        bottom: pos === 'last' ? '10px' : 0,
+        width: '3px',
+        borderRadius: pos === 'first' ? '3px 3px 0 0' : pos === 'last' ? '0 0 3px 3px' : 0,
+        background: 'var(--color-accent-active)',
+        opacity: 0.45,
+      }}
+    />
+  );
 }
 
-function InvoiceRow({ invoice, isLocallySynced, isSyncing, syncable, selected, splitPOs, onToggle, onView }: {
+function InvoiceRow({ invoice, isLocallySynced, isSyncing, syncable, selected, groupPos, onToggle, onView }: {
   invoice: Invoice;
   isLocallySynced: boolean;
   isSyncing: boolean;
   syncable: boolean;
   selected: boolean;
-  splitPOs: string[];
+  groupPos: GroupPos;
   onToggle: () => void;
   onView: () => void;
 }) {
-  const isSplit = isSplitBillingInvoice(invoice);
   const checkboxDisabled = !syncable || isLocallySynced || isSyncing;
   const reason = blockedReason(invoice.status);
   const checkboxTitle = isLocallySynced
@@ -714,16 +766,13 @@ function InvoiceRow({ invoice, isLocallySynced, isSyncing, syncable, selected, s
         ? reason
         : 'Select for bulk sync';
 
-  // Row accent color — first split-billed PO this invoice is on, if any
-  const invoicePOs = getPOsForInvoice(invoice);
-  const accent = invoicePOs.map(po => colorForSplitPO(po, splitPOs)).find(c => c !== null) ?? null;
-
   return (
     <tr style={{ cursor: 'pointer', background: selected ? 'rgba(34, 68, 68, 0.04)' : undefined }} onClick={onView}>
       <td
-        style={{ padding: '12px 12px', borderBottom: '1px solid var(--color-border-subtle)', textAlign: 'center', width: '40px', boxShadow: accent ? `inset 3px 0 0 ${accent.bar}` : undefined }}
+        style={{ padding: '12px 12px', borderBottom: '1px solid var(--color-border-subtle)', textAlign: 'center', width: '40px', position: 'relative' }}
         onClick={(e) => e.stopPropagation()}
       >
+        <GroupSpine pos={groupPos} />
         {isLocallySynced ? (
           <span title="Synced to Xero" style={{ color: 'var(--color-success)', fontSize: '14px', fontWeight: 700 }}>✓</span>
         ) : isSyncing ? (
@@ -769,21 +818,21 @@ function InvoiceRow({ invoice, isLocallySynced, isSyncing, syncable, selected, s
         £{invoice.total.toFixed(2)}
       </td>
       <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
-        <POList invoice={invoice} splitPOs={splitPOs} />
+        <POList invoice={invoice} />
       </td>
-      <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', color: invoice.grnNumbers.length ? 'var(--color-accent-active)' : 'var(--color-text-secondary)', fontWeight: invoice.grnNumbers.length ? 600 : 400 }}>
-        {invoice.grnNumbers.length > 0 ? invoice.grnNumbers.join(', ') : '—'}
-        {invoice.suggestedGRN && (
-          <span style={{ display: 'block', fontSize: '12px', color: 'var(--color-info)', fontWeight: 600, marginTop: '2px' }}>
-            + {invoice.suggestedGRN} suggested
-          </span>
-        )}
+      <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <GRNList invoice={invoice} />
       </td>
       <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
         <CreditNoteChip invoice={invoice} />
       </td>
       <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
         <StatusBadge status={invoice.status} variant={getInvoiceStatusBadgeVariant(invoice.status)} />
+        {invoice.duplicateConfirmed && (
+          <span style={{ display: 'block', fontSize: '11px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '3px' }}>
+            Confirmed · discarded
+          </span>
+        )}
         {isLocallySynced && (
           <span style={{ display: 'block', fontSize: '11px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '3px' }}>
             Synced to Xero
@@ -812,45 +861,109 @@ function InvoiceRow({ invoice, isLocallySynced, isSyncing, syncable, selected, s
   );
 }
 
-function POList({ invoice, splitPOs }: { invoice: Invoice; splitPOs: string[] }) {
+// Shared chip look for linked documents (POs, GRNs). Multiples are always
+// counted in words — never implied by colour.
+const docChipStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '5px',
+  padding: '2px 8px',
+  borderRadius: '100px',
+  background: 'var(--color-bg-hover)',
+  color: 'var(--color-text-primary)',
+  border: '1px solid var(--color-border)',
+  fontSize: '11px',
+  fontWeight: 700,
+  whiteSpace: 'nowrap',
+  width: 'fit-content',
+  lineHeight: 1.35,
+};
+
+function DocCountLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>
+      {children}
+    </span>
+  );
+}
+
+function POList({ invoice }: { invoice: Invoice }) {
   const pos = getPOsForInvoice(invoice);
   if (pos.length === 0) return <span style={{ color: 'var(--color-text-secondary)' }}>—</span>;
+  const contexts = getPOContextForInvoice(invoice);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start' }}>
+      {pos.length > 1 && <DocCountLabel>{pos.length} POs</DocCountLabel>}
       {pos.map(po => {
-        const accent = colorForSplitPO(po, splitPOs);
-        if (accent) {
-          return (
-            <span
-              key={po}
-              title={`Multiple invoices share ${po}`}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '2px 8px',
-                borderRadius: '100px',
-                background: accent.chipBg,
-                color: accent.chipText,
-                border: `1px solid ${accent.chipBorder}`,
-                fontSize: '11px',
-                fontWeight: 700,
-                whiteSpace: 'nowrap',
-                width: 'fit-content',
-                lineHeight: 1.35,
-              }}
-            >
-              {po}
-              <span style={{ fontSize: '9px', fontWeight: 700, opacity: 0.85, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                · split
-              </span>
-            </span>
-          );
-        }
+        const ctx = contexts.find(c => c.poNumber === po);
+        const isSplit = (ctx?.totalInvoices ?? 1) > 1;
         return (
-          <span key={po} style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-accent-active)' }}>{po}</span>
+          <span
+            key={po}
+            title={isSplit ? `${ctx!.totalInvoices} invoices are billed against ${po} — this is invoice ${ctx!.invoiceIndex} of ${ctx!.totalInvoices}` : undefined}
+            style={docChipStyle}
+          >
+            {po}
+            {isSplit && (
+              <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-accent-active)', whiteSpace: 'nowrap' }}>
+                · inv {ctx!.invoiceIndex} of {ctx!.totalInvoices}
+              </span>
+            )}
+          </span>
         );
       })}
+    </div>
+  );
+}
+
+function GRNList({ invoice }: { invoice: Invoice }) {
+  const grns = invoice.grnNumbers;
+  const candidates = invoice.candidateGRNs ?? [];
+  if (grns.length === 0 && !invoice.suggestedGRN && candidates.length === 0) {
+    return <span style={{ color: 'var(--color-text-secondary)' }}>—</span>;
+  }
+  if (grns.length === 0 && candidates.length > 0) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start' }}>
+        <DocCountLabel>{candidates.length} possible</DocCountLabel>
+        {candidates.map(c => (
+          <span
+            key={c.grnNumber}
+            title={`${c.grnNumber} could match this invoice — open to pick manually`}
+            style={{
+              ...docChipStyle,
+              background: 'transparent',
+              border: '1px dashed rgba(217,119,6,0.55)',
+              color: 'var(--color-warning)',
+            }}
+          >
+            {c.grnNumber}
+            <span style={{ fontSize: '10px', fontWeight: 600, opacity: 0.85 }}>· {c.confidence}%</span>
+          </span>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start' }}>
+      {grns.length > 1 && <DocCountLabel>{grns.length} GRNs</DocCountLabel>}
+      {grns.map(grn => (
+        <span key={grn} style={docChipStyle}>{grn}</span>
+      ))}
+      {invoice.suggestedGRN && (
+        <span
+          title={`${invoice.suggestedGRN} looks like a match but isn't attached yet`}
+          style={{
+            ...docChipStyle,
+            background: 'transparent',
+            border: '1px dashed rgba(3,105,161,0.45)',
+            color: 'var(--color-info)',
+          }}
+        >
+          {invoice.suggestedGRN}
+          <span style={{ fontSize: '10px', fontWeight: 600, opacity: 0.85 }}>· suggested</span>
+        </span>
+      )}
     </div>
   );
 }

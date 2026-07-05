@@ -185,21 +185,9 @@ export default function ActivityPage() {
         }}
       >
         <div style={{ minWidth: 0 }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 22,
-              fontWeight: 700,
-              color: 'var(--color-text-primary)',
-              fontFamily: 'var(--font-primary)',
-              letterSpacing: '-0.005em',
-            }}
-          >
-            Activity
-          </h1>
           <p
             style={{
-              margin: '4px 0 0',
+              margin: 0,
               fontSize: 13,
               color: 'var(--color-text-secondary)',
               lineHeight: 1.55,

@@ -1123,6 +1123,27 @@ const FORECAST_CARDS: ForecastCardData[] = [
     covers: 38,
     comparison: '+11% vs last Sat',
   },
+  {
+    label: 'Sunday',
+    date: 'Sun 13 Apr',
+    netSales: 1040,
+    covers: 35,
+    comparison: '+4% vs last Sun',
+  },
+  {
+    label: 'Monday',
+    date: 'Mon 14 Apr',
+    netSales: 560,
+    covers: 19,
+    comparison: '−5% vs last Mon',
+  },
+  {
+    label: 'Tuesday',
+    date: 'Tue 15 Apr',
+    netSales: 640,
+    covers: 22,
+    comparison: '+2% vs last Tue',
+  },
 ];
 
 function ForecastCard({ card, hero }: { card: ForecastCardData; hero: boolean }) {
@@ -1290,7 +1311,7 @@ export default function OrderReview({
             </div>
           </div>
 
-          {/* Forecast net sales — today + next 2 days */}
+          {/* Forecast net sales — today + next 5 days */}
           <div
             style={{
               display: 'flex',
@@ -1401,7 +1422,7 @@ export default function OrderReview({
                           gap: '6px',
                         }}
                       >
-                        <span>📦</span> Arriving {date}
+                        <span>📦</span> Will arrive on {date}
                       </span>
                       <span
                         style={{
@@ -1665,21 +1686,21 @@ export default function OrderReview({
             padding: '11px 28px',
             borderRadius: 'var(--radius-card)',
             border: 'none',
-            background: '#15803D',
+            background: 'var(--color-accent-active)',
             color: '#fff',
             fontSize: '14px',
             fontWeight: 700,
             fontFamily: 'var(--font-primary)',
             cursor: 'pointer',
             whiteSpace: 'nowrap',
-            boxShadow: '0 2px 8px rgba(21,128,61,0.22)',
+            boxShadow: '0 2px 8px rgba(0,28,53,0.22)',
             transition: 'background 0.15s ease',
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = '#166534';
+            (e.currentTarget as HTMLButtonElement).style.background = '#0A2E4F';
           }}
           onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = '#15803D';
+            (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-accent-active)';
           }}
         >
           Confirm all — £{grandTotal.toFixed(0)}
