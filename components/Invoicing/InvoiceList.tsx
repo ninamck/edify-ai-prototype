@@ -48,6 +48,8 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
   const [syncing, setSyncing] = useState<Set<string>>(new Set());
   const [pendingSync, setPendingSync] = useState<Invoice[] | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // Persistent on-page notice for invoices auto-synced on arrival (dismissible, doesn't time out)
+  const [autoSyncNotice, setAutoSyncNotice] = useState<{ count: number; total: number } | null>(null);
 
   const isSyncable = (inv: Invoice) => isSyncableStatus(inv.status);
 
@@ -78,7 +80,7 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
     if (toAuto.length > 0) {
       const total = toAuto.reduce((s, i) => s + i.total, 0);
       recordSync(toAuto.map(i => i.id), toAuto.map(i => i.invoiceNumber), total);
-      setToast(`${toAuto.length} auto-synced on arrival · £${total.toFixed(2)}`);
+      setAutoSyncNotice({ count: toAuto.length, total });
     }
   }, []);
 
@@ -256,6 +258,49 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
           + Upload invoice
         </Link>
       </div>
+
+      {/* Auto-sync notice — clean matches synced on arrival, stays until dismissed */}
+      {autoSyncNotice && (
+        <div
+          role="status"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '11px 14px',
+            marginBottom: '16px',
+            background: '#fff',
+            border: '1px solid var(--color-border-subtle)',
+            borderLeft: '3px solid var(--color-success)',
+            borderRadius: '10px',
+            fontSize: '13px',
+            color: 'var(--color-text-primary)',
+          }}
+        >
+          <span style={{ color: 'var(--color-success)', fontWeight: 700 }}>✓</span>
+          <span>
+            <strong>{autoSyncNotice.count} invoice{autoSyncNotice.count === 1 ? '' : 's'} auto-synced to Xero on arrival</strong>
+            {' '}· £{autoSyncNotice.total.toFixed(2)} — clean three-way match, nothing to review.
+          </span>
+          <button
+            onClick={() => setAutoSyncNotice(null)}
+            aria-label="Dismiss auto-sync notice"
+            style={{
+              marginLeft: 'auto',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '14px',
+              lineHeight: 1,
+              color: 'var(--color-text-secondary)',
+              padding: '4px',
+              fontFamily: 'var(--font-primary)',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display: 'flex', background: 'var(--color-bg-hover)', borderRadius: '100px', padding: '3px', marginBottom: '16px', width: isMobile ? '100%' : 'fit-content' }}>
