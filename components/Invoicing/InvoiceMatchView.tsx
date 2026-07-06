@@ -128,11 +128,10 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
   const candidateGRNs = useMemo(() => getCandidateGRNs(invoice), [invoice, editBump]);
   const needsManualMatch = invoice.status === 'Needs GRN Match' && candidateGRNs.length > 0;
   const poContexts = useMemo(() => getPOContextForInvoice(invoice), [invoice, editBump]);
-  const splitPOContexts = useMemo(() => poContexts.filter(c => c.totalInvoices > 1), [poContexts]);
   const siblingInvoicesAcrossPOs = useMemo(() => {
     const seen = new Set<string>();
     const out: Invoice[] = [];
-    for (const ctx of splitPOContexts) {
+    for (const ctx of poContexts) {
       for (const other of [...ctx.priorInvoices, ...ctx.laterInvoices]) {
         if (other.id === invoice.id || seen.has(other.id)) continue;
         seen.add(other.id);
@@ -140,7 +139,7 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
       }
     }
     return out;
-  }, [splitPOContexts, invoice.id]);
+  }, [poContexts, invoice.id]);
 
   const grns = useMemo(() => getGRNsForInvoice(invoice, linkedGRNs), [invoice, linkedGRNs, editBump]);
   const grnTotal = useMemo(() => invoiceGRNTotal(invoice, linkedGRNs), [invoice, linkedGRNs, editBump]);
@@ -164,7 +163,7 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
     };
     addLines(invoice.lines);
     // siblings are editable too — seed their defaults so the dropdown works out of the box
-    for (const ctx of splitPOContexts) {
+    for (const ctx of poContexts) {
       for (const other of [...ctx.priorInvoices, ...ctx.laterInvoices]) {
         if (other.id === invoice.id) continue;
         addLines(other.lines);
@@ -369,15 +368,6 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
       {/* Auto-generated status note — system-authored, based on invoice state */}
       <AutoStatusNoteCard invoice={invoice} />
 
-      {/* PO context — running total when this invoice is one of several against a PO */}
-      {splitPOContexts.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
-          {splitPOContexts.map(ctx => (
-            <POContextStrip key={ctx.poNumber} ctx={ctx} currentInvoiceId={invoice.id} />
-          ))}
-        </div>
-      )}
-
       {/* Ambiguous match — system found several plausible GRNs, reviewer picks (blocker — full card) */}
       {needsManualMatch && (
         <AmbiguousGRNPicker
@@ -536,75 +526,6 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
       </div>
     </div>
   );
-}
-
-/* ──────────── PO Context Strip ──────────── */
-
-function POContextStrip({ ctx, currentInvoiceId }: { ctx: POContextForInvoice; currentInvoiceId: string }) {
-  const priorPercent = ctx.poAmount > 0 ? Math.min(100, (ctx.priorInvoicedAmount / ctx.poAmount) * 100) : 0;
-  const thisPercent = ctx.poAmount > 0 ? Math.min(100 - priorPercent, (ctx.thisInvoiceAmount / ctx.poAmount) * 100) : 0;
-  const afterPct = Math.round((ctx.afterThisAmount / Math.max(ctx.poAmount, 0.01)) * 100);
-
-  const implicationColor = ctx.overInvoiceIfApproved ? 'var(--color-error)' :
-    ctx.closesIfApproved ? 'var(--color-success)' :
-    'var(--color-info)';
-  const implicationText = ctx.overInvoiceIfApproved
-    ? `Over-invoices PO by £${ctx.overBy.toFixed(2)} — resolve before approving.`
-    : ctx.closesIfApproved
-      ? `Approving closes ${ctx.poNumber} — fully invoiced.`
-      : `${ctx.poNumber} stays open: £${(ctx.poAmount - ctx.afterThisAmount).toFixed(2)} remaining after this invoice.`;
-
-  return (
-    <div style={{
-      padding: '10px 14px',
-      borderRadius: '10px',
-      background: 'var(--color-info-light)',
-      border: '1px solid rgba(3, 105, 161, 0.2)',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-      flexWrap: 'wrap',
-    }}>
-      <span style={{ fontSize: '14px', lineHeight: 1 }}>🧾</span>
-      <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--color-info)', whiteSpace: 'nowrap' }}>
-        {ctx.poNumber}
-      </span>
-      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>
-        Invoice {ctx.invoiceIndex} of {ctx.totalInvoices}
-      </span>
-      <span aria-hidden="true" style={{ color: 'rgba(3, 105, 161, 0.35)' }}>·</span>
-      <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>
-        £{ctx.afterThisAmount.toFixed(2)} of £{ctx.poAmount.toFixed(2)} ({afterPct}%) after approval
-      </span>
-      <span aria-hidden="true" style={{ color: 'rgba(3, 105, 161, 0.35)' }}>·</span>
-      <span style={{ fontSize: '12px', fontWeight: 600, color: implicationColor, whiteSpace: 'nowrap' }}>
-        {implicationText}
-      </span>
-      <div style={{ flex: 1 }} />
-      <a
-        href={`/purchase-orders/${ctx.poId}`}
-        style={{
-          padding: '5px 12px',
-          borderRadius: '6px',
-          background: '#fff',
-          border: '1px solid rgba(3, 105, 161, 0.25)',
-          fontSize: '12px', fontWeight: 600,
-          fontFamily: 'var(--font-primary)',
-          color: 'var(--color-info)',
-          textDecoration: 'none',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        View PO →
-      </a>
-    </div>
-  );
-}
-
-function applicationTotalForInvoiceOnPO(ctx: POContextForInvoice, invoiceId: string): number {
-  const inv = ctx.allInvoices.find(i => i.id === invoiceId);
-  if (!inv) return 0;
-  return inv.total;
 }
 
 /* ──────────── Match Context Bar (chip strip with accordion) ──────────── */
@@ -1725,6 +1646,23 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
   // parse came through wrong, even on invoices that matched automatically.
   const [manualEdit, setManualEdit] = useState(false);
   const editable = invoice.editable === true || manualEdit;
+  // Sibling invoices collapse to one summary row each — the reviewer's task is
+  // this invoice; siblings are context, expandable on demand.
+  const [expandedSiblings, setExpandedSiblings] = useState<Set<string>>(new Set());
+  const toggleSibling = (id: string) => setExpandedSiblings(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  // Clean-matched lines collapse into a per-group summary band so exceptions
+  // carry the page; expanding restores full verifiability. Keyed per GRN group
+  // (or 'po' for the PO tab).
+  const [expandedCleanGroups, setExpandedCleanGroups] = useState<Set<string>>(new Set());
+  const toggleCleanGroup = (key: string) => setExpandedCleanGroups(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
 
   const commitQty = (lineId: string, current: number, raw: string) => {
     const n = parseFloat(raw);
@@ -1950,7 +1888,25 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
           grns={allDisplayGRNs}
           poNumbers={allPONumbersInView}
         />
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontWeight: 500 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontWeight: 500, tableLayout: 'fixed' }}>
+          {/* Fixed column widths — without these, expanding a sibling dropdown
+              adds new content that reflows every column and shifts the headers */}
+          <colgroup>
+            {/* Invoice side */}
+            <col style={{ width: '19%' }} />
+            <col style={{ width: '6%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '6%' }} />
+            <col style={{ width: '7%' }} />
+            {/* GRN / PO side */}
+            <col style={{ width: '6%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '90px' }} />
+          </colgroup>
 
           {/* ── Panel headers ── */}
           <thead>
@@ -1958,16 +1914,19 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
               {/* Invoice panel header */}
               <td colSpan={6} style={{ padding: '14px 16px', borderBottom: '1px solid var(--color-border-subtle)', ...divider }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--color-text-primary)' }}>Supplier Invoice</div>
-                    <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-                      {invoice.invoiceNumber} · {invoice.date}
-                      {editable && (
-                        <span style={{ marginLeft: '8px', fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '100px', border: `1px solid ${VARIANCE_ACCENT}`, background: VARIANCE_BADGE_BG, color: 'var(--color-text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
-                          Editing — match recalculates live
-                        </span>
-                      )}
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', minWidth: 0 }}>
+                    <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--color-text-primary)' }}>{invoice.invoiceNumber}</span>
+                    <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{invoice.date}</span>
+                    {siblingInvoices.length > 0 && (
+                      <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'var(--color-accent-active)', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+                        Invoice 1 of {invoiceCountInView} · this one
+                      </span>
+                    )}
+                    {editable && (
+                      <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '100px', border: `1px solid ${VARIANCE_ACCENT}`, background: VARIANCE_BADGE_BG, color: 'var(--color-text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+                        Editing — match recalculates live
+                      </span>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                     <button
@@ -1995,18 +1954,25 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
               {/* GRN/PO panel header */}
               <td colSpan={RC} style={{ padding: '14px 16px', borderBottom: '1px solid var(--color-border-subtle)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--color-text-primary)' }}>
-                      {rightTab === 'grn' ? (allDisplayGRNs.length > 1 ? `${allDisplayGRNs.length} GRNs` : 'GRN') : 'PO Prices'}
-                    </div>
-                    <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+                  <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--color-text-primary)' }}>
                       {rightTab === 'grn'
-                        ? (allDisplayGRNs.length > 0 ? allDisplayGRNs.map((g, i) => <span key={g.id}>{i > 0 && ' + '}{g.grnNumber} · {g.dateReceived}</span>) : 'No linked GRN')
+                        ? (grns.length > 0 ? grns.map(g => g.grnNumber).join(' + ') : 'GRN')
+                        : (() => {
+                            const poNumbers = Array.from(new Set(grnGroups.flatMap(g => g.pos.map(p => p.poNumber))));
+                            return poNumbers.length > 0 ? poNumbers.join(' + ') : 'PO Prices';
+                          })()}
+                    </span>
+                    <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                      {rightTab === 'grn'
+                        ? (grns.length === 0
+                            ? 'No linked GRN'
+                            : grns.map(g => g.dateReceived).join(' + '))
                         : (grnGroups.some(g => g.pos.length > 0)
-                            ? grnGroups.filter(g => g.pos.length > 0).map((g, i) => <span key={g.grn.id}>{i > 0 && ' + '}{g.pos.map(p => p.poNumber).join(', ')} via {g.grn.grnNumber}</span>)
+                            ? <>via {Array.from(new Set(grnGroups.filter(g => g.pos.length > 0).map(g => g.grn.grnNumber))).join(' + ')}</>
                             : 'No linked PO')
                       }
-                    </div>
+                    </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                     <div className="split-tab-toggle">
@@ -2031,7 +1997,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
               <th style={colLabelStyle}>Price</th>
               <th style={colLabelStyle}>Total</th>
               <th style={colLabelStyle}>VAT £</th>
-              <th style={{ ...colLabelStyle, width: '32px' }}></th>
+              <th style={colLabelStyle}></th>
             </tr>
           </thead>
 
@@ -2045,52 +2011,46 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
 
             return (
               <tbody key={grn.id}>
-                {/* Group section header — the invoice identity shows once, on the first
-                    group; repeat headers keep that half blank white. The GRN half only
-                    carries a band when there are multiple GRNs. */}
-                {(multiGroup || siblingInvoices.length > 0) && (
+                {/* Group section header — only needed when there are multiple GRNs.
+                    Invoice identity shows once on the first group; later groups keep
+                    that half blank white. (Position in the invoice group lives in the
+                    "Supplier Invoice" panel header above, not here.) */}
+                {multiGroup && (
                   <tr>
-                    {(groupIdx === 0 || siblingInvoices.length > 0) ? (
+                    {groupIdx === 0 ? (
                       <td colSpan={6} style={{ padding: '8px 14px', background: 'rgba(34, 68, 68, 0.06)', borderTop: '2px solid var(--color-accent-active)', borderBottom: '1px solid var(--color-border-subtle)', ...divider }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                           <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-accent-active)' }}>
                             {invoice.invoiceNumber}
                           </span>
                           <span style={{ fontWeight: 500, fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-                            {invoice.date} · {invoice.supplier}
+                            {invoice.date}
                           </span>
-                          {siblingInvoices.length > 0 && (
-                            <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'var(--color-accent-active)', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                              Invoice 1 of {invoiceCountInView} · this one
-                            </span>
-                          )}
                         </div>
                       </td>
                     ) : (
                       <td colSpan={6} style={{ padding: '8px 14px', background: '#fff', borderBottom: '1px solid var(--color-border-subtle)', ...divider }} />
                     )}
-                    {multiGroup ? (
-                      <td colSpan={RC} style={{ padding: '8px 14px', background: 'rgba(34, 68, 68, 0.06)', borderTop: '2px solid var(--color-accent-active)', borderBottom: '1px solid var(--color-border-subtle)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'var(--color-text-primary)', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
-                            GRN {groupIdx + 1} of {grns.length}
-                          </span>
-                          <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-text-primary)' }}>
-                            {rightTab === 'grn' ? grn.grnNumber : (pos.length > 0 ? pos.map(p => p.poNumber).join(' + ') : 'No PO')}
-                          </span>
-                          <span style={{ fontWeight: 500, fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-                            {rightTab === 'grn' ? `Received ${grn.dateReceived} · ${grn.receivedBy}` : `via ${grn.grnNumber}`}
-                          </span>
-                        </div>
-                      </td>
-                    ) : (
-                      <td colSpan={RC} style={{ padding: '8px 14px', background: '#fff', borderBottom: '1px solid var(--color-border-subtle)' }} />
-                    )}
+                    <td colSpan={RC} style={{ padding: '8px 14px', background: 'rgba(34, 68, 68, 0.06)', borderTop: '2px solid var(--color-accent-active)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'var(--color-text-primary)', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+                          GRN {groupIdx + 1} of {grns.length}
+                        </span>
+                        <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-text-primary)' }}>
+                          {rightTab === 'grn' ? grn.grnNumber : (pos.length > 0 ? pos.map(p => p.poNumber).join(' + ') : 'No PO')}
+                        </span>
+                        <span style={{ fontWeight: 500, fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+                          {rightTab === 'grn' ? `Received ${grn.dateReceived}` : `via ${grn.grnNumber}`}
+                        </span>
+                      </div>
+                    </td>
                   </tr>
                 )}
 
-                {/* GRN tab rows */}
-                {rightTab === 'grn' && lines.flatMap(grnLine => {
+                {/* GRN tab rows — exception rows always render; clean-matched rows
+                    collapse into one summary band per GRN group */}
+                {rightTab === 'grn' && (() => {
+                const renderGRNRow = (grnLine: (typeof lines)[number]) => {
                   const invLine = invoice.lines.find(il => il.sku === grnLine.sku);
                   const alternativeFor = grnLine.alternativeFor;
                   const isShort = grnLine.receivedQty < grnLine.orderedQty;
@@ -2219,7 +2179,65 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   );
 
                   return [dataRow, expandRow];
-                })}
+                };
+
+                const isSignalLine = (grnLine: (typeof lines)[number]) => {
+                  const invLine = invoice.lines.find(il => il.sku === grnLine.sku);
+                  if (!invLine) return true; // GRN line the invoice doesn't bill — worth seeing
+                  const variance = invoice.variances.find(v => v.sku === grnLine.sku);
+                  const priceVar = invLine.unitPrice !== grnLine.unitPrice;
+                  return !!variance || priceVar || !!grnLine.alternativeFor || grnLine.receivedQty < grnLine.orderedQty;
+                };
+
+                const signalLines = lines.filter(isSignalLine);
+                const cleanLines = lines.filter(l => !isSignalLine(l));
+                // Editing needs every field on screen; a band of 1 saves nothing
+                const collapseClean = !editable && cleanLines.length >= 2;
+                if (!collapseClean) return lines.flatMap(renderGRNRow);
+
+                const cleanKey = `grn-${grn.id}`;
+                const cleanExpanded = expandedCleanGroups.has(cleanKey);
+                const cleanInvTotal = cleanLines.reduce((s, gl) => {
+                  const il = invoice.lines.find(l => l.sku === gl.sku);
+                  return s + (il?.lineTotal ?? 0);
+                }, 0);
+                const bandCell: React.CSSProperties = {
+                  padding: '9px 14px',
+                  background: 'var(--color-bg-subtle, #fafafa)',
+                  borderBottom: '1px solid var(--color-border-subtle)',
+                  fontSize: '12px',
+                  color: 'var(--color-text-secondary)',
+                };
+                const bandRow = (
+                  <tr
+                    key={`clean-band-${grn.id}`}
+                    onClick={() => toggleCleanGroup(cleanKey)}
+                    title={cleanExpanded ? 'Hide clean-matched lines' : 'Show clean-matched lines'}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <td colSpan={6} style={{ ...bandCell, ...divider }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ color: 'var(--color-success)', fontWeight: 700 }}>✓</span>
+                        <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                          {cleanLines.length} line{cleanLines.length === 1 ? '' : 's'} matched clean · £{cleanInvTotal.toFixed(2)}
+                        </span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          {cleanExpanded ? 'Hide' : 'Show'} <Chevron open={cleanExpanded} />
+                        </span>
+                      </div>
+                    </td>
+                    <td colSpan={RC} style={bandCell}>
+                      Qty and price agree with {grn.grnNumber} on every line
+                    </td>
+                  </tr>
+                );
+
+                return [
+                  ...signalLines.flatMap(renderGRNRow),
+                  bandRow,
+                  ...(cleanExpanded ? cleanLines.flatMap(renderGRNRow) : []),
+                ];
+                })()}
 
               </tbody>
             );
@@ -2241,8 +2259,9 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
 
             return (
               <tbody>
-                {/* Single header row in this tab — invoice identity always shows here */}
-                {(siblingInvoices.length > 0 || allPoNumbers.length > 1) && (
+                {/* Header row only when multiple POs need labelling — invoice position
+                    lives in the "Supplier Invoice" panel header above. */}
+                {allPoNumbers.length > 1 && (
                   <tr>
                     <td colSpan={6} style={{ padding: '8px 14px', background: 'rgba(34, 68, 68, 0.06)', borderTop: '2px solid var(--color-accent-active)', borderBottom: '1px solid var(--color-border-subtle)', ...divider }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -2250,33 +2269,25 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                           {invoice.invoiceNumber}
                         </span>
                         <span style={{ fontWeight: 500, fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-                          {invoice.date} · {invoice.supplier}
+                          {invoice.date}
                         </span>
-                        {siblingInvoices.length > 0 && (
-                          <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'var(--color-accent-active)', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                            Invoice 1 of {invoiceCountInView} · this one
-                          </span>
-                        )}
                       </div>
                     </td>
-                    {allPoNumbers.length > 1 ? (
-                      <td colSpan={RC} style={{ padding: '8px 14px', background: 'rgba(34, 68, 68, 0.06)', borderTop: '2px solid var(--color-accent-active)', borderBottom: '1px solid var(--color-border-subtle)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'var(--color-text-primary)', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
-                            {allPoNumbers.length} POs
-                          </span>
-                          <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-text-primary)' }}>
-                            {allPoNumbers.join(' + ')}
-                          </span>
-                        </div>
-                      </td>
-                    ) : (
-                      <td colSpan={RC} style={{ padding: '8px 14px', background: '#fff', borderBottom: '1px solid var(--color-border-subtle)' }} />
-                    )}
+                    <td colSpan={RC} style={{ padding: '8px 14px', background: 'rgba(34, 68, 68, 0.06)', borderTop: '2px solid var(--color-accent-active)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'var(--color-text-primary)', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+                          {allPoNumbers.length} POs
+                        </span>
+                        <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-text-primary)' }}>
+                          {allPoNumbers.join(' + ')}
+                        </span>
+                      </div>
+                    </td>
                   </tr>
                 )}
 
-                {invoice.lines.flatMap(invLine => {
+                {(() => {
+                const renderPORow = (invLine: (typeof invoice.lines)[number]) => {
                   const substitution = substitutionBySku.get(invLine.sku);
                   const poLine = poBySku.get(invLine.sku) ?? substitution?.original;
                   const isDeliverySubstitution = !!substitution;
@@ -2406,7 +2417,62 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   );
 
                   return [dataRow, expandRow];
-                })}
+                };
+
+                const isSignalPOLine = (invLine: (typeof invoice.lines)[number]) => {
+                  const substitution = substitutionBySku.get(invLine.sku);
+                  const poLine = poBySku.get(invLine.sku) ?? substitution?.original;
+                  if (!poLine || substitution) return true;
+                  const variance = invoice.variances.find(v => v.sku === invLine.sku);
+                  const priceVar = invLine.unitPrice !== poLine.price;
+                  const overOnLine = invLine.qty > poLine.expectedQty;
+                  return !!variance || priceVar || overOnLine;
+                };
+
+                const signalLines = invoice.lines.filter(isSignalPOLine);
+                const cleanLines = invoice.lines.filter(l => !isSignalPOLine(l));
+                const collapseClean = !editable && cleanLines.length >= 2;
+                if (!collapseClean) return invoice.lines.flatMap(renderPORow);
+
+                const cleanExpanded = expandedCleanGroups.has('po');
+                const cleanInvTotal = cleanLines.reduce((s, l) => s + l.lineTotal, 0);
+                const bandCell: React.CSSProperties = {
+                  padding: '9px 14px',
+                  background: 'var(--color-bg-subtle, #fafafa)',
+                  borderBottom: '1px solid var(--color-border-subtle)',
+                  fontSize: '12px',
+                  color: 'var(--color-text-secondary)',
+                };
+                const bandRow = (
+                  <tr
+                    key="clean-band-po"
+                    onClick={() => toggleCleanGroup('po')}
+                    title={cleanExpanded ? 'Hide clean-matched lines' : 'Show clean-matched lines'}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <td colSpan={6} style={{ ...bandCell, ...divider }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ color: 'var(--color-success)', fontWeight: 700 }}>✓</span>
+                        <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                          {cleanLines.length} line{cleanLines.length === 1 ? '' : 's'} matched clean · £{cleanInvTotal.toFixed(2)}
+                        </span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          {cleanExpanded ? 'Hide' : 'Show'} <Chevron open={cleanExpanded} />
+                        </span>
+                      </div>
+                    </td>
+                    <td colSpan={RC} style={bandCell}>
+                      Prices agree with the PO on every line
+                    </td>
+                  </tr>
+                );
+
+                return [
+                  ...signalLines.flatMap(renderPORow),
+                  bandRow,
+                  ...(cleanExpanded ? cleanLines.flatMap(renderPORow) : []),
+                ];
+                })()}
               </tbody>
             );
           })()}
@@ -2468,10 +2534,16 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
               }));
             });
             const siblingStatusVariant = sibling.status === 'Approved' || sibling.status === 'Matched' ? 'success' : 'warning';
+            const isExpanded = expandedSiblings.has(sibling.id);
             return (
               <tbody key={`sibling-${sibling.id}`}>
-                {/* Sibling section header — split invoice | GRN with divider through */}
-                <tr>
+                {/* Sibling summary row — minimal by default (number + total); date,
+                    status, GRN details and actions all live under the dropdown */}
+                <tr
+                  onClick={() => toggleSibling(sibling.id)}
+                  title={isExpanded ? undefined : `Show ${sibling.invoiceNumber} details`}
+                  style={{ cursor: 'pointer' }}
+                >
                   <td colSpan={6} style={{ padding: '8px 14px', background: 'var(--color-bg-subtle, #fafafa)', borderTop: '2px solid var(--color-border)', borderBottom: '1px solid var(--color-border-subtle)', ...divider }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
@@ -2480,51 +2552,66 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                       <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-text-primary)' }}>
                         {sibling.invoiceNumber}
                       </span>
-                      <span style={{ fontWeight: 500, fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-                        {sibling.date} · {sibling.supplier}
-                      </span>
-                      <StatusBadge status={sibling.status} variant={siblingStatusVariant} />
+                      {isExpanded && (
+                        <>
+                          <span style={{ fontWeight: 500, fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+                            {sibling.date}
+                          </span>
+                          <StatusBadge status={sibling.status} variant={siblingStatusVariant} />
+                        </>
+                      )}
                       <div style={{ flex: 1 }} />
-                      <a
-                        href={`/invoices/match?id=${sibling.id}`}
-                        style={{ padding: '3px 10px', borderRadius: '6px', background: 'transparent', border: '1px solid var(--color-border)', fontSize: '11px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-accent-active)', cursor: 'pointer', textDecoration: 'none', whiteSpace: 'nowrap' }}
-                      >
-                        Open INV →
-                      </a>
+                      <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>
+                        £{sibling.total.toFixed(2)}
+                      </span>
+                      {isExpanded && (
+                        <a
+                          href={`/invoices/match?id=${sibling.id}`}
+                          onClick={e => e.stopPropagation()}
+                          style={{ padding: '3px 10px', borderRadius: '6px', background: 'transparent', border: '1px solid var(--color-border)', fontSize: '11px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-accent-active)', cursor: 'pointer', textDecoration: 'none', whiteSpace: 'nowrap' }}
+                        >
+                          Open INV →
+                        </a>
+                      )}
+                      <span style={{ color: 'var(--color-text-secondary)', display: 'inline-flex', alignItems: 'center' }}>
+                        <Chevron open={isExpanded} />
+                      </span>
                     </div>
                   </td>
                   <td colSpan={RC} style={{ padding: '8px 14px', background: 'var(--color-bg-subtle, #fafafa)', borderTop: '2px solid var(--color-border)', borderBottom: '1px solid var(--color-border-subtle)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      {rightTab === 'po' ? (
-                        <span style={{
-                          fontSize: '10px',
-                          fontWeight: 700,
-                          padding: '2px 8px',
-                          borderRadius: '999px',
-                          background: '#fff',
-                          color: 'var(--color-success)',
-                          border: '1.5px solid var(--color-success)',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.04em',
-                        }}>
-                          Matched
-                        </span>
-                      ) : sibGRNs.length === 0 ? (
-                        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>No linked GRN</span>
-                      ) : (
-                        sibGRNs.map((g, i) => (
-                          <span key={g.id} style={{ display: 'inline-flex', gap: '6px', alignItems: 'baseline' }}>
-                            {i > 0 && <span style={{ color: 'var(--color-border)' }}>+</span>}
-                            <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-text-primary)' }}>{g.grnNumber}</span>
-                            <span style={{ fontWeight: 500, fontSize: '12px', color: 'var(--color-text-secondary)' }}>Received {g.dateReceived} · {g.receivedBy}</span>
+                    {isExpanded && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        {rightTab === 'po' ? (
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            padding: '2px 8px',
+                            borderRadius: '999px',
+                            background: '#fff',
+                            color: 'var(--color-success)',
+                            border: '1.5px solid var(--color-success)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                          }}>
+                            Matched
                           </span>
-                        ))
-                      )}
-                    </div>
+                        ) : sibGRNs.length === 0 ? (
+                          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>No linked GRN</span>
+                        ) : (
+                          sibGRNs.map((g, i) => (
+                            <span key={g.id} style={{ display: 'inline-flex', gap: '6px', alignItems: 'baseline' }}>
+                              {i > 0 && <span style={{ color: 'var(--color-border)' }}>+</span>}
+                              <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--color-text-primary)' }}>{g.grnNumber}</span>
+                              <span style={{ fontWeight: 500, fontSize: '12px', color: 'var(--color-text-secondary)' }}>Received {g.dateReceived}</span>
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </td>
                 </tr>
-                {/* Sibling line rows (editable) */}
-                {sibling.lines.map(il => {
+                {/* Sibling line rows — only when expanded */}
+                {isExpanded && sibling.lines.map(il => {
                   const grnMatch = sibGRNLinesBySku.get(il.sku);
                   const poMatch = sibPOLinesBySku.get(il.sku);
                   const rate = lineTaxRates[il.id] ?? 0;
@@ -2589,16 +2676,18 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
               <td style={{ padding: '8px 12px', fontWeight: anyTax ? 600 : 400, ...divider, color: anyTax ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
                 {anyTax ? `£${totalTax.toFixed(2)}` : '—'}
               </td>
+              {/* Right side: Ordered | Received | Price stay empty (colSpan 3), so the
+                  total lands under "Total" and VAT under "VAT £", mirroring the rows above */}
               {rightTab === 'grn' ? (
                 <>
-                  <td colSpan={2} />
+                  <td colSpan={3} />
                   <td style={{ padding: '8px 12px', fontWeight: 700 }}>£{allGrnTotal.toFixed(2)}</td>
                   <td style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>£{(allGrnTotal * 0.10).toFixed(2)}</td>
                   <td />
                 </>
               ) : (
                 <>
-                  <td colSpan={2} />
+                  <td colSpan={3} />
                   <td style={{ padding: '8px 12px', fontWeight: 700 }}>£{allPoTotal.toFixed(2)}</td>
                   <td style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>£{(allPoTotal * 0.10).toFixed(2)}</td>
                   <td />
@@ -2761,7 +2850,7 @@ function ApprovalConfirmation({ invoice, resolutions, grns, unmatchedLines, poCo
                 <div>
                   <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--color-text-primary)' }}>{inv.invoiceNumber}</span>
                   <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginLeft: '8px' }}>
-                    {inv.date} · {inv.supplier}{i === 0 ? ' · this invoice' : ''}
+                    {inv.date}{i === 0 ? ' · this invoice' : ''}
                   </span>
                 </div>
                 <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--color-text-primary)' }}>£{inv.total.toFixed(2)}</span>
