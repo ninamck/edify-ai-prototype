@@ -68,7 +68,8 @@ export default function InvoiceUploadFlow({ onDone, onCancel }: InvoiceUploadFlo
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [stageIdx, setStageIdx] = useState(0);
-  const [lines, setLines] = useState<ParsedInvoiceLine[]>(PARSED_LINES.map(({ confidence: _c, ...l }) => l));
+  // Confidence stays on each line so it travels with the invoice into matching.
+  const [lines, setLines] = useState<ParsedInvoiceLine[]>(PARSED_LINES);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 

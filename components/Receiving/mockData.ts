@@ -272,7 +272,9 @@ export const MOCK_COMPLETED_DELIVERIES: GRN[] = [
     invoiceStatus: 'Pending Invoice',
     attachmentUrl: '/mock-grn-doc.pdf',
     lines: [
-      { id: 'gl-1', poLineId: 'pl-1', name: 'Full cream milk 2L', sku: 'FCM-2L', unit: 'EA', price: 4.20, expectedQty: 20, receivedQty: 18 },
+      // FCM-2L is split across GRN-1244 and GRN-1245 — the supplier delivered
+      // the milk order in two drops (demo: one invoice line ← two deliveries)
+      { id: 'gl-1', poLineId: 'pl-1', name: 'Full cream milk 2L', sku: 'FCM-2L', unit: 'EA', price: 4.20, expectedQty: 12, receivedQty: 12 },
       { id: 'gl-2', poLineId: 'pl-2', name: 'Double cream 1L', sku: 'DC-1L', unit: 'EA', price: 8.00, expectedQty: 8, receivedQty: 8 },
       { id: 'gl-2b', poLineId: 'pl-3', name: 'Free range eggs 15pk', sku: 'FRE-15', unit: 'EA', price: 8.00, expectedQty: 12, receivedQty: 12 },
       { id: 'gl-2c', poLineId: 'pl-4', name: 'Unsalted butter 500g', sku: 'UB-500', unit: 'EA', price: 6.50, expectedQty: 6, receivedQty: 6 },
@@ -293,6 +295,8 @@ export const MOCK_COMPLETED_DELIVERIES: GRN[] = [
       { id: 'gl-6', poLineId: 'pl-10', name: 'Espresso blend 1kg', sku: 'EB-1KG', unit: 'BAG', price: 18.00, expectedQty: 10, receivedQty: 10 },
       { id: 'gl-7', poLineId: 'pl-11', name: 'Oat milk 1L', sku: 'OM-1L', unit: 'CTN', price: 4.00, expectedQty: 24, receivedQty: 24 },
       { id: 'gl-8', poLineId: 'pl-12', name: 'Takeaway cups 12oz', sku: 'TC-12', unit: 'CASE', price: 28.00, expectedQty: 4, receivedQty: 4 },
+      // Balance of the milk order from PO-2901 — second drop, arrived 2 short
+      { id: 'gl-8b', poLineId: 'pl-1', name: 'Full cream milk 2L', sku: 'FCM-2L', unit: 'EA', price: 4.20, expectedQty: 8, receivedQty: 6 },
     ],
   },
   {

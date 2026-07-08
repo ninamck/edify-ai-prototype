@@ -128,6 +128,8 @@ export function updateInvoiceLine(
   if (patch.qty !== undefined) line.qty = patch.qty;
   if (patch.unitPrice !== undefined) line.unitPrice = patch.unitPrice;
   line.lineTotal = line.qty * line.unitPrice;
+  // A human touched the line — it's now verified regardless of what the parser read.
+  line.parseConfidence = 100;
   recomputeInvoiceVariances(invoiceId);
 }
 
@@ -138,7 +140,14 @@ export interface InvoiceLine {
   qty: number;
   unitPrice: number;
   lineTotal: number;
+  // Per-line extraction confidence (0–100) from the document-parsing
+  // integration partner. Below PARSE_CONFIDENCE_THRESHOLD the line is
+  // flagged for a human check; a manual edit marks it verified (100).
+  parseConfidence?: number;
 }
+
+// Lines read below this confidence are surfaced as exceptions in the match view.
+export const PARSE_CONFIDENCE_THRESHOLD = 90;
 
 export interface MatchVariance {
   id: string;
@@ -212,14 +221,14 @@ export const MOCK_INVOICES: Invoice[] = [
     suggestedGRN: 'GRN-1245',
     status: 'Variance',
     lines: [
-      { id: 'il-1', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 20, unitPrice: 4.20, lineTotal: 84.00 },
-      { id: 'il-2', description: 'Double cream 1L', sku: 'DC-1L', qty: 8, unitPrice: 8.00, lineTotal: 64.00 },
-      { id: 'il-3', description: 'Free range eggs 15pk', sku: 'FRE-15', qty: 12, unitPrice: 8.50, lineTotal: 102.00 },
-      { id: 'il-4', description: 'Unsalted butter 500g', sku: 'UB-500', qty: 6, unitPrice: 6.50, lineTotal: 39.00 },
-      { id: 'il-4b', description: 'Dishwasher tablets 100pk', sku: 'DWT-100', qty: 2, unitPrice: 24.00, lineTotal: 48.00 },
-      { id: 'il-5', description: 'Espresso blend 1kg', sku: 'EB-1KG', qty: 10, unitPrice: 19.20, lineTotal: 192.00 },
-      { id: 'il-6', description: 'Oat milk 1L', sku: 'OM-1L', qty: 24, unitPrice: 4.00, lineTotal: 96.00 },
-      { id: 'il-7', description: 'Takeaway cups 12oz', sku: 'TC-12', qty: 4, unitPrice: 28.00, lineTotal: 112.00 },
+      { id: 'il-1', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 20, unitPrice: 4.20, lineTotal: 84.00, parseConfidence: 99 },
+      { id: 'il-2', description: 'Double cream 1L', sku: 'DC-1L', qty: 8, unitPrice: 8.00, lineTotal: 64.00, parseConfidence: 98 },
+      { id: 'il-3', description: 'Free range eggs 15pk', sku: 'FRE-15', qty: 12, unitPrice: 8.50, lineTotal: 102.00, parseConfidence: 97 },
+      { id: 'il-4', description: 'Unsalted butter 500g', sku: 'UB-500', qty: 6, unitPrice: 6.50, lineTotal: 39.00, parseConfidence: 99 },
+      { id: 'il-4b', description: 'Dishwasher tablets 100pk', sku: 'DWT-100', qty: 2, unitPrice: 24.00, lineTotal: 48.00, parseConfidence: 74 },
+      { id: 'il-5', description: 'Espresso blend 1kg', sku: 'EB-1KG', qty: 10, unitPrice: 19.20, lineTotal: 192.00, parseConfidence: 98 },
+      { id: 'il-6', description: 'Oat milk 1L', sku: 'OM-1L', qty: 24, unitPrice: 4.00, lineTotal: 96.00, parseConfidence: 96 },
+      { id: 'il-7', description: 'Takeaway cups 12oz', sku: 'TC-12', qty: 4, unitPrice: 28.00, lineTotal: 112.00, parseConfidence: 99 },
     ],
     variances: [
       { id: 'v-1', itemName: 'Full cream milk 2L', sku: 'FCM-2L', type: 'qty', invoiceValue: 20, grnValue: 18, poValue: 20, impact: 8.40 },
@@ -239,11 +248,11 @@ export const MOCK_INVOICES: Invoice[] = [
     grnNumbers: ['GRN-1243'],
     status: 'Variance',
     lines: [
-      { id: 'il-8', description: 'Baby spinach 500g', sku: 'BS-500', qty: 6, unitPrice: 3.80, lineTotal: 22.80 },
-      { id: 'il-9', description: 'Cherry tomatoes 500g', sku: 'CT-500', qty: 8, unitPrice: 3.80, lineTotal: 30.40 },
-      { id: 'il-10', description: 'Sourdough loaves', sku: 'SDL-WH', qty: 20, unitPrice: 6.00, lineTotal: 120.00 },
-      { id: 'il-11', description: 'Avocados', sku: 'AVO-EA', qty: 24, unitPrice: 2.10, lineTotal: 50.40 },
-      { id: 'il-12', description: 'Lemons', sku: 'LEM-EA', qty: 30, unitPrice: 0.55, lineTotal: 16.50 },
+      { id: 'il-8', description: 'Baby spinach 500g', sku: 'BS-500', qty: 6, unitPrice: 3.80, lineTotal: 22.80, parseConfidence: 99 },
+      { id: 'il-9', description: 'Cherry tomatoes 500g', sku: 'CT-500', qty: 8, unitPrice: 3.80, lineTotal: 30.40, parseConfidence: 98 },
+      { id: 'il-10', description: 'Sourdough loaves', sku: 'SDL-WH', qty: 20, unitPrice: 6.00, lineTotal: 120.00, parseConfidence: 97 },
+      { id: 'il-11', description: 'Avocados', sku: 'AVO-EA', qty: 24, unitPrice: 2.10, lineTotal: 50.40, parseConfidence: 88 },
+      { id: 'il-12', description: 'Lemons', sku: 'LEM-EA', qty: 30, unitPrice: 0.55, lineTotal: 16.50, parseConfidence: 96 },
     ],
     variances: [
       { id: 'v-4', itemName: 'Baby spinach 500g', sku: 'BS-500', type: 'price', invoiceValue: 3.80, grnValue: 3.50, poValue: 3.50, impact: 1.80 },
@@ -264,8 +273,8 @@ export const MOCK_INVOICES: Invoice[] = [
     grnNumbers: ['GRN-1240'],
     status: 'Approved',
     lines: [
-      { id: 'il-13', description: 'Napkins (white)', sku: 'NAP-W', qty: 10, unitPrice: 3.80, lineTotal: 38.00 },
-      { id: 'il-14', description: 'Sugar sachets', sku: 'SUG-S', qty: 5, unitPrice: 12.00, lineTotal: 60.00 },
+      { id: 'il-13', description: 'Napkins (white)', sku: 'NAP-W', qty: 10, unitPrice: 3.80, lineTotal: 38.00, parseConfidence: 95 },
+      { id: 'il-14', description: 'Sugar sachets', sku: 'SUG-S', qty: 5, unitPrice: 12.00, lineTotal: 60.00, parseConfidence: 99 },
     ],
     variances: [],
   },
@@ -300,9 +309,9 @@ export const MOCK_INVOICES: Invoice[] = [
     grnNumbers: ['GRN-1248'],
     status: 'Matched',
     lines: [
-      { id: 'il-20', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 30, unitPrice: 4.20, lineTotal: 126.00 },
-      { id: 'il-21', description: 'Double cream 1L', sku: 'DC-1L', qty: 10, unitPrice: 8.00, lineTotal: 80.00 },
-      { id: 'il-22', description: 'Unsalted butter 500g', sku: 'UB-500', qty: 12, unitPrice: 6.50, lineTotal: 78.00 },
+      { id: 'il-20', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 30, unitPrice: 4.20, lineTotal: 126.00, parseConfidence: 99 },
+      { id: 'il-21', description: 'Double cream 1L', sku: 'DC-1L', qty: 10, unitPrice: 8.00, lineTotal: 80.00, parseConfidence: 98 },
+      { id: 'il-22', description: 'Unsalted butter 500g', sku: 'UB-500', qty: 12, unitPrice: 6.50, lineTotal: 78.00, parseConfidence: 97 },
     ],
     variances: [],
     note: 'First of two deliveries against PO-2907 — dairy run. Eggs + flour arriving tomorrow on a separate truck.',
@@ -318,8 +327,8 @@ export const MOCK_INVOICES: Invoice[] = [
     grnNumbers: ['GRN-1249'],
     status: 'Matched',
     lines: [
-      { id: 'il-23', description: 'Free range eggs 4pk', sku: 'FRE-4', qty: 15, unitPrice: 4.00, lineTotal: 60.00 },
-      { id: 'il-24', description: 'Plain flour 10kg', sku: 'FLR-10', qty: 4, unitPrice: 18.00, lineTotal: 72.00 },
+      { id: 'il-23', description: 'Free range eggs 4pk', sku: 'FRE-4', qty: 15, unitPrice: 4.00, lineTotal: 60.00, parseConfidence: 96 },
+      { id: 'il-24', description: 'Plain flour 10kg', sku: 'FLR-10', qty: 4, unitPrice: 18.00, lineTotal: 72.00, parseConfidence: 99 },
     ],
     variances: [],
   },
@@ -332,7 +341,7 @@ export const MOCK_INVOICES: Invoice[] = [
     grnNumbers: ['GRN-1250'],
     status: 'Matched',
     lines: [
-      { id: 'il-25', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 20, unitPrice: 4.20, lineTotal: 84.00 },
+      { id: 'il-25', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 20, unitPrice: 4.20, lineTotal: 84.00, parseConfidence: 98 },
     ],
     variances: [],
   },
@@ -345,7 +354,7 @@ export const MOCK_INVOICES: Invoice[] = [
     grnNumbers: ['GRN-1251'],
     status: 'Variance',
     lines: [
-      { id: 'il-26', description: 'Plain flour 10kg', sku: 'FLR-10', qty: 5, unitPrice: 18.00, lineTotal: 90.00 },
+      { id: 'il-26', description: 'Plain flour 10kg', sku: 'FLR-10', qty: 5, unitPrice: 18.00, lineTotal: 90.00, parseConfidence: 97 },
     ],
     variances: [
       { id: 'v-9', itemName: 'Plain flour 10kg', sku: 'FLR-10', type: 'qty', invoiceValue: 5, grnValue: 4, poValue: 5, impact: 18.00 },
@@ -364,8 +373,8 @@ export const MOCK_INVOICES: Invoice[] = [
     poNumbers: ['PO-2915'],
     status: 'Matching in Progress',
     lines: [
-      { id: 'il-27', description: 'Double cream 1L', sku: 'DC-1L', qty: 8, unitPrice: 8.00, lineTotal: 64.00 },
-      { id: 'il-28', description: 'Free range eggs 15pk', sku: 'FRE-15', qty: 10, unitPrice: 8.00, lineTotal: 80.00 },
+      { id: 'il-27', description: 'Double cream 1L', sku: 'DC-1L', qty: 8, unitPrice: 8.00, lineTotal: 64.00, parseConfidence: 99 },
+      { id: 'il-28', description: 'Free range eggs 15pk', sku: 'FRE-15', qty: 10, unitPrice: 8.00, lineTotal: 80.00, parseConfidence: 95 },
     ],
     variances: [],
   },
@@ -381,8 +390,8 @@ export const MOCK_INVOICES: Invoice[] = [
     grnNumbers: ['GRN-1260'],
     status: 'Approved',
     lines: [
-      { id: 'il-40', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 25, unitPrice: 4.20, lineTotal: 105.00 },
-      { id: 'il-41', description: 'Oat milk 1L', sku: 'OM-1L', qty: 10, unitPrice: 4.00, lineTotal: 40.00 },
+      { id: 'il-40', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 25, unitPrice: 4.20, lineTotal: 105.00, parseConfidence: 99 },
+      { id: 'il-41', description: 'Oat milk 1L', sku: 'OM-1L', qty: 10, unitPrice: 4.00, lineTotal: 40.00, parseConfidence: 98 },
     ],
     variances: [],
   },
@@ -395,10 +404,10 @@ export const MOCK_INVOICES: Invoice[] = [
     grnNumbers: ['GRN-1261'],
     status: 'Variance',
     lines: [
-      { id: 'il-42', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 15, unitPrice: 4.20, lineTotal: 63.00 },
-      { id: 'il-43', description: 'Oat milk 1L', sku: 'OM-1L', qty: 20, unitPrice: 4.20, lineTotal: 84.00 },
-      { id: 'il-44', description: 'Double cream 1L', sku: 'DC-1L', qty: 12, unitPrice: 8.00, lineTotal: 96.00 },
-      { id: 'il-45', description: 'Plain flour 10kg', sku: 'FLR-10', qty: 6, unitPrice: 18.00, lineTotal: 108.00 },
+      { id: 'il-42', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 15, unitPrice: 4.20, lineTotal: 63.00, parseConfidence: 99 },
+      { id: 'il-43', description: 'Oat milk 1L', sku: 'OM-1L', qty: 20, unitPrice: 4.20, lineTotal: 84.00, parseConfidence: 86 },
+      { id: 'il-44', description: 'Double cream 1L', sku: 'DC-1L', qty: 12, unitPrice: 8.00, lineTotal: 96.00, parseConfidence: 98 },
+      { id: 'il-45', description: 'Plain flour 10kg', sku: 'FLR-10', qty: 6, unitPrice: 18.00, lineTotal: 108.00, parseConfidence: 97 },
     ],
     variances: [
       { id: 'v-20', itemName: 'Oat milk 1L', sku: 'OM-1L', type: 'price', invoiceValue: 4.20, grnValue: 4.00, poValue: 4.00, impact: 4.00 },
@@ -416,8 +425,8 @@ export const MOCK_INVOICES: Invoice[] = [
     grnNumbers: ['GRN-1262'],
     status: 'Matched',
     lines: [
-      { id: 'il-46', description: 'Espresso blend 1kg', sku: 'EB-1KG', qty: 12, unitPrice: 18.00, lineTotal: 216.00 },
-      { id: 'il-47', description: 'Takeaway cups 12oz', sku: 'TC-12', qty: 6, unitPrice: 28.00, lineTotal: 168.00 },
+      { id: 'il-46', description: 'Espresso blend 1kg', sku: 'EB-1KG', qty: 12, unitPrice: 18.00, lineTotal: 216.00, parseConfidence: 96 },
+      { id: 'il-47', description: 'Takeaway cups 12oz', sku: 'TC-12', qty: 6, unitPrice: 28.00, lineTotal: 168.00, parseConfidence: 99 },
     ],
     variances: [],
   },
@@ -438,8 +447,8 @@ export const MOCK_INVOICES: Invoice[] = [
       { grnNumber: 'GRN-1271', confidence: 48, reason: 'Same products, but this drop was 2 milk short (16 received vs 18 billed). Signed in by Aisha Nguyen on 13 Apr.' },
     ],
     lines: [
-      { id: 'il-50', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 18, unitPrice: 4.20, lineTotal: 75.60 },
-      { id: 'il-51', description: 'Double cream 1L', sku: 'DC-1L', qty: 6, unitPrice: 8.00, lineTotal: 48.00 },
+      { id: 'il-50', description: 'Full cream milk 2L', sku: 'FCM-2L', qty: 18, unitPrice: 4.20, lineTotal: 75.60, parseConfidence: 99 },
+      { id: 'il-51', description: 'Double cream 1L', sku: 'DC-1L', qty: 6, unitPrice: 8.00, lineTotal: 48.00, parseConfidence: 98 },
     ],
     variances: [],
   },
@@ -482,6 +491,7 @@ export interface ParsedInvoiceLine {
   sku: string;
   qty: number;
   unitPrice: number;
+  confidence?: number; // 0–100, from the parsing integration partner
 }
 
 export interface ParsedInvoiceData {
@@ -506,6 +516,7 @@ export function addUploadedInvoice(parsed: ParsedInvoiceData, grnNumbers: string
       qty: l.qty,
       unitPrice: l.unitPrice,
       lineTotal: l.qty * l.unitPrice,
+      parseConfidence: l.confidence,
     }));
     existing.grnNumbers = grnNumbers;
     recomputeInvoiceVariances(existing.id);
@@ -519,6 +530,7 @@ export function addUploadedInvoice(parsed: ParsedInvoiceData, grnNumbers: string
     qty: l.qty,
     unitPrice: l.unitPrice,
     lineTotal: l.qty * l.unitPrice,
+    parseConfidence: l.confidence,
   }));
   MOCK_INVOICES.push({
     id,
