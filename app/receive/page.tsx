@@ -12,7 +12,6 @@ export default function ReceivePage() {
         onReceive={(poIds) => {
           router.push(`/receive/entry?pos=${poIds.join(',')}`);
         }}
-        onBack={() => router.push('/')}
       />
     </div>
   );

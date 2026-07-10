@@ -670,7 +670,7 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
             transition: 'all 0.15s',
           }}
         >
-          Confirm Delivery
+          Accept Delivery
         </button>
       </div>
 

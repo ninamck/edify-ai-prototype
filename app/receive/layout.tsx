@@ -1,20 +1,28 @@
 'use client';
 
+import { usePathname, useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar/Sidebar';
 import AreaTopBar from '@/components/TopBar/AreaTopBar';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
 
-// Same tab set as app/order-history/layout.tsx — the two routes present
-// as one "Deliveries" area with a shared bar.
+// Deliveries area tabs — receiving on one side, the accepted-deliveries
+// record (GRNs) on the other. Controlled (stateTabs) rather than
+// route-based so the GRN detail route (/receive/grn/…) highlights
+// "Accepted deliveries" instead of prefix-matching both tabs.
 const DELIVERIES_TABS = [
-  { id: 'receive', label: 'Receive delivery', href: '/receive' },
-  { id: 'history', label: 'Orders',           href: '/order-history' },
+  { id: 'receive', label: 'Receive' },
+  { id: 'accepted', label: 'Accepted' },
 ];
 
 export default function ReceiveLayout({ children }: { children: React.ReactNode }) {
   const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
+  const router = useRouter();
+  const pathname = usePathname() ?? '';
+
+  const acceptedActive =
+    pathname.startsWith('/receive/accepted') || pathname.startsWith('/receive/grn');
 
   return (
     <div
@@ -40,7 +48,11 @@ export default function ReceiveLayout({ children }: { children: React.ReactNode 
       >
         <AreaTopBar
           title="Deliveries"
-          tabs={DELIVERIES_TABS}
+          stateTabs={{
+            items: DELIVERIES_TABS,
+            value: acceptedActive ? 'accepted' : 'receive',
+            onChange: id => router.push(id === 'accepted' ? '/receive/accepted' : '/receive'),
+          }}
           siteName="Fitzroy Espresso"
           backTo="/"
         />

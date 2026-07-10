@@ -2,15 +2,13 @@
 
 import { useState, useMemo } from 'react';
 import StatusBadge from './StatusBadge';
-import { MOCK_POS, MOCK_COMPLETED_DELIVERIES, poItemCount, poTotal, PO, GRN, grnVarianceCount, deliverySequenceTag } from './mockData';
+import { MOCK_POS, poItemCount, poTotal, PO } from './mockData';
 
 interface POSelectionProps {
   onReceive: (poIds: string[]) => void;
-  onBack: () => void;
 }
 
-export default function POSelection({ onReceive, onBack }: POSelectionProps) {
-  const [tab, setTab] = useState<'awaiting' | 'completed'>('awaiting');
+export default function POSelection({ onReceive }: POSelectionProps) {
   const [search, setSearch] = useState('');
   const [siteFilter, setSiteFilter] = useState('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -27,13 +25,6 @@ export default function POSelection({ onReceive, onBack }: POSelectionProps) {
     return list;
   }, [search, siteFilter]);
 
-  const completedDeliveries = useMemo(() => {
-    let list = MOCK_COMPLETED_DELIVERIES as GRN[];
-    if (siteFilter !== 'all') list = list.filter(g => g.site === siteFilter);
-    if (search) list = list.filter(g => g.supplier.toLowerCase().includes(search.toLowerCase()) || g.grnNumber.toLowerCase().includes(search.toLowerCase()));
-    return list;
-  }, [search, siteFilter]);
-
   const toggleSelected = (id: string) => {
     setSelected(prev => {
       const next = new Set(prev);
@@ -42,44 +33,12 @@ export default function POSelection({ onReceive, onBack }: POSelectionProps) {
     });
   };
 
-  const tabStyle = (active: boolean): React.CSSProperties => ({
-    padding: '8px 18px',
-    borderRadius: '100px',
-    border: 'none',
-    fontSize: '13px',
-    fontWeight: 600,
-    fontFamily: 'var(--font-primary)',
-    cursor: 'pointer',
-    background: active ? 'var(--color-accent-active)' : 'transparent',
-    color: active ? '#fff' : 'var(--color-text-secondary)',
-    transition: 'all 0.15s',
-  });
-
   return (
     <div style={{ fontFamily: 'var(--font-primary)' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-        <button
-          onClick={onBack}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: 'var(--color-accent-deep)', fontFamily: 'var(--font-primary)' }}
-        >
-          ← Back
-        </button>
-        <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>Receive Delivery</h1>
-      </div>
-
-      {/* Tabs + actions row */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
-        <div style={{ display: 'flex', background: 'var(--color-bg-hover)', borderRadius: '100px', padding: '3px' }}>
-          <button onClick={() => { setTab('awaiting'); setSelected(new Set()); }} style={tabStyle(tab === 'awaiting')}>
-            Awaiting Delivery
-          </button>
-          <button onClick={() => { setTab('completed'); setSelected(new Set()); }} style={tabStyle(tab === 'completed')}>
-            Completed
-          </button>
-        </div>
-
-        {tab === 'awaiting' && selected.size > 0 && (
+      {/* Area top bar carries the title and tabs; a floating action row
+          appears only once POs are ticked for a combined receive. */}
+      {selected.size > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
           <button
             onClick={() => onReceive(Array.from(selected))}
             style={{
@@ -96,8 +55,8 @@ export default function POSelection({ onReceive, onBack }: POSelectionProps) {
           >
             Receive Selected ({selected.size})
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
@@ -137,16 +96,12 @@ export default function POSelection({ onReceive, onBack }: POSelectionProps) {
       </div>
 
       {/* Content */}
-      {tab === 'awaiting' ? (
-        <AwaitingList
-          pos={awaitingPOs}
-          selected={selected}
-          onToggle={toggleSelected}
-          onReceiveSingle={(id) => onReceive([id])}
-        />
-      ) : (
-        <CompletedList deliveries={completedDeliveries} />
-      )}
+      <AwaitingList
+        pos={awaitingPOs}
+        selected={selected}
+        onToggle={toggleSelected}
+        onReceiveSingle={(id) => onReceive([id])}
+      />
     </div>
   );
 }
@@ -226,46 +181,3 @@ function AwaitingList({ pos, selected, onToggle, onReceiveSingle }: { pos: PO[];
   );
 }
 
-/* ──────────── Completed GRN cards ──────────── */
-
-function CompletedList({ deliveries }: { deliveries: GRN[] }) {
-  if (deliveries.length === 0) {
-    return <p style={{ textAlign: 'center', padding: '32px', color: 'var(--color-text-secondary)', fontSize: '14px' }}>No completed deliveries.</p>;
-  }
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      {deliveries.map(grn => {
-        const variances = grnVarianceCount(grn);
-        // "1st/2nd delivery · PO-x" when a PO was split across deliveries.
-        const deliveryTag = deliverySequenceTag(grn);
-        return (
-          <div
-            key={grn.id}
-            style={{
-              padding: '16px',
-              borderRadius: '10px',
-              border: '1px solid var(--color-border-subtle)',
-              background: '#fff',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--color-text-primary)' }}>{grn.grnNumber}</span>
-              <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>— {grn.supplier}</span>
-              <StatusBadge status={grn.status} />
-            </div>
-            <div style={{ display: 'flex', gap: '8px', marginTop: '8px', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', flexWrap: 'wrap', alignItems: 'center' }}>
-              <span>{grn.site}</span>
-              <span>·</span>
-              <span>Received {grn.dateReceived}</span>
-              <span>·</span>
-              <span>By {grn.receivedBy}</span>
-              {deliveryTag && <StatusBadge status={deliveryTag} variant="info" />}
-              {variances > 0 && <StatusBadge status={`${variances} variance${variances > 1 ? 's' : ''}`} variant="warning" />}
-              <StatusBadge status={grn.invoiceStatus} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}

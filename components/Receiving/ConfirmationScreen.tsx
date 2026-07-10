@@ -18,6 +18,8 @@ interface ConfirmationScreenProps {
   openPoNumbers?: string[];
   onBackToDeliveries: () => void;
   onViewMaster?: () => void;
+  /** Opens the Accepted tab where the new GRN row now lives. */
+  onViewAccepted?: () => void;
 }
 
 export default function ConfirmationScreen({
@@ -31,6 +33,7 @@ export default function ConfirmationScreen({
   openPoNumbers = [],
   onBackToDeliveries,
   onViewMaster,
+  onViewAccepted,
 }: ConfirmationScreenProps) {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const statusLabel = backOrderCount > 0
@@ -62,7 +65,7 @@ export default function ConfirmationScreen({
       >
         <div style={{ fontSize: '36px', marginBottom: '8px' }}>✓</div>
         <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>
-          Delivery Confirmed
+          Delivery Accepted
         </h2>
         <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', margin: 0 }}>
           {grnNumber} has been recorded for {supplier}
@@ -183,6 +186,24 @@ export default function ConfirmationScreen({
         >
           Attach Invoice
         </button>
+        {onViewAccepted && (
+          <button
+            onClick={onViewAccepted}
+            style={{
+              padding: '12px 24px',
+              borderRadius: '8px',
+              background: '#fff',
+              color: 'var(--color-text-primary)',
+              border: '1px solid var(--color-border)',
+              fontWeight: 600,
+              fontSize: '14px',
+              fontFamily: 'var(--font-primary)',
+              cursor: 'pointer',
+            }}
+          >
+            View in Accepted →
+          </button>
+        )}
         <button
           onClick={onBackToDeliveries}
           style={{

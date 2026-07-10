@@ -5,6 +5,7 @@ export function generateStaticParams() {
   return MOCK_COMPLETED_DELIVERIES.map(g => ({ id: g.id }));
 }
 
-export default function GRNDetailPage({ params }: { params: { id: string } }) {
-  return <GRNDetail id={params.id} />;
+export default async function GRNDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <GRNDetail id={id} />;
 }

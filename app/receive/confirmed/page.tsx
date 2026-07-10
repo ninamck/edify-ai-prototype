@@ -29,7 +29,8 @@ function ConfirmedContent() {
       backOrderCount={backOrderCount}
       openPoNumbers={openPoNumbers}
       receivedBy="Ed Barry"
-      onBackToDeliveries={() => router.push('/receive')}
+      onBackToDeliveries={() => router.push('/receive/upcoming')}
+      onViewAccepted={() => router.push('/receive/accepted')}
       onViewMaster={masterId ? () => router.push(`/suppliers/master-products/${masterId}`) : undefined}
     />
   );
