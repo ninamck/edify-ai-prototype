@@ -1,10 +1,11 @@
 /**
  * demoGate — shared passcode-gate helpers for the customer demo build.
  *
- * The gate is a lightweight, account-free wall: a customer types a shared
- * passcode on `/welcome`, we verify it server-side against
- * `DEMO_GATE_PASSCODE`, and set an httpOnly cookie holding a derived token.
- * Middleware then lets any request through only if that cookie matches.
+ * The gate is a lightweight, account-free wall: `/welcome` presents a closed
+ * holding page, and a hidden interaction reveals a passcode field. The code
+ * is verified server-side against `DEMO_GATE_PASSCODE`, and we set an
+ * httpOnly cookie holding a derived token. Middleware then lets any request
+ * through only if that cookie matches.
  *
  * The cookie never contains the passcode itself — it holds a SHA-256 of
  * `passcode:secret`, so a leaked cookie can't be reversed into the passcode.

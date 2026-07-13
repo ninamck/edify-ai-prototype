@@ -1,48 +1,57 @@
 'use client';
 
 /**
- * /welcome — the branded passcode gate for customer demo builds.
+ * /welcome — the locked front door for the CHAGEE demo build.
  *
- * Customers land here (via middleware) until they enter the shared passcode.
- * On success we set the gate cookie server-side and forward them to wherever
- * they were originally heading (`from`), defaulting to the home screen.
+ * To anyone who lands here the demo looks closed: an Edify-branded holding
+ * page that says "get in touch with Ed" and nothing else. There is no
+ * visible way in.
+ *
+ * The way in (for Ed): click the "Powered by Edify" mark in the bottom
+ * corner five times in quick succession. That opens `/welcome/unlock`,
+ * where the access code is verified server-side (`/api/gate`) and a
+ * 30-day cookie keeps the device unlocked — so Ed only does this once
+ * per device; future demos go straight through.
  */
 
-import { Suspense, useState } from 'react';
+import { Suspense, useRef } from 'react';
+import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { demoCustomer } from '@/lib/demoConfig';
 import { track } from '@/components/Analytics/Analytics';
+
+const CONTACT_EMAIL = 'ed@edifysystems.io';
+const SECRET_CLICKS = 5;
+const CLICK_WINDOW_MS = 3000;
+
+/** Edify brand palette (see brand guidelines). */
+const EDIFY = {
+  midnight: '#051b33',
+  natural: '#f5e8d8',
+  offWhite: '#f9f4ef',
+  hotPink: '#ff315d', // signifier only
+};
 
 function WelcomeInner() {
   const router = useRouter();
   const params = useSearchParams();
   const from = params.get('from') || '/';
-  const [passcode, setPasscode] = useState('');
-  const [error, setError] = useState(false);
-  const [busy, setBusy] = useState(false);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!passcode.trim() || busy) return;
-    setBusy(true);
-    setError(false);
-    try {
-      const res = await fetch('/api/gate', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ passcode }),
-      });
-      if (res.ok) {
-        track('Demo unlocked');
-        router.replace(from);
-      } else {
-        setError(true);
-        setBusy(false);
-      }
-    } catch {
-      setError(true);
-      setBusy(false);
+  const clickCount = useRef(0);
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleSecretClick() {
+    clickCount.current += 1;
+    if (clickTimer.current) clearTimeout(clickTimer.current);
+    if (clickCount.current >= SECRET_CLICKS) {
+      clickCount.current = 0;
+      track('Demo gate revealed');
+      router.push(`/welcome/unlock?from=${encodeURIComponent(from)}`);
+      return;
     }
+    // Too slow between clicks? Start the count again.
+    clickTimer.current = setTimeout(() => {
+      clickCount.current = 0;
+    }, CLICK_WINDOW_MS);
   }
 
   return (
@@ -50,97 +59,112 @@ function WelcomeInner() {
       style={{
         minHeight: '100dvh',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         padding: 24,
-        background:
-          `radial-gradient(1200px 600px at 50% -10%, ${demoCustomer.accent}22, transparent), var(--color-bg-surface)`,
+        position: 'relative',
+        background: EDIFY.midnight,
         fontFamily: 'var(--font-primary)',
       }}
     >
-      <form
-        onSubmit={submit}
+      {/* Shrink-wraps to its content so the cluster centres in the viewport,
+          while everything inside stays left-aligned. */}
+      <div
         style={{
-          width: '100%',
-          maxWidth: 380,
-          background: '#fff',
-          border: '1px solid var(--color-border-subtle)',
-          borderRadius: 18,
-          padding: '32px 28px',
-          boxShadow: '0 24px 60px rgba(10,20,25,0.12)',
+          maxWidth: 560,
           display: 'flex',
           flexDirection: 'column',
-          gap: 16,
+          alignItems: 'flex-start',
+          gap: 28,
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <Image
+          src="/edify-logo-cream.png"
+          alt="Edify"
+          width={172}
+          height={38}
+          priority
+          style={{ height: 38, width: 'auto' }}
+        />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <span
             style={{
-              fontSize: 12,
+              fontSize: 12.5,
               fontWeight: 700,
-              letterSpacing: '0.14em',
+              letterSpacing: '0.18em',
               textTransform: 'uppercase',
-              color: demoCustomer.accent,
+              color: EDIFY.natural,
+              opacity: 0.65,
             }}
           >
-            {demoCustomer.name}
+            A private preview for CHAGEE
           </span>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--color-text-primary)' }}>
-            A private preview, powered by Edify
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 34,
+              lineHeight: 1.2,
+              fontWeight: 800,
+              color: EDIFY.offWhite,
+              maxWidth: '18ch',
+            }}
+          >
+            This preview isn’t open right now
           </h1>
-          <p style={{ margin: 0, fontSize: 13.5, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
-            {demoCustomer.tagline}. Enter the access code you were sent to continue.
+          <p
+            style={{
+              margin: 0,
+              fontSize: 15.5,
+              color: EDIFY.natural,
+              opacity: 0.85,
+              lineHeight: 1.65,
+              maxWidth: '46ch',
+            }}
+          >
+            Thanks for your interest in what Edify and CHAGEE are exploring
+            together — from demand forecasting to production and ordering,
+            made to order. If you’d like to know more, get in touch with Ed at{' '}
+            <a
+              href={`mailto:${CONTACT_EMAIL}`}
+              style={{
+                color: EDIFY.hotPink,
+                fontWeight: 700,
+                textDecoration: 'underline',
+                textUnderlineOffset: 3,
+              }}
+            >
+              {CONTACT_EMAIL}
+            </a>
+            .
           </p>
         </div>
+      </div>
 
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-            Access code
-          </span>
-          <input
-            type="password"
-            value={passcode}
-            onChange={(e) => {
-              setPasscode(e.target.value);
-              if (error) setError(false);
-            }}
-            autoFocus
-            autoComplete="off"
-            placeholder="••••••••"
-            style={{
-              padding: '11px 13px',
-              borderRadius: 10,
-              border: `1.5px solid ${error ? 'var(--color-error)' : 'var(--color-border)'}`,
-              fontSize: 15,
-              fontFamily: 'var(--font-primary)',
-              outline: 'none',
-            }}
-          />
-          {error && (
-            <span style={{ fontSize: 12, color: 'var(--color-error)' }}>
-              That code didn’t work. Check it and try again.
-            </span>
-          )}
-        </label>
-
-        <button
-          type="submit"
-          disabled={busy || !passcode.trim()}
-          style={{
-            padding: '12px 16px',
-            borderRadius: 10,
-            border: 'none',
-            background: busy || !passcode.trim() ? 'var(--color-border)' : demoCustomer.accent,
-            color: '#fff',
-            fontSize: 14,
-            fontWeight: 700,
-            fontFamily: 'var(--font-primary)',
-            cursor: busy || !passcode.trim() ? 'default' : 'pointer',
-          }}
-        >
-          {busy ? 'Checking…' : 'Enter preview'}
-        </button>
-      </form>
+      {/* The secret spot: five quick clicks open the access-code page. */}
+      <button
+        type="button"
+        onClick={handleSecretClick}
+        aria-hidden="true"
+        tabIndex={-1}
+        style={{
+          position: 'absolute',
+          bottom: 20,
+          right: 24,
+          padding: '6px 10px',
+          background: 'none',
+          border: 'none',
+          fontSize: 11.5,
+          fontFamily: 'var(--font-primary)',
+          color: EDIFY.natural,
+          opacity: 0.4,
+          cursor: 'default',
+          userSelect: 'none',
+        }}
+      >
+        Powered by Edify
+      </button>
     </main>
   );
 }
