@@ -267,15 +267,15 @@ export default function Sidebar() {
             sit at the estate level. */}
         <NavGroup title="Stock & ordering" compact={compact}>
           {/* "Orders" fronts the Predictive ordering area — suggested
-              orders plus the Review approvals tab. Badge sums the two
-              queues (3 suggested orders + pending approvals) so neither
-              signal is lost by the merge. */}
+              orders, the Review approvals tab, and Placed (order history).
+              Badge sums the two queues (3 suggested orders + pending
+              approvals) so neither signal is lost by the merge. */}
           <NavItem
             label="Orders"
             icon={ShoppingCart}
             compact={compact}
             badge={3 + pendingApprovals || undefined}
-            active={is('/assisted-ordering') || is('/approvals')}
+            active={is('/assisted-ordering') || is('/approvals') || is('/order-history')}
             onClick={() => router.push('/assisted-ordering')}
           />
           {/* "Manage stock" covers the four sub-views of /stock:
@@ -284,9 +284,9 @@ export default function Sidebar() {
               ("Monitor stock" + "Count stock") — folded into one so the
               operator doesn't route-hop between monitoring and counting. */}
           <NavItem label="Manage stock" icon={Box} compact={compact} badge={stockAttentionCount || undefined} active={is('/stock')} onClick={() => router.push('/stock')} />
-          {/* Deliveries area covers receiving and order history; Receive
-              delivery is the lead tab so the entry lands there. */}
-          <NavItem label="Deliveries" icon={List} compact={compact} active={is('/order-history') || is('/receive')} onClick={() => router.push('/receive')} />
+          {/* Deliveries is now just receiving — placed orders moved into
+              the Orders area as its "Placed" tab. */}
+          <NavItem label="Deliveries" icon={List} compact={compact} active={is('/receive')} onClick={() => router.push('/receive')} />
         </NavGroup>
 
         {/* Group 3 — Performance (Manager+)

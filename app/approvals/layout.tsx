@@ -6,11 +6,12 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
 
-// Same tab set as app/assisted-ordering/layout.tsx — the two routes
-// present as one "Predictive ordering" area with a shared bar.
+// Same tab set as app/assisted-ordering/layout.tsx — the three routes
+// present as one "Orders" area with a shared bar.
 const ORDERS_TABS = [
   { id: 'orders',    label: 'Predictive ordering', href: '/assisted-ordering' },
   { id: 'approvals', label: 'Review approvals', href: '/approvals' },
+  { id: 'placed',    label: 'Placed', href: '/order-history' },
 ];
 
 export default function ApprovalsLayout({ children }: { children: React.ReactNode }) {

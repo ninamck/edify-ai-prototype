@@ -6,12 +6,14 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
 
-// Predictive ordering area tabs — suggested orders and approvals sit
-// behind the sidebar's single "Orders" entry. Duplicated in
-// app/approvals/layout.tsx so both routes render the same bar.
+// Predictive ordering area tabs — suggested orders, approvals and placed
+// orders sit behind the sidebar's single "Orders" entry. Duplicated in
+// app/approvals/layout.tsx and app/order-history/layout.tsx so all three
+// routes render the same bar.
 const ORDERS_TABS = [
   { id: 'orders',    label: 'Predictive ordering', href: '/assisted-ordering' },
   { id: 'approvals', label: 'Review approvals', href: '/approvals' },
+  { id: 'placed',    label: 'Placed', href: '/order-history' },
 ];
 
 export default function AssistedOrderingLayout({ children }: { children: React.ReactNode }) {

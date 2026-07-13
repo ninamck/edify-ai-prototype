@@ -6,11 +6,12 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
 
-// Deliveries area tabs — receiving and history present as one area.
-// Duplicated in app/receive/layout.tsx so both routes render the same bar.
-const DELIVERIES_TABS = [
-  { id: 'receive', label: 'Receive delivery', href: '/receive' },
-  { id: 'history', label: 'Orders',           href: '/order-history' },
+// Same tab set as app/assisted-ordering/layout.tsx — placed orders now
+// live in the "Orders" area alongside predictive ordering and approvals.
+const ORDERS_TABS = [
+  { id: 'orders',    label: 'Predictive ordering', href: '/assisted-ordering' },
+  { id: 'approvals', label: 'Review approvals', href: '/approvals' },
+  { id: 'placed',    label: 'Placed', href: '/order-history' },
 ];
 
 export default function OrderHistoryLayout({ children }: { children: React.ReactNode }) {
@@ -39,8 +40,8 @@ export default function OrderHistoryLayout({ children }: { children: React.React
         }}
       >
         <AreaTopBar
-          title="Deliveries"
-          tabs={DELIVERIES_TABS}
+          title="Orders"
+          tabs={ORDERS_TABS}
           siteName="Fitzroy Espresso"
           backTo="/"
         />
