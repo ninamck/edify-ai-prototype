@@ -82,7 +82,7 @@ function WelcomeInner() {
         <Image
           src="/edify-logo-cream.png"
           alt="Edify"
-          width={172}
+          width={159}
           height={38}
           priority
           style={{ height: 38, width: 'auto' }}

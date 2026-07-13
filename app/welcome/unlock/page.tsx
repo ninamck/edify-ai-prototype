@@ -80,10 +80,11 @@ function UnlockInner() {
         <Image
           src="/edify-logo-cream.png"
           alt="Edify"
-          width={136}
+          width={126}
           height={30}
           priority
-          style={{ height: 30, width: 'auto' }}
+          // alignSelf stops the column-flex form stretching it full-width.
+          style={{ height: 30, width: 'auto', alignSelf: 'flex-start' }}
         />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
