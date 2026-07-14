@@ -8,7 +8,6 @@ import {
   upsertProduct, genId,
 } from '@/components/Suppliers/store';
 import ProductsTable from '@/components/Suppliers/ProductsTable';
-import SuppliersHero from '@/components/Suppliers/SuppliersHero';
 import BulkActionBar from '@/components/Suppliers/BulkActionBar';
 import QuinnSheet, { type QuinnScope } from '@/components/Suppliers/QuinnSheet';
 import SupplierDrawer from '@/components/Suppliers/SupplierDrawer';
@@ -66,9 +65,6 @@ export default function SupplierDetailPage() {
   }
   const clearSelection = () => setSelectedIds(new Set());
 
-  function openQuinnGlobal(seed?: string) {
-    setQuinn({ open: true, scope: { kind: 'global', seed } });
-  }
   function openQuinnSupplier() {
     setQuinn({ open: true, scope: { kind: 'supplier', supplierId } });
   }
@@ -105,16 +101,6 @@ export default function SupplierDetailPage() {
     upsertProduct(blank);
     router.push(`/suppliers/products/${newId}`);
   }
-
-  // Suggestion chips scoped to this supplier so the chat opens with the
-  // most useful actions for "I'm looking at Agility right now".
-  const suggestions = [
-    { label: `Mark every ${supplier.name} product unavailable`, seed: `Mark every ${supplier.name} product unavailable` },
-    { label: 'Adjust all prices +5%', seed: `${supplier.name} price +5` },
-    { label: `Update cut-off time`, seed: `Update ${supplier.name} cutoff` },
-    { label: 'Find duplicate products', seed: 'Find duplicates' },
-    { label: 'Re-categorise all packaging', seed: `Recategorise ${supplier.name} packaging` },
-  ];
 
   return (
     <div style={{
@@ -194,16 +180,6 @@ export default function SupplierDetailPage() {
             </span>
           </div>
         )}
-      </div>
-
-      {/* Hero (Quinn) */}
-      <div style={{ marginTop: 16 }}>
-        <SuppliersHero
-          title={`What do you want to do with ${supplier.name}?`}
-          subtitle="Type a sentence or tap a shortcut. I'll preview every change before it commits."
-          suggestions={suggestions}
-          onAsk={openQuinnGlobal}
-        />
       </div>
 
       {/* Search */}

@@ -5,17 +5,13 @@ import { useRouter } from 'next/navigation';
 import StatusBadge from '@/components/Receiving/StatusBadge';
 import CopyChip from '@/components/Receiving/CopyChip';
 import DeliveriesTabs from '@/components/Receiving/DeliveriesTabs';
-import { MOCK_POS, PO, poItemCount } from '@/components/Receiving/mockData';
+import { MOCK_POS, poItemCount, poTotal } from '@/components/Receiving/mockData';
 
 /**
  * Upcoming deliveries — POs that have been sent and are awaiting (or part
  * way through) delivery. "Accept delivery" opens the receiving flow for
  * that order; once signed off it moves to the Accepted tab as a GRN.
  */
-
-function poTotalValue(po: PO): number {
-  return po.lines.reduce((s, l) => s + l.price * l.expectedQty, 0);
-}
 
 const thStyle: React.CSSProperties = {
   textAlign: 'left',
@@ -155,7 +151,8 @@ export default function UpcomingDeliveriesPage() {
                   <td style={tdStyle}>{po.dateSent}</td>
                   <td style={{ ...tdStyle, textAlign: 'center' }}>{poItemCount(po)}</td>
                   <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>
-                    £{poTotalValue(po).toFixed(2)}
+                    {/* Currency-aware: foreign-currency POs render dual display */}
+                    {poTotal(po)}
                   </td>
                   <td style={tdStyle}>
                     <StatusBadge status={po.status} />

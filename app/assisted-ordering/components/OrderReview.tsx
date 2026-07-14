@@ -13,7 +13,38 @@ import MovProgressBar from './MovProgressBar';
 import QtyControl from './QtyControl';
 import TrustPanels from './TrustPanels';
 import { getTrustPanelDataForRecurring } from '../data/trustPanelData';
-import { fmtSupplierAmount, fmtSupplierUnitCost, supplierCurrency } from '../lib/money';
+import { fmtSupplierAmount, fmtSupplierAmountParts, fmtSupplierUnitCost, supplierCurrency } from '../lib/money';
+
+/**
+ * Fixed-width amount column for rows with qty steppers: the supplier-currency
+ * amount with the base equivalent stacked underneath, so the wide dual
+ * display ("CA$392 (£227)") can't push the steppers out of vertical
+ * alignment across rows.
+ */
+function StackedAmount({ amount, supplierId }: { amount: number; supplierId: string }) {
+  const total = fmtSupplierAmountParts(amount, supplierId);
+  return (
+    <span
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-end',
+        width: '68px',
+        flexShrink: 0,
+        fontFamily: 'var(--font-primary)',
+      }}
+    >
+      <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>
+        {total.main}
+      </span>
+      {total.base && (
+        <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+          {total.base}
+        </span>
+      )}
+    </span>
+  );
+}
 
 interface Props {
   orders: SuggestedOrder[];
@@ -265,19 +296,7 @@ function NewSupplierSection({
                   min={1}
                   label={ingredient.name}
                 />
-                <span
-                  style={{
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    color: 'var(--color-text-primary)',
-                    fontFamily: 'var(--font-primary)',
-                    minWidth: '48px',
-                    textAlign: 'right',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {fmtSupplierAmount(lineTotal, ml.supplierId)}
-                </span>
+                <StackedAmount amount={lineTotal} supplierId={ml.supplierId} />
                 <button
                   type="button"
                   aria-label={`Remove ${ingredient.name}`}
@@ -659,19 +678,7 @@ function RecurringOrderSection({
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
                   <QtyControl value={qty} onChange={(q) => onQtyChange(line.id, q)} min={0} label={ingredient.name} />
-                  <span
-                    style={{
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      color: 'var(--color-text-primary)',
-                      fontFamily: 'var(--font-primary)',
-                      minWidth: '48px',
-                      textAlign: 'right',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {fmtSupplierAmount(lineTotal, line.supplierId)}
-                  </span>
+                  <StackedAmount amount={lineTotal} supplierId={line.supplierId} />
                 </div>
               </div>
 
@@ -792,19 +799,7 @@ function RecurringOrderSection({
                       {editing ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
                           <QtyControl value={qty} onChange={(q) => onQtyChange(line.id, q)} min={0} label={ingredient.name} />
-                          <span
-                            style={{
-                              fontSize: '13px',
-                              fontWeight: 700,
-                              color: 'var(--color-text-primary)',
-                              fontFamily: 'var(--font-primary)',
-                              minWidth: '44px',
-                              textAlign: 'right',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {fmtSupplierAmount(lineTotal, line.supplierId)}
-                          </span>
+                          <StackedAmount amount={lineTotal} supplierId={line.supplierId} />
                           <button
                             type="button"
                             onClick={() => toggleAutoLineEdit(line.id)}

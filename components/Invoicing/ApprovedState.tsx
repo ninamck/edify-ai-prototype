@@ -1,8 +1,8 @@
 'use client';
 
 import StatusBadge from '@/components/Receiving/StatusBadge';
-import { Invoice, getApprovedResolutions } from './mockData';
-import { BASE_CURRENCY, formatMoney } from '@/lib/currency';
+import { Invoice, getApprovedResolutions, getPOsForInvoice } from './mockData';
+import { BASE_CURRENCY, currencySymbol, formatMoney } from '@/lib/currency';
 
 interface ApprovedStateProps {
   invoice: Invoice;
@@ -14,6 +14,10 @@ interface DeliveryOnly { item: string; invoicePrice: number; masterPrice: number
 
 export default function ApprovedState({ invoice, onBackToInvoices }: ApprovedStateProps) {
   const resolutions = getApprovedResolutions(invoice.id) ?? {};
+  const invCurrency = invoice.currency ?? BASE_CURRENCY;
+  const isForeign = invCurrency !== BASE_CURRENCY;
+  const sym = currencySymbol(invCurrency);
+  const pos = getPOsForInvoice(invoice);
 
   const COST_UPDATES: CostUpdate[] = invoice.variances
     .filter(v => v.type === 'price' && resolutions[v.id] === 'Accept & Update Cost in Edify')
@@ -81,7 +85,16 @@ export default function ApprovedState({ invoice, onBackToInvoices }: ApprovedSta
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 24px', fontSize: '13px' }}>
           <SummaryRow label="Invoice" value={invoice.invoiceNumber} />
           <SummaryRow label="Supplier" value={invoice.supplier} />
+          <SummaryRow label="Invoice Date" value={invoice.date} />
           <SummaryRow label="Approved By" value="Nina McKinnon" />
+          {pos.length > 0 && <SummaryRow label={pos.length === 1 ? 'Purchase Order' : 'Purchase Orders'} value={pos.join(', ')} />}
+          {invoice.grnNumbers.length > 0 && <SummaryRow label={invoice.grnNumbers.length === 1 ? 'GRN' : 'GRNs'} value={invoice.grnNumbers.join(', ')} />}
+          {isForeign && (
+            <SummaryRow
+              label="Exchange Rate"
+              value={`1 ${invCurrency} = ${(invoice.lockedFxRate ?? 1).toFixed(2)} ${BASE_CURRENCY} · locked at receipt`}
+            />
+          )}
           <div>
             <span style={{ color: 'var(--color-text-secondary)' }}>Xero Status</span>
             <div style={{ marginTop: '4px' }}><StatusBadge status="Queued for sync" variant="info" /></div>
@@ -111,6 +124,110 @@ export default function ApprovedState({ invoice, onBackToInvoices }: ApprovedSta
           </div>
         </div>
       </div>
+
+      {/* Invoice lines — the full invoice, not just the sync status */}
+      {invoice.lines.length > 0 && (
+        <div
+          style={{
+            border: '1px solid var(--color-border-subtle)',
+            borderRadius: '12px',
+            background: '#fff',
+            marginBottom: '20px',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ padding: '20px 20px 0' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>
+              Invoice Lines
+            </h3>
+            <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', margin: '0 0 12px' }}>
+              As billed by the supplier{isForeign ? ` in ${invCurrency}` : ''}.
+            </p>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <thead>
+              <tr>
+                {['Item', 'SKU', 'Qty', 'Unit Price', 'Line Total'].map((h, i) => (
+                  <th
+                    key={h}
+                    style={{
+                      textAlign: i >= 2 ? 'right' : 'left',
+                      padding: '8px 20px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      letterSpacing: '0.04em',
+                      color: 'var(--color-text-secondary)',
+                      borderBottom: '1px solid var(--color-border-subtle)',
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {invoice.lines.map(line => (
+                <tr key={line.id}>
+                  <td style={{ padding: '10px 20px', borderBottom: '1px solid var(--color-border-subtle)', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                    {line.description}
+                  </td>
+                  <td style={{ padding: '10px 20px', borderBottom: '1px solid var(--color-border-subtle)', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                    {line.sku}
+                  </td>
+                  <td style={{ padding: '10px 20px', borderBottom: '1px solid var(--color-border-subtle)', textAlign: 'right', color: 'var(--color-text-primary)' }}>
+                    {line.qty}
+                  </td>
+                  <td style={{ padding: '10px 20px', borderBottom: '1px solid var(--color-border-subtle)', textAlign: 'right', color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>
+                    {sym}{line.unitPrice.toFixed(2)}
+                  </td>
+                  <td style={{ padding: '10px 20px', borderBottom: '1px solid var(--color-border-subtle)', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>
+                    {sym}{line.lineTotal.toFixed(2)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={4} style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+                  Total
+                </td>
+                <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>
+                  {formatMoney(invoice.total, invCurrency)}
+                  {isForeign && (
+                    <span style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                      {formatMoney(invoice.total * (invoice.lockedFxRate ?? 1), BASE_CURRENCY)}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      {/* Note card */}
+      {invoice.note && (
+        <div
+          style={{
+            border: '1px solid var(--color-border-subtle)',
+            borderRadius: '12px',
+            padding: '16px 20px',
+            background: 'var(--color-bg-hover)',
+            marginBottom: '20px',
+            fontSize: '13px',
+            lineHeight: 1.5,
+            color: 'var(--color-text-primary)',
+          }}
+        >
+          <span style={{ marginRight: '8px' }}>📝</span>
+          {invoice.note}
+          {invoice.noteAuthor && (
+            <span style={{ display: 'block', marginTop: '6px', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+              — {invoice.noteAuthor}{invoice.noteUpdatedAt ? `, ${invoice.noteUpdatedAt}` : ''}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Cost Updates card */}
       {COST_UPDATES.length > 0 && (

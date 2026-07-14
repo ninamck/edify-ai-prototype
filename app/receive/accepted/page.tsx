@@ -10,6 +10,7 @@ import {
   grnVarianceCount,
   deliverySequenceTag,
 } from '@/components/Receiving/mockData';
+import { BASE_CURRENCY, formatMoney } from '@/lib/currency';
 
 /**
  * Accepted deliveries — the Deliveries area's record of everything that
@@ -164,7 +165,18 @@ export default function AcceptedDeliveriesPage() {
                     </td>
                     <td style={tdStyle}>{grn.dateReceived}</td>
                     <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>
-                      £{grnTotal(grn).toFixed(2)}
+                      {/* Foreign-currency deliveries show the billed amount with
+                          the GBP value at the rate locked at receipt. */}
+                      {grn.currency && grn.currency !== BASE_CURRENCY ? (
+                        <>
+                          {formatMoney(grnTotal(grn), grn.currency)}
+                          <span style={{ display: 'block', fontSize: '11px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                            {formatMoney(grnTotal(grn) * (grn.lockedFxRate ?? 1), BASE_CURRENCY)}
+                          </span>
+                        </>
+                      ) : (
+                        <>£{grnTotal(grn).toFixed(2)}</>
+                      )}
                     </td>
                     <td style={{ ...tdStyle, color: 'var(--color-text-secondary)', fontSize: '12px' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>

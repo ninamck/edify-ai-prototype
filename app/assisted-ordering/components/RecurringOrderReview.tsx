@@ -5,7 +5,7 @@ import type { RecurringOrder } from '../types';
 import { getVariancePercent, needsReview } from '../types';
 import { getSupplier, getIngredient, getProduct } from '../data/mockOrders';
 import QtyControl from './QtyControl';
-import { fmtSupplierAmount } from '../lib/money';
+import { fmtSupplierAmountParts } from '../lib/money';
 
 interface Props {
   order: RecurringOrder;
@@ -234,19 +234,32 @@ export default function RecurringOrderReview({
                           min={0}
                           label={ingredient.name}
                         />
-                        <span
-                          style={{
-                            fontSize: '13px',
-                            fontWeight: 700,
-                            color: 'var(--color-text-primary)',
-                            fontFamily: 'var(--font-primary)',
-                            minWidth: '48px',
-                            textAlign: 'right',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {fmtSupplierAmount(lineTotal, line.supplierId)}
-                        </span>
+                        {(() => {
+                          // Fixed-width stacked amount so steppers align even
+                          // with the dual-currency display.
+                          const total = fmtSupplierAmountParts(lineTotal, line.supplierId);
+                          return (
+                            <span
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'flex-end',
+                                width: '68px',
+                                flexShrink: 0,
+                                fontFamily: 'var(--font-primary)',
+                              }}
+                            >
+                              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>
+                                {total.main}
+                              </span>
+                              {total.base && (
+                                <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                                  {total.base}
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
 

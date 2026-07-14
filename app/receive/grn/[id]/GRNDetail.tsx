@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { MOCK_COMPLETED_DELIVERIES, MOCK_POS } from '@/components/Receiving/mockData';
+import { BASE_CURRENCY, currencySymbol, formatMoney } from '@/lib/currency';
 
 export default function GRNDetail({ id }: { id: string }) {
   const router = useRouter();
@@ -25,6 +26,11 @@ export default function GRNDetail({ id }: { id: string }) {
   const pos = MOCK_POS.filter(p => grn.poNumbers.includes(p.poNumber));
   const total = grn.lines.reduce((s, l) => s + l.price * l.receivedQty, 0);
   const hasVariance = grn.lines.some(l => l.receivedQty !== l.expectedQty);
+  // Foreign-currency deliveries (e.g. CAD from Second Cup Central Supply)
+  // render in the billed currency, with the GBP value at the locked rate.
+  const grnCurrency = grn.currency ?? BASE_CURRENCY;
+  const isForeign = grnCurrency !== BASE_CURRENCY;
+  const sym = currencySymbol(grnCurrency);
 
   const cell: React.CSSProperties = {
     padding: '10px 14px',
@@ -80,7 +86,13 @@ export default function GRNDetail({ id }: { id: string }) {
         <MetaCard label="Site" value={grn.site} />
         <MetaCard label="Items" value={`${grn.lines.length} lines`} />
         {grn.invoiceNumber && <MetaCard label="Invoice" value={grn.invoiceNumber} />}
-        <MetaCard label="Total Received" value={`£${total.toFixed(2)}`} highlight />
+        <MetaCard label="Total Received" value={formatMoney(total, grnCurrency)} highlight />
+        {isForeign && (
+          <MetaCard
+            label={`In GBP (1 ${grnCurrency} = ${grn.lockedFxRate ?? 1} GBP, locked at receipt)`}
+            value={formatMoney(total * (grn.lockedFxRate ?? 1), BASE_CURRENCY)}
+          />
+        )}
       </div>
 
       {/* Lines table */}
@@ -115,8 +127,8 @@ export default function GRNDetail({ id }: { id: string }) {
                       </span>
                     )}
                   </td>
-                  <td style={{ ...cell }}>£{line.price.toFixed(2)}</td>
-                  <td style={{ ...cell, fontWeight: 600 }}>£{lineTotal.toFixed(2)}</td>
+                  <td style={{ ...cell }}>{sym}{line.price.toFixed(2)}</td>
+                  <td style={{ ...cell, fontWeight: 600 }}>{sym}{lineTotal.toFixed(2)}</td>
                 </tr>
               );
             })}
@@ -124,7 +136,7 @@ export default function GRNDetail({ id }: { id: string }) {
           <tfoot>
             <tr style={{ borderTop: '2px solid var(--color-border)' }}>
               <td colSpan={6} style={{ ...cell, textAlign: 'right', fontWeight: 600, color: 'var(--color-text-secondary)', borderBottom: 'none' }}>Total received</td>
-              <td style={{ ...cell, fontWeight: 700, fontSize: '14px', borderBottom: 'none' }}>£{total.toFixed(2)}</td>
+              <td style={{ ...cell, fontWeight: 700, fontSize: '14px', borderBottom: 'none' }}>{sym}{total.toFixed(2)}</td>
             </tr>
           </tfoot>
         </table>

@@ -5,7 +5,13 @@ import { usePathname, useRouter } from 'next/navigation';
 import { FlaskConical, ChevronDown } from 'lucide-react';
 import { USERS, getRoleRules } from '@/components/Approvals/approvalsStore';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
-import { isDemoBuild } from '@/lib/demoConfig';
+import {
+  isDemoBuild,
+  isBrandSwitchable,
+  DEMO_CUSTOMERS,
+  DEMO_CUSTOMER_ID,
+  setDemoBrand,
+} from '@/lib/demoConfig';
 import { useFranchise, type FranchiseViewMode } from '@/components/Franchise/FranchiseContext';
 import { BRIEFING_ROLES } from '@/components/briefing';
 import type { BriefingRole } from '@/components/briefing';
@@ -51,8 +57,10 @@ export default function DemoControls({ variant = 'floating', extraSection }: Pro
   const pathname = usePathname() ?? '';
 
   // Customer-facing demo builds never expose the internal demo controls
-  // (brand/version/acting-as switches).
-  if (isDemoBuild) return null;
+  // (brand/version/acting-as switches). The internal build keeps them even
+  // while wearing another brand via the runtime Demo brand switch — that's
+  // the only way back.
+  if (isDemoBuild && !isBrandSwitchable) return null;
 
   // Hidden everywhere except the home screens — inner pages keep their
   // mounts (layouts pass this into their top bars) but render nothing.
@@ -225,6 +233,40 @@ function PanelBody({ extraSection }: { extraSection?: ReactNode }) {
 
   return (
     <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {isBrandSwitchable && (
+        <div>
+          <div style={sectionLabelStyle}>Demo brand</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {DEMO_CUSTOMERS.map((c) => {
+              const active = DEMO_CUSTOMER_ID === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => {
+                    if (!active) setDemoBrand(c.id);
+                  }}
+                  style={{ ...pillOptionStyle(active), flex: '1 1 auto' }}
+                >
+                  {c.name}
+                </button>
+              );
+            })}
+          </div>
+          <div
+            style={{
+              fontSize: 10,
+              lineHeight: 1.4,
+              color: 'var(--color-text-muted)',
+              marginTop: 6,
+            }}
+          >
+            Customer demo branding and gated features (e.g. Second Cup&apos;s multi-currency
+            purchasing). Switching reloads the app.
+          </div>
+        </div>
+      )}
+
       <div>
         <div style={sectionLabelStyle}>Brand</div>
         <div style={{ display: 'flex', gap: 4 }}>

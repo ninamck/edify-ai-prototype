@@ -89,7 +89,7 @@ export default function ShellTopBar({
             whiteSpace: 'nowrap',
           }}
         >
-          Command centre
+          Command Centre
         </button>
         <button
           type="button"

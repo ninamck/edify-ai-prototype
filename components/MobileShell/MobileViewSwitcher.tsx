@@ -34,7 +34,7 @@ export default function MobileViewSwitcher({
           border: '1px solid rgba(255,255,255,0.3)',
         }}
       >
-        <Pill label="Command centre" active={view === 'command-centre'} onClick={() => onChange('command-centre')} />
+        <Pill label="Command Centre" active={view === 'command-centre'} onClick={() => onChange('command-centre')} />
         <Pill label="Dashboard" active={view === 'dashboard'} onClick={() => onChange('dashboard')} />
       </div>
     </div>

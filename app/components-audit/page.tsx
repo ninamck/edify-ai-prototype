@@ -1207,7 +1207,7 @@ function TabsSection() {
                   boxShadow: isActive ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                   fontFamily: 'var(--font-primary)',
                 }}>
-                  {k === 'command' ? 'Command centre' : 'Dashboard'}
+                  {k === 'command' ? 'Command Centre' : 'Dashboard'}
                 </button>
               );
             })}

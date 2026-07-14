@@ -7,9 +7,16 @@
  * demo controls visible. Any other id switches the prototype into a
  * customer-facing "demo build": branded, and (when a passcode is set) gated.
  *
+ * On the internal build the brand can additionally be switched at runtime
+ * from the demo-controls panel: the choice persists in localStorage and the
+ * page reloads so module-scope fixture data (which reads the brand at import
+ * time) re-evaluates. Customer deployments ignore the override — the env var
+ * always wins there, so a gated build can never be flipped to another brand.
+ *
  * This module is deliberately client-safe: it reads only NEXT_PUBLIC_*
- * values so it can be imported from client components and from middleware.
- * Secrets (the gate passcode) live in `lib/demoGate.ts`, never here.
+ * values (plus localStorage, guarded) so it can be imported from client
+ * components and from middleware. Secrets (the gate passcode) live in
+ * `lib/demoGate.ts`, never here.
  */
 
 export type DemoCustomer = {
@@ -60,10 +67,50 @@ const CUSTOMERS: Record<string, DemoCustomer> = {
   },
 };
 
-export const DEMO_CUSTOMER_ID = process.env.NEXT_PUBLIC_DEMO_CUSTOMER ?? 'edify';
+/** Brand baked in at build/deploy time. */
+const ENV_CUSTOMER_ID = process.env.NEXT_PUBLIC_DEMO_CUSTOMER ?? 'edify';
+
+/**
+ * The runtime brand override is only honoured on the internal build — a
+ * customer-facing deployment must never be switchable to another brand.
+ */
+export const isBrandSwitchable = ENV_CUSTOMER_ID === 'edify';
+
+const BRAND_STORAGE_KEY = 'edify.demoBrand';
+
+function readBrandOverride(): string | null {
+  if (!isBrandSwitchable || typeof window === 'undefined') return null;
+  try {
+    const stored = window.localStorage.getItem(BRAND_STORAGE_KEY);
+    return stored && CUSTOMERS[stored] ? stored : null;
+  } catch {
+    return null; // localStorage unavailable — stay on the env brand
+  }
+}
+
+export const DEMO_CUSTOMER_ID = readBrandOverride() ?? ENV_CUSTOMER_ID;
 
 export const demoCustomer: DemoCustomer =
   CUSTOMERS[DEMO_CUSTOMER_ID] ?? CUSTOMERS.edify;
+
+/** All brands, for the demo-controls brand selector. */
+export const DEMO_CUSTOMERS: DemoCustomer[] = Object.values(CUSTOMERS);
+
+/**
+ * Persist a runtime brand choice and reload. A full reload (not a router
+ * navigation) is required: fixture modules read the brand at import time,
+ * so the whole client bundle must re-initialise.
+ */
+export function setDemoBrand(id: string) {
+  if (!isBrandSwitchable || typeof window === 'undefined' || !CUSTOMERS[id]) return;
+  try {
+    if (id === ENV_CUSTOMER_ID) window.localStorage.removeItem(BRAND_STORAGE_KEY);
+    else window.localStorage.setItem(BRAND_STORAGE_KEY, id);
+  } catch {
+    return; // can't persist — reloading would just lose the choice
+  }
+  window.location.reload();
+}
 
 /** True when this build wears a customer brand (i.e. not the internal one). */
 export const isDemoBuild = demoCustomer.id !== 'edify';

@@ -358,13 +358,13 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
         <div style={{
           display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
           padding: '10px 14px', borderRadius: '10px', marginBottom: '16px',
-          background: 'rgba(34,51,130,0.05)',
-          border: '1px solid rgba(34,51,130,0.18)',
+          background: 'rgba(3,105,161,0.06)',
+          border: '1px solid rgba(3,105,161,0.25)',
           fontSize: '12.5px', color: 'var(--color-text-secondary)',
         }}>
           <span style={{
             padding: '2px 9px', borderRadius: '100px',
-            background: 'var(--color-accent-active)', color: '#fff',
+            background: 'var(--color-info)', color: '#fff',
             fontSize: '11px', fontWeight: 700, letterSpacing: '0.02em',
           }}>
             Invoiced in {invCurrency}

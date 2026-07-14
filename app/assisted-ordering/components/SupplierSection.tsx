@@ -5,7 +5,7 @@ import { getSupplier, getIngredient, getProduct, isUrgent } from '../data/mockOr
 import LineItem from './LineItem';
 import MovProgressBar from './MovProgressBar';
 import QtyControl from './QtyControl';
-import { fmtSupplierAmount } from '../lib/money';
+import { fmtSupplierAmount, fmtSupplierAmountParts } from '../lib/money';
 import { BASE_CURRENCY, fxRateLabel, FX_RATE_DATE } from '@/lib/currency';
 
 interface Props {
@@ -116,9 +116,9 @@ export default function SupplierSection({
                     style={{
                       padding: '1px 8px',
                       borderRadius: 'var(--radius-badge)',
-                      background: 'rgba(34,51,130,0.08)',
-                      border: '1px solid rgba(34,51,130,0.2)',
-                      color: 'var(--color-accent-active)',
+                      background: 'rgba(3,105,161,0.10)',
+                      border: '1px solid rgba(3,105,161,0.30)',
+                      color: 'var(--color-info)',
                       fontWeight: 600,
                     }}
                     title={`Supplier bills in ${supplier.currency}. Rate auto-updated ${FX_RATE_DATE}; locked at goods receipt.`}
@@ -249,7 +249,7 @@ export default function SupplierSection({
                         fontFamily: 'var(--font-primary)',
                       }}
                     >
-                      {ingredient.variant} · {product.unitName}
+                      {ingredient.variant}
                     </p>
                   </div>
                   <div
@@ -266,18 +266,62 @@ export default function SupplierSection({
                       min={1}
                       label={ingredient.name}
                     />
+                    {/* Same fixed unit column as LineItem so steppers align */}
                     <span
                       style={{
-                        fontSize: '13px',
-                        fontWeight: 700,
-                        color: 'var(--color-text-primary)',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        color: 'var(--color-text-secondary)',
                         fontFamily: 'var(--font-primary)',
-                        minWidth: '48px',
-                        textAlign: 'right',
+                        whiteSpace: 'nowrap',
+                        width: '100px',
+                        flexShrink: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
                       }}
                     >
-                      {fmtSupplierAmount(lineTotal, ml.supplierId)}
+                      {product.unitName}
                     </span>
+                    {(() => {
+                      // Same fixed-width stacked amount column as LineItem so
+                      // manual rows keep the steppers aligned with the rest.
+                      const total = fmtSupplierAmountParts(lineTotal, ml.supplierId);
+                      return (
+                        <span
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'flex-end',
+                            width: '68px',
+                            flexShrink: 0,
+                            fontFamily: 'var(--font-primary)',
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: '13px',
+                              fontWeight: 700,
+                              color: 'var(--color-text-primary)',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {total.main}
+                          </span>
+                          {total.base && (
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: 500,
+                                color: 'var(--color-text-secondary)',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {total.base}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })()}
                     <button
                       type="button"
                       aria-label={`Remove ${ingredient.name}`}
