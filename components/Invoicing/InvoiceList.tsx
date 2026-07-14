@@ -8,6 +8,7 @@ import { MOCK_INVOICES, Invoice, InvoiceMatchStatus, needsReviewCount, autoMatch
 import { getCreditNotesForInvoice } from '@/components/CreditNotes/mockData';
 import { MOCK_PASS_THROUGH_INVOICES, PassThroughInvoice, PassThroughStatus, grandTotal, vatAmount } from '@/components/PassThrough/mockData';
 import { recordSync } from './syncLog';
+import { BASE_CURRENCY, formatMoney } from '@/lib/currency';
 
 function isSyncableStatus(s: InvoiceMatchStatus): boolean {
   return s === 'Matched' || s === 'Approved';
@@ -860,7 +861,18 @@ function InvoiceRow({ invoice, isLocallySynced, isSyncing, syncable, selected, g
         {invoice.date}
       </td>
       <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontWeight: 600, color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>
-        £{invoice.total.toFixed(2)}
+        {invoice.currency && invoice.currency !== BASE_CURRENCY ? (
+          // Foreign-currency invoice: original amount with the GBP equivalent
+          // at the rate locked at goods receipt.
+          <>
+            {formatMoney(invoice.total, invoice.currency)}
+            <span style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+              {formatMoney(invoice.total * (invoice.lockedFxRate ?? 1), BASE_CURRENCY)}
+            </span>
+          </>
+        ) : (
+          <>£{invoice.total.toFixed(2)}</>
+        )}
       </td>
       <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
         <POList invoice={invoice} />

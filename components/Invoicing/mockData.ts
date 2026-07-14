@@ -1,5 +1,7 @@
 import { MOCK_COMPLETED_DELIVERIES, MOCK_POS, GRN, PO, POLine } from '@/components/Receiving/mockData';
 export type { GRN } from '@/components/Receiving/mockData';
+import { isMultiCurrencyDemo } from '@/lib/demoConfig';
+import type { CurrencyCode } from '@/lib/currency';
 
 export type InvoiceMatchStatus =
   | 'Matched'
@@ -191,6 +193,14 @@ export interface Invoice {
   // Reviewer confirmed this flagged invoice really is a duplicate — it's
   // discarded from the review queue and will never sync.
   duplicateConfirmed?: boolean;
+  /**
+   * Currency the supplier invoiced in. Absent = base currency (GBP).
+   * The invoice is matched against the PO/GRN in this original currency —
+   * the base-currency translation is stored alongside, never replacing it.
+   */
+  currency?: CurrencyCode;
+  /** FX rate into base locked at goods receipt (from the linked GRN). */
+  lockedFxRate?: number;
 }
 
 export interface GRNMatchLine {
@@ -452,6 +462,33 @@ export const MOCK_INVOICES: Invoice[] = [
     ],
     variances: [],
   },
+  // Second Cup build only: a CAD invoice from Central Supply, matched
+  // against the CAD PO/GRN in the original currency. Amounts are CAD;
+  // the GBP translation renders alongside at the rate locked at receipt.
+  ...(isMultiCurrencyDemo
+    ? ([
+        {
+          id: 'inv-sc-1',
+          invoiceNumber: 'INV-CS-70112',
+          supplier: 'Second Cup Central Supply (Canada)',
+          date: '8 Apr 2026',
+          total: 589.00, // CAD
+          grnNumbers: ['GRN-1280'],
+          status: 'Matched' as InvoiceMatchStatus,
+          currency: 'CAD' as CurrencyCode,
+          lockedFxRate: 0.58,
+          lines: [
+            { id: 'il-sc-1', description: 'Espresso Forte whole bean 1kg', sku: 'SC-ESP-1KG', qty: 12, unitPrice: 28.00, lineTotal: 336.00 },
+            { id: 'il-sc-2', description: 'Second Cup vanilla syrup 1L', sku: 'SC-VAN-1L', qty: 6, unitPrice: 10.50, lineTotal: 63.00 },
+            { id: 'il-sc-3', description: 'Branded hot cup + lid 12oz', sku: 'SC-CUP-12OZ', qty: 2, unitPrice: 95.00, lineTotal: 190.00 },
+          ],
+          variances: [],
+          note: 'CAD invoice matched against the CAD PO — GBP value booked at the rate locked at receipt (1 CAD = 0.58 GBP).',
+          noteAuthor: 'Edify AI',
+          noteUpdatedAt: '8 Apr',
+        },
+      ] satisfies Invoice[])
+    : []),
 ];
 
 export function getGRNsForInvoice(invoice: Invoice, extraGRNs: string[] = []): GRN[] {

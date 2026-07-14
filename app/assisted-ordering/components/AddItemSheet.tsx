@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { INGREDIENTS, SUPPLIER_PRODUCTS, SUPPLIERS } from '../data/mockOrders';
 import type { Ingredient, SupplierProduct } from '../types';
 import QtyControl from './QtyControl';
+import { fmtSupplierAmount, fmtSupplierUnitCost } from '../lib/money';
 
 type Step = 'ingredient' | 'supplier' | 'quantity';
 
@@ -334,7 +335,7 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <p style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--color-text-primary)', fontFamily: 'var(--font-primary)' }}>
-                      £{product.unitCost}
+                      {fmtSupplierUnitCost(product.unitCost, product.supplierId)}
                     </p>
                     <p style={{ margin: '1px 0 0', fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-primary)' }}>
                       per {product.unitName}
@@ -368,7 +369,7 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
           >
             <span>{selectedProduct.unitName}</span>
             <span>·</span>
-            <span>£{selectedProduct.unitCost} each</span>
+            <span>{fmtSupplierUnitCost(selectedProduct.unitCost, selectedProduct.supplierId)} each</span>
             <span>·</span>
             <span>📦 {selectedSupplier.deliveryDate}</span>
             <span>·</span>
@@ -400,7 +401,7 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
 
             <div style={{ textAlign: 'right' }}>
               <p style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--color-text-primary)', fontFamily: 'var(--font-primary)' }}>
-                £{total.toFixed(0)}
+                {fmtSupplierAmount(total, selectedProduct.supplierId)}
               </p>
               <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-primary)' }}>
                 {(qty * selectedProduct.unitSize).toFixed(1)}{selectedIngredient.stockUnit} ·{' '}
@@ -433,7 +434,7 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#166534'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#15803D'; }}
           >
-            Add to order — £{total.toFixed(0)}
+            Add to order — {fmtSupplierAmount(total, selectedProduct.supplierId)}
           </button>
         </div>
       )}

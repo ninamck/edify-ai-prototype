@@ -2,6 +2,10 @@
 
 import StatusBadge, { BadgeVariant } from '@/components/Receiving/StatusBadge';
 import { POCoverage, POCoverageStatus, POLineCoverage } from '@/components/Invoicing/mockData';
+import {
+  BASE_CURRENCY, convert, formatMoney, fxRateLabel, FX_RATE_DATE,
+  type CurrencyCode,
+} from '@/lib/currency';
 
 interface PODetailViewProps {
   coverage: POCoverage;
@@ -9,8 +13,16 @@ interface PODetailViewProps {
   onOpenInvoice: (invoiceId: string) => void;
 }
 
+// PO documents are denominated in the supplier's billing currency; the base
+// (GBP) equivalent renders alongside so the store sees its own food cost too.
+function fmtPOAmount(amount: number, currency: CurrencyCode): string {
+  if (currency === BASE_CURRENCY) return formatMoney(amount, BASE_CURRENCY);
+  return `${formatMoney(amount, currency)} (${formatMoney(convert(amount, currency, BASE_CURRENCY), BASE_CURRENCY)})`;
+}
+
 export default function PODetailView({ coverage, onBack, onOpenInvoice }: PODetailViewProps) {
   const { po, invoices, poAmount, invoicedAmount, percent, lineCoverage, status, fullyInvoicedLineCount } = coverage;
+  const currency = po.currency ?? BASE_CURRENCY;
 
   const remaining = Math.max(0, poAmount - invoicedAmount);
   const overBy = Math.max(0, invoicedAmount - poAmount);
@@ -36,6 +48,23 @@ export default function PODetailView({ coverage, onBack, onOpenInvoice }: PODeta
           <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
             Sent {po.dateSent} · {po.site} · {po.lines.length} item{po.lines.length === 1 ? '' : 's'}
           </p>
+          {currency !== BASE_CURRENCY && (
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: '8px', marginTop: '8px',
+              padding: '5px 10px', borderRadius: '8px',
+              background: 'var(--color-bg-hover)',
+              fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)',
+            }}>
+              <span style={{
+                padding: '2px 8px', borderRadius: '100px',
+                background: 'var(--color-accent-active)', color: '#fff',
+                fontSize: '11px', fontWeight: 700,
+              }}>
+                PO in {currency}
+              </span>
+              <span>{fxRateLabel(currency)} · updated {FX_RATE_DATE} · rate locks at goods receipt</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -50,6 +79,7 @@ export default function PODetailView({ coverage, onBack, onOpenInvoice }: PODeta
         totalLineCount={lineCoverage.length}
         remaining={remaining}
         overBy={overBy}
+        currency={currency}
       />
 
       {/* Invoices list */}
@@ -86,7 +116,7 @@ export default function PODetailView({ coverage, onBack, onOpenInvoice }: PODeta
                       <StatusBadge status={inv.status} variant={invoiceStatusVariant(inv.status)} />
                     </div>
                     <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-                      {inv.date} · £{coveredTotal.toFixed(2)} applied · {thisCoverage.length} line{thisCoverage.length === 1 ? '' : 's'}
+                      {inv.date} · {fmtPOAmount(coveredTotal, currency)} applied · {thisCoverage.length} line{thisCoverage.length === 1 ? '' : 's'}
                     </div>
                     <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted, var(--color-text-secondary))', marginTop: '4px' }}>
                       Covers: {thisCoverage.length > 0
@@ -147,7 +177,7 @@ export default function PODetailView({ coverage, onBack, onOpenInvoice }: PODeta
             </thead>
             <tbody>
               {lineCoverage.map(lc => (
-                <LineCoverageRow key={lc.poLine.id} line={lc} onOpenInvoice={onOpenInvoice} />
+                <LineCoverageRow key={lc.poLine.id} line={lc} currency={currency} onOpenInvoice={onOpenInvoice} />
               ))}
             </tbody>
           </table>
@@ -158,11 +188,11 @@ export default function PODetailView({ coverage, onBack, onOpenInvoice }: PODeta
 }
 
 function RunningTotalCard({
-  poAmount, invoicedAmount, percent, status, fullyInvoicedLineCount, pendingLineCount, totalLineCount, remaining, overBy,
+  poAmount, invoicedAmount, percent, status, fullyInvoicedLineCount, pendingLineCount, totalLineCount, remaining, overBy, currency,
 }: {
   poAmount: number; invoicedAmount: number; percent: number;
   status: POCoverageStatus; fullyInvoicedLineCount: number; pendingLineCount: number; totalLineCount: number;
-  remaining: number; overBy: number;
+  remaining: number; overBy: number; currency: CurrencyCode;
 }) {
   const barColor =
     status === 'Over-invoiced' ? 'var(--color-error)' :
@@ -187,8 +217,13 @@ function RunningTotalCard({
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '26px', fontWeight: 700, color: 'var(--color-text-primary)' }}>£{invoicedAmount.toFixed(2)}</span>
-        <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>of £{poAmount.toFixed(2)}</span>
+        <span style={{ fontSize: '26px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{formatMoney(invoicedAmount, currency)}</span>
+        <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>of {formatMoney(poAmount, currency)}</span>
+        {currency !== BASE_CURRENCY && (
+          <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+            ({formatMoney(convert(invoicedAmount, currency, BASE_CURRENCY), BASE_CURRENCY)} of {formatMoney(convert(poAmount, currency, BASE_CURRENCY), BASE_CURRENCY)})
+          </span>
+        )}
       </div>
 
       {/* Progress bar */}
@@ -202,15 +237,15 @@ function RunningTotalCard({
       <div style={{ marginTop: '12px', fontSize: '13px', color: 'var(--color-text-secondary)', display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
         <span><strong style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>{fullyInvoicedLineCount}</strong> of {totalLineCount} lines complete</span>
         {pendingLineCount > 0 && <span>· <strong style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>{pendingLineCount}</strong> pending</span>}
-        {status === 'Partially Invoiced' && remaining > 0 && <span>· £{remaining.toFixed(2)} remaining</span>}
-        {status === 'Over-invoiced' && <span style={{ color: 'var(--color-error)', fontWeight: 700 }}>· Over-invoiced by £{overBy.toFixed(2)}</span>}
+        {status === 'Partially Invoiced' && remaining > 0 && <span>· {formatMoney(remaining, currency)} remaining</span>}
+        {status === 'Over-invoiced' && <span style={{ color: 'var(--color-error)', fontWeight: 700 }}>· Over-invoiced by {formatMoney(overBy, currency)}</span>}
         {status === 'Fully Invoiced' && <span style={{ color: 'var(--color-success)', fontWeight: 700 }}>· PO fully invoiced</span>}
       </div>
     </div>
   );
 }
 
-function LineCoverageRow({ line, onOpenInvoice }: { line: POLineCoverage; onOpenInvoice: (invoiceId: string) => void }) {
+function LineCoverageRow({ line, currency, onOpenInvoice }: { line: POLineCoverage; currency: CurrencyCode; onOpenInvoice: (invoiceId: string) => void }) {
   const { poLine, invoicedQty, remainingQty, applications, overInvoiced } = line;
 
   const lineStatus = overInvoiced ? 'Over' :
@@ -239,7 +274,7 @@ function LineCoverageRow({ line, onOpenInvoice }: { line: POLineCoverage; onOpen
         {invoicedQty}
         {applications.length > 0 && (
           <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            £{line.invoicedAmount.toFixed(2)}
+            {fmtPOAmount(line.invoicedAmount, currency)}
           </div>
         )}
       </td>
@@ -270,7 +305,7 @@ function LineCoverageRow({ line, onOpenInvoice }: { line: POLineCoverage; onOpen
                 {app.invoice.invoiceNumber} · {app.qty}
                 {app.priceDelta !== 0 && (
                   <span style={{ color: 'var(--color-warning)', fontWeight: 600, marginLeft: '6px' }}>
-                    {app.priceDelta > 0 ? '+' : ''}£{app.priceDelta.toFixed(2)}/unit
+                    {app.priceDelta > 0 ? '+' : ''}{formatMoney(app.priceDelta, currency)}/unit
                   </span>
                 )}
               </button>

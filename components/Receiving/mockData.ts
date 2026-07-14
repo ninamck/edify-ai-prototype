@@ -1,3 +1,7 @@
+import { isMultiCurrencyDemo } from '@/lib/demoConfig';
+import type { CurrencyCode } from '@/lib/currency';
+import { BASE_CURRENCY, formatMoney, fxRate } from '@/lib/currency';
+
 export type POStatus = 'Draft' | 'Sent' | 'Partially Received' | 'Fully Received' | 'Closed' | 'Cancelled';
 export type GRNStatus = 'Created' | 'Pending Invoice' | 'Matched' | 'Variance — Awaiting Resolution' | 'Closed';
 export type InvoiceStatus = 'Pending Invoice' | 'Matched' | 'Closed';
@@ -27,6 +31,11 @@ export interface PO {
   status: POStatus;
   dateSent: string;
   lines: POLine[];
+  /**
+   * Transaction currency the PO (and its line prices) is denominated in —
+   * the supplier's billing currency. Absent = base currency (GBP).
+   */
+  currency?: CurrencyCode;
 }
 
 export interface GRNLine {
@@ -64,6 +73,14 @@ export interface GRN {
   invoiceStatus: InvoiceStatus;
   attachmentUrl?: string;
   lines: GRNLine[];
+  /** Transaction currency of the delivery (from the PO). Absent = GBP. */
+  currency?: CurrencyCode;
+  /**
+   * Exchange rate into the base currency locked at goods receipt, so the
+   * cost recorded in inventory matches the supplier's invoice. Only set for
+   * foreign-currency deliveries.
+   */
+  lockedFxRate?: number;
 }
 
 export interface DeliveryCommitLine {
@@ -257,6 +274,42 @@ export const MOCK_POS: PO[] = [
       { id: 'pl-36', name: 'Sourdough loaves', sku: 'SDL-WH', unit: 'EA', price: 6.00, expectedQty: 15 },
     ],
   },
+  // Second Cup build only: a CAD-denominated PO on the franchisor's Canadian
+  // supply base. Prices are in CAD (the supplier's billing currency).
+  ...(isMultiCurrencyDemo
+    ? ([
+        {
+          id: 'po-sc-0',
+          poNumber: 'PO-2918',
+          supplier: 'Second Cup Central Supply (Canada)',
+          site: 'Fitzroy Espresso',
+          status: 'Fully Received' as POStatus,
+          dateSent: '27 Mar 2026',
+          currency: 'CAD' as CurrencyCode,
+          lines: [
+            { id: 'pl-sc-p1', name: 'Espresso Forte whole bean 1kg', sku: 'SC-ESP-1KG', unit: 'BAG', price: 28.00, expectedQty: 12 },
+            { id: 'pl-sc-p2', name: 'Second Cup vanilla syrup 1L', sku: 'SC-VAN-1L', unit: 'EA', price: 10.50, expectedQty: 6 },
+            { id: 'pl-sc-p3', name: 'Branded hot cup + lid 12oz', sku: 'SC-CUP-12OZ', unit: 'CASE', price: 95.00, expectedQty: 2 },
+          ],
+        },
+        {
+          id: 'po-sc-1',
+          // PO-2920 is taken by the Bidfood complex-flow demo above.
+          poNumber: 'PO-2930',
+          supplier: 'Second Cup Central Supply (Canada)',
+          site: 'Fitzroy Espresso',
+          status: 'Sent' as POStatus,
+          dateSent: '9 Apr 2026',
+          currency: 'CAD' as CurrencyCode,
+          lines: [
+            { id: 'pl-sc-1', name: 'Espresso Forte whole bean 1kg', sku: 'SC-ESP-1KG', unit: 'BAG', price: 28.00, expectedQty: 14 },
+            { id: 'pl-sc-2', name: 'Paradiso medium roast 1kg', sku: 'SC-PAR-1KG', unit: 'BAG', price: 23.00, expectedQty: 9 },
+            { id: 'pl-sc-3', name: 'Second Cup vanilla syrup 1L', sku: 'SC-VAN-1L', unit: 'EA', price: 10.50, expectedQty: 7 },
+            { id: 'pl-sc-4', name: 'Branded hot cup + lid 12oz', sku: 'SC-CUP-12OZ', unit: 'CASE', price: 95.00, expectedQty: 3 },
+          ],
+        },
+      ] satisfies PO[])
+    : []),
 ];
 
 export const MOCK_COMPLETED_DELIVERIES: GRN[] = [
@@ -507,6 +560,32 @@ export const MOCK_COMPLETED_DELIVERIES: GRN[] = [
       { id: 'gl-32', poLineId: 'pl-36', name: 'Sourdough loaves', sku: 'SDL-WH', unit: 'EA', price: 6.00, expectedQty: 15, receivedQty: 15 },
     ],
   },
+  // Second Cup build only: an earlier CAD delivery from Central Supply with
+  // the FX rate locked at receipt (0.58), so the invoice matches to the
+  // penny even if the daily rate has since moved.
+  ...(isMultiCurrencyDemo
+    ? ([
+        {
+          id: 'grn-sc-1',
+          // GRN-1260/61/62 and 1270/71 are taken by main's demo flows.
+          grnNumber: 'GRN-1280',
+          poNumbers: ['PO-2918'],
+          supplier: 'Second Cup Central Supply (Canada)',
+          site: 'Fitzroy Espresso',
+          status: 'Pending Invoice' as GRNStatus,
+          dateReceived: '6 Apr 2026',
+          receivedBy: 'Ed Barry',
+          invoiceStatus: 'Pending Invoice' as InvoiceStatus,
+          currency: 'CAD' as CurrencyCode,
+          lockedFxRate: 0.58,
+          lines: [
+            { id: 'gl-sc-1', poLineId: 'pl-sc-p1', name: 'Espresso Forte whole bean 1kg', sku: 'SC-ESP-1KG', unit: 'BAG', price: 28.00, expectedQty: 12, receivedQty: 12 },
+            { id: 'gl-sc-2', poLineId: 'pl-sc-p2', name: 'Second Cup vanilla syrup 1L', sku: 'SC-VAN-1L', unit: 'EA', price: 10.50, expectedQty: 6, receivedQty: 6 },
+            { id: 'gl-sc-3', poLineId: 'pl-sc-p3', name: 'Branded hot cup + lid 12oz', sku: 'SC-CUP-12OZ', unit: 'CASE', price: 95.00, expectedQty: 2, receivedQty: 2 },
+          ],
+        },
+      ] satisfies GRN[])
+    : []),
 ];
 
 export function poItemCount(po: PO): number {
@@ -515,7 +594,10 @@ export function poItemCount(po: PO): number {
 
 export function poTotal(po: PO): string {
   const t = po.lines.reduce((sum, l) => sum + l.price * l.expectedQty, 0);
-  return `£${t.toFixed(2)}`;
+  const currency = po.currency ?? BASE_CURRENCY;
+  if (currency === BASE_CURRENCY) return formatMoney(t, BASE_CURRENCY);
+  // Dual display for foreign-currency POs: supplier amount + base equivalent.
+  return `${formatMoney(t, currency)} (${formatMoney(t * fxRate(currency, BASE_CURRENCY), BASE_CURRENCY)})`;
 }
 
 export function grnVarianceCount(grn: GRN): number {
@@ -654,6 +736,7 @@ export function recordCompletedDeliveryFromReceiving(input: {
     },
   }));
 
+  const currency = input.pos[0].currency;
   const grn: GRN = {
     id: `grn-runtime-${Date.now()}`,
     grnNumber: `GRN-${1252 + MOCK_COMPLETED_DELIVERIES.filter(g => g.id.startsWith('grn-runtime')).length}`,
@@ -665,6 +748,10 @@ export function recordCompletedDeliveryFromReceiving(input: {
     receivedBy: input.receivedBy ?? 'Ed Barry',
     invoiceNumber: input.invoiceNumber || undefined,
     invoiceStatus: 'Pending Invoice',
+    // Foreign-currency deliveries lock the FX rate at receipt so the
+    // inventory value matches the supplier's invoice.
+    currency,
+    lockedFxRate: currency && currency !== BASE_CURRENCY ? fxRate(currency, BASE_CURRENCY) : undefined,
     lines: [...normalLines, ...alternativeLines, ...extraLines],
   };
 

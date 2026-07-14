@@ -1,4 +1,5 @@
 import type { Supplier, Ingredient, SupplierProduct, SuggestedOrder, RecurringOrder } from '../types';
+import { isMultiCurrencyDemo } from '@/lib/demoConfig';
 
 // ─── Suppliers ────────────────────────────────────────────────────────────────
 
@@ -58,6 +59,24 @@ export const SUPPLIERS: Supplier[] = [
     deliveryDate: 'Fri 11 Apr',
     sendTime: '05:30',
   },
+  // Second Cup build only: the franchisor's Canadian supply base, billed in
+  // CAD. Long lead — sea/air freight from Mississauga — so it orders weekly.
+  ...(isMultiCurrencyDemo
+    ? ([
+        {
+          id: 'sup-secondcup-central',
+          name: 'Second Cup Central Supply (Canada)',
+          cutOffTime: '17:00',
+          leadTimeDays: 10,
+          minimumOrderValue: 1500, // CAD
+          deliveryDays: ['Monday'],
+          email: 'franchise.orders@secondcup.com',
+          deliveryDate: 'Mon 4 May',
+          sendTime: '16:30',
+          currency: 'CAD',
+        },
+      ] satisfies Supplier[])
+    : []),
 ];
 
 // ─── Ingredients ─────────────────────────────────────────────────────────────
@@ -283,6 +302,52 @@ export const INGREDIENTS: Ingredient[] = [
     parLevel: 18,
     parConfirmed: true,
   },
+  // Second Cup Central Supply lines (multi-currency demo only)
+  ...(isMultiCurrencyDemo
+    ? ([
+        {
+          id: 'ing-espresso',
+          name: 'Espresso Forte Whole Bean',
+          variant: '1kg bag',
+          stockUnit: 'kg',
+          currentStock: 4,
+          stockDataAgeDays: 1,
+          parLevel: 18,
+          parConfirmed: true,
+        },
+        {
+          id: 'ing-paradiso',
+          name: 'Paradiso Medium Roast',
+          variant: 'Filter, 1kg bag',
+          stockUnit: 'kg',
+          currentStock: 3,
+          stockDataAgeDays: 1,
+          parLevel: 12,
+          parConfirmed: true,
+        },
+        {
+          // Distinct id — 'ing-vanilla' already exists (Vanilla Extract, CPU).
+          id: 'ing-sc-vanilla',
+          name: 'Second Cup Vanilla Syrup',
+          variant: '1L bottle',
+          stockUnit: 'L',
+          currentStock: 2,
+          stockDataAgeDays: 2,
+          parLevel: 9,
+          parConfirmed: true,
+        },
+        {
+          id: 'ing-hotcups',
+          name: 'Branded Hot Cups + Lids',
+          variant: '12oz, pack of 1000',
+          stockUnit: 'packs',
+          currentStock: 1,
+          stockDataAgeDays: 1,
+          parLevel: 4,
+          parConfirmed: true,
+        },
+      ] satisfies Ingredient[])
+    : []),
 ];
 
 // ─── Supplier Products ────────────────────────────────────────────────────────
@@ -316,6 +381,15 @@ export const SUPPLIER_PRODUCTS: SupplierProduct[] = [
   { ingredientId: 'ing-painchoc', supplierId: 'sup-risebakery', isPrimary: true, unitName: 'box of 8', unitSize: 8, unitCost: 28, available: true },
   { ingredientId: 'ing-cinscrolls', supplierId: 'sup-risebakery', isPrimary: true, unitName: 'box of 6', unitSize: 6, unitCost: 24, available: true },
   { ingredientId: 'ing-almonddanish', supplierId: 'sup-risebakery', isPrimary: true, unitName: 'box of 6', unitSize: 6, unitCost: 26, available: true },
+  // Second Cup Central Supply — unit costs in CAD (the supplier's currency)
+  ...(isMultiCurrencyDemo
+    ? ([
+        { ingredientId: 'ing-espresso', supplierId: 'sup-secondcup-central', isPrimary: true, unitName: '1kg bag', unitSize: 1, unitCost: 28, available: true },
+        { ingredientId: 'ing-paradiso', supplierId: 'sup-secondcup-central', isPrimary: true, unitName: '1kg bag', unitSize: 1, unitCost: 23, available: true },
+        { ingredientId: 'ing-sc-vanilla', supplierId: 'sup-secondcup-central', isPrimary: true, unitName: '1L bottle', unitSize: 1, unitCost: 10.5, available: true },
+        { ingredientId: 'ing-hotcups', supplierId: 'sup-secondcup-central', isPrimary: true, unitName: 'pack of 1000', unitSize: 1, unitCost: 95, available: true },
+      ] satisfies SupplierProduct[])
+    : []),
 ];
 
 // ─── Suggested Orders ─────────────────────────────────────────────────────────
@@ -533,6 +607,107 @@ export const SUGGESTED_ORDERS: SuggestedOrder[] = [
       },
     ],
   },
+  // Second Cup Central Supply order (multi-currency demo only). Lines are
+  // priced in CAD — the supplier's currency — and the UI shows the GBP
+  // equivalent alongside at the daily rate.
+  ...(isMultiCurrencyDemo
+    ? ([
+        {
+          id: 'ord-secondcup',
+          supplierId: 'sup-secondcup-central',
+          state: 'draft',
+          deliveryDate: 'Mon 4 May',
+          sendTime: '16:30',
+          lines: [
+            {
+              id: 'line-espresso',
+              orderId: 'ord-secondcup',
+              ingredientId: 'ing-espresso',
+              supplierId: 'sup-secondcup-central',
+              suggestedQty: 14,
+              suggestedPar: 18,
+              currentStockAtSuggestion: 4,
+              stockDataAgeDays: 1,
+              posDataAvailable: true,
+              salesVelocity7d: 9.5,
+              salesVelocity14d: 9.1,
+              confidenceScore: 'high',
+              confidenceFactors: { stocktake: 'fresh', pos: 'active', par: 'confirmed', variance: 'stable' },
+              movAutoAdded: false,
+              userAction: null,
+              finalQty: null,
+              dismissReason: null,
+              movWarnShown: false,
+              whyHighlight: true,
+              whyOverride: [
+                'Central Supply bills in CAD — CA$28.00/bag is £16.24 at today\u2019s rate (1 CAD = 0.58 GBP)',
+                '10-day freight lead from Mississauga: 14 bags covers espresso sales through the next shipment window',
+              ],
+            },
+            {
+              id: 'line-paradiso',
+              orderId: 'ord-secondcup',
+              ingredientId: 'ing-paradiso',
+              supplierId: 'sup-secondcup-central',
+              suggestedQty: 9,
+              suggestedPar: 12,
+              currentStockAtSuggestion: 3,
+              stockDataAgeDays: 1,
+              posDataAvailable: true,
+              salesVelocity7d: 6.2,
+              salesVelocity14d: 5.8,
+              confidenceScore: 'high',
+              confidenceFactors: { stocktake: 'fresh', pos: 'active', par: 'confirmed', variance: 'stable' },
+              movAutoAdded: false,
+              userAction: null,
+              finalQty: null,
+              dismissReason: null,
+              movWarnShown: false,
+            },
+            {
+              id: 'line-vanilla',
+              orderId: 'ord-secondcup',
+              ingredientId: 'ing-sc-vanilla',
+              supplierId: 'sup-secondcup-central',
+              suggestedQty: 7,
+              suggestedPar: 9,
+              currentStockAtSuggestion: 2,
+              stockDataAgeDays: 2,
+              posDataAvailable: true,
+              salesVelocity7d: 4.1,
+              salesVelocity14d: 3.8,
+              confidenceScore: 'medium',
+              confidenceFactors: { stocktake: 'aging', pos: 'active', par: 'confirmed', variance: 'stable' },
+              movAutoAdded: false,
+              userAction: null,
+              finalQty: null,
+              dismissReason: null,
+              movWarnShown: false,
+            },
+            {
+              id: 'line-hotcups',
+              orderId: 'ord-secondcup',
+              ingredientId: 'ing-hotcups',
+              supplierId: 'sup-secondcup-central',
+              suggestedQty: 3,
+              suggestedPar: 4,
+              currentStockAtSuggestion: 1,
+              stockDataAgeDays: 1,
+              posDataAvailable: true,
+              salesVelocity7d: 2.4,
+              salesVelocity14d: 2.2,
+              confidenceScore: 'high',
+              confidenceFactors: { stocktake: 'fresh', pos: 'active', par: 'confirmed', variance: 'stable' },
+              movAutoAdded: false,
+              userAction: null,
+              finalQty: null,
+              dismissReason: null,
+              movWarnShown: false,
+            },
+          ],
+        },
+      ] satisfies SuggestedOrder[])
+    : []),
 ];
 
 // ─── Lookup helpers ───────────────────────────────────────────────────────────

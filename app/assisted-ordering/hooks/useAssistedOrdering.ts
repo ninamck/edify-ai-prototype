@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo } from 'react';
 import type { GroupBy, View, DismissReason, ManualLine } from '../types';
 import { needsReview } from '../types';
 import { SUGGESTED_ORDERS, SUPPLIERS, RECURRING_ORDERS, getIngredient, getProduct } from '../data/mockOrders';
+import { toBase } from '../lib/money';
 
 // ─── Derived per-line values ──────────────────────────────────────────────────
 
@@ -147,9 +148,12 @@ export function useAssistedOrdering() {
         if (qty !== line.suggestedQty) editedCount += 1;
       }
 
+      // supplierTotals stay in the supplier's own currency (MOV thresholds
+      // are set in that currency); the grand total is a cross-supplier sum,
+      // so each contribution converts to the base currency first.
       supplierTotals[order.supplierId] = supplierTotal;
       supplierItemCounts[order.supplierId] = supplierItemCount;
-      grandTotal += supplierTotal;
+      grandTotal += toBase(supplierTotal, order.supplierId);
       totalItems += supplierItemCount;
     }
 
@@ -159,7 +163,7 @@ export function useAssistedOrdering() {
       const lineTotal = ml.qty * product.unitCost;
       supplierTotals[ml.supplierId] = (supplierTotals[ml.supplierId] ?? 0) + lineTotal;
       supplierItemCounts[ml.supplierId] = (supplierItemCounts[ml.supplierId] ?? 0) + 1;
-      grandTotal += lineTotal;
+      grandTotal += toBase(lineTotal, ml.supplierId);
       totalItems += 1;
     }
 

@@ -3,6 +3,7 @@
 import type { SuggestedOrder, RecurringOrder } from '../types';
 import { getVariancePercent, recurringFrequencyBadgeLabel, sentenceCaseFrequency } from '../types';
 import { getSupplier, getIngredient, getProduct } from '../data/mockOrders';
+import { fmtSupplierAmount } from '../lib/money';
 
 interface Props {
   orders: SuggestedOrder[];
@@ -170,9 +171,10 @@ export default function ConfirmationScreen({
                       fontWeight: 700,
                       color: 'var(--color-text-primary)',
                       fontFamily: 'var(--font-primary)',
+                      whiteSpace: 'nowrap',
                     }}
                   >
-                    £{total.toFixed(0)}
+                    {fmtSupplierAmount(total, order.supplierId)}
                   </span>
                   <span
                     style={{
@@ -266,9 +268,10 @@ export default function ConfirmationScreen({
                         fontWeight: 700,
                         color: 'var(--color-text-primary)',
                         fontFamily: 'var(--font-primary)',
+                        whiteSpace: 'nowrap',
                       }}
                     >
-                      £{recTotal.toFixed(0)}
+                      {fmtSupplierAmount(recTotal, recOrder.supplierId)}
                     </span>
                     <span
                       style={{

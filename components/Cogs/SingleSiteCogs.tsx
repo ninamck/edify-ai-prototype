@@ -2,6 +2,7 @@
 
 import { Cell, Pie, PieChart } from 'recharts';
 import { DollarSign, Info } from 'lucide-react';
+import FxAttributionCard from './FxAttributionCard';
 import { gbp } from './format';
 import {
   COGS_CLASS_ROWS,
@@ -213,6 +214,10 @@ export default function SingleSiteCogs() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Multi-currency demo only: Edify decomposes the period's cost
+          movement into FX vs price vs volume. Renders null elsewhere. */}
+      <FxAttributionCard />
+
       {/* Total net sales banner */}
       <div
         style={{

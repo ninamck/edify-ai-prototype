@@ -5,6 +5,7 @@ import type { RecurringOrder } from '../types';
 import { getVariancePercent, needsReview } from '../types';
 import { getSupplier, getIngredient, getProduct } from '../data/mockOrders';
 import QtyControl from './QtyControl';
+import { fmtSupplierAmount } from '../lib/money';
 
 interface Props {
   order: RecurringOrder;
@@ -241,9 +242,10 @@ export default function RecurringOrderReview({
                             fontFamily: 'var(--font-primary)',
                             minWidth: '48px',
                             textAlign: 'right',
+                            whiteSpace: 'nowrap',
                           }}
                         >
-                          £{lineTotal.toFixed(0)}
+                          {fmtSupplierAmount(lineTotal, line.supplierId)}
                         </span>
                       </div>
                     </div>

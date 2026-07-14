@@ -2,6 +2,7 @@
 
 import StatusBadge from '@/components/Receiving/StatusBadge';
 import { Invoice, getApprovedResolutions } from './mockData';
+import { BASE_CURRENCY, formatMoney } from '@/lib/currency';
 
 interface ApprovedStateProps {
   invoice: Invoice;
@@ -95,7 +96,18 @@ export default function ApprovedState({ invoice, onBackToInvoices }: ApprovedSta
           )}
           <div>
             <span style={{ color: 'var(--color-text-secondary)' }}>Total</span>
-            <div style={{ fontWeight: 700, color: 'var(--color-text-primary)', marginTop: '4px', fontSize: '16px' }}>£{invoice.total.toFixed(2)}</div>
+            <div style={{ fontWeight: 700, color: 'var(--color-text-primary)', marginTop: '4px', fontSize: '16px' }}>
+              {invoice.currency && invoice.currency !== BASE_CURRENCY ? (
+                <>
+                  {formatMoney(invoice.total, invoice.currency)}
+                  <span style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                    {formatMoney(invoice.total * (invoice.lockedFxRate ?? 1), BASE_CURRENCY)} at locked rate
+                  </span>
+                </>
+              ) : (
+                <>£{invoice.total.toFixed(2)}</>
+              )}
+            </div>
           </div>
         </div>
       </div>

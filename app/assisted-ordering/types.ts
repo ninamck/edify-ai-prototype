@@ -1,3 +1,5 @@
+import type { CurrencyCode } from '@/lib/currency';
+
 // ─── Core domain types ───────────────────────────────────────────────────────
 
 export type ConfidenceScore = 'high' | 'medium' | 'low';
@@ -21,11 +23,17 @@ export interface Supplier {
   name: string;
   cutOffTime: string;         // e.g. "14:00"
   leadTimeDays: number;
-  minimumOrderValue: number;  // 0 = no minimum
+  minimumOrderValue: number;  // 0 = no minimum; in the supplier's currency
   deliveryDays: string[];
   email: string;
   deliveryDate: string;       // ISO date string
   sendTime: string;           // e.g. "13:30" (cutoff minus buffer)
+  /**
+   * Transaction currency the supplier bills in. Absent = base currency (GBP).
+   * Unit costs for this supplier's products are held in this currency; the
+   * UI shows the base-currency equivalent alongside (dual display).
+   */
+  currency?: CurrencyCode;
 }
 
 // ─── Ingredient ──────────────────────────────────────────────────────────────

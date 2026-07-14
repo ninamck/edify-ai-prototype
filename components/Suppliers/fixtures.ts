@@ -10,6 +10,9 @@
  * prototype can demo the same kinds of records (Agility carries 355 products
  * across 12 sites, Apple Fizz, Aluminium Foil Roll, etc.).
  */
+import { isMultiCurrencyDemo } from '@/lib/demoConfig';
+import type { CurrencyCode } from '@/lib/currency';
+
 export type SupplierStatus = 'Available' | 'Unavailable' | 'Pending';
 export type ProductClass = 'General' | 'Food' | 'Beverage' | 'Non-food';
 export type ProductCategory =
@@ -75,8 +78,21 @@ export type Supplier = {
   phone?: string;
   cutOffTime?: string;
   leadTimeDays?: number;
+  /** In the supplier's transaction `currency`. */
   minimumOrderValue?: number;
   deliveryDays?: DayOfWeek[];
+  /**
+   * Transaction currency the supplier bills in (Supy-style per-supplier
+   * currency, not per-account). Absent = the base/reporting currency (GBP).
+   * Product packCosts for this supplier are held in this currency.
+   */
+  currency?: CurrencyCode;
+  /**
+   * Optional contracted FX rate into the base currency, overriding the daily
+   * auto rate (e.g. a negotiated forward rate with the franchisor).
+   * null/absent = use the daily rate.
+   */
+  fxContractRate?: number | null;
 };
 
 export type Nutrition = Partial<{
@@ -211,6 +227,28 @@ export const formatPrice = (amount: number) =>
 // Seed data
 
 const ALL_AGILITY_SITES = [...ALL_SITES];
+
+/**
+ * Second Cup's Canadian supply base — the franchisor's central supply chain
+ * that every international franchise orders from. Bills in CAD; the store
+ * reports in GBP. Only present on the multi-currency demo build.
+ */
+const SECOND_CUP_SUPPLIER: Supplier = {
+  id: 'sup-secondcup-central',
+  name: 'Second Cup Central Supply (Canada)',
+  shortCode: 'SC Central',
+  categories: ['Beverage', 'Pantry', 'Packaging'],
+  sites: ALL_SITES,
+  status: 'Available',
+  email: 'franchise.orders@secondcup.com',
+  phone: '+1 905 362 1818',
+  cutOffTime: '17:00',
+  leadTimeDays: 10,
+  minimumOrderValue: 1500, // CAD
+  deliveryDays: ['Mon'],
+  currency: 'CAD',
+  fxContractRate: null,
+};
 
 export const SEED_SUPPLIERS: Supplier[] = [
   {
@@ -373,6 +411,8 @@ export const SEED_SUPPLIERS: Supplier[] = [
     leadTimeDays: 2,
     deliveryDays: ['Mon', 'Wed', 'Fri'],
   },
+  // Second Cup build only: the CAD-billing franchisor supply base.
+  ...(isMultiCurrencyDemo ? [SECOND_CUP_SUPPLIER] : []),
 ];
 
 /** Shorthand for seeding a single calculated WAC (per master `unit`) at
@@ -470,6 +510,16 @@ export const SEED_MASTER_PRODUCTS: MasterProduct[] = [
   { id: 'mp-andouille-sausage', name: 'Andouille Sausage', category: 'Meat', unit: '1kg pack', slug: 'andouille-sausage', productClass: 'Food', status: 'Available', siteCosts: wacAt(11.00, 5) },
   { id: 'mp-ham-sliced', name: 'Ham (sliced)', category: 'Meat', unit: '1kg pack', slug: 'ham-sliced', productClass: 'Food', status: 'Available', siteCosts: wacAt(9.00, 5) },
   { id: 'mp-chicken-sausage', name: 'Chicken Sausage', category: 'Meat', unit: '1kg pack', slug: 'chicken-sausage', productClass: 'Food', status: 'Available', siteCosts: wacAt(10.00, 5) },
+  // ── Second Cup Central Supply (Canada) — multi-currency demo only ─────
+  // WACs are in GBP (the base currency): CAD packCost × locked receipt rate.
+  ...(isMultiCurrencyDemo
+    ? ([
+        { id: 'mp-espresso-forte', name: 'Espresso Forte whole bean',           category: 'Beverage', unit: '1kg bag', slug: 'espresso-forte', productClass: 'Beverage', status: 'Available', defaultProductId: 'prd-espresso-forte', siteCosts: wacAt(16.24, 14) },
+        { id: 'mp-paradiso-medium', name: 'Paradiso medium roast (filter)',     category: 'Beverage', unit: '1kg bag', slug: 'paradiso-medium', productClass: 'Beverage', status: 'Available', defaultProductId: 'prd-paradiso-medium', siteCosts: wacAt(13.34, 10) },
+        { id: 'mp-sc-vanilla-syrup', name: 'Second Cup vanilla syrup',          category: 'Pantry', unit: '1L bottle', slug: 'sc-vanilla-syrup', productClass: 'Food', status: 'Available', defaultProductId: 'prd-sc-vanilla-syrup', siteCosts: wacAt(6.09, 12) },
+        { id: 'mp-sc-hot-cup-12', name: 'Branded hot cup + lid (12oz)',         category: 'Packaging', unit: 'pack of 1000', slug: 'sc-hot-cup-12', productClass: 'Non-food', status: 'Available', defaultProductId: 'prd-sc-hot-cup-12', siteCosts: wacAt(55.10, 5) },
+      ] satisfies MasterProduct[])
+    : []),
 ];
 
 const blankNutrition: Nutrition = {};
@@ -817,4 +867,74 @@ export const SEED_PRODUCTS: Product[] = [
     packCost: 14.40,
     singleUnitType: 'Each',
   }),
+  // ── Second Cup Central Supply (Canada) — multi-currency demo only ──────
+  // packCost is in the supplier's currency (CAD); UI converts to GBP for
+  // dual display using the daily rate (or the rate locked at receipt).
+  ...(isMultiCurrencyDemo
+    ? [
+        p({
+          id: 'prd-espresso-forte',
+          name: 'Espresso Forte Whole Bean 1kg',
+          supplierCode: 'SC-ESP-1KG',
+          supplierId: 'sup-secondcup-central',
+          masterProductId: 'mp-espresso-forte',
+          productClass: 'Beverage',
+          category: 'Beverage',
+          packType: 'Pack',
+          packQty: 6,
+          packCost: 168.0, // CAD
+          singleUnitType: 'kg',
+          singleUnitVolumeOrWeight: 1,
+          unitOfMeasure: 'kg',
+          taxRatePct: 0,
+        }),
+        p({
+          id: 'prd-paradiso-medium',
+          name: 'Paradiso Medium Roast (Filter) 1kg',
+          supplierCode: 'SC-PAR-1KG',
+          supplierId: 'sup-secondcup-central',
+          masterProductId: 'mp-paradiso-medium',
+          productClass: 'Beverage',
+          category: 'Beverage',
+          packType: 'Pack',
+          packQty: 6,
+          packCost: 138.0, // CAD
+          singleUnitType: 'kg',
+          singleUnitVolumeOrWeight: 1,
+          unitOfMeasure: 'kg',
+          taxRatePct: 0,
+        }),
+        p({
+          id: 'prd-sc-vanilla-syrup',
+          name: 'Second Cup Vanilla Syrup 1L',
+          supplierCode: 'SC-VAN-1L',
+          supplierId: 'sup-secondcup-central',
+          masterProductId: 'mp-sc-vanilla-syrup',
+          productClass: 'Food',
+          category: 'Pantry',
+          packType: 'Pack',
+          packQty: 6,
+          packCost: 63.0, // CAD
+          singleUnitType: 'L',
+          singleUnitVolumeOrWeight: 1,
+          unitOfMeasure: 'L',
+        }),
+        p({
+          id: 'prd-sc-hot-cup-12',
+          name: 'Branded Hot Cup + Lid 12oz',
+          supplierCode: 'SC-CUP-12OZ',
+          supplierId: 'sup-secondcup-central',
+          masterProductId: 'mp-sc-hot-cup-12',
+          productClass: 'Non-food',
+          category: 'Packaging',
+          packType: 'Pack',
+          packQty: 1,
+          packCost: 95.0, // CAD
+          singleUnitType: 'Each',
+          singleUnitVolumeOrWeight: 1000,
+          unitOfMeasure: 'each',
+          excludeFromCogs: true,
+        }),
+      ]
+    : []),
 ];

@@ -14,6 +14,7 @@ import QuinnSheet, { type QuinnScope } from '@/components/Suppliers/QuinnSheet';
 import SupplierDrawer from '@/components/Suppliers/SupplierDrawer';
 import { StatusPill } from '@/components/Suppliers/Primitives';
 import type { Product } from '@/components/Suppliers/fixtures';
+import { BASE_CURRENCY, CURRENCY_NAMES, formatMoney, fxRateLabel, FX_RATE_DATE } from '@/lib/currency';
 
 export default function SupplierDetailPage() {
   const router = useRouter();
@@ -160,6 +161,39 @@ export default function SupplierDetailPage() {
           <Stat icon={null} label={`${supplierProducts.length} product${supplierProducts.length === 1 ? '' : 's'}`} />
           <Stat icon={null} label={`${supplier.sites.length} site${supplier.sites.length === 1 ? '' : 's'}`} />
         </div>
+        {supplier.currency && supplier.currency !== BASE_CURRENCY && (
+          // Per-supplier currency (not account-level): this supplier bills in
+          // its own currency; purchases convert to the base currency at the
+          // daily rate, locked at goods receipt.
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+            padding: '10px 12px', borderRadius: 10,
+            background: 'var(--color-bg-hover)',
+            fontSize: 12.5, color: 'var(--color-text-secondary)',
+          }}>
+            <span style={{
+              padding: '3px 9px', borderRadius: 100,
+              background: 'var(--color-accent-active)', color: '#fff',
+              fontSize: 11.5, fontWeight: 700, letterSpacing: '0.02em',
+            }}>
+              Bills in {supplier.currency}
+            </span>
+            <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
+              {CURRENCY_NAMES[supplier.currency]}
+            </span>
+            <span>
+              {supplier.fxContractRate
+                ? `Contracted rate: 1 ${supplier.currency} = ${supplier.fxContractRate} GBP`
+                : `${fxRateLabel(supplier.currency)} · auto-updated ${FX_RATE_DATE}`}
+            </span>
+            {typeof supplier.minimumOrderValue === 'number' && (
+              <span>Minimum order {formatMoney(supplier.minimumOrderValue, supplier.currency)}</span>
+            )}
+            <span style={{ color: 'var(--color-text-muted)' }}>
+              Rate locks at goods receipt
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Hero (Quinn) */}

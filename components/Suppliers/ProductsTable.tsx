@@ -3,6 +3,7 @@
 import { type Product, type Supplier, formatPrice } from './fixtures';
 import { Checkbox, Dash, RowQuinnButton, SmallButton, StatusPill } from './Primitives';
 import { TrendingUp, AlertTriangle } from 'lucide-react';
+import { BASE_CURRENCY, formatMoney, formatBaseEquivalent } from '@/lib/currency';
 
 const COLUMNS_WITH_SUPPLIER = '32px 2fr 90px 1fr 70px 80px 90px 80px 110px 110px';
 const COLUMNS_NO_SUPPLIER   = '32px 2fr 90px 1fr 70px 80px 90px 110px 110px';
@@ -112,13 +113,30 @@ export default function ProductsTable({
                     : p.unitOfMeasure)
                 : <Dash />}
             </span>
-            <span style={{
-              fontSize: 12.5, color: 'var(--color-text-primary)', fontWeight: 600,
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-            }}>
-              {formatPrice(p.packCost)}
-              <TrendingUp size={11} color="var(--color-text-muted)" strokeWidth={2} />
-            </span>
+            {supplier?.currency && supplier.currency !== BASE_CURRENCY ? (
+              // Supplier bills in a foreign currency: show the transaction
+              // amount with the base-currency equivalent underneath.
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+                <span style={{
+                  fontSize: 12.5, color: 'var(--color-text-primary)', fontWeight: 600,
+                  display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap',
+                }}>
+                  {formatMoney(p.packCost, supplier.currency)}
+                  <TrendingUp size={11} color="var(--color-text-muted)" strokeWidth={2} />
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                  {formatBaseEquivalent(p.packCost, supplier.currency)}
+                </span>
+              </span>
+            ) : (
+              <span style={{
+                fontSize: 12.5, color: 'var(--color-text-primary)', fontWeight: 600,
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+              }}>
+                {formatPrice(p.packCost)}
+                <TrendingUp size={11} color="var(--color-text-muted)" strokeWidth={2} />
+              </span>
+            )}
             {showSupplierColumn && (
               <span style={{
                 fontSize: 12, color: 'var(--color-text-secondary)',

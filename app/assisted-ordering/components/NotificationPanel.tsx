@@ -3,6 +3,8 @@
 import type { SuggestedOrder, RecurringOrder } from '../types';
 import { needsReview, recurringFrequencyBadgeLabel, sentenceCase } from '../types';
 import { getSupplier, getProduct, isUrgent } from '../data/mockOrders';
+import { fmtSupplierAmount } from '../lib/money';
+import { BASE_CURRENCY } from '@/lib/currency';
 
 interface Props {
   orders: SuggestedOrder[];
@@ -144,7 +146,7 @@ export default function NotificationPanel({
                     fontFamily: 'var(--font-primary)',
                   }}
                 >
-                  £{total.toFixed(0)}
+                  {fmtSupplierAmount(total, order.supplierId)}
                 </span>
               </div>
 
@@ -163,6 +165,14 @@ export default function NotificationPanel({
                 <span>📦 Arriving {order.deliveryDate}</span>
                 <span>·</span>
                 <span>{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
+                {supplier.currency && supplier.currency !== BASE_CURRENCY && (
+                  <>
+                    <span>·</span>
+                    <span style={{ fontWeight: 600, color: 'var(--color-accent-active)' }}>
+                      Bills in {supplier.currency}
+                    </span>
+                  </>
+                )}
                 {urgent && (
                   <>
                     <span>·</span>
@@ -247,7 +257,7 @@ export default function NotificationPanel({
                       fontFamily: 'var(--font-primary)',
                     }}
                   >
-                    £{recTotal.toFixed(0)}
+                    {fmtSupplierAmount(recTotal, recOrder.supplierId)}
                   </span>
                 </div>
 

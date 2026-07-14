@@ -342,7 +342,7 @@ function addSupplierIntroStep(): Step {
     kind: 'quinn',
     text: 'I\u2019ll start a new supplier draft. Open the form to fill in the basics?',
     options: [
-      { label: 'Open the new supplier form', emphasis: 'primary', next: () => ({ kind: 'success', message: 'New supplier draft opened. Fill in the basics and Quinn will validate.' }) },
+      { label: 'Open the new supplier form', emphasis: 'primary', next: () => ({ kind: 'success', message: 'New supplier draft opened. Fill in the basics and Edify will validate.' }) },
       { label: 'Cancel', next: () => ({ kind: 'success', message: 'No changes made.' }) },
     ],
   };

@@ -18,6 +18,13 @@ import {
 } from './fixtures';
 import { upsertSupplier, deleteSupplier } from './store';
 import { StatusPill } from './Primitives';
+import { isMultiCurrencyDemo } from '@/lib/demoConfig';
+import {
+  BASE_CURRENCY, CURRENCY_NAMES, fxRate, fxRateLabel, FX_RATE_DATE,
+  currencySymbol, type CurrencyCode,
+} from '@/lib/currency';
+
+const SUPPLIER_CURRENCIES: CurrencyCode[] = ['GBP', 'CAD', 'USD', 'EUR', 'AED'];
 
 const ALL_DAYS: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -157,6 +164,55 @@ export default function SupplierDrawer({
             </Field>
           </Section>
 
+          {isMultiCurrencyDemo && (
+            <Section label="Currency & exchange rate">
+              <Field label="Billing currency">
+                <PillRadio
+                  options={SUPPLIER_CURRENCIES.map((c) => ({
+                    value: c,
+                    label: c === BASE_CURRENCY ? `${c} (base)` : c,
+                  }))}
+                  value={draft.currency ?? BASE_CURRENCY}
+                  onChange={(v) => update('currency', v === BASE_CURRENCY ? undefined : (v as CurrencyCode))}
+                />
+                <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 6 }}>
+                  {(draft.currency ?? BASE_CURRENCY) === BASE_CURRENCY
+                    ? `Prices and orders for this supplier are held in ${CURRENCY_NAMES[BASE_CURRENCY]}s — your reporting currency.`
+                    : `POs, deliveries and invoices for this supplier are processed in ${CURRENCY_NAMES[draft.currency as CurrencyCode]}s, then converted to ${BASE_CURRENCY} for reporting. The rate locks at goods receipt.`}
+                </div>
+              </Field>
+              {draft.currency && draft.currency !== BASE_CURRENCY && (
+                <>
+                  <Field label="Daily rate (auto)">
+                    <div style={{
+                      padding: '8px 10px', borderRadius: 8,
+                      background: 'var(--color-bg-hover)',
+                      fontSize: 13, color: 'var(--color-text-primary)', fontWeight: 600,
+                    }}>
+                      {fxRateLabel(draft.currency)}
+                      <span style={{ fontWeight: 400, color: 'var(--color-text-muted)', marginLeft: 8 }}>
+                        updated {FX_RATE_DATE}
+                      </span>
+                    </div>
+                  </Field>
+                  <Field label={`Contracted rate override (1 ${draft.currency} → ${BASE_CURRENCY})`}>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      placeholder={`Using daily rate (${fxRate(draft.currency, BASE_CURRENCY).toFixed(4)})`}
+                      value={draft.fxContractRate ?? ''}
+                      onChange={(e) => update('fxContractRate', e.target.value === '' ? null : Number(e.target.value))}
+                      style={inputStyle}
+                    />
+                    <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 4 }}>
+                      Set only if you have a negotiated FX rate with this supplier. Leave blank to follow the daily rate.
+                    </div>
+                  </Field>
+                </>
+              )}
+            </Section>
+          )}
+
           <Collapsible
             label="Order schedule"
             count={draft.cutOffTime ? `Cut-off ${draft.cutOffTime}` : 'Not set'}
@@ -167,7 +223,7 @@ export default function SupplierDrawer({
             <Field label="Lead time (days)">
               <NumberInput value={draft.leadTimeDays ?? 0} onChange={(v) => update('leadTimeDays', v)} />
             </Field>
-            <Field label="Minimum order value (£)">
+            <Field label={`Minimum order value (${currencySymbol(draft.currency ?? BASE_CURRENCY)})`}>
               <NumberInput value={draft.minimumOrderValue ?? 0} onChange={(v) => update('minimumOrderValue', v)} />
             </Field>
             <Field label="Delivery days">

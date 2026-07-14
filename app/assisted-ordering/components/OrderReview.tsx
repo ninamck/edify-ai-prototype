@@ -13,6 +13,7 @@ import MovProgressBar from './MovProgressBar';
 import QtyControl from './QtyControl';
 import TrustPanels from './TrustPanels';
 import { getTrustPanelDataForRecurring } from '../data/trustPanelData';
+import { fmtSupplierAmount, fmtSupplierUnitCost, supplierCurrency } from '../lib/money';
 
 interface Props {
   orders: SuggestedOrder[];
@@ -197,7 +198,7 @@ function NewSupplierSection({
             flexShrink: 0,
           }}
         >
-          £{sectionTotal.toFixed(0)}
+          {fmtSupplierAmount(sectionTotal, supplierId)}
         </span>
       </div>
 
@@ -272,9 +273,10 @@ function NewSupplierSection({
                     fontFamily: 'var(--font-primary)',
                     minWidth: '48px',
                     textAlign: 'right',
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  £{lineTotal.toFixed(0)}
+                  {fmtSupplierAmount(lineTotal, ml.supplierId)}
                 </span>
                 <button
                   type="button"
@@ -314,7 +316,7 @@ function NewSupplierSection({
         {/* MOV progress bar */}
         {mov > 0 && (
           <div style={{ padding: '4px 14px 14px' }}>
-            <MovProgressBar current={sectionTotal} minimum={mov} />
+            <MovProgressBar current={sectionTotal} minimum={mov} currency={supplierCurrency(supplierId)} />
 
             {/* Top-up prompt when MOV not met */}
             {!movMet && topUpProducts.length > 0 && (
@@ -352,7 +354,7 @@ function NewSupplierSection({
                     }}
                   >
                     <span style={{ fontSize: '15px', lineHeight: 1 }}>+</span>
-                    Add £{shortfall.toFixed(0)} more to reach minimum
+                    Add {fmtSupplierAmount(shortfall, supplierId)} more to reach minimum
                   </button>
                 ) : (
                   <div
@@ -381,7 +383,7 @@ function NewSupplierSection({
                           letterSpacing: '0.03em',
                         }}
                       >
-                        Add items to reach £{mov} minimum
+                        Add items to reach {fmtSupplierAmount(mov, supplierId)} minimum
                       </span>
                       <button
                         type="button"
@@ -435,7 +437,7 @@ function NewSupplierSection({
                                   fontFamily: 'var(--font-primary)',
                                 }}
                               >
-                                {product.unitName} · £{product.unitCost}
+                                {product.unitName} · {fmtSupplierUnitCost(product.unitCost, supplierId)}
                                 {ingredient.currentStock <= (ingredient.parLevel ?? 0) * 0.5 && (
                                   <span style={{ color: '#B91C1C', fontWeight: 600, marginLeft: '6px' }}>
                                     Low stock ({ingredient.currentStock}{ingredient.stockUnit})
@@ -469,7 +471,7 @@ function NewSupplierSection({
                                 (e.currentTarget as HTMLButtonElement).style.background = 'rgba(234,88,12,0.08)';
                               }}
                             >
-                              + Add · £{product.unitCost}
+                              + Add · {fmtSupplierUnitCost(product.unitCost, supplierId)}
                             </button>
                           </div>
                         );
@@ -665,9 +667,10 @@ function RecurringOrderSection({
                       fontFamily: 'var(--font-primary)',
                       minWidth: '48px',
                       textAlign: 'right',
+                      whiteSpace: 'nowrap',
                     }}
                   >
-                    £{lineTotal.toFixed(0)}
+                    {fmtSupplierAmount(lineTotal, line.supplierId)}
                   </span>
                 </div>
               </div>
@@ -797,9 +800,10 @@ function RecurringOrderSection({
                               fontFamily: 'var(--font-primary)',
                               minWidth: '44px',
                               textAlign: 'right',
+                              whiteSpace: 'nowrap',
                             }}
                           >
-                            £{lineTotal.toFixed(0)}
+                            {fmtSupplierAmount(lineTotal, line.supplierId)}
                           </span>
                           <button
                             type="button"
@@ -840,9 +844,10 @@ function RecurringOrderSection({
                               fontFamily: 'var(--font-primary)',
                               minWidth: '40px',
                               textAlign: 'right',
+                              whiteSpace: 'nowrap',
                             }}
                           >
-                            £{lineTotal.toFixed(0)}
+                            {fmtSupplierAmount(lineTotal, line.supplierId)}
                           </span>
                           <button
                             type="button"

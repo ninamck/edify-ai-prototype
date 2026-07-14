@@ -23,6 +23,14 @@ export type DemoCustomer = {
   accent: string;
   /** Site/context label under the forecast demo header. */
   demoSiteLabel: string;
+  /**
+   * Per-brand feature switches. Demo-only capabilities are opted into per
+   * customer so other builds render byte-for-byte unchanged.
+   */
+  features?: {
+    /** Per-supplier currency + dual-display purchasing journey (Second Cup). */
+    multiCurrency?: boolean;
+  };
 };
 
 const CUSTOMERS: Record<string, DemoCustomer> = {
@@ -41,6 +49,15 @@ const CUSTOMERS: Record<string, DemoCustomer> = {
     accent: '#A4123F',
     demoSiteLabel: 'CHAGEE · flagship — afternoon service, replayed',
   },
+  secondcup: {
+    id: 'secondcup',
+    name: 'Second Cup',
+    tagline: 'Canadian coffee, served worldwide',
+    // Placeholder Second Cup red — swap for the exact brand hex once confirmed.
+    accent: '#C8102E',
+    demoSiteLabel: 'Second Cup · international franchise — morning service, replayed',
+    features: { multiCurrency: true },
+  },
 };
 
 export const DEMO_CUSTOMER_ID = process.env.NEXT_PUBLIC_DEMO_CUSTOMER ?? 'edify';
@@ -50,3 +67,9 @@ export const demoCustomer: DemoCustomer =
 
 /** True when this build wears a customer brand (i.e. not the internal one). */
 export const isDemoBuild = demoCustomer.id !== 'edify';
+
+/**
+ * True when this build demos the multi-currency purchasing journey
+ * (per-supplier currency, dual display, FX attribution). Second Cup only.
+ */
+export const isMultiCurrencyDemo = demoCustomer.features?.multiCurrency === true;

@@ -45,6 +45,7 @@ import { MOCK_POS, MOCK_COMPLETED_DELIVERIES, PO } from '@/components/Receiving/
 import PODocDrawer from './PODocDrawer';
 import InvoiceDocDrawer from './InvoiceDocDrawer';
 import GRNDocDrawer from './GRNDocDrawer';
+import { BASE_CURRENCY, currencySymbol, formatMoney, type CurrencyCode } from '@/lib/currency';
 
 interface InvoiceMatchViewProps {
   invoice: Invoice;
@@ -115,16 +116,16 @@ function VarianceTypeChip({ type }: { type: MatchVariance['type'] }) {
   );
 }
 
-function varianceShortLabel(variance: MatchVariance, priceDiff: number): string {
-  if (variance.type === 'price') return `${priceDiff > 0 ? '+' : ''}£${Math.abs(priceDiff).toFixed(2)}`;
+function varianceShortLabel(variance: MatchVariance, priceDiff: number, sym = '£'): string {
+  if (variance.type === 'price') return `${priceDiff > 0 ? '+' : ''}${sym}${Math.abs(priceDiff).toFixed(2)}`;
   if (variance.type === 'over-invoice') return `+${variance.invoiceValue - variance.poValue} over`;
   return `${variance.invoiceValue > variance.grnValue ? '+' : ''}${variance.invoiceValue - variance.grnValue} unit${Math.abs(variance.invoiceValue - variance.grnValue) !== 1 ? 's' : ''}`;
 }
 
-function varianceDetailText(variance: MatchVariance): string {
+function varianceDetailText(variance: MatchVariance, sym = '£'): string {
   if (variance.type === 'price') {
     const d = variance.invoiceValue - variance.poValue;
-    return `PO: £${variance.poValue.toFixed(2)} → Invoice: £${variance.invoiceValue.toFixed(2)} (${d >= 0 ? '+' : ''}£${d.toFixed(2)}/unit)`;
+    return `PO: ${sym}${variance.poValue.toFixed(2)} → Invoice: ${sym}${variance.invoiceValue.toFixed(2)} (${d >= 0 ? '+' : ''}${sym}${d.toFixed(2)}/unit)`;
   }
   if (variance.type === 'over-invoice') {
     const extra = variance.invoiceValue - variance.poValue;
@@ -134,6 +135,14 @@ function varianceDetailText(variance: MatchVariance): string {
 }
 
 export default function InvoiceMatchView({ invoice, onApprove, onBack }: InvoiceMatchViewProps) {
+  // Foreign-currency invoices (e.g. CAD from Second Cup Central Supply) are
+  // matched in the supplier's original currency; the base (GBP) translation
+  // is shown alongside at the rate locked at goods receipt.
+  const invCurrency: CurrencyCode = invoice.currency ?? BASE_CURRENCY;
+  const isForeignCurrency = invCurrency !== BASE_CURRENCY;
+  const lockedRate = invoice.lockedFxRate ?? 1;
+  const toBaseAtLockedRate = (amount: number) => amount * lockedRate;
+
   const [resolutions, setResolutions] = useState<Record<string, AnyResolution>>({});
   const [showConfirm, setShowConfirm] = useState(false);
   // Forces a re-render after mutating the invoice in place (updateInvoiceLine,
@@ -343,32 +352,61 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
         </button>
       </div>
 
+      {/* Foreign-currency invoice: matched in the supplier's original currency,
+          with the base (GBP) translation at the rate locked at goods receipt. */}
+      {isForeignCurrency && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
+          padding: '10px 14px', borderRadius: '10px', marginBottom: '16px',
+          background: 'rgba(34,51,130,0.05)',
+          border: '1px solid rgba(34,51,130,0.18)',
+          fontSize: '12.5px', color: 'var(--color-text-secondary)',
+        }}>
+          <span style={{
+            padding: '2px 9px', borderRadius: '100px',
+            background: 'var(--color-accent-active)', color: '#fff',
+            fontSize: '11px', fontWeight: 700, letterSpacing: '0.02em',
+          }}>
+            Invoiced in {invCurrency}
+          </span>
+          <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
+            Matched against the {invCurrency} PO · booked at 1 {invCurrency} = {lockedRate} GBP (locked at receipt)
+          </span>
+          <span>
+            The {BASE_CURRENCY} translation is stored alongside the original — never replacing it.
+          </span>
+        </div>
+      )}
+
       {/* Summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '24px' }}>
         <MatchSummaryCard
           label="GRN Total"
-          value={`£${grnTotal.toFixed(2)}`}
-          sub={grns.length > 0
+          value={formatMoney(grnTotal, invCurrency)}
+          sub={(grns.length > 0
             ? `${grns.length} GRN${grns.length === 1 ? '' : 's'}${hasUnmatched ? ' (partial)' : ''}`
-            : '—'
+            : '—')
+            + (isForeignCurrency ? ` · ${formatMoney(toBaseAtLockedRate(grnTotal), BASE_CURRENCY)}` : '')
           }
           variant="default"
         />
         <MatchSummaryCard
           label="Invoice Total"
-          value={`£${(invoice.total + totalTax).toFixed(2)}`}
-          sub={anyTax ? `Incl. VAT · Ex-VAT £${invoice.total.toFixed(2)}` : 'Per supplier invoice'}
+          value={formatMoney(invoice.total + totalTax, invCurrency)}
+          sub={isForeignCurrency
+            ? `${formatMoney(toBaseAtLockedRate(invoice.total + totalTax), BASE_CURRENCY)} at locked rate`
+            : anyTax ? `Incl. VAT · Ex-VAT £${invoice.total.toFixed(2)}` : 'Per supplier invoice'}
           variant="default"
         />
         <MatchSummaryCard
           label="VAT"
-          value={`£${totalTax.toFixed(2)}`}
+          value={formatMoney(totalTax, invCurrency)}
           sub="Total VAT on this invoice"
           variant="default"
         />
         <MatchSummaryCard
           label="Variance"
-          value={varianceTotal === 0 ? '£0.00' : `${varianceTotal > 0 ? '+' : ''}£${varianceTotal.toFixed(2)}`}
+          value={varianceTotal === 0 ? formatMoney(0, invCurrency) : `${varianceTotal > 0 ? '+' : ''}${formatMoney(varianceTotal, invCurrency)}`}
           sub={hasUnmatched ? `${unmatchedLines.length} unmatched items` : varianceTotal === 0 ? 'Matched' : allResolved ? 'All caught & cleared' : varianceTotal > 0 ? 'Invoice higher' : 'Invoice lower'}
           variant={hasUnmatched ? 'error' : varianceTotal === 0 ? 'success' : allResolved ? 'default' : 'warning'}
         />
@@ -1588,6 +1626,9 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
   const [showGRN, setShowGRN] = useState<GRN | null>(null);
   // PO drawer — the order behind the agreed prices, opened from header chips
   const [showPO, setShowPO] = useState<PO | null>(null);
+  // Amounts render in the invoice's own currency (CAD for Second Cup Central
+  // Supply); GBP invoices keep the familiar £.
+  const sym = currencySymbol(invoice.currency ?? BASE_CURRENCY);
 
   const commitQty = (lineId: string, current: number, raw: string) => {
     const n = parseFloat(raw);
@@ -1627,7 +1668,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
 
   const EditablePrice = ({ lineId, value }: { lineId: string; value: number }) => (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
-      <span style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>£</span>
+      <span style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>{sym}</span>
       <input
         key={`${lineId}-${value}`}
         type="number"
@@ -2004,7 +2045,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
               <th style={colLabelStyle}>Price</th>
               <th style={colLabelStyle}>Total</th>
               <th style={colLabelStyle}>VAT %</th>
-              <th style={{ ...colLabelStyle, ...divider }}>VAT £</th>
+              <th style={{ ...colLabelStyle, ...divider }}>VAT {sym}</th>
               <th style={colLabelStyle}>Ordered</th>
               <th style={colLabelStyle}>Received</th>
               <th style={colLabelStyle}>Price</th>
@@ -2041,7 +2082,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const qtyDiff = variance?.type === 'qty' ? variance.invoiceValue - variance.grnValue : 0;
                   const varLabel = variance?.type === 'qty'
                     ? `${qtyDiff > 0 ? '+' : ''}${qtyDiff} unit${Math.abs(qtyDiff) !== 1 ? 's' : ''}`
-                    : `${priceDiff > 0 ? '+' : ''}£${Math.abs(priceDiff).toFixed(2)}`;
+                    : `${priceDiff > 0 ? '+' : ''}${sym}${Math.abs(priceDiff).toFixed(2)}`;
                   const multi = m.sources.length > 1;
                   // Collapsed on entry — the aggregated row is the summary; the
                   // per-delivery split opens on demand via the GRNs chip.
@@ -2099,17 +2140,17 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                         {editable && invLine ? <EditableQty lineId={invLine.id} value={invLine.qty} /> : (invLine?.qty ?? '—')}
                       </td>
                       <td style={{ ...cell, fontWeight: priceVar && !isCleared ? 700 : 400 }}>
-                        {editable && invLine ? <EditablePrice lineId={invLine.id} value={invLine.unitPrice} /> : (invLine ? `£${invLine.unitPrice.toFixed(2)}` : '—')}
+                        {editable && invLine ? <EditablePrice lineId={invLine.id} value={invLine.unitPrice} /> : (invLine ? `${sym}${invLine.unitPrice.toFixed(2)}` : '—')}
                       </td>
                       <td style={{ ...cell, fontWeight: 600 }}>
-                        {invLine ? `£${invLine.lineTotal.toFixed(2)}` : '—'}
+                        {invLine ? `${sym}${invLine.lineTotal.toFixed(2)}` : '—'}
                       </td>
                       <td style={{ ...cell }}>
                         {invLine && <TaxSelect lineId={invLine.id} sku={invLine.sku} />}
                       </td>
                       <td style={{ ...cell, ...divider, fontWeight: 600, color: invLine && (lineTaxRates[invLine.id] ?? 0) > 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
                         {invLine && (lineTaxRates[invLine.id] ?? 0) > 0
-                          ? `£${(invLine.lineTotal * (lineTaxRates[invLine.id] ?? 0) / 100).toFixed(2)}`
+                          ? `${sym}${(invLine.lineTotal * (lineTaxRates[invLine.id] ?? 0) / 100).toFixed(2)}`
                           : '—'}
                       </td>
                       <td style={{ ...cell, color: 'var(--color-text-secondary)', textAlign: 'center' }}>{m.orderedQty}</td>
@@ -2119,10 +2160,10 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                       </td>
                       <td style={{ ...cell, fontWeight: priceVar && !isCleared ? 700 : 400 }}>
                         {m.unitPrice !== null
-                          ? `£${m.unitPrice.toFixed(2)}`
+                          ? `${sym}${m.unitPrice.toFixed(2)}`
                           : <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', fontStyle: 'italic' }}>varies</span>}
                       </td>
-                      <td style={{ ...cell, fontWeight: 600 }}>£{m.lineTotal.toFixed(2)}</td>
+                      <td style={{ ...cell, fontWeight: 600 }}>{sym}{m.lineTotal.toFixed(2)}</td>
                       <td style={{ ...cell, padding: '6px 12px', textAlign: 'center' }}>
                         {variance
                           ? getAutoAppliedForVariance(variance.id)
@@ -2158,8 +2199,8 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                               {s.receivedQty}
                               {srcShort && <span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--color-text-secondary)', marginLeft: '4px' }}>of {s.orderedQty}</span>}
                             </td>
-                            <td style={{ ...cell, fontSize: '11px' }}>£{s.unitPrice.toFixed(2)}</td>
-                            <td style={{ ...cell, fontSize: '11px', fontWeight: 600 }}>£{s.lineTotal.toFixed(2)}</td>
+                            <td style={{ ...cell, fontSize: '11px' }}>{sym}{s.unitPrice.toFixed(2)}</td>
+                            <td style={{ ...cell, fontSize: '11px', fontWeight: 600 }}>{sym}{s.lineTotal.toFixed(2)}</td>
                             <td style={{ ...cell, textAlign: 'center' }}>
                               {srcShort
                                 ? <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', border: `1px solid ${VARIANCE_ACCENT}`, background: VARIANCE_BADGE_BG, color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>
@@ -2177,8 +2218,8 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const resolution = resolutions[variance.id] as AnyResolution | undefined;
                   const options = resolutionOptionsFor(variance.type);
                   const vDiff = variance.invoiceValue - variance.poValue;
-                  const detail = varianceDetailText(variance);
-                  const impactLabel = variance.impact >= 0 ? `+£${variance.impact.toFixed(2)}` : `-£${Math.abs(variance.impact).toFixed(2)}`;
+                  const detail = varianceDetailText(variance, sym);
+                  const impactLabel = variance.impact >= 0 ? `+${sym}${variance.impact.toFixed(2)}` : `-${sym}${Math.abs(variance.impact).toFixed(2)}`;
 
                   const expandBg = isResolved ? 'rgba(16,185,129,0.03)' : '#F9F4F0';
                   const expandAccent = isResolved ? 'inset 3px 0 0 var(--color-success)' : `inset 3px 0 0 ${VARIANCE_ACCENT}`;
@@ -2266,15 +2307,15 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                       {editable ? <EditableQty lineId={il.id} value={il.qty} /> : il.qty}
                     </td>
                     <td style={{ ...cell, fontWeight: priceVar ? 700 : 400 }}>
-                      {editable ? <EditablePrice lineId={il.id} value={il.unitPrice} /> : `£${il.unitPrice.toFixed(2)}`}
+                      {editable ? <EditablePrice lineId={il.id} value={il.unitPrice} /> : `${sym}${il.unitPrice.toFixed(2)}`}
                     </td>
-                    <td style={{ ...cell, fontWeight: 600 }}>£{il.lineTotal.toFixed(2)}</td>
+                    <td style={{ ...cell, fontWeight: 600 }}>{sym}{il.lineTotal.toFixed(2)}</td>
                     <td style={{ ...cell }}>
                       <TaxSelect lineId={il.id} sku={il.sku} />
                     </td>
                     <td style={{ ...cell, ...divider, fontWeight: 600, color: (lineTaxRates[il.id] ?? 0) > 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
                       {(lineTaxRates[il.id] ?? 0) > 0
-                        ? `£${(il.lineTotal * (lineTaxRates[il.id] ?? 0) / 100).toFixed(2)}`
+                        ? `${sym}${(il.lineTotal * (lineTaxRates[il.id] ?? 0) / 100).toFixed(2)}`
                         : '—'}
                     </td>
                     <td colSpan={RC} style={{ ...cell, color: 'var(--color-text-secondary)', textAlign: 'center' }}>—</td>
@@ -2293,16 +2334,16 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                 {anyTax ? 'Subtotal' : (multiGroup ? 'Grand Total' : 'Total')}
               </td>
               <td style={{ padding: '8px 12px', fontWeight: anyTax ? 500 : 700, textAlign: 'center', color: anyTax ? 'var(--color-text-secondary)' : undefined }}>
-                £{invoice.total.toFixed(2)}
+                {sym}{invoice.total.toFixed(2)}
               </td>
               <td />
               <td style={{ padding: '8px 12px', fontWeight: anyTax ? 600 : 400, textAlign: 'center', ...divider, color: anyTax ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
-                {anyTax ? `£${totalTax.toFixed(2)}` : '—'}
+                {anyTax ? `${sym}${totalTax.toFixed(2)}` : '—'}
               </td>
               {/* Right side: Ordered | Received | Price stay empty (colSpan 3), so
                   the total lands under "Total", mirroring the rows above */}
               <td colSpan={3} />
-              <td style={{ padding: '8px 12px', fontWeight: 700, textAlign: 'center' }}>£{allGrnTotal.toFixed(2)}</td>
+              <td style={{ padding: '8px 12px', fontWeight: 700, textAlign: 'center' }}>{sym}{allGrnTotal.toFixed(2)}</td>
               <td />
             </tr>
             {/* Grand total row — only shown when VAT applies */}
@@ -2311,7 +2352,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                 <td colSpan={2} />
                 <td style={{ padding: '10px 12px', fontWeight: 700, textAlign: 'right', whiteSpace: 'nowrap' }}>Total (incl. VAT)</td>
                 <td style={{ padding: '10px 12px', fontWeight: 700, textAlign: 'center' }}>
-                  £{(invoice.total + totalTax).toFixed(2)}
+                  {sym}{(invoice.total + totalTax).toFixed(2)}
                 </td>
                 <td colSpan={2} style={divider} />
                 <td colSpan={RC} />
@@ -2329,7 +2370,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                     <span style={{ color: 'var(--color-success)', fontWeight: 700, fontSize: '13px' }}>✓</span>
                     <span style={{ fontWeight: 500 }}>
-                      {cleanLines.length} line{cleanLines.length === 1 ? '' : 's'} matched clean · £{cleanInvTotal.toFixed(2)}
+                      {cleanLines.length} line{cleanLines.length === 1 ? '' : 's'} matched clean · {sym}{cleanInvTotal.toFixed(2)}
                     </span>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '3px 10px', borderRadius: '6px', background: '#fff', border: '1px solid var(--color-border)', fontSize: '11px', fontWeight: 600, color: 'var(--color-accent-active)', whiteSpace: 'nowrap' }}>
                       {cleanExpanded ? 'Hide from table' : 'Show in table'} <Chevron open={cleanExpanded} />
@@ -2358,7 +2399,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '3px 10px', borderRadius: '6px', background: '#fff', border: '1px solid var(--color-border)', fontSize: '11px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-accent-active)', textDecoration: 'none', whiteSpace: 'nowrap' }}
             >
               {sibling.invoiceNumber}
-              <span style={{ color: 'var(--color-text-secondary)', fontWeight: 500 }}>£{sibling.total.toFixed(2)}</span>
+              <span style={{ color: 'var(--color-text-secondary)', fontWeight: 500 }}>{sym}{sibling.total.toFixed(2)}</span>
               →
             </a>
           ))}
@@ -2469,6 +2510,9 @@ function ApprovalConfirmation({ invoice, resolutions, grns, unmatchedLines, poCo
   onBack: () => void;
   onConfirm: () => void;
 }) {
+  // Amounts stay in the invoice's own currency (all bulk siblings share the
+  // same supplier, hence the same currency).
+  const sym = currencySymbol(invoice.currency ?? BASE_CURRENCY);
   const creditNotes = invoice.variances.filter(v => {
     const r = resolutions[v.id];
     if (!r) return false;
@@ -2500,7 +2544,7 @@ function ApprovalConfirmation({ invoice, resolutions, grns, unmatchedLines, poCo
         <div style={{ border: '1px solid var(--color-border-subtle)', borderRadius: '10px', background: '#fff', padding: '18px', marginBottom: '16px' }}>
           <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 10px' }}>Invoices being approved</h3>
           <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', margin: '0 0 12px' }}>
-            Both invoices are linked to the same PO and can be approved in one action. Combined total <strong style={{ color: 'var(--color-text-primary)' }}>£{bulkTotal.toFixed(2)}</strong>.
+            Both invoices are linked to the same PO and can be approved in one action. Combined total <strong style={{ color: 'var(--color-text-primary)' }}>{sym}{bulkTotal.toFixed(2)}</strong>.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {bulkInvoices.map((inv, i) => (
@@ -2511,7 +2555,7 @@ function ApprovalConfirmation({ invoice, resolutions, grns, unmatchedLines, poCo
                     {inv.date}{i === 0 ? ' · this invoice' : ''}
                   </span>
                 </div>
-                <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--color-text-primary)' }}>£{inv.total.toFixed(2)}</span>
+                <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--color-text-primary)' }}>{sym}{inv.total.toFixed(2)}</span>
               </div>
             ))}
           </div>
@@ -2530,7 +2574,7 @@ function ApprovalConfirmation({ invoice, resolutions, grns, unmatchedLines, poCo
                 <div>
                   <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text-primary)' }}>{v.itemName}</span>
                   <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginLeft: '8px' }}>
-                    {v.type === 'price' ? `£${v.poValue.toFixed(2)} → £${v.invoiceValue.toFixed(2)}` : `GRN: ${v.grnValue} vs Invoice: ${v.invoiceValue}`}
+                    {v.type === 'price' ? `${sym}${v.poValue.toFixed(2)} → ${sym}${v.invoiceValue.toFixed(2)}` : `GRN: ${v.grnValue} vs Invoice: ${v.invoiceValue}`}
                   </span>
                 </div>
                 {auto ? (
@@ -2578,42 +2622,42 @@ function ApprovalConfirmation({ invoice, resolutions, grns, unmatchedLines, poCo
         <ul style={{ margin: 0, padding: '0 0 0 18px', fontSize: '13px', color: 'var(--color-text-primary)', lineHeight: 1.8 }}>
           {costUpdates.map(v => (
             <li key={v.id}>
-              <strong>{v.itemName}</strong> master cost updated £{v.poValue.toFixed(2)} → £{v.invoiceValue.toFixed(2)}
+              <strong>{v.itemName}</strong> master cost updated {sym}{v.poValue.toFixed(2)} → {sym}{v.invoiceValue.toFixed(2)}
               <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-info)', marginLeft: '6px' }}>Affects recipes & GP%</span>
             </li>
           ))}
           {costUpdates.length > 0 && <li>Recipe GP% recalculated for affected recipes</li>}
           {deliveryOnly.map(v => (
             <li key={v.id}>
-              <strong>{v.itemName}</strong> charged at £{v.invoiceValue.toFixed(2)} for this delivery
-              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginLeft: '6px' }}>Cost stays at £{v.poValue.toFixed(2)}</span>
+              <strong>{v.itemName}</strong> charged at {sym}{v.invoiceValue.toFixed(2)} for this delivery
+              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginLeft: '6px' }}>Cost stays at {sym}{v.poValue.toFixed(2)}</span>
             </li>
           ))}
           {poContexts.map(ctx => (
             <li key={ctx.poNumber}>
               {ctx.overInvoiceIfApproved ? (
                 <>
-                  <strong>{ctx.poNumber}</strong> ends <strong>£{ctx.overBy.toFixed(2)}</strong> above PO amount
+                  <strong>{ctx.poNumber}</strong> ends <strong>{sym}{ctx.overBy.toFixed(2)}</strong> above PO amount
                   <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginLeft: '6px' }}>Accounted for in your variance resolutions above</span>
                 </>
               ) : ctx.closesIfApproved ? (
                 <>
-                  <strong>{ctx.poNumber}</strong> closes — fully invoiced at £{ctx.poAmount.toFixed(2)}
+                  <strong>{ctx.poNumber}</strong> closes — fully invoiced at {sym}{ctx.poAmount.toFixed(2)}
                   <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginLeft: '6px' }}>PO marked complete</span>
                 </>
               ) : (
                 <>
-                  <strong>{ctx.poNumber}</strong> stays open — £{(ctx.poAmount - ctx.afterThisAmount).toFixed(2)} remaining after this invoice
+                  <strong>{ctx.poNumber}</strong> stays open — {sym}{(ctx.poAmount - ctx.afterThisAmount).toFixed(2)} remaining after this invoice
                 </>
               )}
             </li>
           ))}
           {isBulk ? (
-            <li><strong>{bulkInvoices.length} invoices</strong> pushed to Xero in one batch (account codes mapped, total £{bulkTotal.toFixed(2)})</li>
+            <li><strong>{bulkInvoices.length} invoices</strong> pushed to Xero in one batch (account codes mapped, total {sym}{bulkTotal.toFixed(2)})</li>
           ) : (
             <li>Invoice pushed to Xero (account codes mapped)</li>
           )}
-          {creditTotal > 0 && <li>Credit note for <strong>£{creditTotal.toFixed(2)}</strong> exported to Xero separately</li>}
+          {creditTotal > 0 && <li>Credit note for <strong>{sym}{creditTotal.toFixed(2)}</strong> exported to Xero separately</li>}
         </ul>
       </div>
 
@@ -2637,7 +2681,7 @@ function ApprovalConfirmation({ invoice, resolutions, grns, unmatchedLines, poCo
                   <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginLeft: '6px' }}>({il.sku})</span>
                 </div>
                 <span style={{ fontSize: '12px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                  {il.qty} × £{il.unitPrice.toFixed(2)} = £{il.lineTotal.toFixed(2)}
+                  {il.qty} × {sym}{il.unitPrice.toFixed(2)} = {sym}{il.lineTotal.toFixed(2)}
                 </span>
               </div>
             ))}

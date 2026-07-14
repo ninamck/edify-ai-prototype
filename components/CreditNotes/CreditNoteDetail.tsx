@@ -89,8 +89,8 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
       date: `${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`,
       type: 'chased',
       method: 'Email',
-      note: `Quinn sent a chase email to ${creditNote.supplier} on your behalf.`,
-      by: 'Quinn',
+      note: `Edify sent a chase email to ${creditNote.supplier} on your behalf.`,
+      by: 'Edify',
     };
     setCreditNote((prev) => ({
       ...prev,
@@ -236,7 +236,7 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
                   Chase {creditNote.supplier} for {creditNote.ref}?
                 </div>
                 <div style={{ fontSize: '12px', fontWeight: 500, color: '#fff', marginTop: '1px' }}>
-                  Quinn will send a chase email on your behalf
+                  Edify will send a chase email on your behalf
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>

@@ -8,6 +8,7 @@ import { PO, POLine, VarianceResolution, poItemCount, poTotal } from './mockData
 import AddAlternativeProductModal, { type AlternativeProductPrefill, type StagedAlternative } from './AddAlternativeProductModal';
 import { ScanCaptureModal, LineActionModal, AddCatalogueItemModal, type CatalogueExtra } from './ReceivingModals';
 import { formatPrice } from '@/components/Suppliers/fixtures';
+import { BASE_CURRENCY, formatDual, fxRateLabel } from '@/lib/currency';
 
 interface ReceivedLine {
   poLineId: string;
@@ -162,6 +163,10 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
   }, [allLines, alternatives, extras]);
 
   // Substituted lines are intentionally at 0 — don't treat them as shorts.
+  // Foreign-currency deliveries lock the FX rate at receipt — surfaced as a
+  // banner so the operator knows the inventory value will match the invoice.
+  const foreignCurrency = pos.find(p => p.currency && p.currency !== BASE_CURRENCY)?.currency;
+
   const varianceLines = allLines.filter(
     l => !substitutedLineIds.has(l.id) && (receivedMap[l.id] ?? l.expectedQty) !== l.expectedQty,
   );
@@ -269,7 +274,15 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
       header: 'Unit Price',
       width: '90px',
       render: (row) => {
-        if (row.kind === 'po') return <span>£{row.line.price.toFixed(2)}</span>;
+        if (row.kind === 'po') {
+          const currency = poForLine(row.line.id).currency ?? BASE_CURRENCY;
+          // Foreign-currency PO lines show the supplier amount with the
+          // base equivalent underneath (Supy-style dual display).
+          if (currency !== BASE_CURRENCY) {
+            return <span style={{ whiteSpace: 'nowrap' }}>{formatDual(row.line.price, currency)}</span>;
+          }
+          return <span>£{row.line.price.toFixed(2)}</span>;
+        }
         if (row.kind === 'extra') return <span>{formatPrice(row.extra.price)}</span>;
         return <span>{formatPrice(row.alt.packCost)}</span>;
       },
@@ -380,6 +393,31 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
           <button onClick={() => setScanCapture(true)} style={secondaryBtnStyle}>Add GRN</button>
         </div>
       </div>
+
+      {/* FX rate-lock banner for foreign-currency deliveries */}
+      {foreignCurrency && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
+          padding: '10px 14px', borderRadius: '10px', marginBottom: '14px',
+          background: 'rgba(34,51,130,0.05)',
+          border: '1px solid rgba(34,51,130,0.18)',
+          fontSize: '12.5px', color: 'var(--color-text-secondary)',
+        }}>
+          <span style={{
+            padding: '2px 9px', borderRadius: '100px',
+            background: 'var(--color-accent-active)', color: '#fff',
+            fontSize: '11px', fontWeight: 700, letterSpacing: '0.02em',
+          }}>
+            {foreignCurrency} delivery
+          </span>
+          <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
+            {fxRateLabel(foreignCurrency)} — locked at this receipt
+          </span>
+          <span>
+            Inventory is valued at this rate so it matches the supplier&apos;s invoice, even if the daily rate moves.
+          </span>
+        </div>
+      )}
 
       {/* PO summary cards */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>

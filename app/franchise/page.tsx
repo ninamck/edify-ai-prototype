@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useFranchise } from '@/components/Franchise/FranchiseContext';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+import MultiCurrencyRollup from '@/components/Franchise/MultiCurrencyRollup';
 import {
   SHARED_LIBRARY_COUNTS,
   TOTAL_STORE_COUNT,
@@ -265,6 +266,9 @@ export default function FranchiseOverviewPage() {
           );
         })}
       </div>
+
+      {/* 3.5 — Multi-currency purchasing roll-up (Second Cup build only). */}
+      <MultiCurrencyRollup />
 
       {/* 4 — Shared across the group */}
       <SectionTitle>

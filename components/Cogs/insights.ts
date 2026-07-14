@@ -16,6 +16,7 @@ import {
   COGS_SITE_NAME,
   type CogsVarianceRow,
 } from './fixtures';
+import { isMultiCurrencyDemo } from '@/lib/demoConfig';
 
 /** Threshold (absolute variance %) above which a row gets the Edify chip. */
 export const VARIANCE_INSIGHT_THRESHOLD = 10;
@@ -290,6 +291,8 @@ export const COGS_SUGGESTED_QUESTIONS: string[] = [
   'Show me the over-portioned items',
   'What should I check first?',
   'Summarise this week\u2019s COGS story',
+  // Multi-currency build only: the FX-vs-price attribution moment.
+  ...(isMultiCurrencyDemo ? ['Is the beans cost rise real or just the exchange rate?'] : []),
 ];
 
 const fmt = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 0 });
@@ -298,6 +301,17 @@ const fmt = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 0 
  *  scripted "AI" surfaces (e.g. insightForTableQuery in the Feed). */
 export function getCogsChatAnswer(question: string): CogsChatAnswer {
   const q = question.toLowerCase();
+
+  // Multi-currency build only: FX-vs-price attribution answer. Checked
+  // first so currency wording doesn't fall through to the supplier branch.
+  if (
+    isMultiCurrencyDemo &&
+    (q.includes('exchange') || q.includes(' fx') || q.startsWith('fx') || q.includes('currency') || q.includes('cad') || q.includes('rate'))
+  ) {
+    return {
+      text: `Mostly the exchange rate. Coffee & beans is up **6.2% (£214)** vs last period, and Edify splits it three ways: **+4.1pp (£142) is FX** — the pound weakened against the Canadian dollar across this period's receipts — **+1.8pp (£62) is a genuine supplier increase** (Espresso Forte rose CA$1.20/case at source), and **+0.3pp is volume**. Purchases from Second Cup Central Supply are billed in CAD and booked at the rate locked at each goods receipt, which is what lets me separate the two. Only the 1.8pp is worth raising with the supplier; if the FX drag persists, consider a **contracted rate** on the supplier record.`,
+    };
+  }
 
   if (q.includes('biggest') || q.includes('largest') || q.includes('worst')) {
     return {

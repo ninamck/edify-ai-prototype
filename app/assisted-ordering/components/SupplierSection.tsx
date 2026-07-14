@@ -5,6 +5,8 @@ import { getSupplier, getIngredient, getProduct, isUrgent } from '../data/mockOr
 import LineItem from './LineItem';
 import MovProgressBar from './MovProgressBar';
 import QtyControl from './QtyControl';
+import { fmtSupplierAmount } from '../lib/money';
+import { BASE_CURRENCY, fxRateLabel, FX_RATE_DATE } from '@/lib/currency';
 
 interface Props {
   order: SuggestedOrder;
@@ -107,6 +109,24 @@ export default function SupplierSection({
               <span>📦 Arriving {order.deliveryDate}</span>
               <span>·</span>
               <span>Order by {supplier.cutOffTime}</span>
+              {supplier.currency && supplier.currency !== BASE_CURRENCY && (
+                <>
+                  <span>·</span>
+                  <span
+                    style={{
+                      padding: '1px 8px',
+                      borderRadius: 'var(--radius-badge)',
+                      background: 'rgba(34,51,130,0.08)',
+                      border: '1px solid rgba(34,51,130,0.2)',
+                      color: 'var(--color-accent-active)',
+                      fontWeight: 600,
+                    }}
+                    title={`Supplier bills in ${supplier.currency}. Rate auto-updated ${FX_RATE_DATE}; locked at goods receipt.`}
+                  >
+                    Bills in {supplier.currency} · {fxRateLabel(supplier.currency)}
+                  </span>
+                </>
+              )}
               {urgent && (
                 <>
                   <span>·</span>
@@ -124,7 +144,7 @@ export default function SupplierSection({
               flexShrink: 0,
             }}
           >
-            £{supplierTotal.toFixed(0)}
+            {fmtSupplierAmount(supplierTotal, order.supplierId)}
           </span>
         </div>
       </div>
@@ -256,7 +276,7 @@ export default function SupplierSection({
                         textAlign: 'right',
                       }}
                     >
-                      £{lineTotal.toFixed(0)}
+                      {fmtSupplierAmount(lineTotal, ml.supplierId)}
                     </span>
                     <button
                       type="button"
@@ -298,7 +318,11 @@ export default function SupplierSection({
       {/* MOV progress bar */}
       {supplier.minimumOrderValue > 0 && (
         <div style={{ padding: '0 16px 14px' }}>
-          <MovProgressBar current={supplierTotal} minimum={supplier.minimumOrderValue} />
+          <MovProgressBar
+            current={supplierTotal}
+            minimum={supplier.minimumOrderValue}
+            currency={supplier.currency}
+          />
         </div>
       )}
     </div>

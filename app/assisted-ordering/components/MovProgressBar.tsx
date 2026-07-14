@@ -1,12 +1,17 @@
 'use client';
 
+import { BASE_CURRENCY, formatMoneyRounded, type CurrencyCode } from '@/lib/currency';
+
 interface Props {
   current: number;
+  /** In the supplier's `currency` — MOVs are agreed in the billing currency. */
   minimum: number;
+  currency?: CurrencyCode;
 }
 
-export default function MovProgressBar({ current, minimum }: Props) {
+export default function MovProgressBar({ current, minimum, currency = BASE_CURRENCY }: Props) {
   if (minimum === 0) return null;
+  const fmt = (n: number) => formatMoneyRounded(n, currency);
 
   const pct = Math.min(100, (current / minimum) * 100);
   const met = current >= minimum;
@@ -35,7 +40,7 @@ export default function MovProgressBar({ current, minimum }: Props) {
         >
           {met
             ? 'Minimum order met'
-            : `£${(minimum - current).toFixed(0)} to reach minimum`}
+            : `${fmt(minimum - current)} to reach minimum`}
         </span>
         <span
           style={{
@@ -45,7 +50,7 @@ export default function MovProgressBar({ current, minimum }: Props) {
             fontFamily: 'var(--font-primary)',
           }}
         >
-          £{current.toFixed(0)} / £{minimum.toFixed(0)}
+          {fmt(current)} / {fmt(minimum)}
         </span>
       </div>
       <div

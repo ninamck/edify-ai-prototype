@@ -598,7 +598,7 @@ function SegmentedControl({
   onChange: (next: SegValue) => void;
 }) {
   const options: Array<{ id: SegValue; label: string; icon?: ReactNode; sublabel?: string }> = [
-    { id: 'quinn', label: 'Quinn', sublabel: quinnLabel, icon: <EdifyMark size={11} /> },
+    { id: 'quinn', label: 'Edify', sublabel: quinnLabel, icon: <EdifyMark size={11} /> },
     { id: 'in',    label: 'On',    icon: <Check size={11} /> },
     { id: 'out',   label: 'Off',   icon: <X size={11} /> },
   ];

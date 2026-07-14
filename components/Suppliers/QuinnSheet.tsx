@@ -331,7 +331,7 @@ export default function QuinnSheet({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') submitInput(); }}
-              placeholder="Tell Quinn what to do\u2026"
+              placeholder="Tell Edify what to do\u2026"
               style={{
                 border: 'none', outline: 'none', background: 'transparent',
                 flex: 1, fontSize: 13, fontFamily: 'var(--font-primary)',

@@ -7,6 +7,7 @@ import QtyControl from './QtyControl';
 import DismissReasonPrompt from './DismissReason';
 import TrustPanels from './TrustPanels';
 import { getTrustPanelDataForLine } from '../data/trustPanelData';
+import { fmtSupplierAmount } from '../lib/money';
 
 interface Props {
   line: SuggestedOrderLine;
@@ -333,9 +334,10 @@ export default function LineItem({
               fontFamily: 'var(--font-primary)',
               minWidth: '52px',
               textAlign: 'right',
+              whiteSpace: 'nowrap',
             }}
           >
-            £{lineTotal.toFixed(0)}
+            {fmtSupplierAmount(lineTotal, line.supplierId)}
           </span>
           <button
             type="button"
