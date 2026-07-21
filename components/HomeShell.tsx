@@ -17,6 +17,7 @@ import NoteForEdifyPopup from '@/components/Feed/NoteForEdifyPopup';
 import RightPanelSheetOverlay from '@/components/RightPanel/RightPanelSheetOverlay';
 import MobileInsightsBar from '@/components/MobileInsightsBar';
 import AddInsightPopup from '@/components/Dashboard/AddInsightPopup';
+import DashboardEditToolbar from '@/components/Dashboard/DashboardEditToolbar';
 import { pinnedChartIdOf, type DashboardLayoutEntry } from '@/components/Dashboard/layoutTypes';
 
 import FloorActionsBox from '@/components/FloorActionsBox';
@@ -30,6 +31,35 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useDashboardLayout } from '@/hooks/useDashboardLayout';
 import MobileShell from '@/components/MobileShell/MobileShell';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+import Mvp1Tabs from '@/components/Mvp1/Tabs/Mvp1Tabs';
+import DateRangePicker, { type DateRange } from '@/components/Mvp1/DateRangePicker';
+import TablesTab from '@/components/Mvp1/Tables/TablesTab';
+import { useMvp1Tabs, type Mvp1Tab } from '@/hooks/useMvp1Tabs';
+import {
+  StorePerformanceDashboard,
+  FranchiseNetworkDashboard,
+} from '@/components/Dashboard/SecondCup/SecondCupViews';
+import TemplatesDashboard from '@/components/Dashboard/Templates/TemplatesDashboard';
+import { isMultiCurrencyDemo } from '@/lib/demoConfig';
+
+// Starter-templates tab — the out-of-the-box dashboard a new customer sees
+// before any customisation. Pinned (kind: 'dashboard') so it can't be
+// renamed or removed from the tab strip.
+const TEMPLATE_TABS: Mvp1Tab[] = [
+  { id: 'starter-templates', name: 'Templates', kind: 'dashboard' },
+];
+
+// Extra dashboard tabs for the Second Cup (multi-currency) build only.
+// Typed as `kind: 'dashboard'` so the shared tab strip treats them as
+// pinned (no rename, no remove); HomeShell resolves them by id.
+const SECOND_CUP_TABS: Mvp1Tab[] = [
+  { id: 'sc-performance', name: 'Store Performance', kind: 'dashboard' },
+  { id: 'sc-network', name: 'Franchise Network', kind: 'dashboard' },
+];
+
+// MVP1-seeded views that belong to the /mvp-1 page's demo script — hidden
+// from the home tab strip. User-created views still show in both places.
+const HIDDEN_MVP1_TAB_IDS = new Set(['flash-report', 'summary-analysis', 'sales-deep-dive']);
 
 
 
@@ -58,6 +88,19 @@ export default function HomeShell() {
   const [phaseOverride, setPhaseOverride] = useState<PhaseOverride>('auto');
   const [briefingOpen, setBriefingOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange>({ kind: 'week' });
+  // Same tab set as the MVP1 shell (shared localStorage state), plus the
+  // Second Cup dashboards appended on the multi-currency build.
+  const {
+    tabs: mvp1Tabs,
+    activeId: activeTabId,
+    setActiveId: setActiveTabId,
+    addTablesTab,
+    removeTab,
+    renameTab,
+    updateTablesForTab,
+    updateChartsForTab,
+  } = useMvp1Tabs();
   const effectivePhase: BriefingPhase =
     phaseOverride === 'auto' ? phaseFromHour(new Date().getHours()) : phaseOverride;
   const isNarrow = useMediaQuery(NARROW_BREAKPOINT);
@@ -110,6 +153,142 @@ export default function HomeShell() {
 
   function removePinnedChart(id: AnalyticsChartId) {
     removePinned(briefingRole, id);
+  }
+
+  const visibleMvp1Tabs = mvp1Tabs.filter((t) => !HIDDEN_MVP1_TAB_IDS.has(t.id));
+  const allTabs: Mvp1Tab[] = isMultiCurrencyDemo
+    ? [...visibleMvp1Tabs, ...TEMPLATE_TABS, ...SECOND_CUP_TABS]
+    : [...visibleMvp1Tabs, ...TEMPLATE_TABS];
+  // Guard against a stale stored id (e.g. a Second Cup tab id persisted, then
+  // the brand switched away) — fall back to the main dashboard.
+  const effectiveTabId = allTabs.some((t) => t.id === activeTabId) ? activeTabId : 'dashboard';
+  const activeHomeTab = allTabs.find((t) => t.id === effectiveTabId) ?? allTabs[0];
+  const dateControls = <DateRangePicker value={dateRange} onChange={setDateRange} />;
+  // Same toolbar cluster the main dashboard shows (date range + Add insight +
+  // Edit view), reused in the header of every other home tab.
+  const tabToolbar = (
+    <DashboardEditToolbar
+      editing={editingDashboard}
+      onToggleEdit={() => setEditingDashboard((v) => !v)}
+      onAddInsight={() => setAddInsightOpen(true)}
+      leadingControls={dateControls}
+    />
+  );
+
+  function renderRoleDashboard() {
+    if (briefingRole === 'culinary') {
+      return (
+        <CulinaryCollectiveDashboard
+          layout={currentLayout}
+          editing={editingDashboard}
+          onLayoutChange={updateCurrentLayout}
+          onToggleEdit={() => setEditingDashboard((v) => !v)}
+          onAddInsight={() => setAddInsightOpen(true)}
+          onRemovePinned={removePinnedChart}
+          toolbarLeadingControls={dateControls}
+        />
+      );
+    }
+    if (briefingRole === 'playtomic') {
+      return (
+        <PlaytomicDashboard
+          layout={currentLayout}
+          editing={editingDashboard}
+          onLayoutChange={updateCurrentLayout}
+          onToggleEdit={() => setEditingDashboard((v) => !v)}
+          onAddInsight={() => setAddInsightOpen(true)}
+          onRemovePinned={removePinnedChart}
+          toolbarLeadingControls={dateControls}
+        />
+      );
+    }
+    if (briefingRole === 'plato') {
+      return (
+        <PlatoDashboard
+          layout={currentLayout}
+          editing={editingDashboard}
+          onLayoutChange={updateCurrentLayout}
+          onToggleEdit={() => setEditingDashboard((v) => !v)}
+          onAddInsight={() => setAddInsightOpen(true)}
+          onRemovePinned={removePinnedChart}
+          toolbarLeadingControls={dateControls}
+        />
+      );
+    }
+    if (briefingRole === 'cheryl') {
+      return (
+        <EstateDashboard
+          phase={effectivePhase}
+          layout={currentLayout}
+          editing={editingDashboard}
+          onLayoutChange={updateCurrentLayout}
+          onToggleEdit={() => setEditingDashboard((v) => !v)}
+          onAddInsight={() => setAddInsightOpen(true)}
+          onRemovePinned={removePinnedChart}
+          toolbarLeadingControls={dateControls}
+        />
+      );
+    }
+    return (
+      <ManagerDashboard
+        phase={effectivePhase}
+        layout={currentLayout}
+        editing={editingDashboard}
+        onLayoutChange={updateCurrentLayout}
+        onToggleEdit={() => setEditingDashboard((v) => !v)}
+        onAddInsight={() => setAddInsightOpen(true)}
+        onRemovePinned={removePinnedChart}
+        toolbarLeadingControls={dateControls}
+      />
+    );
+  }
+
+  function renderActiveHomeTab() {
+    if (effectiveTabId === 'starter-templates') {
+      // No TabHeaderRow here — the templates view puts its Daily/Weekly/Period
+      // switcher where the title would be, with the shared toolbar beside it.
+      return <TemplatesDashboard controls={tabToolbar} />;
+    }
+    if (effectiveTabId === 'sc-performance') {
+      return (
+        <>
+          <TabHeaderRow title="Store performance — UK estate" controls={tabToolbar} />
+          <StorePerformanceDashboard />
+        </>
+      );
+    }
+    if (effectiveTabId === 'sc-network') {
+      return (
+        <>
+          <TabHeaderRow title="Franchise network — 150 sites worldwide" controls={tabToolbar} />
+          <FranchiseNetworkDashboard />
+        </>
+      );
+    }
+    if (activeHomeTab.kind === 'tables') {
+      return (
+        <>
+          <TabHeaderRow title={activeHomeTab.name} controls={tabToolbar} />
+          <TablesTab
+            tables={activeHomeTab.tables.filter(
+              (t) => !t.roleScope || t.roleScope.includes(briefingRole),
+            )}
+            charts={activeHomeTab.charts}
+            defaultFilters={activeHomeTab.id === 'sales-deep-dive' ? [] : undefined}
+            onChange={(next) => {
+              // Merge back tables hidden for this role so switching the demo
+              // role stays reversible (same pattern as the MVP1 shell).
+              const hidden = activeHomeTab.tables.filter(
+                (t) => t.roleScope && !t.roleScope.includes(briefingRole),
+              );
+              updateTablesForTab(activeHomeTab.id, [...next, ...hidden]);
+            }}
+            onChartsChange={(next) => updateChartsForTab(activeHomeTab.id, next)}
+          />
+        </>
+      );
+    }
+    return renderRoleDashboard();
   }
 
   return (
@@ -232,54 +411,15 @@ export default function HomeShell() {
               background: 'var(--color-bg-surface)',
             }}
           >
-            {briefingRole === 'culinary' ? (
-              <CulinaryCollectiveDashboard
-                layout={currentLayout}
-                editing={editingDashboard}
-                onLayoutChange={updateCurrentLayout}
-                onToggleEdit={() => setEditingDashboard((v) => !v)}
-                onAddInsight={() => setAddInsightOpen(true)}
-                onRemovePinned={removePinnedChart}
-              />
-            ) : briefingRole === 'playtomic' ? (
-              <PlaytomicDashboard
-                layout={currentLayout}
-                editing={editingDashboard}
-                onLayoutChange={updateCurrentLayout}
-                onToggleEdit={() => setEditingDashboard((v) => !v)}
-                onAddInsight={() => setAddInsightOpen(true)}
-                onRemovePinned={removePinnedChart}
-              />
-            ) : briefingRole === 'plato' ? (
-              <PlatoDashboard
-                layout={currentLayout}
-                editing={editingDashboard}
-                onLayoutChange={updateCurrentLayout}
-                onToggleEdit={() => setEditingDashboard((v) => !v)}
-                onAddInsight={() => setAddInsightOpen(true)}
-                onRemovePinned={removePinnedChart}
-              />
-            ) : briefingRole === 'cheryl' ? (
-              <EstateDashboard
-                phase={effectivePhase}
-                layout={currentLayout}
-                editing={editingDashboard}
-                onLayoutChange={updateCurrentLayout}
-                onToggleEdit={() => setEditingDashboard((v) => !v)}
-                onAddInsight={() => setAddInsightOpen(true)}
-                onRemovePinned={removePinnedChart}
-              />
-            ) : (
-              <ManagerDashboard
-                phase={effectivePhase}
-                layout={currentLayout}
-                editing={editingDashboard}
-                onLayoutChange={updateCurrentLayout}
-                onToggleEdit={() => setEditingDashboard((v) => !v)}
-                onAddInsight={() => setAddInsightOpen(true)}
-                onRemovePinned={removePinnedChart}
-              />
-            )}
+            <Mvp1Tabs
+              tabs={allTabs}
+              activeId={effectiveTabId}
+              onSelect={setActiveTabId}
+              onAddTablesTab={addTablesTab}
+              onRemove={removeTab}
+              onRename={renameTab}
+            />
+            {renderActiveHomeTab()}
           </div>
         )}
       </div>
@@ -320,6 +460,33 @@ export default function HomeShell() {
         layout="side-sheet"
       />
 
+    </div>
+  );
+}
+
+/** Heading + trailing controls (date range) for non-dashboard home tabs. */
+function TabHeaderRow({ title, controls }: { title: string; controls: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        flexWrap: 'wrap',
+      }}
+    >
+      <h2
+        style={{
+          margin: 0,
+          fontSize: 18,
+          fontWeight: 700,
+          color: 'var(--color-text-primary)',
+        }}
+      >
+        {title}
+      </h2>
+      {controls}
     </div>
   );
 }
