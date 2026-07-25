@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { ClipboardCheck, AlertTriangle, Clock, ArrowRight } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { ChecklistComplianceSummary } from '@/app/checklists/mockData';
 
 const OK = '#166534';
@@ -92,8 +93,10 @@ function Stat({
 
 export default function ChecklistComplianceCard({
   summary,
+  actions,
 }: {
   summary: ChecklistComplianceSummary;
+  actions?: ReactNode;
 }) {
   const {
     completeToday,
@@ -142,6 +145,7 @@ export default function ChecklistComplianceCard({
             Today across the estate · {sevenDayPct}% completed on time last 7 days
           </div>
         </div>
+        {actions}
         <Link
           href="/checklists"
           style={{

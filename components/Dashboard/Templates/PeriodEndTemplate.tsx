@@ -53,6 +53,7 @@ import {
   SUPPLIER_PRICE_EFFECT_TOTAL_K,
   type BridgeDrillItem,
 } from './templateData';
+import TileActions from '@/components/ScheduledReports/TileActions';
 import { TemplateIntro } from './DailyTemplate';
 import {
   DependencyBadge,
@@ -74,6 +75,29 @@ import {
   WARN_TEXT,
   tipStyle,
 } from './templateParts';
+
+const PERIOD_INSIGHTS = [
+  'GP bridge · theoretical to actual',
+  'Data confidence',
+  'COGS variance · site × category',
+  'Menu profitability · margin vs volume',
+  'Stock holding · value and days of cover',
+  'Dead and slow-moving stock',
+  'Supplier inflation impact',
+  'CPU transfer reconciliation',
+  'Trend · four periods',
+];
+
+function periodActions(insightTitle: string) {
+  return (
+    <TileActions
+      insightTitle={insightTitle}
+      siteLabel="All sites (estate view)"
+      siblingInsights={PERIOD_INSIGHTS}
+      dataWindowLabel="Last complete period as of send date"
+    />
+  );
+}
 
 // ─── GP bridge (waterfall) ────────────────────────────────────────────────────
 
@@ -165,7 +189,8 @@ function GpBridgeTile({ invoiceMatchingLive }: { invoiceMatchingLive: boolean })
   return (
     <TileCard
       title="GP bridge · theoretical to actual"
-      badge={<FigureBadge kind="measured" />}>
+      badge={<FigureBadge kind="measured" />}
+      actions={periodActions('GP bridge · theoretical to actual')}>
       <div style={{ padding: '0 12px', width: '100%', height: 280 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={steps} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
@@ -261,7 +286,8 @@ export default function PeriodEndTemplate({
         {/* Data confidence panel */}
         <div style={HALF}>
           <TileCard
-            title="Data confidence">
+            title="Data confidence"
+            actions={periodActions('Data confidence')}>
             <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 9 }}>
               <ConfidenceRow
                 label="Stocktake completion"
@@ -295,6 +321,7 @@ export default function PeriodEndTemplate({
         <div style={HALF}>
           <TileCard
             title="COGS variance · site × category"
+            actions={periodActions('COGS variance · site × category')}
             footer="Diagnostic order: mapping gaps → count errors → un-logged waste → price movement → yield. Work the list, not the hunch."
           >
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -337,7 +364,8 @@ export default function PeriodEndTemplate({
         <div style={FULL}>
           <TileCard
             title="Menu profitability · margin vs volume"
-            badge={<FigureBadge kind="theoretical" />}>
+            badge={<FigureBadge kind="theoretical" />}
+            actions={periodActions('Menu profitability · margin vs volume')}>
             <div style={{ padding: '0 12px 12px', width: '100%', height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <ScatterChart margin={{ top: 12, right: 20, left: 0, bottom: 4 }}>
@@ -412,7 +440,8 @@ export default function PeriodEndTemplate({
         {/* Stock holding */}
         <div style={HALF}>
           <TileCard
-            title="Stock holding · value and days of cover">
+            title="Stock holding · value and days of cover"
+            actions={periodActions('Stock holding · value and days of cover')}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
@@ -445,6 +474,7 @@ export default function PeriodEndTemplate({
         <div style={HALF}>
           <TileCard
             title="Dead and slow-moving stock"
+            actions={periodActions('Dead and slow-moving stock')}
             footer={`£${DEAD_STOCK_TOTAL} at risk. Seasonal lines dominate — transfer or promote before the value is written off.`}
           >
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -476,6 +506,7 @@ export default function PeriodEndTemplate({
             <TileCard
               title="Supplier inflation impact"
               badge={<FigureBadge kind="measured" />}
+              actions={periodActions('Supplier inflation impact')}
               footer={`Total price effect £${SUPPLIER_PRICE_EFFECT_TOTAL_K.toFixed(1)}k this period — the same figure the GP bridge deducts. Brakes carries nearly half of it; La Boulangerie's tier discount is the only deflation.`}
             >
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -540,6 +571,7 @@ export default function PeriodEndTemplate({
         <div style={HALF}>
           <TileCard
             title="CPU transfer reconciliation"
+            actions={periodActions('CPU transfer reconciliation')}
             footer="Two routes don't reconcile: £0.8k left the CPU that Kings X and Shoreditch never booked in. Until receipted, that value inflates CPU costs and flatters those sites' GP."
           >
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -578,7 +610,8 @@ export default function PeriodEndTemplate({
         {/* Period-on-period trend */}
         <div style={HALF}>
           <TileCard
-            title="Trend · four periods">
+            title="Trend · four periods"
+            actions={periodActions('Trend · four periods')}>
             <div style={{ padding: '0 12px 12px', width: '100%', height: 240 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={PERIOD_TREND} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>

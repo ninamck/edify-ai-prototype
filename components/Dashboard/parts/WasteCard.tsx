@@ -10,6 +10,7 @@ import {
   YAxis,
 } from 'recharts';
 import { Trash2, AlertTriangle } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { WasteRow } from '@/components/Dashboard/data/managerMockData';
 
 const ACCENT = 'var(--color-accent-deep)';
@@ -40,7 +41,7 @@ function colourFor(sev: ReturnType<typeof severity>): string {
   return OK;
 }
 
-export default function WasteCard({ rows }: { rows: WasteRow[] }) {
+export default function WasteCard({ rows, actions }: { rows: WasteRow[]; actions?: ReactNode }) {
   const totalToday = rows.reduce((s, r) => s + r.spendToday, 0);
   const totalTypical = rows.reduce((s, r) => s + r.spendTypical, 0);
   const delta = totalToday - totalTypical;
@@ -86,6 +87,7 @@ export default function WasteCard({ rows }: { rows: WasteRow[] }) {
             Items wasted so far today vs typical for this time. Flag spikes early.
           </div>
         </div>
+        {actions}
         <div style={{
           display: 'flex', alignItems: 'baseline', gap: 6,
           padding: '6px 12px',

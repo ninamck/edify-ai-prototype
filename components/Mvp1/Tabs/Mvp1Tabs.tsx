@@ -1,8 +1,15 @@
 'use client';
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { Plus, X, Table2 } from 'lucide-react';
+import { Plus, X, Table2, LayoutDashboard, CalendarDays, CalendarRange, CalendarCheck2 } from 'lucide-react';
 import { PINNED_TAB_IDS, type Mvp1Tab } from '@/hooks/useMvp1Tabs';
+import type { DashboardPeriod } from '@/components/Dashboard/permissions/model';
+
+const PERIOD_OPTIONS: { id: DashboardPeriod; label: string; hint: string; icon: typeof CalendarDays }[] = [
+  { id: 'daily', label: 'Daily', hint: 'Always shows yesterday', icon: CalendarDays },
+  { id: 'weekly', label: 'Weekly', hint: 'Always shows the current week', icon: CalendarRange },
+  { id: 'period-end', label: 'Period end', hint: 'Always shows the current period', icon: CalendarCheck2 },
+];
 
 type Props = {
   tabs: Mvp1Tab[];
@@ -11,6 +18,12 @@ type Props = {
   onAddTablesTab: () => void;
   onRemove: (id: string) => void;
   onRename: (id: string, name: string) => void;
+  /** When provided, the add menu also offers "Dashboard" — a roles-model
+   *  dashboard built from pinned insights (roles & permissions demo). */
+  onAddDashboard?: () => void;
+  /** Period-bound dashboards: every chart on them is locked to that
+   *  reporting window and refreshes for the current date. */
+  onAddPeriodDashboard?: (period: DashboardPeriod) => void;
 };
 
 export default function Mvp1Tabs({
@@ -20,10 +33,13 @@ export default function Mvp1Tabs({
   onAddTablesTab,
   onRemove,
   onRename,
+  onAddDashboard,
+  onAddPeriodDashboard,
 }: Props) {
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const addBtnRef = useRef<HTMLButtonElement | null>(null);
   const addMenuRef = useRef<HTMLDivElement | null>(null);
+  const [menuAlignRight, setMenuAlignRight] = useState(false);
 
   useEffect(() => {
     if (!addMenuOpen) return;
@@ -74,7 +90,16 @@ export default function Mvp1Tabs({
         <button
           ref={addBtnRef}
           type="button"
-          onClick={() => setAddMenuOpen((v) => !v)}
+          onClick={() => {
+            // With many tabs the "+" button ends up near the right edge —
+            // anchor the menu to the button's right side when a left-anchored
+            // 220px panel would spill outside the viewport.
+            if (!addMenuOpen && addBtnRef.current) {
+              const rect = addBtnRef.current.getBoundingClientRect();
+              setMenuAlignRight(rect.left + 232 > window.innerWidth);
+            }
+            setAddMenuOpen((v) => !v);
+          }}
           aria-label="Add view"
           title="Add view"
           style={{
@@ -109,7 +134,7 @@ export default function Mvp1Tabs({
             style={{
               position: 'absolute',
               top: 'calc(100% + 6px)',
-              left: 0,
+              ...(menuAlignRight ? { right: 0 } : { left: 0 }),
               zIndex: 200,
               minWidth: 220,
               background: '#fff',
@@ -130,7 +155,7 @@ export default function Mvp1Tabs({
                 padding: '6px 10px 4px',
               }}
             >
-              New view
+              Create new
             </div>
             <button
               type="button"
@@ -161,12 +186,106 @@ export default function Mvp1Tabs({
             >
               <Table2 size={13} strokeWidth={2.2} color="var(--color-text-muted)" />
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontWeight: 600 }}>View</span>
+                <span style={{ fontWeight: 600 }}>View — just for you</span>
                 <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
-                  Combine tables and charts
+                  Your private workspace of tables and charts
                 </span>
               </div>
             </button>
+            {onAddDashboard && (
+              <button
+                type="button"
+                onClick={() => {
+                  onAddDashboard();
+                  setAddMenuOpen(false);
+                }}
+                style={{
+                  all: 'unset',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 10px',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: 'var(--color-text-secondary)',
+                  width: 'calc(100% - 4px)',
+                  boxSizing: 'border-box',
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-bg-hover)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                }}
+              >
+                <LayoutDashboard size={13} strokeWidth={2.2} color="var(--color-text-muted)" />
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontWeight: 600 }}>Dashboard — to share</span>
+                  <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
+                    Pin insights, publish to roles at sites
+                  </span>
+                </div>
+              </button>
+            )}
+            {onAddPeriodDashboard && (
+              <>
+                <div
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    color: 'var(--color-text-muted)',
+                    padding: '8px 10px 4px',
+                    borderTop: '1px solid var(--color-border-subtle)',
+                    marginTop: 4,
+                  }}
+                >
+                  Period dashboard — auto-refreshing
+                </div>
+                {PERIOD_OPTIONS.map((p) => {
+                  const Icon = p.icon;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        onAddPeriodDashboard(p.id);
+                        setAddMenuOpen(false);
+                      }}
+                      style={{
+                        all: 'unset',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '8px 10px',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontWeight: 500,
+                        color: 'var(--color-text-secondary)',
+                        width: 'calc(100% - 4px)',
+                        boxSizing: 'border-box',
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-bg-hover)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                      }}
+                    >
+                      <Icon size={13} strokeWidth={2.2} color="var(--color-text-muted)" />
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontWeight: 600 }}>{p.label}</span>
+                        <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{p.hint}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </>
+            )}
           </div>
         )}
       </div>

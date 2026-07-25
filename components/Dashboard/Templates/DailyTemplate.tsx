@@ -20,7 +20,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { AlertTriangle, ChevronRight, Sparkles, Trash2 } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Trash2 } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import {
   DAILY_ANOMALIES,
   DAILY_DATE_LABEL,
@@ -33,6 +34,7 @@ import {
   DAILY_YESTERDAY,
   type DailyWasteItem,
 } from './templateData';
+import TileActions from '@/components/ScheduledReports/TileActions';
 import {
   DeltaText,
   FigureBadge,
@@ -46,6 +48,25 @@ import {
   WARN_TEXT,
   tipStyle,
 } from './templateParts';
+
+const DAILY_INSIGHTS = [
+  'Sales · yesterday',
+  'GP% flash · yesterday',
+  'Waste logged · yesterday',
+  'Exceptions queue',
+  'Anomaly flags',
+];
+
+function dailyActions(insightTitle: string) {
+  return (
+    <TileActions
+      insightTitle={insightTitle}
+      siteLabel={DAILY_SITE}
+      siblingInsights={DAILY_INSIGHTS}
+      dataWindowLabel="Yesterday, as of send date"
+    />
+  );
+}
 
 const vsForecastPct =
   ((DAILY_YESTERDAY.sales - DAILY_YESTERDAY.forecast) / DAILY_YESTERDAY.forecast) * 100;
@@ -61,7 +82,8 @@ export default function DailyTemplate() {
         {/* 1 · Sales anchor — one number, one sparkline */}
         <div style={HALF}>
           <TileCard
-            title="Sales · yesterday">
+            title="Sales · yesterday"
+            actions={dailyActions('Sales · yesterday')}>
             <div style={{ padding: '0 16px 12px' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 36, fontWeight: 700, color: VALUE_INK }}>
@@ -103,6 +125,7 @@ export default function DailyTemplate() {
           <TileCard
             title="GP% flash · yesterday"
             badge={<FigureBadge kind="theoretical" />}
+            actions={dailyActions('GP% flash · yesterday')}
             footer={`${DAILY_THEO_GP.posMappedPct}% of yesterday's POS sales are recipe-mapped. Unmapped items are excluded, not guessed.`}
           >
             <div style={{ padding: '0 16px 12px' }}>
@@ -127,7 +150,8 @@ export default function DailyTemplate() {
         {/* 4 · Exceptions queue */}
         <div style={HALF}>
           <TileCard
-            title="Exceptions queue">
+            title="Exceptions queue"
+            actions={dailyActions('Exceptions queue')}>
             <div style={{ padding: '0 8px 10px', display: 'flex', flexDirection: 'column' }}>
               {DAILY_EXCEPTIONS.map((ex) => (
                 <Link
@@ -175,7 +199,8 @@ export default function DailyTemplate() {
         <div style={{ gridColumn: 'span 2 / span 2', minWidth: 0 }}>
           <TileCard
             title="Anomaly flags"
-            badge={<FigureBadge kind="ai" />}>
+            badge={<FigureBadge kind="ai" />}
+            actions={dailyActions('Anomaly flags')}>
             <div style={{ padding: '0 16px 14px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
               {DAILY_ANOMALIES.map((a) => (
                 <div
@@ -190,7 +215,7 @@ export default function DailyTemplate() {
                     alignItems: 'flex-start',
                   }}
                 >
-                  <Sparkles size={14} color={VALUE_INK} strokeWidth={2.2} style={{ marginTop: 2, flexShrink: 0 }} />
+                  <EdifyMark size={14} color="#FF0058" style={{ marginTop: 2, flexShrink: 0 }} />
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.4 }}>
                       {a.headline}
@@ -280,6 +305,7 @@ function DailyWasteWatch() {
             {DAILY_WASTE.pctOfSales.toFixed(1)}% of sales · target ≤ {DAILY_WASTE.targetPct.toFixed(1)}%
           </div>
         </div>
+        {dailyActions('Waste logged · yesterday')}
         <div
           style={{
             display: 'flex',

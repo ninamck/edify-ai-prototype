@@ -32,6 +32,7 @@ import {
   WEEKLY_SITES,
   WEEK_LABEL,
 } from './templateData';
+import TileActions from '@/components/ScheduledReports/TileActions';
 import { TemplateIntro } from './DailyTemplate';
 import {
   DeltaText,
@@ -56,6 +57,26 @@ import {
 const WASTE_BY_SITE = [...WEEKLY_SITES].sort((a, b) => a.wastePctOfSales - b.wastePctOfSales);
 const SPEND_BY_SITE = [...WEEKLY_SITES].sort((a, b) => a.spendPctOfSales - b.spendPctOfSales);
 
+const WEEKLY_INSIGHTS = [
+  'Site league · sales and GP',
+  'Waste as % of sales · by site',
+  'Purchasing spend as % of sales · by site',
+  'Spend vs trailing 4-week average',
+  'Top 5 price movers',
+  'Compliance strip',
+];
+
+function weeklyActions(insightTitle: string) {
+  return (
+    <TileActions
+      insightTitle={insightTitle}
+      siteLabel="All sites (estate view)"
+      siblingInsights={WEEKLY_INSIGHTS}
+      dataWindowLabel="Last complete week as of send date"
+    />
+  );
+}
+
 export default function WeeklyFlashTemplate({
   invoiceMatchingLive = false,
 }: {
@@ -71,6 +92,7 @@ export default function WeeklyFlashTemplate({
         <div style={FULL}>
           <TileCard
             title="Site league · sales and GP"
+            actions={weeklyActions('Site league · sales and GP')}
             footer="Shoreditch didn't count this week, so no actual-GP claim is made for it — the flag stays until the count is done."
           >
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -118,7 +140,8 @@ export default function WeeklyFlashTemplate({
         {/* 3 · Waste as % of sales by site */}
         <div style={HALF}>
           <TileCard
-            title="Waste as % of sales · by site">
+            title="Waste as % of sales · by site"
+            actions={weeklyActions('Waste as % of sales · by site')}>
             <div style={{ padding: '0 12px 12px', width: '100%', height: 230 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={WASTE_BY_SITE} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 0 }}>
@@ -142,6 +165,7 @@ export default function WeeklyFlashTemplate({
         <div style={HALF}>
           <TileCard
             title="Purchasing spend as % of sales · by site"
+            actions={weeklyActions('Purchasing spend as % of sales · by site')}
             footer="Gains a &ldquo;vs plan&rdquo; comparator when the budget CSV importer ships; the tile itself doesn't change."
           >
             <div style={{ padding: '0 12px 12px', width: '100%', height: 230 }}>
@@ -162,6 +186,7 @@ export default function WeeklyFlashTemplate({
         <div style={HALF}>
           <TileCard
             title="Spend vs trailing 4-week average"
+            actions={weeklyActions('Spend vs trailing 4-week average')}
             footer="Canary and Shoreditch are both >5% above their own baseline. That's the drift signal, before any budget exists."
           >
             <div style={{ padding: '0 12px 12px', width: '100%', height: 230 }}>
@@ -189,6 +214,7 @@ export default function WeeklyFlashTemplate({
             <TileCard
               title="Top 5 price movers"
               badge={<FigureBadge kind="measured" />}
+              actions={weeklyActions('Top 5 price movers')}
               footer="Net £130/week of price creep across the five. The oat milk rise alone is ~£1,120 annualised across the estate — worth a supplier conversation."
             >
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -254,7 +280,8 @@ export default function WeeklyFlashTemplate({
         {/* 7 · Compliance strip */}
         <div style={FULL}>
           <TileCard
-            title="Compliance strip">
+            title="Compliance strip"
+            actions={weeklyActions('Compliance strip')}>
             <div style={{ padding: '0 16px 14px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
               <ComplianceStat
                 label="Invoices matched"

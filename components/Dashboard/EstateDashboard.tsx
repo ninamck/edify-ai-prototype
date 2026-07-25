@@ -7,6 +7,7 @@ import type { BriefingPhase } from '@/components/briefing';
 import DashboardWidget from '@/components/Dashboard/DashboardWidget';
 import DashboardEditToolbar from '@/components/Dashboard/DashboardEditToolbar';
 import QuinnInsightButton from '@/components/Dashboard/parts/QuinnInsightButton';
+import TileActions from '@/components/ScheduledReports/TileActions';
 import {
   isHalfOnlyChart,
   pinnedChartIdOf,
@@ -42,10 +43,13 @@ function labourChartSubtitle(phase: BriefingPhase): string {
 function ChartCard({
   title,
   subtitle,
+  actions,
   children,
 }: {
   title: string;
   subtitle?: string;
+  /** Chat/Email chips — pinned to the right of the title. */
+  actions?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -60,13 +64,38 @@ function ChartCard({
       }}
     >
       <div style={{ marginBottom: '12px' }}>
-        <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{title}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)', flex: 1, minWidth: 0 }}>{title}</div>
+          {actions}
+        </div>
         {subtitle && (
           <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '2px' }}>{subtitle}</div>
         )}
       </div>
       <div style={{ width: '100%', height: 220 }}>{children}</div>
     </div>
+  );
+}
+
+// Insight titles on the estate view — offered as "include more insights"
+// in the schedule-report drawer.
+const ESTATE_INSIGHTS = [
+  'Net sales — estate (£k / day)',
+  'Gross profit % by site',
+  'Wastage value by category',
+  'COGS variance vs theoretical',
+  'Labour vs sales — by site',
+  'Checklist compliance',
+];
+
+function estateActions(insightTitle: string) {
+  return (
+    <TileActions
+      insightTitle={insightTitle}
+      siteLabel="All sites (estate view)"
+      siblingInsights={ESTATE_INSIGHTS}
+      dataWindowLabel="Last 7 complete days as of send date"
+    />
   );
 }
 
@@ -145,6 +174,7 @@ export default function EstateDashboard({
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', flex: 1, minWidth: 0 }}>
               {ANALYTICS_CONFIG[pinned].label}
             </span>
+            {estateActions(ANALYTICS_CONFIG[pinned].label)}
             <QuinnInsightButton chartId={pinned} text={ANALYTICS_CONFIG[pinned].reasoning} />
           </div>
           {renderAnalyticsChart(pinned)}
@@ -239,41 +269,41 @@ export default function EstateDashboard({
 
       case 'sales-trend':
         return (
-          <ChartCard title="Net sales — estate (£k / day)" subtitle={periodSubtitle}>
+          <ChartCard title="Net sales — estate (£k / day)" subtitle={periodSubtitle} actions={estateActions('Net sales — estate (£k / day)')}>
             <SalesTrendChart data={visibleSalesTrend} />
           </ChartCard>
         );
 
       case 'site-gp':
         return (
-          <ChartCard title="Gross profit % by site" subtitle="Same period · after transfers">
+          <ChartCard title="Gross profit % by site" subtitle="Same period · after transfers" actions={estateActions('Gross profit % by site')}>
             <SiteGpChart />
           </ChartCard>
         );
 
       case 'wastage':
         return (
-          <ChartCard title="Wastage value by category" subtitle="£ thousands · spoilage + comps (7d)">
+          <ChartCard title="Wastage value by category" subtitle="£ thousands · spoilage + comps (7d)" actions={estateActions('Wastage value by category')}>
             <WastageChart />
           </ChartCard>
         );
 
       case 'cogs-variance':
         return (
-          <ChartCard title="COGS variance vs theoretical" subtitle="By major line — % over(+) / under(−) recipe cost">
+          <ChartCard title="COGS variance vs theoretical" subtitle="By major line — % over(+) / under(−) recipe cost" actions={estateActions('COGS variance vs theoretical')}>
             <CogsVarianceChart />
           </ChartCard>
         );
 
       case 'labour-vs-sales':
         return (
-          <ChartCard title="Labour vs sales — by site" subtitle={`% of net sales · ${labourChartSubtitle(phase)}`}>
+          <ChartCard title="Labour vs sales — by site" subtitle={`% of net sales · ${labourChartSubtitle(phase)}`} actions={estateActions('Labour vs sales — by site')}>
             <LabourVsSalesChart />
           </ChartCard>
         );
 
       case 'checklist-compliance':
-        return <ChecklistComplianceCard summary={checklistSummary} />;
+        return <ChecklistComplianceCard summary={checklistSummary} actions={estateActions('Checklist compliance')} />;
 
       default:
         return null;

@@ -143,6 +143,7 @@ export function TileCard({
   title,
   subtitle,
   badge,
+  actions,
   footer,
   children,
   minHeight,
@@ -150,6 +151,8 @@ export function TileCard({
   title: string;
   subtitle?: string;
   badge?: ReactNode;
+  /** Chat/Email chips — rendered after the badge in the header row. */
+  actions?: ReactNode;
   footer?: ReactNode;
   children: ReactNode;
   minHeight?: number;
@@ -172,6 +175,7 @@ export function TileCard({
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', flex: 1, minWidth: 0 }}>{title}</div>
           {badge}
+          {actions}
         </div>
         {subtitle && (
           <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)', marginTop: 2 }}>{subtitle}</div>

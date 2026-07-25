@@ -23,6 +23,7 @@ import { renderAnalyticsChart, ANALYTICS_CONFIG } from '@/components/Analytics/A
 import DashboardWidget from '@/components/Dashboard/DashboardWidget';
 import DashboardEditToolbar from '@/components/Dashboard/DashboardEditToolbar';
 import QuinnInsightButton from '@/components/Dashboard/parts/QuinnInsightButton';
+import TileActions from '@/components/ScheduledReports/TileActions';
 import {
   isHalfOnlyChart,
   pinnedChartIdOf,
@@ -34,11 +35,14 @@ import {
 function ChartCard({
   title,
   subtitle,
+  actions,
   children,
   height = 260,
 }: {
   title: string;
   subtitle?: string;
+  /** Chat/Email chips — pinned to the right of the title. */
+  actions?: ReactNode;
   children: ReactNode;
   height?: number;
 }) {
@@ -54,13 +58,37 @@ function ChartCard({
       }}
     >
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>{title}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', flex: 1, minWidth: 0 }}>{title}</div>
+          {actions}
+        </div>
         {subtitle && (
           <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)', marginTop: 2 }}>{subtitle}</div>
         )}
       </div>
       <div style={{ width: '100%', height }}>{children}</div>
     </div>
+  );
+}
+
+// Insight titles on the in-shift view — offered as "include more insights"
+// in the schedule-report drawer.
+const SHIFT_INSIGHTS = [
+  'Sales v staff v forecast · hour by hour',
+  'Weather · now vs forecast',
+  'Waste watch',
+  'Deliveries',
+  'Checklist compliance',
+];
+
+function shiftActions(insightTitle: string) {
+  return (
+    <TileActions
+      insightTitle={insightTitle}
+      siteLabel="Fitzroy"
+      siblingInsights={SHIFT_INSIGHTS}
+      dataWindowLabel="Today so far, as of send time"
+    />
   );
 }
 
@@ -137,6 +165,7 @@ export default function ManagerDashboard({
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', flex: 1, minWidth: 0 }}>
               {ANALYTICS_CONFIG[pinned].label}
             </span>
+            {shiftActions(ANALYTICS_CONFIG[pinned].label)}
             <QuinnInsightButton chartId={pinned} text={ANALYTICS_CONFIG[pinned].reasoning} />
           </div>
           {renderAnalyticsChart(pinned)}
@@ -159,6 +188,7 @@ export default function ManagerDashboard({
         return (
           <ChartCard
             title="Sales v staff v forecast · hour by hour"
+            actions={shiftActions('Sales v staff v forecast · hour by hour')}
             subtitle="Bars: actual £ (cyan = ahead of forecast, pink = behind, sand = not yet). Line: forecast £. Right axis: staff headcount — solid for hours worked, dashed for the rest of the roster."
             height={280}
           >
@@ -169,6 +199,7 @@ export default function ManagerDashboard({
         return (
           <ChartCard
             title="Weather · now vs forecast"
+            actions={shiftActions('Weather · now vs forecast')}
             subtitle="Morning & afternoon pattern. Tap either to see the hourly breakdown."
             height={96}
           >
@@ -176,11 +207,11 @@ export default function ManagerDashboard({
           </ChartCard>
         );
       case 'waste':
-        return <WasteCard rows={waste} />;
+        return <WasteCard rows={waste} actions={shiftActions('Waste watch')} />;
       case 'deliveries':
-        return <DeliveriesCard drops={deliveries} wtd={WTD_SPEND} />;
+        return <DeliveriesCard drops={deliveries} wtd={WTD_SPEND} actions={shiftActions('Deliveries')} />;
       case 'checklist-compliance':
-        return <ChecklistComplianceCard summary={checklistSummary} />;
+        return <ChecklistComplianceCard summary={checklistSummary} actions={shiftActions('Checklist compliance')} />;
       default:
         return null;
     }

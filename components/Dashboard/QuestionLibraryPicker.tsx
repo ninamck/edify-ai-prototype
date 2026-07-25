@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { ChevronRight, ArrowUp, BarChart3, Table2, Clock } from 'lucide-react';
+import { ChevronRight, ArrowUp, BarChart3, Table2, Clock, Lock } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import {
   QUESTION_LIBRARY,
@@ -39,6 +39,7 @@ export default function QuestionLibraryPicker({
   onPick,
   recentCount = 0,
   onShowRecent,
+  askLocked = false,
 }: {
   query: string;
   onQueryChange: (next: string) => void;
@@ -63,6 +64,10 @@ export default function QuestionLibraryPicker({
   /** Fires when the user clicks the "Recent chats" pill. The parent swaps
    *  the side-sheet body to a full-panel recents view (no nested drawer). */
   onShowRecent?: () => void;
+  /** Viewing vs asking: when true the free-text ask input is replaced with a
+   *  locked notice (asking new questions is admin-only for now) and the user
+   *  can only pick from the curated library. */
+  askLocked?: boolean;
 }) {
   const segCounts = useMemo(
     () => countsBySegment(briefingRole === 'dunkin' ? DUNKIN_WIRED_QUESTION_IDS : undefined),
@@ -125,6 +130,26 @@ export default function QuestionLibraryPicker({
           Ask Edify
         </div>
 
+        {askLocked ? (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '12px 16px',
+              borderRadius: 14,
+              border: '1.5px dashed var(--color-border)',
+              background: 'var(--color-bg-hover)',
+            }}
+          >
+            <Lock size={15} strokeWidth={2.2} color="var(--color-text-muted)" />
+            <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
+              <strong>Asking Edify new questions is admin-only for now.</strong>{' '}
+              You can pin any of the curated questions below — they always answer
+              with your own sites’ data.
+            </div>
+          </div>
+        ) : (
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -187,6 +212,7 @@ export default function QuestionLibraryPicker({
             <ArrowUp size={16} strokeWidth={2.4} />
           </button>
         </form>
+        )}
 
         {showRecentPill && (
           <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-start' }}>

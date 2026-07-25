@@ -68,6 +68,7 @@ export default function AddInsightPopup({
   onAddChartToTarget,
   onAddChartToNewView,
   autoChatTable,
+  askLocked = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -109,6 +110,10 @@ export default function AddInsightPopup({
     query: TableQuery;
     title?: string;
   };
+  /** Viewing vs asking: hides the free-text ask input in the library (the
+   *  curated questions stay available). Used for non-admin viewers in the
+   *  roles & permissions demo. */
+  askLocked?: boolean;
 }) {
   const [mode, setMode] = useState<'browse' | 'chat'>('browse');
   // When true, a sibling "Recent chats" drawer slides in from the right and
@@ -445,7 +450,9 @@ export default function AddInsightPopup({
                   <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)' }}>
                     {mode === 'chat'
                       ? 'Edify will answer here. Pin any chart to your dashboard.'
-                      : 'Chat with Edify, or pick one of 180 curated questions.'}
+                      : askLocked
+                        ? 'Pick one of 180 curated questions.'
+                        : 'Chat with Edify, or pick one of 180 curated questions.'}
                   </span>
                 </div>
 
@@ -503,6 +510,7 @@ export default function AddInsightPopup({
                   onSegmentChange={setSegment}
                   onSubsegmentChange={setSubsegment}
                   briefingRole={briefingRole}
+                  askLocked={askLocked}
                   onPick={(entry) => {
                     const tableQuery = getQuestionTableQuery(entry.id, briefingRole);
                     const entryShape = questionShape(entry, briefingRole);

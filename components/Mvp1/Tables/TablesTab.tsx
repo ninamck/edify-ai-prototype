@@ -23,6 +23,7 @@ import {
   type AnalyticsChartId,
 } from '@/components/Analytics/AnalyticsCharts';
 import QuinnInsightButton from '@/components/Dashboard/parts/QuinnInsightButton';
+import TileActions from '@/components/ScheduledReports/TileActions';
 import type { BriefingRole } from '@/components/briefing';
 
 export type TableOrigin =
@@ -157,6 +158,17 @@ export default function TablesTab({
 
   const isEmpty = tables.length === 0 && charts.length === 0;
 
+  // Titles of every card on this view — offered as "include more insights"
+  // in the schedule-report drawer. Mirrors each card's own title logic.
+  const allCardTitles = [
+    ...tables.map(
+      (t, idx) =>
+        t.title?.trim() ||
+        `${DATA_SOURCES[t.query.sources[0]]?.label ?? 'Table'}${idx === 0 ? '' : ` ${idx + 1}`}`,
+    ),
+    ...charts.map((c) => c.title?.trim() || ANALYTICS_CONFIG[c.chartId]?.label || 'Chart'),
+  ];
+
   return (
     <div
       style={{
@@ -191,6 +203,7 @@ export default function TablesTab({
               isDropTarget={dropTargetId === t.id && draggingId !== null && draggingId !== t.id}
               onRemove={() => removeTable(t.id)}
               onRename={(title) => renameTable(t.id, title)}
+              siblingTitles={allCardTitles}
               onEditQuery={onEditQuery ? () => onEditQuery(t) : undefined}
               onDragStart={() => setDraggingId(t.id)}
               onDragEnter={() => {
@@ -213,6 +226,7 @@ export default function TablesTab({
               instance={c}
               canRemove={editing && tables.length + charts.length > 1}
               onRemove={() => removeChart(c.id)}
+              siblingTitles={allCardTitles}
             />
           ))}
         </>
@@ -260,6 +274,7 @@ function TableCard({
   onDragEnter,
   onDragEnd,
   onDrop,
+  siblingTitles = [],
 }: {
   instance: TableInstance;
   viewFilters: ViewFilter[];
@@ -278,6 +293,8 @@ function TableCard({
   onDragEnter: () => void;
   onDragEnd: () => void;
   onDrop: (sourceId: string) => void;
+  /** Every card title on this view — for multi-insight reports. */
+  siblingTitles?: string[];
 }) {
   const [columns, setColumns] = useState<Column[] | null>(null);
   const [rows, setRows] = useState<Record<string, unknown>[] | null>(null);
@@ -450,6 +467,12 @@ function TableCard({
         )}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <TileActions
+          insightTitle={displayTitle}
+          siteLabel="Fitzroy"
+          siblingInsights={siblingTitles}
+          dataWindowLabel="Last 4 complete weeks as of send date"
+        />
         {onEditQuery && (
           <button
             type="button"
@@ -550,10 +573,13 @@ function ChartCard({
   instance,
   canRemove,
   onRemove,
+  siblingTitles = [],
 }: {
   instance: ChartInstance;
   canRemove: boolean;
   onRemove: () => void;
+  /** Every card title on this view — for multi-insight reports. */
+  siblingTitles?: string[];
 }) {
   const cfg = ANALYTICS_CONFIG[instance.chartId];
   const title = instance.title?.trim() || cfg?.label || 'Chart';
@@ -609,6 +635,12 @@ function ChartCard({
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <TileActions
+            insightTitle={title}
+            siteLabel="Fitzroy"
+            siblingInsights={siblingTitles}
+            dataWindowLabel="Last 4 complete weeks as of send date"
+          />
           {cfg?.reasoning && (
             <QuinnInsightButton
               chartId={instance.chartId}
@@ -661,9 +693,9 @@ function EmptyState({
         <Database size={20} strokeWidth={1.8} color="var(--color-text-muted)" />
         <div>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-            No tables yet
+            No charts or tables yet
           </div>
-          <div style={{ fontSize: 12, marginTop: 4 }}>Add a table to view your data here.</div>
+          <div style={{ fontSize: 12, marginTop: 4 }}>Add a chart or table to see your data here.</div>
         </div>
         <button type="button" onClick={onAddBlank} style={addButton}>
           <Plus size={13} strokeWidth={2.4} />
@@ -678,7 +710,7 @@ function EmptyState({
       <Database size={20} strokeWidth={1.8} color="var(--color-text-muted)" />
       <div>
         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-          Build your first table
+          Build your first chart or table
         </div>
         <div style={{ fontSize: 12, marginTop: 4 }}>
           Ask Edify, pick a question, or build one manually.
@@ -698,7 +730,7 @@ function EmptyState({
           <ChoiceCard
             icon={<EdifyMark size={16} strokeWidth={2.2} color="var(--color-accent-active)" />}
             title="Ask Edify"
-            description="Describe the table you want in your own words."
+            description="Describe the chart or table you want in your own words."
             onClick={onAskQuinn}
           />
         )}
@@ -706,7 +738,7 @@ function EmptyState({
           <ChoiceCard
             icon={<ListChecks size={16} strokeWidth={2.2} color="var(--color-text-secondary)" />}
             title="Pick a question"
-            description="Start from a curated table-shaped question."
+            description="Start from a curated question — chart or table."
             onClick={onBrowseLibrary}
           />
         )}
@@ -736,7 +768,7 @@ function EmptyState({
   );
 }
 
-function ChoiceCard({
+export function ChoiceCard({
   icon,
   title,
   description,

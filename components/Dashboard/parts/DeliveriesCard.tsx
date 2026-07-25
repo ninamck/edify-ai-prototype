@@ -1,6 +1,7 @@
 'use client';
 
 import { Package, CheckCircle2, Clock, CircleDashed } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { DeliveryDrop, WtdSupplierSpend } from '@/components/Dashboard/data/managerMockData';
 
 const OK = '#166534';
@@ -22,9 +23,11 @@ function statusLabel(status: DeliveryDrop['status']): string {
 export default function DeliveriesCard({
   drops,
   wtd,
+  actions,
 }: {
   drops: DeliveryDrop[];
   wtd: WtdSupplierSpend[];
+  actions?: ReactNode;
 }) {
   const wtdTotal = wtd.reduce((s, r) => s + r.spend, 0);
   const wtdBudget = wtd.reduce((s, r) => s + r.budget, 0);
@@ -54,8 +57,9 @@ export default function DeliveriesCard({
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>Deliveries</div>
-          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-muted)' }}>Today's drops · week-to-date spend</div>
+          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-muted)' }}>Today&rsquo;s drops · week-to-date spend</div>
         </div>
+        {actions}
       </div>
 
       {/* Today's drops */}

@@ -48,11 +48,6 @@ export default function TemplatesDashboard({
   controls?: ReactNode;
 }) {
   const [active, setActive] = useState<TemplateId>(() => defaultTemplateForDate(new Date()));
-  // Default on: the first cohort of template customers gets invoice matching
-  // from the end of the month, so the live tiles are the state we demo.
-  // Toggle off to show the designed locked/degraded state for customers
-  // without line-level invoice prices.
-  const [invoiceMatchingLive, setInvoiceMatchingLive] = useState(true);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -99,36 +94,6 @@ export default function TemplatesDashboard({
           })}
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <button
-            onClick={() => setInvoiceMatchingLive((v) => !v)}
-            aria-pressed={invoiceMatchingLive}
-            title="Demo switch: with invoice matching, the price-dependent tiles and the bridge's price-variance step go live. Without it, they render their designed locked states."
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 10px',
-              borderRadius: 999,
-              border: `1px solid ${invoiceMatchingLive ? NAVY : 'var(--color-border-subtle)'}`,
-              background: invoiceMatchingLive ? NAVY : '#fff',
-              color: invoiceMatchingLive ? '#fff' : 'var(--color-text-secondary)',
-              cursor: 'pointer',
-              fontSize: 11.5,
-              fontWeight: 700,
-              fontFamily: 'inherit',
-            }}
-          >
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: 999,
-                background: invoiceMatchingLive ? '#28AFC9' : 'var(--color-text-muted)',
-                display: 'inline-block',
-              }}
-            />
-            Invoice matching: {invoiceMatchingLive ? 'live' : 'not yet'}
-          </button>
           {controls}
         </div>
       </div>
@@ -151,8 +116,8 @@ export default function TemplatesDashboard({
       </div>
 
       {active === 'daily' && <DailyTemplate />}
-      {active === 'weekly' && <WeeklyFlashTemplate invoiceMatchingLive={invoiceMatchingLive} />}
-      {active === 'period' && <PeriodEndTemplate invoiceMatchingLive={invoiceMatchingLive} />}
+      {active === 'weekly' && <WeeklyFlashTemplate invoiceMatchingLive />}
+      {active === 'period' && <PeriodEndTemplate invoiceMatchingLive />}
     </div>
   );
 }
