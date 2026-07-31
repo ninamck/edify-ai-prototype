@@ -96,7 +96,7 @@ export default function CulinaryCollectiveDashboard({
   // hand-extracted snapshot for week ending 17-May, not a live query, so
   // changing the picker doesn't refilter the tables. It mirrors the Dunkin
   // demo's affordance so the UI feels consistent.
-  const [dateRange, setDateRange] = useState<DateRange>({ kind: 'week' });
+  const [dateRange, setDateRange] = useState<DateRange>({ kind: 'this_week' });
 
   // Custom user-created tabs. Seeded from localStorage on mount so a demo
   // operator can build up a few pages and have them survive reloads. We

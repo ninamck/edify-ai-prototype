@@ -59,7 +59,7 @@ export default function Mvp1Shell() {
   const [addInsightShape, setAddInsightShape] = useState<'all' | 'chart' | 'table'>('all');
   const [addInsightTargetTabId, setAddInsightTargetTabId] = useState<string | null>(null);
   const [phaseOverride, setPhaseOverride] = useState<PhaseOverride>('auto');
-  const [dateRange, setDateRange] = useState<DateRange>({ kind: 'week' });
+  const [dateRange, setDateRange] = useState<DateRange>({ kind: 'this_week' });
   /**
    * When set, the AddInsightPopup opens directly into a Quinn-led chat seeded
    * with this starter table. Used by the empty-state "Build manually" card and

@@ -11,6 +11,8 @@
 // 12 sites and a manager their 3. The only exception is an insight an admin
 // marks "show company-wide".
 
+import { resolveDateRange, type DateRange } from '@/lib/dateRange';
+import type { RangeBinding } from '@/lib/chartRange';
 import {
   siteListPhrase,
   type DemoRole,
@@ -21,9 +23,15 @@ import {
 
 export type DashboardKind = 'personal' | 'company' | 'published';
 
-/** A dashboard can be bound to a reporting cadence: every chart and table on
- *  it always shows that window's data. In the real build the data refreshes
- *  for the current date; in the prototype the window is just described. */
+/**
+ * A dashboard can be bound to a reporting cadence: every chart and table on
+ * it shows that window's data, re-resolved against the current date.
+ *
+ * The three cadences are now sugar over the general range model rather than
+ * a parallel concept — each maps to a range token, and a dashboard can carry
+ * any other range instead. Keeping the named cadences matters because
+ * "Daily" is what people call the thing; the range is the implementation.
+ */
 export type DashboardPeriod = 'daily' | 'weekly' | 'period-end';
 
 export const PERIOD_META: Record<
@@ -32,31 +40,80 @@ export const PERIOD_META: Record<
     label: string;
     /** Default name for a new dashboard of this cadence. */
     defaultName: string;
-    /** Header line describing the auto-refreshing window. */
-    windowLine: string;
+    /** The range token this cadence is shorthand for. */
+    range: DateRange;
     /** Matching rolling window for emailed reports (see DATA_WINDOW_OPTIONS). */
     reportWindow: string;
+    /** Trailing clause on the header line, after the resolved dates. */
+    refreshClause: string;
   }
 > = {
   daily: {
     label: 'Daily',
     defaultName: 'Daily dashboard',
-    windowLine: 'Always shows yesterday \u2014 refreshes each morning.',
+    range: { kind: 'yesterday' },
     reportWindow: 'Yesterday, as of send date',
+    refreshClause: 'refreshes each morning',
   },
   weekly: {
     label: 'Weekly',
     defaultName: 'Weekly dashboard',
-    windowLine: 'Always shows the current week so far \u2014 refreshes daily.',
+    range: { kind: 'this_week' },
     reportWindow: 'Last complete week as of send date',
+    refreshClause: 'refreshes daily',
   },
   'period-end': {
     label: 'Period end',
     defaultName: 'Period end dashboard',
-    windowLine: 'Always shows the current period (P7) \u2014 finalises when the period closes.',
+    range: { kind: 'this_period' },
     reportWindow: 'Last complete period as of send date',
+    refreshClause: 'finalises when the period closes',
   },
 };
+
+/**
+ * The range a dashboard's tiles inherit. An explicit `range` wins over the
+ * cadence shorthand; a dashboard with neither imposes nothing, and its tiles
+ * fall back to their own native windows.
+ */
+export function dashboardRange(d: DemoDashboard): DateRange | undefined {
+  if (d.range) return d.range;
+  return d.period ? PERIOD_META[d.period].range : undefined;
+}
+
+/**
+ * Header line describing the window, resolved live. The old copy hardcoded
+ * "(P7)", which had already gone stale — deriving it means the header can
+ * never drift from the data.
+ */
+export function dashboardWindowLine(
+  d: DemoDashboard,
+  anchor?: string,
+): string | null {
+  const range = dashboardRange(d);
+  if (!range) return null;
+
+  const resolved = resolveDateRange(range, { anchor });
+  const dates = resolved.absoluteLabel;
+
+  if (range.kind === 'custom') {
+    return `Fixed range: ${dates} \u2014 does not move.`;
+  }
+
+  const clause = d.period ? PERIOD_META[d.period].refreshClause : null;
+  const window = `Always shows ${resolved.label.toLowerCase()} (${dates})`;
+  return clause ? `${window} \u2014 ${clause}.` : `${window}.`;
+}
+
+/** Short badge text for the dashboard header. */
+export function dashboardRangeBadge(
+  d: DemoDashboard,
+  anchor?: string,
+): string | null {
+  if (d.period) return PERIOD_META[d.period].label;
+  if (!d.range) return null;
+  return resolveDateRange(d.range, { anchor }).label;
+}
 
 /** Audiences are role-at-sites, never individuals. */
 export type Audience = {
@@ -75,6 +132,11 @@ export type DashboardInsight = {
   companyWide?: boolean;
   /** Grid span; defaults to the insight's natural width when unset. */
   width?: 'full' | 'half';
+  /**
+   * How this placement gets its date window. Unset means inherit — the
+   * common case, and the default when a chart is added from Ask Edify.
+   */
+  binding?: RangeBinding;
 };
 
 export type DemoDashboard = {
@@ -87,9 +149,13 @@ export type DemoDashboard = {
   /** Published only. `null` = draft — visible to its owner and admins until
    *  an audience is chosen. */
   audience?: Audience | null;
-  /** When set, every insight on this dashboard is bound to this reporting
-   *  window (chosen at set-up) and the data refreshes for the current date. */
+  /** Named cadence shorthand. Resolves to a range via `PERIOD_META`. */
   period?: DashboardPeriod;
+  /**
+   * An explicit window, for dashboards that don't fit one of the three named
+   * cadences. Takes precedence over `period` when both are set.
+   */
+  range?: DateRange;
   insights: DashboardInsight[];
 };
 

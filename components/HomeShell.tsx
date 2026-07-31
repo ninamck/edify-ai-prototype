@@ -146,7 +146,7 @@ export default function HomeShell() {
   const [briefingOpen, setBriefingOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [publishedOverviewOpen, setPublishedOverviewOpen] = useState(false);
-  const [dateRange, setDateRange] = useState<DateRange>({ kind: 'week' });
+  const [dateRange, setDateRange] = useState<DateRange>({ kind: 'this_week' });
   // Same tab set as the MVP1 shell (shared localStorage state), plus the
   // Second Cup dashboards appended on the multi-currency build.
   const {
@@ -669,6 +669,19 @@ export default function HomeShell() {
                   rolesPersona && rolesViewer && canCreateDashboards(rolesViewer)
                     ? (period) => {
                         const d = createRolesDashboard(rolesPersona, undefined, period);
+                        setActiveTabId(`${ROLES_TAB_PREFIX}${d.id}`);
+                      }
+                    : undefined
+                }
+                onAddRangeDashboard={
+                  rolesPersona && rolesViewer && canCreateDashboards(rolesViewer)
+                    ? (range) => {
+                        const d = createRolesDashboard(
+                          rolesPersona,
+                          undefined,
+                          undefined,
+                          range,
+                        );
                         setActiveTabId(`${ROLES_TAB_PREFIX}${d.id}`);
                       }
                     : undefined

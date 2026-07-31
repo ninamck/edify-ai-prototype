@@ -1,110 +1,100 @@
 'use client';
 
 /**
- * DateRangePicker — global home-page date scope.
+ * DateRangePicker — the global date scope control.
  *
- * Three preset ranges (`today`, `week`, `last_4_weeks`) plus `custom`,
- * which when picked opens an inline range-builder with two date-picker
- * popovers (one for the start, one for the end). The popovers are the
- * same calendar surface used on /forecast — kept consistent so the
- * platform speaks one date-picking language.
+ * Two panes that are two views of the same value: a grouped preset list and
+ * a range calendar. Picking a preset highlights its span in the calendar;
+ * dragging out dates in the calendar switches the value to a custom range.
  *
- * State shape: a single discriminated union is exposed to the parent,
- * so the consumer can branch cleanly on `kind`:
+ * Presets lead with trading periods rather than calendar months, because the
+ * business closes on 4-week periods. Calendar months stay available for
+ * anyone reconciling against a statutory month, but they are the second
+ * group, not the first. `Last 4 weeks` and `This period` are deliberately
+ * separated — they are different windows and treating them as synonyms is a
+ * standard reporting mistake.
  *
- *   type DateRange =
- *     | { kind: 'today' | 'week' | 'last_4_weeks' }
- *     | { kind: 'custom', start: string, end: string };
- *
- * The picker is self-contained: it owns the dropdown open/close state,
- * which date-pill popover is open inside the menu, and the working
- * draft of the custom range while the user is in the menu. The parent
- * only ever sees a fully-resolved DateRange via `onChange`.
+ * The range model, resolution and labelling all live in `lib/dateRange`;
+ * this file is presentation only.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, ChevronDown } from 'lucide-react';
-import DatePickerPopover from '@/components/Forecast/DatePickerPopover';
+import { Calendar, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  PRESET_GROUPS,
+  addDays,
+  compareIso,
+  dayCount,
+  formatRange,
+  parseIso,
+  rangesEqual,
+  resolveDateRange,
+  startOfWeek,
+  toIso,
+  todayIso,
+  tradingPeriodFor,
+  type DateRange,
+  type DateRangeKind,
+  type SimpleRangeKind,
+} from '@/lib/dateRange';
 
-// ────────────────────────────────────────────────────────────────────────────
-// Types & constants
-// ────────────────────────────────────────────────────────────────────────────
+export type { DateRange, DateRangeKind, SimpleRangeKind };
 
-export type DateRangeKind = 'today' | 'week' | 'last_4_weeks' | 'custom';
-
-export type DateRange =
-  | { kind: 'today' }
-  | { kind: 'week' }
-  | { kind: 'last_4_weeks' }
-  | { kind: 'custom'; start: string; end: string };
-
-const PRESETS: { value: 'today' | 'week' | 'last_4_weeks'; label: string }[] = [
-  { value: 'today', label: 'Today' },
-  { value: 'week', label: 'This week' },
-  { value: 'last_4_weeks', label: 'Last 4 weeks' },
-];
-
-// Bounds for the custom date pickers. The prototype keeps a 90-day
-// history window and lets you pick up to a fortnight into the future
-// (matches the /forecast horizon, so the picker behaves the same way
-// on both pages).
-const HISTORY_DAYS = 90;
+/** How far the calendar lets you travel. Two years back supports year-on-year. */
+const HISTORY_DAYS = 730;
 const FUTURE_DAYS = 14;
-
-// ────────────────────────────────────────────────────────────────────────────
-// Component
-// ────────────────────────────────────────────────────────────────────────────
 
 export default function DateRangePicker({
   value,
   onChange,
+  anchor,
 }: {
   value: DateRange;
   onChange: (v: DateRange) => void;
+  /** Override "today". Used by demos and tests; defaults to the real day. */
+  anchor?: string;
 }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
-  // Draft of the custom range while the menu is open. Lives in the
-  // picker (not the parent) so the user can fiddle without committing —
-  // we commit by calling onChange on every edit, which keeps the
-  // pinned-on-top trigger label in sync with the menu.
-  const initialCustom = useMemo<{ start: string; end: string }>(() => {
-    if (value.kind === 'custom') return { start: value.start, end: value.end };
-    // Default to "the last 7 days" — matches the existing 'week' preset
-    // semantically so switching to Custom feels like a refinement rather
-    // than a reset.
-    return { start: isoDayOffset(-6), end: isoDayOffset(0) };
-  }, [value]);
-  const [customRange, setCustomRange] = useState(initialCustom);
+  const today = anchor ?? todayIso();
+  const resolved = useMemo(
+    () => resolveDateRange(value, { anchor: today }),
+    [value, today],
+  );
 
-  // Which inline popover (start or end) is open within the menu.
-  // `null` means neither — both are anchored to their pill but only one
-  // popover is rendered at a time so they don't overlap.
-  const [openField, setOpenField] = useState<'start' | 'end' | null>(null);
+  // Half-finished calendar selection: the first click parks an anchor here
+  // and the second click commits the range. Null means "not mid-selection".
+  const [pendingStart, setPendingStart] = useState<string | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
 
-  // Whenever the parent moves the value back into custom (e.g. after a
-  // reload), re-seed the local draft so the menu opens in sync.
-  useEffect(() => {
-    if (value.kind === 'custom') {
-      setCustomRange({ start: value.start, end: value.end });
-    }
-  }, [value]);
+  // Which month the grid is showing. Reset when the menu opens rather than in
+  // an effect, so opening doesn't cost a second render pass.
+  const [visibleMonth, setVisibleMonth] = useState(() => monthOf(resolved.end));
+
+  function openMenu() {
+    setVisibleMonth(monthOf(resolved.end));
+    setPendingStart(null);
+    setHovered(null);
+    setOpen(true);
+  }
+
+  function closeMenu() {
+    setPendingStart(null);
+    setHovered(null);
+    setOpen(false);
+  }
 
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
       const t = e.target as Node;
       if (menuRef.current?.contains(t) || triggerRef.current?.contains(t)) return;
-      setOpen(false);
-      setOpenField(null);
+      closeMenu();
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        setOpen(false);
-        setOpenField(null);
-      }
+      if (e.key === 'Escape') closeMenu();
     }
     document.addEventListener('mousedown', onDown);
     window.addEventListener('keydown', onKey);
@@ -114,166 +104,277 @@ export default function DateRangePicker({
     };
   }, [open]);
 
-  const currentKind: DateRangeKind = value.kind;
-  const triggerLabel = useMemo(() => formatTriggerLabel(value), [value]);
+  const minDate = addDays(today, -HISTORY_DAYS);
+  const maxDate = addDays(today, FUTURE_DAYS);
 
-  const handlePresetClick = (preset: 'today' | 'week' | 'last_4_weeks') => {
-    onChange({ kind: preset });
-    setOpenField(null);
-    setOpen(false);
-  };
+  function pickPreset(kind: SimpleRangeKind) {
+    onChange({ kind });
+    closeMenu();
+  }
 
-  const handleCustomClick = () => {
-    // Switching to Custom commits the current draft so the trigger
-    // label updates immediately; the menu stays open so the user can
-    // tweak the two dates.
-    onChange({ kind: 'custom', start: customRange.start, end: customRange.end });
-  };
-
-  const handleStartChange = (start: string) => {
-    const end =
-      compareIso(start, customRange.end) > 0 ? start : customRange.end;
-    setCustomRange({ start, end });
+  function pickDay(iso: string) {
+    if (pendingStart === null) {
+      setPendingStart(iso);
+      return;
+    }
+    const [start, end] =
+      compareIso(pendingStart, iso) <= 0 ? [pendingStart, iso] : [iso, pendingStart];
     onChange({ kind: 'custom', start, end });
-    setOpenField(null);
-  };
+    closeMenu();
+  }
 
-  const handleEndChange = (end: string) => {
-    const start =
-      compareIso(end, customRange.start) < 0 ? end : customRange.start;
-    setCustomRange({ start, end });
-    onChange({ kind: 'custom', start, end });
-    setOpenField(null);
-  };
+  // While mid-selection the calendar previews the range under the cursor
+  // rather than the committed value, so the drag reads as direct.
+  const preview = useMemo(() => {
+    if (pendingStart === null) return { start: resolved.start, end: resolved.end };
+    const other = hovered ?? pendingStart;
+    return compareIso(pendingStart, other) <= 0
+      ? { start: pendingStart, end: other }
+      : { start: other, end: pendingStart };
+  }, [pendingStart, hovered, resolved.start, resolved.end]);
 
-  const minDate = isoDayOffset(-HISTORY_DAYS);
-  const maxDate = isoDayOffset(FUTURE_DAYS);
+  const trigger = triggerParts(value, resolved.label, resolved.absoluteLabel);
 
   return (
     <div style={{ position: 'relative', display: 'inline-flex' }}>
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen(v => !v)}
+        onClick={() => (open ? closeMenu() : openMenu())}
+        aria-haspopup="dialog"
+        aria-expanded={open}
         style={triggerStyle}
       >
         <Calendar size={12} strokeWidth={2.2} color="var(--color-text-muted)" />
-        <span>{triggerLabel}</span>
+        <span>{trigger.primary}</span>
+        {trigger.secondary && (
+          <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>
+            {trigger.secondary}
+          </span>
+        )}
         <ChevronDown size={12} strokeWidth={2.2} color="var(--color-text-muted)" />
       </button>
 
       {open && (
-        <div
-          ref={menuRef}
-          role="menu"
-          style={{
-            position: 'absolute',
-            top: 'calc(100% + 6px)',
-            right: 0,
-            zIndex: 300,
-            minWidth: 220,
-            background: '#fff',
-            border: '1px solid var(--color-border-subtle)',
-            borderRadius: 8,
-            boxShadow:
-              '0 4px 16px rgba(0, 28, 53,0.12), 0 0 0 1px rgba(0, 28, 53,0.04)',
-            padding: 4,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 1,
-            fontFamily: 'var(--font-primary)',
-          }}
-        >
-          <div style={menuHeaderStyle}>Date range</div>
-
-          {PRESETS.map(opt => (
-            <MenuItem
-              key={opt.value}
-              active={currentKind === opt.value}
-              onClick={() => handlePresetClick(opt.value)}
-              label={opt.label}
-            />
-          ))}
-
-          <MenuItem
-            active={currentKind === 'custom'}
-            onClick={handleCustomClick}
-            label={
-              currentKind === 'custom'
-                ? `Custom · ${formatShortRange(customRange.start, customRange.end)}`
-                : 'Custom\u2026'
-            }
-          />
-
-          {currentKind === 'custom' && (
-            <div
-              style={{
-                marginTop: 4,
-                paddingTop: 8,
-                paddingLeft: 6,
-                paddingRight: 6,
-                paddingBottom: 4,
-                borderTop: '1px solid var(--color-border-subtle)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-              }}
-            >
-              <RangeField
-                label="From"
-                value={customRange.start}
-                min={minDate}
-                max={customRange.end}
-                open={openField === 'start'}
-                onToggle={() =>
-                  setOpenField(prev => (prev === 'start' ? null : 'start'))
-                }
-                onPick={handleStartChange}
-                onClose={() => setOpenField(null)}
-              />
-              <RangeField
-                label="To"
-                value={customRange.end}
-                min={customRange.start}
-                max={maxDate}
-                open={openField === 'end'}
-                onToggle={() =>
-                  setOpenField(prev => (prev === 'end' ? null : 'end'))
-                }
-                onPick={handleEndChange}
-                onClose={() => setOpenField(null)}
-              />
-              <div
-                style={{
-                  fontSize: 10.5,
-                  color: 'var(--color-text-muted)',
-                  paddingTop: 2,
-                  textAlign: 'right',
-                }}
-              >
-                {dayCount(customRange.start, customRange.end)} day
-                {dayCount(customRange.start, customRange.end) === 1 ? '' : 's'}
-              </div>
+        <div ref={menuRef} role="dialog" aria-label="Date range" style={menuStyle}>
+          <div style={{ display: 'flex', alignItems: 'stretch' }}>
+            <div style={presetPaneStyle}>
+              {PRESET_GROUPS.map(group => (
+                <div key={group.heading}>
+                  <div style={groupHeadingStyle}>{group.heading}</div>
+                  {group.options.map(opt => (
+                    <PresetItem
+                      key={opt.kind}
+                      label={opt.label}
+                      hint={presetHint(opt.kind, today)}
+                      active={rangesEqual(value, { kind: opt.kind })}
+                      onClick={() => pickPreset(opt.kind)}
+                    />
+                  ))}
+                </div>
+              ))}
             </div>
-          )}
+
+            <div style={calendarPaneStyle}>
+              <RangeCalendar
+                visibleMonth={visibleMonth}
+                onVisibleMonthChange={setVisibleMonth}
+                start={preview.start}
+                end={preview.end}
+                today={today}
+                minDate={minDate}
+                maxDate={maxDate}
+                selecting={pendingStart !== null}
+                onPick={pickDay}
+                onHover={setHovered}
+              />
+            </div>
+          </div>
+
+          <div style={footerStyle}>
+            <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>
+              {resolved.absoluteLabel}
+            </span>
+            <span>{dayCount(resolved.start, resolved.end)} days</span>
+            <span style={{ marginLeft: 'auto', textAlign: 'right' }}>
+              {pendingStart !== null
+                ? 'Pick an end date'
+                : `${periodSpanLabel(resolved.start, resolved.end)} · ${
+                    resolved.settlement === 'provisional' ? 'Provisional' : 'Settled'
+                  }`}
+            </span>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Sub-pieces
-// ────────────────────────────────────────────────────────────────────────────
+// ── Calendar ────────────────────────────────────────────────────────────────
 
-function MenuItem({
+function RangeCalendar({
+  visibleMonth,
+  onVisibleMonthChange,
+  start,
+  end,
+  today,
+  minDate,
+  maxDate,
+  selecting,
+  onPick,
+  onHover,
+}: {
+  visibleMonth: string;
+  onVisibleMonthChange: (iso: string) => void;
+  start: string;
+  end: string;
+  today: string;
+  minDate: string;
+  maxDate: string;
+  selecting: boolean;
+  onPick: (iso: string) => void;
+  onHover: (iso: string | null) => void;
+}) {
+  const cells = useMemo(() => buildMonthGrid(visibleMonth), [visibleMonth]);
+  const month = parseIso(visibleMonth).getUTCMonth();
+
+  const prevMonth = shiftMonth(visibleMonth, -1);
+  const nextMonth = shiftMonth(visibleMonth, 1);
+  const canPrev = compareIso(lastDayOfMonth(prevMonth), minDate) >= 0;
+  const canNext = compareIso(nextMonth, maxDate) <= 0;
+
+  return (
+    <div onMouseLeave={() => onHover(null)}>
+      <div style={calendarHeaderStyle}>
+        <NavButton
+          label="Previous month"
+          disabled={!canPrev}
+          onClick={() => onVisibleMonthChange(prevMonth)}
+        >
+          <ChevronLeft size={14} strokeWidth={2.4} />
+        </NavButton>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+          {parseIso(visibleMonth).toLocaleDateString('en-GB', {
+            month: 'long',
+            year: 'numeric',
+            timeZone: 'UTC',
+          })}
+        </span>
+        <NavButton
+          label="Next month"
+          disabled={!canNext}
+          onClick={() => onVisibleMonthChange(nextMonth)}
+        >
+          <ChevronRight size={14} strokeWidth={2.4} />
+        </NavButton>
+      </div>
+
+      <div style={weekdayRowStyle}>
+        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+          <span key={i} style={weekdayCellStyle}>
+            {d}
+          </span>
+        ))}
+      </div>
+
+      <div style={gridStyle}>
+        {cells.map(cell => {
+          const outside = cell.month !== month;
+          const disabled =
+            compareIso(cell.iso, minDate) < 0 || compareIso(cell.iso, maxDate) > 0;
+          const inRange =
+            compareIso(cell.iso, start) >= 0 && compareIso(cell.iso, end) <= 0;
+          const isStart = cell.iso === start;
+          const isEnd = cell.iso === end;
+          const isEdge = isStart || isEnd;
+          const period = tradingPeriodFor(cell.iso);
+          const startsPeriod = period.start === cell.iso;
+
+          return (
+            <button
+              key={cell.iso}
+              type="button"
+              disabled={disabled}
+              onClick={() => onPick(cell.iso)}
+              onMouseEnter={() => onHover(cell.iso)}
+              aria-label={`${formatRange(cell.iso, cell.iso)} · ${period.code}`}
+              style={{
+                position: 'relative',
+                height: 30,
+                border:
+                  cell.iso === today && !isEdge
+                    ? '1px solid color-mix(in srgb, var(--color-accent-active) 35%, white)'
+                    : '1px solid transparent',
+                borderRadius: isEdge ? 7 : inRange ? 0 : 7,
+                background: isEdge
+                  ? 'var(--color-accent-active)'
+                  : inRange
+                    ? 'color-mix(in srgb, var(--color-accent-active) 9%, white)'
+                    : 'transparent',
+                color: isEdge
+                  ? '#fff'
+                  : disabled || outside
+                    ? 'var(--color-text-muted)'
+                    : 'var(--color-text-primary)',
+                fontSize: 12,
+                fontWeight: isEdge || cell.iso === today ? 700 : 500,
+                fontFamily: 'var(--font-primary)',
+                fontVariantNumeric: 'tabular-nums',
+                opacity: outside && !inRange ? 0.4 : 1,
+                cursor: disabled ? 'default' : selecting ? 'crosshair' : 'pointer',
+                transition: 'background 80ms ease',
+              }}
+            >
+              {cell.day}
+              {/* Period boundaries are the spine of the trading calendar, so
+                  the grid marks where each one opens. */}
+              {startsPeriod && !isEdge && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    bottom: 2,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: 3,
+                    height: 3,
+                    borderRadius: '50%',
+                    background: 'var(--color-accent-mid)',
+                  }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={calendarNoteStyle}>
+        <span
+          style={{
+            width: 3,
+            height: 3,
+            borderRadius: '50%',
+            background: 'var(--color-accent-mid)',
+            display: 'inline-block',
+          }}
+        />
+        Period start
+      </div>
+    </div>
+  );
+}
+
+// ── Small pieces ────────────────────────────────────────────────────────────
+
+function PresetItem({
+  label,
+  hint,
   active,
   onClick,
-  label,
 }: {
+  label: string;
+  hint: string;
   active: boolean;
   onClick: () => void;
-  label: string;
 }) {
   return (
     <button
@@ -282,118 +383,132 @@ function MenuItem({
       aria-checked={active}
       onClick={onClick}
       style={{
-        all: 'unset',
-        fontFamily: 'var(--font-primary)',
-        fontSize: 12,
-        fontWeight: active ? 700 : 500,
-        color: active ? 'var(--color-accent-active)' : 'var(--color-text-secondary)',
-        padding: '7px 10px',
-        borderRadius: 6,
-        cursor: 'pointer',
-        background: active ? 'rgba(34,68,68,0.08)' : 'transparent',
-      }}
-      onMouseEnter={e => {
-        if (!active)
-          (e.currentTarget as HTMLButtonElement).style.background =
-            'var(--color-bg-hover)';
-      }}
-      onMouseLeave={e => {
-        if (!active)
-          (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
-function RangeField({
-  label,
-  value,
-  min,
-  max,
-  open,
-  onToggle,
-  onPick,
-  onClose,
-}: {
-  label: string;
-  value: string;
-  min: string;
-  max: string;
-  open: boolean;
-  onToggle: () => void;
-  onPick: (date: string) => void;
-  onClose: () => void;
-}) {
-  return (
-    <div
-      style={{
         display: 'flex',
-        alignItems: 'center',
-        gap: 8,
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        gap: 1,
+        width: '100%',
+        padding: '5px 8px',
+        border: 'none',
+        borderRadius: 6,
+        background: active
+          ? 'color-mix(in srgb, var(--color-accent-active) 8%, white)'
+          : 'transparent',
+        cursor: 'pointer',
+        textAlign: 'left',
+        fontFamily: 'var(--font-primary)',
       }}
     >
       <span
         style={{
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: '0.06em',
-          textTransform: 'uppercase',
-          color: 'var(--color-text-muted)',
-          width: 32,
-          flexShrink: 0,
+          fontSize: 12,
+          fontWeight: active ? 700 : 500,
+          color: 'var(--color-text-primary)',
         }}
       >
         {label}
       </span>
-      <span style={{ position: 'relative', flex: 1, display: 'inline-flex' }}>
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={open}
-          aria-haspopup="dialog"
-          style={{
-            flex: 1,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '5px 10px',
-            border: `1px solid ${
-              open ? 'var(--color-accent-active)' : 'var(--color-border-subtle)'
-            }`,
-            background: open
-              ? 'color-mix(in srgb, var(--color-accent-active) 6%, white)'
-              : '#ffffff',
-            borderRadius: 6,
-            fontSize: 11.5,
-            fontWeight: 600,
-            color: 'var(--color-text-primary)',
-            cursor: 'pointer',
-            fontFamily: 'var(--font-primary)',
-          }}
-        >
-          <Calendar size={11} color="var(--color-text-muted)" />
-          {formatPretty(value)}
-        </button>
-        {open && (
-          <DatePickerPopover
-            key={value}
-            selectedDate={value}
-            min={min}
-            max={max}
-            onSelect={d => onPick(d)}
-            onClose={onClose}
-          />
-        )}
-      </span>
-    </div>
+      <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{hint}</span>
+    </button>
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Styling helpers
-// ────────────────────────────────────────────────────────────────────────────
+function NavButton({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        width: 24,
+        height: 24,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: 'none',
+        background: 'transparent',
+        borderRadius: 6,
+        color: disabled ? 'var(--color-text-muted)' : 'var(--color-text-secondary)',
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.4 : 1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ── Derivations ─────────────────────────────────────────────────────────────
+
+/** Resolved dates shown under each preset, so the window is never a guess. */
+function presetHint(kind: SimpleRangeKind, anchor: string): string {
+  const r = resolveDateRange({ kind }, { anchor });
+  if (kind === 'this_period' || kind === 'last_period') {
+    return `${tradingPeriodFor(r.start).code} · ${r.absoluteLabel}`;
+  }
+  return r.absoluteLabel;
+}
+
+function triggerParts(
+  value: DateRange,
+  label: string,
+  absoluteLabel: string,
+): { primary: string; secondary: string | null } {
+  if (value.kind === 'custom') return { primary: absoluteLabel, secondary: null };
+  // Strip the parenthetical period code from the trigger; the dates that
+  // follow say the same thing more precisely.
+  const primary = label.replace(/\s*\(.*\)$/, '');
+  return { primary, secondary: absoluteLabel };
+}
+
+/** "P8" for a range inside one period, "P7–P8" when it straddles a close. */
+function periodSpanLabel(start: string, end: string): string {
+  const a = tradingPeriodFor(start);
+  const b = tradingPeriodFor(end);
+  return a.code === b.code ? a.code : `${a.code}–${b.code}`;
+}
+
+// ── Calendar maths (UTC, Monday-first — matches every other grid) ───────────
+
+type Cell = { iso: string; day: number; month: number };
+
+function monthOf(iso: string): string {
+  const d = parseIso(iso);
+  return toIso(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)));
+}
+
+function shiftMonth(monthIso: string, delta: number): string {
+  const d = parseIso(monthIso);
+  return toIso(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + delta, 1)));
+}
+
+function lastDayOfMonth(monthIso: string): string {
+  const d = parseIso(monthIso);
+  return toIso(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)));
+}
+
+/** Always 42 cells so paging never shifts the layout. */
+function buildMonthGrid(monthIso: string): Cell[] {
+  const gridStart = startOfWeek(monthIso);
+  return Array.from({ length: 42 }, (_, i) => {
+    const iso = addDays(gridStart, i);
+    const d = parseIso(iso);
+    return { iso, day: d.getUTCDate(), month: d.getUTCMonth() };
+  });
+}
+
+// ── Styles ──────────────────────────────────────────────────────────────────
 
 const triggerStyle: React.CSSProperties = {
   display: 'inline-flex',
@@ -411,77 +526,85 @@ const triggerStyle: React.CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
-const menuHeaderStyle: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: '0.06em',
-  textTransform: 'uppercase',
-  color: 'var(--color-text-muted)',
-  padding: '6px 10px 4px',
+const menuStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: 'calc(100% + 6px)',
+  right: 0,
+  zIndex: 300,
+  background: '#fff',
+  border: '1px solid var(--color-border-subtle)',
+  borderRadius: 10,
+  boxShadow: '0 8px 28px rgba(0, 28, 53,0.14), 0 0 0 1px rgba(0, 28, 53,0.04)',
+  fontFamily: 'var(--font-primary)',
+  overflow: 'hidden',
 };
 
-// ────────────────────────────────────────────────────────────────────────────
-// Pure helpers
-// ────────────────────────────────────────────────────────────────────────────
+const presetPaneStyle: React.CSSProperties = {
+  width: 168,
+  padding: 6,
+  borderRight: '1px solid var(--color-border-subtle)',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 2,
+};
 
-function compareIso(a: string, b: string): number {
-  return a === b ? 0 : a < b ? -1 : 1;
-}
+const calendarPaneStyle: React.CSSProperties = {
+  width: 250,
+  padding: 8,
+};
 
-function isoDayOffset(offset: number): string {
-  const today = new Date();
-  // Strip to UTC midnight so the offset is whole-day; matches how the
-  // /forecast page derives `dayOffset` from DEMO_TODAY.
-  const utc = new Date(
-    Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() + offset),
-  );
-  return utc.toISOString().slice(0, 10);
-}
+const groupHeadingStyle: React.CSSProperties = {
+  fontSize: 9,
+  fontWeight: 700,
+  letterSpacing: '0.07em',
+  textTransform: 'uppercase',
+  color: 'var(--color-text-muted)',
+  padding: '6px 8px 3px',
+};
 
-function formatPretty(iso: string): string {
-  const d = new Date(`${iso}T00:00:00Z`);
-  return d.toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  });
-}
+const calendarHeaderStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '0 2px 6px',
+};
 
-function formatShortRange(start: string, end: string): string {
-  const s = new Date(`${start}T00:00:00Z`);
-  const e = new Date(`${end}T00:00:00Z`);
-  const sameMonth =
-    s.getUTCFullYear() === e.getUTCFullYear() && s.getUTCMonth() === e.getUTCMonth();
-  if (sameMonth) {
-    const day = (d: Date) => d.getUTCDate();
-    const monthYear = e.toLocaleDateString('en-GB', {
-      month: 'short',
-      timeZone: 'UTC',
-    });
-    return `${day(s)}–${day(e)} ${monthYear}`;
-  }
-  const fmt = (d: Date) =>
-    d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-  return `${fmt(s)} – ${fmt(e)}`;
-}
+const weekdayRowStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(7, 1fr)',
+  gap: 1,
+};
 
-function formatTriggerLabel(value: DateRange): string {
-  switch (value.kind) {
-    case 'today':
-      return 'Today';
-    case 'week':
-      return 'This week';
-    case 'last_4_weeks':
-      return 'Last 4 weeks';
-    case 'custom':
-      return formatShortRange(value.start, value.end);
-  }
-}
+const weekdayCellStyle: React.CSSProperties = {
+  textAlign: 'center',
+  fontSize: 10,
+  fontWeight: 600,
+  color: 'var(--color-text-muted)',
+  padding: '2px 0 4px',
+};
 
-function dayCount(start: string, end: string): number {
-  const ms = 24 * 60 * 60 * 1000;
-  const s = new Date(`${start}T00:00:00Z`).getTime();
-  const e = new Date(`${end}T00:00:00Z`).getTime();
-  return Math.max(1, Math.round((e - s) / ms) + 1);
-}
+const gridStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(7, 1fr)',
+  gap: 1,
+};
+
+const calendarNoteStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 5,
+  fontSize: 10,
+  color: 'var(--color-text-muted)',
+  padding: '8px 2px 0',
+};
+
+const footerStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  padding: '8px 12px',
+  borderTop: '1px solid var(--color-border-subtle)',
+  background: 'color-mix(in srgb, var(--color-accent-active) 3%, white)',
+  fontSize: 11,
+  color: 'var(--color-text-secondary)',
+};

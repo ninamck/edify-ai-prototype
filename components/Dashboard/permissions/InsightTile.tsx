@@ -6,10 +6,12 @@
 // feel deliberate, so controls sit above the card rather than hiding behind
 // hover states.
 
-import { ArrowDown, ArrowUp, Globe2, Maximize2, Minimize2, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, CalendarClock, Globe2, Maximize2, Minimize2, Trash2 } from 'lucide-react';
 import { ANALYTICS_CONFIG, renderAnalyticsChart, type AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
 import TileActions from '@/components/ScheduledReports/TileActions';
 import type { WidgetWidth } from '@/components/Dashboard/layoutTypes';
+import { deriveTileTitle, refreshPlan, resolveTileRange } from '@/lib/chartRange';
+import type { DateRange } from '@/lib/dateRange';
 import type { DashboardInsight } from './model';
 import { ALL_SITE_IDS, siteListPhrase, type Viewer } from './sites';
 import {
@@ -28,6 +30,15 @@ export function insightDefaultWidth(chartId: string): WidgetWidth {
   return 'half';
 }
 
+/** Two words explaining why this tile's window differs from the dashboard's. */
+const OUT_OF_STEP_BADGE: Record<string, string> = {
+  widened: 'Wider range',
+  defining: 'Own range',
+  own: 'Own range',
+  pinned: 'Pinned',
+  static: 'Live state',
+};
+
 function scopeLine(insight: DashboardInsight, viewer: Viewer): string {
   if (insight.companyWide) return `Company-wide · all ${ALL_SITE_IDS.length} sites`;
   if (viewer.siteIds.length >= ALL_SITE_IDS.length) return `All ${ALL_SITE_IDS.length} sites`;
@@ -43,6 +54,7 @@ export default function InsightTile({
   canToggleCompanyWide,
   siblingInsights = [],
   dataWindowLabel = 'Last 7 complete days as of send date',
+  dashboardRange,
   isFirst,
   isLast,
   onMove,
@@ -60,6 +72,8 @@ export default function InsightTile({
   siblingInsights?: string[];
   /** Rolling window for emailed reports — period dashboards pass their own. */
   dataWindowLabel?: string;
+  /** The dashboard's window. Inheriting tiles follow it; undefined imposes nothing. */
+  dashboardRange?: DateRange;
   isFirst: boolean;
   isLast: boolean;
   onMove: (direction: -1 | 1) => void;
@@ -70,6 +84,22 @@ export default function InsightTile({
   const scoped = isScopedInsightId(insight.chartId);
   const effectiveSites = insight.companyWide ? ALL_SITE_IDS : viewer.siteIds;
   const isMilestone = insight.chartId === 'scoped:million-milestone';
+
+  const tile = resolveTileRange({
+    chartId: insight.chartId,
+    binding: insight.binding,
+    dashboardRange,
+  });
+  // Scoped insights carry hand-written labels tied to their own mock windows,
+  // so they keep them; everything else gets a title derived from its window.
+  const title = scoped
+    ? insightLabel(insight.chartId)
+    : deriveTileTitle({
+        chartId: insight.chartId,
+        tile,
+        fallbackLabel: insightLabel(insight.chartId),
+      });
+  const refresh = refreshPlan(tile.resolved);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -177,10 +207,32 @@ export default function InsightTile({
                   minWidth: 0,
                 }}
               >
-                {insightLabel(insight.chartId)}
+                {title}
               </span>
+              {!scoped && tile.note && (
+                <span
+                  title={tile.note}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '3px 8px',
+                    borderRadius: 999,
+                    background: 'var(--color-warning-light, #FEF3C7)',
+                    color: 'var(--color-warning, #92400E)',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <CalendarClock size={11} strokeWidth={2.2} />
+                  {OUT_OF_STEP_BADGE[tile.adjustment]}
+                </span>
+              )}
               <TileActions
-                insightTitle={insightLabel(insight.chartId)}
+                insightTitle={title}
                 siteLabel={scopeLine(insight, viewer)}
                 siblingInsights={siblingInsights}
                 dataWindowLabel={dataWindowLabel}
@@ -211,7 +263,10 @@ export default function InsightTile({
               {scopeLine(insight, viewer)}
               {scoped && isScopedInsightId(insight.chartId)
                 ? ` · ${SCOPED_INSIGHT_CONFIG[insight.chartId].subtitle}`
-                : ''}
+                : ` · ${tile.resolved.absoluteLabel}`}
+              {!scoped && tile.resolved.settlement === 'provisional' && (
+                <span title={refresh.description}> · provisional</span>
+              )}
             </div>
           </div>
         )}

@@ -1,15 +1,105 @@
 'use client';
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { Plus, X, Table2, LayoutDashboard, CalendarDays, CalendarRange, CalendarCheck2 } from 'lucide-react';
+import {
+  Plus,
+  X,
+  Table2,
+  LayoutDashboard,
+  CalendarDays,
+  CalendarRange,
+  CalendarCheck2,
+  CalendarSearch,
+} from 'lucide-react';
 import { PINNED_TAB_IDS, type Mvp1Tab } from '@/hooks/useMvp1Tabs';
 import type { DashboardPeriod } from '@/components/Dashboard/permissions/model';
+import type { DateRange } from '@/lib/dateRange';
 
 const PERIOD_OPTIONS: { id: DashboardPeriod; label: string; hint: string; icon: typeof CalendarDays }[] = [
   { id: 'daily', label: 'Daily', hint: 'Always shows yesterday', icon: CalendarDays },
   { id: 'weekly', label: 'Weekly', hint: 'Always shows the current week', icon: CalendarRange },
   { id: 'period-end', label: 'Period end', hint: 'Always shows the current period', icon: CalendarCheck2 },
 ];
+
+/**
+ * Where a custom-range dashboard starts. It is only a starting point — the
+ * whole point of this kind is that the picker on the dashboard moves it.
+ */
+const DEFAULT_CUSTOM_RANGE: DateRange = { kind: 'this_week' };
+
+function MenuHeading({
+  children,
+  divider,
+}: {
+  children: React.ReactNode;
+  divider?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: '0.06em',
+        textTransform: 'uppercase',
+        color: 'var(--color-text-muted)',
+        padding: divider ? '8px 10px 4px' : '6px 10px 4px',
+        ...(divider
+          ? { borderTop: '1px solid var(--color-border-subtle)', marginTop: 4 }
+          : null),
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function MenuItem({
+  icon: Icon,
+  label,
+  hint,
+  trailing,
+  onClick,
+}: {
+  icon: typeof CalendarDays;
+  label: string;
+  hint: string;
+  trailing?: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        all: 'unset',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '8px 10px',
+        borderRadius: 6,
+        cursor: 'pointer',
+        fontSize: 12,
+        fontWeight: 500,
+        color: 'var(--color-text-secondary)',
+        width: 'calc(100% - 4px)',
+        boxSizing: 'border-box',
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-bg-hover)';
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+      }}
+    >
+      <Icon size={13} strokeWidth={2.2} color="var(--color-text-muted)" />
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+        <span style={{ fontWeight: 600 }}>{label}</span>
+        <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{hint}</span>
+      </div>
+      {trailing}
+    </button>
+  );
+}
 
 type Props = {
   tabs: Mvp1Tab[];
@@ -24,6 +114,9 @@ type Props = {
   /** Period-bound dashboards: every chart on them is locked to that
    *  reporting window and refreshes for the current date. */
   onAddPeriodDashboard?: (period: DashboardPeriod) => void;
+  /** Any other window. Offered alongside the three named cadences, which are
+   *  themselves just the three most common ranges. */
+  onAddRangeDashboard?: (range: DateRange) => void;
 };
 
 export default function Mvp1Tabs({
@@ -35,8 +128,13 @@ export default function Mvp1Tabs({
   onRename,
   onAddDashboard,
   onAddPeriodDashboard,
+  onAddRangeDashboard,
 }: Props) {
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+
+  function closeAddMenu() {
+    setAddMenuOpen(false);
+  }
   const addBtnRef = useRef<HTMLButtonElement | null>(null);
   const addMenuRef = useRef<HTMLDivElement | null>(null);
   const [menuAlignRight, setMenuAlignRight] = useState(false);
@@ -46,10 +144,10 @@ export default function Mvp1Tabs({
     function onDown(e: MouseEvent) {
       const t = e.target as Node;
       if (addBtnRef.current?.contains(t) || addMenuRef.current?.contains(t)) return;
-      setAddMenuOpen(false);
+      closeAddMenu();
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setAddMenuOpen(false);
+      if (e.key === 'Escape') closeAddMenu();
     }
     document.addEventListener('mousedown', onDown);
     window.addEventListener('keydown', onKey);
@@ -145,145 +243,53 @@ export default function Mvp1Tabs({
               fontFamily: 'var(--font-primary)',
             }}
           >
-            <div
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                color: 'var(--color-text-muted)',
-                padding: '6px 10px 4px',
-              }}
-            >
-              Create new
-            </div>
-            <button
-              type="button"
+            <MenuHeading>Create new</MenuHeading>
+            <MenuItem
+              icon={Table2}
+              label="View — just for you"
+              hint="Your private workspace of tables and charts"
               onClick={() => {
                 onAddTablesTab();
-                setAddMenuOpen(false);
+                closeAddMenu();
               }}
-              style={{
-                all: 'unset',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '8px 10px',
-                borderRadius: 6,
-                cursor: 'pointer',
-                fontSize: 12,
-                fontWeight: 500,
-                color: 'var(--color-text-secondary)',
-                width: 'calc(100% - 4px)',
-                boxSizing: 'border-box',
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-bg-hover)';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-              }}
-            >
-              <Table2 size={13} strokeWidth={2.2} color="var(--color-text-muted)" />
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontWeight: 600 }}>View — just for you</span>
-                <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
-                  Your private workspace of tables and charts
-                </span>
-              </div>
-            </button>
+            />
             {onAddDashboard && (
-              <button
-                type="button"
+              <MenuItem
+                icon={LayoutDashboard}
+                label="Dashboard — to share"
+                hint="Pin insights, publish to roles at sites"
                 onClick={() => {
                   onAddDashboard();
-                  setAddMenuOpen(false);
+                  closeAddMenu();
                 }}
-                style={{
-                  all: 'unset',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '8px 10px',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: 500,
-                  color: 'var(--color-text-secondary)',
-                  width: 'calc(100% - 4px)',
-                  boxSizing: 'border-box',
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-bg-hover)';
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                }}
-              >
-                <LayoutDashboard size={13} strokeWidth={2.2} color="var(--color-text-muted)" />
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontWeight: 600 }}>Dashboard — to share</span>
-                  <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
-                    Pin insights, publish to roles at sites
-                  </span>
-                </div>
-              </button>
+              />
             )}
             {onAddPeriodDashboard && (
               <>
-                <div
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: '0.06em',
-                    textTransform: 'uppercase',
-                    color: 'var(--color-text-muted)',
-                    padding: '8px 10px 4px',
-                    borderTop: '1px solid var(--color-border-subtle)',
-                    marginTop: 4,
-                  }}
-                >
-                  Period dashboard — auto-refreshing
-                </div>
-                {PERIOD_OPTIONS.map((p) => {
-                  const Icon = p.icon;
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => {
-                        onAddPeriodDashboard(p.id);
-                        setAddMenuOpen(false);
-                      }}
-                      style={{
-                        all: 'unset',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '8px 10px',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        fontSize: 12,
-                        fontWeight: 500,
-                        color: 'var(--color-text-secondary)',
-                        width: 'calc(100% - 4px)',
-                        boxSizing: 'border-box',
-                      }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-bg-hover)';
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                      }}
-                    >
-                      <Icon size={13} strokeWidth={2.2} color="var(--color-text-muted)" />
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontWeight: 600 }}>{p.label}</span>
-                        <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{p.hint}</span>
-                      </div>
-                    </button>
-                  );
-                })}
+                <MenuHeading divider>Period dashboard — one window, every chart</MenuHeading>
+                {PERIOD_OPTIONS.map((p) => (
+                  <MenuItem
+                    key={p.id}
+                    icon={p.icon}
+                    label={p.label}
+                    hint={p.hint}
+                    onClick={() => {
+                      onAddPeriodDashboard(p.id);
+                      closeAddMenu();
+                    }}
+                  />
+                ))}
+                {onAddRangeDashboard && (
+                  <MenuItem
+                    icon={CalendarSearch}
+                    label="Custom range"
+                    hint="Adds a date picker you control"
+                    onClick={() => {
+                      onAddRangeDashboard(DEFAULT_CUSTOM_RANGE);
+                      closeAddMenu();
+                    }}
+                  />
+                )}
               </>
             )}
           </div>

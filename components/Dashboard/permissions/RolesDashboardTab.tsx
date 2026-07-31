@@ -17,12 +17,20 @@ import type { AnalyticsChartId } from '@/components/Analytics/AnalyticsCharts';
 import { ANALYTICS_CONFIG } from '@/components/Analytics/AnalyticsCharts';
 import InsightTile, { insightDefaultWidth, insightLabel } from './InsightTile';
 import PublishDialog from './PublishDialog';
+import InheritRangeDialog, {
+  needsInheritPrompt,
+  type PendingAdd,
+} from './InheritRangeDialog';
+import DateRangePicker from '@/components/Mvp1/DateRangePicker';
 import {
   audienceSummary,
   canAskQuestions,
   canEditDashboard,
   canPublish,
   canToggleCompanyWide,
+  dashboardRange,
+  dashboardRangeBadge,
+  dashboardWindowLine,
   PERIOD_META,
   visibleDashboards,
   type DemoDashboard,
@@ -35,6 +43,7 @@ import {
   publishDashboard,
   removeInsight,
   renameDashboard,
+  setDashboardRange,
   setInsightCompanyWide,
   setInsightWidth,
   unpublishDashboard,
@@ -77,6 +86,7 @@ export default function RolesDashboardTab({
 
   const [editing, setEditing] = useState(false);
   const [addInsightOpen, setAddInsightOpen] = useState(false);
+  const [pendingAdd, setPendingAdd] = useState<PendingAdd | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -145,6 +155,9 @@ export default function RolesDashboardTab({
   }
 
   const period = active.period ? PERIOD_META[active.period] : null;
+  const range = dashboardRange(active);
+  const rangeBadge = dashboardRangeBadge(active);
+  const windowLine = dashboardWindowLine(active);
   const insightTitles = active.insights.map((i) => insightLabel(i.chartId));
   // Site scope for emailed reports follows the viewer's scope, like the tiles.
   const emailSiteLabel =
@@ -155,6 +168,27 @@ export default function RolesDashboardTab({
   function commitRename() {
     if (nameDraft.trim()) renameDashboard(active!.id, nameDraft);
     setRenaming(false);
+  }
+
+  /**
+   * Adding a chart to a dashboard that carries a window is the moment the
+   * chart's own range gets overridden, so that is where we say so — but only
+   * when the chart could actually inherit. Anything else goes straight on.
+   */
+  function requestAdd(chartId: string, targetId: string) {
+    const target = visible.find((d) => d.id === targetId);
+    const targetRange = target ? dashboardRange(target) : undefined;
+
+    if (!target || !needsInheritPrompt(chartId, targetRange)) {
+      addInsight(targetId, chartId);
+      return;
+    }
+    setPendingAdd({
+      chartId,
+      targetId,
+      targetName: target.name,
+      targetRange: targetRange!,
+    });
   }
 
   return (
@@ -211,9 +245,9 @@ export default function RolesDashboardTab({
               }}
             >
               {headerName}
-              {period && (
+              {rangeBadge && (
                 <span
-                  title={`Every chart and table on this dashboard is bound to the ${period.label.toLowerCase()} window \u2014 the data refreshes for the current date.`}
+                  title={`Every inheriting chart on this dashboard follows the ${rangeBadge.toLowerCase()} window, re-resolved against today\u2019s date.`}
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -232,7 +266,7 @@ export default function RolesDashboardTab({
                   }}
                 >
                   <RefreshCw size={10} strokeWidth={2.4} />
-                  {period.label}
+                  {rangeBadge}
                 </span>
               )}
             </h1>
@@ -241,11 +275,21 @@ export default function RolesDashboardTab({
             {showAudienceLine
               ? audienceSummary(active)
               : `Shared with you as ${ROLE_LABEL[viewer.role].toLowerCase()} — showing your sites\u2019 data.`}
-            {period ? ` ${period.windowLine}` : ''}
+            {windowLine ? ` ${windowLine}` : ''}
           </p>
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
+          {/* Only custom-range dashboards get a picker. A cadence dashboard's
+              promise is that it always shows the same window, so handing it a
+              free date control would quietly undo the thing it is for. */}
+          {canEdit && active.range && (
+            <DateRangePicker
+              value={active.range}
+              onChange={(next) => setDashboardRange(active.id, next)}
+            />
+          )}
+
           {canDelete && (
             <button
               type="button"
@@ -429,6 +473,7 @@ export default function RolesDashboardTab({
                   canToggleCompanyWide={canToggleCompanyWide(viewer, active)}
                   siblingInsights={insightTitles}
                   dataWindowLabel={period?.reportWindow}
+                  dashboardRange={range}
                   isFirst={index === 0}
                   isLast={index === active.insights.length - 1}
                   onMove={(dir) => moveInsight(active.id, ins.id, dir)}
@@ -450,17 +495,27 @@ export default function RolesDashboardTab({
         askLocked={!askAllowed}
         alreadyPinned={alreadyPinned}
         onAddToDashboard={(chartId) => {
-          if (defaultPinTargetId) addInsight(defaultPinTargetId, chartId);
+          if (defaultPinTargetId) requestAdd(chartId, defaultPinTargetId);
         }}
         pinTarget="view"
         pinTargets={pinTargets}
         defaultPinTargetId={defaultPinTargetId}
-        onAddChartToTarget={(chartId, targetId) => addInsight(targetId, chartId)}
+        onAddChartToTarget={(chartId, targetId) => requestAdd(chartId, targetId)}
         onAddChartToNewView={(chartId) => {
           const d = createDashboard(viewer.personaId);
           addInsight(d.id, chartId);
           onSelectDashboard(d.id);
           return d.id;
+        }}
+      />
+
+      <InheritRangeDialog
+        pending={pendingAdd}
+        fallbackLabel={pendingAdd ? insightLabel(pendingAdd.chartId) : undefined}
+        onCancel={() => setPendingAdd(null)}
+        onConfirm={(binding) => {
+          if (pendingAdd) addInsight(pendingAdd.targetId, pendingAdd.chartId, binding);
+          setPendingAdd(null);
         }}
       />
 

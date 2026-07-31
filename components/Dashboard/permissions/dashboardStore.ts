@@ -9,6 +9,8 @@
 // demo resets never require a manual localStorage wipe.
 
 import { useSyncExternalStore } from 'react';
+import { normaliseRange, type DateRange } from '@/lib/dateRange';
+import type { RangeBinding } from '@/lib/chartRange';
 import { ALL_SITE_IDS, type RolesPersonaId, type SiteId } from './sites';
 import { PERIOD_META, type Audience, type DashboardInsight, type DashboardPeriod, type DemoDashboard } from './model';
 
@@ -146,11 +148,15 @@ export function hydrateDashboards() {
     if (!isValidStored(parsed)) return;
     const storedIds = new Set(parsed.map((d) => d.id));
     const missingSeeds = SEED_DASHBOARDS.filter((d) => !storedIds.has(d.id));
-    dashboards = [...parsed, ...missingSeeds].map((d) =>
-      // Migrate the pre-rename default ("Company") — the name is now shown in
-      // both the tab and the header, so it carries the full default label.
-      d.id === 'company' && d.name === 'Company' ? { ...d, name: 'Company dashboard' } : d,
-    );
+    dashboards = [...parsed, ...missingSeeds]
+      .map((d) =>
+        // Migrate the pre-rename default ("Company") — the name is now shown in
+        // both the tab and the header, so it carries the full default label.
+        d.id === 'company' && d.name === 'Company' ? { ...d, name: 'Company dashboard' } : d,
+      )
+      // Range tokens outlive deployments in localStorage, so anything written
+      // by an older build gets coerced back to something resolvable.
+      .map((d) => (d.range ? { ...d, range: normaliseRange(d.range) } : d));
     emit();
   } catch {
     /* corrupt payload — keep seeds */
@@ -175,9 +181,17 @@ export function createDashboard(
   owner: RolesPersonaId,
   name?: string,
   period?: DashboardPeriod,
+  range?: DateRange,
 ): DemoDashboard {
   const count = dashboards.filter((d) => d.kind === 'published').length;
-  const fallbackName = period ? PERIOD_META[period].defaultName : `New dashboard ${count + 1}`;
+  // A custom-range dashboard is not named after its window: the window is
+  // the thing the viewer moves, so baking it into the name would go stale on
+  // the first change.
+  const fallbackName = period
+    ? PERIOD_META[period].defaultName
+    : range
+      ? 'Custom range dashboard'
+      : `New dashboard ${count + 1}`;
   const dashboard: DemoDashboard = {
     id: `pub-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     kind: 'published',
@@ -185,10 +199,50 @@ export function createDashboard(
     owner,
     audience: null,
     ...(period ? { period } : {}),
+    ...(range ? { range } : {}),
     insights: [],
   };
   update([...dashboards, dashboard]);
   return dashboard;
+}
+
+/**
+ * Change the window every inheriting tile on a dashboard follows. Passing
+ * `undefined` unbinds it, so tiles fall back to their own native ranges.
+ */
+export function setDashboardRange(id: string, range: DateRange | undefined) {
+  update(
+    dashboards.map((d) => {
+      if (d.id !== id) return d;
+      const next = { ...d };
+      if (range) next.range = range;
+      else delete next.range;
+      // An explicit range supersedes the cadence shorthand; keeping both
+      // would leave two sources of truth disagreeing.
+      delete next.period;
+      return next;
+    }),
+  );
+}
+
+/** Change how a single tile gets its window. */
+export function setInsightBinding(
+  dashboardId: string,
+  insightId: string,
+  binding: RangeBinding,
+) {
+  update(
+    dashboards.map((d) =>
+      d.id === dashboardId
+        ? {
+            ...d,
+            insights: d.insights.map((i) =>
+              i.id === insightId ? { ...i, binding } : i,
+            ),
+          }
+        : d,
+    ),
+  );
 }
 
 export function renameDashboard(id: string, name: string) {
@@ -207,12 +261,19 @@ export function deleteDashboard(id: string) {
   update(dashboards.filter((d) => !(d.id === id && d.kind === 'published')));
 }
 
-export function addInsight(dashboardId: string, chartId: string) {
+export function addInsight(
+  dashboardId: string,
+  chartId: string,
+  binding?: RangeBinding,
+) {
   update(
     dashboards.map((d) => {
       if (d.id !== dashboardId) return d;
       if (d.insights.some((i) => i.chartId === chartId)) return d;
-      return { ...d, insights: [insight(chartId), ...d.insights] };
+      const added = binding
+        ? { ...insight(chartId), binding }
+        : insight(chartId);
+      return { ...d, insights: [added, ...d.insights] };
     }),
   );
 }
