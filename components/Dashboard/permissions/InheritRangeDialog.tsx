@@ -8,8 +8,8 @@
  * — "what were sales last week?" produces a last-week chart. Dropping that
  * onto a period dashboard silently re-cuts it, and a reader who remembers
  * asking about last week would have no way of knowing. So the swap is made
- * explicit at the one moment the user is thinking about it, with inheriting
- * as the default and keeping the original range one click away.
+ * explicit at the one moment the user is thinking about it: add the chart
+ * and let it follow the dashboard's date picker, or cancel.
  *
  * The dialog is skipped entirely when there is no decision to make: charts
  * whose range is intrinsic never inherit, so asking would be noise.
@@ -18,12 +18,7 @@
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CalendarClock, X } from 'lucide-react';
-import {
-  capabilityFor,
-  deriveTileTitle,
-  resolveTileRange,
-  type RangeBinding,
-} from '@/lib/chartRange';
+import { capabilityFor, type RangeBinding } from '@/lib/chartRange';
 import { resolveDateRange, type DateRange } from '@/lib/dateRange';
 
 export type PendingAdd = {
@@ -63,24 +58,9 @@ export default function InheritRangeDialog({
   const native = pending ? resolveDateRange(cap!.nativeRange) : null;
   const target = pending ? resolveDateRange(pending.targetRange) : null;
 
-  const inherited = pending
-    ? resolveTileRange({
-        chartId: pending.chartId,
-        binding: { mode: 'inherit' },
-        dashboardRange: pending.targetRange,
-      })
-    : null;
-  const kept = pending
-    ? resolveTileRange({
-        chartId: pending.chartId,
-        binding: { mode: 'own', range: cap!.nativeRange },
-        dashboardRange: pending.targetRange,
-      })
-    : null;
-
   return createPortal(
     <AnimatePresence>
-      {pending && cap && native && target && inherited && kept && (
+      {pending && cap && native && target && (
         <>
           <motion.div
             key="inherit-backdrop"
@@ -157,8 +137,8 @@ export default function InheritRangeDialog({
                     You built <strong>{cap.metric || fallbackLabel}</strong> for{' '}
                     <strong>{native.label.toLowerCase()}</strong>, but{' '}
                     <strong>{pending.targetName}</strong> shows{' '}
-                    <strong>{target.label.toLowerCase()}</strong>. It will be re-cut to
-                    match, so every tile on the dashboard reads the same window.
+                    <strong>{target.label.toLowerCase()}</strong>. It will show data
+                    for the date range selected on the dashboard.
                   </div>
                 </div>
                 <button
@@ -177,37 +157,9 @@ export default function InheritRangeDialog({
                 </button>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <Outcome
-                  heading="Follow the dashboard"
-                  title={deriveTileTitle({
-                    chartId: pending.chartId,
-                    tile: inherited,
-                    fallbackLabel,
-                  })}
-                  window={inherited.resolved.absoluteLabel}
-                  note={inherited.note}
-                  recommended
-                />
-                <Outcome
-                  heading="Keep its own range"
-                  title={deriveTileTitle({
-                    chartId: pending.chartId,
-                    tile: kept,
-                    fallbackLabel,
-                  })}
-                  window={kept.resolved.absoluteLabel}
-                  note="Stays on its own window, out of step with the rest of the dashboard."
-                />
-              </div>
-
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  onClick={() => onConfirm({ mode: 'own', range: cap.nativeRange })}
-                  style={secondaryButtonStyle}
-                >
-                  Keep its own range
+                <button type="button" onClick={onCancel} style={secondaryButtonStyle}>
+                  Cancel
                 </button>
                 <button
                   type="button"
@@ -224,76 +176,6 @@ export default function InheritRangeDialog({
       )}
     </AnimatePresence>,
     document.body,
-  );
-}
-
-function Outcome({
-  heading,
-  title,
-  window: windowLabel,
-  note,
-  recommended,
-}: {
-  heading: string;
-  title: string;
-  window: string;
-  note: string | null;
-  recommended?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        border: recommended
-          ? '1px solid var(--color-accent-active)'
-          : '1px solid var(--color-border-subtle)',
-        borderRadius: 10,
-        padding: '10px 12px',
-        background: recommended
-          ? 'color-mix(in srgb, var(--color-accent-active) 4%, white)'
-          : '#fff',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
-            color: 'var(--color-text-muted)',
-          }}
-        >
-          {heading}
-        </span>
-        {recommended && (
-          <span
-            style={{
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: '0.05em',
-              textTransform: 'uppercase',
-              color: 'var(--color-accent-active)',
-            }}
-          >
-            Default
-          </span>
-        )}
-      </div>
-      <div
-        style={{
-          fontSize: 13,
-          fontWeight: 700,
-          color: 'var(--color-text-primary)',
-          marginTop: 3,
-        }}
-      >
-        {title}
-      </div>
-      <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-muted)', marginTop: 2 }}>
-        {windowLabel}
-        {note ? ` · ${note}` : ''}
-      </div>
-    </div>
   );
 }
 
