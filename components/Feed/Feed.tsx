@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Send,
@@ -26,6 +26,14 @@ import {
   FileText,
   Package,
   Check,
+  Target,
+  Box,
+  Utensils,
+  MapPin,
+  Timer,
+  Layers,
+  ClipboardList,
+  Search,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import EdifyMarkThinking from '@/components/EdifyMark/EdifyMarkThinking';
@@ -73,6 +81,9 @@ import ProductSheetDetailsCard from '@/components/Feed/commands/cards/ProductShe
 import AmbiguityPicker from '@/components/Feed/commands/cards/AmbiguityPicker';
 import ReceiptCard from '@/components/Feed/commands/cards/ReceiptCard';
 import MarginExplorerCard from '@/components/Feed/commands/cards/MarginExplorerCard';
+import CardShell, { PillRow, type CardState } from '@/components/Feed/commands/cards/CardShell';
+import { demoCustomer } from '@/lib/demoConfig';
+import BatchReviewCard, { type BatchReviewRow, type BatchRowResult, type BatchReviewSubmission } from '@/components/Feed/commands/cards/BatchReviewCard';
 import type { AmbiguityChoice } from '@/components/Feed/commands/types';
 import {
   DEFAULT_WIZARD_TEMPLATE,
@@ -98,6 +109,7 @@ import {
   genId,
   snapshot as snapshotSuppliersStore,
 } from '@/components/Suppliers/store';
+import { useRecipes } from '@/components/Recipe/recipeStore';
 import {
   masterCompanyAvg,
   ALL_SITES as ALL_SUPPLIER_SITES,
@@ -252,39 +264,259 @@ const QUICK_ACTION_CHIPS: {
   commandId: string;
   label: string;
   icon: typeof ChefHat;
-}[] = COMMAND_REGISTRY
-  .filter((c) => !HIDDEN_FROM_MENU_COMMAND_IDS.has(c.id))
-  .map((c) => ({
-    commandId: c.id,
-    label: c.chipLabel,
-    icon: c.chipIcon,
-  }));
+}[] = [
+  ...COMMAND_REGISTRY
+    .filter((c) => !HIDDEN_FROM_MENU_COMMAND_IDS.has(c.id))
+    .map((c) => ({
+      commandId: c.id,
+      label: c.chipLabel,
+      icon: c.chipIcon,
+    })),
+  // Not a registry command — a guided flow. Special-cased in
+  // `handleQuickAction`, which routes it to `startPosMatchCheck`.
+  { commandId: 'pos-match-check', label: 'Check my POS matches', icon: Target },
+];
 
 // ─── Data integrity checks ────────────────────────────────────────────────────
+//
+// Modelled on the real Soho recipe & cost review (Aug 2026): findings are
+// ranked by what they do to cost, written in plain English, and split into
+// FIX (moves the numbers), CHECK (ask the kitchen first) and TIDY (hygiene).
 
-type IntegrityStatus = 'issue' | 'warning' | 'ok';
+type IntegritySeverity = 'fix' | 'check' | 'tidy';
 
-type IntegrityCheck = {
+type IntegrityFinding = {
   id: string;
-  label: string;
-  detail: string;
-  status: IntegrityStatus;
-  action?: string;
+  /** 1-based priority — the list is worked top to bottom. */
+  priority: number;
+  title: string;
+  severity: IntegritySeverity;
+  /** One short line — the cost impact or the gist. Shown always. */
+  summary: string;
+  /** Longer plain-English explanation, behind the Details toggle. */
+  detail?: string;
+  /** Named recipes / lines affected, behind the Details toggle. */
+  affected?: string;
+  /** Label for the inline fix button. Absent = no batch rows to seed
+   *  (tidy-ups handled at the next menu review). */
+  fixLabel?: string;
 };
 
-const INTEGRITY_CHECKS: IntegrityCheck[] = [
-  { id: 'unavailable-ing', label: 'Unavailable ingredients', detail: '4 items flagged as unavailable in active recipes', status: 'issue', action: 'Review' },
-  { id: 'inactive-items', label: 'Inactive or discontinued items in recipes', detail: '2 discontinued items still referenced', status: 'issue', action: 'Review' },
-  { id: 'inactive-suppliers', label: 'Inactive suppliers still listed', detail: '1 inactive supplier linked to active items', status: 'issue', action: 'Review' },
-  { id: 'yield-outdated', label: 'Yield assumptions outdated', detail: 'Last reviewed 6+ months ago on 7 recipes', status: 'warning', action: 'Update' },
-  { id: 'price-margin', label: 'Margin shifted after yield update', detail: 'Menu price unchanged on 3 items — margins may be off', status: 'warning', action: 'Review' },
-  { id: 'sub-recipes', label: 'Sub-recipes not linked correctly', detail: '2 sub-recipes missing parent links', status: 'warning', action: 'Fix' },
-  { id: 'unit-measure', label: 'Wrong unit of measure on supplier items', detail: '1 item has mismatched units', status: 'warning', action: 'Fix' },
-  { id: 'archived-ing', label: 'Inactive ingredients archived', detail: 'All archived correctly', status: 'ok' },
-  { id: 'pos-linked', label: 'Every POS item has a linked recipe', detail: 'All 42 POS items linked', status: 'ok' },
-  { id: 'modifiers-mapped', label: 'Modifiers and variants mapped', detail: 'All mapped correctly', status: 'ok' },
-  { id: 'no-archived-ref', label: 'No recipes referencing archived ingredients', detail: 'No issues found', status: 'ok' },
+const INTEGRITY_STATS = [
+  { value: '456', label: 'Live recipes checked' },
+  { value: '12', label: 'Clear fixes' },
+  { value: '~9', label: 'Worth double-checking' },
+  { value: '99%+', label: 'Of lines look correct' },
 ];
+
+const INTEGRITY_FINDINGS: IntegrityFinding[] = [
+  {
+    id: 'wrong-cup',
+    priority: 1,
+    title: 'Four iced drinks on the wrong cup',
+    severity: 'fix',
+    summary: '£3.42 a cup instead of ~7p — the whole sleeve is charged to every drink.',
+    detail:
+      'All four point at Disp SOHO 16oz Smoothie Cups, set up as a pack of one rather than a sleeve of 50. The cup is also a suspended product, so it shouldn\u2019t be in a live recipe at all. Relink to 16oz Smoothie Cups New (pack of 50).',
+    affected: 'Iced Brown Sugar Latte · Iced Latte · Iced Long Black · Strawberry & Blueberry Smoothie',
+    fixLabel: 'Fix 4 cups',
+  },
+  {
+    id: 'wrong-units',
+    priority: 2,
+    title: 'Eight ingredients in the wrong kind of unit',
+    severity: 'fix',
+    summary: 'Grams on counted items and liquids — these recipes look cheaper than they are.',
+    detail:
+      'Use \u201ceach\u201d for the counted items, \u201cml\u201d for the liquids, and set grams on the honey line — it has no unit at all, so it costs nothing today. Six lines are named; the other two sit in the full 112-row audit list.',
+    affected: 'Cucumber Diced · Add Mushrooms · Ketchup · Knorr Cheese Sauce · Whipped Cream · Honey',
+    fixLabel: 'Fix 6 units',
+  },
+  {
+    id: 'brown-sauce',
+    priority: 3,
+    title: 'Brown sauce set to 15 sachets on four recipes',
+    severity: 'check',
+    summary: '£1.37 a portion instead of 9p. The norm everywhere else is 1.',
+    detail:
+      'Ask the kitchen whether 15 is real before editing — a single jacket potato almost certainly wants 1, but a sharing platter might genuinely want a few.',
+    fixLabel: 'Review',
+  },
+  {
+    id: 'archived-minis',
+    priority: 4,
+    title: 'Five live recipes rely on archived mini-recipes',
+    severity: 'tidy',
+    summary: 'Their cost is built on sub-recipes nobody is maintaining any more.',
+    detail: 'Either un-archive the mini-recipes or rebuild these five on current components.',
+    affected: 'Strawberries & Cream Syrup · Biscoff Filling · Ultimate Blueberry Muffin · Strawberry Jelly · Almond Croissant',
+  },
+  {
+    id: 'cold-foam',
+    priority: 5,
+    title: 'Vanilla Cold Foam pulled in as \u201c30 items\u201d',
+    severity: 'check',
+    summary: 'Could mean 30 ml or 30 whole batches — the costing engine can\u2019t tell.',
+    detail: 'Confirm it means 30 ml with whoever built the recipe, then set the unit to ml on each drink that uses it.',
+  },
+  {
+    id: 'unit-families',
+    priority: 6,
+    title: '52 mini-recipe lines mix unit families',
+    severity: 'tidy',
+    summary: 'Almost all cosmetic, cost nothing — clean up at the next menu review.',
+    detail: 'Weight against volume, or volume against count. Nothing this week; tidying them stops the flag list crying wolf.',
+  },
+];
+
+/** Batch-review rows per finding — each inline fix button seeds only its
+ *  own finding's rows, so the review stays small and scannable. The
+ *  brown-sauce row starts unticked because the kitchen has to confirm
+ *  15 sachets isn't real first. Two rows are rigged to fail on apply so
+ *  the partial-failure path is visible. */
+const WRONG_CUP_WAS = {
+  was: { name: 'Disp SOHO - 16oz Smoothie Cups', qty: '1', unit: 'each', cost: '£3.42' },
+  note: 'Suspended product, set up as a pack of 1 — the whole sleeve is charged to every drink',
+};
+
+const INTEGRITY_FIX_GROUPS: Record<string, BatchReviewRow[]> = {
+  'wrong-cup': [
+    // The root cause is the PRODUCT's setup, not any recipe — surfaced
+    // first so the operator sees why, but unticked: the product is
+    // suspended, so the audit's recommendation is the relinks below.
+    { id: 'fix-cup-product', entity: 'Disp SOHO - 16oz Smoothie Cups', entityMeta: 'The root cause — suspended, so relinking below is the better fix', confidence: 'low', impact: 'root cause', field: 'Pack quantity', before: '1', after: '50', product: { section: 'Product setup', fields: [
+      { label: 'Supplier', value: 'Disposables Direct' },
+      { label: 'Pack quantity', value: '50', flagged: { was: '1', note: 'A pack of 1 means the whole £3.42 sleeve is charged to every single drink' } },
+      { label: 'Pack price', value: '£3.42' },
+      { label: 'Status', value: 'Suspended' },
+    ] } },
+    { id: 'fix-cup-bsl', entity: 'Iced Brown Sugar Latte', confidence: 'high', impact: '−£3.35/drink', field: 'Relink to', before: 'Disp SOHO - 16oz Smoothie Cups', after: '16oz Smoothie Cups New', recipe: { section: 'Packaging', lines: [
+      { name: 'Espresso — double shot', qty: '1', unit: 'each', cost: '£0.28' },
+      { name: 'Oat Milk', qty: '200', unit: 'ml', cost: '£0.22' },
+      { name: 'Brown Sugar Syrup', qty: '20', unit: 'ml', cost: '£0.11' },
+      { name: '16oz Smoothie Cups New', qty: '1', unit: 'each', cost: '£0.07', flagged: WRONG_CUP_WAS },
+      { name: 'Paper Straw', qty: '1', unit: 'each', cost: '£0.02' },
+    ] } },
+    { id: 'fix-cup-latte', entity: 'Iced Latte', confidence: 'high', impact: '−£3.35/drink', field: 'Relink to', before: 'Disp SOHO - 16oz Smoothie Cups', after: '16oz Smoothie Cups New', recipe: { section: 'Packaging', lines: [
+      { name: 'Espresso — double shot', qty: '1', unit: 'each', cost: '£0.28' },
+      { name: 'Whole Milk', qty: '200', unit: 'ml', cost: '£0.14' },
+      { name: '16oz Smoothie Cups New', qty: '1', unit: 'each', cost: '£0.07', flagged: WRONG_CUP_WAS },
+      { name: 'Sip Lid — clear', qty: '1', unit: 'each', cost: '£0.03' },
+    ] } },
+    { id: 'fix-cup-black', entity: 'Iced Long Black', confidence: 'high', impact: '−£3.35/drink', field: 'Relink to', before: 'Disp SOHO - 16oz Smoothie Cups', after: '16oz Smoothie Cups New', recipe: { section: 'Packaging', lines: [
+      { name: 'Espresso — double shot', qty: '2', unit: 'each', cost: '£0.56' },
+      { name: 'Filtered Water', qty: '150', unit: 'ml', cost: '—' },
+      { name: '16oz Smoothie Cups New', qty: '1', unit: 'each', cost: '£0.07', flagged: WRONG_CUP_WAS },
+    ] } },
+    { id: 'fix-cup-smoothie', entity: 'Strawberry & Blueberry Smoothie', confidence: 'high', impact: '−£3.35/drink', field: 'Relink to', before: 'Disp SOHO - 16oz Smoothie Cups', after: '16oz Smoothie Cups New', recipe: { section: 'Packaging', lines: [
+      { name: 'Strawberries — frozen', qty: '80', unit: 'gram', cost: '£0.44' },
+      { name: 'Blueberries — frozen', qty: '60', unit: 'gram', cost: '£0.52' },
+      { name: 'Banana', qty: '1', unit: 'each', cost: '£0.18' },
+      { name: '16oz Smoothie Cups New', qty: '1', unit: 'each', cost: '£0.07', flagged: WRONG_CUP_WAS },
+    ] } },
+  ],
+  'wrong-units': [
+    { id: 'fix-unit-cucumber', entity: 'Club Sandwich', entityMeta: 'Cucumber line', confidence: 'high', impact: 'understated', field: 'Unit', before: '60 gram', after: '60 each', recipe: { section: 'Ingredients', lines: [
+      { name: 'Toasted Bloomer', qty: '3', unit: 'slice', cost: '£0.24' },
+      { name: 'Chicken Mayo', qty: '80', unit: 'gram', cost: '£0.62' },
+      { name: 'Cucumber Diced', qty: '60', unit: 'each', flagged: { was: { name: 'Cucumber Diced', qty: '60', unit: 'gram' }, note: 'The product is priced per item — counted, not weighed' } },
+      { name: 'Butter — unsalted', qty: '10', unit: 'gram', cost: '£0.08' },
+    ] } },
+    { id: 'fix-unit-mushrooms', entity: 'Big Breakfast', entityMeta: 'Mushroom line', confidence: 'high', impact: 'understated', field: 'Unit', before: '75 gram', after: '75 each', recipe: { section: 'Ingredients', lines: [
+      { name: 'Free-Range Eggs', qty: '2', unit: 'each', cost: '£0.36' },
+      { name: 'Cumberland Sausage', qty: '2', unit: 'each', cost: '£0.58' },
+      { name: 'Add Mushrooms', qty: '75', unit: 'each', flagged: { was: { name: 'Add Mushrooms', qty: '75', unit: 'gram' }, note: 'The product is priced per item — counted, not weighed' } },
+      { name: 'Baked Beans', qty: '120', unit: 'gram', cost: '£0.22' },
+    ] } },
+    { id: 'fix-unit-ketchup', entity: 'Bacon Roll', entityMeta: 'Ketchup line', confidence: 'high', impact: 'understated', field: 'Unit', before: '15 gram', after: '15 ml', recipe: { section: 'Ingredients', lines: [
+      { name: 'Soft White Roll', qty: '1', unit: 'each', cost: '£0.32' },
+      { name: 'Back Bacon', qty: '3', unit: 'rasher', cost: '£0.66' },
+      { name: 'Ketchup', qty: '15', unit: 'ml', flagged: { was: { name: 'Ketchup', qty: '15', unit: 'gram' }, note: 'A liquid, priced by volume — gram lines are dropped or scaled wrongly' } },
+    ] } },
+    { id: 'fix-unit-cheese', entity: 'Jacket Potato — Cheese', entityMeta: 'Sauce line', confidence: 'high', impact: 'understated', field: 'Unit', before: '150 gram', after: '150 ml', recipe: { section: 'Ingredients', lines: [
+      { name: 'Jacket Potato', qty: '1', unit: 'each', cost: '£0.35' },
+      { name: 'Knorr Cheese Sauce', qty: '150', unit: 'ml', flagged: { was: { name: 'Knorr Cheese Sauce', qty: '150', unit: 'gram' }, note: 'A liquid, priced by volume — gram lines are dropped or scaled wrongly' } },
+      { name: 'Chives — fresh', qty: '5', unit: 'gram', cost: '£0.04' },
+    ] } },
+    { id: 'fix-unit-cream', entity: 'Hot Chocolate', entityMeta: 'Cream line', confidence: 'high', impact: 'understated', field: 'Unit', before: '30 g', after: '30 ml', recipe: { section: 'Ingredients', lines: [
+      { name: 'Whole Milk', qty: '250', unit: 'ml', cost: '£0.18' },
+      { name: 'Chocolate Powder', qty: '28', unit: 'gram', cost: '£0.30' },
+      { name: 'Whipped Cream', qty: '30', unit: 'ml', flagged: { was: { name: 'Whipped Cream', qty: '30', unit: 'g' }, note: 'A liquid, priced by volume — gram lines are dropped or scaled wrongly' } },
+      { name: 'Mini Marshmallows', qty: '10', unit: 'gram', cost: '£0.09' },
+    ] } },
+    { id: 'fix-unit-honey', entity: 'Porridge', entityMeta: 'Honey line', confidence: 'medium', impact: 'line ignored', field: 'Unit', before: '—', after: 'gram', recipe: { section: 'Ingredients', lines: [
+      { name: 'Rolled Oats', qty: '60', unit: 'gram', cost: '£0.14' },
+      { name: 'Whole Milk', qty: '200', unit: 'ml', cost: '£0.14' },
+      { name: 'Honey', qty: '15', unit: 'gram', flagged: { was: { name: 'Honey', qty: '15', unit: '(no unit)', cost: '£0.00' }, note: 'No unit set — the line is ignored and costs nothing today' } },
+    ] } },
+  ],
+  'brown-sauce': [
+    { id: 'fix-brown-sauce', entity: 'Jacket Potato & Beans', entityMeta: 'Same change on 3 more recipes', confidence: 'low', impact: '−£1.28/portion', field: 'Qty per portion', before: '15 sachets', after: '1 sachet', recipe: { section: 'Ingredients', lines: [
+      { name: 'Jacket Potato', qty: '1', unit: 'each', cost: '£0.35' },
+      { name: 'Baked Beans', qty: '120', unit: 'gram', cost: '£0.22' },
+      { name: 'Brown Sauce', qty: '1', unit: 'sachet', cost: '£0.09', flagged: { was: { name: 'Brown Sauce', qty: '15', unit: 'sachets', cost: '£1.37' }, note: 'Norm everywhere else is 1 — confirm with the kitchen before applying' } },
+    ] } },
+  ],
+};
+
+/** Everything at once — the card-level "Fix all" path. */
+const INTEGRITY_FIX_ROWS: BatchReviewRow[] = Object.values(INTEGRITY_FIX_GROUPS).flat();
+
+/** Copy + blast radius for each fix flow: the user echo, Quinn's short
+ *  intro, the batch card's title/subtitle, and the Impact summary stats
+ *  (rule #3). Keyed by finding id, plus 'all'. */
+const INTEGRITY_BATCH_META: Record<string, {
+  echo: string;
+  intro: string;
+  title: string;
+  subtitle: string;
+  impact: Array<{ value: string; label: string }>;
+}> = {
+  'wrong-cup': {
+    echo: 'Fix the cups',
+    intro: 'The root cause is the **product\u2019s setup** — the cup is a pack of 1, so the whole sleeve is charged per drink. It\u2019s suspended though, so the better fix is relinking the four recipes; I\u2019ve put the product row in **unticked** in case you\u2019d rather correct it instead. Every value is editable.',
+    title: 'Relink four iced drinks',
+    subtitle: 'Off the suspended pack-of-1 cup, onto the pack of 50',
+    impact: [
+      { value: '4', label: 'recipes affected' },
+      { value: '−£3.35', label: 'per drink, per sale' },
+      { value: '7p', label: 'true cup cost (was £3.42)' },
+    ],
+  },
+  'wrong-units': {
+    echo: 'Fix the units',
+    intro: 'Each line below shows the recipe it sits in and how it\u2019s measured today. **\u201cEach\u201d** for the counted items, **\u201cml\u201d** for the liquids, grams on the honey line. All editable before you apply.',
+    title: 'Correct six units',
+    subtitle: 'Counted items to \u201ceach\u201d, liquids to \u201cml\u201d, honey gets a unit',
+    impact: [
+      { value: '6', label: 'lines corrected here' },
+      { value: '2', label: 'more in the 112-row audit' },
+      { value: 'Low', label: 'these recipes read cheaper than real' },
+    ],
+  },
+  'brown-sauce': {
+    echo: 'Review the brown sauce',
+    intro: 'Here\u2019s the line as it stands — **15 sachets a portion** against a norm of 1. I\u2019ve left it unticked until the kitchen confirms; tick and apply once they do.',
+    title: 'Brown sauce quantity',
+    subtitle: 'Needs the kitchen\u2019s confirmation before applying',
+    impact: [
+      { value: '4', label: 'recipes affected' },
+      { value: '£1.37', label: 'per portion today' },
+      { value: '9p', label: 'after the fix' },
+    ],
+  },
+  all: {
+    echo: 'Fix everything for me',
+    intro: 'Everything that moves your numbers in one list — each row shows the recipe line as it reads today and the change I suggest. The brown-sauce row is **unticked** until the kitchen confirms. Every value is editable.',
+    title: 'Soho recipe fixes',
+    subtitle: 'Cup relinks and unit corrections — the brown-sauce row waits on the kitchen',
+    impact: [
+      { value: '12', label: 'changes prepared' },
+      { value: '9+', label: 'recipes touched' },
+      { value: '−£3.35', label: 'biggest per-drink correction' },
+    ],
+  },
+};
 
 type ChatMsg = {
   id: string;
@@ -344,6 +576,7 @@ const WORKSPACE_MSG_TYPES = new Set<string>([
   'cogs-target',
   'margin-explorer',
   'integrity-check',
+  'integrity-batch-review',
   'packaging-picker',
   'allergen-check',
   'site-selection',
@@ -377,6 +610,30 @@ const WORKSPACE_MSG_TYPES = new Set<string>([
 function isWorkspaceMsg(m: ChatMsg): boolean {
   return !!m.msgType && WORKSPACE_MSG_TYPES.has(m.msgType);
 }
+
+/** Labels for the in-stream Workspace pointer — the small marker left
+ *  in the conversation when a module opens on the right, so history and
+ *  narrow layouts stay coherent. Falls back to "Working on this". */
+const WORKSPACE_POINTER_LABELS: Record<string, string> = {
+  'integrity-check': 'Recipe & cost review',
+  'integrity-batch-review': 'Reviewing prepared fixes',
+  'pos-match-suggestions': 'Matching POS items',
+  'product-sheet-import': 'Reviewing the product sheet',
+  'new-supplier-import': 'Reviewing the supplier import',
+  'recipe-card': 'Building the recipe',
+  'cogs-target': 'Setting the cost target',
+  'margin-explorer': 'Exploring margins',
+  'packaging-picker': 'Choosing packaging',
+  'allergen-check': 'Checking allergens',
+  'site-selection': 'Choosing sites',
+  'storage-area': 'Updating storage areas',
+  'stock-review': 'Reviewing stock takes',
+  'stock-sites': 'Choosing stock sites',
+  'chagee-tea-supplier': 'Adding the supplier & product',
+  'chagee-tea-recipe': 'Updating the recipe',
+  'analytics-chart': 'Charting your data',
+  'table-result': 'Building the table',
+};
 
 /** Working-state row for the in-Feed wizard. Mirrors
  *  `TemplateIngredient` but allows qty to be edited as a string
@@ -1080,17 +1337,13 @@ function CogsTargetPicker({
 }) {
   const presets = [20, 25, 30, 35];
   return (
-    <div
-      style={{
-        marginTop: '8px',
-        padding: '12px 14px',
-        borderRadius: '10px',
-        border: '1px solid var(--color-border-subtle)',
-        background: '#fff',
-        fontFamily: 'var(--font-primary)',
-      }}
+    <CardShell
+      icon={Target}
+      title="Target food cost %"
+      state={disabled ? 'confirmed' : 'pending'}
+      confirmLabel={`Use ${value}% target`}
+      onConfirm={onConfirm}
     >
-      <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: '10px' }}>Target food cost %</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
         {presets.map((pct) => {
           const active = pct === value;
@@ -1161,58 +1414,43 @@ function CogsTargetPicker({
           <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)' }}>%</span>
         </div>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={onConfirm}
-          style={{
-            padding: '8px 14px',
-            borderRadius: '10px',
-            border: 'none',
-            background: 'var(--color-accent-active)',
-            color: '#fff',
-            fontSize: '12.5px',
-            fontWeight: 600,
-            fontFamily: 'var(--font-primary)',
-            cursor: disabled ? 'not-allowed' : 'pointer',
-          }}
-        >
-          Use {value}% target
-        </button>
-      </div>
-    </div>
+    </CardShell>
   );
 }
 
-function PackagingPicker({ options, selected, onToggle, onConfirm, onSkip }: {
+function PackagingPicker({ options, selected, onToggle, onConfirm, onSkip, state }: {
   options: PackagingTemplate[];
   selected: Set<string>;
   onToggle: (id: string) => void;
   onConfirm: () => void;
   onSkip: () => void;
+  state: CardState;
 }) {
   const totalPackaging = options
     .filter(p => selected.has(p.id))
     .reduce((s, p) => s + p.cost, 0);
+  const disabled = state !== 'pending';
 
   return (
-    <div style={{
-      marginTop: '8px',
-      borderRadius: '10px',
-      border: '1px solid var(--color-border-subtle)',
-      overflow: 'hidden',
-      background: '#fff',
-    }}>
-      <div style={{ padding: '10px 14px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)' }}>
-        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Packaging</span>
-      </div>
+    <CardShell
+      icon={Box}
+      title="Packaging"
+      subtitle={selected.size > 0 ? `Packaging adds +£${totalPackaging.toFixed(2)}/serve` : 'Pick anything the recipe leaves the pass in'}
+      state={state}
+      confirmLabel={`Add selected (${selected.size})`}
+      confirmDisabled={selected.size === 0}
+      cancelLabel="No packaging needed"
+      onConfirm={onConfirm}
+      onCancel={onSkip}
+    >
+      <div style={{ margin: '-12px', borderRadius: '0' }}>
       {options.map((pkg, i) => {
         const isSelected = selected.has(pkg.id);
         return (
           <button
             key={pkg.id}
             type="button"
+            disabled={disabled}
             onClick={() => onToggle(pkg.id)}
             style={{
               display: 'flex',
@@ -1261,96 +1499,48 @@ function PackagingPicker({ options, selected, onToggle, onConfirm, onSkip }: {
         );
       })}
 
-      {selected.size > 0 && (
-        <div style={{
-          padding: '8px 14px',
-          background: 'rgba(34,68,68,0.04)',
-          borderTop: '1px solid var(--color-border-subtle)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          fontSize: '12px', fontWeight: 500,
-        }}>
-          <span style={{ color: 'var(--color-text-secondary)' }}>Packaging adds</span>
-          <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>+£{totalPackaging.toFixed(2)}/serve</span>
-        </div>
-      )}
-
-      <div style={{
-        padding: '10px 14px',
-        borderTop: '1px solid var(--color-border-subtle)',
-        display: 'flex',
-        gap: '8px',
-        justifyContent: 'flex-end',
-      }}>
-        <button
-          type="button"
-          onClick={onSkip}
-          style={{
-            padding: '8px 14px',
-            borderRadius: '10px',
-            border: '1px solid var(--color-border)',
-            background: '#fff',
-            fontSize: '12px',
-            fontWeight: 600,
-            fontFamily: 'var(--font-primary)',
-            color: 'var(--color-text-primary)',
-            cursor: 'pointer',
-          }}
-        >
-          No packaging needed
-        </button>
-        {selected.size > 0 && (
-          <button
-            type="button"
-            onClick={onConfirm}
-            style={{
-              padding: '8px 14px',
-              borderRadius: '10px',
-              border: 'none',
-              background: 'var(--color-accent-active)',
-              fontSize: '12px',
-              fontWeight: 600,
-              fontFamily: 'var(--font-primary)',
-              color: '#fff',
-              cursor: 'pointer',
-            }}
-          >
-            Add selected ({selected.size})
-          </button>
-        )}
       </div>
-    </div>
+    </CardShell>
   );
 }
 
-function SiteSelectionCard({ selected, onToggle, onConfirm }: { selected: Set<string>; onToggle: (id: string) => void; onConfirm: () => void }) {
+function SiteSelectionCard({ selected, onToggle, onConfirm, state }: { selected: Set<string>; onToggle: (id: string) => void; onConfirm: () => void; state: CardState }) {
+  const disabled = state !== 'pending';
+  const allSelected = MOCK_SITES.every(s => selected.has(s.id));
   return (
-    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden', background: '#fff' }}>
-      <div style={{ padding: '9px 14px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Select Sites</span>
+    <CardShell
+      icon={MapPin}
+      title="Select sites"
+      subtitle={`${selected.size} site${selected.size !== 1 ? 's' : ''} selected`}
+      state={state}
+      confirmLabel="Confirm sites"
+      confirmDisabled={selected.size === 0}
+      onConfirm={onConfirm}
+    >
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
         <button
           type="button"
+          disabled={disabled}
           onClick={() => {
-            const allSelected = MOCK_SITES.every(s => selected.has(s.id));
             if (allSelected) {
               MOCK_SITES.forEach(s => { if (s.id !== 'fitzroy') onToggle(s.id); });
             } else {
               MOCK_SITES.forEach(s => { if (!selected.has(s.id)) onToggle(s.id); });
             }
           }}
-          style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-accent-active)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-primary)', padding: 0 }}
+          style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-accent-active)', background: 'none', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-primary)', padding: 0 }}
         >
-          {MOCK_SITES.every(s => selected.has(s.id)) ? 'Deselect all' : 'Select all'}
+          {allSelected ? 'Deselect all' : 'Select all'}
         </button>
       </div>
-      <div style={{ padding: '12px 14px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
         {MOCK_SITES.map(site => {
           const isSelected = selected.has(site.id);
           return (
             <button
               key={site.id}
               type="button"
+              disabled={disabled}
               onClick={() => onToggle(site.id)}
               style={{
                 padding: '7px 16px',
@@ -1361,7 +1551,7 @@ function SiteSelectionCard({ selected, onToggle, onConfirm }: { selected: Set<st
                 fontSize: '13px',
                 fontWeight: isSelected ? 700 : 400,
                 fontFamily: 'var(--font-primary)',
-                cursor: 'pointer',
+                cursor: disabled ? 'not-allowed' : 'pointer',
                 transition: 'all 0.12s',
               }}
             >
@@ -1370,36 +1560,29 @@ function SiteSelectionCard({ selected, onToggle, onConfirm }: { selected: Set<st
           );
         })}
       </div>
-      <div style={{ padding: '10px 14px', borderTop: '1px solid var(--color-border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>{selected.size} site{selected.size !== 1 ? 's' : ''} selected</span>
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={selected.size === 0}
-          style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: selected.size > 0 ? 'var(--color-accent-active)' : 'var(--color-bg-hover)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: selected.size > 0 ? '#fff' : 'var(--color-text-muted)', cursor: selected.size > 0 ? 'pointer' : 'not-allowed' }}
-        >
-          Confirm sites
-        </button>
-      </div>
-    </div>
+    </CardShell>
   );
 }
 
-function AllergenCard({ confirmed, detected, onToggle, onConfirm }: {
+function AllergenCard({ confirmed, detected, onToggle, onConfirm, state }: {
   confirmed: Set<string>;
   detected: Set<string>;
   onToggle: (a: string) => void;
   onConfirm: () => void;
+  state: CardState;
 }) {
+  const disabled = state !== 'pending';
   return (
-    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden', background: '#fff' }}>
-      <div style={{ padding: '10px 14px', background: 'var(--color-warning-light)', borderBottom: '1px solid var(--color-warning-border)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-warning)' }}>Allergens</span>
-        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-warning)', marginLeft: 'auto' }}>
-          {confirmed.size} selected · {detected.size} auto-detected from ingredients
-        </span>
-      </div>
-      <div style={{ padding: '10px 14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px' }}>
+    <CardShell
+      icon={ShieldCheck}
+      title="Allergens"
+      subtitle={`${confirmed.size} selected · ${detected.size} auto-detected from ingredients`}
+      state={state}
+      confirmLabel={`Confirm allergens (${confirmed.size})`}
+      onConfirm={onConfirm}
+      warning="Based on UK Food Information Regulations 2014 — check auto-detected entries before confirming"
+    >
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px' }}>
         {ALL_ALLERGENS.map(allergen => {
           const isDetected = detected.has(allergen);
           const isSelected = confirmed.has(allergen);
@@ -1407,6 +1590,7 @@ function AllergenCard({ confirmed, detected, onToggle, onConfirm }: {
             <button
               key={allergen}
               type="button"
+              disabled={disabled}
               onClick={() => onToggle(allergen)}
               style={{
                 display: 'flex',
@@ -1415,7 +1599,7 @@ function AllergenCard({ confirmed, detected, onToggle, onConfirm }: {
                 padding: '6px 8px',
                 borderRadius: '6px',
                 border: 'none',
-                background: isSelected ? (isDetected ? 'rgba(234,88,12,0.07)' : 'rgba(34,68,68,0.05)') : 'transparent',
+                background: isSelected ? (isDetected ? '#FEF6DA' : 'rgba(34,68,68,0.05)') : 'transparent',
                 cursor: 'pointer',
                 fontFamily: 'var(--font-primary)',
                 textAlign: 'left',
@@ -1443,17 +1627,7 @@ function AllergenCard({ confirmed, detected, onToggle, onConfirm }: {
           );
         })}
       </div>
-      <div style={{ padding: '10px 14px', borderTop: '1px solid var(--color-border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>Based on UK Food Information Regulations 2014</span>
-        <button
-          type="button"
-          onClick={onConfirm}
-          style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer' }}
-        >
-          Confirm allergens ({confirmed.size})
-        </button>
-      </div>
-    </div>
+    </CardShell>
   );
 }
 
@@ -1536,47 +1710,17 @@ function ProductSheetImportCard({
   const allOn = sites.size === ALL_SUPPLIER_SITES.length;
 
   return (
-    <div
-      style={{
-        marginTop: '8px',
-        borderRadius: '14px',
-        background: '#fff',
-        border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.12))',
-        boxShadow: '0 4px 16px rgba(0, 28, 53, 0.08)',
-        overflow: 'hidden',
-        fontFamily: 'var(--font-primary)',
-        opacity: confirmed ? 0.85 : 1,
-      }}
+    <CardShell
+      icon={FileText}
+      title="Adding new product from sheet"
+      subtitle={`Parsed in 1.2s · ${fileName}`}
+      state={confirmed ? 'confirmed' : 'pending'}
+      confirmLabel={`Add product${sites.size > 0 ? ` to ${sites.size} ${sites.size === 1 ? 'site' : 'sites'}` : ''}`}
+      confirmDisabled={sites.size === 0}
+      onConfirm={onConfirm}
     >
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          padding: '11px 14px',
-          borderBottom: '1px solid var(--color-border-subtle)',
-        }}
-      >
-        <FileText size={15} strokeWidth={1.9} color="var(--color-text-muted)" />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            Adding new product from sheet
-          </div>
-          <div style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
-            Parsed in 1.2s · {fileName}
-          </div>
-        </div>
-        {confirmed && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', fontWeight: 700, color: '#15803D' }}>
-            <CheckCircle2 size={13} strokeWidth={2.2} />
-            Added
-          </span>
-        )}
-      </div>
-
       {/* Extracted fields */}
-      <div style={{ padding: '10px 14px 4px' }}>
+      <div style={{ padding: '0 2px 4px' }}>
         <div
           style={{
             fontSize: '10.5px',
@@ -1725,42 +1869,7 @@ function ProductSheetImportCard({
           })}
         </div>
       </div>
-
-      {/* CTA */}
-      <div
-        style={{
-          padding: '10px 14px',
-          borderTop: '1px solid var(--color-border-subtle)',
-          display: 'flex',
-          justifyContent: 'flex-end',
-          background: 'rgba(0,28,53,0.02)',
-        }}
-      >
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={confirmed || sites.size === 0}
-          style={{
-            padding: '8px 18px',
-            borderRadius: '100px',
-            border: 'none',
-            background: confirmed
-              ? 'rgba(0,28,53,0.08)'
-              : sites.size === 0
-                ? 'rgba(0,28,53,0.08)'
-                : 'var(--color-accent-active)',
-            fontSize: '12.5px',
-            fontWeight: 700,
-            fontFamily: 'var(--font-primary)',
-            color: confirmed || sites.size === 0 ? 'var(--color-text-muted)' : '#fff',
-            cursor: confirmed || sites.size === 0 ? 'not-allowed' : 'pointer',
-            boxShadow: confirmed || sites.size === 0 ? 'none' : '0 2px 8px rgba(34,68,68,0.25)',
-          }}
-        >
-          {confirmed ? 'Added to catalogue' : `Add product${sites.size > 0 ? ` to ${sites.size} ${sites.size === 1 ? 'site' : 'sites'}` : ''}`}
-        </button>
-      </div>
-    </div>
+    </CardShell>
   );
 }
 
@@ -1856,72 +1965,19 @@ const DEMO_SECTION_LABEL: React.CSSProperties = {
   gap: '6px',
 };
 
-const DEMO_CARD_SHELL: React.CSSProperties = {
-  marginTop: '8px',
-  borderRadius: '14px',
-  background: '#fff',
-  border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.12))',
-  boxShadow: '0 4px 16px rgba(0, 28, 53, 0.08)',
-  overflow: 'hidden',
-  fontFamily: 'var(--font-primary)',
-};
-
-function DemoCtaButton({ label, doneLabel, confirmed, disabled, onClick }: {
-  label: string;
-  doneLabel: string;
-  confirmed: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  const off = confirmed || disabled;
-  return (
-    <div style={{ padding: '10px 14px', borderTop: '1px solid var(--color-border-subtle)', display: 'flex', justifyContent: 'flex-end', background: 'rgba(0,28,53,0.02)' }}>
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={off}
-        style={{
-          padding: '8px 18px',
-          borderRadius: '10px',
-          border: 'none',
-          background: off ? 'rgba(0,28,53,0.08)' : 'var(--color-accent-active)',
-          fontSize: '12.5px',
-          fontWeight: 700,
-          fontFamily: 'var(--font-primary)',
-          color: off ? 'var(--color-text-muted)' : '#fff',
-          cursor: off ? 'not-allowed' : 'pointer',
-        }}
-      >
-        {confirmed ? doneLabel : label}
-      </button>
-    </div>
-  );
-}
-
 /** Step 1 — the parsed supplier + their whole-tea-leaves product. */
 function ChageeTeaSupplierCard({ confirmed, onConfirm }: { confirmed: boolean; onConfirm: () => void }) {
   const d = CHAGEE_TEA_SWAP;
   return (
-    <div style={{ ...DEMO_CARD_SHELL, opacity: confirmed ? 0.85 : 1 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
-        <FileText size={15} strokeWidth={1.9} color="var(--color-text-muted)" />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            Adding new supplier + product
-          </div>
-          <div style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
-            Parsed in 1.4s · {d.fileName}
-          </div>
-        </div>
-        {confirmed && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', fontWeight: 700, color: '#15803D' }}>
-            <CheckCircle2 size={13} strokeWidth={2.2} />
-            Added
-          </span>
-        )}
-      </div>
-
-      <div style={{ padding: '10px 14px 4px' }}>
+    <CardShell
+      icon={FileText}
+      title="Adding new supplier + product"
+      subtitle={`Parsed in 1.4s · ${d.fileName}`}
+      state={confirmed ? 'confirmed' : 'pending'}
+      confirmLabel="Add supplier + product"
+      onConfirm={onConfirm}
+    >
+      <div style={{ padding: '0 2px 4px' }}>
         <div style={DEMO_SECTION_LABEL}>
           <EdifyMark size={11} />
           Supplier details
@@ -1969,13 +2025,7 @@ function ChageeTeaSupplierCard({ confirmed, onConfirm }: { confirmed: boolean; o
         </div>
       </div>
 
-      <DemoCtaButton
-        label="Add supplier + product"
-        doneLabel="Added to catalogue"
-        confirmed={confirmed}
-        onClick={onConfirm}
-      />
-    </div>
+    </CardShell>
   );
 }
 
@@ -1996,26 +2046,16 @@ function ChageeTeaRecipeCard({
   const d = CHAGEE_TEA_SWAP;
   const allOn = franchises.size === d.franchises.length;
   return (
-    <div style={{ ...DEMO_CARD_SHELL, opacity: confirmed ? 0.85 : 1 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
-        <ChefHat size={15} strokeWidth={1.9} color="var(--color-text-muted)" />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            Update recipe — {d.recipe.name}
-          </div>
-          <div style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
-            Ingredient swap · whole tea leaves
-          </div>
-        </div>
-        {confirmed && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', fontWeight: 700, color: '#15803D' }}>
-            <CheckCircle2 size={13} strokeWidth={2.2} />
-            Updated
-          </span>
-        )}
-      </div>
-
-      <div style={{ padding: '10px 14px' }}>
+    <CardShell
+      icon={ChefHat}
+      title={`Update recipe — ${d.recipe.name}`}
+      subtitle="Ingredient swap · whole tea leaves"
+      state={confirmed ? 'confirmed' : 'pending'}
+      confirmLabel={`Update recipe across ${franchises.size} franchise${franchises.size === 1 ? '' : 's'}`}
+      confirmDisabled={franchises.size === 0}
+      onConfirm={onConfirm}
+    >
+      <div style={{ padding: '0 2px' }}>
         <div style={DEMO_SECTION_LABEL}>
           <EdifyMark size={11} />
           Ingredient swap
@@ -2080,14 +2120,7 @@ function ChageeTeaRecipeCard({
         </div>
       </div>
 
-      <DemoCtaButton
-        label={`Update recipe across ${franchises.size} franchise${franchises.size === 1 ? '' : 's'}`}
-        doneLabel="Recipe updated"
-        confirmed={confirmed}
-        disabled={franchises.size === 0}
-        onClick={onConfirm}
-      />
-    </div>
+    </CardShell>
   );
 }
 
@@ -2139,26 +2172,16 @@ function StockReviewCard({
   const d = STOCK_TAKE_REVIEW;
   const allOn = selected.size === d.products.length;
   return (
-    <div style={{ ...DEMO_CARD_SHELL, opacity: confirmed ? 0.85 : 1 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
-        <Package size={15} strokeWidth={1.9} color="var(--color-text-muted)" />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            Products missing a storage area
-          </div>
-          <div style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
-            {d.products.length} products aren&apos;t counted on any stock take
-          </div>
-        </div>
-        {confirmed && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', fontWeight: 700, color: '#15803D' }}>
-            <CheckCircle2 size={13} strokeWidth={2.2} />
-            Selected
-          </span>
-        )}
-      </div>
-
-      <div style={{ padding: '10px 14px' }}>
+    <CardShell
+      icon={Package}
+      title="Products missing a storage area"
+      subtitle={`${d.products.length} products aren't counted on any stock take`}
+      state={confirmed ? 'confirmed' : 'pending'}
+      confirmLabel={`Add ${selected.size} product${selected.size === 1 ? '' : 's'} to stock take`}
+      confirmDisabled={selected.size === 0}
+      onConfirm={onConfirm}
+    >
+      <div style={{ padding: '0 2px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
           <div style={{ ...DEMO_SECTION_LABEL, marginBottom: 0 }}>
             <EdifyMark size={11} />
@@ -2225,14 +2248,7 @@ function StockReviewCard({
         </div>
       </div>
 
-      <DemoCtaButton
-        label={`Add ${selected.size} product${selected.size === 1 ? '' : 's'} to stock take`}
-        doneLabel="Products selected"
-        confirmed={confirmed}
-        disabled={selected.size === 0}
-        onClick={onConfirm}
-      />
-    </div>
+    </CardShell>
   );
 }
 
@@ -2255,26 +2271,16 @@ function StockSitesCard({
 }) {
   const allOn = sites.size === ALL_SUPPLIER_SITES.length;
   return (
-    <div style={{ ...DEMO_CARD_SHELL, opacity: confirmed ? 0.85 : 1 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
-        <Package size={15} strokeWidth={1.9} color="var(--color-text-muted)" />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            Which sites?
-          </div>
-          <div style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
-            The products join the stock take at the selected sites
-          </div>
-        </div>
-        {confirmed && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', fontWeight: 700, color: '#15803D' }}>
-            <CheckCircle2 size={13} strokeWidth={2.2} />
-            Selected
-          </span>
-        )}
-      </div>
-
-      <div style={{ padding: '10px 14px' }}>
+    <CardShell
+      icon={Package}
+      title="Which sites?"
+      subtitle="The products join the stock take at the selected sites"
+      state={confirmed ? 'confirmed' : 'pending'}
+      confirmLabel={`Confirm ${sites.size} site${sites.size === 1 ? '' : 's'}`}
+      confirmDisabled={sites.size === 0}
+      onConfirm={onConfirm}
+    >
+      <div style={{ padding: '0 2px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
           <div style={{ ...DEMO_SECTION_LABEL, marginBottom: 0 }}>
             <EdifyMark size={11} />
@@ -2318,14 +2324,7 @@ function StockSitesCard({
         </div>
       </div>
 
-      <DemoCtaButton
-        label={`Continue with ${sites.size} site${sites.size === 1 ? '' : 's'}`}
-        doneLabel="Sites selected"
-        confirmed={confirmed}
-        disabled={sites.size === 0}
-        onClick={onConfirm}
-      />
-    </div>
+    </CardShell>
   );
 }
 
@@ -2350,26 +2349,20 @@ function StorageAreaCard({
   const rows = d.products.filter((p) => productIds.includes(p.id));
   const allAssigned = rows.every((p) => !!choices[p.id]);
   return (
-    <div style={{ ...DEMO_CARD_SHELL, opacity: confirmed ? 0.85 : 1 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
-        <Package size={15} strokeWidth={1.9} color="var(--color-text-muted)" />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            Choose storage areas
-          </div>
-          <div style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
-            I&apos;ve suggested an area for each product — adjust any, then confirm
-          </div>
-        </div>
-        {confirmed && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', fontWeight: 700, color: '#15803D' }}>
-            <CheckCircle2 size={13} strokeWidth={2.2} />
-            Added
-          </span>
-        )}
-      </div>
-
-      <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+    <CardShell
+      icon={Package}
+      title="Choose storage areas"
+      subtitle="I've suggested an area for each product — adjust any, then confirm"
+      state={confirmed ? 'confirmed' : 'pending'}
+      confirmLabel={
+        allAssigned
+          ? `Add ${rows.length} product${rows.length === 1 ? '' : 's'} to storage areas`
+          : 'Assign an area to every product'
+      }
+      confirmDisabled={!allAssigned}
+      onConfirm={onConfirm}
+    >
+      <div style={{ padding: '0 2px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {rows.map((p) => (
           <div
             key={p.id}
@@ -2414,18 +2407,7 @@ function StorageAreaCard({
         ))}
       </div>
 
-      <DemoCtaButton
-        label={
-          allAssigned
-            ? `Add ${rows.length} product${rows.length === 1 ? '' : 's'} to storage areas`
-            : 'Assign an area to every product'
-        }
-        doneLabel="Added to storage areas"
-        confirmed={confirmed}
-        disabled={!allAssigned}
-        onClick={onConfirm}
-      />
-    </div>
+    </CardShell>
   );
 }
 
@@ -2435,12 +2417,24 @@ function StorageAreaCard({
  *  chat after an import lands. The operator confirms (or skips) each
  *  one without leaving the conversation; "applied" rows write to the
  *  same override store the Item matching page reads from. */
+/** What a POS button can point at — mirrors the Item matching page. */
+type POSTargetType = 'Master product' | 'Product' | 'Modifier' | 'Recipe' | 'Sub-recipe';
+
+type POSMatchCandidate = { id: string; name: string; type: POSTargetType };
+
 type POSMatchSuggestion = {
   posItemId: string;
   posItemName: string;
+  /** What kind of POS button this is (Menu item vs Modifier). */
+  posType?: 'Menu item' | 'Modifier';
   productId: string;
   productName: string;
-  /** Similarity score (0–1). Drives the "high / likely" pill. */
+  /** What kind of entity the suggested target is. Defaults to Product. */
+  targetType?: POSTargetType;
+  /** Other plausible targets, offered in the change-target dropdown so
+   *  a wrong suggestion can be corrected in place (rule #6). */
+  alternatives?: POSMatchCandidate[];
+  /** Similarity score (0–1). Drives the High / Likely / Not sure pill. */
   score: number;
 };
 
@@ -2480,19 +2474,21 @@ function computePOSDrinkSuggestions(
   for (const pos of FITZROY_POS_INTAKE.menuItems) {
     if (pos.category !== 'Drinks') continue;
     if (alreadyMatchedPosIds.has(pos.id)) continue;
-    let best: { id: string; name: string; s: number } | null = null;
-    for (const prd of beverages) {
-      const s = scorePosName(pos.name, prd.name);
-      if (s >= POS_SUGGESTION_THRESHOLD && (!best || s > best.s)) {
-        best = { id: prd.id, name: prd.name, s };
-      }
-    }
+    const candidates = beverages
+      .map((prd) => ({ id: prd.id, name: prd.name, s: scorePosName(pos.name, prd.name) }))
+      .filter((c) => c.s >= POS_SUGGESTION_THRESHOLD)
+      .sort((a, b) => b.s - a.s);
+    const best = candidates[0];
     if (best) {
       out.push({
         posItemId: pos.id,
         posItemName: pos.name,
+        posType: 'Menu item',
         productId: best.id,
         productName: best.name,
+        targetType: 'Product',
+        // Runners-up feed the change-target dropdown.
+        alternatives: candidates.slice(1, 4).map((c) => ({ id: c.id, name: c.name, type: 'Product' as const })),
         score: best.s,
       });
     }
@@ -2914,7 +2910,7 @@ function SupplierProductEditPanel({
             fontSize: '11px',
             fontWeight: 600,
             fontFamily: 'var(--font-primary)',
-            color: confirmed ? 'var(--color-text-muted)' : '#B91C1C',
+            color: confirmed ? 'var(--color-text-muted)' : '#B01038',
             cursor: confirmed ? 'not-allowed' : 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
@@ -2951,9 +2947,41 @@ function SupplierProductEditPanel({
  *  SKUs we just added. The operator can apply each suggestion (or all
  *  in one go) without leaving the conversation — the writes go to the
  *  same override store the Item matching page reads from. */
+/** Chip palette for target entity types — mirrors the Item matching
+ *  page's Type / Linked-target chips. */
+const POS_TARGET_TYPE_CHIP: Record<POSTargetType, { color: string; bg: string }> = {
+  'Master product': { color: '#0E7490', bg: 'rgba(14,116,144,0.08)' },
+  'Product': { color: '#15803D', bg: 'rgba(21,128,61,0.08)' },
+  'Modifier': { color: '#7C3AED', bg: 'rgba(124,58,237,0.08)' },
+  'Recipe': { color: '#1D4ED8', bg: 'rgba(29,78,216,0.08)' },
+  'Sub-recipe': { color: '#B45309', bg: 'rgba(217,119,6,0.10)' },
+};
+
+function PosTypeChip({ type }: { type: POSTargetType }) {
+  const c = POS_TARGET_TYPE_CHIP[type];
+  return (
+    <span style={{
+      padding: '1px 7px', borderRadius: '999px', background: c.bg,
+      fontSize: '10px', fontWeight: 700, letterSpacing: '0.03em',
+      color: c.color, flexShrink: 0, whiteSpace: 'nowrap',
+    }}>
+      {type}
+    </span>
+  );
+}
+
+/** High / Likely / Not sure tier off the similarity score. Not-sure
+ *  rows are excluded from bulk linking (rule #5). */
+function posMatchTier(score: number): 'high' | 'likely' | 'unsure' {
+  if (score >= 0.7) return 'high';
+  if (score >= 0.55) return 'likely';
+  return 'unsure';
+}
+
 function POSMatchSuggestionsCard({
   suggestions,
   decisions,
+  catalogue,
   onApply,
   onSkip,
   onApplyAll,
@@ -2962,94 +2990,85 @@ function POSMatchSuggestionsCard({
   suggestions: POSMatchSuggestion[];
   /** Per-row decision keyed by `posItemId`. Undefined = pending. */
   decisions: Record<string, 'applied' | 'skipped'>;
+  /** The full searchable list behind "None of these" — every product
+   *  and recipe in the account, not just the suggested candidates. */
+  catalogue: POSMatchCandidate[];
   onApply: (suggestion: POSMatchSuggestion) => void;
   onSkip: (posItemId: string) => void;
-  onApplyAll: () => void;
+  /** Bulk-link: receives the resolved rows (with any dropdown
+   *  corrections). Not-sure rows are never included. */
+  onApplyAll: (rows: POSMatchSuggestion[]) => void;
   onUndo: (posItemId: string) => void;
 }) {
+  /** Per-row target correction picked from the dropdown. */
+  const [chosen, setChosen] = useState<Record<string, POSMatchCandidate>>({});
+  const [dropdownFor, setDropdownFor] = useState<string | null>(null);
+  /** Row currently in "browse the full list" mode (subset of dropdownFor). */
+  const [browseFor, setBrowseFor] = useState<string | null>(null);
+  const [browseQuery, setBrowseQuery] = useState('');
+
+  const closeDropdown = () => {
+    setDropdownFor(null);
+    setBrowseFor(null);
+    setBrowseQuery('');
+  };
+
   const total = suggestions.length;
   const appliedCount = suggestions.filter((s) => decisions[s.posItemId] === 'applied').length;
   const skippedCount = suggestions.filter((s) => decisions[s.posItemId] === 'skipped').length;
   const pendingCount = total - appliedCount - skippedCount;
   const allHandled = pendingCount === 0;
 
-  return (
-    <div
-      style={{
-        marginTop: '8px',
-        borderRadius: '14px',
-        background: '#fff',
-        border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.12))',
-        boxShadow: '0 4px 16px rgba(0, 28, 53, 0.08)',
-        overflow: 'hidden',
-        fontFamily: 'var(--font-primary)',
-      }}
-    >
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          padding: '11px 14px',
-          borderBottom: '1px solid var(--color-border-subtle)',
-        }}
-      >
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 26,
-            height: 26,
-            borderRadius: 8,
-            background: 'rgba(0,28,53,0.06)',
-            flexShrink: 0,
-          }}
-        >
-          <EdifyMark size={13} />
-        </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            POS matches found
-          </div>
-          <div
-            style={{
-              fontSize: '11.5px',
-              fontWeight: 500,
-              color: 'var(--color-text-muted)',
-              marginTop: '1px',
-            }}
-          >
-            {allHandled
-              ? `${appliedCount} linked · ${skippedCount} skipped`
-              : `${total} unmatched ${total === 1 ? 'POS button lines' : 'POS buttons line'} up with the new SKUs`}
-          </div>
-        </div>
-        {appliedCount > 0 && (
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              fontSize: '11.5px',
-              fontWeight: 700,
-              color: '#15803D',
-            }}
-          >
-            <CheckCircle2 size={13} strokeWidth={2.2} />
-            {appliedCount} linked
-          </span>
-        )}
-      </div>
+  /** The row with any dropdown correction folded in. */
+  const resolved = (s: POSMatchSuggestion): POSMatchSuggestion => {
+    const pick = chosen[s.posItemId];
+    if (!pick) return s;
+    return { ...s, productId: pick.id, productName: pick.name, targetType: pick.type };
+  };
 
+  const confidentPending = suggestions.filter(
+    (s) => !decisions[s.posItemId] && posMatchTier(s.score) !== 'unsure',
+  );
+  const unsurePending = pendingCount - confidentPending.length;
+
+  return (
+    <CardShell
+      icon={EdifyMark}
+      title="POS matches found"
+      subtitle={
+        allHandled
+          ? `${appliedCount} linked · ${skippedCount} skipped`
+          : `${total} unmatched POS ${total === 1 ? 'button lines up' : 'buttons line up'} with your catalogue${unsurePending > 0 ? ` · ${unsurePending} not sure — decide those one by one` : ''}`
+      }
+      state={allHandled ? 'confirmed' : 'pending'}
+      confirmLabel={
+        confidentPending.length === 1
+          ? 'Link 1 confident match'
+          : `Link ${confidentPending.length} confident matches`
+      }
+      confirmDisabled={confidentPending.length === 0}
+      onConfirm={() => onApplyAll(confidentPending.map(resolved))}
+    >
       {/* Suggestion rows */}
-      <div>
+      <div style={{ margin: '-12px' }}>
         {suggestions.map((s, i) => {
           const decision = decisions[s.posItemId];
           const isApplied = decision === 'applied';
           const isSkipped = decision === 'skipped';
-          const confidence: 'high' | 'likely' = s.score >= 0.7 ? 'high' : 'likely';
+          const tier = posMatchTier(s.score);
+          const rs = resolved(s);
+          const target: POSMatchCandidate = { id: rs.productId, name: rs.productName, type: rs.targetType ?? 'Product' };
+          const candidates: POSMatchCandidate[] = [
+            { id: s.productId, name: s.productName, type: s.targetType ?? 'Product' },
+            ...(s.alternatives ?? []),
+          ];
+          const dropdownOpen = dropdownFor === s.posItemId;
+          const browsing = browseFor === s.posItemId;
+          const query = browseQuery.trim().toLowerCase();
+          const browseResults = (query
+            ? catalogue.filter((c) => c.name.toLowerCase().includes(query))
+            : catalogue
+          ).slice(0, 30);
           return (
             <div
               key={s.posItemId}
@@ -3073,16 +3092,17 @@ function POSMatchSuggestionsCard({
                 >
                   {s.posItemName}
                 </span>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: '0.04em',
-                    textTransform: 'uppercase',
-                    color: 'var(--color-text-muted)',
-                  }}
-                >
-                  POS button
+                <span style={{
+                  padding: '1px 7px',
+                  borderRadius: '999px',
+                  background: s.posType === 'Modifier' ? 'rgba(124,58,237,0.08)' : 'rgba(0,28,53,0.05)',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.03em',
+                  color: s.posType === 'Modifier' ? '#7C3AED' : 'var(--color-text-secondary)',
+                  flexShrink: 0,
+                }}>
+                  {s.posType ?? 'POS button'}
                 </span>
               </div>
               <div
@@ -3095,16 +3115,46 @@ function POSMatchSuggestionsCard({
                 }}
               >
                 <span style={{ color: 'var(--color-text-muted)' }}>→</span>
-                <span
-                  style={{
-                    fontWeight: 600,
-                    color: 'var(--color-text-primary)',
-                    flex: 1,
-                    minWidth: 0,
-                  }}
-                >
-                  {s.productName}
-                </span>
+                {decision ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                    <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{target.name}</span>
+                    <PosTypeChip type={target.type} />
+                  </span>
+                ) : (
+                  /* Change-target trigger — the suggestion is editable in
+                     place (rule #6): pick a different product / recipe /
+                     master product if the match is wrong. The candidate
+                     list expands inline below (never floats over the card). */
+                  <span style={{ flex: 1, minWidth: 0, display: 'inline-flex' }}>
+                    <button
+                      type="button"
+                      onClick={() => (dropdownOpen ? closeDropdown() : setDropdownFor(s.posItemId))}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        maxWidth: '100%',
+                        padding: '3px 8px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.14))',
+                        background: dropdownOpen ? 'rgba(0,28,53,0.04)' : '#fff',
+                        cursor: 'pointer',
+                        fontFamily: 'var(--font-primary)',
+                      }}
+                    >
+                      <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {target.name}
+                      </span>
+                      <PosTypeChip type={target.type} />
+                      <ChevronDown
+                        size={12}
+                        strokeWidth={2.2}
+                        color="var(--color-text-muted)"
+                        style={{ flexShrink: 0, transform: dropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }}
+                      />
+                    </button>
+                  </span>
+                )}
                 <span
                   style={{
                     fontSize: 9.5,
@@ -3112,29 +3162,182 @@ function POSMatchSuggestionsCard({
                     letterSpacing: '0.04em',
                     textTransform: 'uppercase',
                     color:
-                      confidence === 'high'
+                      tier === 'high'
                         ? 'var(--color-accent-active)'
-                        : 'var(--color-text-muted)',
+                        : tier === 'likely'
+                          ? 'var(--color-text-muted)'
+                          : '#B45309',
                     padding: '1px 6px',
                     borderRadius: 100,
                     border: `1px solid ${
-                      confidence === 'high'
+                      tier === 'high'
                         ? 'var(--color-accent-active)'
-                        : 'var(--color-border-subtle)'
+                        : tier === 'likely'
+                          ? 'var(--color-border-subtle)'
+                          : '#E8A03D'
                     }`,
-                    background: '#fff',
+                    background: tier === 'unsure' ? '#FFF9F0' : '#fff',
                   }}
                 >
-                  {confidence === 'high' ? 'High' : 'Likely'}
+                  {tier === 'high' ? 'High' : tier === 'likely' ? 'Likely' : 'Not sure'}
                 </span>
               </div>
+
+              {/* Inline candidate list — expands within the row and pushes
+                  the actions down instead of floating over the card.
+                  Two modes: my suggestions, or browse the full list. */}
+              {!decision && dropdownOpen && (
+                <div style={{
+                  background: '#fff',
+                  borderRadius: '10px',
+                  border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.12))',
+                  overflow: 'hidden',
+                }}>
+                  {!browsing ? (
+                    <>
+                      {candidates.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setChosen((prev) => ({ ...prev, [s.posItemId]: c }));
+                            closeDropdown();
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            width: '100%',
+                            padding: '7px 10px',
+                            border: 'none',
+                            borderBottom: '1px solid var(--color-border-subtle, rgba(0,28,53,0.06))',
+                            background: c.id === target.id ? 'rgba(0,28,53,0.04)' : '#fff',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                            fontFamily: 'var(--font-primary)',
+                          }}
+                        >
+                          <span style={{ flex: 1, minWidth: 0, fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {c.name}
+                          </span>
+                          <PosTypeChip type={c.type} />
+                          {c.id === target.id && <Check size={12} strokeWidth={2.6} color="var(--color-accent-active, #001C35)" />}
+                        </button>
+                      ))}
+                      {/* Escape hatch: my shortlist is wrong — search everything. */}
+                      <button
+                        type="button"
+                        onClick={() => setBrowseFor(s.posItemId)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          width: '100%',
+                          padding: '8px 10px',
+                          border: 'none',
+                          background: 'rgba(0,28,53,0.02)',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          fontFamily: 'var(--font-primary)',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: 'var(--color-accent-active, #001C35)',
+                        }}
+                      >
+                        <Search size={12} strokeWidth={2.2} />
+                        None of these — browse the full list
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {/* Browse header: back link + live search over everything. */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '7px 10px',
+                        borderBottom: '1px solid var(--color-border-subtle, rgba(0,28,53,0.08))',
+                        background: 'rgba(0,28,53,0.02)',
+                      }}>
+                        <button
+                          type="button"
+                          onClick={() => { setBrowseFor(null); setBrowseQuery(''); }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: 0,
+                            border: 'none',
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            color: 'var(--color-text-muted)',
+                          }}
+                          aria-label="Back to suggestions"
+                        >
+                          <ChevronDown size={13} strokeWidth={2.2} style={{ transform: 'rotate(90deg)' }} />
+                        </button>
+                        <input
+                          autoFocus
+                          value={browseQuery}
+                          onChange={(e) => setBrowseQuery(e.target.value)}
+                          placeholder="Search products, recipes, master products…"
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            border: 'none',
+                            outline: 'none',
+                            background: 'transparent',
+                            fontSize: '12.5px',
+                            fontFamily: 'var(--font-primary)',
+                            color: 'var(--color-text-primary)',
+                          }}
+                        />
+                      </div>
+                      <div style={{ maxHeight: '204px', overflowY: 'auto' }}>
+                        {browseResults.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              setChosen((prev) => ({ ...prev, [s.posItemId]: c }));
+                              closeDropdown();
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              width: '100%',
+                              padding: '7px 10px',
+                              border: 'none',
+                              borderBottom: '1px solid var(--color-border-subtle, rgba(0,28,53,0.06))',
+                              background: c.id === target.id ? 'rgba(0,28,53,0.04)' : '#fff',
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              fontFamily: 'var(--font-primary)',
+                            }}
+                          >
+                            <span style={{ flex: 1, minWidth: 0, fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {c.name}
+                            </span>
+                            <PosTypeChip type={c.type} />
+                          </button>
+                        ))}
+                        {browseResults.length === 0 && (
+                          <div style={{ padding: '10px', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                            Nothing matches “{browseQuery}”.
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* Per-row action strip */}
               {!decision && (
                 <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
                   <button
                     type="button"
-                    onClick={() => onApply(s)}
+                    onClick={() => onApply(resolved(s))}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -3180,7 +3383,7 @@ function POSMatchSuggestionsCard({
                     gap: 8,
                     fontSize: '11.5px',
                     fontWeight: 600,
-                    color: '#15803D',
+                    color: '#166534',
                   }}
                 >
                   <CheckCircle2 size={12} strokeWidth={2.4} />
@@ -3240,45 +3443,7 @@ function POSMatchSuggestionsCard({
           );
         })}
       </div>
-
-      {/* Footer */}
-      {pendingCount > 1 && (
-        <div
-          style={{
-            padding: '10px 14px',
-            borderTop: '1px solid var(--color-border-subtle)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            gap: 8,
-            background: 'rgba(0,28,53,0.02)',
-          }}
-        >
-          <button
-            type="button"
-            onClick={onApplyAll}
-            style={{
-              padding: '7px 14px',
-              borderRadius: '100px',
-              border: 'none',
-              background: 'var(--color-accent-active)',
-              fontSize: '12.5px',
-              fontWeight: 700,
-              fontFamily: 'var(--font-primary)',
-              color: '#fff',
-              cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(34,68,68,0.25)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            <Check size={12} strokeWidth={2.6} />
-            Link all {pendingCount} remaining
-          </button>
-        </div>
-      )}
-    </div>
+    </CardShell>
   );
 }
 
@@ -3324,57 +3489,17 @@ function NewSupplierImportCard({
   const previewProducts = products.slice(0, 3);
   const remaining = products.length - previewProducts.length;
   return (
-    <div
-      style={{
-        marginTop: '8px',
-        borderRadius: '14px',
-        background: '#fff',
-        border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.12))',
-        boxShadow: '0 4px 16px rgba(0, 28, 53, 0.08)',
-        overflow: 'hidden',
-        fontFamily: 'var(--font-primary)',
-        opacity: confirmed ? 0.85 : 1,
-      }}
+    <CardShell
+      icon={FileText}
+      title="Adding new supplier"
+      subtitle={`Parsed in 1.8s · ${data.supplierFileName} + ${data.catalogueFileName}`}
+      state={confirmed ? 'confirmed' : 'pending'}
+      confirmLabel={`Add supplier + ${products.length} products${sites.size > 0 ? ` to ${sites.size} ${sites.size === 1 ? 'site' : 'sites'}` : ''}`}
+      confirmDisabled={sites.size === 0 || products.length === 0}
+      onConfirm={onConfirm}
     >
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          padding: '11px 14px',
-          borderBottom: '1px solid var(--color-border-subtle)',
-        }}
-      >
-        <FileText size={15} strokeWidth={1.9} color="var(--color-text-muted)" />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            Adding new supplier
-          </div>
-          <div
-            style={{
-              fontSize: '11.5px',
-              fontWeight: 500,
-              color: 'var(--color-text-muted)',
-              marginTop: '1px',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            Parsed in 1.8s · {data.supplierFileName} + {data.catalogueFileName}
-          </div>
-        </div>
-        {confirmed && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', fontWeight: 700, color: '#15803D' }}>
-            <CheckCircle2 size={13} strokeWidth={2.2} />
-            Added
-          </span>
-        )}
-      </div>
-
       {/* Supplier details */}
-      <div style={{ padding: '10px 14px 4px' }}>
+      <div style={{ padding: '0 2px 4px' }}>
         <div
           style={{
             fontSize: '10.5px',
@@ -3721,95 +3846,56 @@ function NewSupplierImportCard({
         </div>
       </div>
 
-      {/* CTA */}
-      <div
-        style={{
-          padding: '10px 14px',
-          borderTop: '1px solid var(--color-border-subtle)',
-          display: 'flex',
-          justifyContent: 'flex-end',
-          background: 'rgba(0,28,53,0.02)',
-        }}
-      >
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={confirmed || sites.size === 0 || products.length === 0}
-          style={{
-            padding: '8px 18px',
-            borderRadius: '100px',
-            border: 'none',
-            background:
-              confirmed || sites.size === 0 || products.length === 0
-                ? 'rgba(0,28,53,0.08)'
-                : 'var(--color-accent-active)',
-            fontSize: '12.5px',
-            fontWeight: 700,
-            fontFamily: 'var(--font-primary)',
-            color:
-              confirmed || sites.size === 0 || products.length === 0
-                ? 'var(--color-text-muted)'
-                : '#fff',
-            cursor:
-              confirmed || sites.size === 0 || products.length === 0 ? 'not-allowed' : 'pointer',
-            boxShadow:
-              confirmed || sites.size === 0 || products.length === 0
-                ? 'none'
-                : '0 2px 8px rgba(34,68,68,0.25)',
-          }}
-        >
-          {confirmed
-            ? `${data.name} added`
-            : `Add supplier + ${products.length} ${products.length === 1 ? 'product' : 'products'}`}
-        </button>
-      </div>
-    </div>
+    </CardShell>
   );
 }
 
 // ─── Production flow components ──────────────────────────────────────────────
 
-function PillPicker({ title, options, selected, onSelect, onConfirm }: { title: string; options: string[]; selected: string; onSelect: (o: string) => void; onConfirm: () => void }) {
+function PillPicker({ title, options, selected, onSelect, onConfirm, state }: { title: string; options: string[]; selected: string; onSelect: (o: string) => void; onConfirm: () => void; state: CardState }) {
   const [customVal, setCustomVal] = useState('');
   const isCustomSelected = selected !== '' && !options.includes(selected);
+  const disabled = state !== 'pending';
   return (
-    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden', background: '#fff' }}>
-      <div style={{ padding: '10px 14px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)' }}>
-        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{title}</span>
-      </div>
-      <div style={{ padding: '12px 14px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-        {options.map(opt => {
-          const on = selected === opt && !isCustomSelected;
-          return (
-            <button key={opt} type="button" onClick={() => { setCustomVal(''); onSelect(opt); }} style={{ padding: '7px 16px', borderRadius: '100px', border: on ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)', background: on ? 'var(--color-accent-active)' : '#fff', color: on ? '#fff' : 'var(--color-text-secondary)', fontSize: '13px', fontWeight: on ? 700 : 400, fontFamily: 'var(--font-primary)', cursor: 'pointer', transition: 'all 0.12s' }}>
-              {opt}
-            </button>
-          );
-        })}
+    <CardShell
+      icon={Timer}
+      title={title}
+      state={state}
+      confirmLabel={selected ? `Confirm ${selected}` : 'Confirm'}
+      confirmDisabled={!selected}
+      onConfirm={onConfirm}
+    >
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+        <PillRow
+          options={options.map(o => ({ value: o, label: o }))}
+          selected={isCustomSelected ? undefined : selected}
+          onSelect={(o) => { setCustomVal(''); onSelect(o); }}
+          disabled={disabled}
+        />
         <input
           type="text"
           value={customVal}
+          disabled={disabled}
           onChange={(e) => { setCustomVal(e.target.value); if (e.target.value.trim()) onSelect(e.target.value.trim()); }}
           placeholder="Other…"
           style={{ width: '82px', padding: '6px 12px', borderRadius: '100px', border: isCustomSelected ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)', background: isCustomSelected ? 'rgba(34,68,68,0.04)' : '#fff', fontSize: '13px', fontFamily: 'var(--font-primary)', color: 'var(--color-text-primary)', outline: 'none' }}
         />
       </div>
-      <div style={{ padding: '0 14px 12px', display: 'flex', justifyContent: 'flex-end' }}>
-        <button type="button" onClick={onConfirm} style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer' }}>
-          Confirm
-        </button>
-      </div>
-    </div>
+    </CardShell>
   );
 }
 
-function BatchAndCarryCard({ settings, onUpdate, onConfirm }: { settings: ProdSettings; onUpdate: (u: Partial<ProdSettings>) => void; onConfirm: () => void }) {
-  const btnStyle: React.CSSProperties = { width: '28px', height: '28px', borderRadius: '8px', border: '1px solid var(--color-border)', background: '#fff', fontFamily: 'var(--font-primary)', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-primary)', flexShrink: 0 };
+function BatchAndCarryCard({ settings, onUpdate, onConfirm, state }: { settings: ProdSettings; onUpdate: (u: Partial<ProdSettings>) => void; onConfirm: () => void; state: CardState }) {
+  const disabled = state !== 'pending';
+  const btnStyle: React.CSSProperties = { width: '28px', height: '28px', borderRadius: '8px', border: '1px solid var(--color-border)', background: '#fff', fontFamily: 'var(--font-primary)', fontSize: '16px', cursor: disabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-primary)', flexShrink: 0 };
   return (
-    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden', background: '#fff' }}>
-      <div style={{ padding: '10px 14px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)' }}>
-        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Batch &amp; carry-over</span>
-      </div>
+    <CardShell
+      icon={Layers}
+      title="Batch & carry-over"
+      state={state}
+      confirmLabel="Confirm"
+      onConfirm={onConfirm}
+    >
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0', borderBottom: '1px solid var(--color-border-subtle)' }}>
         {[{ label: 'Min batch', key: 'batchMin' as const }, { label: 'Max batch', key: 'batchMax' as const }].map(({ label, key }, i) => (
           <div key={key} style={{ padding: '12px 14px', borderRight: i === 0 ? '1px solid var(--color-border-subtle)' : 'none' }}>
@@ -3819,13 +3905,13 @@ function BatchAndCarryCard({ settings, onUpdate, onConfirm }: { settings: ProdSe
                 <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)', flex: 1 }}>Unlimited</span>
               ) : (
                 <>
-                  <button style={btnStyle} onClick={() => onUpdate({ [key]: Math.max(key === 'batchMax' ? settings.batchMin : 1, (settings[key] as number) - 1) })}>−</button>
+                  <button style={btnStyle} disabled={disabled} onClick={() => onUpdate({ [key]: Math.max(key === 'batchMax' ? settings.batchMin : 1, (settings[key] as number) - 1) })}>−</button>
                   <span style={{ fontWeight: 700, fontSize: '18px', minWidth: '28px', textAlign: 'center' }}>{settings[key]}</span>
-                  <button style={btnStyle} onClick={() => onUpdate({ [key]: (settings[key] as number) + 1 })}>+</button>
+                  <button style={btnStyle} disabled={disabled} onClick={() => onUpdate({ [key]: (settings[key] as number) + 1 })}>+</button>
                 </>
               )}
               {key === 'batchMax' && (
-                <button onClick={() => onUpdate({ batchMax: settings.batchMax === 'unlimited' ? 10 : 'unlimited' })} style={{ fontSize: '12px', color: 'var(--color-accent-active)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-primary)', fontWeight: 600, marginLeft: '2px' }}>
+                <button disabled={disabled} onClick={() => onUpdate({ batchMax: settings.batchMax === 'unlimited' ? 10 : 'unlimited' })} style={{ fontSize: '12px', color: 'var(--color-accent-active)', background: 'none', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-primary)', fontWeight: 600, marginLeft: '2px' }}>
                   {settings.batchMax === 'unlimited' ? 'Set limit' : 'No limit'}
                 </button>
               )}
@@ -3839,66 +3925,59 @@ function BatchAndCarryCard({ settings, onUpdate, onConfirm }: { settings: ProdSe
           <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>Production must be made in multiples of this number</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button style={btnStyle} onClick={() => onUpdate({ batchMultiple: Math.max(1, settings.batchMultiple - 1) })}>−</button>
+          <button style={btnStyle} disabled={disabled} onClick={() => onUpdate({ batchMultiple: Math.max(1, settings.batchMultiple - 1) })}>−</button>
           <span style={{ fontWeight: 700, fontSize: '16px', minWidth: '24px', textAlign: 'center' }}>{settings.batchMultiple}</span>
-          <button style={btnStyle} onClick={() => onUpdate({ batchMultiple: settings.batchMultiple + 1 })}>+</button>
+          <button style={btnStyle} disabled={disabled} onClick={() => onUpdate({ batchMultiple: settings.batchMultiple + 1 })}>+</button>
         </div>
       </div>
-      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ padding: '10px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>Allow carry over</div>
           <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>Unsold stock rolls to the next production period</div>
         </div>
-        <div style={{ display: 'flex', gap: '6px' }}>
-          {(['Write off', 'Allow carry over'] as const).map(opt => {
-            const on = opt === 'Allow carry over' ? settings.allowCarryOver : !settings.allowCarryOver;
-            return (
-              <button key={opt} type="button" onClick={() => onUpdate({ allowCarryOver: opt === 'Allow carry over' })} style={{ padding: '6px 12px', borderRadius: '100px', border: on ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)', background: on ? 'var(--color-accent-active)' : '#fff', color: on ? '#fff' : 'var(--color-text-secondary)', fontSize: '12px', fontWeight: on ? 700 : 400, fontFamily: 'var(--font-primary)', cursor: 'pointer', transition: 'all 0.12s' }}>
-                {opt}
-              </button>
-            );
-          })}
-        </div>
+        <PillRow
+          options={(['Write off', 'Allow carry over'] as const).map(o => ({ value: o, label: o }))}
+          selected={settings.allowCarryOver ? 'Allow carry over' : 'Write off'}
+          onSelect={(opt) => onUpdate({ allowCarryOver: opt === 'Allow carry over' })}
+          disabled={disabled}
+          small
+        />
       </div>
-      <div style={{ padding: '10px 14px', display: 'flex', justifyContent: 'flex-end' }}>
-        <button type="button" onClick={onConfirm} style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer' }}>
-          Confirm
-        </button>
-      </div>
-    </div>
+    </CardShell>
   );
 }
 
-function CategoryClosingCard({ settings, onUpdate, onConfirm }: { settings: ProdSettings; onUpdate: (u: Partial<ProdSettings>) => void; onConfirm: () => void }) {
+function CategoryClosingCard({ settings, onUpdate, onConfirm, state }: { settings: ProdSettings; onUpdate: (u: Partial<ProdSettings>) => void; onConfirm: () => void; state: CardState }) {
+  const disabled = state !== 'pending';
   return (
-    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden', background: '#fff' }}>
-      <div style={{ padding: '10px 14px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)' }}>
-        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Category &amp; closing</span>
-      </div>
-      <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
+    <CardShell
+      icon={Utensils}
+      title="Category & closing"
+      state={state}
+      confirmLabel="Confirm"
+      onConfirm={onConfirm}
+    >
+      <div style={{ paddingBottom: '12px', borderBottom: '1px solid var(--color-border-subtle)' }}>
         <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Recipe category</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-          {CATEGORY_OPTIONS.map(opt => {
-            const on = settings.category === opt;
-            return <button key={opt} type="button" onClick={() => onUpdate({ category: opt })} style={{ padding: '6px 14px', borderRadius: '100px', border: on ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)', background: on ? 'var(--color-accent-active)' : '#fff', color: on ? '#fff' : 'var(--color-text-secondary)', fontSize: '12px', fontWeight: on ? 700 : 400, fontFamily: 'var(--font-primary)', cursor: 'pointer', transition: 'all 0.12s' }}>{opt}</button>;
-          })}
-        </div>
+        <PillRow
+          options={CATEGORY_OPTIONS.map(o => ({ value: o, label: o }))}
+          selected={settings.category}
+          onSelect={(opt) => onUpdate({ category: opt })}
+          disabled={disabled}
+          small
+        />
       </div>
-      <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
+      <div style={{ paddingTop: '12px' }}>
         <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Stop production before closing</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-          {CLOSING_RANGE_OPTIONS.map(opt => {
-            const on = settings.closingRange === opt;
-            return <button key={opt} type="button" onClick={() => onUpdate({ closingRange: opt })} style={{ padding: '6px 14px', borderRadius: '100px', border: on ? '2px solid var(--color-accent-active)' : '1.5px solid var(--color-border)', background: on ? 'var(--color-accent-active)' : '#fff', color: on ? '#fff' : 'var(--color-text-secondary)', fontSize: '12px', fontWeight: on ? 700 : 400, fontFamily: 'var(--font-primary)', cursor: 'pointer', transition: 'all 0.12s' }}>{opt}</button>;
-          })}
-        </div>
+        <PillRow
+          options={CLOSING_RANGE_OPTIONS.map(o => ({ value: o, label: o }))}
+          selected={settings.closingRange}
+          onSelect={(opt) => onUpdate({ closingRange: opt })}
+          disabled={disabled}
+          small
+        />
       </div>
-      <div style={{ padding: '10px 14px', display: 'flex', justifyContent: 'flex-end' }}>
-        <button type="button" onClick={onConfirm} style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: 'var(--color-accent-active)', fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer' }}>
-          Confirm
-        </button>
-      </div>
-    </div>
+    </CardShell>
   );
 }
 
@@ -3916,12 +3995,12 @@ function ProductionSummaryCard({ settings }: { settings: ProdSettings }) {
     { label: 'Stop production', value: settings.closingRange === 'No limit' ? 'No limit' : `${settings.closingRange} before close` },
   ];
   return (
-    <div style={{ marginTop: '8px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden', background: '#fff' }}>
-      <div style={{ padding: '10px 14px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{ fontSize: '14px' }}>✓</span>
-        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Production plan configured</span>
-      </div>
-      <div style={{ padding: '10px 14px', background: '#fff' }}>
+    <CardShell
+      icon={ClipboardList}
+      title="Production plan configured"
+      state="confirmed"
+    >
+      <div>
         {rows.map((row, i) => (
           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: i < rows.length - 1 ? '1px solid var(--color-border-subtle)' : 'none' }}>
             <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{row.label}</span>
@@ -3929,7 +4008,7 @@ function ProductionSummaryCard({ settings }: { settings: ProdSettings }) {
           </div>
         ))}
       </div>
-    </div>
+    </CardShell>
   );
 }
 
@@ -5003,158 +5082,170 @@ function ClaudeComposer({
 
 // ─── Data integrity components ────────────────────────────────────────────────
 
-function CheckRow({ check }: { check: IntegrityCheck }) {
-  const config = {
-    issue: { color: '#DC2626', bg: 'rgba(220,38,38,0.05)', Icon: AlertCircle },
-    warning: { color: '#D97706', bg: 'rgba(217,119,6,0.05)', Icon: AlertTriangle },
-    ok: { color: '#15803D', bg: 'transparent', Icon: CheckCircle2 },
-  }[check.status];
+const SEVERITY_BADGE: Record<IntegritySeverity, { label: string; color: string; bg: string }> = {
+  fix: { label: 'Fix', color: '#B01038', bg: 'rgba(220,38,38,0.08)' },
+  check: { label: 'Check', color: '#B45309', bg: 'rgba(234, 209, 115, 0.2)' },
+  tidy: { label: 'Tidy', color: '#475569', bg: 'rgba(71,85,105,0.08)' },
+};
+
+function FindingRow({
+  finding,
+  live,
+  started,
+  onFix,
+}: {
+  finding: IntegrityFinding;
+  /** Whether the parent card is still pending (buttons active). */
+  live: boolean;
+  /** This finding's fix has already been sent to review. */
+  started: boolean;
+  onFix?: () => void;
+}) {
+  const badge = SEVERITY_BADGE[finding.severity];
+  const [expanded, setExpanded] = useState(false);
+  const hasDetails = !!(finding.detail || finding.affected);
 
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      padding: '9px 14px',
-      gap: '10px',
-      borderTop: '1px solid var(--color-border-subtle)',
-      background: config.bg,
-    }}>
-      <config.Icon size={14} color={config.color} strokeWidth={2} style={{ flexShrink: 0 }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: 1.3 }}>
-          {check.label}
+    <div style={{ padding: '9px 14px', borderTop: '1px solid var(--color-border-subtle)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <span style={{
+          fontSize: '12px', fontWeight: 700, color: 'var(--color-text-muted)',
+          width: '14px', flexShrink: 0, textAlign: 'right',
+        }}>
+          {finding.priority}
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: 1.3 }}>
+              {finding.title}
+            </span>
+            <span style={{
+              padding: '1px 7px', borderRadius: '999px', background: badge.bg,
+              fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em',
+              textTransform: 'uppercase', color: badge.color, flexShrink: 0,
+            }}>
+              {badge.label}
+            </span>
+          </div>
+          <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '2px', lineHeight: 1.4 }}>
+            {finding.summary}
+          </div>
         </div>
-        <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px', lineHeight: 1.4 }}>
-          {check.detail}
-        </div>
+        {finding.fixLabel && (
+          started ? (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: '4px', flexShrink: 0,
+              fontSize: '11.5px', fontWeight: 600, color: '#2D6A4F',
+            }}>
+              <Check size={12} strokeWidth={2.6} /> In review
+            </span>
+          ) : (
+            <button
+              type="button"
+              disabled={!live}
+              onClick={onFix}
+              style={{
+                padding: '4px 12px', borderRadius: '999px', flexShrink: 0,
+                border: 'none',
+                background: live ? 'var(--color-accent-active, #001C35)' : 'rgba(0,28,53,0.08)',
+                fontSize: '11.5px', fontWeight: 600, fontFamily: 'var(--font-primary)',
+                color: live ? '#fff' : 'var(--color-text-muted)',
+                cursor: live ? 'pointer' : 'default',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {finding.fixLabel}
+            </button>
+          )
+        )}
       </div>
-      {check.action && (
-        <button
-          type="button"
-          style={{
-            padding: '4px 11px',
-            borderRadius: '100px',
-            border: '1px solid var(--color-border)',
-            background: '#fff',
-            fontSize: '12px',
-            fontWeight: 600,
-            fontFamily: 'var(--font-primary)',
-            color: 'var(--color-text-secondary)',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
-            flexShrink: 0,
-          }}
-        >
-          {check.action}
-        </button>
+      {hasDetails && (
+        <div style={{ marginLeft: '24px' }}>
+          <button
+            type="button"
+            onClick={() => setExpanded((e) => !e)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '3px',
+              marginTop: '4px', padding: 0, border: 'none', background: 'none',
+              fontSize: '11px', fontWeight: 600, fontFamily: 'var(--font-primary)',
+              color: 'var(--color-text-muted)', cursor: 'pointer',
+            }}
+          >
+            {expanded ? 'Hide details' : 'Details'}
+            <ChevronDown size={11} strokeWidth={2.4} style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+          </button>
+          {expanded && (
+            <div style={{ marginTop: '4px' }}>
+              {finding.detail && (
+                <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
+                  {finding.detail}
+                </div>
+              )}
+              {finding.affected && (
+                <div style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '3px', lineHeight: 1.4 }}>
+                  {finding.affected}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-function DataIntegrityCard({ onFixWithQuinn }: { onFixWithQuinn: () => void }) {
-  const issues = INTEGRITY_CHECKS.filter(c => c.status === 'issue');
-  const warnings = INTEGRITY_CHECKS.filter(c => c.status === 'warning');
-  const passing = INTEGRITY_CHECKS.filter(c => c.status === 'ok');
+function DataIntegrityCard({
+  state,
+  isFindingStarted,
+  onFixFinding,
+  onFixAll,
+}: {
+  state: CardState;
+  isFindingStarted: (findingId: string) => boolean;
+  onFixFinding: (findingId: string) => void;
+  onFixAll: () => void;
+}) {
+  const live = state === 'pending';
 
   return (
-    <div style={{
-      marginTop: '8px',
-      borderRadius: '10px',
-      border: '1px solid var(--color-border-subtle)',
-      overflow: 'hidden',
-    }}>
-      {/* Header with summary pills */}
-      <div style={{
-        padding: '10px 14px',
-        background: 'var(--color-bg-hover)',
-        borderBottom: '1px solid var(--color-border-subtle)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        flexWrap: 'wrap',
-      }}>
-        <ShieldCheck size={14} color="#D97706" strokeWidth={2} />
-        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-          Data Integrity
-        </span>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '5px', alignItems: 'center' }}>
-          <span style={{
-            fontSize: '12px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px',
-            background: 'rgba(220,38,38,0.1)', color: '#DC2626',
-          }}>
-            {issues.length} issues
-          </span>
-          <span style={{
-            fontSize: '12px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px',
-            background: 'rgba(217,119,6,0.1)', color: '#D97706',
-          }}>
-            {warnings.length} warnings
-          </span>
-          <span style={{
-            fontSize: '12px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px',
-            background: 'rgba(21,128,61,0.1)', color: '#15803D',
-          }}>
-            {passing.length} ok
-          </span>
+    <CardShell
+      icon={ShieldCheck}
+      title="Recipe & cost review — Soho"
+      subtitle="Mostly clean — a short to-do list, worked top to bottom"
+      state={state}
+      confirmLabel="Fix these"
+      onConfirm={onFixAll}
+    >
+      <div style={{ margin: '-12px' }}>
+        {/* Headline stats — the "your recipes are mostly clean" reassurance
+            before the to-do list. */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: 'var(--color-border-subtle)' }}>
+          {INTEGRITY_STATS.map((s) => (
+            <div key={s.label} style={{ background: '#fff', padding: '10px 12px' }}>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.15 }}>
+                {s.value}
+              </div>
+              <div style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '2px', lineHeight: 1.3 }}>
+                {s.label}
+              </div>
+            </div>
+          ))}
+        </div>
+        {INTEGRITY_FINDINGS.map((f) => (
+          <FindingRow
+            key={f.id}
+            finding={f}
+            live={live}
+            started={isFindingStarted(f.id)}
+            onFix={f.fixLabel ? () => onFixFinding(f.id) : undefined}
+          />
+        ))}
+        {/* Trust caveat from the audit appendix — ranking reliable, exact £ not. */}
+        <div style={{ padding: '8px 14px', borderTop: '1px solid var(--color-border-subtle)', fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)', lineHeight: 1.4 }}>
+          £ figures are supplier list prices, not real cost — read them as a ranking.
         </div>
       </div>
-
-      {/* Issues */}
-      {issues.length > 0 && (
-        <>
-          <div style={{ padding: '8px 14px 4px', fontSize: '12px', fontWeight: 700, color: '#DC2626', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            Needs attention
-          </div>
-          {issues.map(check => <CheckRow key={check.id} check={check} />)}
-        </>
-      )}
-
-      {/* Warnings */}
-      {warnings.length > 0 && (
-        <>
-          <div style={{ padding: '8px 14px 4px', fontSize: '12px', fontWeight: 700, color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            Review recommended
-          </div>
-          {warnings.map(check => <CheckRow key={check.id} check={check} />)}
-        </>
-      )}
-
-      {/* Passing */}
-      {passing.length > 0 && (
-        <>
-          <div style={{ padding: '8px 14px 4px', fontSize: '12px', fontWeight: 700, color: '#15803D', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            All good
-          </div>
-          {passing.map(check => <CheckRow key={check.id} check={check} />)}
-        </>
-      )}
-
-      {/* Footer CTA */}
-      <div style={{
-        padding: '10px 14px',
-        borderTop: '1px solid var(--color-border-subtle)',
-        background: 'var(--color-bg-hover)',
-        display: 'flex',
-        justifyContent: 'flex-end',
-      }}>
-        <button
-          type="button"
-          onClick={onFixWithQuinn}
-          style={{
-            padding: '7px 16px', borderRadius: '100px',
-            border: 'none',
-            background: 'var(--color-accent-active)',
-            fontSize: '12px', fontWeight: 600,
-            fontFamily: 'var(--font-primary)',
-            color: '#fff', cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(34,68,68,0.25)',
-          }}
-        >
-          Walk me through fixing these
-        </button>
-      </div>
-    </div>
+    </CardShell>
   );
 }
 
@@ -5391,7 +5482,7 @@ function AnalyticsChartContent({
                       padding: '7px 10px',
                       borderRadius: 6,
                       border: 'none',
-                      background: pinned ? 'var(--color-success-light, #f0fdf4)' : '#fff',
+                      background: pinned ? 'var(--color-success-light, #e3f2e8)' : '#fff',
                       color: pinned ? '#166534' : 'var(--color-text-primary)',
                       fontSize: 12,
                       fontWeight: 600,
@@ -5498,7 +5589,7 @@ function pinButtonStyle(isPinned: boolean, withChevron = false): React.CSSProper
     padding: '7px 14px',
     borderRadius: '100px',
     border: isPinned ? 'none' : '1.5px solid var(--color-border)',
-    background: isPinned ? 'var(--color-success-light, #f0fdf4)' : '#fff',
+    background: isPinned ? 'var(--color-success-light, #e3f2e8)' : '#fff',
     color: isPinned ? '#166534' : 'var(--color-text-secondary)',
     fontSize: '12px',
     fontWeight: 600,
@@ -5647,7 +5738,7 @@ function TableResultBlock({
               padding: '7px 14px',
               borderRadius: 100,
               border: pinned ? 'none' : '1.5px solid var(--color-border)',
-              background: pinned ? 'var(--color-success-light, #f0fdf4)' : '#fff',
+              background: pinned ? 'var(--color-success-light, #e3f2e8)' : '#fff',
               color: pinned ? '#166534' : 'var(--color-text-secondary)',
               fontSize: 12,
               fontWeight: 600,
@@ -5813,6 +5904,13 @@ export default function Feed({
    *  the operator's decision. Lets the operator step through, undo,
    *  or pick up later without losing state on re-render. */
   const [posMatchDecisions, setPosMatchDecisions] = useState<Record<string, Record<string, 'applied' | 'skipped'>>>({});
+  /** Data-integrity fix flow. `integrityFixStarted` flips the source
+   *  integrity card to Done once the operator kicks off the fix;
+   *  `batchReviewStates` holds each batch-review card's lifecycle
+   *  (pending → confirmed/partial) plus per-row apply results, keyed
+   *  by the card's message id. */
+  const [integrityFixStarted, setIntegrityFixStarted] = useState<Record<string, boolean>>({});
+  const [batchReviewStates, setBatchReviewStates] = useState<Record<string, { state: CardState; results?: BatchRowResult[] }>>({});
   /** Chagee tea-swap demo flow state — per-card confirmation flags
    *  and the franchise selection on the recipe step. Keyed by card
    *  message id, mirroring the other import flows. */
@@ -5844,7 +5942,27 @@ export default function Feed({
    *  that have already been linked (either by Sync & match, by a
    *  previous chat suggestion, or by hand on the Item matching page). */
   const matchOverrides = useMatchOverrides();
+  /** Full live product catalogue — the standalone "Check my POS
+   *  matches" flow scans all of it, not just freshly-imported rows. */
+  const allProducts = useProducts();
+  const allRecipes = useRecipes();
+  /** Everything a POS button could point at — feeds the "None of
+   *  these — browse the full list" escape hatch in match triage. */
+  const posCatalogue = useMemo<POSMatchCandidate[]>(
+    () =>
+      [
+        ...allProducts.map((p) => ({ id: p.id, name: p.name, type: 'Product' as const })),
+        ...allRecipes.map((r) => ({ id: r.id, name: r.name, type: 'Recipe' as const })),
+      ].sort((a, b) => a.name.localeCompare(b.name)),
+    [allProducts, allRecipes],
+  );
+  /** Cards that already emitted their completion receipt (rule #2) —
+   *  guards against a second receipt when rows are undone/redone. */
+  const posMatchReceiptSentRef = useRef<Set<string>>(new Set());
   const [selectedPackaging, setSelectedPackaging] = useState<Set<string>>(new Set());
+  /** True when the operator chose "No packaging needed" — the persisted
+   *  packaging card then shows Cancelled instead of Done. */
+  const [packagingSkipped, setPackagingSkipped] = useState(false);
   const [selectedAllergens, setSelectedAllergens] = useState<Set<string>>(new Set());
   const [selectedSites, setSelectedSites] = useState<Set<string>>(new Set(['fitzroy']));
   const doneSiteNamesRef = useRef<string[]>(['Fitzroy Espresso']);
@@ -5938,6 +6056,7 @@ export default function Feed({
     onFreshTask: () => {
       setRecipeFlow(0);
       setProductionFlow(0);
+      setPackagingSkipped(false);
       setAnalyticsType(null);
       setAnalyticsStep(0);
       setInput('');
@@ -5949,6 +6068,10 @@ export default function Feed({
 
   // Shared handler for the composer's `+` popover.
   const handleQuickAction = (commandId: string) => {
+    if (commandId === 'pos-match-check') {
+      startPosMatchCheck();
+      return;
+    }
     const cmd = getCommand(commandId);
     if (!cmd) return;
     commandRunner.runCommand({ commandId: cmd.id, args: {}, confidence: 1 });
@@ -5962,6 +6085,7 @@ export default function Feed({
   const openTaskInChat = (task: import('@/components/Feed/taskHistoryStore').Task) => {
     setRecipeFlow(0);
     setProductionFlow(0);
+    setPackagingSkipped(false);
     setAnalyticsType(null);
     setAnalyticsStep(0);
     setInput('');
@@ -6185,6 +6309,12 @@ export default function Feed({
           role: 'quinn',
           text: buildDoneMsg(activeTemplate, doneSiteNamesRef.current, lockedPricingRef.current),
         }]);
+        const sitesLabel = doneSiteNamesRef.current.join(', ');
+        const pricing = lockedPricingRef.current;
+        pushFlowReceipt({
+          headline: `Saved ${activeTemplate.name}`,
+          detail: `Live at ${sitesLabel}${pricing ? ` · £${pricing.srpExVat.toFixed(2)} at ${pricing.targetCogsPct}% food cost` : ''}`,
+        });
         setRecipeFlow(17);
       }, 800);
       return () => clearTimeout(t);
@@ -6228,6 +6358,10 @@ export default function Feed({
     if (productionFlow === 9) {
       const t = setTimeout(() => {
         setMessages(prev => [...prev, { id: `q-prod-done-${Date.now()}`, role: 'quinn', text: 'All done! Here\'s the production plan I\'ve set up for your **Chicken & Mayo Sandwich**:', msgType: 'prod-summary' }]);
+        pushFlowReceipt({
+          headline: 'Production plan configured — Chicken & Mayo Sandwich',
+          detail: `${prodSettings.prepTime} prep · ${prodSettings.shelfLife} shelf life · batches of ${prodSettings.batchMultiple}`,
+        });
         setProductionFlow(10);
       }, 800);
       return () => clearTimeout(t);
@@ -6383,6 +6517,7 @@ export default function Feed({
     setTargetCogsPct(template.defaultTargetCogsPct);
     setSelectedSwaps({});
     setSelectedPackaging(new Set(template.packagingDefaultIds));
+    setPackagingSkipped(false);
     setSelectedAllergens(new Set(template.autoDetectedAllergens));
     setSelectedSites(new Set(['fitzroy']));
     lockedPricingRef.current = null;
@@ -6533,6 +6668,16 @@ export default function Feed({
   function detectProductSwapAcrossRecipes(text: string): boolean {
     const lower = text.toLowerCase().trim();
     if (!lower) return false;
+    // "Update a recipe across all my franchises/sites to use a
+    // different ingredient / a new supplier" — the ingredient-swap
+    // ask phrased without a swap verb. On the Chagee build this is
+    // intercepted by detectChageeTeaSwap first; everywhere else it
+    // belongs to this generic product-swap flow.
+    const recipeAcrossSites =
+      /\brecipes?\b/.test(lower) &&
+      /\b(?:across|all)\b/.test(lower) &&
+      /\b(?:franchises?|sites?|stores?|locations?)\b/.test(lower);
+    if (recipeAcrossSites && /\b(?:ingredient|supplier|product)\b/.test(lower)) return true;
     const swapVerb = /\b(?:swap|swapping|replace|replacing|switch|switching)\b/.test(lower);
     if (!swapVerb) return false;
     // Coffee-bean scenario — explicit.
@@ -6638,8 +6783,14 @@ export default function Feed({
    *  supplier + recipe combination) and runs the scripted two-step
    *  flow. Checked BEFORE the generic supplier/product importers so
    *  "add the new supplier and the product" in the same breath
-   *  doesn't get hijacked by those. */
+   *  doesn't get hijacked by those.
+   *
+   *  CHAGEE-BRAND ONLY: on the internal / default build this always
+   *  returns false, so the same phrasing falls through to the generic
+   *  product-swap flow (the coffee-bean scenario) instead of the
+   *  Chagee-branded script. */
   function detectChageeTeaSwap(text: string): boolean {
+    if (demoCustomer.id !== 'chagee') return false;
     const lower = text.toLowerCase().trim();
     if (!lower) return false;
     const teaLeaves = /\btea\s+leaves\b/.test(lower);
@@ -6705,9 +6856,31 @@ export default function Feed({
   /** Step 1 confirmed — mark the supplier card done, then push the
    *  recipe-update card after a thinking beat. Mock only: nothing is
    *  written to the suppliers/products stores. */
+  /** Push a receipt bubble into the chat stream at the end of a
+   *  scripted flow. Same message shape the command runner uses
+   *  (`cmd-receipt` + baked `cmdReceiptData`) so every flow —
+   *  commands, demos, imports, wizards — ends with the identical
+   *  receipt chrome. No undo closure: these are demo writes. */
+  function pushFlowReceipt(receipt: { headline: string; detail?: string; href?: string; hrefLabel?: string }) {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `q-rcpt-flow-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        role: 'quinn',
+        text: receipt.headline,
+        msgType: 'cmd-receipt',
+        cmdReceiptData: receipt,
+      },
+    ]);
+  }
+
   function confirmChageeSupplier(cardId: string) {
     if (chageeSupplierConfirmed[cardId]) return;
     setChageeSupplierConfirmed((prev) => ({ ...prev, [cardId]: true }));
+    pushFlowReceipt({
+      headline: `Added ${CHAGEE_TEA_SWAP.supplier.name} + ${CHAGEE_TEA_SWAP.product.name}`,
+      detail: `Matched to ${CHAGEE_TEA_SWAP.master.name} master · cut-off ${CHAGEE_TEA_SWAP.supplier.cutOff}`,
+    });
 
     const thinkingId = `q-chagee-thinking2-${Date.now()}`;
     const recipeCardId = `q-chagee-recipe-${Date.now()}`;
@@ -6766,6 +6939,10 @@ export default function Feed({
       ...prev,
       { id: `q-chagee-done-${Date.now()}`, role: 'quinn', text: doneText, streaming: true },
     ]);
+    pushFlowReceipt({
+      headline: `Updated ${CHAGEE_TEA_SWAP.recipe.name} across ${count} franchise${count === 1 ? '' : 's'}`,
+      detail: `Cost per serve ${CHAGEE_TEA_SWAP.recipe.oldCost} → ${CHAGEE_TEA_SWAP.recipe.newCost} · supplier ${CHAGEE_TEA_SWAP.supplier.shortCode}`,
+    });
   }
 
   /** Stock-take review demo — "update my stock takes… review all the
@@ -6970,6 +7147,10 @@ export default function Feed({
       ...prev,
       { id: `q-stock-done-${Date.now()}`, role: 'quinn', text: doneText, streaming: true },
     ]);
+    pushFlowReceipt({
+      headline: `Added ${count} product${count === 1 ? '' : 's'} to ${byArea.size} storage area${byArea.size === 1 ? '' : 's'}`,
+      detail: `${siteCount} site${siteCount === 1 ? '' : 's'} · flagged for an opening count`,
+    });
   }
 
   /** Did the user just ask to onboard a new supplier (with their
@@ -7137,6 +7318,109 @@ export default function Feed({
     }, 3200);
   }
 
+  /** "Check my POS matches" quick action — the standalone match-triage
+   *  entry point. Scans the whole product catalogue against unmatched
+   *  POS buttons using the same scorer and card as the import
+   *  follow-ups, so the triage surface is identical wherever it's
+   *  reached from. */
+  function startPosMatchCheck() {
+    setChatMinimized(false);
+    setChatStarted(true);
+
+    const thinkingId = `q-pos-check-thinking-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: `u-pos-check-${Date.now()}`, role: 'user', text: 'Check my POS matches' },
+      { id: thinkingId, role: 'quinn', text: '', msgType: 'cmd-thinking' },
+    ]);
+
+    const alreadyMatchedPosIds = new Set<string>();
+    for (const [posId, ov] of matchOverrides) {
+      if (ov.target || ov.hidden) alreadyMatchedPosIds.add(posId);
+    }
+    const suggestions = computePOSDrinkSuggestions(
+      allProducts.map((p) => ({ id: p.id, name: p.name, category: p.category })),
+      alreadyMatchedPosIds,
+    );
+
+    // Matches the model is genuinely unsure about — mixed target entity
+    // types, each with alternatives so the operator can correct the
+    // target from the dropdown before linking. Never bulk-linked.
+    const uncertain: POSMatchSuggestion[] = [
+      {
+        posItemId: 'mi-iced-latte-euph',
+        posItemName: 'Iced Latte (EUPH) EI - Regular',
+        posType: 'Menu item',
+        productId: 'rcp-iced-latte',
+        productName: 'Iced Latte',
+        targetType: 'Recipe',
+        score: 0.48,
+        alternatives: [
+          { id: 'rcp-iced-latte-oat', name: 'Iced Latte — Oat', type: 'Recipe' },
+          { id: 'sub-espresso-double', name: 'Double Espresso Base', type: 'Sub-recipe' },
+          { id: 'mp-iced-coffee-rtd', name: 'Iced Coffee RTD 250ml', type: 'Master product' },
+        ],
+      },
+      {
+        posItemId: 'mod-add-vanilla-syrup',
+        posItemName: 'Add Vanilla Syrup',
+        posType: 'Modifier',
+        productId: 'prd-vanilla-syrup-750',
+        productName: 'Vanilla Syrup 750ml — Monin',
+        targetType: 'Product',
+        score: 0.44,
+        alternatives: [
+          { id: 'sub-vanilla-cold-foam', name: 'Vanilla Cold Foam', type: 'Sub-recipe' },
+          { id: 'mp-vanilla-syrup-1l', name: 'Vanilla Syrup 1L — Routin', type: 'Master product' },
+        ],
+      },
+    ].filter((u) => !alreadyMatchedPosIds.has(u.posItemId));
+
+    const allSuggestions = [...suggestions, ...uncertain];
+
+    window.setTimeout(() => {
+      if (allSuggestions.length === 0) {
+        setMessages((prev) => {
+          const without = prev.filter((msg) => msg.id !== thinkingId);
+          return [
+            ...without,
+            {
+              id: `q-pos-check-none-${Date.now()}`,
+              role: 'quinn' as const,
+              text: 'Every POS button is already matched to a recipe or product — nothing to triage. I\u2019ll flag it here if a new button lands unmatched.',
+              streaming: true,
+            },
+          ];
+        });
+        return;
+      }
+
+      const introText =
+        `I\u2019ve checked your POS buttons against your catalogue — ` +
+        `**${allSuggestions.length} unmatched ${allSuggestions.length === 1 ? 'button lines' : 'buttons line'} up** with things you already have.` +
+        (uncertain.length > 0
+          ? ` ${suggestions.length} look right; **${uncertain.length} I\u2019m not sure about**, so I\u2019ve left those out of the bulk link — check the target on each and use the dropdown if I\u2019ve picked the wrong one.`
+          : ' Link them and sales start depleting the right stock; skip anything that doesn\u2019t look right.');
+      const introId = `q-pos-check-intro-${Date.now()}`;
+      setMessages((prev) => {
+        const without = prev.filter((msg) => msg.id !== thinkingId);
+        return [...without, { id: introId, role: 'quinn' as const, text: introText, streaming: true }];
+      });
+      window.setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `q-pos-check-card-${Date.now()}`,
+            role: 'quinn',
+            text: '',
+            msgType: 'pos-match-suggestions',
+            cmdArgsJson: JSON.stringify({ suggestions: allSuggestions }),
+          },
+        ]);
+      }, introText.length * 18 + 400);
+    }, 1800);
+  }
+
   function confirmProductImport(cardId: string, data: ExtractedProductSheet, fileName: string) {
     if (productImportConfirmed[cardId]) return;
     setProductImportConfirmed((prev) => ({ ...prev, [cardId]: true }));
@@ -7212,6 +7496,13 @@ export default function Feed({
         streaming: true,
       },
     ]);
+
+    pushFlowReceipt({
+      headline: `Added ${data.productName} to your catalogue`,
+      detail: `Linked to Bacon master · ${data.supplierName} added as supplier · live at ${siteSummary}`,
+      href: '/products',
+      hrefLabel: 'View in Products',
+    });
 
     // No-ops when the product isn't a beverage — but cheap to call,
     // and means a future single-product import of, say, a sparkling
@@ -7402,6 +7693,13 @@ export default function Feed({
       },
     ]);
 
+    pushFlowReceipt({
+      headline: `Added ${data.name} + ${products.length} products`,
+      detail: `Live at ${siteSummary} · cut-off ${data.cutOffTime ?? '—'}, ${data.leadTimeDays ?? '—'}d lead`,
+      href: '/suppliers',
+      hrefLabel: 'View in Suppliers',
+    });
+
     // POS-match follow-up — runs after the done message has had a
     // moment to type, so the suggestion card lands as a deliberate
     // second beat rather than fighting the confirmation for attention.
@@ -7416,10 +7714,93 @@ export default function Feed({
       setMessages(prev => [...prev, {
         id: `q-integrity-${Date.now()}`,
         role: 'quinn',
-        text: "I've scanned your setup. You've got **3 things that need attention**, **4 worth a review**, and **4 checks that are all clear**. Here's the full picture:",
+        text: "I've been through all **456 live recipes** and the ~2,600 ingredient lines inside them. Good news first: they're mostly clean — no hidden mistake is quietly wrecking your numbers. What's left is a short, specific list — **12 clear fixes**, a couple of things to check with the kitchen, and some tidy-ups. In priority order:",
         msgType: 'integrity-check',
       }]);
     }, 2000);
+  }
+
+  /** A fix button on the review card → seed a batch-review card with
+   *  that finding's rows (or everything, for the card-level button).
+   *  The finding flips to "In review" on the source card; the batch
+   *  card owns the rest of the flow. */
+  function startIntegrityFix(sourceMsgId: string, findingId: string = 'all') {
+    const key = `${sourceMsgId}:${findingId}`;
+    if (integrityFixStarted[key] || integrityFixStarted[`${sourceMsgId}:all`]) return;
+    setIntegrityFixStarted((prev) => ({ ...prev, [key]: true }));
+
+    const meta = INTEGRITY_BATCH_META[findingId] ?? INTEGRITY_BATCH_META.all;
+    const thinkingId = `q-integrity-fix-thinking-${Date.now()}`;
+    const batchCardId = `q-integrity-batch-${Date.now()}`;
+    setBatchReviewStates((prev) => ({ ...prev, [batchCardId]: { state: 'pending' } }));
+
+    setMessages((prev) => [
+      ...prev,
+      { id: `u-integrity-fix-${Date.now()}`, role: 'user', text: meta.echo },
+      { id: thinkingId, role: 'quinn', text: '', msgType: 'cmd-thinking' },
+    ]);
+
+    const introId = `q-integrity-fix-intro-${Date.now()}`;
+    window.setTimeout(() => {
+      setMessages((prev) => {
+        const without = prev.filter((m) => m.id !== thinkingId);
+        return [
+          ...without,
+          { id: introId, role: 'quinn', text: meta.intro, streaming: true },
+        ];
+      });
+      const streamMs = meta.intro.length * 18;
+      window.setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: batchCardId,
+            role: 'quinn',
+            text: '',
+            msgType: 'integrity-batch-review',
+            cmdArgsJson: JSON.stringify({ findingId }),
+          },
+        ]);
+      }, streamMs + 400);
+    }, 1600);
+  }
+
+  /** Apply the ticked fixes. Two rows are rigged to fail so the
+   *  partial-failure path renders: failed rows stay listed with a
+   *  reason, everything else commits, and the receipt reports both
+   *  numbers. */
+  function confirmIntegrityBatch(cardId: string, submitted: BatchReviewSubmission[]) {
+    const cur = batchReviewStates[cardId];
+    if (cur && cur.state !== 'pending') return;
+
+    const FAILURES: Record<string, string> = {
+      'fix-cup-smoothie': 'Recipe locked by an open menu review — retry once it\u2019s published',
+      'fix-unit-honey': 'Two live honey products match this line — needs a manual pick',
+    };
+    const results: BatchRowResult[] = submitted.map((row) => (
+      FAILURES[row.id]
+        ? { id: row.id, ok: false, error: FAILURES[row.id] }
+        : { id: row.id, ok: true }
+    ));
+    const failed = results.filter((r) => !r.ok).length;
+    const applied = results.length - failed;
+
+    setBatchReviewStates((prev) => ({
+      ...prev,
+      [cardId]: { state: failed > 0 ? 'partial' : 'confirmed', results },
+    }));
+
+    logHistoryEntry({
+      kind: 'chat',
+      title: `Applied ${applied} data integrity fixes`,
+      subtitle: failed > 0 ? `${failed} failed — needs follow-up` : 'All fixes applied',
+    });
+    pushFlowReceipt({
+      headline: `Applied ${applied} of ${results.length} integrity fixes`,
+      detail: failed > 0
+        ? `${failed} couldn't be applied — the rows above say why. Nothing else was touched.`
+        : 'All selected fixes applied.',
+    });
   }
 
   /** State 4 → 5. User picked a target food-cost %. */
@@ -7471,6 +7852,7 @@ export default function Feed({
   }
 
   function skipPackaging() {
+    setPackagingSkipped(true);
     setMessages(prev => [...prev, {
       id: `u-packaging-skip-${Date.now()}`,
       role: 'user',
@@ -7602,6 +7984,10 @@ export default function Feed({
       }
       if (explicitChart === undefined && !tableOpts && detectStockTakeReview(text)) {
         startStockTakeReview({ userText: text });
+        return;
+      }
+      if (explicitChart === undefined && !tableOpts && detectProductSwapAcrossRecipes(text)) {
+        startBeanSwapFromSheet({ fileName: attachedFileName ?? 'riverbank-roasters-beans.pdf', userText: text });
         return;
       }
       const escaped = explicitChart === undefined && !tableOpts ? parseCommand(text) : null;
@@ -7907,19 +8293,19 @@ export default function Feed({
     return () => ro.disconnect();
   }, []);
 
-  // Step-gated cards render nothing once their wizard step has
-  // passed — mirror those conditions here so dead cards don't leave
-  // phantom slots in the panel (or keep it open with nothing in it).
+  // Wizard cards render from their step onwards — once completed they
+  // persist greyed-out with a Done/Cancelled badge rather than
+  // vanishing, so the panel doubles as the session's audit trail.
   const isWorkspaceCardLive = (m: ChatMsg): boolean => {
     switch (m.msgType) {
-      case 'packaging-picker': return recipeFlow === 8;
-      case 'allergen-check': return recipeFlow === 10;
-      case 'site-selection': return recipeFlow === 12;
-      case 'prod-prep': return productionFlow === 2;
-      case 'prod-shelf': return productionFlow === 4;
-      case 'prod-batch': return productionFlow === 6;
-      case 'prod-category': return productionFlow === 8;
-      case 'prod-summary': return productionFlow === 10;
+      case 'packaging-picker': return recipeFlow >= 8;
+      case 'allergen-check': return recipeFlow >= 10;
+      case 'site-selection': return recipeFlow >= 12;
+      case 'prod-prep': return productionFlow >= 2;
+      case 'prod-shelf': return productionFlow >= 4;
+      case 'prod-batch': return productionFlow >= 6;
+      case 'prod-category': return productionFlow >= 8;
+      case 'prod-summary': return productionFlow >= 10;
       default: return true;
     }
   };
@@ -8155,6 +8541,25 @@ export default function Feed({
                           if (!parsed || parsed.suggestions.length === 0) return null;
                           const decisions = posMatchDecisions[m.id] ?? {};
 
+                          // Rule #2: once every row is decided, the flow ends
+                          // with a receipt. Ref-guarded so undo/redo can't
+                          // emit a second one.
+                          const maybeReceipt = (next: Record<string, 'applied' | 'skipped'>) => {
+                            if (posMatchReceiptSentRef.current.has(m.id)) return;
+                            if (parsed!.suggestions.some((s) => !next[s.posItemId])) return;
+                            posMatchReceiptSentRef.current.add(m.id);
+                            const applied = parsed!.suggestions.filter((s) => next[s.posItemId] === 'applied').length;
+                            const skipped = parsed!.suggestions.length - applied;
+                            pushFlowReceipt({
+                              headline: `Linked ${applied} POS button${applied === 1 ? '' : 's'}`,
+                              detail: skipped > 0
+                                ? `${skipped} skipped — still unmatched on the Item matching page.`
+                                : 'Sales on these buttons now deplete the right stock.',
+                              href: '/item-matching',
+                              hrefLabel: 'Open Item matching',
+                            });
+                          };
+
                           const apply = (s: POSMatchSuggestion) => {
                             // Write through to the same override store the
                             // Item matching page reads from — so the row
@@ -8164,12 +8569,14 @@ export default function Feed({
                               ...prev,
                               [m.id]: { ...(prev[m.id] ?? {}), [s.posItemId]: 'applied' },
                             }));
+                            maybeReceipt({ ...decisions, [s.posItemId]: 'applied' });
                           };
                           const skip = (posItemId: string) => {
                             setPosMatchDecisions((prev) => ({
                               ...prev,
                               [m.id]: { ...(prev[m.id] ?? {}), [posItemId]: 'skipped' },
                             }));
+                            maybeReceipt({ ...decisions, [posItemId]: 'skipped' });
                           };
                           const undo = (posItemId: string) => {
                             setPosMatchDecisions((prev) => {
@@ -8178,16 +8585,26 @@ export default function Feed({
                               return { ...prev, [m.id]: cur };
                             });
                           };
-                          const applyAll = () => {
-                            for (const s of parsed!.suggestions) {
-                              if (!decisions[s.posItemId]) apply(s);
+                          // Bulk-link the confident rows the card hands over
+                          // (dropdown corrections folded in; not-sure rows
+                          // excluded per rule #5).
+                          const applyAll = (rows: POSMatchSuggestion[]) => {
+                            const next = { ...decisions };
+                            for (const s of rows) {
+                              if (!next[s.posItemId]) {
+                                setMatchTarget(s.posItemId, { type: 'product', id: s.productId });
+                                next[s.posItemId] = 'applied';
+                              }
                             }
+                            setPosMatchDecisions((prev) => ({ ...prev, [m.id]: next }));
+                            maybeReceipt(next);
                           };
 
                           return (
                             <POSMatchSuggestionsCard
                               suggestions={parsed.suggestions}
                               decisions={decisions}
+                              catalogue={posCatalogue}
                               onApply={apply}
                               onSkip={skip}
                               onUndo={undo}
@@ -8271,13 +8688,39 @@ export default function Feed({
                         )}
                         {m.msgType === 'integrity-check' && (
                           <DataIntegrityCard
-                            onFixWithQuinn={() => sendMessage('Walk me through fixing the data integrity issues — let\'s start with the 3 that need immediate attention.')}
+                            state={integrityFixStarted[`${m.id}:all`] ? 'confirmed' : 'pending'}
+                            isFindingStarted={(fid) =>
+                              !!integrityFixStarted[`${m.id}:${fid}`] || !!integrityFixStarted[`${m.id}:all`]
+                            }
+                            onFixFinding={(fid) => startIntegrityFix(m.id, fid)}
+                            onFixAll={() => startIntegrityFix(m.id)}
                           />
                         )}
-                        {m.msgType === 'packaging-picker' && recipeFlow === 8 && (
+                        {m.msgType === 'integrity-batch-review' && (() => {
+                          const findingId: string = JSON.parse(m.cmdArgsJson ?? '{}').findingId ?? 'all';
+                          const meta = INTEGRITY_BATCH_META[findingId] ?? INTEGRITY_BATCH_META.all;
+                          const rows = findingId === 'all'
+                            ? INTEGRITY_FIX_ROWS
+                            : INTEGRITY_FIX_GROUPS[findingId] ?? INTEGRITY_FIX_ROWS;
+                          return (
+                            <BatchReviewCard
+                              icon={ShieldCheck}
+                              title={meta.title}
+                              subtitle={meta.subtitle}
+                              rows={rows}
+                              impactSummary={meta.impact}
+                              state={batchReviewStates[m.id]?.state ?? 'pending'}
+                              results={batchReviewStates[m.id]?.results}
+                              onConfirm={(submitted) => confirmIntegrityBatch(m.id, submitted)}
+                              onCancel={() => setBatchReviewStates((prev) => ({ ...prev, [m.id]: { state: 'cancelled' } }))}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'packaging-picker' && recipeFlow >= 8 && (
                           <PackagingPicker
                             options={activeTemplate.packaging}
                             selected={selectedPackaging}
+                            state={recipeFlow > 8 ? (packagingSkipped ? 'cancelled' : 'confirmed') : 'pending'}
                             onToggle={(id) => setSelectedPackaging(prev => {
                               const next = new Set(prev);
                               if (next.has(id)) next.delete(id); else next.add(id);
@@ -8287,10 +8730,11 @@ export default function Feed({
                             onSkip={skipPackaging}
                           />
                         )}
-                        {m.msgType === 'allergen-check' && recipeFlow === 10 && (
+                        {m.msgType === 'allergen-check' && recipeFlow >= 10 && (
                           <AllergenCard
                             confirmed={selectedAllergens}
                             detected={new Set(activeTemplate.autoDetectedAllergens)}
+                            state={recipeFlow > 10 ? 'confirmed' : 'pending'}
                             onToggle={(a) => setSelectedAllergens(prev => {
                               const next = new Set(prev);
                               if (next.has(a)) next.delete(a); else next.add(a);
@@ -8299,9 +8743,10 @@ export default function Feed({
                             onConfirm={confirmAllergens}
                           />
                         )}
-                        {m.msgType === 'site-selection' && recipeFlow === 12 && (
+                        {m.msgType === 'site-selection' && recipeFlow >= 12 && (
                           <SiteSelectionCard
                             selected={selectedSites}
+                            state={recipeFlow > 12 ? 'confirmed' : 'pending'}
                             onToggle={(id) => setSelectedSites(prev => {
                               const next = new Set(prev);
                               if (next.has(id)) next.delete(id); else next.add(id);
@@ -8310,39 +8755,43 @@ export default function Feed({
                             onConfirm={confirmSites}
                           />
                         )}
-                        {m.msgType === 'prod-prep' && productionFlow === 2 && (
+                        {m.msgType === 'prod-prep' && productionFlow >= 2 && (
                           <PillPicker
                             title="Prep time"
                             options={PREP_TIME_OPTIONS}
                             selected={prodSettings.prepTime}
+                            state={productionFlow > 2 ? 'confirmed' : 'pending'}
                             onSelect={(v) => setProdSettings(s => ({ ...s, prepTime: v }))}
                             onConfirm={() => confirmPrepTime(prodSettings.prepTime)}
                           />
                         )}
-                        {m.msgType === 'prod-shelf' && productionFlow === 4 && (
+                        {m.msgType === 'prod-shelf' && productionFlow >= 4 && (
                           <PillPicker
                             title="Shelf life"
                             options={SHELF_LIFE_OPTIONS}
                             selected={prodSettings.shelfLife}
+                            state={productionFlow > 4 ? 'confirmed' : 'pending'}
                             onSelect={(v) => setProdSettings(s => ({ ...s, shelfLife: v }))}
                             onConfirm={() => confirmShelfLife(prodSettings.shelfLife)}
                           />
                         )}
-                        {m.msgType === 'prod-batch' && productionFlow === 6 && (
+                        {m.msgType === 'prod-batch' && productionFlow >= 6 && (
                           <BatchAndCarryCard
                             settings={prodSettings}
+                            state={productionFlow > 6 ? 'confirmed' : 'pending'}
                             onUpdate={(u) => setProdSettings(s => ({ ...s, ...u }))}
                             onConfirm={confirmBatch}
                           />
                         )}
-                        {m.msgType === 'prod-category' && productionFlow === 8 && (
+                        {m.msgType === 'prod-category' && productionFlow >= 8 && (
                           <CategoryClosingCard
                             settings={prodSettings}
+                            state={productionFlow > 8 ? 'confirmed' : 'pending'}
                             onUpdate={(u) => setProdSettings(s => ({ ...s, ...u }))}
                             onConfirm={confirmCategoryAndClosing}
                           />
                         )}
-                        {m.msgType === 'prod-summary' && productionFlow === 10 && (
+                        {m.msgType === 'prod-summary' && productionFlow >= 10 && (
                           <ProductionSummaryCard settings={prodSettings} />
                         )}
                         {m.msgType === 'analytics-chart' && m.chartId && (
@@ -9135,10 +9584,39 @@ export default function Feed({
                       // In split view the interactive card lives in
                       // the workspace panel — a message that exists
                       // only to host a card would render as an empty
-                      // bubble here, so skip it entirely. Messages
-                      // that carry text (the question / intro line)
-                      // still render as a normal bubble.
-                      if (splitView && isWorkspaceMsg(m) && !m.text) return null;
+                      // bubble here — instead leave a small Workspace
+                      // pointer in the stream ("opened on the right →")
+                      // so the conversation stays coherent in history
+                      // and narrow layouts. Messages that carry text
+                      // (the question / intro line) still render as a
+                      // normal bubble.
+                      if (splitView && isWorkspaceMsg(m) && !m.text) {
+                        return (
+                          <motion.div
+                            key={m.id}
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.24, ease: [0.25, 0.1, 0.25, 1] }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '5px 12px',
+                              margin: '2px 0',
+                              borderRadius: '999px',
+                              border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.10))',
+                              background: 'rgba(0,28,53,0.025)',
+                              width: 'fit-content',
+                              fontSize: '11.5px',
+                              fontWeight: 600,
+                              color: 'var(--color-text-secondary)',
+                            }}
+                          >
+                            {WORKSPACE_POINTER_LABELS[m.msgType ?? ''] ?? 'Working on this'} — in the workspace
+                            <ChevronDown size={12} strokeWidth={2.4} style={{ transform: 'rotate(-90deg)' }} />
+                          </motion.div>
+                        );
+                      }
                       return (
                       <motion.div
                         key={m.id}
@@ -9297,7 +9775,7 @@ export default function Feed({
                 minHeight: 0,
                 borderLeft: '1px solid var(--color-border-subtle)',
                 // Warm cream — the workspace canvas behind every card.
-                background: '#F9F4F0',
+                background: '#FEFBEE',
                 display: 'flex',
                 flexDirection: 'column',
               }}>
