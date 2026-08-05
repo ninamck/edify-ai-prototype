@@ -495,7 +495,7 @@ export default function MarginExplorerCard({
           style={{
             padding: '8px 10px',
             borderRadius: '8px',
-            background: 'rgba(3,105,161,0.05)',
+            background: 'rgba(25, 20, 132, 0.05)',
             fontSize: '12px',
             fontWeight: 500,
             color: 'var(--color-text-secondary)',

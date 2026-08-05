@@ -89,7 +89,7 @@ export default function PhotoProcessPage() {
               <span
                 style={{
                   width: '36px', height: '36px', borderRadius: '10px',
-                  background: 'rgba(21,128,61,0.15)',
+                  background: 'rgba(22, 101, 52, 0.15)',
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                   flexShrink: 0,
                 }}

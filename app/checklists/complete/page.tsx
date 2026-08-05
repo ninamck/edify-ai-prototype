@@ -6,9 +6,9 @@ import { MOCK_INSTANCES } from '../mockData';
 import type { ChecklistInstance, InstanceStatus, UserRole } from '../types';
 
 const STATUS_CONFIG: Record<InstanceStatus, { label: string; bg: string; text: string }> = {
-  pending: { label: 'Pending', bg: '#FFF7ED', text: '#EA580C' },
-  in_progress: { label: 'In progress', bg: '#EFF6FF', text: '#1D4ED8' },
-  complete: { label: 'Complete', bg: '#F0FDF4', text: '#15803D' },
+  pending: { label: 'Pending', bg: '#FEF6DA', text: '#001C35' },
+  in_progress: { label: 'In progress', bg: '#E4EDFB', text: '#3D5CA6' },
+  complete: { label: 'Complete', bg: '#E3F2E8', text: '#166534' },
 };
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -64,14 +64,14 @@ function InstanceCard({ instance, onClick }: { instance: ChecklistInstance; onCl
         width: '44px',
         height: '44px',
         borderRadius: '10px',
-        background: isComplete ? '#F0FDF4' : 'var(--color-bg-surface)',
+        background: isComplete ? '#E3F2E8' : 'var(--color-bg-surface)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
       }}>
         {isComplete
-          ? <CheckCircle2 size={22} color="#15803D" />
+          ? <CheckCircle2 size={22} color="#166534" />
           : <ClipboardList size={20} color="var(--color-text-secondary)" />
         }
       </div>
@@ -161,7 +161,7 @@ export default function CompleteTasksPage() {
             <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', fontWeight: 500 }}>To do</span>
           </div>
           <div style={summaryCardStyle}>
-            <span style={{ fontSize: '22px', fontWeight: 800, color: '#15803D' }}>{complete.length}</span>
+            <span style={{ fontSize: '22px', fontWeight: 800, color: '#166534' }}>{complete.length}</span>
             <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', fontWeight: 500 }}>Done today</span>
           </div>
           <button
@@ -221,7 +221,7 @@ export default function CompleteTasksPage() {
 
         {MOCK_INSTANCES.length === 0 && (
           <div style={{ padding: '60px 0', textAlign: 'center' }}>
-            <CheckCircle2 size={40} color="#15803D" style={{ marginBottom: '12px' }} />
+            <CheckCircle2 size={40} color="#166534" style={{ marginBottom: '12px' }} />
             <p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>
               All done!
             </p>

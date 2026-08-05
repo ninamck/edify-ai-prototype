@@ -260,7 +260,7 @@ function FollowUpRuleRow({
           flexShrink: 0,
         }}
       >
-        <Trash2 size={13} color="#B91C1C" />
+        <Trash2 size={13} color="#B01038" />
       </button>
     </div>
   );
@@ -324,7 +324,7 @@ function QuestionCard({
         background: '#fff',
         borderRadius: '10px',
         border: isFollowUp
-          ? '1px solid #FDE68A'
+          ? '1px solid #EAD173'
           : '1px solid var(--color-border-subtle)',
         boxShadow: '0 1px 4px rgba(0, 28, 53,0.06)',
         overflow: 'hidden',
@@ -351,7 +351,7 @@ function QuestionCard({
         )}
 
         {isFollowUp && (
-          <GitBranch size={13} color="#D97706" style={{ flexShrink: 0 }} />
+          <GitBranch size={13} color="#001C35" style={{ flexShrink: 0 }} />
         )}
 
         <ResponseIcon size={13} color="var(--color-text-secondary)" style={{ flexShrink: 0 }} />
@@ -369,7 +369,7 @@ function QuestionCard({
         </span>
 
         {question.mandatory && (
-          <span style={{ fontSize: '12px', color: '#B91C1C', fontWeight: 700, flexShrink: 0 }}>Required</span>
+          <span style={{ fontSize: '12px', color: '#B01038', fontWeight: 700, flexShrink: 0 }}>Required</span>
         )}
 
         {!isFollowUp && (
@@ -398,7 +398,7 @@ function QuestionCard({
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
           style={iconBtnStyle}
         >
-          <Trash2 size={13} color="#B91C1C" />
+          <Trash2 size={13} color="#B01038" />
         </button>
 
         {expanded ? <ChevronUp size={14} color="var(--color-text-muted)" /> : <ChevronDown size={14} color="var(--color-text-muted)" />}
@@ -678,16 +678,16 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
         <div style={{
           padding: '12px 14px',
           borderRadius: '9px',
-          background: '#FEF2F2',
-          border: '1px solid #FECACA',
+          background: '#FCE5EB',
+          border: '1px solid #E89AAE',
           marginBottom: '20px',
           display: 'flex',
           gap: '10px',
         }}>
-          <AlertCircle size={16} color="#B91C1C" style={{ flexShrink: 0, marginTop: '1px' }} />
+          <AlertCircle size={16} color="#B01038" style={{ flexShrink: 0, marginTop: '1px' }} />
           <div>
             {errors.map((e) => (
-              <p key={e} style={{ margin: '0 0 2px', fontSize: '12px', color: '#B91C1C', fontWeight: 500 }}>{e}</p>
+              <p key={e} style={{ margin: '0 0 2px', fontSize: '12px', color: '#B01038', fontWeight: 500 }}>{e}</p>
             ))}
           </div>
         </div>
@@ -698,12 +698,12 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
         <div style={{
           padding: '12px 14px',
           borderRadius: '9px',
-          background: '#F0FDF4',
-          border: '1px solid #BBF7D0',
+          background: '#E3F2E8',
+          border: '1px solid #93C8A6',
           marginBottom: '20px',
           fontSize: '13px',
           fontWeight: 600,
-          color: '#15803D',
+          color: '#166534',
         }}>
           ✓ Checklist saved — redirecting…
         </div>

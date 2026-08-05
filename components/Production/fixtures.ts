@@ -190,13 +190,13 @@ export const WORK_TYPE_LABELS: Record<WorkType, string> = {
 export const WORK_TYPE_COLORS: Record<WorkType, { bg: string; color: string }> = {
   // Pre-shift — warm yellows/ambers, the "before service" tone.
   'weigh-up':  { bg: 'rgba(241,180,52,0.16)', color: 'var(--color-warning)' },
-  'thaw':      { bg: 'rgba(3,105,161,0.10)',  color: 'var(--color-info)' },
+  'thaw':      { bg: 'rgba(25, 20, 132, 0.10)',  color: 'var(--color-info)' },
   'mise':      { bg: 'rgba(0, 28, 53,0.07)',    color: 'var(--color-accent-active)' },
   // Butcher — protein breakdown; a deep rose to read distinct from the
   // hot-work reds (bake/grill) while still signalling "raw protein".
   'butcher':   { bg: 'rgba(159,18,57,0.10)',  color: '#9f1239' },
   // Cold prep — cool blues/teals.
-  'wash':      { bg: 'rgba(3,105,161,0.10)',  color: 'var(--color-info)' },
+  'wash':      { bg: 'rgba(25, 20, 132, 0.10)',  color: 'var(--color-info)' },
   'sanitise':  { bg: 'rgba(74,108,181,0.14)', color: 'var(--color-accent-mid)' },
   'slice':     { bg: 'rgba(74,108,181,0.14)', color: 'var(--color-accent-mid)' },
   // Mix / shape — accent navy.
@@ -206,13 +206,13 @@ export const WORK_TYPE_COLORS: Record<WorkType, { bg: string; color: string }> =
   'bake':      { bg: 'rgba(220,38,38,0.10)',  color: 'var(--color-error)' },
   'grill':     { bg: 'rgba(220,38,38,0.10)',  color: 'var(--color-error)' },
   // Set / cool — light blue.
-  'chill':     { bg: 'rgba(3,105,161,0.10)',  color: 'var(--color-info)' },
+  'chill':     { bg: 'rgba(25, 20, 132, 0.10)',  color: 'var(--color-info)' },
   // Build — info blue.
-  'assemble':  { bg: 'rgba(3,105,161,0.12)',  color: 'var(--color-info)' },
-  'portion':   { bg: 'rgba(21,128,61,0.10)',  color: 'var(--color-success)' },
+  'assemble':  { bg: 'rgba(25, 20, 132, 0.12)',  color: 'var(--color-info)' },
+  'portion':   { bg: 'rgba(22, 101, 52, 0.10)',  color: 'var(--color-success)' },
   // Finish — green/neutral.
   'label':     { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' },
-  'pack':      { bg: 'rgba(21,128,61,0.10)',  color: 'var(--color-success)' },
+  'pack':      { bg: 'rgba(22, 101, 52, 0.10)',  color: 'var(--color-success)' },
   // Clean — neutral grey.
   'wash-down': { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' },
 };

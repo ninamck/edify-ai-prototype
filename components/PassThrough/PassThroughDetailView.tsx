@@ -96,7 +96,7 @@ export default function PassThroughDetailView({ invoice, onBack, modeLabel, mode
               {invoiceNumber} — {supplier}
             </h1>
             <StatusBadge status={status} variant={statusVariant(status)} />
-            <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'rgba(3,105,161,0.08)', color: 'var(--color-info)', border: '1px solid rgba(3,105,161,0.25)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'rgba(25, 20, 132, 0.08)', color: 'var(--color-info)', border: '1px solid rgba(25, 20, 132, 0.25)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               {modeLabel ?? 'Pass-through'}
             </span>
           </div>

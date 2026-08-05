@@ -335,7 +335,7 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
           padding: '12px 16px',
           borderRadius: '10px',
           background: 'var(--color-info-light)',
-          border: '1px solid rgba(3, 105, 161, 0.18)',
+          border: '1px solid rgba(25, 20, 132, 0.18)',
           marginBottom: '16px',
           fontSize: '13px',
           color: 'var(--color-text-primary)',
@@ -990,7 +990,7 @@ function GRNList({ invoice }: { invoice: Invoice }) {
             style={{
               ...docChipStyle,
               background: 'transparent',
-              border: '1px dashed rgba(217,119,6,0.55)',
+              border: '1px dashed rgba(234, 209, 115, 1)',
               color: 'var(--color-warning)',
             }}
           >
@@ -1013,7 +1013,7 @@ function GRNList({ invoice }: { invoice: Invoice }) {
           style={{
             ...docChipStyle,
             background: 'transparent',
-            border: '1px dashed rgba(3,105,161,0.45)',
+            border: '1px dashed rgba(25, 20, 132, 0.45)',
             color: 'var(--color-info)',
           }}
         >
@@ -1044,9 +1044,9 @@ function CreditNoteChip({ invoice }: { invoice: Invoice }) {
         borderRadius: '100px',
         fontSize: '11px',
         fontWeight: 600,
-        background: 'rgba(3,105,161,0.08)',
+        background: 'rgba(25, 20, 132, 0.08)',
         color: 'var(--color-info)',
-        border: '1px solid rgba(3,105,161,0.22)',
+        border: '1px solid rgba(25, 20, 132, 0.22)',
         whiteSpace: 'nowrap',
         lineHeight: 1.2,
       }}

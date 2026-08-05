@@ -204,7 +204,7 @@ export function GpPercentChart() {
             type="monotone"
             dataKey="foodActual"
             name="Food GP %"
-            stroke="#d97706"
+            stroke="#4A6CB5"
             strokeWidth={2}
             dot={false}
           />
@@ -221,7 +221,7 @@ export function GpPercentChart() {
             type="monotone"
             dataKey="foodBudget"
             name="Food GP % (budget)"
-            stroke="#d97706"
+            stroke="#4A6CB5"
             strokeWidth={1.5}
             strokeDasharray="4 3"
             dot={false}

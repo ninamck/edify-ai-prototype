@@ -66,7 +66,7 @@ export default function RulesView({ onBack }: Props) {
         padding: '14px 18px',
         borderRadius: '12px',
         background: 'var(--color-info-light)',
-        border: '1px solid rgba(3, 105, 161, 0.18)',
+        border: '1px solid rgba(25, 20, 132, 0.18)',
         marginBottom: '20px',
         display: 'flex',
         alignItems: 'flex-start',
@@ -331,7 +331,7 @@ function RuleRow({
 function ScopeChip({ scope, value }: { scope: RuleScope; value?: string }) {
   const styles: Record<RuleScope, { bg: string; color: string; border: string }> = {
     global: { bg: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)', border: 'var(--color-border)' },
-    supplier: { bg: 'rgba(3, 105, 161, 0.08)', color: 'var(--color-info)', border: 'rgba(3, 105, 161, 0.22)' },
+    supplier: { bg: 'rgba(25, 20, 132, 0.08)', color: 'var(--color-info)', border: 'rgba(25, 20, 132, 0.22)' },
     invoice: { bg: 'rgba(34, 68, 68, 0.1)', color: 'var(--color-accent-active)', border: 'rgba(34, 68, 68, 0.25)' },
   };
   const s = styles[scope];

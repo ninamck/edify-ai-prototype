@@ -36,27 +36,63 @@
   --color-quinn-bg:        #001C35;
   --color-quinn-label:     #FFFFFF;
 
-  /* SEMANTIC — SUCCESS */
-  --color-success:         #15803D;
-  --color-success-light:   #DCFCE7;
-  --color-success-border:  #BBF7D0;
+  /* SEMANTIC — SUCCESS — matched, synced, done. Never for ordinary numbers. */
+  --color-success:         #166534;
+  --color-success-light:   #E3F2E8;
+  --color-success-border:  #93C8A6;
 
-  /* SEMANTIC — WARNING — amber accents, never dark-yellow-brown.
-     Body text on warning surfaces should stay --color-text-primary;
-     this colour is for accents, borders, badges and bold flags. */
-  --color-warning:         #D97706;
-  --color-warning-light:   #FBF4E4;
-  --color-warning-bg:      #F9F4F0;
-  --color-warning-border:  rgba(217, 119, 6, 0.45);
+  /* SEMANTIC — WARNING — a yellow field with navy ink. Orange text is GONE
+     (it drifts brown and fails AA). Text/icons on warning surfaces are always
+     navy; the field (fill + border) carries the state. #EA580C may remain
+     ONLY for icons / large graphics (3.6:1 — non-text). */
+  --color-warning:         #001C35;
+  --color-warning-light:   #FEF6DA;
+  --color-warning-bg:      #FEFBEE;  /* quiet wash — several warnings at once */
+  --color-warning-border:  #EAD173;
 
-  /* SEMANTIC — ERROR */
-  --color-error:           #B91C1C;
-  --color-error-light:     #FEE2E2;
-  --color-error-border:    #FECACA;
+  /* SEMANTIC — ERROR — crimson. Failed syncs, disputes, destructive confirms
+     only. Never negative variance, low confidence or overdue counts. */
+  --color-error:           #B01038;
+  --color-error-light:     #FCE5EB;
+  --color-error-border:    #E89AAE;
 
-  /* SEMANTIC — INFO */
-  --color-info:            #0369A1;
-  --color-info-light:      #E0F2FE;
+  /* SEMANTIC — INFO — brand Cobalt indigo. Meaning (notices, role labels,
+     links) — never data; data takes cobalt --color-accent-mid. */
+  --color-info:            #191484;
+  --color-info-light:      #E9E8F7;
+  --color-info-border:     #A6A2DB;
+  --color-link:            #191484;  /* links; navy #001C35 on hover */
+
+  /* SEMANTIC — IN REVIEW / IN PROGRESS — work moving through its normal
+     flow (batches in review, syncing, drafts). Replaces orange on the
+     production stepper. */
+  --color-review:          #3D5CA6;
+  --color-review-light:    #E4EDFB;
+  --color-review-border:   #AFC8EF;
+
+  /* BRAND ACCENTS — restricted roles */
+  --color-accent-pink:     #FF315D;  /* Hot Pink — active nav indicator, notification badges (navy text), AI signifier. Never status/buttons/links/charts */
+  --color-accent-sky:      #72BBCC;  /* fills/accents on navy surfaces only — never text on white */
+  --color-accent-amber:    #FFC060;  /* highlights/badge tints on navy only — never text on white */
+  --color-bg-alert:        #FEF9F3;  /* warm callout surface for proactive alerts */
+  --color-border-alert:    #F5E6D3;
+
+  /* CATEGORICAL CHIPS (ink / tint) — fixed per category, never status */
+  --chip-indigo:    #191484;  --chip-indigo-bg: #E9E8F7;   /* roles & people */
+  --chip-teal:      #0F766E;  --chip-teal-bg:   #DCF2F0;   /* product categories */
+  --chip-plum:      #6B21A8;  --chip-plum-bg:   #F3EAFB;   /* record types */
+  --chip-cyan:      #0E7490;  --chip-cyan-bg:   #E0F2F7;   /* materials & supplies */
+  --chip-olive:     #4D7C0F;  --chip-olive-bg:  #EFF5E1;   /* sites & benches */
+  --chip-stone:     #6B5E55;  --chip-stone-bg:  #F1EDE9;   /* fallback / other */
+
+  /* CHART SERIES — strict order; orange is the last resort, stone is the
+     "Other" rollup. >6 categories: top five + Other. */
+  --viz-1: #001C35;
+  --viz-2: #4A6CB5;
+  --viz-3: #72BBCC;
+  --viz-4: #0F766E;
+  --viz-5: #EA580C;
+  --viz-6: #A89A8E;
 
   /* NOTIFICATION */
   --color-dot:             #001C35;

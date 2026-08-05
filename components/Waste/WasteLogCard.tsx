@@ -491,7 +491,7 @@ function Field({
         }}
       >
         {label}
-        {required && <span style={{ color: '#B91C1C', marginLeft: 4 }}>*</span>}
+        {required && <span style={{ color: '#B01038', marginLeft: 4 }}>*</span>}
       </div>
       {children}
     </div>

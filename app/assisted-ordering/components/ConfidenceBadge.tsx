@@ -3,16 +3,16 @@
 import { useState } from 'react';
 import type { ConfidenceScore, ConfidenceFactors } from '../types';
 
-// Outlined-only chip palette — matches the stock chip treatment so the
-// app reads as a single design system. Background stays transparent;
-// the colour token does double-duty for text + border.
+// Confidence tiers per the palette guidelines: high = success green,
+// medium = info indigo (neutral), low = the warning yellow field with
+// navy ink. Never red — uncertain ≠ broken.
 const CONFIG: Record<
   ConfidenceScore,
-  { label: string; tone: string }
+  { label: string; tone: string; bg: string; border: string }
 > = {
-  high:   { label: 'HIGH', tone: '#15803D' },
-  medium: { label: 'MED',  tone: 'var(--color-warning)' },
-  low:    { label: 'LOW',  tone: '#B91C1C' },
+  high:   { label: 'HIGH', tone: '#166534', bg: 'transparent', border: '#166534' },
+  medium: { label: 'MED',  tone: '#191484', bg: 'transparent', border: '#191484' },
+  low:    { label: 'LOW',  tone: '#001C35', bg: '#FEF6DA',     border: '#EAD173' },
 };
 
 function factorLabel(key: string, value: string): { text: string; ok: boolean } {
@@ -62,9 +62,9 @@ export default function ConfidenceBadge({ score, factors }: Props) {
           alignItems: 'center',
           padding: '2px 7px',
           borderRadius: 'var(--radius-badge)',
-          background: 'transparent',
+          background: cfg.bg,
           color: cfg.tone,
-          border: `1px solid ${cfg.tone}`,
+          border: `1px solid ${cfg.border}`,
           fontSize: '12px',
           fontWeight: 700,
           letterSpacing: '0.04em',
@@ -113,7 +113,7 @@ export default function ConfidenceBadge({ score, factors }: Props) {
                 <span
                   style={{
                     fontSize: '12px', fontWeight: 500,
-                    color: ok ? '#15803D' : '#B91C1C',
+                    color: ok ? '#166534' : '#001C35',
                     flexShrink: 0,
                   }}
                 >

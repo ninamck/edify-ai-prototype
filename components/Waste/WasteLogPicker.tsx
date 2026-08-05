@@ -714,8 +714,8 @@ function EntryRow({
           transition: 'background 0.15s ease, color 0.15s ease',
         }}
         onMouseEnter={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.background = 'rgba(185,28,28,0.08)';
-          (e.currentTarget as HTMLButtonElement).style.color = '#B91C1C';
+          (e.currentTarget as HTMLButtonElement).style.background = 'rgba(176, 16, 56, 0.08)';
+          (e.currentTarget as HTMLButtonElement).style.color = '#B01038';
         }}
         onMouseLeave={(e) => {
           (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
@@ -906,8 +906,8 @@ function ProductRow({
               borderRadius: '100px',
               fontSize: '12px',
               fontWeight: 700,
-              background: 'rgba(185,28,28,0.08)',
-              color: '#B91C1C',
+              background: 'rgba(176, 16, 56, 0.08)',
+              color: '#B01038',
             }}
           >
             {badge.label}
@@ -1003,13 +1003,13 @@ function ConfirmDeleteModal({
               width: 40,
               height: 40,
               borderRadius: '50%',
-              background: 'rgba(185,28,28,0.10)',
+              background: 'rgba(176, 16, 56, 0.10)',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <AlertTriangle size={20} color="#B91C1C" strokeWidth={2.2} />
+            <AlertTriangle size={20} color="#B01038" strokeWidth={2.2} />
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
@@ -1082,7 +1082,7 @@ function ConfirmDeleteModal({
               padding: '10px 20px',
               borderRadius: 10,
               border: 'none',
-              background: '#B91C1C',
+              background: '#B01038',
               cursor: 'pointer',
               fontFamily: 'var(--font-primary)',
               fontSize: 14,

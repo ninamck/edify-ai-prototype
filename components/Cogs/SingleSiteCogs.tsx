@@ -179,9 +179,9 @@ const TD: React.CSSProperties = {
 const CLASS_COLORS: Record<string, string> = {
   Beverage: '#4a6cb5',
   Food: '#B45309',
-  General: '#0369A1',
+  General: '#191484',
   Other: '#6B5E55',
-  Unassigned: '#B91C1C',
+  Unassigned: '#B01038',
 };
 
 function ClassCell({ row }: { row: CogsClassRow }) {

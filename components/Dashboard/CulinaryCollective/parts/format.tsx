@@ -5,13 +5,15 @@ import type { CSSProperties, ReactNode } from 'react';
 // Brand-flavoured outlet colours used across the Overview + Flash report.
 // Recharts components key by string -> hex/var so we keep these centralised
 // to make tweaking the palette a one-line change.
+// Assigned strictly in chart-series order (viz-1…viz-6) per the palette
+// guidelines; "Other" always takes the stone rollup colour.
 export const CC_OUTLET_COLORS: Record<string, string> = {
-  Bar: 'var(--color-accent-deep)',
-  Flock: '#d97706',
-  Opa: '#2563eb',
-  Dough: '#7c3aed',
-  Other: '#94a3b8',
-  Total: '#0f172a',
+  Bar: '#001C35',   // viz-1 navy
+  Flock: '#4A6CB5', // viz-2 cobalt
+  Opa: '#72BBCC',   // viz-3 sky
+  Dough: '#0F766E', // viz-4 teal
+  Other: '#A89A8E', // viz-6 stone
+  Total: '#001C35',
 };
 
 // ---------------------------------------------------------------------------
@@ -85,7 +87,7 @@ export function heatmapCellColor(value: number, magnitude: number): string {
   }
   if (value < 0) {
     const alpha = 0.08 + 0.45 * eased;
-    return `rgba(180, 35, 24, ${alpha.toFixed(3)})`;
+    return `rgba(176, 16, 56, ${alpha.toFixed(3)})`;
   }
   return 'transparent';
 }

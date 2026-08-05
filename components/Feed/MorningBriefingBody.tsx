@@ -660,7 +660,7 @@ const CATEGORY = {
     color: '#1a5c3a',
     bg: 'rgba(26,92,58,0.055)',
     borderColor: 'rgba(26,92,58,0.22)',
-    dot: '#22C55E',
+    dot: '#166534',
   },
   'worth-knowing': {
     // Worth-knowing is reference, not warning. Amber-tinted wrapper reads

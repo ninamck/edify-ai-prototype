@@ -399,8 +399,8 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
         <div style={{
           display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
           padding: '10px 14px', borderRadius: '10px', marginBottom: '14px',
-          background: 'rgba(3,105,161,0.06)',
-          border: '1px solid rgba(3,105,161,0.25)',
+          background: 'rgba(25, 20, 132, 0.06)',
+          border: '1px solid rgba(25, 20, 132, 0.25)',
           fontSize: '12.5px', color: 'var(--color-text-secondary)',
         }}>
           <span style={{

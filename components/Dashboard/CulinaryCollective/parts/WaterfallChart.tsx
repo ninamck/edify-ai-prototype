@@ -131,7 +131,7 @@ const CONNECTORS = buildConnectors(FIS_WATERFALL_STEPS);
 
 const TOTAL_FILL = '#1f2937';
 const POSITIVE_FILL = 'var(--color-accent-deep)';
-const NEGATIVE_FILL = '#b91c1c';
+const NEGATIVE_FILL = '#b01038';
 
 function valueColor(row: WaterfallChartRow): string {
   if (row.isTotal) return TOTAL_FILL;

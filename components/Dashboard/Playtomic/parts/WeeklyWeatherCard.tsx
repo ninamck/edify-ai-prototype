@@ -7,10 +7,10 @@ import {
 } from '@/components/Dashboard/data/playtomicMockData';
 
 const ICON_COLOUR: Record<WeatherCondition, string> = {
-  sun: '#d97706',
+  sun: '#ea580c',
   'part-cloud': 'var(--color-text-secondary)',
   cloud: 'var(--color-text-muted)',
-  rain: '#2563eb',
+  rain: '#3d5ca6',
 };
 
 const LABEL: Record<WeatherCondition, string> = {
@@ -87,7 +87,7 @@ export default function WeeklyWeatherCard() {
                 style={{
                   fontSize: 10,
                   fontWeight: 600,
-                  color: d.precipPct >= 50 ? '#2563eb' : 'var(--color-text-muted)',
+                  color: d.precipPct >= 50 ? '#3d5ca6' : 'var(--color-text-muted)',
                 }}
                 aria-label={`${LABEL[d.condition]}, ${d.precipPct}% precipitation`}
               >

@@ -48,16 +48,17 @@ function wasFollowUpTriggered(question: ChecklistQuestion, answer: ChecklistAnsw
 function answerColor(answer: ChecklistAnswer, responseType: ResponseType): { bg: string; text: string; border: string } {
   if (responseType === 'checkbox') {
     return answer.value === true
-      ? { bg: '#F0FDF4', text: '#15803D', border: '#BBF7D0' }
-      : { bg: '#FEF2F2', text: '#B91C1C', border: '#FECACA' };
+      ? { bg: '#E3F2E8', text: '#166534', border: '#93C8A6' }
+      : { bg: '#FCE5EB', text: '#B01038', border: '#E89AAE' };
   }
   if (responseType === 'temperature' || responseType === 'number') {
-    return { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' };
+    return { bg: '#E4EDFB', text: '#3D5CA6', border: '#BFDBFE' };
   }
   if (responseType === 'rating') {
-    if (answer.value === 'great') return { bg: '#F0FDF4', text: '#15803D', border: '#BBF7D0' };
-    if (answer.value === 'average') return { bg: '#FFFBEB', text: '#D97706', border: '#FDE68A' };
-    return { bg: '#FEF2F2', text: '#B91C1C', border: '#FECACA' };
+    if (answer.value === 'great') return { bg: '#E3F2E8', text: '#166534', border: '#93C8A6' };
+    if (answer.value === 'average') return { bg: '#FEF6DA', text: '#001C35', border: '#EAD173' };
+    // 'urgent' is an escalation, not an error — warning field, navy ink.
+    return { bg: '#FEF6DA', text: '#001C35', border: '#EAD173' };
   }
   return { bg: 'var(--color-bg-surface)', text: 'var(--color-text-primary)', border: 'var(--color-border-subtle)' };
 }
@@ -94,8 +95,8 @@ function AnswerRow({
       style={{
         padding: '14px 16px',
         borderRadius: '10px',
-        border: isFollowUp ? '1px solid #FDE68A' : '1px solid var(--color-border-subtle)',
-        background: isFollowUp ? '#FFFBEB' : '#fff',
+        border: isFollowUp ? '1px solid #EAD173' : '1px solid var(--color-border-subtle)',
+        background: isFollowUp ? '#FEF6DA' : '#fff',
         marginLeft: isFollowUp ? '16px' : '0',
         borderLeft: isFollowUp ? '3px solid #F59E0B' : undefined,
         display: 'flex',
@@ -107,7 +108,7 @@ function AnswerRow({
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '7px', flex: 1, minWidth: 0 }}>
           {isFollowUp && (
-            <GitBranch size={12} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <GitBranch size={12} color="#001C35" style={{ flexShrink: 0, marginTop: '2px' }} />
           )}
           <ResponseIcon size={13} color="var(--color-text-muted)" style={{ flexShrink: 0, marginTop: '2px' }} />
           <span style={{
@@ -134,8 +135,8 @@ function AnswerRow({
           }}>
             {question.responseType === 'checkbox' ? (
               isCheckboxNo
-                ? <XCircle size={13} color="#B91C1C" />
-                : <CheckCircle2 size={13} color="#15803D" />
+                ? <XCircle size={13} color="#B01038" />
+                : <CheckCircle2 size={13} color="#166534" />
             ) : null}
             <span style={{ fontSize: '12px', fontWeight: 700, color: colors.text }}>
               {formatAnswer(answer!, question.responseType)}
@@ -181,8 +182,8 @@ function AnswerRow({
       {/* Follow-up triggered indicator */}
       {triggered && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <AlertTriangle size={11} color="#D97706" />
-          <span style={{ fontSize: '12px', color: '#D97706', fontWeight: 600 }}>Follow-up triggered</span>
+          <AlertTriangle size={11} color="#001C35" />
+          <span style={{ fontSize: '12px', color: '#001C35', fontWeight: 600 }}>Follow-up triggered</span>
         </div>
       )}
     </div>
@@ -233,13 +234,13 @@ export function HistoryDetailClient({ instanceId }: { instanceId: string }) {
               width: '44px',
               height: '44px',
               borderRadius: '10px',
-              background: '#F0FDF4',
+              background: '#E3F2E8',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
             }}>
-              <CheckCircle2 size={22} color="#15803D" />
+              <CheckCircle2 size={22} color="#166534" />
             </div>
             <div>
               <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--color-text-primary)' }}>
@@ -274,8 +275,12 @@ export function HistoryDetailClient({ instanceId }: { instanceId: string }) {
           {/* Stats row */}
           <div style={{ display: 'flex', gap: '8px' }}>
             <StatChip label="Answered" value={allAnsweredCount} color="var(--color-text-primary)" />
-            <StatChip label="Pass" value={passedCount} color="#15803D" />
-            {failedCount > 0 && <StatChip label="Needs attention" value={failedCount} color="#B91C1C" />}
+            <StatChip label="Pass" value={passedCount} color="#166534" />
+            {failedCount > 0 && (
+              // Needs-attention counts take the warning yellow field with
+              // navy ink — never red (overdue/attention ≠ broken).
+              <StatChip label="Needs attention" value={failedCount} color="#001C35" bg="#FEF6DA" border="#EAD173" />
+            )}
           </div>
         </div>
 
@@ -336,7 +341,7 @@ export function HistoryDetailClient({ instanceId }: { instanceId: string }) {
   );
 }
 
-function StatChip({ label, value, color }: { label: string; value: number; color: string }) {
+function StatChip({ label, value, color, bg, border }: { label: string; value: number; color: string; bg?: string; border?: string }) {
   return (
     <div style={{
       flex: 1,
@@ -345,8 +350,8 @@ function StatChip({ label, value, color }: { label: string; value: number; color
       alignItems: 'center',
       padding: '8px 6px',
       borderRadius: '8px',
-      background: '#fff',
-      border: '1px solid var(--color-border-subtle)',
+      background: bg ?? '#fff',
+      border: `1px solid ${border ?? 'var(--color-border-subtle)'}`,
       gap: '1px',
     }}>
       <span style={{ fontSize: '17px', fontWeight: 800, color }}>{value}</span>

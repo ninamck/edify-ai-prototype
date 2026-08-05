@@ -112,8 +112,8 @@ export default function GRNDetail({ id }: { id: string }) {
               const isShort = line.receivedQty < line.expectedQty;
               const lineTotal = line.price * line.receivedQty;
               return (
-                <tr key={line.id} style={{ background: isShort ? 'rgba(217,119,6,0.06)' : 'transparent' }}>
-                  <td style={{ ...cell, fontWeight: 600, color: 'var(--color-text-primary)', boxShadow: isShort ? 'inset 3px 0 0 #D97706' : 'none' }}>
+                <tr key={line.id} style={{ background: isShort ? 'rgba(234, 209, 115, 0.12)' : 'transparent' }}>
+                  <td style={{ ...cell, fontWeight: 600, color: 'var(--color-text-primary)', boxShadow: isShort ? 'inset 3px 0 0 #001C35' : 'none' }}>
                     {line.name}
                   </td>
                   <td style={{ ...cell, color: 'var(--color-text-secondary)', fontSize: '12px' }}>{line.sku}</td>

@@ -3877,7 +3877,7 @@ function DropGrid({
               border: `1px solid ${
                 isActive ? 'var(--color-warning)' : 'var(--color-warning-border)'
               }`,
-              boxShadow: isActive ? '0 0 0 2px rgba(217, 119, 6, 0.18)' : 'none',
+              boxShadow: isActive ? '0 0 0 2px rgba(234, 209, 115, 0.36)' : 'none',
               borderRadius: 6,
               background: isActive ? 'var(--color-warning-light)' : '#ffffff',
               display: 'flex',
@@ -3987,7 +3987,7 @@ function DropSummaryChip({
         padding: '8px 12px',
         borderRadius: 6,
         border: '1px dashed var(--color-warning-border)',
-        background: 'var(--color-bg-subtle, rgba(217,119,6,0.04))',
+        background: 'var(--color-bg-subtle, rgba(234, 209, 115, 0.08))',
         color: 'var(--color-text-muted)',
         cursor: 'pointer',
         fontSize: 12,

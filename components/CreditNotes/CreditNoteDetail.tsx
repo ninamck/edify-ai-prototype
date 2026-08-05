@@ -25,18 +25,18 @@ function statusVariant(status: CreditNoteStatus): BadgeVariant {
 
 const EVENT_ICON: Record<ChaseEvent['type'], React.ReactNode> = {
   raised:    <AlertTriangle size={13} strokeWidth={2} color="var(--color-warning)" />,
-  chased:    <Mail size={13} strokeWidth={2} color="#1D4ED8" />,
-  escalated: <ArrowUpRight size={13} strokeWidth={2} color="#B91C1C" />,
-  received:  <CheckCircle2 size={13} strokeWidth={2} color="#15803D" />,
-  applied:   <CheckCircle2 size={13} strokeWidth={2} color="#15803D" />,
+  chased:    <Mail size={13} strokeWidth={2} color="#3D5CA6" />,
+  escalated: <ArrowUpRight size={13} strokeWidth={2} color="#B01038" />,
+  received:  <CheckCircle2 size={13} strokeWidth={2} color="#166534" />,
+  applied:   <CheckCircle2 size={13} strokeWidth={2} color="#166534" />,
 };
 
 const EVENT_BG: Record<ChaseEvent['type'], string> = {
   raised:    '#FEF3C7',
   chased:    '#DBEAFE',
-  escalated: '#FEE2E2',
-  received:  '#DCFCE7',
-  applied:   '#DCFCE7',
+  escalated: '#FCE5EB',
+  received:  '#E3F2E8',
+  applied:   '#E3F2E8',
 };
 
 const METHOD_ICON: Record<ChaseMethod, React.ReactNode> = {
@@ -488,8 +488,8 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
                 margin: '16px 20px 0',
                 padding: '16px',
                 borderRadius: '10px',
-                background: '#F0FDF4',
-                border: '1px solid #BBF7D0',
+                background: '#E3F2E8',
+                border: '1px solid #93C8A6',
               }}
             >
               <div
@@ -520,7 +520,7 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
                     flex: 1,
                     padding: '9px 16px',
                     borderRadius: '8px',
-                    background: '#15803D',
+                    background: '#166534',
                     border: 'none',
                     color: '#fff',
                     fontSize: '13px',
@@ -564,16 +564,16 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
                 margin: '16px 20px 0',
                 padding: '14px 16px',
                 borderRadius: '10px',
-                background: '#DCFCE7',
-                border: '1px solid #BBF7D0',
+                background: '#E3F2E8',
+                border: '1px solid #93C8A6',
                 display: 'flex',
                 alignItems: 'flex-start',
                 gap: '10px',
               }}
             >
-              <CheckCircle2 size={18} color="#15803D" strokeWidth={2} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <CheckCircle2 size={18} color="#166534" strokeWidth={2} style={{ flexShrink: 0, marginTop: '1px' }} />
               <div>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#15803D', marginBottom: '3px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#166534', marginBottom: '3px' }}>
                   Credit note received
                 </div>
                 <div style={{ fontSize: '13px', color: '#166534', lineHeight: 1.5 }}>{successMessage}</div>
@@ -624,8 +624,8 @@ function ActionBar({
   if (creditNote.status === 'Applied') {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <CheckCircle2 size={15} color="#15803D" strokeWidth={2} />
-        <span style={{ fontSize: '13px', color: '#15803D', fontWeight: 600 }}>
+        <CheckCircle2 size={15} color="#166534" strokeWidth={2} />
+        <span style={{ fontSize: '13px', color: '#166534', fontWeight: 600 }}>
           Applied to {creditNote.linkedInvoice ?? 'invoice'} — no further action needed
         </span>
       </div>
@@ -635,8 +635,8 @@ function ActionBar({
   if (creditNote.status === 'Received') {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <CheckCircle2 size={15} color="#15803D" strokeWidth={2} />
-        <span style={{ fontSize: '13px', color: '#15803D', fontWeight: 600 }}>
+        <CheckCircle2 size={15} color="#166534" strokeWidth={2} />
+        <span style={{ fontSize: '13px', color: '#166534', fontWeight: 600 }}>
           Credit note received — pending application to invoice
         </span>
       </div>
@@ -675,8 +675,8 @@ function ActionButton({
 }) {
   const styles: Record<string, React.CSSProperties> = {
     primary: { background: 'var(--color-accent-active)', color: '#fff', border: 'none' },
-    success: { background: '#15803D', color: '#fff', border: 'none' },
-    danger:  { background: '#FEE2E2', color: '#B91C1C', border: '1px solid #FECACA' },
+    success: { background: '#166534', color: '#fff', border: 'none' },
+    danger:  { background: '#FCE5EB', color: '#B01038', border: '1px solid #E89AAE' },
     ghost:   { background: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' },
   };
   return (

@@ -15,7 +15,9 @@ const CONDITION_LABEL: Record<WeatherCondition, string> = {
 };
 
 function WeatherIcon({ condition, size = 14 }: { condition: WeatherCondition; size?: number }) {
-  const color = condition === 'sun' ? '#D97706' : condition === 'rain' ? '#2563EB' : 'var(--color-text-muted)';
+  // Weather glyphs are icons, not text — orange #EA580C is sanctioned for
+  // non-text graphics.
+  const color = condition === 'sun' ? '#EA580C' : condition === 'rain' ? '#3D5CA6' : 'var(--color-text-muted)';
   switch (condition) {
     case 'sun': return <Sun size={size} color={color} strokeWidth={2} />;
     case 'rain': return <CloudRain size={size} color={color} strokeWidth={2} />;

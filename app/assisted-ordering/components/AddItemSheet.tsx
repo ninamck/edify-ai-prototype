@@ -289,9 +289,9 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
                     padding: '12px 14px',
                     borderRadius: 'var(--radius-card)',
                     border: isNew
-                      ? '1.5px solid rgba(234,88,12,0.30)'
+                      ? '1.5px solid #EAD173'
                       : '1.5px solid var(--color-border-subtle)',
-                    background: isNew ? 'rgba(234,88,12,0.03)' : 'var(--color-bg-surface)',
+                    background: isNew ? '#FEFBEE' : 'var(--color-bg-surface)',
                     cursor: 'pointer',
                     textAlign: 'left',
                     width: '100%',
@@ -305,8 +305,8 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
                   }}
                   onMouseLeave={(e) => {
                     const el = e.currentTarget as HTMLButtonElement;
-                    el.style.borderColor = isNew ? 'rgba(234,88,12,0.30)' : 'var(--color-border-subtle)';
-                    el.style.background = isNew ? 'rgba(234,88,12,0.03)' : 'var(--color-bg-surface)';
+                    el.style.borderColor = isNew ? '#EAD173' : 'var(--color-border-subtle)';
+                    el.style.background = isNew ? '#FEFBEE' : 'var(--color-bg-surface)';
                   }}
                 >
                   <div style={{ minWidth: 0 }}>
@@ -422,17 +422,17 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
               padding: '11px',
               borderRadius: 'var(--radius-card)',
               border: 'none',
-              background: '#15803D',
+              background: '#166534',
               color: '#fff',
               fontSize: '14px',
               fontWeight: 700,
               fontFamily: 'var(--font-primary)',
               cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(21,128,61,0.22)',
+              boxShadow: '0 2px 8px rgba(22, 101, 52, 0.22)',
               transition: 'background 0.15s ease',
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#166534'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#15803D'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#166534'; }}
           >
             Add to order — {fmtSupplierAmount(total, selectedProduct.supplierId)}
           </button>

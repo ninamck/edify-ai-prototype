@@ -66,7 +66,7 @@ export default function InvoiceDocDrawer({ invoice, onClose }: { invoice: Invoic
           <span style={{
             fontSize: '9px', fontWeight: 800, letterSpacing: '0.06em',
             padding: '3px 7px', borderRadius: '4px',
-            background: '#B91C1C', color: '#fff',
+            background: '#B01038', color: '#fff',
           }}>
             PDF
           </span>

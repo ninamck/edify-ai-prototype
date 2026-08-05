@@ -56,8 +56,8 @@ interface InvoiceMatchViewProps {
 // Variance highlight treatment — amber accents (bars, borders, badge fills)
 // carry the warning signal; the text itself stays neutral so it never needs a
 // dark legible yellow, which is what reads as brown.
-const VARIANCE_ACCENT = '#D97706';
-const VARIANCE_BADGE_BG = '#FBF4E4';
+const VARIANCE_ACCENT = '#001C35';
+const VARIANCE_BADGE_BG = '#FEF6DA';
 const VARIANCE_BADGE_BG_ACTIVE = '#F6E9CD';
 
 // Parse-confidence badge: green = good, amber = maybe, red = warning.
@@ -72,7 +72,7 @@ function confidenceBadgeStyle(score: number): React.CSSProperties {
     whiteSpace: 'nowrap',
   };
   if (score < PARSE_CONFIDENCE_RED) {
-    return { ...base, background: '#FEE2E2', color: 'var(--color-error)', border: '1px solid #F5B5B5' };
+    return { ...base, background: '#FCE5EB', color: 'var(--color-error)', border: '1px solid #F5B5B5' };
   }
   if (score < PARSE_CONFIDENCE_THRESHOLD) {
     return { ...base, background: VARIANCE_BADGE_BG, color: VARIANCE_ACCENT, border: `1px solid ${VARIANCE_ACCENT}` };
@@ -105,8 +105,8 @@ function varianceBadgeVariant(type: MatchVariance['type']): 'warning' | 'info' |
 function VarianceTypeChip({ type }: { type: MatchVariance['type'] }) {
   const styles: Record<MatchVariance['type'], { bg: string; color: string; border: string }> = {
     price: { bg: 'var(--color-warning-light)', color: 'var(--color-warning)', border: 'var(--color-warning-border)' },
-    qty: { bg: 'rgba(3,105,161,0.08)', color: 'var(--color-info)', border: 'rgba(3,105,161,0.25)' },
-    'over-invoice': { bg: 'rgba(185,28,28,0.09)', color: 'var(--color-error)', border: 'rgba(185,28,28,0.3)' },
+    qty: { bg: 'rgba(25, 20, 132, 0.08)', color: 'var(--color-info)', border: 'rgba(25, 20, 132, 0.25)' },
+    'over-invoice': { bg: 'rgba(176, 16, 56, 0.09)', color: 'var(--color-error)', border: 'rgba(176, 16, 56, 0.3)' },
   };
   const s = styles[type];
   return (
@@ -358,8 +358,8 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
         <div style={{
           display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
           padding: '10px 14px', borderRadius: '10px', marginBottom: '16px',
-          background: 'rgba(3,105,161,0.06)',
-          border: '1px solid rgba(3,105,161,0.25)',
+          background: 'rgba(25, 20, 132, 0.06)',
+          border: '1px solid rgba(25, 20, 132, 0.25)',
           fontSize: '12.5px', color: 'var(--color-text-secondary)',
         }}>
           <span style={{
@@ -597,10 +597,10 @@ function MatchContextBar({ chips, initialExpandedId }: {
   type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'error';
   const palette: Record<Tone, { bg: string; bgActive: string; color: string; border: string }> = {
     neutral: { bg: 'var(--color-bg-hover)', bgActive: 'rgba(0, 28, 53,0.08)', color: 'var(--color-text-primary)', border: 'var(--color-border-subtle)' },
-    info: { bg: 'rgba(3,105,161,0.06)', bgActive: 'rgba(3,105,161,0.14)', color: 'var(--color-info)', border: 'rgba(3,105,161,0.3)' },
-    success: { bg: 'rgba(21,128,61,0.06)', bgActive: 'rgba(21,128,61,0.14)', color: 'var(--color-success)', border: 'var(--color-success-border)' },
+    info: { bg: 'rgba(25, 20, 132, 0.06)', bgActive: 'rgba(25, 20, 132, 0.14)', color: 'var(--color-info)', border: 'rgba(25, 20, 132, 0.3)' },
+    success: { bg: 'rgba(22, 101, 52, 0.06)', bgActive: 'rgba(22, 101, 52, 0.14)', color: 'var(--color-success)', border: 'var(--color-success-border)' },
     warning: { bg: 'var(--color-warning-bg)', bgActive: 'var(--color-warning-light)', color: 'var(--color-warning)', border: 'var(--color-warning-border)' },
-    error: { bg: 'rgba(185,28,28,0.08)', bgActive: 'rgba(185,28,28,0.16)', color: 'var(--color-error)', border: 'var(--color-error-border)' },
+    error: { bg: 'rgba(176, 16, 56, 0.08)', bgActive: 'rgba(176, 16, 56, 0.16)', color: 'var(--color-error)', border: 'var(--color-error-border)' },
   };
   const toneStyle = (tone: Tone, active: boolean): React.CSSProperties => {
     const p = palette[tone];
@@ -649,7 +649,7 @@ function DeliverySubstitutionBanner({ substitutions }: { substitutions: Delivery
     <div style={{
       padding: '14px 18px',
       borderRadius: '12px',
-      background: 'rgba(21,128,61,0.06)',
+      background: 'rgba(22, 101, 52, 0.06)',
       border: '1px solid var(--color-success-border)',
       marginBottom: '20px',
     }}>
@@ -753,7 +753,7 @@ function AISuggestionBanner({ suggestion, onDismiss }: { suggestion: ReturnType<
     <div style={{
       padding: '16px 18px',
       borderRadius: '12px',
-      background: 'linear-gradient(135deg, rgba(34, 68, 68, 0.05), rgba(3, 105, 161, 0.05))',
+      background: 'linear-gradient(135deg, rgba(34, 68, 68, 0.05), rgba(25, 20, 132, 0.05))',
       border: '1px solid rgba(34, 68, 68, 0.2)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
@@ -880,7 +880,7 @@ function AmbiguousGRNPicker({ invoice, candidates, onConfirm }: {
                 border: isSelected ? `2px solid ${VARIANCE_ACCENT}` : '1px solid var(--color-border)',
                 cursor: 'pointer',
                 fontFamily: 'var(--font-primary)',
-                boxShadow: isSelected ? '0 2px 8px rgba(217,119,6,0.15)' : 'none',
+                boxShadow: isSelected ? '0 2px 8px rgba(234, 209, 115, 0.3)' : 'none',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
@@ -1152,7 +1152,7 @@ function SuggestGRNBanner({ unmatchedLines, suggestedGRN, onLink, alternateMode,
       padding: '18px 20px',
       borderRadius: '12px',
       background: 'var(--color-info-light)',
-      border: '1px solid rgba(3, 105, 161, 0.2)',
+      border: '1px solid rgba(25, 20, 132, 0.2)',
       marginBottom: '20px',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
@@ -1178,7 +1178,7 @@ function SuggestGRNBanner({ unmatchedLines, suggestedGRN, onLink, alternateMode,
             padding: '10px 14px',
             borderRadius: '8px',
             background: '#fff',
-            border: '1px solid rgba(3, 105, 161, 0.15)',
+            border: '1px solid rgba(25, 20, 132, 0.15)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -1222,7 +1222,7 @@ function AutoStatusNoteCard({ invoice }: { invoice: Invoice }) {
   const note = getAutoStatusNote(invoice);
   if (!note) return null;
   const toneStyles: Record<AutoStatusNoteData['tone'], { bg: string; border: string; icon: string; iconColor: string }> = {
-    info:    { bg: 'var(--color-info-light)',    border: 'rgba(3,105,161,0.2)',      icon: 'ℹ',  iconColor: 'var(--color-info)' },
+    info:    { bg: 'var(--color-info-light)',    border: 'rgba(25, 20, 132, 0.2)',      icon: 'ℹ',  iconColor: 'var(--color-info)' },
     warning: { bg: 'var(--color-bg-surface)',    border: 'var(--color-warning)',        icon: '⚠', iconColor: 'var(--color-warning)' },
     error:   { bg: 'var(--color-error-light)',   border: 'var(--color-error-border)',   icon: '⚠', iconColor: 'var(--color-error)' },
     success: { bg: 'var(--color-bg-surface)',    border: 'var(--color-success-border)', icon: '✓', iconColor: 'var(--color-success)' },
@@ -2077,7 +2077,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const isResolved = !!variance && !!resolutions[variance.id];
                   const isCleared = isResolved || isAutoApplied;
                   const hasVar = (priceVar || variance?.type === 'qty') && !isCleared;
-                  const rowBg = hasVar ? '#F9F4F0' : 'transparent';
+                  const rowBg = hasVar ? '#FEFBEE' : 'transparent';
                   const leftAccent: React.CSSProperties = hasVar ? { boxShadow: `inset 4px 0 0 ${VARIANCE_ACCENT}` } : {};
                   const qtyDiff = variance?.type === 'qty' ? variance.invoiceValue - variance.grnValue : 0;
                   const varLabel = variance?.type === 'qty'
@@ -2094,7 +2094,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontWeight: hasVar ? 600 : 400 }}>
                           {invLine?.description ?? m.description}
                           {alternativeFor && (
-                            <span style={{ marginLeft: 'auto', fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(21,128,61,0.08)', color: 'var(--color-success)', border: '1px solid var(--color-success-border)', whiteSpace: 'nowrap' }}>
+                            <span style={{ marginLeft: 'auto', fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(22, 101, 52, 0.08)', color: 'var(--color-success)', border: '1px solid var(--color-success-border)', whiteSpace: 'nowrap' }}>
                               Reconciled alternative
                             </span>
                           )}
@@ -2221,7 +2221,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
                   const detail = varianceDetailText(variance, sym);
                   const impactLabel = variance.impact >= 0 ? `+${sym}${variance.impact.toFixed(2)}` : `-${sym}${Math.abs(variance.impact).toFixed(2)}`;
 
-                  const expandBg = isResolved ? 'rgba(16,185,129,0.03)' : '#F9F4F0';
+                  const expandBg = isResolved ? 'rgba(16,185,129,0.03)' : '#FEFBEE';
                   const expandAccent = isResolved ? 'inset 3px 0 0 var(--color-success)' : `inset 3px 0 0 ${VARIANCE_ACCENT}`;
 
                   const expandRow = (
@@ -2285,11 +2285,11 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
               {unmatchedInvRows.map(il => {
                 const priceVar = invoice.variances.find(v => v.sku === il.sku && v.type === 'price');
                 return (
-                  <tr key={il.id} style={{ background: 'rgba(185, 28, 28, 0.05)' }}>
+                  <tr key={il.id} style={{ background: 'rgba(176, 16, 56, 0.05)' }}>
                     <td style={{ ...cell, ...descCell }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, flexWrap: 'wrap' }}>
                         {il.description}
-                        <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(185, 28, 28, 0.1)', color: 'var(--color-error)', border: '1px solid rgba(185, 28, 28, 0.25)', whiteSpace: 'nowrap', flexShrink: 0 }}>NO GRN</span>
+                        <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(176, 16, 56, 0.1)', color: 'var(--color-error)', border: '1px solid rgba(176, 16, 56, 0.25)', whiteSpace: 'nowrap', flexShrink: 0 }}>NO GRN</span>
                       </div>
                       <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {il.sku}

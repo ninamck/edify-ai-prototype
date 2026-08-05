@@ -41,12 +41,14 @@ const CATEGORY_LABEL: Record<Category, string> = {
   Beverage: 'Drinks & smoothies',
 };
 
+// Categorical chip tints from the palette guidelines — fixed per
+// category, never status colours.
 const CATEGORY_TINT: Record<Category, string> = {
-  Bakery:   'rgba(234, 88, 12, 0.10)',
-  Sandwich: 'rgba(74, 108, 181, 0.10)',
-  Salad:    'rgba(21, 128, 61, 0.10)',
-  Snack:    'rgba(255, 192, 96, 0.18)',
-  Beverage: 'rgba(3, 105, 161, 0.10)',
+  Bakery:   '#EFF5E1',  /* olive */
+  Sandwich: '#E0F2F7',  /* cyan */
+  Salad:    '#DCF2F0',  /* teal */
+  Snack:    '#F3EAFB',  /* plum */
+  Beverage: '#E9E8F7',  /* indigo */
 };
 
 const MODE_LABEL = { run: 'Run', variable: 'Variable', increment: 'Increment' } as const;

@@ -40,8 +40,8 @@ const PARSE_STAGES = [
   'Scanning deliveries for a match',
 ];
 
-const AMBER = '#D97706';
-const AMBER_BG = '#FBF4E4';
+const AMBER = '#001C35';
+const AMBER_BG = '#FEF6DA';
 
 const cardStyle: React.CSSProperties = {
   background: '#fff',
@@ -359,7 +359,7 @@ export default function InvoiceUploadFlow({ onDone, onCancel }: InvoiceUploadFlo
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{
             padding: '12px 16px', borderRadius: '12px',
-            background: 'rgba(3,105,161,0.07)', border: '1px solid rgba(3,105,161,0.25)',
+            background: 'rgba(25, 20, 132, 0.07)', border: '1px solid rgba(25, 20, 132, 0.25)',
             fontSize: '13px', color: 'var(--color-text-primary)',
           }}>
             🔗 One delivery fits this invoice — <strong>{GRN_CONFIDENCE}% confident</strong>. Every line matches what {grn.receivedBy} signed
@@ -371,7 +371,7 @@ export default function InvoiceUploadFlow({ onDone, onCancel }: InvoiceUploadFlo
               <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--color-text-primary)' }}>{grn.grnNumber}</span>
               <span style={{
                 fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px',
-                background: 'rgba(3,105,161,0.08)', border: '1px solid rgba(3,105,161,0.3)', color: 'var(--color-info)',
+                background: 'rgba(25, 20, 132, 0.08)', border: '1px solid rgba(25, 20, 132, 0.3)', color: 'var(--color-info)',
               }}>
                 {GRN_CONFIDENCE}% match
               </span>

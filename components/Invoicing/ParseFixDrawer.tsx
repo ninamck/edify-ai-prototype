@@ -97,8 +97,8 @@ export default function ParseFixDrawer({ invoice, focusLineId, onClose, onEdited
                 style={{
                   padding: '12px 14px',
                   borderRadius: '10px',
-                  border: isFocused ? '1.5px solid #D97706' : '1px solid var(--color-border-subtle)',
-                  background: hasVariance ? '#F9F4F0' : '#fff',
+                  border: isFocused ? '1.5px solid #001C35' : '1px solid var(--color-border-subtle)',
+                  background: hasVariance ? '#FEFBEE' : '#fff',
                   marginBottom: '10px',
                 }}
               >
@@ -111,7 +111,7 @@ export default function ParseFixDrawer({ invoice, focusLineId, onClose, onEdited
                   {hasVariance && (
                     <span style={{
                       fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px',
-                      border: '1px solid #D97706', background: '#FBF4E4',
+                      border: '1px solid #001C35', background: '#FEF6DA',
                       color: 'var(--color-text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em',
                       whiteSpace: 'nowrap',
                     }}>

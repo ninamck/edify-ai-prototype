@@ -57,11 +57,11 @@ export default function ConfirmationScreen({
             width: '64px',
             height: '64px',
             borderRadius: '50%',
-            background: 'rgba(21,128,61,0.12)',
+            background: 'rgba(22, 101, 52, 0.12)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            border: '2px solid rgba(21,128,61,0.25)',
+            border: '2px solid rgba(22, 101, 52, 0.25)',
           }}
         >
           <svg
@@ -69,7 +69,7 @@ export default function ConfirmationScreen({
             height="28"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="#15803D"
+            stroke="#166534"
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -330,8 +330,8 @@ export default function ConfirmationScreen({
                               color: action === 'reverted'
                                 ? 'var(--color-text-secondary)'
                                 : variance > 0
-                                  ? '#15803D'
-                                  : '#B91C1C',
+                                  ? '#166534'
+                                  : '#B01038',
                             }}
                           >
                             {action === 'reverted'

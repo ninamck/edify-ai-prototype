@@ -401,7 +401,7 @@ export default function ItemMatchingPage() {
             {filtered.length} {filtered.length === 1 ? 'item' : 'items'}
           </span>
           <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>·</span>
-          <SummaryDot color="var(--color-success, #15803D)" label={`${counts.matched} matched`} />
+          <SummaryDot color="var(--color-success, #166534)" label={`${counts.matched} matched`} />
           <SummaryDot color="var(--color-text-primary)" label={`${counts.unmatched} unmatched`} />
           {counts.review > 0 && (
             <SummaryDot color="var(--color-warning, #EA580C)" label={`${counts.review} needs review`} />

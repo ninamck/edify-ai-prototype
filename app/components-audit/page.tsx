@@ -2329,7 +2329,7 @@ function ToastsSection() {
         specs={[
           ['track height', '6px'],
           ['radius',       '999px'],
-          ['fill colour',  '#15803D / #EA580C / #B91C1C'],
+          ['fill colour',  '#166534 / #EA580C / #B01038'],
         ]}
         preview={
           <div style={{ width: 280, display: 'flex', flexDirection: 'column', gap: 6 }}>

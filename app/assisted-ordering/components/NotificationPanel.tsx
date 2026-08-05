@@ -75,9 +75,9 @@ export default function NotificationPanel({
               style={{
                 borderRadius: 'var(--radius-card)',
                 border: urgent
-                  ? '1.5px solid rgba(185,28,28,0.30)'
+                  ? '1.5px solid rgba(176, 16, 56, 0.30)'
                   : '1px solid var(--color-border-subtle)',
-                background: urgent ? 'rgba(185,28,28,0.02)' : 'var(--color-bg-surface)',
+                background: urgent ? 'rgba(176, 16, 56, 0.02)' : 'var(--color-bg-surface)',
                 padding: '16px',
                 display: 'flex',
                 flexDirection: 'column',
@@ -110,8 +110,8 @@ export default function NotificationPanel({
                       style={{
                         padding: '2px 8px',
                         borderRadius: 'var(--radius-badge)',
-                        background: 'rgba(185,28,28,0.12)',
-                        color: '#B91C1C',
+                        background: 'rgba(176, 16, 56, 0.12)',
+                        color: '#B01038',
                         fontSize: '12px',
                         fontWeight: 700,
                         letterSpacing: '0.04em',
@@ -176,7 +176,7 @@ export default function NotificationPanel({
                 {urgent && (
                   <>
                     <span>·</span>
-                    <span style={{ color: '#B91C1C', fontWeight: 600 }}>
+                    <span style={{ color: '#B01038', fontWeight: 600 }}>
                       Review soon — cut-off is {supplier.cutOffTime} today
                     </span>
                   </>

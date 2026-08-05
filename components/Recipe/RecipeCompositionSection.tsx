@@ -266,7 +266,7 @@ export function RecipeCompositionSection({
             <button
               type="button"
               onClick={handleRemoveVariants}
-              style={{ ...switchBtn, color: '#DC2626', borderColor: '#FECACA' }}
+              style={{ ...switchBtn, color: '#B01038', borderColor: '#E89AAE' }}
             >
               Yes, remove variants
             </button>

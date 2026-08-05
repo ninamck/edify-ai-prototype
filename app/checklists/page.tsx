@@ -20,10 +20,12 @@ const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Admin',
 };
 
+// Role chips ride the categorical chip palette (fixed per value, never
+// status colours).
 const ROLE_COLORS: Record<UserRole, { bg: string; text: string }> = {
-  kitchen: { bg: '#EEF4FF', text: '#3B5BDB' },
-  manager: { bg: '#F0FDF4', text: '#15803D' },
-  admin: { bg: '#FFF7ED', text: '#EA580C' },
+  kitchen: { bg: '#E0F2F7', text: '#0E7490' },
+  manager: { bg: '#EFF5E1', text: '#4D7C0F' },
+  admin: { bg: '#E9E8F7', text: '#191484' },
 };
 
 function Pill({ label, color }: { label: string; color?: { bg: string; text: string } }) {
@@ -198,8 +200,8 @@ export default function ManageChecklistsPage() {
           gap: '16px',
           padding: '14px 18px',
           borderRadius: '10px',
-          border: recentFlagged.length > 0 ? '1px solid #FDE68A' : '1px solid var(--color-border-subtle)',
-          background: recentFlagged.length > 0 ? '#FFFBEB' : 'var(--color-bg-surface)',
+          border: recentFlagged.length > 0 ? '1px solid #EAD173' : '1px solid var(--color-border-subtle)',
+          background: recentFlagged.length > 0 ? '#FEF6DA' : 'var(--color-bg-surface)',
           marginBottom: '20px',
           cursor: 'pointer',
           fontFamily: 'var(--font-primary)',
@@ -218,7 +220,7 @@ export default function ManageChecklistsPage() {
             flexShrink: 0,
           }}>
             {recentFlagged.length > 0
-              ? <AlertTriangle size={16} color="#D97706" />
+              ? <AlertTriangle size={16} color="#001C35" />
               : <History size={16} color="var(--color-text-secondary)" />
             }
           </div>

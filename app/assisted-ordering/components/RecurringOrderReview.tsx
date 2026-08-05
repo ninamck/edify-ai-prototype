@@ -176,10 +176,10 @@ export default function RecurringOrderReview({
                     style={{
                       borderRadius: 'var(--radius-item)',
                       border: action
-                        ? '1px solid rgba(21,128,61,0.25)'
+                        ? '1px solid rgba(22, 101, 52, 0.25)'
                         : '1px solid var(--color-border-subtle)',
                       background: action
-                        ? 'rgba(21,128,61,0.03)'
+                        ? 'rgba(22, 101, 52, 0.03)'
                         : 'var(--color-bg-surface)',
                       overflow: 'hidden',
                       transition: 'border-color 0.15s ease, background 0.15s ease',
@@ -293,8 +293,8 @@ export default function RecurringOrderReview({
                             style={{
                               padding: '5px 14px',
                               borderRadius: 'var(--radius-item)',
-                              background: 'rgba(21,128,61,0.10)',
-                              color: '#15803D',
+                              background: 'rgba(22, 101, 52, 0.10)',
+                              color: '#166534',
                               fontSize: '12px',
                               fontWeight: 700,
                               fontFamily: 'var(--font-primary)',
@@ -324,9 +324,9 @@ export default function RecurringOrderReview({
                               style={{
                                 padding: '5px 14px',
                                 borderRadius: 'var(--radius-item)',
-                                border: '1px solid rgba(21,128,61,0.30)',
-                                background: 'rgba(21,128,61,0.08)',
-                                color: '#15803D',
+                                border: '1px solid rgba(22, 101, 52, 0.30)',
+                                background: 'rgba(22, 101, 52, 0.08)',
+                                color: '#166534',
                                 fontSize: '12px',
                                 fontWeight: 700,
                                 fontFamily: 'var(--font-primary)',
@@ -335,10 +335,10 @@ export default function RecurringOrderReview({
                                 transition: 'background 0.12s ease',
                               }}
                               onMouseEnter={(e) => {
-                                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(21,128,61,0.15)';
+                                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(22, 101, 52, 0.15)';
                               }}
                               onMouseLeave={(e) => {
-                                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(21,128,61,0.08)';
+                                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(22, 101, 52, 0.08)';
                               }}
                             >
                               Accept {isUp ? '↑' : '↓'} {line.suggestedQty}
@@ -545,14 +545,14 @@ export default function RecurringOrderReview({
             padding: '11px 28px',
             borderRadius: 'var(--radius-card)',
             border: 'none',
-            background: allReviewActioned ? '#15803D' : 'var(--color-bg-hover)',
+            background: allReviewActioned ? '#166534' : 'var(--color-bg-hover)',
             color: allReviewActioned ? '#fff' : 'var(--color-text-secondary)',
             fontSize: '14px',
             fontWeight: 700,
             fontFamily: 'var(--font-primary)',
             cursor: allReviewActioned ? 'pointer' : 'not-allowed',
             whiteSpace: 'nowrap',
-            boxShadow: allReviewActioned ? '0 2px 8px rgba(21,128,61,0.22)' : 'none',
+            boxShadow: allReviewActioned ? '0 2px 8px rgba(22, 101, 52, 0.22)' : 'none',
             transition: 'background 0.15s ease',
           }}
           onMouseEnter={(e) => {
@@ -562,7 +562,7 @@ export default function RecurringOrderReview({
           }}
           onMouseLeave={(e) => {
             if (allReviewActioned) {
-              (e.currentTarget as HTMLButtonElement).style.background = '#15803D';
+              (e.currentTarget as HTMLButtonElement).style.background = '#166534';
             }
           }}
         >
@@ -579,14 +579,14 @@ function VarianceBadge({ variance }: { variance: number }) {
   const isZero = variance === 0;
 
   const bg = isUp
-    ? 'rgba(21,128,61,0.10)'
+    ? 'rgba(22, 101, 52, 0.10)'
     : isDown
-      ? 'rgba(185,28,28,0.10)'
+      ? 'rgba(176, 16, 56, 0.10)'
       : 'var(--color-bg-hover)';
   const color = isUp
-    ? '#15803D'
+    ? '#166534'
     : isDown
-      ? '#B91C1C'
+      ? '#B01038'
       : 'var(--color-text-secondary)';
 
   return (

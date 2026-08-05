@@ -387,12 +387,12 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
                       width: 20, height: 20, borderRadius: 100,
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                       background: state === 'done'
-                        ? 'var(--color-success-light, #DCFCE7)'
+                        ? 'var(--color-success-light, #E3F2E8)'
                         : state === 'running'
                           ? 'rgba(40, 175, 201, 0.15)'
                           : '#F1F0EC',
                       color: state === 'done'
-                        ? 'var(--color-success, #15803D)'
+                        ? 'var(--color-success, #166534)'
                         : state === 'running'
                           ? 'var(--color-accent-mid, #28AFC9)'
                           : 'var(--color-text-muted)',
@@ -431,7 +431,7 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
                 <SummaryStat
                   label="Auto-matched"
                   value={highConfidence.length}
-                  accent="var(--color-success, #15803D)"
+                  accent="var(--color-success, #166534)"
                 />
                 <SummaryStat
                   label="Needs your call"
@@ -594,7 +594,7 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
                             }}>
                               <div style={{
                                 fontSize: 11.5, fontWeight: 600,
-                                color: 'var(--color-success, #15803D)',
+                                color: 'var(--color-success, #166534)',
                                 display: 'inline-flex', alignItems: 'center', gap: 5,
                               }}>
                                 <Check size={12} strokeWidth={3} />

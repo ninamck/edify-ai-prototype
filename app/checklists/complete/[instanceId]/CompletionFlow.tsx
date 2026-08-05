@@ -72,7 +72,7 @@ function CheckboxInput({
           minHeight: '52px',
           borderRadius: '10px',
           border: value === true ? 'none' : '1.5px solid var(--color-border)',
-          background: value === true ? '#15803D' : '#fff',
+          background: value === true ? '#166534' : '#fff',
           color: value === true ? '#fff' : 'var(--color-text-primary)',
           fontSize: '14px',
           fontWeight: 700,
@@ -96,7 +96,7 @@ function CheckboxInput({
           minHeight: '52px',
           borderRadius: '10px',
           border: value === false ? 'none' : '1.5px solid var(--color-border)',
-          background: value === false ? '#B91C1C' : '#fff',
+          background: value === false ? '#B01038' : '#fff',
           color: value === false ? '#fff' : 'var(--color-text-primary)',
           fontSize: '14px',
           fontWeight: 700,
@@ -112,10 +112,18 @@ function CheckboxInput({
   );
 }
 
-const RATING_OPTIONS: { value: RatingValue; label: string; activeBg: string }[] = [
-  { value: 'great', label: 'Great', activeBg: '#15803D' },
-  { value: 'average', label: 'Average', activeBg: '#D97706' },
-  { value: 'urgent', label: 'Urgent', activeBg: '#B91C1C' },
+// "Urgent" is a needs-attention escalation, not a broken state — it takes
+// the warning yellow field (navy ink), never red.
+const RATING_OPTIONS: {
+  value: RatingValue;
+  label: string;
+  activeBg: string;
+  activeFg: string;
+  activeBorder: string;
+}[] = [
+  { value: 'great', label: 'Great', activeBg: '#166534', activeFg: '#fff', activeBorder: '#166534' },
+  { value: 'average', label: 'Average', activeBg: '#001C35', activeFg: '#fff', activeBorder: '#001C35' },
+  { value: 'urgent', label: 'Urgent', activeBg: '#FEF6DA', activeFg: '#001C35', activeBorder: '#EAD173' },
 ];
 
 function RatingInput({
@@ -146,9 +154,9 @@ function RatingInput({
                 justifyContent: 'center',
                 minHeight: '52px',
                 borderRadius: '10px',
-                border: active ? 'none' : '1.5px solid var(--color-border)',
+                border: active ? `1.5px solid ${opt.activeBorder}` : '1.5px solid var(--color-border)',
                 background: active ? opt.activeBg : '#fff',
-                color: active ? '#fff' : 'var(--color-text-primary)',
+                color: active ? opt.activeFg : 'var(--color-text-primary)',
                 fontSize: '14px',
                 fontWeight: 700,
                 cursor: 'pointer',
@@ -343,7 +351,7 @@ function PhotoCapture({
               height: '20px',
               borderRadius: '50%',
               border: 'none',
-              background: '#B91C1C',
+              background: '#B01038',
               color: '#fff',
               cursor: 'pointer',
               display: 'flex',
@@ -416,9 +424,9 @@ function QuestionCard({
         padding: isFollowUp ? '14px' : '18px',
         borderRadius: '12px',
         border: missing
-          ? '1.5px solid #FECACA'
+          ? '1.5px solid #E89AAE'
           : isFollowUp
-          ? '1px solid #FDE68A'
+          ? '1px solid #EAD173'
           : '1px solid var(--color-border-subtle)',
         background: missing ? '#FFF5F5' : '#fff',
         boxShadow: answered ? 'none' : '0 2px 8px rgba(0, 28, 53,0.07)',
@@ -437,7 +445,7 @@ function QuestionCard({
           width: '22px',
           height: '22px',
           borderRadius: '50%',
-          background: '#15803D',
+          background: '#166534',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -449,7 +457,7 @@ function QuestionCard({
       {/* Question number + follow-up label */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
         {isFollowUp ? (
-          <span style={{ fontSize: '12px', fontWeight: 700, color: '#D97706', display: 'flex', alignItems: 'center', gap: '3px' }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: '#001C35', display: 'flex', alignItems: 'center', gap: '3px' }}>
             <GitBranch size={11} />
             Follow-up
           </span>
@@ -459,7 +467,7 @@ function QuestionCard({
           </span>
         )}
         {question.mandatory && (
-          <span style={{ fontSize: '12px', fontWeight: 500, color: missing ? '#B91C1C' : 'var(--color-text-muted)' }}>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: missing ? '#B01038' : 'var(--color-text-muted)' }}>
             · Required
           </span>
         )}
@@ -526,8 +534,8 @@ function QuestionCard({
 
       {missing && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '10px' }}>
-          <AlertCircle size={13} color="#B91C1C" />
-          <span style={{ fontSize: '12px', color: '#B91C1C', fontWeight: 500 }}>This question is required</span>
+          <AlertCircle size={13} color="#B01038" />
+          <span style={{ fontSize: '12px', color: '#B01038', fontWeight: 500 }}>This question is required</span>
         </div>
       )}
     </div>
@@ -698,13 +706,13 @@ export function CompletionFlowClient({ instanceId }: { instanceId: string }) {
             width: '72px',
             height: '72px',
             borderRadius: '50%',
-            background: '#F0FDF4',
+            background: '#E3F2E8',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <CheckSquare size={36} color="#15803D" />
+          <CheckSquare size={36} color="#166534" />
         </motion.div>
         <div>
           <p style={{ margin: '0 0 4px', fontSize: '18px', fontWeight: 800, color: 'var(--color-text-primary)' }}>
@@ -817,8 +825,8 @@ export function CompletionFlowClient({ instanceId }: { instanceId: string }) {
       }}>
         {showRequired && !allMandatoryAnswered && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <AlertCircle size={13} color="#B91C1C" />
-            <span style={{ fontSize: '12px', color: '#B91C1C', fontWeight: 500 }}>
+            <AlertCircle size={13} color="#B01038" />
+            <span style={{ fontSize: '12px', color: '#B01038', fontWeight: 500 }}>
               Answer all required questions before submitting
             </span>
           </div>

@@ -813,7 +813,7 @@ function PickerScreen({
               width: 44,
               height: 44,
               borderRadius: 12,
-              background: '#c2410c',
+              background: '#EA580C',
               color: '#ffffff',
               flexShrink: 0,
             }}
@@ -829,7 +829,7 @@ function PickerScreen({
               cadence.
             </span>
           </span>
-          <ChevronRight size={18} color="#c2410c" />
+          <ChevronRight size={18} color="#EA580C" />
         </button>
       )}
 
@@ -1222,7 +1222,7 @@ function StepperBody({
               Ingredients Needed
             </span>
             <span style={{ flex: 1 }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#c2410c' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)' }}>
               {ingredientCount} ingredient{ingredientCount === 1 ? '' : 's'}
             </span>
           </div>

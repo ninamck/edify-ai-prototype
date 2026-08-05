@@ -73,8 +73,8 @@ export function DependencyBadge({ needs }: { needs: string }) {
         fontWeight: 600,
         padding: '2px 8px',
         borderRadius: 999,
-        background: '#FFF7ED',
-        border: '1px solid #F0C892',
+        background: '#FEF6DA',
+        border: '1px solid #EAD173',
         color: WARN_TEXT,
         whiteSpace: 'nowrap',
       }}

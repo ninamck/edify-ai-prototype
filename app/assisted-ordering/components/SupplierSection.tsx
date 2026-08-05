@@ -83,9 +83,9 @@ export default function SupplierSection({
                   style={{
                     padding: '2px 8px',
                     borderRadius: 'var(--radius-badge)',
-                    background: 'rgba(185,28,28,0.10)',
-                    color: '#B91C1C',
-                    border: '1px solid rgba(185,28,28,0.25)',
+                    background: 'rgba(176, 16, 56, 0.10)',
+                    color: '#B01038',
+                    border: '1px solid rgba(176, 16, 56, 0.25)',
                     fontSize: '12px',
                     fontWeight: 700,
                     letterSpacing: '0.04em',
@@ -116,8 +116,8 @@ export default function SupplierSection({
                     style={{
                       padding: '1px 8px',
                       borderRadius: 'var(--radius-badge)',
-                      background: 'rgba(3,105,161,0.10)',
-                      border: '1px solid rgba(3,105,161,0.30)',
+                      background: 'rgba(25, 20, 132, 0.10)',
+                      border: '1px solid rgba(25, 20, 132, 0.30)',
                       color: 'var(--color-info)',
                       fontWeight: 600,
                     }}
@@ -130,7 +130,7 @@ export default function SupplierSection({
               {urgent && (
                 <>
                   <span>·</span>
-                  <span style={{ color: '#B91C1C', fontWeight: 600 }}>Review soon to make this delivery</span>
+                  <span style={{ color: '#B01038', fontWeight: 600 }}>Review soon to make this delivery</span>
                 </>
               )}
             </div>

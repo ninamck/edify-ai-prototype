@@ -208,7 +208,7 @@ export default function CreditNoteList({ onView }: CreditNoteListProps) {
 function CreditNoteRow({ creditNote: cn, onView }: { creditNote: CreditNote; onView: () => void }) {
   const isOverdue = cn.status === 'Overdue';
   const daysColor = isOverdue
-    ? '#B91C1C'
+    ? '#B01038'
     : cn.daysOutstanding >= 14
     ? 'var(--color-warning)'
     : 'var(--color-text-secondary)';

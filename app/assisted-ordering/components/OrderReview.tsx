@@ -169,9 +169,9 @@ function NewSupplierSection({
         style={{
           padding: '10px 14px',
           borderRadius: 'var(--radius-item) var(--radius-item) 0 0',
-          background: isNew ? 'rgba(234,88,12,0.06)' : 'var(--color-bg-hover)',
+          background: isNew ? '#FEF6DA' : 'var(--color-bg-hover)',
           border: isNew
-            ? '1px solid rgba(234,88,12,0.22)'
+            ? '1px solid #EAD173'
             : '1px solid var(--color-border-subtle)',
           borderBottom: 'none',
           display: 'flex',
@@ -196,7 +196,7 @@ function NewSupplierSection({
               style={{
                 padding: '2px 7px',
                 borderRadius: 'var(--radius-badge)',
-                background: 'rgba(234,88,12,0.12)',
+                background: '#FEF6DA',
                 color: 'var(--color-warning)',
                 fontSize: '11px',
                 fontWeight: 700,
@@ -237,7 +237,7 @@ function NewSupplierSection({
       <div
         style={{
           border: isNew
-            ? '1px solid rgba(234,88,12,0.22)'
+            ? '1px solid #EAD173'
             : '1px solid var(--color-border-subtle)',
           borderRadius: '0 0 var(--radius-item) var(--radius-item)',
           background: 'var(--color-bg-surface)',
@@ -348,8 +348,8 @@ function NewSupplierSection({
                       width: '100%',
                       padding: '10px 14px',
                       borderRadius: 'var(--radius-item)',
-                      border: '1.5px dashed rgba(234,88,12,0.35)',
-                      background: 'rgba(234,88,12,0.04)',
+                      border: '1.5px dashed #EAD173',
+                      background: '#FEFBEE',
                       color: 'var(--color-warning)',
                       fontSize: '13px',
                       fontWeight: 600,
@@ -363,13 +363,13 @@ function NewSupplierSection({
                     }}
                     onMouseEnter={(e) => {
                       const el = e.currentTarget as HTMLButtonElement;
-                      el.style.background = 'rgba(234,88,12,0.08)';
-                      el.style.borderColor = 'rgba(234,88,12,0.50)';
+                      el.style.background = '#FEF6DA';
+                      el.style.borderColor = '#D4B94A';
                     }}
                     onMouseLeave={(e) => {
                       const el = e.currentTarget as HTMLButtonElement;
-                      el.style.background = 'rgba(234,88,12,0.04)';
-                      el.style.borderColor = 'rgba(234,88,12,0.35)';
+                      el.style.background = '#FEFBEE';
+                      el.style.borderColor = '#EAD173';
                     }}
                   >
                     <span style={{ fontSize: '15px', lineHeight: 1 }}>+</span>
@@ -379,15 +379,15 @@ function NewSupplierSection({
                   <div
                     style={{
                       borderRadius: 'var(--radius-item)',
-                      border: '1px solid rgba(234,88,12,0.22)',
-                      background: 'rgba(234,88,12,0.03)',
+                      border: '1px solid #EAD173',
+                      background: '#FEFBEE',
                       overflow: 'hidden',
                     }}
                   >
                     <div
                       style={{
                         padding: '10px 12px',
-                        borderBottom: '1px solid rgba(234,88,12,0.15)',
+                        borderBottom: '1px solid #EAD173',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
@@ -458,7 +458,7 @@ function NewSupplierSection({
                               >
                                 {product.unitName} · {fmtSupplierUnitCost(product.unitCost, supplierId)}
                                 {ingredient.currentStock <= (ingredient.parLevel ?? 0) * 0.5 && (
-                                  <span style={{ color: '#B91C1C', fontWeight: 600, marginLeft: '6px' }}>
+                                  <span style={{ color: '#B01038', fontWeight: 600, marginLeft: '6px' }}>
                                     Low stock ({ingredient.currentStock}{ingredient.stockUnit})
                                   </span>
                                 )}
@@ -472,8 +472,8 @@ function NewSupplierSection({
                               style={{
                                 padding: '6px 14px',
                                 borderRadius: 'var(--radius-item)',
-                                border: '1px solid rgba(234,88,12,0.30)',
-                                background: 'rgba(234,88,12,0.08)',
+                                border: '1px solid #EAD173',
+                                background: '#FEF6DA',
                                 color: 'var(--color-warning)',
                                 fontSize: '12px',
                                 fontWeight: 700,
@@ -484,10 +484,10 @@ function NewSupplierSection({
                                 whiteSpace: 'nowrap',
                               }}
                               onMouseEnter={(e) => {
-                                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(234,88,12,0.15)';
+                                (e.currentTarget as HTMLButtonElement).style.background = '#FAF0C8';
                               }}
                               onMouseLeave={(e) => {
-                                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(234,88,12,0.08)';
+                                (e.currentTarget as HTMLButtonElement).style.background = '#FEF6DA';
                               }}
                             >
                               + Add · {fmtSupplierUnitCost(product.unitCost, supplierId)}
@@ -628,10 +628,10 @@ function RecurringOrderSection({
               style={{
                 borderRadius: 'var(--radius-item)',
                 border: action
-                  ? '1px solid rgba(21,128,61,0.25)'
+                  ? '1px solid rgba(22, 101, 52, 0.25)'
                   : '1px solid var(--color-border-subtle)',
                 background: action
-                  ? 'rgba(21,128,61,0.03)'
+                  ? 'rgba(22, 101, 52, 0.03)'
                   : 'var(--color-bg-surface)',
                 overflow: 'hidden',
                 transition: 'border-color 0.15s ease, background 0.15s ease',
@@ -966,8 +966,8 @@ function RecurringLineDetail({
               style={{
                 padding: '4px 12px',
                 borderRadius: 'var(--radius-badge)',
-                background: 'rgba(21,128,61,0.10)',
-                color: '#15803D',
+                background: 'rgba(22, 101, 52, 0.10)',
+                color: '#166534',
                 fontSize: '12px',
                 fontWeight: 700,
                 fontFamily: 'var(--font-primary)',
@@ -997,9 +997,9 @@ function RecurringLineDetail({
                 style={{
                   padding: '4px 12px',
                   borderRadius: 'var(--radius-badge)',
-                  border: '1px solid rgba(21,128,61,0.30)',
-                  background: 'rgba(21,128,61,0.08)',
-                  color: '#15803D',
+                  border: '1px solid rgba(22, 101, 52, 0.30)',
+                  background: 'rgba(22, 101, 52, 0.08)',
+                  color: '#166534',
                   fontSize: '12px',
                   fontWeight: 700,
                   fontFamily: 'var(--font-primary)',
@@ -1008,10 +1008,10 @@ function RecurringLineDetail({
                   transition: 'background 0.12s ease',
                 }}
                 onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = 'rgba(21,128,61,0.15)';
+                  (e.currentTarget as HTMLButtonElement).style.background = 'rgba(22, 101, 52, 0.15)';
                 }}
                 onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = 'rgba(21,128,61,0.08)';
+                  (e.currentTarget as HTMLButtonElement).style.background = 'rgba(22, 101, 52, 0.08)';
                 }}
               >
                 Accept {isUp ? '↑' : '↓'} {line.suggestedQty}
@@ -1061,14 +1061,14 @@ function RecurringVarianceBadge({ variance }: { variance: number }) {
   const isDown = variance < 0;
 
   const bg = isUp
-    ? 'rgba(21,128,61,0.10)'
+    ? 'rgba(22, 101, 52, 0.10)'
     : isDown
-      ? 'rgba(185,28,28,0.10)'
+      ? 'rgba(176, 16, 56, 0.10)'
       : 'var(--color-bg-hover)';
   const color = isUp
-    ? '#15803D'
+    ? '#166534'
     : isDown
-      ? '#B91C1C'
+      ? '#B01038'
       : 'var(--color-text-secondary)';
 
   return (
@@ -1358,7 +1358,7 @@ export default function OrderReview({
             <span>
               Stock levels from most recent stocktake ({stocktakeDateStr})
               {stocktakeAge > 7 && (
-                <strong style={{ color: '#B91C1C', marginLeft: '6px' }}>
+                <strong style={{ color: '#B01038', marginLeft: '6px' }}>
                   — consider running a new stocktake to improve accuracy
                 </strong>
               )}

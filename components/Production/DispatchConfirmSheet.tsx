@@ -1658,7 +1658,7 @@ function buildDispatchPrintHTML(input: PrintInput): string {
     .note {
       padding: 8px 12px;
       border-left: 3px solid #b45309;
-      background: #fffbeb;
+      background: #fef6da;
       font-size: 10pt;
       margin-bottom: 14px;
       color: #422006;
@@ -1728,8 +1728,8 @@ function buildDispatchPrintHTML(input: PrintInput): string {
       font-size: 8pt;
       font-weight: 700;
       color: #b45309;
-      background: #fffbeb;
-      border: 1px solid #fde68a;
+      background: #fef6da;
+      border: 1px solid #ead173;
       border-radius: 3px;
       padding: 1px 5px;
       margin-right: 6px;

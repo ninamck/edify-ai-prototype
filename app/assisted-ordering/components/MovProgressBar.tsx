@@ -17,8 +17,11 @@ export default function MovProgressBar({ current, minimum, currency = BASE_CURRE
   const met = current >= minimum;
   const close = pct >= 70;
 
-  const barColor = met ? '#15803D' : close ? '#EA580C' : '#B91C1C';
-  const bgColor = met ? 'rgba(21,128,61,0.10)' : close ? 'rgba(234,88,12,0.10)' : 'rgba(185,28,28,0.10)';
+  // Not meeting the MOV yet is a to-do, not a failure — red is reserved
+  // for genuinely broken states. Close = the warning yellow field; far =
+  // neutral navy progress.
+  const barColor = met ? '#166534' : close ? '#EAD173' : '#001C35';
+  const bgColor = met ? 'rgba(22, 101, 52, 0.10)' : close ? '#FEF6DA' : 'rgba(0, 28, 53, 0.08)';
 
   return (
     <div style={{ marginTop: '12px' }}>
@@ -34,7 +37,7 @@ export default function MovProgressBar({ current, minimum, currency = BASE_CURRE
           style={{
             fontSize: '12px',
             fontWeight: 600,
-            color: met ? '#15803D' : 'var(--color-text-secondary)',
+            color: met ? '#166534' : 'var(--color-text-secondary)',
             fontFamily: 'var(--font-primary)',
           }}
         >

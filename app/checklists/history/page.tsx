@@ -67,8 +67,8 @@ function HistoryCard({ instance, onClick }: { instance: ChecklistInstance; onCli
         gap: '12px',
         padding: '14px 16px',
         borderRadius: '12px',
-        border: flagged ? '1px solid #FDE68A' : '1px solid var(--color-border-subtle)',
-        background: flagged ? '#FFFBEB' : '#fff',
+        border: flagged ? '1px solid #EAD173' : '1px solid var(--color-border-subtle)',
+        background: flagged ? '#FEF6DA' : '#fff',
         boxShadow: '0 1px 3px rgba(0, 28, 53,0.06)',
         cursor: 'pointer',
         fontFamily: 'var(--font-primary)',
@@ -80,15 +80,15 @@ function HistoryCard({ instance, onClick }: { instance: ChecklistInstance; onCli
         width: '40px',
         height: '40px',
         borderRadius: '10px',
-        background: flagged ? '#FEF3C7' : '#F0FDF4',
+        background: flagged ? '#FEF3C7' : '#E3F2E8',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
       }}>
         {flagged
-          ? <AlertTriangle size={18} color="#D97706" />
-          : <CheckCircle2 size={18} color="#15803D" />
+          ? <AlertTriangle size={18} color="#001C35" />
+          : <CheckCircle2 size={18} color="#166534" />
         }
       </div>
 

@@ -500,7 +500,7 @@ const INSIGHT_TONE: Record<InsightTone, { fg: string; bg: string }> = {
   accent: { fg: 'var(--color-accent-active)', bg: 'rgba(0, 28, 53, 0.06)' },
   success: { fg: 'var(--color-success)', bg: 'rgba(31, 157, 87, 0.10)' },
   warning: { fg: 'var(--color-warning)', bg: 'rgba(241, 180, 52, 0.16)' },
-  info: { fg: 'var(--color-info)', bg: 'rgba(3, 105, 161, 0.10)' },
+  info: { fg: 'var(--color-info)', bg: 'rgba(25, 20, 132, 0.10)' },
 };
 
 /** Turn the forecast totals + signals + channel mix into 3–4 concrete nudges. */
