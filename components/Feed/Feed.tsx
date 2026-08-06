@@ -110,6 +110,7 @@ import {
   snapshot as snapshotSuppliersStore,
 } from '@/components/Suppliers/store';
 import { useRecipes } from '@/components/Recipe/recipeStore';
+import { TypeChip as PosTypeChip, type EntityType as POSTargetType } from '@/components/ItemMatching/TypeChip';
 import {
   masterCompanyAvg,
   ALL_SITES as ALL_SUPPLIER_SITES,
@@ -2417,9 +2418,6 @@ function StorageAreaCard({
  *  chat after an import lands. The operator confirms (or skips) each
  *  one without leaving the conversation; "applied" rows write to the
  *  same override store the Item matching page reads from. */
-/** What a POS button can point at — mirrors the Item matching page. */
-type POSTargetType = 'Master product' | 'Product' | 'Modifier' | 'Recipe' | 'Sub-recipe';
-
 type POSMatchCandidate = { id: string; name: string; type: POSTargetType };
 
 type POSMatchSuggestion = {
@@ -2947,29 +2945,6 @@ function SupplierProductEditPanel({
  *  SKUs we just added. The operator can apply each suggestion (or all
  *  in one go) without leaving the conversation — the writes go to the
  *  same override store the Item matching page reads from. */
-/** Chip palette for target entity types — mirrors the Item matching
- *  page's Type / Linked-target chips. */
-const POS_TARGET_TYPE_CHIP: Record<POSTargetType, { color: string; bg: string }> = {
-  'Master product': { color: '#0E7490', bg: 'rgba(14,116,144,0.08)' },
-  'Product': { color: '#15803D', bg: 'rgba(21,128,61,0.08)' },
-  'Modifier': { color: '#7C3AED', bg: 'rgba(124,58,237,0.08)' },
-  'Recipe': { color: '#1D4ED8', bg: 'rgba(29,78,216,0.08)' },
-  'Sub-recipe': { color: '#B45309', bg: 'rgba(217,119,6,0.10)' },
-};
-
-function PosTypeChip({ type }: { type: POSTargetType }) {
-  const c = POS_TARGET_TYPE_CHIP[type];
-  return (
-    <span style={{
-      padding: '1px 7px', borderRadius: '999px', background: c.bg,
-      fontSize: '10px', fontWeight: 700, letterSpacing: '0.03em',
-      color: c.color, flexShrink: 0, whiteSpace: 'nowrap',
-    }}>
-      {type}
-    </span>
-  );
-}
-
 /** High / Likely / Not sure tier off the similarity score. Not-sure
  *  rows are excluded from bulk linking (rule #5). */
 function posMatchTier(score: number): 'high' | 'likely' | 'unsure' {
@@ -5834,7 +5809,7 @@ export default function Feed({
   /** Charts already pinned to the dashboard — their "Add to dashboard" buttons render as already-pinned. */
   alreadyPinned?: Set<AnalyticsChartId>;
   /** If set, auto-start the named guided flow on mount (e.g. from an external "Ask Quinn" entry point). */
-  autoStartFlow?: 'recipe' | 'integrity';
+  autoStartFlow?: 'recipe' | 'integrity' | 'pos-match';
   /** Shows the "Note for Edify" quick action in the composer. Sending a
    *  message that starts with "Note:" logs it straight to the notebook. */
   enableNoteCapture?: boolean;
@@ -6161,6 +6136,7 @@ export default function Feed({
     didAutoStartRef.current = true;
     if (autoStartFlow === 'recipe') startRecipeFlow();
     else if (autoStartFlow === 'integrity') startIntegrityCheck();
+    else if (autoStartFlow === 'pos-match') startPosMatchCheck();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStartFlow]);
 
@@ -7346,7 +7322,9 @@ export default function Feed({
     // Matches the model is genuinely unsure about — mixed target entity
     // types, each with alternatives so the operator can correct the
     // target from the dropdown before linking. Never bulk-linked.
-    const uncertain: POSMatchSuggestion[] = [
+    // Typed before the .filter() below — otherwise TS widens the literal
+    // posType/targetType fields to plain strings and the build fails.
+    const uncertainAll: POSMatchSuggestion[] = [
       {
         posItemId: 'mi-iced-latte-euph',
         posItemName: 'Iced Latte (EUPH) EI - Regular',
@@ -7374,7 +7352,8 @@ export default function Feed({
           { id: 'mp-vanilla-syrup-1l', name: 'Vanilla Syrup 1L — Routin', type: 'Master product' },
         ],
       },
-    ].filter((u) => !alreadyMatchedPosIds.has(u.posItemId));
+    ];
+    const uncertain = uncertainAll.filter((u) => !alreadyMatchedPosIds.has(u.posItemId));
 
     const allSuggestions = [...suggestions, ...uncertain];
 
