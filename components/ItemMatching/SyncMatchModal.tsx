@@ -34,7 +34,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import CardShell from '@/components/Feed/commands/cards/CardShell';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { setMatchTarget, clearMatchTarget, useMatchOverrides, type MatchTargetType } from './overrideStore';
-import { TypeChip, type EntityType } from './TypeChip';
+import { TypeChip, PosKindChip, type EntityType, type PosKind } from './TypeChip';
 
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
 
@@ -61,6 +61,8 @@ type SiteException = { site: string; target: Candidate };
 type MatchResult = {
   posItemId: string;
   posItemName: string;
+  /** What kind of POS button this is — menu item or modifier. */
+  posKind: PosKind;
   type: MatchTargetType;
   targetId: string;
   targetName: string;
@@ -85,6 +87,10 @@ const UNCERTAIN_INJECTIONS: Array<{
   posItemId: string;
   preferredTargetName: string;
   reason: string;
+  /** Synthetic POS items (e.g. modifiers, which the intake fixture doesn't
+   *  carry) provide their own name instead of a fixture lookup. */
+  posItemName?: string;
+  posKind?: PosKind;
 }> = [
   {
     posItemId: 'mi-almond-croissant',
@@ -95,6 +101,13 @@ const UNCERTAIN_INJECTIONS: Array<{
     posItemId: 'mi-babyccino',
     preferredTargetName: 'Cappuccino',
     reason: 'Kids drink — could be a scaled cappuccino, or a separate recipe.',
+  },
+  {
+    posItemId: 'mod-add-oat-milk',
+    posItemName: 'Add Oat Milk',
+    posKind: 'Modifier',
+    preferredTargetName: 'Oat Milk 1L',
+    reason: 'Modifier — could deplete the Oat Milk 1L master product, or you may want a poured-volume sub-recipe.',
   },
 ];
 
@@ -218,6 +231,7 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
       out.push({
         posItemId: pos.id,
         posItemName: pos.name,
+        posKind: 'Menu item',
         type: best.c.type,
         targetId: best.c.id,
         targetName: best.c.name,
@@ -226,21 +240,25 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
     }
 
     for (const inj of UNCERTAIN_INJECTIONS) {
-      const posItem = FITZROY_POS_INTAKE.menuItems.find((m) => m.id === inj.posItemId);
-      if (!posItem) continue;
-      if (alreadyMatchedPosIds.has(posItem.id)) continue;
+      // Synthetic entries (modifiers) carry their own name; the rest are
+      // looked up in the intake fixture.
+      const posItemName = inj.posItemName
+        ?? FITZROY_POS_INTAKE.menuItems.find((m) => m.id === inj.posItemId)?.name;
+      if (!posItemName) continue;
+      if (alreadyMatchedPosIds.has(inj.posItemId)) continue;
       const target = candidates.find((c) => c.name === inj.preferredTargetName);
       if (!target) continue;
       const replacement: MatchResult = {
-        posItemId: posItem.id,
-        posItemName: posItem.name,
+        posItemId: inj.posItemId,
+        posItemName,
+        posKind: inj.posKind ?? 'Menu item',
         type: target.type,
         targetId: target.id,
         targetName: target.name,
         confidence: 'uncertain',
         reason: inj.reason,
       };
-      const existingIdx = out.findIndex((r) => r.posItemId === posItem.id);
+      const existingIdx = out.findIndex((r) => r.posItemId === inj.posItemId);
       if (existingIdx >= 0) out[existingIdx] = replacement;
       else out.push(replacement);
     }
@@ -421,20 +439,33 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
         fontSize: 12.5,
         background: decision?.kind === 'skipped' ? '#FBFAF8' : '#fff',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ flex: 1, minWidth: 0, color: 'var(--color-text-primary)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {/* One readable line: POS name · confidence · target field · actions.
+            Mirrors the product's item-matching row. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <span style={{
+            flex: '1 1 30%', minWidth: 0,
+            color: 'var(--color-text-primary)', fontWeight: 600,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
             {r.posItemName}
           </span>
+          <PosKindChip kind={r.posKind} />
           {r.confidence === 'high' ? <HighPill /> : <NotSurePill />}
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ color: 'var(--color-text-muted)' }}>→</span>
           {decision ? (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+            <span style={{
+              flex: '1 1 40%', minWidth: 0,
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '3px 8px', borderRadius: 8,
+              border: '1px solid var(--color-border-subtle)',
+              background: decision.kind === 'skipped' ? 'transparent' : '#F4FBF6',
+            }}>
+              {decision.kind === 'confirmed' && (
+                <CheckCircle2 size={12} strokeWidth={2.2} color="var(--color-success, #166534)" style={{ flexShrink: 0 }} />
+              )}
               <span style={{
-                fontWeight: 600,
-                color: 'var(--color-text-primary)',
+                flex: 1, minWidth: 0,
+                fontWeight: 600, color: 'var(--color-text-primary)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 textDecoration: decision.kind === 'skipped' ? 'line-through' : 'none',
               }}>
                 {target.name}
@@ -442,7 +473,7 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
               <TypeChip type={TYPE_LABEL[target.type]} />
             </span>
           ) : (
-            <span style={{ flex: 1, minWidth: 0, display: 'inline-flex' }}>
+            <span style={{ flex: '1 1 40%', minWidth: 0, display: 'inline-flex' }}>
               <TargetTrigger
                 target={target}
                 open={dropdownOpen}
@@ -450,7 +481,87 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
               />
             </span>
           )}
+          {decision && (
+            <button
+              type="button"
+              onClick={() => {
+                undoDecision(r.posItemId);
+                if (decision.kind === 'confirmed') setDropdownFor(r.posItemId);
+              }}
+              style={{
+                flexShrink: 0, padding: 0,
+                background: 'transparent', border: 'none',
+                fontSize: 11, fontWeight: 600,
+                color: 'var(--color-text-muted)',
+                textDecoration: 'underline', cursor: 'pointer',
+                fontFamily: 'var(--font-primary)',
+              }}
+            >
+              {decision.kind === 'confirmed' ? 'Change' : 'Undo'}
+            </button>
+          )}
         </div>
+
+        {/* Actions on their own row so the match line stays readable. */}
+        {!decision && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => confirmRow(r)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '4px 12px', borderRadius: 999,
+                border: 'none',
+                background: 'var(--color-accent-active)', color: '#fff',
+                fontSize: 11, fontWeight: 700,
+                fontFamily: 'var(--font-primary)', cursor: 'pointer',
+              }}
+            >
+              <Check size={10} strokeWidth={2.6} />
+              Link
+            </button>
+            <button
+              type="button"
+              onClick={() => skipRow(r.posItemId)}
+              style={{
+                padding: '4px 12px', borderRadius: 999,
+                border: '1px solid var(--color-border-subtle)',
+                background: '#fff', color: 'var(--color-text-secondary)',
+                fontSize: 11, fontWeight: 600,
+                fontFamily: 'var(--font-primary)', cursor: 'pointer',
+              }}
+            >
+              Skip
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (excOpen) { closeExceptionEditor(); return; }
+                setExcFor(r.posItemId);
+                // Pre-select the first site without an exception yet,
+                // same as the product's panel opening pre-filled.
+                setExcSite(ALL_SITES.find((s) => !usedSites.has(s)) ?? null);
+                setExcSiteOpen(false);
+                setExcPickerOpen(false);
+                setExcBrowsing(false);
+                setExcQuery('');
+              }}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '4px 12px', borderRadius: 999,
+                border: '1px solid var(--color-border-subtle)',
+                background: excOpen ? 'rgba(0,28,53,0.06)' : '#fff',
+                color: 'var(--color-text-secondary)',
+                fontSize: 11, fontWeight: 600,
+                fontFamily: 'var(--font-primary)', cursor: 'pointer',
+              }}
+            >
+              <MapPin size={11} strokeWidth={2.2} />
+              Site exception
+            </button>
+          </div>
+        )}
+
 
         {r.reason && !decision && (
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 11.5, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
@@ -673,109 +784,6 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {!decision && (
-          <div style={{ display: 'flex', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={() => confirmRow(r)}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                padding: '5px 12px', borderRadius: 999,
-                border: 'none',
-                background: 'var(--color-accent-active)', color: '#fff',
-                fontSize: 11.5, fontWeight: 700,
-                fontFamily: 'var(--font-primary)', cursor: 'pointer',
-              }}
-            >
-              <Check size={11} strokeWidth={2.6} />
-              Link
-            </button>
-            <button
-              type="button"
-              onClick={() => skipRow(r.posItemId)}
-              style={{
-                padding: '5px 12px', borderRadius: 999,
-                border: '1px solid var(--color-border-subtle)',
-                background: '#fff', color: 'var(--color-text-secondary)',
-                fontSize: 11.5, fontWeight: 600,
-                fontFamily: 'var(--font-primary)', cursor: 'pointer',
-              }}
-            >
-              Skip
-            </button>
-            {!excOpen && (
-              <button
-                type="button"
-                onClick={() => {
-                  setExcFor(r.posItemId);
-                  // Pre-select the first site without an exception yet,
-                  // same as the product's panel opening pre-filled.
-                  setExcSite(ALL_SITES.find((s) => !usedSites.has(s)) ?? null);
-                  setExcSiteOpen(false);
-                  setExcPickerOpen(false);
-                  setExcBrowsing(false);
-                  setExcQuery('');
-                }}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                  padding: '5px 12px', borderRadius: 999,
-                  border: '1px solid var(--color-border-subtle)',
-                  background: '#fff', color: 'var(--color-text-secondary)',
-                  fontSize: 11.5, fontWeight: 600,
-                  fontFamily: 'var(--font-primary)', cursor: 'pointer',
-                }}
-              >
-                <MapPin size={11} strokeWidth={2.2} />
-                Site exception
-              </button>
-            )}
-          </div>
-        )}
-
-        {decision?.kind === 'confirmed' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, fontWeight: 600, color: 'var(--color-success, #166534)', flexWrap: 'wrap' }}>
-            <Check size={12} strokeWidth={3} />
-            Linked to {decision.targetName}
-            {exceptions.length > 0 && (
-              <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>
-                · {exceptions.length} site exception{exceptions.length === 1 ? '' : 's'}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => { undoDecision(r.posItemId); setDropdownFor(r.posItemId); }}
-              style={{
-                marginLeft: 4, padding: 0,
-                background: 'transparent', border: 'none',
-                fontSize: 11, fontWeight: 600,
-                color: 'var(--color-text-muted)',
-                textDecoration: 'underline', cursor: 'pointer',
-                fontFamily: 'var(--font-primary)',
-              }}
-            >
-              Change
-            </button>
-          </div>
-        )}
-        {decision?.kind === 'skipped' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: 'var(--color-text-muted)' }}>
-            Skipped — still unmatched in the list behind this panel.
-            <button
-              type="button"
-              onClick={() => undoDecision(r.posItemId)}
-              style={{
-                marginLeft: 4, padding: 0,
-                background: 'transparent', border: 'none',
-                fontSize: 11, fontWeight: 600,
-                color: 'var(--color-text-muted)',
-                textDecoration: 'underline', cursor: 'pointer',
-                fontFamily: 'var(--font-primary)',
-              }}
-            >
-              Undo
-            </button>
-          </div>
-        )}
       </div>
     );
   }
@@ -1132,14 +1140,14 @@ function TargetTrigger({
       onClick={onToggle}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
-        maxWidth: '100%', minWidth: 0,
+        width: '100%', minWidth: 0,
         padding: '3px 8px', borderRadius: 8,
         border: '1px solid var(--color-border-subtle)',
         background: open ? 'rgba(0,28,53,0.04)' : '#fff',
         cursor: 'pointer', fontFamily: 'var(--font-primary)',
       }}
     >
-      <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span style={{ flex: 1, minWidth: 0, textAlign: 'left', fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {target.name}
       </span>
       <TypeChip type={TYPE_LABEL[target.type]} />

@@ -110,7 +110,7 @@ import {
   snapshot as snapshotSuppliersStore,
 } from '@/components/Suppliers/store';
 import { useRecipes } from '@/components/Recipe/recipeStore';
-import { TypeChip as PosTypeChip, type EntityType as POSTargetType } from '@/components/ItemMatching/TypeChip';
+import { TypeChip as PosTypeChip, PosKindChip, type EntityType as POSTargetType } from '@/components/ItemMatching/TypeChip';
 import {
   masterCompanyAvg,
   ALL_SITES as ALL_SUPPLIER_SITES,
@@ -3057,79 +3057,23 @@ function POSMatchSuggestionsCard({
                 gap: 6,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {/* One readable line: POS name · kind · confidence · target
+                  field · actions — same anatomy as the Sync & match sheet. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, fontSize: '12.5px' }}>
                 <span
                   style={{
-                    fontSize: '12.5px',
-                    fontWeight: 700,
+                    flex: '1 1 30%',
+                    minWidth: 0,
+                    fontWeight: 600,
                     color: 'var(--color-text-primary)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
                   }}
                 >
                   {s.posItemName}
                 </span>
-                <span style={{
-                  padding: '1px 7px',
-                  borderRadius: '999px',
-                  background: s.posType === 'Modifier' ? 'rgba(124,58,237,0.08)' : 'rgba(0,28,53,0.05)',
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: '0.03em',
-                  color: s.posType === 'Modifier' ? '#7C3AED' : 'var(--color-text-secondary)',
-                  flexShrink: 0,
-                }}>
-                  {s.posType ?? 'POS button'}
-                </span>
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  flexWrap: 'wrap',
-                  fontSize: '12.5px',
-                }}
-              >
-                <span style={{ color: 'var(--color-text-muted)' }}>→</span>
-                {decision ? (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-                    <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{target.name}</span>
-                    <PosTypeChip type={target.type} />
-                  </span>
-                ) : (
-                  /* Change-target trigger — the suggestion is editable in
-                     place (rule #6): pick a different product / recipe /
-                     master product if the match is wrong. The candidate
-                     list expands inline below (never floats over the card). */
-                  <span style={{ flex: 1, minWidth: 0, display: 'inline-flex' }}>
-                    <button
-                      type="button"
-                      onClick={() => (dropdownOpen ? closeDropdown() : setDropdownFor(s.posItemId))}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        maxWidth: '100%',
-                        padding: '3px 8px',
-                        borderRadius: '8px',
-                        border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.14))',
-                        background: dropdownOpen ? 'rgba(0,28,53,0.04)' : '#fff',
-                        cursor: 'pointer',
-                        fontFamily: 'var(--font-primary)',
-                      }}
-                    >
-                      <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {target.name}
-                      </span>
-                      <PosTypeChip type={target.type} />
-                      <ChevronDown
-                        size={12}
-                        strokeWidth={2.2}
-                        color="var(--color-text-muted)"
-                        style={{ flexShrink: 0, transform: dropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }}
-                      />
-                    </button>
-                  </span>
-                )}
+                <PosKindChip kind={s.posType ?? 'Menu item'} />
                 <span
                   style={{
                     fontSize: 9.5,
@@ -3152,11 +3096,149 @@ function POSMatchSuggestionsCard({
                           : '#E8A03D'
                     }`,
                     background: tier === 'unsure' ? '#FFF9F0' : '#fff',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
                   }}
                 >
                   {tier === 'high' ? 'High' : tier === 'likely' ? 'Likely' : 'Not sure'}
                 </span>
+                {decision ? (
+                  <span
+                    style={{
+                      flex: '1 1 40%',
+                      minWidth: 0,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '3px 8px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--color-border-subtle)',
+                      background: isSkipped ? 'transparent' : '#F4FBF6',
+                    }}
+                  >
+                    {isApplied && (
+                      <CheckCircle2 size={12} strokeWidth={2.2} color="#166534" style={{ flexShrink: 0 }} />
+                    )}
+                    <span
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontWeight: 600,
+                        color: 'var(--color-text-primary)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        textDecoration: isSkipped ? 'line-through' : 'none',
+                      }}
+                    >
+                      {target.name}
+                    </span>
+                    <PosTypeChip type={target.type} />
+                  </span>
+                ) : (
+                  /* Change-target trigger — the suggestion is editable in
+                     place (rule #6): pick a different product / recipe /
+                     master product if the match is wrong. The candidate
+                     list expands inline below (never floats over the card). */
+                  <span style={{ flex: '1 1 40%', minWidth: 0, display: 'inline-flex' }}>
+                    <button
+                      type="button"
+                      onClick={() => (dropdownOpen ? closeDropdown() : setDropdownFor(s.posItemId))}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        width: '100%',
+                        minWidth: 0,
+                        padding: '3px 8px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.14))',
+                        background: dropdownOpen ? 'rgba(0,28,53,0.04)' : '#fff',
+                        cursor: 'pointer',
+                        fontFamily: 'var(--font-primary)',
+                      }}
+                    >
+                      <span style={{ flex: 1, minWidth: 0, textAlign: 'left', fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {target.name}
+                      </span>
+                      <PosTypeChip type={target.type} />
+                      <ChevronDown
+                        size={12}
+                        strokeWidth={2.2}
+                        color="var(--color-text-muted)"
+                        style={{ flexShrink: 0, transform: dropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }}
+                      />
+                    </button>
+                  </span>
+                )}
+                {decision && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onUndo(s.posItemId);
+                      if (isApplied) setDropdownFor(s.posItemId);
+                    }}
+                    style={{
+                      flexShrink: 0,
+                      padding: 0,
+                      background: 'transparent',
+                      border: 'none',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: 'var(--color-text-muted)',
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-primary)',
+                    }}
+                  >
+                    {isApplied ? 'Change' : 'Undo'}
+                  </button>
+                )}
               </div>
+
+              {/* Actions on their own row so the match line stays readable. */}
+              {!decision && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => onApply(resolved(s))}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '4px 12px',
+                      borderRadius: '999px',
+                      border: 'none',
+                      background: 'var(--color-accent-active)',
+                      color: '#fff',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      fontFamily: 'var(--font-primary)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Check size={10} strokeWidth={2.6} />
+                    Link
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSkip(s.posItemId)}
+                    style={{
+                      padding: '4px 12px',
+                      borderRadius: '999px',
+                      border: '1px solid var(--color-border-subtle)',
+                      background: '#fff',
+                      color: 'var(--color-text-secondary)',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      fontFamily: 'var(--font-primary)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Skip
+                  </button>
+                </div>
+              )}
 
               {/* Inline candidate list — expands within the row and pushes
                   the actions down instead of floating over the card.
@@ -3307,113 +3389,6 @@ function POSMatchSuggestionsCard({
                 </div>
               )}
 
-              {/* Per-row action strip */}
-              {!decision && (
-                <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
-                  <button
-                    type="button"
-                    onClick={() => onApply(resolved(s))}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 5,
-                      padding: '5px 12px',
-                      borderRadius: '999px',
-                      border: 'none',
-                      background: 'var(--color-accent-active)',
-                      color: '#fff',
-                      fontSize: '11.5px',
-                      fontWeight: 700,
-                      fontFamily: 'var(--font-primary)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Check size={11} strokeWidth={2.6} />
-                    Link
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onSkip(s.posItemId)}
-                    style={{
-                      padding: '5px 12px',
-                      borderRadius: '999px',
-                      border: '1px solid var(--color-border-subtle)',
-                      background: '#fff',
-                      color: 'var(--color-text-secondary)',
-                      fontSize: '11.5px',
-                      fontWeight: 600,
-                      fontFamily: 'var(--font-primary)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Skip
-                  </button>
-                </div>
-              )}
-              {isApplied && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    fontSize: '11.5px',
-                    fontWeight: 600,
-                    color: '#166534',
-                  }}
-                >
-                  <CheckCircle2 size={12} strokeWidth={2.4} />
-                  Linked
-                  <button
-                    type="button"
-                    onClick={() => onUndo(s.posItemId)}
-                    style={{
-                      marginLeft: 4,
-                      padding: 0,
-                      background: 'transparent',
-                      border: 'none',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: 'var(--color-text-muted)',
-                      textDecoration: 'underline',
-                      cursor: 'pointer',
-                      fontFamily: 'var(--font-primary)',
-                    }}
-                  >
-                    Undo
-                  </button>
-                </div>
-              )}
-              {isSkipped && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    fontSize: '11.5px',
-                    color: 'var(--color-text-muted)',
-                  }}
-                >
-                  Skipped — finish on the Item matching page.
-                  <button
-                    type="button"
-                    onClick={() => onUndo(s.posItemId)}
-                    style={{
-                      marginLeft: 4,
-                      padding: 0,
-                      background: 'transparent',
-                      border: 'none',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: 'var(--color-text-muted)',
-                      textDecoration: 'underline',
-                      cursor: 'pointer',
-                      fontFamily: 'var(--font-primary)',
-                    }}
-                  >
-                    Undo
-                  </button>
-                </div>
-              )}
             </div>
           );
         })}
