@@ -77,9 +77,10 @@ function ActionCard({ action, onClick }: { action: CorrectiveAction; onClick: ()
         padding: '14px 16px',
         borderRadius: '12px',
         border: isCriticalOpen ? '1px solid #F5B5B5' : '1px solid var(--color-border-subtle)',
-        boxShadow: isCriticalOpen ? 'inset 3px 0 0 #B91C1C' : undefined,
+        boxShadow: isCriticalOpen
+          ? 'inset 3px 0 0 #B91C1C, 0 1px 3px rgba(0, 28, 53, 0.06)'
+          : '0 1px 3px rgba(0, 28, 53, 0.06)',
         background: '#fff',
-        boxShadow: '0 1px 3px rgba(0, 28, 53,0.06)',
         cursor: 'pointer',
         fontFamily: 'var(--font-primary)',
       }}
