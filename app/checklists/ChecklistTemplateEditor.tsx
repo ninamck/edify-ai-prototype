@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useId } from 'react';
+import { useState, useId, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Plus,
@@ -8,21 +8,39 @@ import {
   GripVertical,
   ChevronDown,
   ChevronUp,
-  Camera,
   AlertCircle,
+  AlertTriangle,
+  Bell,
   CheckSquare,
   Thermometer,
   Hash,
   AlignLeft,
   Gauge,
   GitBranch,
+  Table,
+  UserCheck,
 } from 'lucide-react';
-import { MOCK_TEMPLATES, MOCK_SITES, MOCK_USERS } from './mockData';
+import { MOCK_TEMPLATES, MOCK_SITES, MOCK_USERS, getSiteTeam } from './mockData';
+import { saveTemplate, findTemplateById } from './templatesStore';
+import {
+  DEFAULT_PASS_THRESHOLD_PCT,
+  DEFAULT_SEVERITY_WEIGHTS,
+  SEVERITY_COLORS,
+  isScoreable,
+  severityLabel,
+} from './scoring';
 import type {
+  AuditSection,
   ChecklistTemplate,
   ChecklistQuestion,
+  CorrectiveAssigneeType,
+  GroupField,
+  GroupFieldType,
+  NotifyScope,
   ResponseType,
   Frequency,
+  Severity,
+  SeverityWeights,
   UserRole,
   FollowUpRule,
   FollowUpConditionType,
@@ -38,17 +56,24 @@ const FREQ_OPTIONS: { value: Frequency; label: string }[] = [
 ];
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
-  { value: 'kitchen', label: 'Kitchen' },
-  { value: 'manager', label: 'Manager' },
   { value: 'admin', label: 'Admin' },
+  { value: 'manager', label: 'Manager' },
+  { value: 'employee', label: 'Employee' },
 ];
 
 const RESPONSE_OPTIONS: { value: ResponseType; label: string; icon: React.ElementType }[] = [
-  { value: 'checkbox', label: 'Checkbox', icon: CheckSquare },
+  { value: 'checkbox', label: 'Yes / No', icon: CheckSquare },
   { value: 'rating', label: 'Rating', icon: Gauge },
   { value: 'temperature', label: 'Temperature', icon: Thermometer },
   { value: 'number', label: 'Number', icon: Hash },
   { value: 'text', label: 'Text', icon: AlignLeft },
+  { value: 'repeating_group', label: 'Repeated entries', icon: Table },
+];
+
+const GROUP_FIELD_TYPE_OPTIONS: { value: GroupFieldType; label: string }[] = [
+  { value: 'text', label: 'Text' },
+  { value: 'checkbox', label: 'Yes / No' },
+  { value: 'temperature', label: 'Temperature' },
 ];
 
 const CONDITION_OPTIONS: { value: FollowUpConditionType; label: string; forTypes: ResponseType[] }[] = [
@@ -91,13 +116,13 @@ function PillToggle({
       type="button"
       onClick={onClick}
       style={{
-        padding: '5px 12px',
+        padding: '6px 12px',
         borderRadius: '100px',
         border: active ? 'none' : '1px solid var(--color-border)',
         background: active ? 'var(--color-accent-active)' : '#fff',
-        color: active ? '#F4F1EC' : 'var(--color-text-secondary)',
+        color: active ? '#F4F1EC' : 'var(--color-text-primary)',
         fontSize: '12px',
-        fontWeight: 600,
+        fontWeight: 500,
         cursor: 'pointer',
         fontFamily: 'var(--font-primary)',
         transition: 'all 0.15s ease',
@@ -113,9 +138,10 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <div
       style={{
         fontSize: '12px',
-        fontWeight: 700,
-        letterSpacing: '0.04em',
-        color: 'var(--color-text-muted)',
+        fontWeight: 600,
+        letterSpacing: '0.05em',
+        textTransform: 'uppercase',
+        color: 'var(--color-text-primary)',
         marginBottom: '10px',
       }}
     >
@@ -162,12 +188,14 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
 
 function FollowUpRuleRow({
   rule,
+  parentQuestionId,
   parentResponseType,
   allQuestions,
   onChange,
   onDelete,
 }: {
   rule: FollowUpRule;
+  parentQuestionId: string;
   parentResponseType: ResponseType;
   allQuestions: ChecklistQuestion[];
   onChange: (updated: FollowUpRule) => void;
@@ -236,10 +264,11 @@ function FollowUpRuleRow({
       >
         <option value="">Select a follow-up question…</option>
         {allQuestions
-          .filter((q) => !q.parentQuestionId)
+          // Own follow-up children first, then other root questions.
+          .filter((q) => q.id !== parentQuestionId && (q.parentQuestionId === parentQuestionId || !q.parentQuestionId))
           .map((q) => (
             <option key={q.id} value={q.id}>
-              {q.name || '(unnamed question)'}
+              {q.parentQuestionId === parentQuestionId ? '↳ ' : ''}{q.name || '(unnamed question)'}
             </option>
           ))}
       </select>
@@ -266,6 +295,379 @@ function FollowUpRuleRow({
   );
 }
 
+// ─── Repeated entries fields editor ───────────────────────────────────────────
+//
+// For "Repeated entries" questions the author defines the fields each
+// entry records. Temperature fields can carry a max threshold that
+// drives per-entry prompting; Yes/No fields prompt on No when a prompt
+// is set.
+
+function GroupFieldsEditor({
+  fields,
+  onChange,
+}: {
+  fields: GroupField[];
+  onChange: (fields: GroupField[]) => void;
+}) {
+  function updateField(idx: number, patch: Partial<GroupField>) {
+    const next = [...fields];
+    next[idx] = { ...next[idx], ...patch };
+    onChange(next);
+  }
+
+  function addField() {
+    onChange([...fields, { id: `gf-${uid()}`, name: '', type: 'text' }]);
+  }
+
+  function removeField(idx: number) {
+    onChange(fields.filter((_, i) => i !== idx));
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+        <label style={{ ...labelStyle, margin: 0 }}>Fields in each entry</label>
+        <button
+          type="button"
+          onClick={addField}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '4px 10px',
+            borderRadius: '7px',
+            border: '1px solid var(--color-border)',
+            background: '#fff',
+            fontSize: '12px',
+            fontWeight: 600,
+            color: 'var(--color-text-secondary)',
+            cursor: 'pointer',
+            fontFamily: 'var(--font-primary)',
+          }}
+        >
+          <Plus size={11} />
+          Add field
+        </button>
+      </div>
+
+      {fields.length === 0 ? (
+        <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', margin: 0 }}>
+          No fields yet — add what each entry should record (e.g. Supplier, Product, Temperature).
+        </p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {fields.map((f, i) => {
+            const promptable = f.type === 'temperature' || f.type === 'checkbox';
+            return (
+              <div
+                key={f.id}
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  background: 'var(--color-bg-surface)',
+                  border: '1px solid var(--color-border-subtle)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                  <input
+                    type="text"
+                    value={f.name}
+                    placeholder="Field name (e.g. Supplier)"
+                    onChange={(e) => updateField(i, { name: e.target.value })}
+                    style={{ ...inputStyle, flex: 1, minWidth: '120px' }}
+                  />
+                  <select
+                    value={f.type}
+                    onChange={(e) => {
+                      const type = e.target.value as GroupFieldType;
+                      updateField(i, {
+                        type,
+                        maxThreshold: type === 'temperature' ? f.maxThreshold ?? 5 : undefined,
+                        followUpPrompt: type === 'text' ? undefined : f.followUpPrompt,
+                      });
+                    }}
+                    style={selectStyle}
+                  >
+                    {GROUP_FIELD_TYPE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  {f.type === 'temperature' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>max</span>
+                      <input
+                        type="number"
+                        value={f.maxThreshold ?? ''}
+                        onChange={(e) => updateField(i, { maxThreshold: e.target.value === '' ? undefined : Number(e.target.value) })}
+                        style={{ ...inputStyle, width: '58px' }}
+                      />
+                      <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>°C</span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeField(i)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Trash2 size={13} color="#B01038" />
+                  </button>
+                </div>
+
+                {promptable && (
+                  <input
+                    type="text"
+                    value={f.followUpPrompt ?? ''}
+                    placeholder={
+                      f.type === 'temperature'
+                        ? 'Prompt when above max (e.g. record the action taken)…'
+                        : 'Prompt on a No (e.g. describe the issue)…'
+                    }
+                    onChange={(e) => updateField(i, { followUpPrompt: e.target.value || undefined })}
+                    style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Corrective action config ─────────────────────────────────────────────────
+//
+// First-class config on Yes/No questions: a No raises an assignable
+// corrective action — no follow-up rule plumbing needed. The assignee
+// resolves per site at completion time (outlet manager or store account).
+
+function CorrectiveActionSection({
+  question,
+  sites,
+  onChange,
+}: {
+  question: ChecklistQuestion;
+  sites: string[];
+  onChange: (updated: ChecklistQuestion) => void;
+}) {
+  const config = question.correctiveActionConfig;
+  const enabled = Boolean(config);
+  const previewSite = sites[0];
+
+  return (
+    <div
+      style={{
+        padding: '12px',
+        borderRadius: '9px',
+        border: enabled ? '1px solid #E89AAE' : '1px solid var(--color-border-subtle)',
+        boxShadow: enabled ? 'inset 3px 0 0 #B01038' : undefined,
+        background: enabled ? '#FFF7F8' : 'var(--color-bg-surface)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+        <AlertTriangle size={14} color={enabled ? '#B01038' : 'var(--color-text-muted)'} style={{ flexShrink: 0, marginTop: '3px' }} />
+        <div style={{ flex: 1 }}>
+          <Toggle
+            checked={enabled}
+            onChange={(v) =>
+              onChange({
+                ...question,
+                correctiveActionConfig: v
+                  ? { triggerOnNo: true, defaultAssignee: 'outlet_manager', requirePhotoEvidence: true }
+                  : undefined,
+              })
+            }
+            label="A “No” answer raises a corrective action"
+          />
+          <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+            The completer writes an issue summary; the fix is assigned to the store and tracked
+            until resolved. Every No raises one — there is no “no issue” branch.
+          </p>
+        </div>
+      </div>
+
+      {enabled && config && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingLeft: '22px' }}>
+          <div>
+            <label style={labelStyle}>Assign to (default)</label>
+            <select
+              value={config.defaultAssignee}
+              onChange={(e) =>
+                onChange({
+                  ...question,
+                  correctiveActionConfig: { ...config, defaultAssignee: e.target.value as CorrectiveAssigneeType },
+                })
+              }
+              style={{ ...selectStyle, width: '100%', boxSizing: 'border-box' }}
+            >
+              <option value="outlet_manager">Outlet manager of the store being checked</option>
+              <option value="store_account">The store&rsquo;s account</option>
+            </select>
+            {previewSite && (
+              <p style={{ margin: '5px 0 0', fontSize: '12px', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <UserCheck size={11} />
+                e.g. at {previewSite}: {config.defaultAssignee === 'outlet_manager'
+                  ? `${getSiteTeam(previewSite).outletManager} (Outlet manager)`
+                  : getSiteTeam(previewSite).storeAccount}
+                {' '}· completer can switch at completion time
+              </p>
+            )}
+          </div>
+
+          <Toggle
+            checked={config.requirePhotoEvidence}
+            onChange={(v) =>
+              onChange({
+                ...question,
+                correctiveActionConfig: { ...config, requirePhotoEvidence: v },
+              })
+            }
+            label="Require photo evidence to resolve"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Per-question scoring (audit templates) ──────────────────────────────────
+//
+// Shown when template scoring is on. Yes/No questions pass on Yes;
+// number/temperature questions pass when in range (defined by a
+// greater/less-than follow-up rule). Text, rating and table questions
+// are unscored.
+
+const SEVERITY_OPTIONS: Severity[] = ['critical', 'medium', 'low'];
+
+function scoringApplies(q: ChecklistQuestion): boolean {
+  return q.responseType === 'checkbox' || q.responseType === 'temperature' || q.responseType === 'number';
+}
+
+function ScoringSection({
+  question,
+  sections,
+  weights,
+  onChange,
+}: {
+  question: ChecklistQuestion;
+  sections: AuditSection[];
+  weights: SeverityWeights;
+  onChange: (updated: ChecklistQuestion) => void;
+}) {
+  if (!scoringApplies(question)) {
+    return (
+      <div style={{
+        padding: '10px 12px',
+        borderRadius: '9px',
+        background: 'var(--color-bg-surface)',
+        border: '1px solid var(--color-border-subtle)',
+        fontSize: '12px',
+        color: 'var(--color-text-muted)',
+      }}>
+        Not scored — this response type has no pass/fail, so it doesn&rsquo;t affect the audit score.
+      </div>
+    );
+  }
+
+  const needsThresholdRule =
+    (question.responseType === 'temperature' || question.responseType === 'number') &&
+    !question.followUpRules.some(
+      (r) =>
+        (r.condition.type === 'greater_than' || r.condition.type === 'less_than') &&
+        typeof r.condition.value === 'number',
+    );
+
+  return (
+    <div style={{
+      padding: '12px',
+      borderRadius: '9px',
+      background: 'var(--color-review-light)',
+      border: '1px solid var(--color-review-border)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '10px',
+    }}>
+      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        Scoring
+      </span>
+
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+        <div>
+          <label style={labelStyle}>Severity</label>
+          <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+            {SEVERITY_OPTIONS.map((s) => {
+              const active = (question.severity ?? 'medium') === s;
+              const c = SEVERITY_COLORS[s];
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => onChange({ ...question, severity: s })}
+                  style={{
+                    // Match inputStyle so the row lines up with the Section select.
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: active ? `1px solid ${c.border}` : '1px solid var(--color-border)',
+                    background: active ? c.bg : '#fff',
+                    color: active ? c.text : 'var(--color-text-secondary)',
+                    fontSize: '13px',
+                    fontWeight: active ? 700 : 600,
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-primary)',
+                  }}
+                >
+                  {severityLabel(s)} · {weights[s]} pts
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ flex: 1, minWidth: '140px' }}>
+          <label style={labelStyle}>Section</label>
+          <select
+            value={question.sectionId ?? ''}
+            onChange={(e) => onChange({ ...question, sectionId: e.target.value || undefined })}
+            style={{ ...selectStyle, width: '100%', boxSizing: 'border-box' }}
+          >
+            <option value="">No section (General)</option>
+            {sections.map((s) => (
+              <option key={s.id} value={s.id}>{s.name || 'Untitled section'}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+        {question.responseType === 'checkbox'
+          ? 'Yes earns full points; No earns zero and raises an action.'
+          : needsThresholdRule
+          ? 'Add a greater-than / less-than follow-up rule below to define the in-range pass — until then this question isn\u2019t scored.'
+          : 'In range earns full points; a threshold breach earns zero and raises an action.'}
+        {` Worth ${weights[question.severity ?? 'medium']} points — set by the template's severity weights above.`}
+        {question.severity === 'critical' && ' A Critical fail fails the whole audit regardless of score.'}
+      </p>
+    </div>
+  );
+}
+
 // ─── Question card ────────────────────────────────────────────────────────────
 
 function QuestionCard({
@@ -274,20 +676,30 @@ function QuestionCard({
   total,
   allQuestions,
   isFollowUp,
+  sites,
+  scoringEnabled,
+  sections,
+  weights,
   onChange,
   onDelete,
   onMoveUp,
   onMoveDown,
+  onAddFollowUp,
 }: {
   question: ChecklistQuestion;
   index: number;
   total: number;
   allQuestions: ChecklistQuestion[];
   isFollowUp: boolean;
+  sites: string[];
+  scoringEnabled: boolean;
+  sections: AuditSection[];
+  weights: SeverityWeights;
   onChange: (updated: ChecklistQuestion) => void;
   onDelete: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onAddFollowUp: () => void;
 }) {
   const [expanded, setExpanded] = useState(true);
 
@@ -326,10 +738,11 @@ function QuestionCard({
         border: isFollowUp
           ? '1px solid #EAD173'
           : '1px solid var(--color-border-subtle)',
-        boxShadow: '0 1px 4px rgba(0, 28, 53,0.06)',
+        boxShadow: isFollowUp
+          ? 'inset 3px 0 0 #F59E0B, 0 1px 4px rgba(0, 28, 53, 0.06)'
+          : '0 1px 4px rgba(0, 28, 53, 0.06)',
         overflow: 'hidden',
         marginLeft: isFollowUp ? '20px' : '0',
-        borderLeft: isFollowUp ? '3px solid #F59E0B' : undefined,
       }}
     >
       {/* Card header */}
@@ -367,6 +780,20 @@ function QuestionCard({
         }}>
           {question.name || `Question ${index + 1}`}
         </span>
+
+        {scoringEnabled && !isFollowUp && isScoreable(question) && (
+          <span style={{
+            fontSize: '11px',
+            fontWeight: 700,
+            padding: '2px 8px',
+            borderRadius: '100px',
+            flexShrink: 0,
+            background: SEVERITY_COLORS[question.severity ?? 'medium'].bg,
+            color: SEVERITY_COLORS[question.severity ?? 'medium'].text,
+          }}>
+            {severityLabel(question.severity ?? 'medium')} · {weights[question.severity ?? 'medium']} pts
+          </span>
+        )}
 
         {question.mandatory && (
           <span style={{ fontSize: '12px', color: '#B01038', fontWeight: 700, flexShrink: 0 }}>Required</span>
@@ -430,7 +857,16 @@ function QuestionCard({
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => onChange({ ...question, responseType: opt.value, followUpRules: [] })}
+                    onClick={() =>
+                      onChange({
+                        ...question,
+                        responseType: opt.value,
+                        followUpRules: [],
+                        // Config is type-specific — drop what no longer applies.
+                        correctiveActionConfig: opt.value === 'checkbox' ? question.correctiveActionConfig : undefined,
+                        groupFields: opt.value === 'repeating_group' ? question.groupFields ?? [] : undefined,
+                      })
+                    }
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -468,32 +904,73 @@ function QuestionCard({
             />
           </div>
 
+          {/* Scoring — audit templates only */}
+          {scoringEnabled && !isFollowUp && (
+            <ScoringSection question={question} sections={sections} weights={weights} onChange={onChange} />
+          )}
+
+          {/* Corrective action — Yes/No questions only */}
+          {question.responseType === 'checkbox' && !isFollowUp && (
+            <CorrectiveActionSection question={question} sites={sites} onChange={onChange} />
+          )}
+
+          {/* Entry fields — repeated-entries questions only */}
+          {question.responseType === 'repeating_group' && (
+            <GroupFieldsEditor
+              fields={question.groupFields ?? []}
+              onChange={(fields) => onChange({ ...question, groupFields: fields })}
+            />
+          )}
+
           {/* Follow-up rules */}
-          {!isFollowUp && (
+          {!isFollowUp && question.responseType !== 'repeating_group' && (
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '6px', flexWrap: 'wrap' }}>
                 <label style={{ ...labelStyle, margin: 0 }}>Follow-up rules</label>
-                <button
-                  type="button"
-                  onClick={addRule}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    padding: '4px 10px',
-                    borderRadius: '7px',
-                    border: '1px solid var(--color-border)',
-                    background: '#fff',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    color: 'var(--color-text-secondary)',
-                    cursor: 'pointer',
-                    fontFamily: 'var(--font-primary)',
-                  }}
-                >
-                  <Plus size={11} />
-                  Add rule
-                </button>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={onAddFollowUp}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 10px',
+                      borderRadius: '7px',
+                      border: '1px solid var(--color-border)',
+                      background: '#fff',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: 'var(--color-text-secondary)',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-primary)',
+                    }}
+                  >
+                    <GitBranch size={11} />
+                    Add follow-up question
+                  </button>
+                  <button
+                    type="button"
+                    onClick={addRule}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 10px',
+                      borderRadius: '7px',
+                      border: '1px solid var(--color-border)',
+                      background: '#fff',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: 'var(--color-text-secondary)',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-primary)',
+                    }}
+                  >
+                    <Plus size={11} />
+                    Add rule
+                  </button>
+                </div>
               </div>
 
               {question.followUpRules.length === 0 ? (
@@ -506,6 +983,7 @@ function QuestionCard({
                     <FollowUpRuleRow
                       key={rule.id}
                       rule={rule}
+                      parentQuestionId={question.id}
                       parentResponseType={question.responseType}
                       allQuestions={allQuestions}
                       onChange={(updated) => updateRule(ri, updated)}
@@ -540,13 +1018,14 @@ const selectStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
+// Labels take full ink (web-v2 moved them from muted to foreground so
+// helper text underneath can sit a step lighter).
 const labelStyle: React.CSSProperties = {
   display: 'block',
   fontSize: '12px',
-  fontWeight: 600,
-  color: 'var(--color-text-secondary)',
+  fontWeight: 500,
+  color: 'var(--color-text-primary)',
   marginBottom: '6px',
-  letterSpacing: '0.04em',
 };
 
 const iconBtnStyle: React.CSSProperties = {
@@ -571,6 +1050,7 @@ const BLANK_TEMPLATE: Omit<ChecklistTemplate, 'id'> = {
   name: '',
   sites: [],
   notifyUserIds: [],
+  notifyScope: 'site_assignees',
   frequency: 'daily',
   timeOfDay: '09:00',
   assignedRoles: [],
@@ -587,7 +1067,25 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
     existing ? { ...existing } : { ...BLANK_TEMPLATE }
   );
   const [saved, setSaved] = useState(false);
+  const [scheduledCount, setScheduledCount] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
+  const [editName, setEditName] = useState(existing?.name ?? '');
+
+  // Custom templates (and edited copies of fixtures) live in the
+  // client-side store, which isn't readable during server render — load
+  // them once on mount, before the user has touched anything.
+  const storeLoaded = useRef(false);
+  useEffect(() => {
+    if (storeLoaded.current) return;
+    storeLoaded.current = true;
+    if (mode === 'edit' && templateId) {
+      const stored = findTemplateById(templateId);
+      if (stored) {
+        setForm({ ...stored });
+        setEditName(stored.name);
+      }
+    }
+  }, [mode, templateId]);
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -621,6 +1119,60 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
     setForm((f) => ({ ...f, questions: [...f.questions, newQuestion()] }));
   }
 
+  /** Create a child follow-up question under a parent and auto-wire a rule
+   *  to it (default condition depends on the parent's response type). */
+  function addFollowUpQuestion(parentId: string) {
+    setForm((f) => {
+      const parent = f.questions.find((q) => q.id === parentId);
+      if (!parent) return f;
+
+      const child: ChecklistQuestion = {
+        id: `q-${uid()}`,
+        name: '',
+        mandatory: true,
+        allowPhoto: true,
+        responseType: 'text',
+        followUpRules: [],
+        parentQuestionId: parentId,
+      };
+
+      const defaultCondition: FollowUpRule['condition'] =
+        parent.responseType === 'checkbox'
+          ? { type: 'unchecked' }
+          : parent.responseType === 'rating'
+          ? { type: 'equals', value: 'urgent' }
+          : parent.responseType === 'text'
+          ? { type: 'contains', value: '' }
+          : { type: 'greater_than', value: 0 };
+
+      const updatedParent: ChecklistQuestion = {
+        ...parent,
+        followUpRules: [
+          ...parent.followUpRules,
+          { id: uid(), condition: defaultCondition, followUpQuestionId: child.id },
+        ],
+      };
+
+      // Insert the child directly after the parent's existing children so
+      // it renders in place.
+      const questions: ChecklistQuestion[] = [];
+      f.questions.forEach((q) => {
+        questions.push(q.id === parentId ? updatedParent : q);
+      });
+      const lastRelatedIdx = (() => {
+        let idx = questions.findIndex((q) => q.id === parentId);
+        for (let i = idx + 1; i < questions.length; i++) {
+          if (questions[i].parentQuestionId === parentId) idx = i;
+          else break;
+        }
+        return idx;
+      })();
+      questions.splice(lastRelatedIdx + 1, 0, child);
+
+      return { ...f, questions };
+    });
+  }
+
   function moveQuestion(id: string, dir: 'up' | 'down') {
     const rootIds = rootQuestions.map((q) => q.id);
     const idx = rootIds.indexOf(id);
@@ -649,7 +1201,23 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
     if (form.questions.filter((q) => !q.parentQuestionId).length === 0) errs.push('Add at least one question.');
     form.questions.forEach((q, i) => {
       if (!q.name.trim()) errs.push(`Question ${i + 1} has no text.`);
+      if (q.responseType === 'repeating_group') {
+        const fields = q.groupFields ?? [];
+        if (fields.length === 0) errs.push(`Question ${i + 1} uses repeated entries but has no fields.`);
+        else if (fields.some((gf) => !gf.name.trim())) errs.push(`Question ${i + 1} has an entry field with no name.`);
+      }
     });
+    if (form.scoringEnabled) {
+      const threshold = form.passThresholdPct ?? DEFAULT_PASS_THRESHOLD_PCT;
+      if (threshold < 1 || threshold > 100) errs.push('Pass threshold must be between 1 and 100%.');
+      const w = form.severityWeights ?? DEFAULT_SEVERITY_WEIGHTS;
+      if (w.critical <= 0 || w.medium <= 0 || w.low <= 0) {
+        errs.push('Every severity weight must be greater than zero.');
+      }
+      (form.sections ?? []).forEach((s, i) => {
+        if (!s.name.trim()) errs.push(`Section ${i + 1} has no name.`);
+      });
+    }
     return errs;
   }
 
@@ -660,8 +1228,12 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
       return;
     }
     setErrors([]);
+
+    const id = mode === 'edit' && templateId ? templateId : `tpl-custom-${uid()}`;
+    const result = saveTemplate({ id, ...form });
+    setScheduledCount(result.scheduledCount);
     setSaved(true);
-    setTimeout(() => router.push('/checklists'), 1400);
+    setTimeout(() => router.push('/checklists'), 1600);
   }
 
   return (
@@ -670,7 +1242,7 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
         {mode === 'new' ? 'Create checklist' : 'Edit checklist'}
       </h1>
       <p style={{ margin: '0 0 24px', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-        {mode === 'new' ? 'Configure your checklist template and add questions.' : `Editing: ${existing?.name ?? ''}`}
+        {mode === 'new' ? 'Configure your checklist template and add questions.' : `Editing: ${editName}`}
       </p>
 
       {/* Errors */}
@@ -705,7 +1277,10 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
           fontWeight: 600,
           color: '#166534',
         }}>
-          ✓ Checklist saved — redirecting…
+          ✓ Checklist saved
+          {scheduledCount > 0 &&
+            ` — ${scheduledCount} ${scheduledCount === 1 ? 'task' : 'tasks'} scheduled in the complete inbox`}
+          . Redirecting…
         </div>
       )}
 
@@ -785,19 +1360,70 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
             </div>
           </div>
 
-          {/* Notify users */}
+          {/* Notification scoping */}
           <div>
-            <label style={labelStyle}>Notify users on completion</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {MOCK_USERS.map((u) => (
-                <PillToggle
-                  key={u.id}
-                  label={u.name}
-                  active={form.notifyUserIds.includes(u.id)}
-                  onClick={() => update('notifyUserIds', toggleArrayItem(form.notifyUserIds, u.id))}
-                />
-              ))}
+            <label style={labelStyle}>Notify on completion</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+              <PillToggle
+                label="Assigned people at that site only"
+                active={(form.notifyScope ?? 'specific_users') === 'site_assignees'}
+                onClick={() => update('notifyScope', 'site_assignees' as NotifyScope)}
+              />
+              <PillToggle
+                label="Specific users"
+                active={(form.notifyScope ?? 'specific_users') === 'specific_users'}
+                onClick={() => update('notifyScope', 'specific_users' as NotifyScope)}
+              />
             </div>
+
+            {(form.notifyScope ?? 'specific_users') === 'site_assignees' ? (
+              <div style={{
+                padding: '12px 14px',
+                borderRadius: '9px',
+                border: '1px solid var(--color-border-subtle)',
+                background: 'var(--color-bg-surface)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                  <Bell size={13} color="var(--color-text-muted)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+                    One template covers every site. When it&rsquo;s completed for a site, only that
+                    site&rsquo;s assigned people are notified — nothing to duplicate per store.
+                  </span>
+                </div>
+                {form.sites.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {form.sites.map((s) => (
+                      <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--color-text-primary)', minWidth: '120px' }}>{s}</span>
+                        <span style={{ color: 'var(--color-text-muted)' }}>→</span>
+                        <span style={{ fontWeight: 500, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <UserCheck size={11} />
+                          {getSiteTeam(s).outletManager} (Outlet manager)
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                    Select sites above to see who gets notified at each.
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {MOCK_USERS.map((u) => (
+                  <PillToggle
+                    key={u.id}
+                    label={u.name}
+                    active={form.notifyUserIds.includes(u.id)}
+                    onClick={() => update('notifyUserIds', toggleArrayItem(form.notifyUserIds, u.id))}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Active toggle */}
@@ -806,6 +1432,196 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
             onChange={(v) => update('active', v)}
             label="Active (checklist will be scheduled)"
           />
+        </div>
+      </div>
+
+      {/* ── Section: Scoring (audit mode) ── */}
+      <div style={sectionStyle}>
+        <SectionLabel>Scoring</SectionLabel>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div>
+            <Toggle
+              checked={!!form.scoringEnabled}
+              onChange={(v) =>
+                setForm((f) => ({
+                  ...f,
+                  scoringEnabled: v,
+                  passThresholdPct: v ? f.passThresholdPct ?? DEFAULT_PASS_THRESHOLD_PCT : f.passThresholdPct,
+                  severityWeights: v ? f.severityWeights ?? { ...DEFAULT_SEVERITY_WEIGHTS } : f.severityWeights,
+                  sections: v ? f.sections ?? [] : f.sections,
+                }))
+              }
+              label="Enable scoring — this checklist is an audit"
+            />
+            <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+              Questions carry points and a severity. Passing answers earn points; every fail raises
+              an action. The audit gets a percentage score and a pass/fail result — and any Critical
+              fail fails it outright. Off = normal checklist behaviour, unchanged.
+            </p>
+          </div>
+
+          {form.scoringEnabled && (
+            <>
+              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div>
+                  <label htmlFor={`${formId}-threshold`} style={labelStyle}>Pass threshold (%)</label>
+                  <input
+                    id={`${formId}-threshold`}
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={form.passThresholdPct ?? DEFAULT_PASS_THRESHOLD_PCT}
+                    onChange={(e) => update('passThresholdPct', Math.max(0, Number(e.target.value) || 0))}
+                    style={{ ...inputStyle, width: '90px' }}
+                  />
+                </div>
+
+                {/* Severity weight map — one place sets every question's value */}
+                <div>
+                  <label style={labelStyle}>Points per severity</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {(['critical', 'medium', 'low'] as Severity[]).map((s) => {
+                      const c = SEVERITY_COLORS[s];
+                      const weights = form.severityWeights ?? DEFAULT_SEVERITY_WEIGHTS;
+                      return (
+                        <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <span style={{
+                            padding: '3px 9px',
+                            borderRadius: '100px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            background: c.bg,
+                            color: c.text,
+                          }}>
+                            {severityLabel(s)}
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={weights[s]}
+                            onChange={(e) =>
+                              update('severityWeights', {
+                                ...weights,
+                                [s]: Math.max(0, Number(e.target.value) || 0),
+                              })
+                            }
+                            style={{ ...inputStyle, width: '58px' }}
+                            aria-label={`${severityLabel(s)} points`}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* How the points add up — live template total */}
+              {(() => {
+                const weights = form.severityWeights ?? DEFAULT_SEVERITY_WEIGHTS;
+                const scoreableQs = form.questions.filter((q) => !q.parentQuestionId && isScoreable(q));
+                const totalPoints = scoreableQs.reduce(
+                  (sum, q) => sum + weights[q.severity ?? 'medium'],
+                  0,
+                );
+                const threshold = form.passThresholdPct ?? DEFAULT_PASS_THRESHOLD_PCT;
+                const passNeeds = Math.ceil((totalPoints * threshold) / 100);
+                return (
+                  <div style={{
+                    padding: '10px 12px',
+                    borderRadius: '9px',
+                    background: 'var(--color-bg-surface)',
+                    border: '1px solid var(--color-border-subtle)',
+                    fontSize: '12px',
+                    color: 'var(--color-text-secondary)',
+                    lineHeight: 1.5,
+                  }}>
+                    {scoreableQs.length === 0 ? (
+                      <>No scoreable questions yet — add Yes/No or threshold-based number questions below.</>
+                    ) : (
+                      <>
+                        <strong style={{ color: 'var(--color-text-primary)' }}>
+                          {scoreableQs.length} scored question{scoreableQs.length === 1 ? '' : 's'} · {totalPoints} points possible
+                        </strong>
+                        {' '}— a pass needs <strong style={{ color: 'var(--color-text-primary)' }}>{passNeeds} points</strong> ({threshold}%),
+                        and any Critical fail fails the audit outright.
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <label style={{ ...labelStyle, margin: 0 }}>Sections</label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      update('sections', [...(form.sections ?? []), { id: `sec-${uid()}`, name: '' }])
+                    }
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 10px',
+                      borderRadius: '7px',
+                      border: '1px solid var(--color-border)',
+                      background: '#fff',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: 'var(--color-text-secondary)',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-primary)',
+                    }}
+                  >
+                    <Plus size={11} />
+                    Add section
+                  </button>
+                </div>
+
+                {(form.sections ?? []).length === 0 ? (
+                  <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', margin: 0 }}>
+                    No sections — questions score into a single General group. Add sections like
+                    &ldquo;Front of house&rdquo; or &ldquo;Food safety&rdquo; to get subtotals.
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {(form.sections ?? []).map((s) => (
+                      <div key={s.id} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          value={s.name}
+                          onChange={(e) =>
+                            update(
+                              'sections',
+                              (form.sections ?? []).map((x) => (x.id === s.id ? { ...x, name: e.target.value } : x)),
+                            )
+                          }
+                          placeholder="Section name, e.g. Front of house"
+                          style={{ ...inputStyle, flex: 1, boxSizing: 'border-box' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setForm((f) => ({
+                              ...f,
+                              sections: (f.sections ?? []).filter((x) => x.id !== s.id),
+                              // Questions in the removed section fall back to General.
+                              questions: f.questions.map((q) =>
+                                q.sectionId === s.id ? { ...q, sectionId: undefined } : q,
+                              ),
+                            }))
+                          }
+                          style={iconBtnStyle}
+                        >
+                          <Trash2 size={13} color="#B01038" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -830,10 +1646,15 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
                   total={rootQuestions.length}
                   allQuestions={form.questions}
                   isFollowUp={false}
+                  sites={form.sites}
+                  scoringEnabled={!!form.scoringEnabled}
+                  sections={form.sections ?? []}
+                  weights={form.severityWeights ?? DEFAULT_SEVERITY_WEIGHTS}
                   onChange={(updated) => updateQuestion(q.id, updated)}
                   onDelete={() => deleteQuestion(q.id)}
                   onMoveUp={() => moveQuestion(q.id, 'up')}
                   onMoveDown={() => moveQuestion(q.id, 'down')}
+                  onAddFollowUp={() => addFollowUpQuestion(q.id)}
                 />
                 {followUps.map((fq) => (
                   <QuestionCard
@@ -843,10 +1664,15 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
                     total={1}
                     allQuestions={form.questions}
                     isFollowUp={true}
+                    sites={form.sites}
+                    scoringEnabled={!!form.scoringEnabled}
+                    sections={form.sections ?? []}
+                    weights={form.severityWeights ?? DEFAULT_SEVERITY_WEIGHTS}
                     onChange={(updated) => updateQuestion(fq.id, updated)}
                     onDelete={() => deleteQuestion(fq.id)}
                     onMoveUp={() => {}}
                     onMoveDown={() => {}}
+                    onAddFollowUp={() => {}}
                   />
                 ))}
               </div>
@@ -888,7 +1714,7 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
         left: 0,
         right: 0,
         padding: '12px 24px',
-        background: 'var(--color-bg-nav)',
+        background: '#fff',
         borderTop: '1px solid var(--color-border-subtle)',
         display: 'flex',
         alignItems: 'center',
@@ -938,9 +1764,8 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
 
 const sectionStyle: React.CSSProperties = {
   background: '#fff',
-  borderRadius: '12px',
+  borderRadius: '10px',
   border: '1px solid var(--color-border-subtle)',
   padding: '20px',
   marginBottom: '16px',
-  boxShadow: '0 1px 4px rgba(0, 28, 53,0.06)',
 };

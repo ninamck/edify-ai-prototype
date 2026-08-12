@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, ClipboardList, Edit2, Clock, MapPin, Users, History, AlertTriangle } from 'lucide-react';
-import { getAllHistoryInstances } from './mockData';
-import { MOCK_TEMPLATES, MOCK_USERS } from './mockData';
+import { Plus, ClipboardList, Edit2, Clock, MapPin, Users, History, AlertTriangle, Bell } from 'lucide-react';
+import { MOCK_USERS } from './mockData';
+import { useChecklistStore, mergeTemplates, mergeHistoryInstances } from './templatesStore';
 import type { ChecklistTemplate, Frequency, UserRole } from './types';
 
 const FREQUENCY_LABELS: Record<Frequency, string> = {
@@ -15,17 +15,17 @@ const FREQUENCY_LABELS: Record<Frequency, string> = {
 };
 
 const ROLE_LABELS: Record<UserRole, string> = {
-  kitchen: 'Kitchen',
-  manager: 'Manager',
   admin: 'Admin',
+  manager: 'Manager',
+  employee: 'Employee',
 };
 
 // Role chips ride the categorical chip palette (fixed per value, never
 // status colours).
 const ROLE_COLORS: Record<UserRole, { bg: string; text: string }> = {
-  kitchen: { bg: '#E0F2F7', text: '#0E7490' },
-  manager: { bg: '#EFF5E1', text: '#4D7C0F' },
   admin: { bg: '#E9E8F7', text: '#191484' },
+  manager: { bg: '#EFF5E1', text: '#4D7C0F' },
+  employee: { bg: '#E0F2F7', text: '#0E7490' },
 };
 
 function Pill({ label, color }: { label: string; color?: { bg: string; text: string } }) {
@@ -169,7 +169,8 @@ function TemplateCard({ template, onEdit }: { template: ChecklistTemplate; onEdi
 
 export default function ManageChecklistsPage() {
   const router = useRouter();
-  const [templates] = useState(MOCK_TEMPLATES);
+  const store = useChecklistStore();
+  const templates = mergeTemplates(store.templates);
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   const filtered = templates.filter((t) => {
@@ -178,7 +179,7 @@ export default function ManageChecklistsPage() {
     return true;
   });
 
-  const history = getAllHistoryInstances();
+  const history = mergeHistoryInstances(store.instances);
   const recentFlagged = history.filter((inst) => {
     // Quick flag check — any 'No' checkbox answer
     return inst.answers.some((a) => a.value === false);
@@ -261,26 +262,48 @@ export default function ManageChecklistsPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => router.push('/checklists/new')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '9px 16px',
-            borderRadius: '9px',
-            background: 'var(--color-accent-active)',
-            border: 'none',
-            fontSize: '13px',
-            fontWeight: 600,
-            color: '#F4F1EC',
-            cursor: 'pointer',
-            fontFamily: 'var(--font-primary)',
-          }}
-        >
-          <Plus size={15} strokeWidth={2.5} />
-          Create checklist
-        </button>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => router.push('/checklists/settings/alerts')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '9px 16px',
+              borderRadius: '9px',
+              background: '#fff',
+              border: '1px solid var(--color-border)',
+              fontSize: '13px',
+              fontWeight: 600,
+              color: 'var(--color-text-secondary)',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-primary)',
+            }}
+          >
+            <Bell size={14} />
+            Alert settings
+          </button>
+          <button
+            onClick={() => router.push('/checklists/new')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '9px 16px',
+              borderRadius: '9px',
+              background: 'var(--color-accent-active)',
+              border: 'none',
+              fontSize: '13px',
+              fontWeight: 600,
+              color: '#F4F1EC',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-primary)',
+            }}
+          >
+            <Plus size={15} strokeWidth={2.5} />
+            Create checklist
+          </button>
+        </div>
       </div>
 
       {/* Filter tabs */}

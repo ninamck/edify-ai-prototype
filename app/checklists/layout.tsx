@@ -8,6 +8,10 @@ import { useRouter, usePathname } from 'next/navigation';
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
 
 function getPageTitle(pathname: string): string {
+  if (pathname.endsWith('/actions')) return 'Actions';
+  if (pathname.includes('/actions/')) return 'Corrective action';
+  if (pathname.endsWith('/settings/alerts')) return 'Alert settings';
+  if (pathname.includes('/report/')) return 'Audit report';
   if (pathname.includes('/complete/') && pathname.split('/').length > 4) return 'Complete checklist';
   if (pathname.endsWith('/complete')) return 'Complete tasks';
   if (pathname.includes('/history/')) return 'Checklist record';
@@ -25,9 +29,20 @@ export default function ChecklistsLayout({ children }: { children: React.ReactNo
 
   const isComplete = pathname.includes('/complete');
   const isHistory = pathname.includes('/history');
+  const isAction = pathname.includes('/actions');
+  const isReport = pathname.includes('/report/');
 
   function handleBack() {
-    if (pathname.includes('/complete/') && pathname.split('/').length > 4) {
+    if (isReport) {
+      const id = pathname.split('/').pop();
+      router.push(id ? `/checklists/history/${id}` : '/checklists/history');
+    } else if (pathname.includes('/actions/')) {
+      router.push('/checklists/actions');
+    } else if (pathname.endsWith('/actions')) {
+      router.push('/checklists/complete');
+    } else if (pathname.endsWith('/settings/alerts')) {
+      router.push('/checklists');
+    } else if (pathname.includes('/complete/') && pathname.split('/').length > 4) {
       router.push('/checklists/complete');
     } else if (isComplete) {
       router.push('/');
@@ -52,7 +67,7 @@ export default function ChecklistsLayout({ children }: { children: React.ReactNo
         fontFamily: 'var(--font-primary)',
       }}
     >
-      {!isMobile && !isComplete && !isHistory && <Sidebar />}
+      {!isMobile && !isComplete && !isHistory && !isAction && !isReport && <Sidebar />}
 
       <div
         style={{
@@ -76,7 +91,7 @@ export default function ChecklistsLayout({ children }: { children: React.ReactNo
           minWidth: 0,
           minHeight: 0,
           overflow: 'auto',
-          background: (isComplete || isHistory) ? '#fff' : 'var(--color-bg-surface)',
+          background: (isComplete || isHistory || isAction || isReport) ? '#fff' : 'var(--color-bg-surface)',
           position: 'relative',
           zIndex: 1,
         }}

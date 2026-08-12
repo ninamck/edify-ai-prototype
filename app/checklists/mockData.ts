@@ -3,11 +3,41 @@ import type {
   ChecklistTemplate,
   ChecklistInstance,
   ChecklistQuestion,
+  CorrectiveAssigneeType,
   FollowUpCondition,
   ResponseType,
+  Severity,
 } from './types';
 
 export const MOCK_SITES = ['Fitzroy Espresso', 'South Yarra', 'Richmond', 'Carlton', 'Platō Tokai'];
+
+// ── Site team map ─────────────────────────────────────────────────────
+//
+// Who a corrective action can be assigned to at each site: the named
+// outlet manager, or the site's shared store account. One checklist
+// template resolves per-site — no per-store duplication needed.
+
+export interface SiteTeam {
+  outletManager: string;
+  storeAccount: string;
+}
+
+export const SITE_TEAM: Record<string, SiteTeam> = {
+  'Fitzroy Espresso': { outletManager: 'Cheryl Wong', storeAccount: 'Fitzroy Espresso (store account)' },
+  'South Yarra': { outletManager: 'Sam Torres', storeAccount: 'South Yarra (store account)' },
+  Richmond: { outletManager: 'Jordan Beck', storeAccount: 'Richmond (store account)' },
+  Carlton: { outletManager: 'Priya Nair', storeAccount: 'Carlton (store account)' },
+  'Platō Tokai': { outletManager: 'Marco Silva', storeAccount: 'Platō Tokai (store account)' },
+};
+
+export function getSiteTeam(site: string): SiteTeam {
+  return SITE_TEAM[site] ?? { outletManager: 'Outlet manager', storeAccount: `${site} (store account)` };
+}
+
+export function assigneeNameFor(site: string, type: CorrectiveAssigneeType): string {
+  const team = getSiteTeam(site);
+  return type === 'outlet_manager' ? team.outletManager : team.storeAccount;
+}
 
 /** Builds a flat list of simple questions (checkbox by default) — used by the Platō checklists. */
 function simpleChecks(
@@ -35,7 +65,51 @@ export const MOCK_USERS = [
   { id: 'u2', name: 'Cheryl Wong' },
   { id: 'u3', name: 'Jordan Beck' },
   { id: 'u4', name: 'Sam Torres' },
+  { id: 'u5', name: 'Priya Nair' },
+  { id: 'u6', name: 'Marco Silva' },
 ];
+
+/** Default corrective-action config for the monthly ops audit questions:
+ *  every No raises an action, assigned to the outlet manager by default,
+ *  with photo evidence required on resolution. */
+const OPS_CA_CONFIG = {
+  triggerOnNo: true as const,
+  defaultAssignee: 'outlet_manager' as const,
+  requirePhotoEvidence: true,
+};
+
+/** Yes/No questions that raise an assignable corrective action on No. */
+function opsAuditChecks(prefix: string, names: string[]): ChecklistQuestion[] {
+  return names.map((name, i) => ({
+    id: `${prefix}-${i + 1}`,
+    name,
+    mandatory: true,
+    allowPhoto: false,
+    responseType: 'checkbox' as ResponseType,
+    followUpRules: [],
+    correctiveActionConfig: { ...OPS_CA_CONFIG },
+  }));
+}
+
+/** Scored Yes/No audit question with photo allowed on the answer.
+ *  Its point value comes from the template's severity weight map. */
+function auditCheck(
+  id: string,
+  name: string,
+  sectionId: string,
+  severity: Severity,
+): ChecklistQuestion {
+  return {
+    id,
+    name,
+    mandatory: true,
+    allowPhoto: true,
+    responseType: 'checkbox',
+    followUpRules: [],
+    severity,
+    sectionId,
+  };
+}
 
 export const MOCK_TEMPLATES: ChecklistTemplate[] = [
   {
@@ -45,7 +119,7 @@ export const MOCK_TEMPLATES: ChecklistTemplate[] = [
     notifyUserIds: ['u2'],
     frequency: 'daily',
     timeOfDay: '07:00',
-    assignedRoles: ['kitchen', 'manager'],
+    assignedRoles: ['employee', 'manager'],
     active: true,
     questions: [
       {
@@ -127,7 +201,7 @@ export const MOCK_TEMPLATES: ChecklistTemplate[] = [
     notifyUserIds: ['u1', 'u2'],
     frequency: 'daily',
     timeOfDay: '09:00',
-    assignedRoles: ['kitchen'],
+    assignedRoles: ['employee'],
     active: true,
     questions: [
       {
@@ -282,6 +356,123 @@ export const MOCK_TEMPLATES: ChecklistTemplate[] = [
       },
     ],
   },
+  // ── Monthly ops audit — one template, every site, one named auditor.
+  //    Each No raises a corrective action assigned to that site's team. ──
+  {
+    id: 'tpl-monthly-ops',
+    name: 'Monthly ops audit',
+    sites: ['Fitzroy Espresso', 'South Yarra', 'Richmond', 'Carlton'],
+    notifyUserIds: [],
+    notifyScope: 'site_assignees',
+    frequency: 'monthly',
+    timeOfDay: '10:00',
+    assignedRoles: ['admin'],
+    active: true,
+    questions: opsAuditChecks('qm', [
+      'Fire exits clear and unobstructed?',
+      'Pest control log up to date with no signs of activity?',
+      'Food hygiene certificates displayed and in date?',
+      'First aid kit fully stocked and in date?',
+      'Waste area clean and bins secured?',
+      'Extraction and ventilation filters clean?',
+    ]),
+  },
+  // ── Daily delivery temperatures — repeating rows, one per delivery ──
+  {
+    id: 'tpl-delivery-temps',
+    name: 'Daily delivery temperatures',
+    sites: ['Fitzroy Espresso', 'South Yarra', 'Richmond', 'Carlton'],
+    notifyUserIds: [],
+    notifyScope: 'site_assignees',
+    frequency: 'daily',
+    timeOfDay: '11:00',
+    assignedRoles: ['employee', 'manager'],
+    active: true,
+    questions: [
+      {
+        id: 'qd1',
+        name: 'Log each delivery as it arrives',
+        mandatory: true,
+        allowPhoto: false,
+        responseType: 'repeating_group',
+        followUpRules: [],
+        groupFields: [
+          { id: 'f-supplier', name: 'Supplier name', type: 'text' },
+          { id: 'f-product', name: 'Product name', type: 'text' },
+          {
+            id: 'f-condition',
+            name: 'Received in good condition?',
+            type: 'checkbox',
+            followUpPrompt: 'Describe the condition issue and what was done with the product',
+          },
+          {
+            id: 'f-temp',
+            name: 'Temperature (°C)',
+            type: 'temperature',
+            maxThreshold: 5,
+            followUpPrompt: 'Temperature above 5°C — record the action taken (reject, quarantine, escalate)',
+          },
+        ],
+      },
+    ],
+  },
+  // ── Brand standards audit — a checklist with scoring switched on.
+  //    Points per question, severity-driven alerting, sections with
+  //    subtotals, pass mark 80%, and any critical fail fails the audit. ──
+  {
+    id: 'tpl-brand-audit',
+    name: 'Brand standards audit',
+    sites: ['Fitzroy Espresso', 'South Yarra', 'Richmond', 'Carlton'],
+    notifyUserIds: [],
+    notifyScope: 'site_assignees',
+    frequency: 'monthly',
+    timeOfDay: '09:00',
+    assignedRoles: ['admin'],
+    active: true,
+    scoringEnabled: true,
+    passThresholdPct: 80,
+    severityWeights: { critical: 10, medium: 5, low: 2 },
+    sections: [
+      { id: 'sec-foh', name: 'Front of house' },
+      { id: 'sec-food', name: 'Food safety' },
+      { id: 'sec-brand', name: 'Brand standards' },
+    ],
+    questions: [
+      // Front of house — point values come from the severity weight map
+      auditCheck('qa-1', 'Storefront glass and windows intact, clean and free of damage?', 'sec-foh', 'critical'),
+      auditCheck('qa-2', 'Seating area clean, tidy and free of damage?', 'sec-foh', 'medium'),
+      auditCheck('qa-3', 'Music, lighting and temperature at brand standard?', 'sec-foh', 'low'),
+      // Food safety
+      {
+        id: 'qa-4',
+        name: 'Display fridge temperature (°C)',
+        mandatory: true,
+        allowPhoto: false,
+        responseType: 'temperature',
+        followUpRules: [
+          { id: 'qa-4-r1', condition: { type: 'greater_than', value: 5 }, followUpQuestionId: 'qa-4f' },
+        ],
+        severity: 'critical',
+        sectionId: 'sec-food',
+      },
+      {
+        id: 'qa-4f',
+        name: 'Fridge above 5°C — record the stock moved and the action taken',
+        mandatory: true,
+        allowPhoto: true,
+        responseType: 'text',
+        followUpRules: [],
+        parentQuestionId: 'qa-4',
+      },
+      auditCheck('qa-5', 'Handwash stations stocked — soap, towels, hot water?', 'sec-food', 'critical'),
+      auditCheck('qa-6', 'Allergen matrix current and accessible to staff?', 'sec-food', 'medium'),
+      auditCheck('qa-7', 'Date labels present on all open products?', 'sec-food', 'medium'),
+      // Brand standards
+      auditCheck('qa-8', 'Menu boards current with no handwritten amendments?', 'sec-brand', 'low'),
+      auditCheck('qa-9', 'Team in correct uniform with name badges?', 'sec-brand', 'low'),
+      auditCheck('qa-10', 'Only approved point-of-sale artwork displayed?', 'sec-brand', 'medium'),
+    ],
+  },
   // ── Platō Coffee checklists (available to all roles, all sites) ──
   {
     id: 'tpl-plato-open',
@@ -290,7 +481,7 @@ export const MOCK_TEMPLATES: ChecklistTemplate[] = [
     notifyUserIds: [],
     frequency: 'daily',
     timeOfDay: '05:30',
-    assignedRoles: ['kitchen', 'manager', 'admin'],
+    assignedRoles: ['employee', 'manager', 'admin'],
     active: true,
     questions: [
       ...simpleChecks('po', [
@@ -329,7 +520,7 @@ export const MOCK_TEMPLATES: ChecklistTemplate[] = [
     notifyUserIds: [],
     frequency: 'daily',
     timeOfDay: '17:30',
-    assignedRoles: ['kitchen', 'manager', 'admin'],
+    assignedRoles: ['employee', 'manager', 'admin'],
     active: true,
     questions: [
       ...simpleChecks('pc', [
@@ -387,7 +578,7 @@ export const MOCK_TEMPLATES: ChecklistTemplate[] = [
     notifyUserIds: [],
     frequency: 'monthly',
     timeOfDay: '09:00',
-    assignedRoles: ['kitchen', 'manager', 'admin'],
+    assignedRoles: ['employee', 'manager', 'admin'],
     active: true,
     questions: [
       ...ratingChecks('psc-store', [
@@ -495,7 +686,7 @@ export const MOCK_INSTANCES: ChecklistInstance[] = [
     site: 'Fitzroy Espresso',
     status: 'complete',
     dueLabel: 'Completed today · 7:05am',
-    assignedRole: 'kitchen',
+    assignedRole: 'employee',
     questionCount: 5,
     answers: [
       { questionId: 'q1', value: true },
@@ -516,7 +707,7 @@ export const MOCK_INSTANCES: ChecklistInstance[] = [
     site: 'Fitzroy Espresso',
     status: 'in_progress',
     dueLabel: 'Due today · 9:00am',
-    assignedRole: 'kitchen',
+    assignedRole: 'employee',
     questionCount: 4,
     answers: [
       { questionId: 'qt1', value: 3 },
@@ -534,13 +725,46 @@ export const MOCK_INSTANCES: ChecklistInstance[] = [
     answers: [],
   },
   {
+    id: 'inst-monthly-ops',
+    templateId: 'tpl-monthly-ops',
+    templateName: 'Monthly ops audit',
+    site: 'South Yarra',
+    status: 'pending',
+    dueLabel: 'Due this month · by 30 Apr',
+    assignedRole: 'admin',
+    questionCount: 6,
+    answers: [],
+  },
+  {
+    id: 'inst-brand-audit',
+    templateId: 'tpl-brand-audit',
+    templateName: 'Brand standards audit',
+    site: 'Fitzroy Espresso',
+    status: 'pending',
+    dueLabel: 'Due this month · by 30 Apr',
+    assignedRole: 'admin',
+    questionCount: 10,
+    answers: [],
+  },
+  {
+    id: 'inst-delivery-temps',
+    templateId: 'tpl-delivery-temps',
+    templateName: 'Daily delivery temperatures',
+    site: 'Fitzroy Espresso',
+    status: 'pending',
+    dueLabel: 'Due today · as deliveries arrive',
+    assignedRole: 'employee',
+    questionCount: 1,
+    answers: [],
+  },
+  {
     id: 'inst-4',
     templateId: 'tpl-1',
     templateName: 'Opening checks',
     site: 'South Yarra',
     status: 'complete',
     dueLabel: 'Completed today · 7:12am',
-    assignedRole: 'kitchen',
+    assignedRole: 'employee',
     questionCount: 5,
     answers: [
       { questionId: 'q1', value: false },
@@ -561,7 +785,7 @@ export const MOCK_INSTANCES: ChecklistInstance[] = [
     site: 'South Yarra',
     status: 'complete',
     dueLabel: 'Completed today · 8:58am',
-    assignedRole: 'kitchen',
+    assignedRole: 'employee',
     questionCount: 4,
     answers: [
       { questionId: 'qt1', value: 3 },
@@ -580,7 +804,7 @@ export const MOCK_INSTANCES: ChecklistInstance[] = [
     site: 'Richmond',
     status: 'complete',
     dueLabel: 'Completed today · 9:06am',
-    assignedRole: 'kitchen',
+    assignedRole: 'employee',
     questionCount: 4,
     answers: [
       { questionId: 'qt1', value: 5 },
@@ -600,7 +824,7 @@ export const MOCK_INSTANCES: ChecklistInstance[] = [
     site: 'Carlton',
     status: 'complete',
     dueLabel: 'Completed today · 9:11am',
-    assignedRole: 'kitchen',
+    assignedRole: 'employee',
     questionCount: 4,
     answers: [
       { questionId: 'qt1', value: 3 },
@@ -619,7 +843,7 @@ export const MOCK_INSTANCES: ChecklistInstance[] = [
     site: 'Platō Tokai',
     status: 'complete',
     dueLabel: 'Completed today · 5:42am',
-    assignedRole: 'kitchen',
+    assignedRole: 'employee',
     questionCount: 18,
     answers: [
       ...Array.from({ length: 17 }, (_, i) => ({ questionId: `po-${i + 1}`, value: true as const })),
@@ -636,7 +860,7 @@ export const MOCK_INSTANCES: ChecklistInstance[] = [
     site: 'Platō Tokai',
     status: 'pending',
     dueLabel: 'Due today · 5:30pm',
-    assignedRole: 'kitchen',
+    assignedRole: 'employee',
     questionCount: 38,
     answers: [],
   },
@@ -654,6 +878,143 @@ export const MOCK_INSTANCES: ChecklistInstance[] = [
 ];
 
 export const MOCK_HISTORY: ChecklistInstance[] = [
+  // Last month's ops audit at Richmond — two No answers, each of which
+  // raised a corrective action (seeded in correctiveActionsStore).
+  {
+    id: 'hist-monthly-ops',
+    templateId: 'tpl-monthly-ops',
+    templateName: 'Monthly ops audit',
+    site: 'Richmond',
+    status: 'complete',
+    dueLabel: 'Completed 28 Mar · 10:40am',
+    assignedRole: 'admin',
+    questionCount: 6,
+    answers: [
+      { questionId: 'qm-1', value: true },
+      {
+        questionId: 'qm-2',
+        value: false,
+        correctiveActionDraft: {
+          issueSummary: 'March entry missing from the pest control log. Droppings found behind dry-store shelving — contractor visit needed before next audit.',
+          assigneeType: 'outlet_manager',
+        },
+      },
+      { questionId: 'qm-3', value: true },
+      {
+        questionId: 'qm-4',
+        value: false,
+        correctiveActionDraft: {
+          issueSummary: 'First aid kit missing burn dressings; plasters below minimum count.',
+          assigneeType: 'outlet_manager',
+        },
+      },
+      { questionId: 'qm-5', value: true },
+      { questionId: 'qm-6', value: true },
+    ],
+    completedAt: '10:40am',
+    completedDate: '2026-03-28',
+    completedBy: 'Ed Mehta',
+  },
+  // Last month's brand audit at Richmond — failed on the critical
+  //  override (smashed window) despite only three fails. Its actions are
+  //  seeded in correctiveActionsStore across all three lifecycle states.
+  {
+    id: 'hist-brand-audit',
+    templateId: 'tpl-brand-audit',
+    templateName: 'Brand standards audit',
+    site: 'Richmond',
+    status: 'complete',
+    dueLabel: 'Completed 30 Mar · 9:35am',
+    assignedRole: 'admin',
+    questionCount: 10,
+    answers: [
+      {
+        questionId: 'qa-1',
+        value: false,
+        correctiveActionDraft: {
+          issueSummary:
+            'Left-hand front window smashed overnight — glass swept but pane boarded up. Glazier needed urgently; storefront visibly damaged.',
+          assigneeType: 'outlet_manager',
+        },
+      },
+      { questionId: 'qa-2', value: true },
+      { questionId: 'qa-3', value: true },
+      { questionId: 'qa-4', value: 3.6 },
+      { questionId: 'qa-5', value: true },
+      { questionId: 'qa-6', value: true },
+      {
+        questionId: 'qa-7',
+        value: false,
+        correctiveActionDraft: {
+          issueSummary: 'Open sauces and two prepped containers in the walk-in with no date labels.',
+          assigneeType: 'outlet_manager',
+        },
+      },
+      {
+        questionId: 'qa-8',
+        value: false,
+        correctiveActionDraft: {
+          issueSummary: 'Winter specials still on the main board; two handwritten price corrections.',
+          assigneeType: 'outlet_manager',
+        },
+      },
+      { questionId: 'qa-9', value: true },
+      { questionId: 'qa-10', value: true },
+    ],
+    completedAt: '9:35am',
+    completedDate: '2026-03-30',
+    completedBy: 'Ed Mehta',
+    scoreResult: {
+      pointsAwarded: 39,
+      pointsTotal: 56,
+      pct: 70,
+      passThresholdPct: 80,
+      criticalFails: 1,
+      passed: false,
+      sectionScores: [
+        { sectionId: 'sec-foh', name: 'Front of house', awarded: 7, total: 17 },
+        { sectionId: 'sec-food', name: 'Food safety', awarded: 25, total: 30 },
+        { sectionId: 'sec-brand', name: 'Brand standards', awarded: 7, total: 9 },
+      ],
+      failedQuestionIds: ['qa-1', 'qa-7', 'qa-8'],
+    },
+  },
+  // Yesterday's delivery log — shows the repeating-row table in history.
+  {
+    id: 'hist-delivery-temps',
+    templateId: 'tpl-delivery-temps',
+    templateName: 'Daily delivery temperatures',
+    site: 'Fitzroy Espresso',
+    status: 'complete',
+    dueLabel: 'Completed 3 Apr · 11:20am',
+    assignedRole: 'employee',
+    questionCount: 1,
+    answers: [
+      {
+        questionId: 'qd1',
+        value: null,
+        rows: [
+          {
+            id: 'row-1',
+            values: { 'f-supplier': 'Calendar Cheese Co', 'f-product': 'Brie wheels', 'f-condition': true, 'f-temp': 3 },
+          },
+          {
+            id: 'row-2',
+            values: { 'f-supplier': 'Bidfood', 'f-product': 'Chicken breast', 'f-condition': true, 'f-temp': 7 },
+            followUpNote: 'Above range — rejected at the door, credit requested from Bidfood.',
+          },
+          {
+            id: 'row-3',
+            values: { 'f-supplier': 'Fresh Produce Direct', 'f-product': 'Mixed leaves', 'f-condition': false, 'f-temp': 4 },
+            followUpNote: 'Two bags crushed in transit — set aside for credit, remainder accepted.',
+          },
+        ],
+      },
+    ],
+    completedAt: '11:20am',
+    completedDate: '2026-04-03',
+    completedBy: 'Jordan Beck',
+  },
   // Yesterday — 3 Apr
   {
     id: 'hist-1',
@@ -662,7 +1023,7 @@ export const MOCK_HISTORY: ChecklistInstance[] = [
     site: 'Fitzroy Espresso',
     status: 'complete',
     dueLabel: 'Completed 3 Apr · 7:04am',
-    assignedRole: 'kitchen',
+    assignedRole: 'employee',
     questionCount: 5,
     answers: [
       { questionId: 'q1', value: true },
@@ -682,7 +1043,7 @@ export const MOCK_HISTORY: ChecklistInstance[] = [
     site: 'Fitzroy Espresso',
     status: 'complete',
     dueLabel: 'Completed 3 Apr · 9:11am',
-    assignedRole: 'kitchen',
+    assignedRole: 'employee',
     questionCount: 4,
     answers: [
       { questionId: 'qt1', value: 6 },
@@ -722,7 +1083,7 @@ export const MOCK_HISTORY: ChecklistInstance[] = [
     site: 'South Yarra',
     status: 'complete',
     dueLabel: 'Completed 3 Apr · 7:08am',
-    assignedRole: 'kitchen',
+    assignedRole: 'employee',
     questionCount: 5,
     answers: [
       { questionId: 'q1', value: false },
@@ -745,7 +1106,7 @@ export const MOCK_HISTORY: ChecklistInstance[] = [
     site: 'Fitzroy Espresso',
     status: 'complete',
     dueLabel: 'Completed 2 Apr · 6:58am',
-    assignedRole: 'kitchen',
+    assignedRole: 'employee',
     questionCount: 5,
     answers: [
       { questionId: 'q1', value: true },
@@ -765,7 +1126,7 @@ export const MOCK_HISTORY: ChecklistInstance[] = [
     site: 'Fitzroy Espresso',
     status: 'complete',
     dueLabel: 'Completed 2 Apr · 9:03am',
-    assignedRole: 'kitchen',
+    assignedRole: 'employee',
     questionCount: 4,
     answers: [
       { questionId: 'qt1', value: 3 },
@@ -804,7 +1165,7 @@ export const MOCK_HISTORY: ChecklistInstance[] = [
     site: 'Richmond',
     status: 'complete',
     dueLabel: 'Completed 2 Apr · 9:15am',
-    assignedRole: 'kitchen',
+    assignedRole: 'employee',
     questionCount: 4,
     answers: [
       { questionId: 'qt1', value: 4 },
@@ -824,7 +1185,7 @@ export const MOCK_HISTORY: ChecklistInstance[] = [
     site: 'Fitzroy Espresso',
     status: 'complete',
     dueLabel: 'Completed 1 Apr · 7:01am',
-    assignedRole: 'kitchen',
+    assignedRole: 'employee',
     questionCount: 5,
     answers: [
       { questionId: 'q1', value: true },

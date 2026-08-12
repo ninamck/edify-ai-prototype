@@ -1,9 +1,19 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ClipboardList, Clock, MapPin, ChevronRight, CheckCircle2, History } from 'lucide-react';
-import { MOCK_INSTANCES } from '../mockData';
-import type { ChecklistInstance, InstanceStatus, UserRole } from '../types';
+import {
+  ClipboardList,
+  Clock,
+  MapPin,
+  ChevronRight,
+  CheckCircle2,
+  History,
+  AlertTriangle,
+  UserCheck,
+} from 'lucide-react';
+import { useCorrectiveActions } from '../correctiveActionsStore';
+import { useChecklistStore, mergeInstances } from '../templatesStore';
+import type { ChecklistInstance, CorrectiveAction, InstanceStatus, UserRole } from '../types';
 
 const STATUS_CONFIG: Record<InstanceStatus, { label: string; bg: string; text: string }> = {
   pending: { label: 'Pending', bg: '#FEF6DA', text: '#001C35' },
@@ -12,9 +22,9 @@ const STATUS_CONFIG: Record<InstanceStatus, { label: string; bg: string; text: s
 };
 
 const ROLE_LABELS: Record<UserRole, string> = {
-  kitchen: 'Kitchen',
-  manager: 'Manager',
   admin: 'Admin',
+  manager: 'Manager',
+  employee: 'Employee',
 };
 
 function StatusPill({ status }: { status: InstanceStatus }) {
@@ -143,11 +153,135 @@ function InstanceCard({ instance, onClick }: { instance: ChecklistInstance; onCl
   );
 }
 
+// ─── Corrective action card ───────────────────────────────────────────────────
+
+function CorrectiveActionCard({ action, onClick }: { action: CorrectiveAction; onClick: () => void }) {
+  const isOpen = action.status !== 'resolved';
+  const statusLabel = action.status === 'open' ? 'Open' : action.status === 'in_progress' ? 'In progress' : 'Resolved';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        width: '100%',
+        textAlign: 'left',
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '14px',
+        padding: '16px',
+        borderRadius: '12px',
+        border: isOpen ? '1px solid #E89AAE' : '1px solid var(--color-border-subtle)',
+        boxShadow: isOpen ? 'inset 3px 0 0 #B01038' : undefined,
+        background: isOpen ? '#fff' : 'var(--color-bg-surface)',
+        boxShadow: isOpen ? '0 1px 4px rgba(0, 28, 53,0.07)' : 'none',
+        cursor: 'pointer',
+        fontFamily: 'var(--font-primary)',
+        opacity: isOpen ? 1 : 0.85,
+        transition: 'box-shadow 0.15s ease, border-color 0.15s ease',
+      }}
+    >
+      <div style={{
+        width: '44px',
+        height: '44px',
+        borderRadius: '10px',
+        background: isOpen ? '#FCE5EB' : '#E3F2E8',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}>
+        {isOpen
+          ? <AlertTriangle size={20} color="#B01038" />
+          : <CheckCircle2 size={22} color="#166534" />
+        }
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: '14px',
+          fontWeight: 700,
+          color: 'var(--color-text-primary)',
+          marginBottom: '4px',
+          lineHeight: 1.35,
+        }}>
+          {action.questionText}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '6px' }}>
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '3px 9px',
+            borderRadius: '100px',
+            fontSize: '12px',
+            fontWeight: 700,
+            background: action.status === 'open' ? '#FCE5EB' : action.status === 'in_progress' ? '#E4EDFB' : '#E3F2E8',
+            color: action.status === 'open' ? '#B01038' : action.status === 'in_progress' ? '#3D5CA6' : '#166534',
+          }}>
+            {statusLabel}
+          </span>
+          {action.severity && (
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '3px 9px',
+              borderRadius: '100px',
+              fontSize: '12px',
+              fontWeight: 700,
+              background: action.severity === 'critical' ? '#FDE8E8' : action.severity === 'medium' ? '#FEF6DA' : '#EFF5E1',
+              color: action.severity === 'critical' ? '#B91C1C' : action.severity === 'medium' ? '#B45309' : '#4D7C0F',
+            }}>
+              {action.severity === 'critical' ? 'Critical' : action.severity === 'medium' ? 'Medium' : 'Low'}
+            </span>
+          )}
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <UserCheck size={11} />
+            {action.assigneeName}
+          </span>
+        </div>
+
+        <div style={{
+          fontSize: '12px',
+          fontWeight: 500,
+          color: 'var(--color-text-muted)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          lineHeight: 1.45,
+          marginBottom: '6px',
+        }}>
+          &ldquo;{action.issueSummary}&rdquo;
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <MapPin size={11} />
+            {action.site}
+          </span>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
+            {action.templateName} · raised by {action.raisedBy}
+          </span>
+        </div>
+      </div>
+
+      <ChevronRight size={16} color="var(--color-text-muted)" style={{ flexShrink: 0, alignSelf: 'center' }} />
+    </button>
+  );
+}
+
 export default function CompleteTasksPage() {
   const router = useRouter();
+  const correctiveActions = useCorrectiveActions();
+  const store = useChecklistStore();
+  const instances = mergeInstances(store.instances);
 
-  const pending = MOCK_INSTANCES.filter((i) => i.status !== 'complete');
-  const complete = MOCK_INSTANCES.filter((i) => i.status === 'complete');
+  const pending = instances.filter((i) => i.status !== 'complete');
+  const complete = instances.filter((i) => i.status === 'complete');
+  const openActions = correctiveActions.filter((a) => a.status !== 'resolved');
+  const resolvedActions = correctiveActions.filter((a) => a.status === 'resolved');
 
   return (
     <div style={{ minHeight: '100%', background: '#fff' }}>
@@ -187,6 +321,41 @@ export default function CompleteTasksPage() {
           </button>
         </div>
 
+        {/* Corrective actions assigned to this store */}
+        {openActions.length > 0 && (
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <div style={sectionHeaderStyle}>Corrective actions</div>
+              <button
+                type="button"
+                onClick={() => router.push('/checklists/actions')}
+                style={{
+                  border: 'none',
+                  background: 'none',
+                  padding: 0,
+                  marginBottom: '10px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: 'var(--color-accent-active)',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-primary)',
+                }}
+              >
+                View all actions →
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {openActions.map((a) => (
+                <CorrectiveActionCard
+                  key={a.id}
+                  action={a}
+                  onClick={() => router.push(`/checklists/actions/${a.id}`)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Pending section */}
         {pending.length > 0 && (
           <div style={{ marginBottom: '24px' }}>
@@ -219,7 +388,23 @@ export default function CompleteTasksPage() {
           </div>
         )}
 
-        {MOCK_INSTANCES.length === 0 && (
+        {/* Resolved corrective actions */}
+        {resolvedActions.length > 0 && (
+          <div style={{ marginTop: '24px' }}>
+            <div style={sectionHeaderStyle}>Resolved corrective actions</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {resolvedActions.map((a) => (
+                <CorrectiveActionCard
+                  key={a.id}
+                  action={a}
+                  onClick={() => router.push(`/checklists/actions/${a.id}`)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {instances.length === 0 && (
           <div style={{ padding: '60px 0', textAlign: 'center' }}>
             <CheckCircle2 size={40} color="#166534" style={{ marginBottom: '12px' }} />
             <p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>

@@ -11,8 +11,14 @@ import {
   Filter,
   AlertTriangle,
 } from 'lucide-react';
-import { getAllHistoryInstances, MOCK_TEMPLATES, MOCK_SITES } from '../mockData';
-import { getTemplateForInstance } from '../mockData';
+import { MOCK_SITES } from '../mockData';
+import { useCorrectiveActions } from '../correctiveActionsStore';
+import {
+  useChecklistStore,
+  mergeTemplates,
+  mergeHistoryInstances,
+  findTemplateById,
+} from '../templatesStore';
 import type { ChecklistInstance } from '../types';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -29,12 +35,13 @@ function formatDateHeading(dateStr: string): string {
 
 /** Detect if any answer triggered a follow-up (indicates something needed attention) */
 function hasFlags(instance: ChecklistInstance): boolean {
-  const template = getTemplateForInstance(instance);
+  const template = findTemplateById(instance.templateId);
   if (!template) return false;
   return instance.answers.some((ans) => {
     const q = template.questions.find((q) => q.id === ans.questionId);
     if (!q) return false;
     if (ans.value === false) return true; // checkbox No
+    if (ans.rows?.some((r) => r.followUpNote)) return true; // flagged table row
     if (typeof ans.value === 'number' && q.followUpRules.length > 0) {
       return q.followUpRules.some((r) => {
         if (r.condition.type === 'greater_than' && typeof r.condition.value === 'number') {
@@ -54,6 +61,9 @@ function hasFlags(instance: ChecklistInstance): boolean {
 
 function HistoryCard({ instance, onClick }: { instance: ChecklistInstance; onClick: () => void }) {
   const flagged = hasFlags(instance);
+  const score = instance.scoreResult;
+  const linkedActions = useCorrectiveActions().filter((a) => a.sourceInstanceId === instance.id);
+  const openLinked = linkedActions.filter((a) => a.status !== 'resolved').length;
 
   return (
     <button
@@ -110,7 +120,33 @@ function HistoryCard({ instance, onClick }: { instance: ChecklistInstance; onCli
           }}>
             {instance.templateName}
           </span>
-          {flagged && (
+          {score && (
+            <span style={{
+              fontSize: '12px',
+              fontWeight: 800,
+              padding: '2px 8px',
+              borderRadius: '100px',
+              background: score.passed ? '#E3F2E8' : '#FDE8E8',
+              color: score.passed ? '#166534' : '#B91C1C',
+              flexShrink: 0,
+            }}>
+              {score.pct}% · {score.passed ? 'Passed' : 'Failed'}
+            </span>
+          )}
+          {linkedActions.length > 0 && (
+            <span style={{
+              fontSize: '12px',
+              fontWeight: 700,
+              padding: '2px 8px',
+              borderRadius: '100px',
+              background: openLinked > 0 ? '#FEF6DA' : '#E3F2E8',
+              color: openLinked > 0 ? '#B45309' : '#166534',
+              flexShrink: 0,
+            }}>
+              {openLinked > 0 ? `${openLinked} open action${openLinked === 1 ? '' : 's'}` : 'Closed out'}
+            </span>
+          )}
+          {flagged && !score && (
             <span style={{
               fontSize: '12px',
               fontWeight: 700,
@@ -152,13 +188,14 @@ function HistoryCard({ instance, onClick }: { instance: ChecklistInstance; onCli
 
 export default function ChecklistHistoryPage() {
   const router = useRouter();
-  const allHistory = getAllHistoryInstances();
+  const store = useChecklistStore();
+  const allHistory = mergeHistoryInstances(store.instances);
 
   const [filterChecklist, setFilterChecklist] = useState('all');
   const [filterSite, setFilterSite] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
 
-  const checklistNames = ['all', ...Array.from(new Set(MOCK_TEMPLATES.map((t) => t.name)))];
+  const checklistNames = ['all', ...Array.from(new Set(mergeTemplates(store.templates).map((t) => t.name)))];
   const sites = ['all', ...MOCK_SITES];
 
   const filtered = allHistory.filter((inst) => {
