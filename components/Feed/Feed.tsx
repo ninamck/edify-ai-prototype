@@ -9435,10 +9435,16 @@ export default function Feed({
                   }}>
                     {PROMPT_CHIPS.map((chip, i) => {
                       const Icon = chip.icon;
+                      const hasCount = chip.count !== undefined && chip.count > 0;
                       return (
                         <button
                           key={i}
                           type="button"
+                          aria-label={
+                            hasCount
+                              ? `${chip.label} — ${chip.count} item${chip.count === 1 ? '' : 's'} need attention`
+                              : chip.label
+                          }
                           onClick={() => {
                             if (chip.action === 'recipe') {
                               startRecipeFlow(chip.text);
@@ -9480,12 +9486,43 @@ export default function Feed({
                             style={{ flexShrink: 0 }}
                           />
                           <span style={{
+                            flex: 1,
+                            minWidth: 0,
                             fontSize: '13px',
                             fontWeight: 500,
                             color: 'var(--color-text-primary)',
                           }}>
                             {chip.label}
                           </span>
+                          {/* Notification count — pending items behind this
+                              chip. Canonical outline pill per
+                              .cursor/rules/status-pills.mdc: white background,
+                              1.5px coloured border, warning tone (navy ink)
+                              for work that's waiting. White bg keeps it crisp
+                              over the row's hover wash. */}
+                          {hasCount && (
+                            <span
+                              aria-hidden
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                minWidth: '22px',
+                                padding: '2px 7px',
+                                borderRadius: '999px',
+                                background: '#ffffff',
+                                color: 'var(--color-warning)',
+                                border: '1.5px solid var(--color-warning)',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                lineHeight: 1.4,
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                              }}
+                            >
+                              {chip.count}
+                            </span>
+                          )}
                         </button>
                       );
                     })}

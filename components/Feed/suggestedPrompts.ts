@@ -28,38 +28,51 @@ export type PromptChip = {
    *  When set, the chip launches that command's wizard via the runner,
    *  same path as the slash menu and `+` popover. */
   commandId?: string;
+  /** Items waiting on the operator behind this chip. When set, the chip
+   *  renders a notification-style count pill so it reads as "there is
+   *  work here", not just a shortcut. Only chips whose flow has real
+   *  pending data carry a count — creative actions (new recipe) don't.
+   *  Counts mirror the scripted demo data in Feed.tsx: 6 = the audit's
+   *  findings list (INTEGRITY_FINDINGS) — findings, not individual lines,
+   *  so the job reads as achievable; 8 = STOCK_TAKE_REVIEW's products
+   *  missing a storage area. */
+  count?: number;
 };
 
-/** Internal / default build (Fitzroy Espresso café scenario). */
+/** Internal / default build (Fitzroy Espresso café scenario).
+ *  Labels follow one wording pattern — verb + object — so the list reads
+ *  as a to-do list. Chips with pending data carry a count. */
 const DEFAULT_CHIPS: PromptChip[] = [
   {
-    label: 'New recipe',
+    label: 'Create a recipe',
     icon: ChefHat,
     text: "I'm releasing avocado toast on the new menu — target 25% food cost.",
     action: 'recipe',
   },
   {
-    label: 'Update recipe',
+    label: 'Update a recipe',
     icon: ChefHat,
     text: 'Sure — what kind of recipe would you like to update? Type the dish and I’ll pull it up.',
     action: 'recipe-ask',
   },
   {
-    label: 'Update suppliers',
+    label: 'Update a supplier',
     icon: Truck,
     text: '',
     commandId: 'supplier',
   },
   {
-    label: 'Update stock takes',
+    label: 'Add products to stock takes',
     icon: ClipboardList,
     text: "Can you update my stock takes? Review all the products that aren't in a stock area.",
+    count: 8,
   },
   {
-    label: 'Check data integrity',
+    label: 'Review data issues',
     icon: ShieldCheck,
     text: '',
     action: 'integrity',
+    count: 6,
   },
 ];
 
