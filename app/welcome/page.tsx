@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * /welcome — the locked front door for the CHAGEE demo build.
+ * /welcome — the locked front door for the Norma's Cafe demo build.
  *
  * To anyone who lands here the demo looks closed: an Edify-branded holding
  * page that says "get in touch with Ed" and nothing else. There is no
@@ -99,7 +99,7 @@ function WelcomeInner() {
               opacity: 0.65,
             }}
           >
-            A private preview for CHAGEE
+            A private preview for Norma&apos;s Cafe
           </span>
           <h1
             style={{
@@ -123,9 +123,9 @@ function WelcomeInner() {
               maxWidth: '46ch',
             }}
           >
-            Thanks for your interest in what Edify and CHAGEE are exploring
-            together — from demand forecasting to production and ordering,
-            made to order. If you’d like to know more, get in touch with Ed at{' '}
+            Thanks for your interest in what Edify and Norma&apos;s Cafe are
+            exploring together, from demand forecasting to production and
+            ordering. If you’d like to know more, get in touch with Ed at{' '}
             <a
               href={`mailto:${CONTACT_EMAIL}`}
               style={{

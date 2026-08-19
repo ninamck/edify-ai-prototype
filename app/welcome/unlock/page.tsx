@@ -107,7 +107,7 @@ function UnlockInner() {
               lineHeight: 1.6,
             }}
           >
-            This unlocks the CHAGEE preview on this device for 30 days.
+            This unlocks the Norma&apos;s Cafe preview on this device for 30 days.
           </p>
         </div>
 

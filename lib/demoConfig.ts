@@ -56,6 +56,14 @@ const CUSTOMERS: Record<string, DemoCustomer> = {
     accent: '#A4123F',
     demoSiteLabel: 'CHAGEE · flagship — afternoon service, replayed',
   },
+  normas: {
+    id: 'normas',
+    name: "Norma's Cafe",
+    tagline: 'Texas comfort food since 1956',
+    // Diner red taken from normascafe.com; swap if they share exact brand hex.
+    accent: '#C8102E',
+    demoSiteLabel: "Norma's Cafe · Oak Cliff — breakfast service, replayed",
+  },
   secondcup: {
     id: 'secondcup',
     name: 'Second Cup',
