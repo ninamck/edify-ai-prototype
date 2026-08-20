@@ -1,27 +1,21 @@
 'use client';
 
 /**
- * /welcome — the locked front door for the Norma's Cafe demo build.
+ * /welcome — the front door for the Norma's Cafe demo build.
  *
- * To anyone who lands here the demo looks closed: an Edify-branded holding
- * page that says "get in touch with Ed" and nothing else. There is no
- * visible way in.
- *
- * The way in (for Ed): click the "Powered by Edify" mark in the bottom
- * corner five times in quick succession. That opens `/welcome/unlock`,
- * where the access code is verified server-side (`/api/gate`) and a
- * 30-day cookie keeps the device unlocked — so Ed only does this once
- * per device; future demos go straight through.
+ * Visitors enter their work email and the shared access code Ed gave them.
+ * The code is verified server-side (`/api/gate`) and a 30-day cookie keeps
+ * the device unlocked. The email is never checked server-side — it exists
+ * to identify the viewer in Mixpanel, so the team can see who at the
+ * prospect is looking, at what, and how often.
  */
 
-import { Suspense, useRef } from 'react';
+import { Suspense, useState } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { track } from '@/components/Analytics/Analytics';
+import { track, identifyViewer } from '@/components/Analytics/Analytics';
 
 const CONTACT_EMAIL = 'ed@edifysystems.io';
-const SECRET_CLICKS = 5;
-const CLICK_WINDOW_MS = 3000;
 
 /** Edify brand palette (see brand guidelines). */
 const EDIFY = {
@@ -31,27 +25,70 @@ const EDIFY = {
   hotPink: '#ff315d', // signifier only
 };
 
+const labelStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: EDIFY.natural,
+  opacity: 0.75,
+};
+
+function inputStyle(hasError: boolean): React.CSSProperties {
+  return {
+    padding: '11px 13px',
+    borderRadius: 10,
+    border: `1.5px solid ${hasError ? EDIFY.hotPink : `${EDIFY.natural}55`}`,
+    background: `${EDIFY.offWhite}14`,
+    color: EDIFY.offWhite,
+    fontSize: 15,
+    fontFamily: 'var(--font-primary)',
+    outline: 'none',
+  };
+}
+
+function isPlausibleEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
 function WelcomeInner() {
   const router = useRouter();
   const params = useSearchParams();
   const from = params.get('from') || '/';
 
-  const clickCount = useRef(0);
-  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [email, setEmail] = useState('');
+  const [passcode, setPasscode] = useState('');
+  const [emailError, setEmailError] = useState(false);
+  const [codeError, setCodeError] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  function handleSecretClick() {
-    clickCount.current += 1;
-    if (clickTimer.current) clearTimeout(clickTimer.current);
-    if (clickCount.current >= SECRET_CLICKS) {
-      clickCount.current = 0;
-      track('Demo gate revealed');
-      router.push(`/welcome/unlock?from=${encodeURIComponent(from)}`);
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    const emailOk = isPlausibleEmail(email);
+    setEmailError(!emailOk);
+    if (!emailOk || !passcode.trim()) {
+      setCodeError(!passcode.trim());
       return;
     }
-    // Too slow between clicks? Start the count again.
-    clickTimer.current = setTimeout(() => {
-      clickCount.current = 0;
-    }, CLICK_WINDOW_MS);
+    setBusy(true);
+    setCodeError(false);
+    try {
+      const res = await fetch('/api/gate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ passcode }),
+      });
+      if (res.ok) {
+        identifyViewer(email);
+        track('Demo unlocked', { email: email.trim().toLowerCase() });
+        router.replace(from);
+      } else {
+        setCodeError(true);
+        setBusy(false);
+      }
+    } catch {
+      setCodeError(true);
+      setBusy(false);
+    }
   }
 
   return (
@@ -63,20 +100,17 @@ function WelcomeInner() {
         alignItems: 'center',
         justifyContent: 'center',
         padding: 24,
-        position: 'relative',
         background: EDIFY.midnight,
         fontFamily: 'var(--font-primary)',
       }}
     >
-      {/* Shrink-wraps to its content so the cluster centres in the viewport,
-          while everything inside stays left-aligned. */}
       <div
         style={{
-          maxWidth: 560,
+          width: '100%',
+          maxWidth: 420,
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'flex-start',
-          gap: 28,
+          gap: 26,
         }}
       >
         <Image
@@ -85,10 +119,10 @@ function WelcomeInner() {
           width={159}
           height={38}
           priority
-          style={{ height: 38, width: 'auto' }}
+          style={{ height: 38, width: 'auto', alignSelf: 'flex-start' }}
         />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <span
             style={{
               fontSize: 12.5,
@@ -104,67 +138,121 @@ function WelcomeInner() {
           <h1
             style={{
               margin: 0,
-              fontSize: 34,
-              lineHeight: 1.2,
+              fontSize: 28,
+              lineHeight: 1.25,
               fontWeight: 800,
               color: EDIFY.offWhite,
-              maxWidth: '18ch',
             }}
           >
-            This preview isn’t open right now
+            Take a look around Edify
           </h1>
           <p
             style={{
               margin: 0,
-              fontSize: 15.5,
+              fontSize: 14.5,
               color: EDIFY.natural,
               opacity: 0.85,
-              lineHeight: 1.65,
-              maxWidth: '46ch',
+              lineHeight: 1.6,
             }}
           >
-            Thanks for your interest in what Edify and Norma&apos;s Cafe are
-            exploring together, from demand forecasting to production and
-            ordering. If you’d like to know more, get in touch with Ed at{' '}
-            <a
-              href={`mailto:${CONTACT_EMAIL}`}
-              style={{
-                color: EDIFY.hotPink,
-                fontWeight: 700,
-                textDecoration: 'underline',
-                textUnderlineOffset: 3,
-              }}
-            >
-              {CONTACT_EMAIL}
-            </a>
-            .
+            Forecasting, production, ordering and more, shared privately with
+            Norma&apos;s Cafe. Enter your work email and the access code Ed
+            gave you. This is an early preview: some of what you&apos;ll see
+            is still in development.
           </p>
         </div>
-      </div>
 
-      {/* The secret spot: five quick clicks open the access-code page. */}
-      <button
-        type="button"
-        onClick={handleSecretClick}
-        aria-hidden="true"
-        tabIndex={-1}
-        style={{
-          position: 'absolute',
-          bottom: 20,
-          right: 24,
-          padding: '6px 10px',
-          background: 'none',
-          border: 'none',
-          fontSize: 11.5,
-          fontFamily: 'var(--font-primary)',
-          color: EDIFY.natural,
-          opacity: 0.4,
-          cursor: 'default',
-          userSelect: 'none',
-        }}
-      >
-        Powered by Edify
-      </button>
+        <form
+          onSubmit={submit}
+          noValidate
+          style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+        >
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={labelStyle}>Work email</span>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (emailError) setEmailError(false);
+              }}
+              autoFocus
+              autoComplete="email"
+              placeholder="you@normascafe.com"
+              aria-invalid={emailError}
+              style={inputStyle(emailError)}
+            />
+            {emailError && (
+              <span role="alert" style={{ fontSize: 12, color: EDIFY.hotPink }}>
+                Enter your work email address.
+              </span>
+            )}
+          </label>
+
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={labelStyle}>Access code</span>
+            <input
+              type="password"
+              value={passcode}
+              onChange={(e) => {
+                setPasscode(e.target.value);
+                if (codeError) setCodeError(false);
+              }}
+              autoComplete="off"
+              placeholder="••••••••"
+              aria-invalid={codeError}
+              style={inputStyle(codeError)}
+            />
+            {codeError && (
+              <span role="alert" style={{ fontSize: 12, color: EDIFY.hotPink }}>
+                That code didn&apos;t work. Check it and try again.
+              </span>
+            )}
+          </label>
+
+          <button
+            type="submit"
+            disabled={busy}
+            style={{
+              padding: '12px 16px',
+              borderRadius: 10,
+              border: 'none',
+              background: busy ? `${EDIFY.natural}44` : EDIFY.hotPink,
+              color: busy ? `${EDIFY.natural}99` : EDIFY.offWhite,
+              fontSize: 14,
+              fontWeight: 700,
+              fontFamily: 'var(--font-primary)',
+              cursor: busy ? 'default' : 'pointer',
+            }}
+          >
+            {busy ? 'Checking…' : 'Enter preview'}
+          </button>
+        </form>
+
+        <p
+          style={{
+            margin: 0,
+            fontSize: 13,
+            color: EDIFY.natural,
+            opacity: 0.7,
+            lineHeight: 1.6,
+          }}
+        >
+          No code? Get in touch with Ed at{' '}
+          <a
+            href={`mailto:${CONTACT_EMAIL}`}
+            style={{
+              color: EDIFY.hotPink,
+              fontWeight: 700,
+              textDecoration: 'underline',
+              textUnderlineOffset: 3,
+            }}
+          >
+            {CONTACT_EMAIL}
+          </a>
+          .
+        </p>
+      </div>
     </main>
   );
 }

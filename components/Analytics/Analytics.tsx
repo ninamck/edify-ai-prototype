@@ -48,6 +48,19 @@ export function track(event: string, props?: Record<string, unknown>): void {
   mixpanel.track(event, props);
 }
 
+/**
+ * Tie this device's activity to the email given at the gate. The identity
+ * and the `viewer_email` super-property persist in localStorage, so every
+ * later event (including autocaptured ones) carries who was looking.
+ */
+export function identifyViewer(email: string): void {
+  if (!ensureInit()) return;
+  const normalised = email.trim().toLowerCase();
+  mixpanel.identify(normalised);
+  mixpanel.people.set({ $email: normalised });
+  mixpanel.register({ viewer_email: normalised });
+}
+
 export default function Analytics() {
   const pathname = usePathname();
 

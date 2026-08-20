@@ -1,8 +1,8 @@
 /**
  * demoGate — shared passcode-gate helpers for the customer demo build.
  *
- * The gate is a lightweight, account-free wall: `/welcome` presents a closed
- * holding page, and a hidden interaction reveals a passcode field. The code
+ * The gate is a lightweight, account-free wall: `/welcome` asks for a work
+ * email (identity, sent to Mixpanel only) and the shared passcode. The code
  * is verified server-side against `DEMO_GATE_PASSCODE`, and we set an
  * httpOnly cookie holding a derived token. Middleware then lets any request
  * through only if that cookie matches.
