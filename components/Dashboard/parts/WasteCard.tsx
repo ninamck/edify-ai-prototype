@@ -48,7 +48,7 @@ export default function WasteCard({ rows, actions }: { rows: WasteRow[]; actions
   const deltaPct = totalTypical > 0 ? Math.round((delta / totalTypical) * 100) : 0;
   const overall: ReturnType<typeof severity> = delta <= 0 ? 'ok' : deltaPct >= 50 ? 'flag' : 'watch';
 
-  // Sort highest waste £ first for the chart.
+  // Sort highest waste $ first for the chart.
   const sorted = [...rows].sort((a, b) => b.spendToday - a.spendToday);
   const chartData = sorted.map((r) => ({
     product: r.product,
@@ -98,15 +98,15 @@ export default function WasteCard({ rows, actions }: { rows: WasteRow[]; actions
             fontSize: 14, fontWeight: 700,
             color: overall === 'flag' ? WARN : overall === 'ok' ? OK : 'var(--color-text-primary)',
           }}>
-            £{totalToday}
+            ${totalToday}
           </span>
           <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-muted)' }}>
-            vs £{totalTypical} typical {delta === 0 ? '' : `(${delta > 0 ? '+' : ''}${deltaPct}%)`}
+            vs ${totalTypical} typical {delta === 0 ? '' : `(${delta > 0 ? '+' : ''}${deltaPct}%)`}
           </span>
         </div>
       </div>
 
-      {/* Chart — today £ per product, coloured by severity */}
+      {/* Chart — today $ per product, coloured by severity */}
       <div style={{ width: '100%', height: 200 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
@@ -120,7 +120,7 @@ export default function WasteCard({ rows, actions }: { rows: WasteRow[]; actions
               tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
               tickLine={false}
               axisLine={{ stroke: 'rgba(0, 28, 53,0.15)' }}
-              tickFormatter={(v) => `£${v}`}
+              tickFormatter={(v) => `$${v}`}
             />
             <YAxis
               type="category"
@@ -135,7 +135,7 @@ export default function WasteCard({ rows, actions }: { rows: WasteRow[]; actions
               formatter={(value, name) => {
                 const nameStr = String(name ?? '');
                 const label = nameStr === 'today' ? 'Today' : 'Typical';
-                return [`£${value}`, label];
+                return [`$${value}`, label];
               }}
             />
             <Bar dataKey="typical" name="typical" fill="rgba(0, 28, 53,0.12)" radius={[3, 3, 3, 3]} maxBarSize={10} />
@@ -184,7 +184,7 @@ export default function WasteCard({ rows, actions }: { rows: WasteRow[]; actions
                   )}
                 </div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: WARN, textAlign: 'right', minWidth: 40 }}>
-                  £{r.spendToday}
+                  ${r.spendToday}
                 </div>
               </div>
             ))}

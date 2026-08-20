@@ -5,7 +5,7 @@
  * non-zero story so the theoretical-vs-actual gauges and the AI insight
  * narratives have something meaningful to explain.
  *
- * Currency is GBP (£). All money values are pre-rounded; percentages are
+ * Currency is GBP ($). All money values are pre-rounded; percentages are
  * derived so the table footers always reconcile.
  */
 
@@ -44,7 +44,7 @@ export type CogsClassRow = CogsClassInput & {
   actualPct: number | null;
   /** Gross margin % = 100 − actual %. */
   grossMarginPct: number | null;
-  /** Theoretical COGS in £ = sales × theoretical %. */
+  /** Theoretical COGS in $ = sales × theoretical %. */
   theoreticalCogs: number;
 };
 
@@ -178,7 +178,7 @@ export const COGS_SUMMARY = {
   theoreticalGrossMarginPct: 100 - COGS_CLASS_TOTALS.theoreticalPct,
   /** Variance in percentage points (positive = unfavourable, costing more). */
   variancePp: COGS_CLASS_TOTALS.actualPct - COGS_CLASS_TOTALS.theoreticalPct,
-  /** Variance in £ (positive = unfavourable). */
+  /** Variance in $ (positive = unfavourable). */
   varianceCost: COGS_CLASS_TOTALS.actualCogs - COGS_CLASS_TOTALS.theoreticalCogs,
   openingStock: COGS_CLASS_TOTALS.openingStock,
   purchases: COGS_CLASS_TOTALS.purchases,

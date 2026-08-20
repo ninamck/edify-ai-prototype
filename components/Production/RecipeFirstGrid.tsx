@@ -666,11 +666,11 @@ export default function RecipeFirstGrid({ siteId, date, surface = 'today', locke
     // extras do — the bench is making them, so they belong in "Total
     // to make" — but stay out of every sales-aligned read below.
     let teamFood = 0;
-    // £ rollups, mirroring the unit aggregates above. Every recipe is
+    // $ rollups, mirroring the unit aggregates above. Every recipe is
     // priced via `unitPriceFor` (synthesised from category + SKU seed)
     // so the "Total sales" footer reads as projected revenue if every
     // unit on the bake plan sells through. Team food intentionally
-    // contributes ZERO £ — staff lunch is a cost line, not revenue.
+    // contributes ZERO $ — staff lunch is a cost line, not revenue.
     let carryOverSales = 0;
     let productionSales = 0;
     let grandSales = 0;
@@ -4410,7 +4410,7 @@ function footStyle({
 // Sub-footer cell — the projected-revenue row that sits directly under
 // "Total to make". Same chassis as `footStyle` but without the heavy
 // top border (the unit row above already carries the divider) and a
-// lighter weight so the £ row reads as a complementary lens on the
+// lighter weight so the $ row reads as a complementary lens on the
 // units, not another bold totals band.
 function footSubStyle({
   left,
@@ -4443,7 +4443,7 @@ function footSubStyle({
 
 // Currency cell content — same tabular-nums alignment as `numStyle`
 // but a touch lighter than the unit totals so the two footer rows
-// have a clear visual hierarchy (units = primary, £ = secondary).
+// have a clear visual hierarchy (units = primary, $ = secondary).
 function moneyStyle(): React.CSSProperties {
   return {
     fontVariantNumeric: 'tabular-nums',

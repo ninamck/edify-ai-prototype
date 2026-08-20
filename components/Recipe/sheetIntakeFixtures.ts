@@ -244,6 +244,6 @@ export const FITZROY_SHEET_INTAKE: SheetIntakeData = {
     'sr-huevos-rancheros':    { tone: 'warn', note: '"Ranchero sauce" new — saved as In-house' },
     'sr-salmon-scramble':     { tone: 'ok',   note: 'all clean' },
     'sr-banana-pancakes':     { tone: 'ok',   note: 'all clean' },
-    'sr-full-english':        { tone: 'ok',   note: 'cost looks plausible vs £14.50 menu price' },
+    'sr-full-english':        { tone: 'ok',   note: 'cost looks plausible vs $14.50 menu price' },
   },
 };

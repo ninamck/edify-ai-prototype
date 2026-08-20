@@ -277,7 +277,7 @@ export default function ProductPackDetailsCard({
             />
           </div>
           <div style={{ flex: 1, minWidth: '140px' }}>
-            <Label>Pack cost (£)</Label>
+            <Label>Pack cost ($)</Label>
             <input
               type="number"
               min={0}

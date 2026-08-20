@@ -5,8 +5,8 @@ import { gbp } from './format';
 
 /**
  * Consolidated COGs — one row per site across the estate for the stocktake
- * period. The hub row reconciles with the Single Site fixtures (£51,000
- * net sales, £14,200 actual, £12,455 theoretical); the spokes are mock but
+ * period. The hub row reconciles with the Single Site fixtures ($51,000
+ * net sales, $14,200 actual, $12,455 theoretical); the spokes are mock but
  * plausible, with one favourable site so the colour-coding reads.
  */
 

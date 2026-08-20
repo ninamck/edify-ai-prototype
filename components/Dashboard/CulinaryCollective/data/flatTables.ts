@@ -4,7 +4,7 @@
 // an array of plain objects keyed by `column.key`.
 //
 // Notes:
-//  - Currency columns render as £ via the `currency: 'GBP'` Column field added
+//  - Currency columns render as $ via the `currency: 'USD'` Column field added
 //    in `Mvp1/Tables/dataSources/types.ts`.
 //  - DataTable's `percent` formatter multiplies cell values into a `${v}%`
 //    string with no scaling, so decimals from the spreadsheet (e.g. 0.011)
@@ -100,16 +100,16 @@ export type FisHeatmapTableRow = {
 export const FIS_HEATMAP_TABLE_COLUMNS: Column[] = [
   { key: 'outlet', header: 'Outlet', type: 'string', width: 90, pinned: 'left', defaultVisible: true },
   { key: 'week_ending', header: 'Week ending', type: 'date', width: 130, defaultVisible: true },
-  { key: 'prior_year', header: 'Prior year', type: 'currency', currency: 'GBP', width: 130, defaultVisible: true },
-  { key: 'mon_var', header: 'Mon var', type: 'currency', currency: 'GBP', width: 110 },
-  { key: 'tue_var', header: 'Tue var', type: 'currency', currency: 'GBP', width: 110 },
-  { key: 'wed_var', header: 'Wed var', type: 'currency', currency: 'GBP', width: 110 },
-  { key: 'thu_var', header: 'Thu var', type: 'currency', currency: 'GBP', width: 110 },
-  { key: 'fri_var', header: 'Fri var', type: 'currency', currency: 'GBP', width: 110 },
-  { key: 'sat_var', header: 'Sat var', type: 'currency', currency: 'GBP', width: 110 },
-  { key: 'sun_var', header: 'Sun var', type: 'currency', currency: 'GBP', width: 110 },
-  { key: 'total_var', header: 'Total var', type: 'currency', currency: 'GBP', width: 130, defaultVisible: true },
-  { key: 'this_year', header: 'This year', type: 'currency', currency: 'GBP', width: 130, defaultVisible: true },
+  { key: 'prior_year', header: 'Prior year', type: 'currency', currency: 'USD', width: 130, defaultVisible: true },
+  { key: 'mon_var', header: 'Mon var', type: 'currency', currency: 'USD', width: 110 },
+  { key: 'tue_var', header: 'Tue var', type: 'currency', currency: 'USD', width: 110 },
+  { key: 'wed_var', header: 'Wed var', type: 'currency', currency: 'USD', width: 110 },
+  { key: 'thu_var', header: 'Thu var', type: 'currency', currency: 'USD', width: 110 },
+  { key: 'fri_var', header: 'Fri var', type: 'currency', currency: 'USD', width: 110 },
+  { key: 'sat_var', header: 'Sat var', type: 'currency', currency: 'USD', width: 110 },
+  { key: 'sun_var', header: 'Sun var', type: 'currency', currency: 'USD', width: 110 },
+  { key: 'total_var', header: 'Total var', type: 'currency', currency: 'USD', width: 130, defaultVisible: true },
+  { key: 'this_year', header: 'This year', type: 'currency', currency: 'USD', width: 130, defaultVisible: true },
   { key: 'var_pct', header: 'Var %', type: 'percent', width: 100, defaultVisible: true },
 ];
 
@@ -156,15 +156,15 @@ export const FIS_FLASH_PNL_TABLE_COLUMNS: Column[] = [
   { key: 'section', header: 'Section', type: 'string', width: 150, pinned: 'left', defaultVisible: true },
   { key: 'line', header: 'Line', type: 'string', width: 220, defaultVisible: true },
   { key: 'kind', header: 'Type', type: 'string', width: 80 },
-  { key: 'week_actual', header: 'Wk Actual', type: 'currency', currency: 'GBP', width: 130, defaultVisible: true },
-  { key: 'week_budget', header: 'Wk Budget', type: 'currency', currency: 'GBP', width: 130, defaultVisible: true },
-  { key: 'week_vs_bud', header: 'Wk vs Bud', type: 'currency', currency: 'GBP', width: 130, defaultVisible: true },
+  { key: 'week_actual', header: 'Wk Actual', type: 'currency', currency: 'USD', width: 130, defaultVisible: true },
+  { key: 'week_budget', header: 'Wk Budget', type: 'currency', currency: 'USD', width: 130, defaultVisible: true },
+  { key: 'week_vs_bud', header: 'Wk vs Bud', type: 'currency', currency: 'USD', width: 130, defaultVisible: true },
   { key: 'week_pct', header: 'Wk Var %', type: 'percent', width: 110, defaultVisible: true },
-  { key: 'mtd_actual', header: 'MTD Actual', type: 'currency', currency: 'GBP', width: 130, defaultVisible: true },
-  { key: 'mtd_budget', header: 'MTD Budget', type: 'currency', currency: 'GBP', width: 130 },
-  { key: 'mtd_vs_bud', header: 'MTD vs Bud', type: 'currency', currency: 'GBP', width: 130, defaultVisible: true },
+  { key: 'mtd_actual', header: 'MTD Actual', type: 'currency', currency: 'USD', width: 130, defaultVisible: true },
+  { key: 'mtd_budget', header: 'MTD Budget', type: 'currency', currency: 'USD', width: 130 },
+  { key: 'mtd_vs_bud', header: 'MTD vs Bud', type: 'currency', currency: 'USD', width: 130, defaultVisible: true },
   { key: 'mtd_pct', header: 'MTD Var %', type: 'percent', width: 110, defaultVisible: true },
-  { key: 'full_month_budget', header: 'Full Mo. Budget', type: 'currency', currency: 'GBP', width: 140 },
+  { key: 'full_month_budget', header: 'Full Mo. Budget', type: 'currency', currency: 'USD', width: 140 },
 ];
 
 function flattenPnL(): FisFlashPnLTableRow[] {
@@ -297,7 +297,7 @@ function dailyColumns(opts: {
       key: k,
       header: DAY_LABELS_LONG[i],
       type: numericType,
-      currency: numericType === 'currency' ? 'GBP' : undefined,
+      currency: numericType === 'currency' ? 'USD' : undefined,
       width: 110,
       defaultVisible: true,
     });
@@ -306,7 +306,7 @@ function dailyColumns(opts: {
     key: 'week_total',
     header: 'Week total',
     type: numericType,
-    currency: numericType === 'currency' ? 'GBP' : undefined,
+    currency: numericType === 'currency' ? 'USD' : undefined,
     width: 130,
     defaultVisible: true,
   });
@@ -323,7 +323,7 @@ function dailyColumns(opts: {
     key: 'mtd_total',
     header: 'MTD total',
     type: numericType,
-    currency: numericType === 'currency' ? 'GBP' : undefined,
+    currency: numericType === 'currency' ? 'USD' : undefined,
     width: 130,
     defaultVisible: true,
   });
@@ -374,7 +374,7 @@ const REVENUE_BY_CATEGORY_SECTIONS = [
 ];
 
 const ORDERS_SECTIONS = [
-  'Revenue (£)', 'Revenue (£)', 'Revenue (£)',
+  'Revenue ($)', 'Revenue ($)', 'Revenue ($)',
   'Orders (count)', 'Orders (count)', 'Orders (count)',
 ];
 
@@ -480,12 +480,12 @@ export type FisTrendTableRow = {
 
 export const FIS_TREND_TABLE_COLUMNS: Column[] = [
   { key: 'week_ending', header: 'Week ending', type: 'date', width: 130, pinned: 'left', defaultVisible: true },
-  { key: 'bar', header: 'Bar', type: 'currency', currency: 'GBP', width: 120, defaultVisible: true },
-  { key: 'flock', header: 'Flock', type: 'currency', currency: 'GBP', width: 110, defaultVisible: true },
-  { key: 'opa', header: 'Opa', type: 'currency', currency: 'GBP', width: 110, defaultVisible: true },
-  { key: 'dough', header: 'Dough', type: 'currency', currency: 'GBP', width: 110, defaultVisible: true },
-  { key: 'other', header: 'Other', type: 'currency', currency: 'GBP', width: 110, defaultVisible: true },
-  { key: 'total', header: 'Total', type: 'currency', currency: 'GBP', width: 140, defaultVisible: true },
+  { key: 'bar', header: 'Bar', type: 'currency', currency: 'USD', width: 120, defaultVisible: true },
+  { key: 'flock', header: 'Flock', type: 'currency', currency: 'USD', width: 110, defaultVisible: true },
+  { key: 'opa', header: 'Opa', type: 'currency', currency: 'USD', width: 110, defaultVisible: true },
+  { key: 'dough', header: 'Dough', type: 'currency', currency: 'USD', width: 110, defaultVisible: true },
+  { key: 'other', header: 'Other', type: 'currency', currency: 'USD', width: 110, defaultVisible: true },
+  { key: 'total', header: 'Total', type: 'currency', currency: 'USD', width: 140, defaultVisible: true },
 ];
 
 function buildTrendRows(): FisTrendTableRow[] {
@@ -508,13 +508,13 @@ export const FIS_TREND_TABLE_ROWS = buildTrendRows();
 // 5. 13-week trend detail tables (sub-sections of TRENDS sheet)
 //
 // These all share the same shape: rows are line items, columns are 13 weeks.
-// Because each table mixes units (e.g. Wage Cost has £ rows AND a "Vs Revenue"
-// % row, Indirects has hours + £ + %), we expose a "Unit" column alongside
+// Because each table mixes units (e.g. Wage Cost has $ rows AND a "Vs Revenue"
+// % row, Indirects has hours + $ + %), we expose a "Unit" column alongside
 // the numeric week columns. % rows are pre-multiplied by 100 so the raw value
 // reads naturally (e.g. 27.3 alongside Unit "%" instead of 0.273).
 // ---------------------------------------------------------------------------
 
-export type TrendUnit = 'GBP' | 'pct' | 'hrs';
+export type TrendUnit = 'USD' | 'pct' | 'hrs';
 
 export type FisTrendDetailRow = {
   group: string;
@@ -604,7 +604,7 @@ export const FIS_TRENDS_REVENUE_BY_CATEGORY_COLUMNS = buildTrendDetailColumns({
 });
 export const FIS_TRENDS_REVENUE_BY_CATEGORY_ROWS = flattenTrend(
   FIS_TRENDS_REVENUE_BY_CATEGORY,
-  () => 'GBP',
+  () => 'USD',
 );
 
 // 5b. Revenue to P&L -- 13 weeks (currency + % Var)
@@ -614,7 +614,7 @@ export const FIS_TRENDS_REVENUE_TO_PNL_COLUMNS = buildTrendDetailColumns({
 });
 export const FIS_TRENDS_REVENUE_TO_PNL_ROWS = flattenTrend(
   FIS_TRENDS_REVENUE_TO_PNL,
-  (r) => (isPercentLabel(r.label) ? 'pct' : 'GBP'),
+  (r) => (isPercentLabel(r.label) ? 'pct' : 'USD'),
 );
 
 // 5c. Cost of Sales movements -- 13 weeks (currency + Vs Revenue %)
@@ -624,7 +624,7 @@ export const FIS_TRENDS_COGS_MOVEMENTS_COLUMNS = buildTrendDetailColumns({
 });
 export const FIS_TRENDS_COGS_MOVEMENTS_ROWS = flattenTrend(
   FIS_TRENDS_COGS_MOVEMENTS,
-  (r) => (r.label === 'Vs Revenue' ? 'pct' : 'GBP'),
+  (r) => (r.label === 'Vs Revenue' ? 'pct' : 'USD'),
 );
 
 // 5d. GP detail (Bar / Food) -- 13 weeks (mostly %)
@@ -635,10 +635,10 @@ export const FIS_TRENDS_GP_DETAIL_COLUMNS = buildTrendDetailColumns({
 export const FIS_TRENDS_GP_DETAIL_ROWS = flattenTrend(FIS_TRENDS_GP_DETAIL, (r) => {
   if (isPercentLabel(r.label)) return 'pct';
   if (r.label === 'COS %' || r.label.endsWith('GP %')) return 'pct';
-  return 'GBP';
+  return 'USD';
 });
 
-// 5e. Indirects -- 13 weeks (hours + £ + %)
+// 5e. Indirects -- 13 weeks (hours + $ + %)
 export const FIS_TRENDS_INDIRECTS_COLUMNS = buildTrendDetailColumns({
   lineHeader: 'Line',
   lineWidth: 200,
@@ -646,27 +646,27 @@ export const FIS_TRENDS_INDIRECTS_COLUMNS = buildTrendDetailColumns({
 export const FIS_TRENDS_INDIRECTS_ROWS = flattenTrend(FIS_TRENDS_INDIRECTS, (r) => {
   if (r.label === 'Security Hours') return 'hrs';
   if (isPercentLabel(r.label)) return 'pct';
-  return 'GBP';
+  return 'USD';
 });
 
-// 5f. Wage cost -- 13 weeks (£ + Vs Revenue %)
+// 5f. Wage cost -- 13 weeks ($ + Vs Revenue %)
 export const FIS_TRENDS_WAGE_COST_COLUMNS = buildTrendDetailColumns({
   lineHeader: 'Line',
   lineWidth: 180,
 });
 export const FIS_TRENDS_WAGE_COST_ROWS = flattenTrend(
   FIS_TRENDS_WAGE_COST,
-  (r) => (r.label === 'Vs Revenue' ? 'pct' : 'GBP'),
+  (r) => (r.label === 'Vs Revenue' ? 'pct' : 'USD'),
 );
 
-// 5g. YoY sales by outlet -- 13 weeks (£ + Growth %)
+// 5g. YoY sales by outlet -- 13 weeks ($ + Growth %)
 export const FIS_YOY_SALES_BY_OUTLET_COLUMNS = buildTrendDetailColumns({
   lineHeader: 'Metric',
   lineWidth: 150,
 });
 export const FIS_YOY_SALES_BY_OUTLET_ROWS = flattenTrend(
   FIS_YOY_SALES_BY_OUTLET,
-  (r) => (r.label === 'Growth %' ? 'pct' : 'GBP'),
+  (r) => (r.label === 'Growth %' ? 'pct' : 'USD'),
 );
 
 // ---------------------------------------------------------------------------
@@ -691,18 +691,18 @@ export type FisBarInventoryTableRow = {
 
 export const FIS_BAR_INVENTORY_COLUMNS: Column[] = [
   { key: 'week_ending', header: 'Week ending', type: 'date', width: 130, pinned: 'left', defaultVisible: true },
-  { key: 'opening', header: 'Opening stock', type: 'currency', currency: 'GBP', width: 130, defaultVisible: true },
-  { key: 'vs_last_week', header: 'Vs last week', type: 'currency', currency: 'GBP', width: 120 },
-  { key: 'deliveries', header: 'Deliveries', type: 'currency', currency: 'GBP', width: 120, defaultVisible: true },
-  { key: 'transfers', header: 'Transfers', type: 'currency', currency: 'GBP', width: 110 },
-  { key: 'closing', header: 'Closing stock', type: 'currency', currency: 'GBP', width: 130, defaultVisible: true },
-  { key: 'cogs', header: 'COGS', type: 'currency', currency: 'GBP', width: 120, defaultVisible: true },
-  { key: 'actual_food', header: 'Actual food', type: 'currency', currency: 'GBP', width: 120 },
-  { key: 'actual_beverage', header: 'Actual beverage', type: 'currency', currency: 'GBP', width: 130, defaultVisible: true },
-  { key: 'sb_nil', header: 'S/B nil', type: 'currency', currency: 'GBP', width: 100 },
-  { key: 'theo_food', header: 'Theoretical food', type: 'currency', currency: 'GBP', width: 130 },
-  { key: 'bev_theo', header: 'Theoretical bev.', type: 'currency', currency: 'GBP', width: 130 },
-  { key: 'food_sales', header: 'Food sales', type: 'currency', currency: 'GBP', width: 120, defaultVisible: true },
+  { key: 'opening', header: 'Opening stock', type: 'currency', currency: 'USD', width: 130, defaultVisible: true },
+  { key: 'vs_last_week', header: 'Vs last week', type: 'currency', currency: 'USD', width: 120 },
+  { key: 'deliveries', header: 'Deliveries', type: 'currency', currency: 'USD', width: 120, defaultVisible: true },
+  { key: 'transfers', header: 'Transfers', type: 'currency', currency: 'USD', width: 110 },
+  { key: 'closing', header: 'Closing stock', type: 'currency', currency: 'USD', width: 130, defaultVisible: true },
+  { key: 'cogs', header: 'COGS', type: 'currency', currency: 'USD', width: 120, defaultVisible: true },
+  { key: 'actual_food', header: 'Actual food', type: 'currency', currency: 'USD', width: 120 },
+  { key: 'actual_beverage', header: 'Actual beverage', type: 'currency', currency: 'USD', width: 130, defaultVisible: true },
+  { key: 'sb_nil', header: 'S/B nil', type: 'currency', currency: 'USD', width: 100 },
+  { key: 'theo_food', header: 'Theoretical food', type: 'currency', currency: 'USD', width: 130 },
+  { key: 'bev_theo', header: 'Theoretical bev.', type: 'currency', currency: 'USD', width: 130 },
+  { key: 'food_sales', header: 'Food sales', type: 'currency', currency: 'USD', width: 120, defaultVisible: true },
 ];
 
 export const FIS_BAR_INVENTORY_ROWS: FisBarInventoryTableRow[] = FIS_BAR_INVENTORY.map(

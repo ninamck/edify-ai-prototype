@@ -98,7 +98,7 @@ export default function MarginExplorerCard({
   const srpExAtTarget = srpExVatForCogs(totalCostP, targetCogsPct);
   const vatPct = template.vatHot ? 20 : 0;
 
-  // ── AI substitution nudges (ranked by £ saved on this recipe) ─
+  // ── AI substitution nudges (ranked by $ saved on this recipe) ─
   const swapSuggestions = useMemo(() => {
     return buildSwapSuggestions(template, resolved, selectedSwaps);
   }, [template, resolved, selectedSwaps]);
@@ -205,7 +205,7 @@ export default function MarginExplorerCard({
               {row.toTaste ? 'to taste' : `${formatQty(row.qty)}${row.uom}`}
             </span>
             <span style={{ fontWeight: 600, color: 'var(--color-text-primary)', minWidth: '52px', textAlign: 'right' }}>
-              £{penceToPounds(lineP).toFixed(2)}
+              ${penceToPounds(lineP).toFixed(2)}
             </span>
           </div>
         );
@@ -233,11 +233,11 @@ export default function MarginExplorerCard({
               color: 'var(--color-accent-deep)',
             }}
           >
-            −£{(baselineCostGBP - totalCostGBP).toFixed(2)} vs baseline
+            −${(baselineCostGBP - totalCostGBP).toFixed(2)} vs baseline
           </span>
         )}
         <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-          £{totalCostGBP.toFixed(2)}
+          ${totalCostGBP.toFixed(2)}
         </span>
       </div>
 
@@ -326,10 +326,10 @@ export default function MarginExplorerCard({
                   {pct}% COGS
                 </div>
                 <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)', marginTop: '2px' }}>
-                  £{srp.toFixed(2)}
+                  ${srp.toFixed(2)}
                 </div>
                 <div style={{ fontSize: '10.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
-                  GP £{gp.toFixed(2)}
+                  GP ${gp.toFixed(2)}
                 </div>
               </button>
             );
@@ -457,10 +457,10 @@ export default function MarginExplorerCard({
                         color: sugg.savingGBP > 0 ? 'var(--color-accent-deep)' : 'var(--color-text-muted)',
                       }}
                     >
-                      −£{sugg.savingGBP.toFixed(2)}
+                      −${sugg.savingGBP.toFixed(2)}
                     </span>
                     <span style={{ fontSize: '10.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
-                      price → £{sugg.newSrpExAtTarget.toFixed(2)}
+                      price → ${sugg.newSrpExAtTarget.toFixed(2)}
                     </span>
                   </div>
                 </button>
@@ -483,7 +483,7 @@ export default function MarginExplorerCard({
           }}
         >
           <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
-            At £{srpExAtTarget.toFixed(2)} dine in, your food cost is {effectiveCogsPct(totalCostP, srpExAtTarget)}%.
+            At ${srpExAtTarget.toFixed(2)} dine in, your food cost is {effectiveCogsPct(totalCostP, srpExAtTarget)}%.
           </span>
           <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
             {Object.keys(selectedSwaps).length > 0
@@ -504,7 +504,7 @@ export default function MarginExplorerCard({
         >
           <span style={{ fontWeight: 700, color: 'var(--color-info)' }}>Projected weekly:</span>{' '}
           At ~{template.servesPerDay} serves/day, that&apos;s{' '}
-          <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>£{projectedWeeklyGP}</span>{' '}
+          <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>${projectedWeeklyGP}</span>{' '}
           gross profit/week from this item alone.
         </div>
         {!locked && (
@@ -524,7 +524,7 @@ export default function MarginExplorerCard({
               cursor: 'pointer',
             }}
           >
-            Lock in £{srpExAtTarget.toFixed(2)}
+            Lock in ${srpExAtTarget.toFixed(2)}
           </button>
         )}
       </div>
@@ -582,11 +582,11 @@ function ChannelRow({
       </div>
       <div style={{ textAlign: 'right' }}>
         <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-          £{inc.toFixed(2)}
+          ${inc.toFixed(2)}
         </div>
         <div style={{ fontSize: '10.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
           {vatPct > 0 ? `inc ${vatPct}% VAT` : 'no VAT'}
-          {commissionPct !== undefined && ` · net £${net.toFixed(2)}`}
+          {commissionPct !== undefined && ` · net $${net.toFixed(2)}`}
         </div>
       </div>
     </div>

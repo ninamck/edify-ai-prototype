@@ -101,7 +101,7 @@ export default function PhotoProcessPage() {
                   {name} saved
                 </div>
                 <div style={{ fontSize: '13px', color: 'var(--color-text-primary)', marginTop: '3px' }}>
-                  {ingCount} ingredients · yields {yieldLabel} · cost £{costEstimate.toFixed(2)}/serve · margin {margin}%
+                  {ingCount} ingredients · yields {yieldLabel} · cost ${costEstimate.toFixed(2)}/serve · margin {margin}%
                 </div>
               </div>
             </div>

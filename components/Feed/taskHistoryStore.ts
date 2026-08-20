@@ -84,7 +84,7 @@ export interface ChangeRecord {
   fieldLabel: string;
   before: unknown;
   after: unknown;
-  /** Optional unit suffix for scalar values ("g", "£", "%"). */
+  /** Optional unit suffix for scalar values ("g", "$", "%"). */
   unit?: string;
   /** Hint to the renderer. */
   valueKind?: 'number' | 'currency' | 'text' | 'boolean' | 'array';
@@ -749,7 +749,7 @@ export function seedActivityDemo(input: SeedActivityDemoInput = {}): void {
       completedAt: now - 5 * hr,
       receipt: {
         headline: 'Logged 12 croissants as waste',
-        detail: 'Reason: overproduction · £14.40 cost',
+        detail: 'Reason: overproduction · $14.40 cost',
         href: '/waste',
         hrefLabel: 'Open waste log',
       },
@@ -775,7 +775,7 @@ export function seedActivityDemo(input: SeedActivityDemoInput = {}): void {
           before: 312.5,
           after: 326.9,
           delta: 14.4,
-          unit: '£',
+          unit: '$',
         },
       ],
       commandIntent: {
@@ -794,7 +794,7 @@ export function seedActivityDemo(input: SeedActivityDemoInput = {}): void {
       startedAt: now - 26 * hr,
       completedAt: now - 26 * hr,
       receipt: {
-        headline: 'Egg mayo sandwich · £4.20 → £4.60',
+        headline: 'Egg mayo sandwich · $4.20 → $4.60',
         detail: 'GP 61% → 65% · applied to all sites',
         href: '/recipes/rec-egg-mayo/edit',
         hrefLabel: 'Open recipe',
@@ -810,7 +810,7 @@ export function seedActivityDemo(input: SeedActivityDemoInput = {}): void {
           fieldLabel: 'Dine-in price',
           before: 4.2,
           after: 4.6,
-          unit: '£',
+          unit: '$',
           valueKind: 'currency',
         },
       ],
@@ -892,7 +892,7 @@ export function seedActivityDemo(input: SeedActivityDemoInput = {}): void {
       startedAt: now - 50 * hr,
       completedAt: now - 50 * hr,
       receipt: {
-        headline: 'Bacon · £6.80 → £7.40 / kg',
+        headline: 'Bacon · $6.80 → $7.40 / kg',
         detail: 'Smithfield Meats · affects 6 recipes',
         href: '/suppliers',
         hrefLabel: 'Open supplier',
@@ -908,7 +908,7 @@ export function seedActivityDemo(input: SeedActivityDemoInput = {}): void {
           fieldLabel: 'Unit price',
           before: 6.8,
           after: 7.4,
-          unit: '£/kg',
+          unit: '$/kg',
           valueKind: 'currency',
         },
       ],

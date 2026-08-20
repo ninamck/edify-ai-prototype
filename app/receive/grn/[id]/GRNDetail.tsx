@@ -89,7 +89,7 @@ export default function GRNDetail({ id }: { id: string }) {
         <MetaCard label="Total Received" value={formatMoney(total, grnCurrency)} highlight />
         {isForeign && (
           <MetaCard
-            label={`In GBP (1 ${grnCurrency} = ${grn.lockedFxRate ?? 1} GBP, locked at receipt)`}
+            label={`In USD (1 ${grnCurrency} = ${grn.lockedFxRate ?? 1} USD, locked at receipt)`}
             value={formatMoney(total * (grn.lockedFxRate ?? 1), BASE_CURRENCY)}
           />
         )}

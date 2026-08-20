@@ -25,9 +25,9 @@ const ACCENT_DEEP = 'var(--color-accent-deep)';
 const ACCENT = 'var(--color-accent-active)';
 
 function fmtKMoney(v: number): string {
-  if (v >= 1_000_000) return `£${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `£${Math.round(v / 1000)}k`;
-  return `£${Math.round(v)}`;
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `$${Math.round(v / 1000)}k`;
+  return `$${Math.round(v)}`;
 }
 
 export default function TopStoresBar({ rows }: { rows: TopStoreRow[] }) {
@@ -65,7 +65,7 @@ export default function TopStoresBar({ rows }: { rows: TopStoreRow[] }) {
           <Tooltip
             contentStyle={DUNKIN_TOOLTIP_STYLE}
             formatter={(v, name) => {
-              if (name === 'sales') return [`£${Number(v).toLocaleString('en-US')}`, 'Sales'];
+              if (name === 'sales') return [`$${Number(v).toLocaleString('en-US')}`, 'Sales'];
               return [v, String(name)];
             }}
           />

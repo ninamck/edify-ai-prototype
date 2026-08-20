@@ -80,11 +80,11 @@ function askPriceStep(ctx: FlowContext, productId: string): Step {
   const cur = product.packCost;
   return {
     kind: 'quinn',
-    text: `Current pack cost is **£${cur.toFixed(2)}**. Pick a new price or pick a percentage adjustment.`,
+    text: `Current pack cost is **$${cur.toFixed(2)}**. Pick a new price or pick a percentage adjustment.`,
     options: [
-      { label: `£${(cur * 0.95).toFixed(2)} (-5%)`, next: () => previewStep(setProductPrice(ctx.products, productId, +(cur * 0.95).toFixed(2)), () => startProductScopedFlow(ctx, productId)) },
-      { label: `£${(cur * 1.05).toFixed(2)} (+5%)`, next: () => previewStep(setProductPrice(ctx.products, productId, +(cur * 1.05).toFixed(2)), () => startProductScopedFlow(ctx, productId)) },
-      { label: `£${(cur * 1.1).toFixed(2)} (+10%)`, next: () => previewStep(setProductPrice(ctx.products, productId, +(cur * 1.1).toFixed(2)), () => startProductScopedFlow(ctx, productId)) },
+      { label: `$${(cur * 0.95).toFixed(2)} (-5%)`, next: () => previewStep(setProductPrice(ctx.products, productId, +(cur * 0.95).toFixed(2)), () => startProductScopedFlow(ctx, productId)) },
+      { label: `$${(cur * 1.05).toFixed(2)} (+5%)`, next: () => previewStep(setProductPrice(ctx.products, productId, +(cur * 1.05).toFixed(2)), () => startProductScopedFlow(ctx, productId)) },
+      { label: `$${(cur * 1.1).toFixed(2)} (+10%)`, next: () => previewStep(setProductPrice(ctx.products, productId, +(cur * 1.1).toFixed(2)), () => startProductScopedFlow(ctx, productId)) },
       { label: 'Match latest invoice (auto)', next: () => previewStep(setProductPrice(ctx.products, productId, +(cur * 1.03).toFixed(2)), () => startProductScopedFlow(ctx, productId)) },
       { label: 'Back', next: () => startProductScopedFlow(ctx, productId) },
     ],

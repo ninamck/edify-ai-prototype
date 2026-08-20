@@ -10,7 +10,7 @@ export function gbp(n: number, opts?: { sign?: boolean; decimals?: number }): st
   return `${sign}\u00a3${abs}`;
 }
 
-/** Rounded-to-nearest-100 "~£X" figure for headline summaries. */
+/** Rounded-to-nearest-100 "~$X" figure for headline summaries. */
 export function gbpApprox(n: number): string {
   const rounded = Math.round(Math.abs(n) / 100) * 100;
   return `~\u00a3${rounded.toLocaleString('en-GB', { maximumFractionDigits: 0 })}`;

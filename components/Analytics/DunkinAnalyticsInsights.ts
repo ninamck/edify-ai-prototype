@@ -5,7 +5,7 @@
 // Each builder loads the relevant Dunkin CSV at call time and returns a short
 // narrative describing what the chart actually shows. The narratives use
 // markdown bold so the resulting Quinn message reads like a quick analyst
-// note ("Top store this week: Boston #103 at £54k, up 6% vs prior week…").
+// note ("Top store this week: Boston #103 at $54k, up 6% vs prior week…").
 //
 // Builders are async so they can lazy-load the same shared CSV cache that
 // powers the Dunkin chart components — no extra fetches if the chart already
@@ -42,10 +42,10 @@ function fmtCurrency(value: number, opts: { compact?: boolean } = {}): string {
   const sign = value < 0 ? '-' : '';
   const abs = Math.abs(value);
   if (opts.compact) {
-    if (abs >= 1_000_000) return `${sign}£${(abs / 1_000_000).toFixed(1)}M`;
-    if (abs >= 1_000) return `${sign}£${(abs / 1_000).toFixed(1)}k`;
+    if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+    if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(1)}k`;
   }
-  return `${sign}£${abs.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  return `${sign}$${abs.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
 
 function fmtPct(value: number, digits = 1): string {
@@ -198,8 +198,8 @@ async function avgTicketBySite(): Promise<string> {
   const bottom = points[points.length - 1]!;
   const spread = top.value - bottom.value;
   return [
-    `Across **${points.length} stores** the average ticket sits at **£${networkAvg.toFixed(2)}** over the last four weeks.`,
-    `**${shortName(top.name)}** leads at **£${top.value.toFixed(2)}** while **${shortName(bottom.name)}** trails at **£${bottom.value.toFixed(2)}** — a £${spread.toFixed(2)} spread.`,
+    `Across **${points.length} stores** the average ticket sits at **$${networkAvg.toFixed(2)}** over the last four weeks.`,
+    `**${shortName(top.name)}** leads at **$${top.value.toFixed(2)}** while **${shortName(bottom.name)}** trails at **$${bottom.value.toFixed(2)}** — a $${spread.toFixed(2)} spread.`,
     `Stores below the network average are most likely candidates for upsell coaching or menu attachment plays.`,
   ].join(' ');
 }
@@ -301,8 +301,8 @@ async function revenuePerLabourHour(): Promise<string> {
   const top = points[0]!;
   const bottom = points[points.length - 1]!;
   return [
-    `Network revenue per labour hour averages **£${networkAvg.toFixed(0)}/hr** this week.`,
-    `**${shortName(top.name)}** is the most productive at **£${top.value.toFixed(0)}/hr**; **${shortName(bottom.name)}** is the lowest at **£${bottom.value.toFixed(0)}/hr** — a ${(((top.value - bottom.value) / bottom.value) * 100).toFixed(0)}% gap.`,
+    `Network revenue per labour hour averages **$${networkAvg.toFixed(0)}/hr** this week.`,
+    `**${shortName(top.name)}** is the most productive at **$${top.value.toFixed(0)}/hr**; **${shortName(bottom.name)}** is the lowest at **$${bottom.value.toFixed(0)}/hr** — a ${(((top.value - bottom.value) / bottom.value) * 100).toFixed(0)}% gap.`,
     `Bringing the bottom quartile up to the network average would meaningfully shift labour efficiency without cutting service speed.`,
   ].join(' ');
 }
@@ -328,8 +328,8 @@ async function basketSizeBySite(): Promise<string> {
   const bottom = points[points.length - 1]!;
   const networkAvg = mean(points.map((p) => p.value));
   return [
-    `Average basket across the network sits at **£${networkAvg.toFixed(2)}** per visit.`,
-    `**${shortName(top.name)}** has the largest basket at **£${top.value.toFixed(2)}** while **${shortName(bottom.name)}** is lowest at **£${bottom.value.toFixed(2)}** — a £${(top.value - bottom.value).toFixed(2)} delta.`,
+    `Average basket across the network sits at **$${networkAvg.toFixed(2)}** per visit.`,
+    `**${shortName(top.name)}** has the largest basket at **$${top.value.toFixed(2)}** while **${shortName(bottom.name)}** is lowest at **$${bottom.value.toFixed(2)}** — a $${(top.value - bottom.value).toFixed(2)} delta.`,
     `Pair this with traffic to understand whether sales gaps are basket-driven or footfall-driven.`,
   ].join(' ');
 }
@@ -412,7 +412,7 @@ async function avgTicketTrend(): Promise<string> {
   const last = series[series.length - 1]!;
   const change = pctChange(last.value, first.value);
   return [
-    `Network average ticket has moved from **£${first.value.toFixed(2)}** in W${first.week} to **£${last.value.toFixed(2)}** in W${last.week} — a **${fmtPct(change)}** shift across the trailing ${series.length} weeks.`,
+    `Network average ticket has moved from **$${first.value.toFixed(2)}** in W${first.week} to **$${last.value.toFixed(2)}** in W${last.week} — a **${fmtPct(change)}** shift across the trailing ${series.length} weeks.`,
     `${change >= 0 ? 'Upward' : 'Downward'} drift typically reflects ${change >= 0 ? 'price take or favourable mix' : 'discounting or value-bias mix shift'}.`,
     `Pair this with the basket-size view to see whether the change is universal or driven by a handful of stores.`,
   ].join(' ');
@@ -533,8 +533,8 @@ async function labourCostPerTxn(): Promise<string> {
   const worst = points[0]!;
   const best = points[points.length - 1]!;
   return [
-    `Network labour cost per transaction averages **£${networkAvg.toFixed(2)}** this week.`,
-    `**${shortName(worst.name)}** has the highest cost per transaction at **£${worst.value.toFixed(2)}**, **${shortName(best.name)}** the lowest at **£${best.value.toFixed(2)}**.`,
+    `Network labour cost per transaction averages **$${networkAvg.toFixed(2)}** this week.`,
+    `**${shortName(worst.name)}** has the highest cost per transaction at **$${worst.value.toFixed(2)}**, **${shortName(best.name)}** the lowest at **$${best.value.toFixed(2)}**.`,
     `High labour-per-txn typically signals thin transaction volume relative to staffing rather than overpaid labour.`,
   ].join(' ');
 }
@@ -559,8 +559,8 @@ async function avgHourlyLabourCost(): Promise<string> {
   const worst = points[0]!;
   const best = points[points.length - 1]!;
   return [
-    `Average hourly labour cost across **${points.length} stores** sits at **£${networkAvg.toFixed(2)}/hr**.`,
-    `Highest: **${worst.name}** at **£${worst.value.toFixed(2)}/hr**. Lowest: **${best.name}** at **£${best.value.toFixed(2)}/hr**.`,
+    `Average hourly labour cost across **${points.length} stores** sits at **$${networkAvg.toFixed(2)}/hr**.`,
+    `Highest: **${worst.name}** at **$${worst.value.toFixed(2)}/hr**. Lowest: **${best.name}** at **$${best.value.toFixed(2)}/hr**.`,
     `Big spreads here usually reflect role mix (more shift leads or managers) rather than wage rates per role.`,
   ].join(' ');
 }
@@ -615,7 +615,7 @@ async function revenueToLabour(): Promise<string> {
   const top = points[0]!;
   const bottom = points[points.length - 1]!;
   return [
-    `Network revenue-to-labour ratio averages **${networkAvg.toFixed(2)}×** this week — i.e. every £1 of labour generates £${networkAvg.toFixed(2)} in sales.`,
+    `Network revenue-to-labour ratio averages **${networkAvg.toFixed(2)}×** this week — i.e. every $1 of labour generates $${networkAvg.toFixed(2)} in sales.`,
     `**${shortName(top.name)}** is the most efficient at **${top.value.toFixed(2)}×**; **${shortName(bottom.name)}** the least at **${bottom.value.toFixed(2)}×**.`,
     `For QSR a 4× ratio is a healthy benchmark — anything below ~3× suggests labour over-allocation relative to volume.`,
   ].join(' ');

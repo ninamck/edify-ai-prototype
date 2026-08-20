@@ -49,17 +49,17 @@ export const SCOPED_INSIGHT_CONFIG: Record<
   },
   'scoped:sales-trend': {
     label: 'Net sales trend',
-    subtitle: '£k per week · last 12 weeks',
+    subtitle: '$k per week · last 12 weeks',
     defaultWidth: 'full',
   },
   'scoped:sales-by-site': {
     label: 'Net sales by site',
-    subtitle: 'This week vs prior week · £k',
+    subtitle: 'This week vs prior week · $k',
     defaultWidth: 'full',
   },
   'scoped:waste-by-site': {
     label: 'Waste by site — last 4 weeks',
-    subtitle: 'Spoilage + comps · £',
+    subtitle: 'Spoilage + comps · $',
     defaultWidth: 'half',
   },
   'scoped:labour-by-site': {
@@ -103,7 +103,7 @@ function SalesBySite({ siteIds }: { siteIds: SiteId[] }) {
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" vertical={false} />
         <XAxis dataKey="site" tick={axisTick} interval={0} angle={data.length > 6 ? -28 : 0} textAnchor={data.length > 6 ? 'end' : 'middle'} height={data.length > 6 ? 52 : 26} />
         <YAxis tick={axisTick} unit="k" />
-        <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`£${v}k`]} />
+        <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`$${v}k`]} />
         <Bar dataKey="prior" name="Prior week" fill={ACCENT_MID} radius={[3, 3, 0, 0]} opacity={0.45} />
         <Bar dataKey="current" name="This week" fill={ACCENT} radius={[3, 3, 0, 0]} />
       </BarChart>
@@ -121,8 +121,8 @@ function WasteBySite({ siteIds }: { siteIds: SiteId[] }) {
       <BarChart data={data} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" vertical={false} />
         <XAxis dataKey="site" tick={axisTick} interval={0} angle={data.length > 6 ? -28 : 0} textAnchor={data.length > 6 ? 'end' : 'middle'} height={data.length > 6 ? 52 : 26} />
-        <YAxis tick={axisTick} tickFormatter={(v: number) => `£${(v / 1000).toFixed(1)}k`} />
-        <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`£${Number(v).toLocaleString()}`, 'Waste (4 wks)']} />
+        <YAxis tick={axisTick} tickFormatter={(v: number) => `$${(v / 1000).toFixed(1)}k`} />
+        <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Waste (4 wks)']} />
         <Bar dataKey="waste" fill={WARN} radius={[3, 3, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
@@ -173,7 +173,7 @@ function SalesTrend({ siteIds }: { siteIds: SiteId[] }) {
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" vertical={false} />
         <XAxis dataKey="wk" tick={axisTick} />
         <YAxis tick={axisTick} unit="k" domain={['auto', 'auto']} />
-        <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`£${v}k`, 'Net sales']} />
+        <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`$${v}k`, 'Net sales']} />
         <Line type="monotone" dataKey="sales" stroke={ACCENT} strokeWidth={2.2} dot={false} />
       </LineChart>
     </ResponsiveContainer>
@@ -186,13 +186,13 @@ function KpiRow({ siteIds }: { siteIds: SiteId[] }) {
   const cards = [
     {
       label: 'Net sales (wk)',
-      value: `£${kpi.salesK >= 100 ? Math.round(kpi.salesK) : kpi.salesK}k`,
+      value: `$${kpi.salesK >= 100 ? Math.round(kpi.salesK) : kpi.salesK}k`,
       delta: `${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(1)}% vs prior week`,
       good: deltaPct >= 0,
     },
     {
       label: 'Waste (wk)',
-      value: `£${kpi.wasteTotal.toLocaleString()}`,
+      value: `$${kpi.wasteTotal.toLocaleString()}`,
       delta: 'spoilage + comps',
       good: false,
     },
@@ -260,9 +260,9 @@ function MillionMilestone() {
       <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.75 }}>
         Company record
       </div>
-      <div style={{ fontSize: 34, fontWeight: 700, lineHeight: 1.1 }}>£1.02m net sales this month</div>
+      <div style={{ fontSize: 34, fontWeight: 700, lineHeight: 1.1 }}>$1.02m net sales this month</div>
       <div style={{ fontSize: 13, fontWeight: 500, opacity: 0.85 }}>
-        First time past £1m — thank you, every site. Shared with the whole company by head office.
+        First time past $1m — thank you, every site. Shared with the whole company by head office.
       </div>
     </div>
   );

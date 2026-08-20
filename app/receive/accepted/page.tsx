@@ -175,7 +175,7 @@ export default function AcceptedDeliveriesPage() {
                           </span>
                         </>
                       ) : (
-                        <>£{grnTotal(grn).toFixed(2)}</>
+                        <>${grnTotal(grn).toFixed(2)}</>
                       )}
                     </td>
                     <td style={{ ...tdStyle, color: 'var(--color-text-secondary)', fontSize: '12px' }}>

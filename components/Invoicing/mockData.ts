@@ -483,7 +483,7 @@ export const MOCK_INVOICES: Invoice[] = [
             { id: 'il-sc-3', description: 'Branded hot cup + lid 12oz', sku: 'SC-CUP-12OZ', qty: 2, unitPrice: 95.00, lineTotal: 190.00 },
           ],
           variances: [],
-          note: 'CAD invoice matched against the CAD PO — GBP value booked at the rate locked at receipt (1 CAD = 0.58 GBP).',
+          note: 'CAD invoice matched against the CAD PO — USD value booked at the rate locked at receipt (1 CAD = 0.58 USD).',
           noteAuthor: 'Edify AI',
           noteUpdatedAt: '8 Apr',
         },
@@ -980,7 +980,7 @@ export function getAutoStatusNote(invoice: Invoice): AutoStatusNote | null {
     if (over) {
       const extra = over.invoiceValue - over.poValue;
       return {
-        text: `Holding — ${invoice.supplier} billed ${over.invoiceValue} ${over.itemName} (${extra > 0 ? '+' : ''}${extra} over PO). Credit note requested for £${Math.abs(over.impact).toFixed(2)}, awaiting confirmation.`,
+        text: `Holding — ${invoice.supplier} billed ${over.invoiceValue} ${over.itemName} (${extra > 0 ? '+' : ''}${extra} over PO). Credit note requested for $${Math.abs(over.impact).toFixed(2)}, awaiting confirmation.`,
         tone: 'warning',
         reason: 'variance.type=over-invoice',
       };

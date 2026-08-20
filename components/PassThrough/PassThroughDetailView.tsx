@@ -173,7 +173,7 @@ export default function PassThroughDetailView({ invoice, onBack, modeLabel, mode
                   const n = parseFloat(v);
                   if (!isNaN(n)) setTotalExVat(n);
                 }}
-                prefix="£"
+                prefix="$"
                 disabled={locked}
               />
             </FieldRow>
@@ -197,13 +197,13 @@ export default function PassThroughDetailView({ invoice, onBack, modeLabel, mode
             </FieldRow>
             <FieldRow label="VAT amount">
               <ReadonlyValue muted={vatRate === null}>
-                {vatRate === null ? '—' : `£${vatValue.toFixed(2)}`}
+                {vatRate === null ? '—' : `$${vatValue.toFixed(2)}`}
               </ReadonlyValue>
             </FieldRow>
 
             <div style={{ borderTop: '1px solid var(--color-border-subtle)', marginTop: '10px', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <span style={{ fontSize: '13px', fontWeight: 600 }}>Grand total</span>
-              <span style={{ fontSize: '18px', fontWeight: 700 }}>£{grand.toFixed(2)}</span>
+              <span style={{ fontSize: '18px', fontWeight: 700 }}>${grand.toFixed(2)}</span>
             </div>
           </section>
 
@@ -425,7 +425,7 @@ function ConfirmModal({
         </h2>
         <ul style={{ margin: '0 0 18px', padding: '0 0 0 18px', fontSize: '13px', lineHeight: 1.7, color: 'var(--color-text-primary)' }}>
           <li>Supplier: <strong>{supplier}</strong></li>
-          <li>Amount: <strong>£{grand.toFixed(2)}</strong> (incl. £{vatValue.toFixed(2)} VAT)</li>
+          <li>Amount: <strong>${grand.toFixed(2)}</strong> (incl. ${vatValue.toFixed(2)} VAT)</li>
           <li>Xero account: <strong>{xeroAccount}</strong></li>
           <li>No PO, no GRN — this invoice bypasses three-way matching.</li>
         </ul>

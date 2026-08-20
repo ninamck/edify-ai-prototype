@@ -577,7 +577,7 @@ function VariantHeaderCell({
           </span>
         )}
         <span style={{ color: priceIsBase ? 'var(--color-text-muted)' : 'var(--color-text-secondary)' }}>
-          {dineIn > 0 ? `£${dineIn.toFixed(2)}` : '—'}
+          {dineIn > 0 ? `$${dineIn.toFixed(2)}` : '—'}
           {priceIsBase ? ' base' : ''}
         </span>
       </div>

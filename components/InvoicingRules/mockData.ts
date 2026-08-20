@@ -111,7 +111,7 @@ export function humanReadableRule(rule: Rule): string {
   if (rule.type === 'price-variance') {
     const parts: string[] = [];
     if (rule.percent !== undefined) parts.push(`< ${rule.percent}%`);
-    if (rule.amount !== undefined) parts.push(`< £${rule.amount.toFixed(2)}`);
+    if (rule.amount !== undefined) parts.push(`< $${rule.amount.toFixed(2)}`);
     if (parts.length === 0) return 'Auto-accept any price change';
     return `Auto-accept when ${parts.join(' or ')}`;
   }
@@ -139,7 +139,7 @@ export function scopeLabel(rule: Rule): string {
 // Demo-only: which variances are "already auto-resolved" by rules on load.
 // Keyed by variance id (from Invoicing/mockData).
 export const AUTO_APPLIED_VARIANCES: Record<string, { ruleId: string; note: string }> = {
-  'v-2': { ruleId: 'r-2', note: 'Free range eggs +£0.50/unit — under Bidfood 10% rule.' },
+  'v-2': { ruleId: 'r-2', note: 'Free range eggs +$0.50/unit — under Bidfood 10% rule.' },
 };
 
 // Demo-only AI suggestion: for a specific invoice id, show a pattern-based banner.
@@ -156,10 +156,10 @@ export const AI_SUGGESTIONS: AISuggestion[] = [
   {
     invoiceId: 'inv-1',
     title: "We've spotted a pattern",
-    body: 'Milk 2L from Bidfood has invoiced at £4.30 (vs catalogue £4.20) for 5 consecutive weeks. Want us to update the catalogue automatically, or keep prompting?',
+    body: 'Milk 2L from Bidfood has invoiced at $4.30 (vs catalogue $4.20) for 5 consecutive weeks. Want us to update the catalogue automatically, or keep prompting?',
     itemLabel: 'Milk 2L (Bidfood)',
-    observedPrice: '£4.30',
-    catalogueCost: '£4.20',
+    observedPrice: '$4.30',
+    catalogueCost: '$4.20',
   },
 ];
 

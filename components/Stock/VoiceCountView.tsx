@@ -96,7 +96,7 @@ export default function VoiceCountView({ items, siteName, scope, onClose }: Prop
   const countedSoFar = Object.values(counts).filter(c => !c.skipped).length;
   const skippedSoFar = Object.values(counts).filter(c => c.skipped).length;
 
-  // £ value of what's been "heard" so far. Mirrors the same rule used
+  // $ value of what's been "heard" so far. Mirrors the same rule used
   // in StocktakeView: heard value × unitPrice in the stockUnit.
   const valueSoFar = useMemo(() => {
     let total = 0;

@@ -181,7 +181,7 @@ function OptionEditor({
           step="0.01"
           value={option.priceDelta ?? ''}
           onChange={(e) => onPatch({ priceDelta: e.target.value === '' ? undefined : Number(e.target.value) })}
-          placeholder="+£"
+          placeholder="+$"
           style={textInput}
         />
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)' }}>

@@ -98,7 +98,7 @@ export const DAILY_ANOMALIES: DailyAnomaly[] = [
   {
     kind: 'price',
     headline: 'Oat milk up 8.4% on yesterday\u2019s Brakes invoice',
-    detail: '£1.42 → £1.54 per litre. Third rise this quarter; annualised impact ~£1,120 across the estate.',
+    detail: '$1.42 → $1.54 per litre. Third rise this quarter; annualised impact ~$1,120 across the estate.',
   },
   {
     kind: 'usage',
@@ -159,7 +159,7 @@ export const PRICE_MOVERS_DEPENDENCY = 'line-level invoice prices';
 
 export const PERIOD_LABEL = 'P7 · 22 Jun – 19 Jul';
 
-/** GP bridge, £k. theoretical − waste − unexplained = actual. */
+/** GP bridge, $k. theoretical − waste − unexplained = actual. */
 export const GP_BRIDGE = {
   theoreticalGp: 412.8,
   waste: 7.4,
@@ -190,7 +190,7 @@ export const BRIDGE_DRILL: Record<'theoretical' | 'waste' | 'unexplained' | 'act
     { item: 'Oat milk', value: 1.9, note: 'part price movement, part over-portioning' },
     { item: 'Chicken (cooked)', value: 1.7, note: 'yield on cooking not captured — investigate' },
     { item: 'Espresso beans', value: 1.2, note: 'supplier price error weeks 1–2, since corrected' },
-    { item: 'All other items', value: 3.4, note: 'no single item over £0.9k' },
+    { item: 'All other items', value: 3.4, note: 'no single item over $0.9k' },
   ],
   actual: [
     { item: 'Opening stock', value: 84.2, note: 'P6 closing counts' },
@@ -328,24 +328,24 @@ export type PriceMoverRow = {
   oldPrice: string;
   newPrice: string;
   changePct: number;
-  /** £ impact on last week's purchasing at actual volumes. */
+  /** $ impact on last week's purchasing at actual volumes. */
   weeklyImpact: number;
 };
 
 export const PRICE_MOVERS: PriceMoverRow[] = [
-  { item: 'Oat milk 1L', supplier: 'Brakes', oldPrice: '£1.42', newPrice: '£1.54', changePct: 8.5, weeklyImpact: 48 },
-  { item: 'Espresso beans 6kg', supplier: 'Union Roasters', oldPrice: '£58.20', newPrice: '£61.10', changePct: 5.0, weeklyImpact: 41 },
-  { item: 'Mozzarella 1kg', supplier: 'Freshways', oldPrice: '£6.80', newPrice: '£7.20', changePct: 5.9, weeklyImpact: 34 },
-  { item: 'Avocado (box of 16)', supplier: 'Produce Direct', oldPrice: '£11.40', newPrice: '£12.30', changePct: 7.9, weeklyImpact: 29 },
-  { item: 'Chicken breast 2.5kg', supplier: 'Brakes', oldPrice: '£18.90', newPrice: '£17.95', changePct: -5.0, weeklyImpact: -22 },
+  { item: 'Oat milk 1L', supplier: 'Brakes', oldPrice: '$1.42', newPrice: '$1.54', changePct: 8.5, weeklyImpact: 48 },
+  { item: 'Espresso beans 6kg', supplier: 'Union Roasters', oldPrice: '$58.20', newPrice: '$61.10', changePct: 5.0, weeklyImpact: 41 },
+  { item: 'Mozzarella 1kg', supplier: 'Freshways', oldPrice: '$6.80', newPrice: '$7.20', changePct: 5.9, weeklyImpact: 34 },
+  { item: 'Avocado (box of 16)', supplier: 'Produce Direct', oldPrice: '$11.40', newPrice: '$12.30', changePct: 7.9, weeklyImpact: 29 },
+  { item: 'Chicken breast 2.5kg', supplier: 'Brakes', oldPrice: '$18.90', newPrice: '$17.95', changePct: -5.0, weeklyImpact: -22 },
 ];
 
 export type SupplierInflationRow = {
   supplier: string;
   spendK: number;
-  /** Change in spend caused by unit-price movement alone (£k, this period). */
+  /** Change in spend caused by unit-price movement alone ($k, this period). */
   priceEffectK: number;
-  /** Change in spend caused by buying more/less or a different mix (£k). */
+  /** Change in spend caused by buying more/less or a different mix ($k). */
   volumeMixK: number;
 };
 
@@ -384,5 +384,5 @@ export const BRIDGE_DRILL_UNEXPLAINED_LIVE: BridgeDrillItem[] = [
   { item: 'Chicken (cooked)', value: 1.7, note: 'yield on cooking not captured — investigate' },
   { item: 'Bakery counts', value: 0.9, note: 'end-of-day counts drift vs deliveries at two sites' },
   { item: 'Oat milk', value: 0.8, note: 'over-portioning only — the price element now sits in price variance' },
-  { item: 'All other items', value: 1.7, note: 'no single item over £0.6k' },
+  { item: 'All other items', value: 1.7, note: 'no single item over $0.6k' },
 ];

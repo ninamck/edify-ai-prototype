@@ -29,9 +29,9 @@ export default function WastageChart() {
         <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} width={36} />
         <Tooltip
           contentStyle={tipStyle}
-          formatter={(v) => [`£${(Number(v) * 1000).toFixed(0)}`, 'Wastage']}
+          formatter={(v) => [`$${(Number(v) * 1000).toFixed(0)}`, 'Wastage']}
         />
-        <Bar dataKey="k" fill={WARN} radius={[6, 6, 0, 0]} name="£k" />
+        <Bar dataKey="k" fill={WARN} radius={[6, 6, 0, 0]} name="$k" />
       </BarChart>
     </ResponsiveContainer>
   );

@@ -105,7 +105,7 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
       id: `ce-recv-${Date.now()}`,
       date: `${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`,
       type: 'received',
-      note: `Credit note marked as received — £${creditNote.amount.toFixed(2)} to be applied to next open invoice.`,
+      note: `Credit note marked as received — $${creditNote.amount.toFixed(2)} to be applied to next open invoice.`,
       by: 'You',
     };
     setCreditNote((prev) => ({
@@ -114,7 +114,7 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
       chaseHistory: [...prev.chaseHistory, event],
     }));
     setSuccessMessage(
-      `${creditNote.ref} received — £${creditNote.amount.toFixed(2)} will be offset against the next open invoice from ${creditNote.supplier}.`,
+      `${creditNote.ref} received — $${creditNote.amount.toFixed(2)} will be offset against the next open invoice from ${creditNote.supplier}.`,
     );
     setView('success');
   }
@@ -173,7 +173,7 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
             <StatusBadge status={creditNote.status} variant={statusVariant(creditNote.status)} />
           </div>
           <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)', marginTop: '3px' }}>
-            {creditNote.supplier} · £{creditNote.amount.toFixed(2)} · {creditNote.reason}
+            {creditNote.supplier} · ${creditNote.amount.toFixed(2)} · {creditNote.reason}
           </div>
         </div>
         <button
@@ -511,7 +511,7 @@ export default function CreditNoteDetail({ creditNoteId, onClose }: CreditNoteDe
                 }}
               >
                 Confirm that <strong>{creditNote.ref}</strong> has been received from {creditNote.supplier} for{' '}
-                <strong>£{creditNote.amount.toFixed(2)}</strong>. This will be flagged for offset against the next open invoice.
+                <strong>${creditNote.amount.toFixed(2)}</strong>. This will be flagged for offset against the next open invoice.
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button

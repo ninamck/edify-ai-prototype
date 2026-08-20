@@ -429,7 +429,7 @@ function EditPriceRule({ rule, onCancel, onSave, onDelete }: {
           <input type="number" value={percent} onChange={e => setPercent(e.target.value)} placeholder="5" style={{ ...inputStyle, width: '64px' }} />
           <span style={{ fontSize: '12px' }}>%</span>
           <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>OR</span>
-          <span style={{ fontSize: '12px' }}>&lt; £</span>
+          <span style={{ fontSize: '12px' }}>&lt; $</span>
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="2.00" style={{ ...inputStyle, width: '80px' }} />
         </div>
       </LabelledRow>

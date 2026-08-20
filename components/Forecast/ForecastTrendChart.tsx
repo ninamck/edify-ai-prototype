@@ -4,7 +4,7 @@
  * ForecastTrendChart — a small "how have we been tracking?" chart that
  * spans the recent past plus (on the Forecast tab) a few days ahead.
  *
- * Three switchable metrics — revenue (£), items, transactions — share
+ * Three switchable metrics — revenue ($), items, transactions — share
  * the same time axis so the operator can flip between them without
  * losing their place. The line + dots layout is more glanceable than
  * stacked bars when the audience is a manager standing at the bench

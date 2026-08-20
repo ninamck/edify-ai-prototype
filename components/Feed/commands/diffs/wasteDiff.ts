@@ -47,7 +47,7 @@ export function diffWaste(args: {
       fieldLabel: 'Value',
       before: null,
       after: value,
-      unit: '£',
+      unit: '$',
       valueKind: 'currency',
     },
   ];

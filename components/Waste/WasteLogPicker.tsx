@@ -528,7 +528,7 @@ function LoggedEntryList({
           {entries.length} entr{entries.length === 1 ? 'y' : 'ies'}
         </span>
         <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-muted)' }}>
-          Total £{totalValue.toFixed(2)}
+          Total ${totalValue.toFixed(2)}
         </span>
       </div>
 
@@ -694,7 +694,7 @@ function EntryRow({
             color: 'var(--color-text-primary)',
           }}
         >
-          £{value.toFixed(2)}
+          ${value.toFixed(2)}
         </div>
       </button>
       <button
@@ -1053,7 +1053,7 @@ function ConfirmDeleteModal({
           <DeleteSummaryRow label="Quantity" value={`${entry.qty} ${entry.uom}${entry.qty === 1 ? '' : 's'}`} />
           <DeleteSummaryRow label="Reason" value={reasonLabel} />
           <DeleteSummaryRow label="Logged" value={entry.timestamp} />
-          <DeleteSummaryRow label="Value" value={`£${value.toFixed(2)}`} strong />
+          <DeleteSummaryRow label="Value" value={`$${value.toFixed(2)}`} strong />
         </div>
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>

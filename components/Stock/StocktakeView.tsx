@@ -228,13 +228,13 @@ export default function StocktakeView({
     );
   }
 
-  // Live £ value of what's been counted so far. Each item's
+  // Live $ value of what's been counted so far. Each item's
   // multi-UOM entries are rolled up into a single quantity in the
   // item's primary stockUnit (via `rollupCounts` — mass/volume
   // conversions inferred, pack-style alts use the item's seeded
   // factors), then multiplied by `unitPrice`. That way a row counted
   // as "2 bags + 0.5 kg" of pasta correctly contributes
-  // 2 × bagFactor + 0.5 = 2.5 kg × unit £, rather than ignoring the
+  // 2 × bagFactor + 0.5 = 2.5 kg × unit $, rather than ignoring the
   // bag cell. Items without a unitPrice (rare) skip the sum entirely.
   // Updates on every keystroke so the rollup tracks the count in
   // real-time.
@@ -251,9 +251,9 @@ export default function StocktakeView({
 
   // Subtitle line — when we're continuing an existing stocktake we
   // show its scope + who started it; for a fresh count the scope
-  // label leads, then progress + £-value of what the operator has
+  // label leads, then progress + $-value of what the operator has
   // actually counted (not theoretical on-hand) so the running
-  // £-figure is a real signal as they go.
+  // $-figure is a real signal as they go.
   const subtitle = stocktake
     ? `${stocktake.scope}${
         stocktake.sectionName ? ` · ${stocktake.sectionName}` : ''
@@ -672,7 +672,7 @@ function CountRow({
   // Roll every cell on this row into a single quantity expressed in
   // the item's primary stockUnit. For master products this sums across
   // every supplier sub-row; for simple items it's the single multi-UOM
-  // strip. The rollup powers the "Count" readout, the £-value line, and
+  // strip. The rollup powers the "Count" readout, the $-value line, and
   // the variance — so an entry in any unit (kg, g, bags, trays, …)
   // influences the totals exactly the same way the primary cell would.
   const rollup = rollupItemCounts(item, rawSuffixMap(item, counts));
@@ -798,7 +798,7 @@ function CountRow({
           tally vs. what the system thought was there. Count rolls up
           every UOM cell on the row (kg, g, bags, packs, …) into a
           single quantity in the item's primary stockUnit so an entry
-          in any unit moves the dial. £-value line below count shows
+          in any unit moves the dial. $-value line below count shows
           the live cash equivalent. */}
       <div
         style={{

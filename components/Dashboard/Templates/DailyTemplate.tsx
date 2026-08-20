@@ -87,7 +87,7 @@ export default function DailyTemplate() {
             <div style={{ padding: '0 16px 12px' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 36, fontWeight: 700, color: VALUE_INK }}>
-                  £{DAILY_YESTERDAY.sales.toLocaleString('en-GB')}
+                  ${DAILY_YESTERDAY.sales.toLocaleString('en-GB')}
                 </span>
                 <span style={{ fontSize: 12.5, fontWeight: 600 }}>
                   <DeltaText pct={vsForecastPct} />{' '}
@@ -110,7 +110,7 @@ export default function DailyTemplate() {
                     <XAxis dataKey="d" hide />
                     <Tooltip
                       contentStyle={tipStyle}
-                      formatter={(v) => `£${Number(v ?? 0).toLocaleString('en-GB')}`}
+                      formatter={(v) => `$${Number(v ?? 0).toLocaleString('en-GB')}`}
                     />
                     <Area dataKey="sales" name="Sales" stroke={NAVY} strokeWidth={2} fill="url(#dailySpark)" />
                   </AreaChart>
@@ -328,15 +328,15 @@ function DailyWasteWatch() {
               color: overall === 'flag' ? '#B45309' : overall === 'ok' ? OK_TEXT : 'var(--color-text-primary)',
             }}
           >
-            £{totalYesterday}
+            ${totalYesterday}
           </span>
           <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-muted)' }}>
-            vs £{totalTypical} typical {delta === 0 ? '' : `(${delta > 0 ? '+' : ''}${deltaPct}%)`}
+            vs ${totalTypical} typical {delta === 0 ? '' : `(${delta > 0 ? '+' : ''}${deltaPct}%)`}
           </span>
         </div>
       </div>
 
-      {/* Chart — yesterday £ per item vs typical, coloured by severity */}
+      {/* Chart — yesterday $ per item vs typical, coloured by severity */}
       <div style={{ width: '100%', height: 190 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
@@ -350,7 +350,7 @@ function DailyWasteWatch() {
               tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
               tickLine={false}
               axisLine={{ stroke: 'rgba(0, 28, 53,0.15)' }}
-              tickFormatter={(v) => `£${v}`}
+              tickFormatter={(v) => `$${v}`}
             />
             <YAxis
               type="category"
@@ -362,7 +362,7 @@ function DailyWasteWatch() {
             />
             <Tooltip
               contentStyle={tipStyle}
-              formatter={(value, name) => [`£${value}`, String(name) === 'yesterday' ? 'Yesterday' : 'Typical']}
+              formatter={(value, name) => [`$${value}`, String(name) === 'yesterday' ? 'Yesterday' : 'Typical']}
             />
             <Bar dataKey="typical" name="typical" fill="rgba(0, 28, 53,0.12)" radius={[3, 3, 3, 3]} maxBarSize={10} />
             <Bar dataKey="yesterday" name="yesterday" radius={[3, 3, 3, 3]} maxBarSize={10}>
@@ -419,7 +419,7 @@ function DailyWasteWatch() {
                   )}
                 </div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#B45309', textAlign: 'right', minWidth: 40 }}>
-                  £{r.spendYesterday}
+                  ${r.spendYesterday}
                 </div>
               </div>
             ))}

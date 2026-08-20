@@ -189,7 +189,7 @@ export default function ManagerDashboard({
           <ChartCard
             title="Sales v staff v forecast · hour by hour"
             actions={shiftActions('Sales v staff v forecast · hour by hour')}
-            subtitle="Bars: actual £ (cyan = ahead of forecast, pink = behind, sand = not yet). Line: forecast £. Right axis: staff headcount — solid for hours worked, dashed for the rest of the roster."
+            subtitle="Bars: actual $ (cyan = ahead of forecast, pink = behind, sand = not yet). Line: forecast $. Right axis: staff headcount — solid for hours worked, dashed for the rest of the roster."
             height={280}
           >
             <HourlyCombo data={hourlyTrading} />

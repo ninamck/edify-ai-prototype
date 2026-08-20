@@ -51,8 +51,8 @@ export default function ProductSheetDetailsCard({
   const perUnitCost = unitsInPack > 0 ? packCost / unitsInPack : packCost;
   const packLabel =
     packType === 'Pack'
-      ? `${packQty} × ${singleUnitVolumeOrWeight ?? 1}${unitType} · £${packCost.toFixed(2)}`
-      : `${packQty}${unitType} · £${packCost.toFixed(2)}`;
+      ? `${packQty} × ${singleUnitVolumeOrWeight ?? 1}${unitType} · $${packCost.toFixed(2)}`
+      : `${packQty}${unitType} · $${packCost.toFixed(2)}`;
 
   return (
     <CardShell
@@ -81,7 +81,7 @@ export default function ProductSheetDetailsCard({
         <FieldRow label="Category">{category}</FieldRow>
         <FieldRow label="Pack">{packLabel}</FieldRow>
         <FieldRow label="Unit cost">
-          £{perUnitCost.toFixed(2)}/{unitType}
+          ${perUnitCost.toFixed(2)}/{unitType}
         </FieldRow>
         <FieldRow label="Allergens">
           {allergens.length > 0 ? allergens.join(', ') : 'None declared'}

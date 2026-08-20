@@ -88,7 +88,7 @@ export default function CostRatioScatter({
             cursor={{ strokeDasharray: '3 3' }}
             contentStyle={DUNKIN_TOOLTIP_STYLE}
             formatter={(v, name) => {
-              if (name === 'Sales') return [`£${Number(v).toLocaleString('en-US')}`, name];
+              if (name === 'Sales') return [`$${Number(v).toLocaleString('en-US')}`, name];
               if (name === 'Food %' || name === 'Labour %') return [`${Number(v).toFixed(1)}%`, name];
               return [v, String(name)];
             }}

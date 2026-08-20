@@ -118,7 +118,7 @@ function todayLabel(): string {
 /**
  * Blend a received delivery into a master product's per-site weighted-average
  * cost. `deliveredUnits` and `deliveredUnitCost` are expressed in the master's
- * reference `unit` (e.g. eggs and £-per-egg). The first real purchase for a
+ * reference `unit` (e.g. eggs and $-per-egg). The first real purchase for a
  * site replaces its "estimated" state with a calculated WAC.
  */
 export function recordMasterDelivery(

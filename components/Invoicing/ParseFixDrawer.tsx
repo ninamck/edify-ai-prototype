@@ -133,7 +133,7 @@ export default function ParseFixDrawer({ invoice, focusLineId, onClose, onEdited
                     />
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>
-                    Unit price £
+                    Unit price $
                     <input
                       key={`${line.id}-price-${line.unitPrice}`}
                       type="number"
@@ -145,7 +145,7 @@ export default function ParseFixDrawer({ invoice, focusLineId, onClose, onEdited
                     />
                   </label>
                   <div style={{ marginLeft: 'auto', fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)', paddingBottom: '6px' }}>
-                    £{line.lineTotal.toFixed(2)}
+                    ${line.lineTotal.toFixed(2)}
                   </div>
                 </div>
               </div>

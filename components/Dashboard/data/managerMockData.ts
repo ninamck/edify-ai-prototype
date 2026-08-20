@@ -51,8 +51,8 @@ export const WEATHER_HOURLY: WeatherRow[] = [
 
 export interface HourlyTradingRow {
   hour: string;        // '6am'
-  actual: number | null;   // £ sales, null if future hour
-  forecast: number;    // £ forecast sales
+  actual: number | null;   // $ sales, null if future hour
+  forecast: number;    // $ forecast sales
   staff: number;       // headcount on the floor — actual if past, rostered if future
 }
 
@@ -83,7 +83,7 @@ export interface DeliveryDrop {
   supplier: string;
   eta: string;
   lines: number;
-  spend: number;    // £
+  spend: number;    // $
   status: 'done' | 'in-window' | 'upcoming';
 }
 
@@ -101,8 +101,8 @@ export interface WasteRow {
   category: WasteCategory;
   unitsToday: number;
   unitsTypical: number;    // rolling average waste for this time of day
-  spendToday: number;      // £ wasted so far today
-  spendTypical: number;    // £ typically wasted by this time of day
+  spendToday: number;      // $ wasted so far today
+  spendTypical: number;    // $ typically wasted by this time of day
   flag?: string;           // short action hint, only on anomalies
 }
 
@@ -119,8 +119,8 @@ export const WASTE_TODAY: WasteRow[] = [
 
 export interface WtdSupplierSpend {
   supplier: string;
-  spend: number;   // £ week-to-date
-  budget: number;  // £ weekly budget
+  spend: number;   // $ week-to-date
+  budget: number;  // $ weekly budget
 }
 
 export const WTD_SPEND: WtdSupplierSpend[] = [

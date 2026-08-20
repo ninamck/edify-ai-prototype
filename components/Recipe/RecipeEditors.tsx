@@ -873,7 +873,7 @@ export function PriceEditor({
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
       <div>
-        <label style={editLabelStyle}>Ingredient cost (£)</label>
+        <label style={editLabelStyle}>Ingredient cost ($)</label>
         <input
           type="number" min={0} step="0.01"
           value={draft.ingredientCost}
@@ -882,7 +882,7 @@ export function PriceEditor({
         />
       </div>
       <div>
-        <label style={editLabelStyle}>Dine-in price (£)</label>
+        <label style={editLabelStyle}>Dine-in price ($)</label>
         <input
           type="number" min={0} step="0.01"
           value={draft.priceDineIn}
@@ -891,7 +891,7 @@ export function PriceEditor({
         />
       </div>
       <div>
-        <label style={editLabelStyle}>Takeaway price (£)</label>
+        <label style={editLabelStyle}>Takeaway price ($)</label>
         <input
           type="number" min={0} step="0.01"
           value={draft.priceTakeaway}
@@ -900,7 +900,7 @@ export function PriceEditor({
         />
       </div>
       <div>
-        <label style={editLabelStyle}>Delivery price (£)</label>
+        <label style={editLabelStyle}>Delivery price ($)</label>
         <input
           type="number" min={0} step="0.01"
           value={draft.priceDelivery}

@@ -367,8 +367,8 @@ export function StorePerformanceDashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
         <KpiTile
           label="Sales this week"
-          value={`£${WEEK_TOTAL.toLocaleString('en-GB')}`}
-          delta={`+£${(WEEK_TOTAL - LW_TOTAL).toLocaleString('en-GB')} (+${WEEK_DELTA_PCT.toFixed(1)}%)`}
+          value={`$${WEEK_TOTAL.toLocaleString('en-GB')}`}
+          delta={`+$${(WEEK_TOTAL - LW_TOTAL).toLocaleString('en-GB')} (+${WEEK_DELTA_PCT.toFixed(1)}%)`}
           positive
           context="vs last week · 6 stores"
           icon={<TrendingUp size={13} color="var(--color-accent-deep)" strokeWidth={2.2} />}
@@ -383,8 +383,8 @@ export function StorePerformanceDashboard() {
         />
         <KpiTile
           label="Avg transaction"
-          value="£4.87"
-          delta="+£0.06"
+          value="$4.87"
+          delta="+$0.06"
           positive
           context="menu price round from 1 Apr"
           icon={<Target size={13} color="var(--color-text-muted)" strokeWidth={2.2} />}
@@ -404,15 +404,15 @@ export function StorePerformanceDashboard() {
         <div style={FULL}>
           <ChartCard
             title="Sales by day · this week vs last"
-            subtitle="Bars: this week's actual £ (cyan = ahead of last week, pink = behind). Line: same day last week."
+            subtitle="Bars: this week's actual $ (cyan = ahead of last week, pink = behind). Line: same day last week."
             height={280}
           >
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={DAILY_SALES} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(0, 28, 53,0.08)" vertical={false} />
                 <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={{ stroke: 'rgba(0, 28, 53,0.15)' }} />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `£${(v / 1000).toFixed(0)}k`} width={44} />
-                <Tooltip contentStyle={tipStyle} formatter={(v) => `£${Number(v ?? 0).toLocaleString('en-GB')}`} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} width={44} />
+                <Tooltip contentStyle={tipStyle} formatter={(v) => `$${Number(v ?? 0).toLocaleString('en-GB')}`} />
                 <Bar dataKey="actual" name="This week" radius={[4, 4, 0, 0]} maxBarSize={44}>
                   {DAILY_SALES.map((d) => (
                     <Cell key={d.day} fill={d.actual >= d.lastWeek ? OK : WARN} />
@@ -434,9 +434,9 @@ export function StorePerformanceDashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={DAYPARTS} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(0, 28, 53,0.08)" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `£${(v / 1000).toFixed(0)}k`} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                 <YAxis type="category" dataKey="part" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} width={78} />
-                <Tooltip contentStyle={tipStyle} formatter={(v) => `£${Number(v ?? 0).toLocaleString('en-GB')}`} />
+                <Tooltip contentStyle={tipStyle} formatter={(v) => `$${Number(v ?? 0).toLocaleString('en-GB')}`} />
                 <Bar dataKey="sales" name="Sales" fill={MID} radius={[0, 4, 4, 0]} maxBarSize={22} />
               </BarChart>
             </ResponsiveContainer>
@@ -468,10 +468,10 @@ export function StorePerformanceDashboard() {
                       <span style={{ color: 'var(--color-text-muted)', fontWeight: 700, marginRight: 8 }}>{i + 1}</span>
                       {s.store}
                     </td>
-                    <td style={{ ...TD, fontWeight: 600 }}>£{s.sales.toLocaleString('en-GB')}</td>
+                    <td style={{ ...TD, fontWeight: 600 }}>${s.sales.toLocaleString('en-GB')}</td>
                     <td style={TD}><DeltaText pct={s.vsLw} /></td>
                     <td style={TD}><DeltaText pct={s.vsForecast} /></td>
-                    <td style={TD}>£{s.atv.toFixed(2)}</td>
+                    <td style={TD}>${s.atv.toFixed(2)}</td>
                     <td style={TD}>{s.cogs.toFixed(1)}%</td>
                   </tr>
                 ))}
@@ -484,15 +484,15 @@ export function StorePerformanceDashboard() {
         <div style={HALF}>
           <ChartCard
             title="Total sales across all sites · last week"
-            subtitle={`£${LW_TOTAL.toLocaleString('en-GB')} across 6 stores.`}
+            subtitle={`$${LW_TOTAL.toLocaleString('en-GB')} across 6 stores.`}
             height={220}
           >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={LAST_WEEK_BY_SITE} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(0, 28, 53,0.08)" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `£${(v / 1000).toFixed(0)}k`} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                 <YAxis type="category" dataKey="store" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} width={132} />
-                <Tooltip contentStyle={tipStyle} formatter={(v) => `£${Number(v ?? 0).toLocaleString('en-GB')}`} />
+                <Tooltip contentStyle={tipStyle} formatter={(v) => `$${Number(v ?? 0).toLocaleString('en-GB')}`} />
                 <Bar dataKey="sales" name="Sales" fill={MID} radius={[0, 4, 4, 0]} maxBarSize={20} />
               </BarChart>
             </ResponsiveContainer>
@@ -503,15 +503,15 @@ export function StorePerformanceDashboard() {
         <div style={HALF}>
           <ChartCard
             title="Highest revenue site · last 30 days"
-            subtitle="Covent Garden leads on £41,200 — 10% clear of Canary Wharf."
+            subtitle="Covent Garden leads on $41,200 — 10% clear of Canary Wharf."
             height={220}
           >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={REVENUE_30D_BY_SITE} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(0, 28, 53,0.08)" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `£${(v / 1000).toFixed(0)}k`} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                 <YAxis type="category" dataKey="store" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} width={132} />
-                <Tooltip contentStyle={tipStyle} formatter={(v) => `£${Number(v ?? 0).toLocaleString('en-GB')}`} />
+                <Tooltip contentStyle={tipStyle} formatter={(v) => `$${Number(v ?? 0).toLocaleString('en-GB')}`} />
                 <Bar dataKey="sales" name="Revenue (30d)" radius={[0, 4, 4, 0]} maxBarSize={20}>
                   {REVENUE_30D_BY_SITE.map((d, i) => (
                     <Cell key={d.store} fill={i === 0 ? OK : MID} />
@@ -526,15 +526,15 @@ export function StorePerformanceDashboard() {
         <div style={FULL}>
           <ChartCard
             title="Sales this week vs the same week last year"
-            subtitle="Bars: this year's actual £. Line: same week last year. Up +6.8% year on year."
+            subtitle="Bars: this year's actual $. Line: same week last year. Up +6.8% year on year."
             height={260}
           >
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={WEEK_VS_LY} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(0, 28, 53,0.08)" vertical={false} />
                 <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={{ stroke: 'rgba(0, 28, 53,0.15)' }} />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `£${(v / 1000).toFixed(0)}k`} width={44} />
-                <Tooltip contentStyle={tipStyle} formatter={(v) => `£${Number(v ?? 0).toLocaleString('en-GB')}`} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} width={44} />
+                <Tooltip contentStyle={tipStyle} formatter={(v) => `$${Number(v ?? 0).toLocaleString('en-GB')}`} />
                 <Bar dataKey="thisYear" name="This year" radius={[4, 4, 0, 0]} maxBarSize={44}>
                   {WEEK_VS_LY.map((d) => (
                     <Cell key={d.day} fill={d.thisYear >= d.lastYear ? OK : WARN} />
@@ -556,9 +556,9 @@ export function StorePerformanceDashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={ATV_BY_SITE} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(0, 28, 53,0.08)" horizontal={false} />
-                <XAxis type="number" domain={[0, 6]} tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `£${Number(v).toFixed(0)}`} />
+                <XAxis type="number" domain={[0, 6]} tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${Number(v).toFixed(0)}`} />
                 <YAxis type="category" dataKey="store" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} width={132} />
-                <Tooltip contentStyle={tipStyle} formatter={(v) => `£${Number(v ?? 0).toFixed(2)}`} />
+                <Tooltip contentStyle={tipStyle} formatter={(v) => `$${Number(v ?? 0).toFixed(2)}`} />
                 <Bar dataKey="atv" name="Avg transaction" fill={MID} radius={[0, 4, 4, 0]} maxBarSize={20} />
               </BarChart>
             </ResponsiveContainer>
@@ -576,8 +576,8 @@ export function StorePerformanceDashboard() {
               <BarChart data={WEEKDAY_HOURLY} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(0, 28, 53,0.08)" vertical={false} />
                 <XAxis dataKey="hour" tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={{ stroke: 'rgba(0, 28, 53,0.15)' }} interval={1} />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `£${v}`} width={44} />
-                <Tooltip contentStyle={tipStyle} formatter={(v) => `£${Number(v ?? 0).toLocaleString('en-GB')}`} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}`} width={44} />
+                <Tooltip contentStyle={tipStyle} formatter={(v) => `$${Number(v ?? 0).toLocaleString('en-GB')}`} />
                 <Bar dataKey="sales" name="Avg weekday sales" radius={[4, 4, 0, 0]} maxBarSize={22}>
                   {WEEKDAY_HOURLY.map((d) => (
                     <Cell key={d.hour} fill={d.hour === '8am' ? OK : MID} />
@@ -592,15 +592,15 @@ export function StorePerformanceDashboard() {
         <div style={HALF}>
           <ChartCard
             title="Revenue trend · last 12 weeks"
-            subtitle="Weekly sales, £ thousands. +13% over the quarter, lifted by the spring menu."
+            subtitle="Weekly sales, $ thousands. +13% over the quarter, lifted by the spring menu."
             height={220}
           >
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={TWELVE_WEEK_TREND} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(0, 28, 53,0.08)" vertical={false} />
                 <XAxis dataKey="week" tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={{ stroke: 'rgba(0, 28, 53,0.15)' }} interval={1} />
-                <YAxis domain={[40, 52]} tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `£${v}k`} width={44} />
-                <Tooltip contentStyle={tipStyle} formatter={(v) => `£${Number(v ?? 0).toFixed(1)}k`} />
+                <YAxis domain={[40, 52]} tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}k`} width={44} />
+                <Tooltip contentStyle={tipStyle} formatter={(v) => `$${Number(v ?? 0).toFixed(1)}k`} />
                 <Line dataKey="sales" name="Weekly sales" stroke={NAVY} strokeWidth={2.4} dot={{ r: 3 }} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -645,9 +645,9 @@ export function StorePerformanceDashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={CATEGORY_REVENUE} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(0, 28, 53,0.08)" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `£${(v / 1000).toFixed(0)}k`} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                 <YAxis type="category" dataKey="category" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} width={110} />
-                <Tooltip contentStyle={tipStyle} formatter={(v) => `£${Number(v ?? 0).toLocaleString('en-GB')}`} />
+                <Tooltip contentStyle={tipStyle} formatter={(v) => `$${Number(v ?? 0).toLocaleString('en-GB')}`} />
                 <Bar dataKey="sales" name="Revenue" radius={[0, 4, 4, 0]} maxBarSize={20}>
                   {CATEGORY_REVENUE.map((d, i) => (
                     <Cell key={d.category} fill={i === 0 ? OK : MID} />
@@ -692,8 +692,8 @@ export function StorePerformanceDashboard() {
               <BarChart data={WEEKEND_VS_WEEKDAY} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(0, 28, 53,0.08)" vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={{ stroke: 'rgba(0, 28, 53,0.15)' }} />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `£${(v / 1000).toFixed(0)}k`} width={44} />
-                <Tooltip contentStyle={tipStyle} formatter={(v) => `£${Number(v ?? 0).toLocaleString('en-GB')}`} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} width={44} />
+                <Tooltip contentStyle={tipStyle} formatter={(v) => `$${Number(v ?? 0).toLocaleString('en-GB')}`} />
                 <Bar dataKey="sales" name="Avg daily sales" radius={[4, 4, 0, 0]} maxBarSize={72}>
                   <Cell fill={MID} />
                   <Cell fill={OK} />
@@ -732,7 +732,7 @@ const TOP_SITES = [
   { store: 'Dubai Mall', region: 'Middle East', local: 'AED 142,300', cad: 53100, vsLw: 8.2 },
   { store: 'Queen St West, Toronto', region: 'Canada', local: '—', cad: 48900, vsLw: 4.1 },
   { store: 'Bryant Park, New York', region: 'US', local: 'US$ 33,800', cad: 46700, vsLw: 5.6 },
-  { store: 'Covent Garden, London', region: 'UK & Europe', local: '£ 9,840', cad: 17000, vsLw: 6.2 },
+  { store: 'Covent Garden, London', region: 'UK & Europe', local: '$ 9,840', cad: 17000, vsLw: 6.2 },
   { store: 'Mall of the Emirates', region: 'Middle East', local: 'AED 118,600', cad: 44300, vsLw: 3.9 },
 ];
 
@@ -740,7 +740,7 @@ const BOTTOM_SITES = [
   { store: 'Sherway Gardens, Toronto', region: 'Canada', local: '—', cad: 9200, vsLw: -6.8 },
   { store: 'Calgary Chinook', region: 'Canada', local: '—', cad: 9900, vsLw: -4.2 },
   { store: 'Riyadh Park', region: 'Middle East', local: 'SAR 26,900', cad: 10100, vsLw: -3.5 },
-  { store: 'Birmingham New St', region: 'UK & Europe', local: '£ 7,260', cad: 12500, vsLw: -1.2 },
+  { store: 'Birmingham New St', region: 'UK & Europe', local: '$ 7,260', cad: 12500, vsLw: -1.2 },
   { store: 'Ottawa Rideau', region: 'Canada', local: '—', cad: 12900, vsLw: -0.8 },
 ];
 

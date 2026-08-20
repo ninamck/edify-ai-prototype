@@ -435,7 +435,7 @@ export type Recipe = {
    * brand so the Burger King menu only shows when the BK persona is active.
    */
   brand?: import('@/components/Production/bkFixtures').Brand;
-  ingredientCost: number;        // £ per serve
+  ingredientCost: number;        // $ per serve
   priceDineIn: number;
   priceTakeaway: number;
   priceDelivery: number;
@@ -446,7 +446,7 @@ export type Recipe = {
    * @deprecated Free-text ingredient list kept for back-compat with
    * the read-only drawer view + un-migrated fixtures. New writes go
    * to `ingredientsV2`. Resolver and editor read from `ingredientsV2`
-   * when present. `price` is the £ line cost for this row at the
+   * when present. `price` is the $ line cost for this row at the
    * stated qty (display-only; typed rows derive cost from the
    * catalogue via components/Recipe/costing.ts instead).
    */
@@ -558,7 +558,7 @@ export type Recipe = {
 };
 
 // Line prices use the same per-unit costs as the master catalogue
-// (espresso £25/kg dosed at 18g ≈ £0.45; whole milk £2.20/L).
+// (espresso $25/kg dosed at 18g ≈ $0.45; whole milk $2.20/L).
 const coffeeIngs = (withMilkMl: number | null) => {
   const list: Recipe['ingredients'] = [
     { name: 'Espresso blend', qty: '7g', supplier: 'Bidvest', price: 0.45 },
@@ -580,7 +580,7 @@ const coffeeIngs = (withMilkMl: number | null) => {
 //     hold this fixed). The `constant: true` flag is informational.
 //   - Milk volume scales per size (smallMl / mediumMl / largeMl).
 //   - The takeaway cup is swapped for the appropriate size.
-//   - Dine-in / takeaway / delivery prices step up by £0.40 / £0.80.
+//   - Dine-in / takeaway / delivery prices step up by $0.40 / $0.80.
 //
 // The override targets reference the ingredient + packaging ids set up
 // in `FITZROY_INGREDIENTSV2_BY_RECIPE` / `FITZROY_PACKAGINGV2_BY_RECIPE`
@@ -1186,7 +1186,7 @@ export function flagVariant(flag: RecipeFlag): 'warning' | 'error' | null {
 }
 
 export function formatCost(n: number): string {
-  return `£${n.toFixed(2)}`;
+  return `$${n.toFixed(2)}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1212,7 +1212,7 @@ function deriveKind(r: typeof PRET_RECIPES[number]): RecipeKind {
  * Pret menus price dine-in and takeaway the same and tack a small
  * surcharge onto delivery (delivery-platform commission). Components
  * (granary loaves, egg mayo fillings, etc.) aren't sold directly so
- * they keep £0 and the drawer hides the Price & margin section as
+ * they keep $0 and the drawer hides the Price & margin section as
  * before. Margin uses a 30% food cost rule of thumb so the rendered
  * "margin %" reads sensibly without per-recipe ingredient costing.
  */
@@ -1232,7 +1232,7 @@ function pricingFor(r: typeof PRET_RECIPES[number], kind: RecipeKind): {
   marginPct: number;
 } {
   // Components and prep items aren't sellable on their own — keep
-  // them at £0 so the drawer's `noPrice` gate hides the section.
+  // them at $0 so the drawer's `noPrice` gate hides the section.
   if (kind === 'component' || r.isPrep) {
     return { ingredientCost: 0, priceDineIn: 0, priceTakeaway: 0, priceDelivery: 0, marginPct: 0 };
   }

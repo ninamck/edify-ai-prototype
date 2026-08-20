@@ -32,7 +32,7 @@ export type FranchiseStore = {
 };
 
 export type FranchiseMetrics = {
-  /** Pre-formatted, brand-local currency string (e.g. "£6.4k"). */
+  /** Pre-formatted, brand-local currency string (e.g. "$6.4k"). */
   salesToday: string;
   storesNeedingAttention: number;
 };
@@ -68,7 +68,7 @@ export const FRANCHISES: Franchise[] = [
     brandColor: '#2F5D50',
     category: 'Coffee & bakery',
     sharesLibrary: true,
-    metrics: { salesToday: '£6.4k', storesNeedingAttention: 1 },
+    metrics: { salesToday: '$6.4k', storesNeedingAttention: 1 },
     stores: [
       {
         id: 'fitzroy-espresso',
@@ -111,7 +111,7 @@ export const FRANCHISES: Franchise[] = [
     brandColor: '#3E7C68',
     category: 'Coffee & bakery',
     sharesLibrary: true,
-    metrics: { salesToday: '£3.8k', storesNeedingAttention: 1 },
+    metrics: { salesToday: '$3.8k', storesNeedingAttention: 1 },
     stores: [
       { id: 'fitzroy-bristol', name: 'Fitzroy Bristol', location: 'Bristol · Clifton' },
       { id: 'fitzroy-bath', name: 'Fitzroy Bath', location: 'Bath · City centre', needsAttention: true },

@@ -1,6 +1,6 @@
 /**
  * Shared formatters for the Activity surface. Keeps the diff /
- * blast-radius renderers from reinventing the same "render a £
+ * blast-radius renderers from reinventing the same "render a $
  * value" / "render a percentage delta" plumbing.
  */
 
@@ -18,7 +18,7 @@ export function formatScalar(
   if (opts.kind === 'currency') {
     const n = typeof value === 'number' ? value : Number(value);
     if (Number.isNaN(n)) return String(value);
-    return `£${n.toFixed(2)}`;
+    return `$${n.toFixed(2)}`;
   }
   if (opts.kind === 'number') {
     const n = typeof value === 'number' ? value : Number(value);

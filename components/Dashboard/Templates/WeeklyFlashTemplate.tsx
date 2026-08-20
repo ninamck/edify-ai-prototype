@@ -114,7 +114,7 @@ export default function WeeklyFlashTemplate({
                       <span style={{ color: 'var(--color-text-muted)', fontWeight: 700, marginRight: 8 }}>{i + 1}</span>
                       {s.site}
                     </td>
-                    <td style={{ ...TD, fontWeight: 600 }}>£{s.sales.toLocaleString('en-GB')}</td>
+                    <td style={{ ...TD, fontWeight: 600 }}>${s.sales.toLocaleString('en-GB')}</td>
                     <td style={TD}><DeltaText pct={s.vsLwPct} /></td>
                     <td style={TD}><DeltaText pct={s.vsForecastPct} /></td>
                     <td style={TD}>{s.theoGpPct.toFixed(1)}%</td>
@@ -215,7 +215,7 @@ export default function WeeklyFlashTemplate({
               title="Top 5 price movers"
               badge={<FigureBadge kind="measured" />}
               actions={weeklyActions('Top 5 price movers')}
-              footer="Net £130/week of price creep across the five. The oat milk rise alone is ~£1,120 annualised across the estate — worth a supplier conversation."
+              footer="Net $130/week of price creep across the five. The oat milk rise alone is ~$1,120 annualised across the estate — worth a supplier conversation."
             >
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
@@ -224,7 +224,7 @@ export default function WeeklyFlashTemplate({
                     <th style={{ ...TH, textAlign: 'left' }}>Supplier</th>
                     <th style={TH}>Price</th>
                     <th style={TH}>Change</th>
-                    <th style={TH}>£ / week</th>
+                    <th style={TH}>$ / week</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -237,7 +237,7 @@ export default function WeeklyFlashTemplate({
                       </td>
                       <td style={TD}><DeltaText pct={m.changePct} goodWhenDown /></td>
                       <td style={{ ...TD, fontWeight: 700, color: m.weeklyImpact > 0 ? WARN_TEXT : OK_TEXT }}>
-                        {m.weeklyImpact > 0 ? '+' : '−'}£{Math.abs(m.weeklyImpact)}
+                        {m.weeklyImpact > 0 ? '+' : '−'}${Math.abs(m.weeklyImpact)}
                       </td>
                     </tr>
                   ))}

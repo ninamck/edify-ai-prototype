@@ -31,7 +31,7 @@ export interface TemplateIngredient {
   name: string;
   qty: number;
   uom: string;
-  /** Pence per uom — `qty * unitCostP / 100` = £ per serve. */
+  /** Pence per uom — `qty * unitCostP / 100` = $ per serve. */
   unitCostP: number;
   /** Provenance label shown alongside the row. */
   source: string;
@@ -80,7 +80,7 @@ export interface RecipeWizardTemplate {
 export interface PackagingTemplate {
   id: string;
   name: string;
-  /** £ per serve. Kept as decimal pounds — matches the existing
+  /** $ per serve. Kept as decimal pounds — matches the existing
    *  packaging picker maths in the wizard. */
   cost: number;
   unit: string;
@@ -398,7 +398,7 @@ export function applySwaps(
   });
 }
 
-/** `qty * unitCostP / 100` — pence-per-uom × uom-count → £. */
+/** `qty * unitCostP / 100` — pence-per-uom × uom-count → $. */
 export function lineCostP(qty: number, unitCostP: number): number {
   return qty * unitCostP;
 }
@@ -409,7 +409,7 @@ export function totalFoodCostP(rows: TemplateIngredient[]): number {
   return rows.reduce((sum, r) => sum + lineCostP(r.qty, r.unitCostP), 0);
 }
 
-/** Convert pence to £ rounded to the nearest penny. */
+/** Convert pence to $ rounded to the nearest penny. */
 export function penceToPounds(p: number): number {
   return Math.round(p) / 100;
 }

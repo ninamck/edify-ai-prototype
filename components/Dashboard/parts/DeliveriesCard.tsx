@@ -98,7 +98,7 @@ export default function DeliveriesCard({
                 {d.lines} lines
               </div>
               <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', textAlign: 'right', minWidth: 50 }}>
-                £{d.spend}
+                ${d.spend}
               </div>
             </div>
           ))}
@@ -112,7 +112,7 @@ export default function DeliveriesCard({
             Week to date
           </span>
           <span style={{ fontSize: 12, fontWeight: 600, color: wtdTotal > wtdBudget ? WARN : 'var(--color-text-secondary)' }}>
-            £{wtdTotal.toLocaleString()} <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>of £{wtdBudget.toLocaleString()} ({wtdPct}%)</span>
+            ${wtdTotal.toLocaleString()} <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>of ${wtdBudget.toLocaleString()} ({wtdPct}%)</span>
           </span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -134,7 +134,7 @@ export default function DeliveriesCard({
                   }} />
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 600, color: over ? WARN : 'var(--color-text-primary)', minWidth: 70, textAlign: 'right' }}>
-                  £{s.spend} / £{s.budget}
+                  ${s.spend} / ${s.budget}
                 </span>
               </div>
             );

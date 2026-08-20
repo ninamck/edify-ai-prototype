@@ -13,7 +13,7 @@ interface InvoiceUploadFlowProps {
 type Step = 'upload' | 'parsing' | 'review' | 'link';
 
 // What the mock OCR "reads" off whatever document the user uploads.
-// The avocado price deliberately disagrees with the PO (£2.10 vs £2.00) so
+// The avocado price deliberately disagrees with the PO ($2.10 vs $2.00) so
 // the resulting match lands with one small variance to review.
 const PARSED_HEADER = {
   supplier: 'Fresh Direct',
@@ -277,7 +277,7 @@ export default function InvoiceUploadFlow({ onDone, onCancel }: InvoiceUploadFlo
                   { label: 'Supplier', value: PARSED_HEADER.supplier, confidence: 99 },
                   { label: 'Invoice no.', value: PARSED_HEADER.invoiceNumber, confidence: 98 },
                   { label: 'Invoice date', value: PARSED_HEADER.date, confidence: 96 },
-                  { label: 'Total (ex VAT)', value: `£${invoiceTotal.toFixed(2)}`, confidence: 97 },
+                  { label: 'Total (ex VAT)', value: `$${invoiceTotal.toFixed(2)}`, confidence: 97 },
                 ].map(f => (
                   <div key={f.label}>
                     <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-secondary)', marginBottom: '3px' }}>
@@ -330,7 +330,7 @@ export default function InvoiceUploadFlow({ onDone, onCancel }: InvoiceUploadFlo
                           />
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid var(--color-border-subtle)', textAlign: 'right', fontWeight: 600 }}>
-                          £{(l.qty * l.unitPrice).toFixed(2)}
+                          ${(l.qty * l.unitPrice).toFixed(2)}
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid var(--color-border-subtle)', textAlign: 'right', fontSize: '11px', color: shaky ? AMBER : 'var(--color-text-secondary)', fontWeight: shaky ? 700 : 400, whiteSpace: 'nowrap' }}>
                           {confidence}%{shaky ? ' — check' : ''}
@@ -391,7 +391,7 @@ export default function InvoiceUploadFlow({ onDone, onCancel }: InvoiceUploadFlo
                     <span style={{ color: 'var(--color-text-primary)' }}>{l.description}</span>
                     <span style={{ whiteSpace: 'nowrap', fontWeight: 600, color: qtyMatches && priceMatches ? 'var(--color-success)' : AMBER }}>
                       {qtyMatches ? `${l.qty} billed = ${received} received ✓` : `${l.qty} billed vs ${received} received`}
-                      {!priceMatches && gl ? ` · £${l.unitPrice.toFixed(2)} vs PO £${gl.price.toFixed(2)}` : ''}
+                      {!priceMatches && gl ? ` · $${l.unitPrice.toFixed(2)} vs PO $${gl.price.toFixed(2)}` : ''}
                     </span>
                   </div>
                 );
@@ -399,8 +399,8 @@ export default function InvoiceUploadFlow({ onDone, onCancel }: InvoiceUploadFlo
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', paddingTop: '10px', borderTop: '1px solid var(--color-border-subtle)', marginBottom: '16px' }}>
-              <span style={{ color: 'var(--color-text-secondary)' }}>GRN total vs invoice £{invoiceTotal.toFixed(2)}</span>
-              <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>£{grnTotal.toFixed(2)}</span>
+              <span style={{ color: 'var(--color-text-secondary)' }}>GRN total vs invoice ${invoiceTotal.toFixed(2)}</span>
+              <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>${grnTotal.toFixed(2)}</span>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>

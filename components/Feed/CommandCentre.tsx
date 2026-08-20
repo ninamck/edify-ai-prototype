@@ -136,7 +136,7 @@ const QUINN_ACTIONS = [
   },
   {
     title: 'Approve Bidfood Thursday basket',
-    detail: '£1,240 · 14 lines',
+    detail: '$1,240 · 14 lines',
   },
   {
     title: 'Map new spinach SKU before production',

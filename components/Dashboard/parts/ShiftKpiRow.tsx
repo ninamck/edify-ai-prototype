@@ -86,8 +86,8 @@ export default function ShiftKpiRow({
     >
       <KpiTile
         label="Sales so far"
-        value={`£${salesSoFar.toLocaleString()}`}
-        delta={`${varianceAhead ? '+' : ''}£${Math.abs(varianceAbs).toLocaleString()} (${varianceAhead ? '+' : ''}${variancePct.toFixed(1)}%)`}
+        value={`$${salesSoFar.toLocaleString()}`}
+        delta={`${varianceAhead ? '+' : ''}$${Math.abs(varianceAbs).toLocaleString()} (${varianceAhead ? '+' : ''}${variancePct.toFixed(1)}%)`}
         positive={varianceAhead}
         context={`as at ${asAt} · vs forecast to now`}
         icon={<Clock size={13} color={muted} strokeWidth={2.2} />}
@@ -95,15 +95,15 @@ export default function ShiftKpiRow({
       />
       <KpiTile
         label="Forecast to now"
-        value={`£${forecastToNow.toLocaleString()}`}
+        value={`$${forecastToNow.toLocaleString()}`}
         context={`as at ${asAt} · model prediction`}
         icon={<Target size={13} color={muted} strokeWidth={2.2} />}
         borderRadius="10px 0 10px 10px"
       />
       <KpiTile
         label="Expected EOD"
-        value={`£${expectedEod.toLocaleString()}`}
-        delta={`${eodAhead ? '+' : ''}£${Math.abs(eodDelta).toLocaleString()}`}
+        value={`$${expectedEod.toLocaleString()}`}
+        delta={`${eodAhead ? '+' : ''}$${Math.abs(eodDelta).toLocaleString()}`}
         positive={eodAhead}
         context="vs full-day forecast"
         icon={<TrendingUp size={13} color={accent} strokeWidth={2.2} />}
@@ -111,7 +111,7 @@ export default function ShiftKpiRow({
       />
       <KpiTile
         label="Full-day forecast"
-        value={`£${fullDayForecast.toLocaleString()}`}
+        value={`$${fullDayForecast.toLocaleString()}`}
         context="baseline target"
         icon={<Target size={13} color={muted} strokeWidth={2.2} />}
         borderRadius="10px 0 10px 10px"

@@ -145,7 +145,7 @@ export default function InvoiceDocDrawer({ invoice, onClose }: { invoice: Invoic
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                 <thead>
                   <tr>
-                    {['Description', 'Qty', 'Unit £', 'Amount £'].map((h, i) => (
+                    {['Description', 'Qty', 'Unit $', 'Amount $'].map((h, i) => (
                       <th key={h} style={{
                         textAlign: i === 0 ? 'left' : 'right',
                         padding: '8px 0',
@@ -180,15 +180,15 @@ export default function InvoiceDocDrawer({ invoice, onClose }: { invoice: Invoic
               <div style={{ width: '200px', fontSize: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: '#6b6b67' }}>
                   <span>Subtotal</span>
-                  <span>£{invoice.total.toFixed(2)}</span>
+                  <span>${invoice.total.toFixed(2)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: '#6b6b67' }}>
                   <span>VAT</span>
-                  <span>£0.00</span>
+                  <span>$0.00</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0 0', marginTop: '4px', borderTop: '2px solid #1e1e1c', fontWeight: 800, fontSize: '14px' }}>
                   <span>Total due</span>
-                  <span>£{invoice.total.toFixed(2)}</span>
+                  <span>${invoice.total.toFixed(2)}</span>
                 </div>
               </div>
             </div>

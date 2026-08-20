@@ -57,7 +57,7 @@ export function getVarianceReason(row: CogsVarianceRow): string {
     : 'Used less than the recipe predicts';
 }
 
-/** Top variance rows by absolute £ impact, for the variance-tab board. */
+/** Top variance rows by absolute $ impact, for the variance-tab board. */
 export function getTopVariances(limit = 10): CogsVarianceRow[] {
   return [...COGS_VARIANCE_ROWS]
     .sort((a, b) => Math.abs(b.varCost) - Math.abs(a.varCost))
@@ -83,23 +83,23 @@ const ROW_INSIGHTS: Record<string, string> = {
   avocado:
     '- **Biggest variance** this period\n- Used 128 kg vs 52 kg recipe\n- New avocado dish not yet costed + unlogged waste\n- **Fix:** cost the new recipe, log waste, recount',
   'smoked-salmon':
-    '- +25% over recipe (+£154)\n- Stock lower than the invoice says\n- Likely a short delivery\n- **Fix:** check delivery vs invoice, raise credit',
+    '- +25% over recipe (+$154)\n- Stock lower than the invoice says\n- Likely a short delivery\n- **Fix:** check delivery vs invoice, raise credit',
   'house-red-wine':
-    '- +25% over recipe (+£78)\n- Bottles down more than sales\n- Over-measures or breakage\n- **Fix:** use measures, log breakages',
+    '- +25% over recipe (+$78)\n- Bottles down more than sales\n- Over-measures or breakage\n- **Fix:** use measures, log breakages',
   'sourdough-loaf':
-    '- +16% over recipe (+£40)\n- Used more than sales explain\n- Staff sandwiches not rung in\n- **Fix:** ring in staff food / comps',
+    '- +16% over recipe (+$40)\n- Used more than sales explain\n- Staff sandwiches not rung in\n- **Fix:** ring in staff food / comps',
   'bagel-vegan':
     '- +12.2% over recipe (50 units)\n- Baking to tray count, not forecast\n- **Fix:** trim standing par ~15%',
   'basil-leaves':
-    '- +31.6% over recipe (£18.60)\n- Fresh herb spoiling before use\n- **Fix:** order smaller, more often',
+    '- +31.6% over recipe ($18.60)\n- Fresh herb spoiling before use\n- **Fix:** order smaller, more often',
   'beans-red-kidney':
-    '- +18.8% over recipe (£7.20)\n- Scoops not weighed to spec\n- Spot-check portioning',
+    '- +18.8% over recipe ($7.20)\n- Scoops not weighed to spec\n- Spot-check portioning',
   'whole-milk':
     '- +9.6% over recipe\n- Steamed-milk waste on the bar (8 L)\n- Watch the espresso bar',
   'oat-milk':
     '- +18.8% over recipe\n- Free-pour on flat whites\n- **Fix:** marked pitcher line',
   'chicken-breast':
-    '- +16% over recipe (+£117)\n- Made heavier than recipe + trim loss\n- **Fix:** weigh portions vs recipe card',
+    '- +16% over recipe (+$117)\n- Made heavier than recipe + trim loss\n- **Fix:** weigh portions vs recipe card',
 };
 
 /** Returns the authored narrative for a variance row, or a generated
@@ -114,9 +114,9 @@ export function getCogsRowInsight(rowId: string): string {
   const mag = Math.abs(row.varPct).toFixed(1);
   const cost = Math.abs(row.varCost).toLocaleString('en-US', { maximumFractionDigits: 2 });
   if (Math.abs(row.varPct) < VARIANCE_INSIGHT_THRESHOLD) {
-    return `- ${mag}% ${dir} theoretical (£${cost})\n- Within tolerance — no action`;
+    return `- ${mag}% ${dir} theoretical ($${cost})\n- Within tolerance — no action`;
   }
-  return `- ${mag}% ${dir} theoretical (£${cost})\n- Check counts, portioning & transfers`;
+  return `- ${mag}% ${dir} theoretical ($${cost})\n- Check counts, portioning & transfers`;
 }
 
 /** Cross-cutting patterns Edify has noticed — shown in a summary card. */
@@ -132,7 +132,7 @@ export const COGS_PATTERNS: CogsPattern[] = [
     id: 'uncosted-recipe',
     title: 'A new recipe not yet costed is the #1 driver',
     detail:
-      'Avocado alone accounts for ~£320 of the gap — a new avocado dish is selling but its recipe isn\u2019t costed yet, so theoretical under-counts it, and some avocado waste went unlogged. Cost the recipe and the variance largely closes.',
+      'Avocado alone accounts for ~$320 of the gap — a new avocado dish is selling but its recipe isn\u2019t costed yet, so theoretical under-counts it, and some avocado waste went unlogged. Cost the recipe and the variance largely closes.',
     severity: 'high',
   },
   {
@@ -267,7 +267,7 @@ export const COGS_INSIGHT_CARDS: CogsInsightCard[] = [
     severity: 'low',
     title: 'Unmatched POS items hiding costs',
     diagnosis:
-      'Several POS sale items aren\u2019t matched to a recipe or product, so their cost lands in Unassigned (£140) instead of a menu category.',
+      'Several POS sale items aren\u2019t matched to a recipe or product, so their cost lands in Unassigned ($140) instead of a menu category.',
     action: 'Match the POS items to their recipes/products so the cost is attributed correctly.',
     impactDh: 110.0,
     kind: 'Setup',
@@ -309,13 +309,13 @@ export function getCogsChatAnswer(question: string): CogsChatAnswer {
     (q.includes('exchange') || q.includes(' fx') || q.startsWith('fx') || q.includes('currency') || q.includes('cad') || q.includes('rate'))
   ) {
     return {
-      text: `Mostly the exchange rate. Coffee & beans is up **6.2% (£214)** vs last period, and Edify splits it three ways: **+4.1pp (£142) is FX** — the pound weakened against the Canadian dollar across this period's receipts — **+1.8pp (£62) is a genuine supplier increase** (Espresso Forte rose CA$1.20/case at source), and **+0.3pp is volume**. Purchases from Second Cup Central Supply are billed in CAD and booked at the rate locked at each goods receipt, which is what lets me separate the two. Only the 1.8pp is worth raising with the supplier; if the FX drag persists, consider a **contracted rate** on the supplier record.`,
+      text: `Mostly the exchange rate. Coffee & beans is up **6.2% ($214)** vs last period, and Edify splits it three ways: **+4.1pp ($142) is FX** — the pound weakened against the Canadian dollar across this period's receipts — **+1.8pp ($62) is a genuine supplier increase** (Espresso Forte rose CA$1.20/case at source), and **+0.3pp is volume**. Purchases from Second Cup Central Supply are billed in CAD and booked at the rate locked at each goods receipt, which is what lets me separate the two. Only the 1.8pp is worth raising with the supplier; if the FX drag persists, consider a **contracted rate** on the supplier record.`,
     };
   }
 
   if (q.includes('biggest') || q.includes('largest') || q.includes('worst')) {
     return {
-      text: `The biggest single discrepancy is **Avocado** — about **£320** of unfavourable variance. Actual usage (128 kg) far outruns the 52 kg theoretical because a **new avocado dish isn't costed in the recipe library yet**, so theory under-counts it, and some avocado waste went unlogged. Cost the recipe, log the waste and recount before locking. Next worst is **Smoked Salmon** (+£154) — stock is lower than the invoice, a likely short delivery.`,
+      text: `The biggest single discrepancy is **Avocado** — about **$320** of unfavourable variance. Actual usage (128 kg) far outruns the 52 kg theoretical because a **new avocado dish isn't costed in the recipe library yet**, so theory under-counts it, and some avocado waste went unlogged. Cost the recipe, log the waste and recount before locking. Next worst is **Smoked Salmon** (+$154) — stock is lower than the invoice, a likely short delivery.`,
       rowIds: ['avocado', 'smoked-salmon'],
     };
   }
@@ -325,7 +325,7 @@ export function getCogsChatAnswer(question: string): CogsChatAnswer {
     !q.includes('item')
   ) {
     return {
-      text: `Actual COGS is **${COGS_SUMMARY.actualPct.toFixed(1)}%** vs a theoretical **${COGS_SUMMARY.theoreticalPct.toFixed(1)}%** — that's **+${COGS_SUMMARY.variancePp.toFixed(1)}pp**, or about **£${fmt(COGS_SUMMARY.varianceCost)}** unfavourable. **Food** is the driver (31.5% vs 28% target). Roughly three causes, in order: a new uncosted recipe (Avocado), a supplier short delivery (Salmon), and over-portioning on milks and protein.`,
+      text: `Actual COGS is **${COGS_SUMMARY.actualPct.toFixed(1)}%** vs a theoretical **${COGS_SUMMARY.theoreticalPct.toFixed(1)}%** — that's **+${COGS_SUMMARY.variancePp.toFixed(1)}pp**, or about **$${fmt(COGS_SUMMARY.varianceCost)}** unfavourable. **Food** is the driver (31.5% vs 28% target). Roughly three causes, in order: a new uncosted recipe (Avocado), a supplier short delivery (Salmon), and over-portioning on milks and protein.`,
     };
   }
 
@@ -352,14 +352,14 @@ export function getCogsChatAnswer(question: string): CogsChatAnswer {
 
   if (q.includes('deliver') || q.includes('invoice') || q.includes('supplier') || q.includes('match') || q.includes('salmon')) {
     return {
-      text: `Two supply-side issues stand out. **Smoked Salmon** is +£154 over recipe because stock on hand is below the invoice — a likely **short delivery** to check against goods-in and credit. Separately, several **POS sale items aren't matched to a recipe**, so ~£140 of cost lands in Unassigned. Both are data fixes, not kitchen problems.`,
+      text: `Two supply-side issues stand out. **Smoked Salmon** is +$154 over recipe because stock on hand is below the invoice — a likely **short delivery** to check against goods-in and credit. Separately, several **POS sale items aren't matched to a recipe**, so ~$140 of cost lands in Unassigned. Both are data fixes, not kitchen problems.`,
       rowIds: ['smoked-salmon'],
     };
   }
 
   if (q.includes('waste')) {
     return {
-      text: `Logged waste is modest this period (**£${fmt(COGS_CLASS_TOTALS.waste)}** total, mostly steamed milk on the bar and a little produce). The one watch-out is **avocado and basil**, where some spoilage looks unlogged — but the variance is dominated by a new uncosted recipe and portioning, not bin loss.`,
+      text: `Logged waste is modest this period (**$${fmt(COGS_CLASS_TOTALS.waste)}** total, mostly steamed milk on the bar and a little produce). The one watch-out is **avocado and basil**, where some spoilage looks unlogged — but the variance is dominated by a new uncosted recipe and portioning, not bin loss.`,
     };
   }
 
@@ -372,7 +372,7 @@ export function getCogsChatAnswer(question: string): CogsChatAnswer {
 
   if (q.includes('summar') || q.includes('story') || q.includes('overview') || q.includes('explain')) {
     return {
-      text: `This period actual COGS landed at **${COGS_SUMMARY.actualPct.toFixed(1)}%** against a **${COGS_SUMMARY.theoreticalPct.toFixed(1)}%** theoretical — **£${fmt(COGS_SUMMARY.varianceCost)}** unfavourable. The headline isn't the kitchen: **roughly two-thirds of the gap is data/setup** (a new Avocado recipe not yet costed and a Smoked Salmon short delivery). The genuine operational slice is **milk over-pour, wine measures and protein portions**. Fix the data issues first, then run a portioning spot-check.`,
+      text: `This period actual COGS landed at **${COGS_SUMMARY.actualPct.toFixed(1)}%** against a **${COGS_SUMMARY.theoreticalPct.toFixed(1)}%** theoretical — **$${fmt(COGS_SUMMARY.varianceCost)}** unfavourable. The headline isn't the kitchen: **roughly two-thirds of the gap is data/setup** (a new Avocado recipe not yet costed and a Smoked Salmon short delivery). The genuine operational slice is **milk over-pour, wine measures and protein portions**. Fix the data issues first, then run a portioning spot-check.`,
     };
   }
 

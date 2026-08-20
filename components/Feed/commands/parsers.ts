@@ -69,12 +69,12 @@ function extractMinutes(text: string): number | null {
   return n;
 }
 
-/** Pull a £ price (or pence) from a string. Returns pounds as a
- *  number, or null. Handles "£4.50", "4.50", "20p". */
+/** Pull a $ price (or pence) from a string. Returns pounds as a
+ *  number, or null. Handles "$4.50", "4.50", "20p". */
 function extractPrice(text: string): number | null {
   const pence = text.match(/(\d+)\s*p\b/i);
   if (pence) return Number(pence[1]) / 100;
-  const pound = text.match(/£\s*(\d+(?:\.\d+)?)/);
+  const pound = text.match(/$\s*(\d+(?:\.\d+)?)/);
   if (pound) return Number(pound[1]);
   // Last resort — bare decimal that looks like money
   const bare = text.match(/\b(\d+\.\d{2})\b/);
@@ -578,7 +578,7 @@ export function parseMenu(text: string): CommandIntent | null {
     .replace(/\b84\b/i, ' ')
     .replace(/(?:by|to|for|of|the)\s+/gi, ' ')
     .replace(/\b(today|now|on the menu|off the menu|available|unavailable|price|raise|lower|drop)\b/gi, ' ')
-    .replace(/£\s*\d+(?:\.\d+)?|\d+\s*p\b|\d+\.\d{2}/gi, ' ')
+    .replace(/$\s*\d+(?:\.\d+)?|\d+\s*p\b|\d+\.\d{2}/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   if (recipeName.length === 0) recipeName = undefined as unknown as string;
@@ -634,7 +634,7 @@ export interface SupplierArgs {
   /** New value as a string (the card normalises it to the right type). */
   value?: string;
   /** All fields mentioned in the sentence, when there's more than one
-   *  ("update Agility lead time and MOV to 3 days and £350"). The
+   *  ("update Agility lead time and MOV to 3 days and $350"). The
    *  card multi-selects these and pre-fills each value. `field`/
    *  `value` still carry the first hit for backwards compatibility. */
   fields?: { field: SupplierField; value?: string }[];
@@ -666,7 +666,7 @@ export function parseSupplier(text: string): CommandIntent | null {
 
   // Per-field value extraction. Each field looks for its own
   // signature pattern so several values can coexist in one sentence
-  // ("…to 3 days and £350").
+  // ("…to 3 days and $350").
   const valueOf = (f: SupplierField): string | undefined => {
     if (f === 'cutOffTime') {
       const m = text.match(/\b(\d{1,2})(?::(\d{2}))\s*(am|pm)?\b/i) ?? text.match(/\b(\d{1,2})()\s*(am|pm)\b/i);
@@ -679,12 +679,12 @@ export function parseSupplier(text: string): CommandIntent | null {
     }
     if (f === 'leadTimeDays') {
       // Prefer a "3 days"-style number; fall back to a bare number
-      // that isn't a £ amount.
-      const m = text.match(/(\d+)\s*(?:day|days|d)\b/i) ?? text.match(/(?<!£\s?)\b(\d+)\b/);
+      // that isn't a $ amount.
+      const m = text.match(/(\d+)\s*(?:day|days|d)\b/i) ?? text.match(/(?<!$\s?)\b(\d+)\b/);
       return m?.[1];
     }
     if (f === 'minimumOrderValue') {
-      const m = text.match(/£\s*(\d+(?:\.\d+)?)/);
+      const m = text.match(/$\s*(\d+(?:\.\d+)?)/);
       if (m) return m[1];
       const v = extractPrice(text);
       return v !== null ? String(v) : undefined;
@@ -731,7 +731,7 @@ export function parseSupplier(text: string): CommandIntent | null {
         .replace(SUPPLIER_KEYWORDS, ' ')
         .replace(/\b(to|at|of|for|the|by)\b/gi, ' ')
         .replace(/\d+(?::\d+)?(?:\s*(?:am|pm|days?|d|min|mins))?/gi, ' ')
-        .replace(/£\d+/g, ' ')
+        .replace(/$\d+/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
       if (stripped.length > 1) supplierName = stripped;

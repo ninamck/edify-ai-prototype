@@ -85,7 +85,7 @@ type Props = {
    * `null` resets the override (back to baseline).
    */
   onCommit: (newValue: number | null) => void;
-  /** Parser used to turn the typed string into a number (e.g. strip "£"). */
+  /** Parser used to turn the typed string into a number (e.g. strip "$"). */
   parse: (input: string) => number | null;
   /** Whether this tile is currently overridden vs the baseline. */
   isOverridden: boolean;
@@ -320,11 +320,11 @@ function EditedDeltaPill({ pct }: { pct: number }) {
 
 /** Strip non-numeric characters except a single decimal point. */
 function stripNumeric(s: string): string {
-  // Allow "£1,200" → "1200", "1.2k" → "1.2k" handled below.
+  // Allow "$1,200" → "1200", "1.2k" → "1.2k" handled below.
   return s.replace(/[^0-9.\-kK]/g, '');
 }
 
-/** Parse a currency input like "£1,200", "1.2k", "1500". */
+/** Parse a currency input like "$1,200", "1.2k", "1500". */
 export function parseCurrencyInput(raw: string): number | null {
   const t = stripNumeric(raw.trim());
   if (!t) return null;

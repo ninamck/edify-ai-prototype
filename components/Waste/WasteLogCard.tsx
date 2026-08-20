@@ -76,7 +76,7 @@ export default function WasteLogCard({
   function log(andAddAnother: boolean) {
     // Prototype — no persistence. Show a confirmation toast, then return.
     setConfirmation(
-      `Logged ${qty} ${uom}${qty === 1 ? '' : 's'} of ${product!.name} · £${value.toFixed(2)}`,
+      `Logged ${qty} ${uom}${qty === 1 ? '' : 's'} of ${product!.name} · $${value.toFixed(2)}`,
     );
     setTimeout(() => {
       setConfirmation(null);
@@ -172,7 +172,7 @@ export default function WasteLogCard({
               marginTop: '2px',
             }}
           >
-            {product.category} · £{product.unitCost.toFixed(2)} per {product.uomOptions[0]}
+            {product.category} · ${product.unitCost.toFixed(2)} per {product.uomOptions[0]}
           </div>
         </div>
       </div>
@@ -263,7 +263,7 @@ export default function WasteLogCard({
                   fontFamily: 'var(--font-display, var(--font-primary))',
                 }}
               >
-                £{value.toFixed(2)}
+                ${value.toFixed(2)}
               </div>
             </Field>
           </div>
@@ -1056,7 +1056,7 @@ function ConfirmLogModal({
           <SummaryRow label="Quantity" value={`${qty} ${uom}${qty === 1 ? '' : 's'}`} />
           <SummaryRow label="Reason" value={reasonLabel} />
           <SummaryRow label="When" value={whenLabel} />
-          <SummaryRow label="Value" value={`£${value.toFixed(2)}`} strong />
+          <SummaryRow label="Value" value={`$${value.toFixed(2)}`} strong />
         </div>
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>

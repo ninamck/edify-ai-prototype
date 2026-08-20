@@ -112,7 +112,7 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
       setSelected(new Set());
       const total = invoices.reduce((s, i) => s + i.total, 0);
       recordSync(ids, invoices.map(i => i.invoiceNumber), total);
-      setToast(`${ids.length} synced to Xero · £${total.toFixed(2)}`);
+      setToast(`${ids.length} synced to Xero · $${total.toFixed(2)}`);
     }, 900);
   };
 
@@ -281,7 +281,7 @@ export default function InvoiceList({ onViewInvoice, onViewPassThrough }: Invoic
           <span style={{ color: 'var(--color-success)', fontWeight: 700 }}>✓</span>
           <span>
             <strong>{autoSyncNotice.count} invoice{autoSyncNotice.count === 1 ? '' : 's'} auto-synced to Xero on arrival</strong>
-            {' '}· £{autoSyncNotice.total.toFixed(2)} — clean three-way match, nothing to review.
+            {' '}· ${autoSyncNotice.total.toFixed(2)} — clean three-way match, nothing to review.
           </span>
           <button
             onClick={() => setAutoSyncNotice(null)}
@@ -614,7 +614,7 @@ function SyncActionBar({ count, blockedCount, total, onClear, onSync }: { count:
           {count}
         </span>
         <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
-          {count === 1 ? '1 invoice selected' : `${count} invoices selected`} · £{total.toFixed(2)}
+          {count === 1 ? '1 invoice selected' : `${count} invoices selected`} · ${total.toFixed(2)}
         </span>
         {blockedCount > 0 && (
           <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-warning)' }}>
@@ -681,13 +681,13 @@ function SyncConfirmModal({ invoices, onCancel, onConfirm }: { invoices: Invoice
           Sync {invoices.length} invoice{invoices.length === 1 ? '' : 's'} to Xero?
         </h2>
         <p style={{ fontSize: '13px', color: 'var(--color-text-primary)', margin: '0 0 14px', lineHeight: 1.5 }}>
-          Total <strong>£{total.toFixed(2)}</strong>. This pushes final invoice data and locks the rows.
+          Total <strong>${total.toFixed(2)}</strong>. This pushes final invoice data and locks the rows.
         </p>
         <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid var(--color-border-subtle)', borderRadius: '8px', padding: '8px 12px', marginBottom: '18px', fontSize: '12px', lineHeight: 1.7 }}>
           {invoices.map(inv => (
             <div key={inv.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
               <span><strong>{inv.invoiceNumber}</strong> · {inv.supplier}</span>
-              <span style={{ color: 'var(--color-text-secondary)' }}>£{inv.total.toFixed(2)}</span>
+              <span style={{ color: 'var(--color-text-secondary)' }}>${inv.total.toFixed(2)}</span>
             </div>
           ))}
         </div>
@@ -727,9 +727,9 @@ function PassThroughRow({ invoice, onView }: { invoice: PassThroughInvoice; onVi
       <td style={cell}>{invoice.supplier}</td>
       <td style={{ ...cell, color: 'var(--color-text-secondary)' }}>{invoice.invoiceDate}</td>
       <td style={{ ...cell, color: 'var(--color-text-secondary)' }}>{invoice.dueDate ?? '—'}</td>
-      <td style={{ ...cell, fontWeight: 600 }}>£{grandTotal(invoice).toFixed(2)}</td>
+      <td style={{ ...cell, fontWeight: 600 }}>${grandTotal(invoice).toFixed(2)}</td>
       <td style={{ ...cell, color: invoice.vatRate === null ? 'var(--color-text-secondary)' : 'var(--color-text-primary)' }}>
-        {invoice.vatRate === null ? '—' : `${invoice.vatRate}% · £${vatAmount(invoice).toFixed(2)}`}
+        {invoice.vatRate === null ? '—' : `${invoice.vatRate}% · $${vatAmount(invoice).toFixed(2)}`}
       </td>
       <td style={cell}>
         {invoice.category ? (
@@ -871,7 +871,7 @@ function InvoiceRow({ invoice, isLocallySynced, isSyncing, syncable, selected, g
             </span>
           </>
         ) : (
-          <>£{invoice.total.toFixed(2)}</>
+          <>${invoice.total.toFixed(2)}</>
         )}
       </td>
       <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
@@ -1032,7 +1032,7 @@ function CreditNoteChip({ invoice }: { invoice: Invoice }) {
   if (notes.length === 0) return <span style={{ color: 'var(--color-text-secondary)' }}>—</span>;
   const label = notes.length === 1 ? notes[0].ref : `${notes.length} CNs`;
   const statuses = Array.from(new Set(notes.map(n => n.status)));
-  const title = notes.map(n => `${n.ref} · ${n.status} · £${n.amount.toFixed(2)}`).join('\n');
+  const title = notes.map(n => `${n.ref} · ${n.status} · $${n.amount.toFixed(2)}`).join('\n');
   return (
     <span
       title={title}

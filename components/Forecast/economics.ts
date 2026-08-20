@@ -4,7 +4,7 @@
  * The fixtures only ship per-SKU unit forecasts and synthesised hourly
  * actuals. Operators don't think in SKUs and units — they think in:
  *
- *   • Currency    (£ revenue for the day / phase)
+ *   • Currency    ($ revenue for the day / phase)
  *   • Items       (quantity sold)
  *   • Transactions(basket counts)
  *
@@ -42,7 +42,7 @@ import { DEMO_TODAY } from '@/components/Production/fixtures';
 
 /**
  * Average sell-price by category. These are eyeballed Pret-like values
- * (in £) so the headline currency number reads in the right ballpark for
+ * (in $) so the headline currency number reads in the right ballpark for
  * a typical mid-size store. They're not load-bearing — anyone can tune
  * them per estate later — they just need to be consistent.
  */
@@ -224,7 +224,7 @@ export const PHASE_LABEL: Record<Phase, string> = {
 /**
  * The three operator-language numbers, plus a phase breakdown.
  *
- * `items` is the quantity sold. `revenue` is in £. `transactions` is the
+ * `items` is the quantity sold. `revenue` is in $. `transactions` is the
  * number of baskets (derived from items via `basketSizeFor`).
  */
 export type DayTotals = {
@@ -397,7 +397,7 @@ function phaseSplitFromHourly(
 // `compareDay` reads the same per-hour cells the live actuals come from
 // and returns both numbers truncated at "now": forecast-so-far + actual-
 // so-far. It also exposes the full-day forecast separately (so the card
-// can still show "of £X expected for the full day") and a per-phase
+// can still show "of $X expected for the full day") and a per-phase
 // status so the UI can show pending phases as "Not yet" instead of a
 // -100% delta.
 // ────────────────────────────────────────────────────────────────────────────
@@ -726,8 +726,8 @@ function sellableSkusForSite(siteId: SiteId): SellableSku[] {
 // ────────────────────────────────────────────────────────────────────────────
 
 export function formatCurrency(n: number): string {
-  if (n >= 10_000) return `£${(n / 1000).toFixed(1)}k`;
-  return `£${n.toLocaleString('en-GB')}`;
+  if (n >= 10_000) return `$${(n / 1000).toFixed(1)}k`;
+  return `$${n.toLocaleString('en-GB')}`;
 }
 
 export function formatCount(n: number): string {

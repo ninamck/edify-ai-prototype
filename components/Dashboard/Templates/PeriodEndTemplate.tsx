@@ -169,7 +169,7 @@ function BridgeDrill({ stepKey, items }: { stepKey: BridgeStepKey; items: Bridge
         {items.map((row) => (
           <div key={row.item} style={{ display: 'flex', alignItems: 'baseline', gap: 10, fontSize: 12.5 }}>
             <span style={{ flex: '0 0 180px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{row.item}</span>
-            <span style={{ fontWeight: 700, color: VALUE_INK, whiteSpace: 'nowrap' }}>£{row.value.toFixed(1)}k</span>
+            <span style={{ fontWeight: 700, color: VALUE_INK, whiteSpace: 'nowrap' }}>${row.value.toFixed(1)}k</span>
             <span style={{ color: 'var(--color-text-muted)', fontSize: 11.5, minWidth: 0 }}>{row.note}</span>
           </div>
         ))}
@@ -201,12 +201,12 @@ function GpBridgeTile({ invoiceMatchingLive }: { invoiceMatchingLive: boolean })
               tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
               tickLine={false}
               axisLine={false}
-              tickFormatter={(v) => `£${v}k`}
+              tickFormatter={(v) => `$${v}k`}
               width={52}
             />
             <Tooltip
               contentStyle={tipStyle}
-              formatter={(value, name) => (name === 'base' ? [null, null] : [`£${Number(value ?? 0).toFixed(1)}k`, undefined])}
+              formatter={(value, name) => (name === 'base' ? [null, null] : [`$${Number(value ?? 0).toFixed(1)}k`, undefined])}
             />
             <Bar dataKey="base" stackId="bridge" fill="transparent" isAnimationActive={false} />
             <Bar
@@ -239,12 +239,12 @@ function GpBridgeTile({ invoiceMatchingLive }: { invoiceMatchingLive: boolean })
       <div style={{ padding: '4px 16px 10px', display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--color-text-secondary)' }}>
         <LegendSwatch color={MID} label="Theoretical (measured from POS + recipes)" />
         {invoiceMatchingLive && (
-          <LegendSwatch color={VALUE_INK} label={`Price variance −£${GP_BRIDGE_PRICE_VARIANCE_K.toFixed(1)}k (measured from matched invoices)`} />
+          <LegendSwatch color={VALUE_INK} label={`Price variance −$${GP_BRIDGE_PRICE_VARIANCE_K.toFixed(1)}k (measured from matched invoices)`} />
         )}
-        <LegendSwatch color={WARN} label={`Logged waste −£${GP_BRIDGE.waste.toFixed(1)}k (measured)`} />
+        <LegendSwatch color={WARN} label={`Logged waste −$${GP_BRIDGE.waste.toFixed(1)}k (measured)`} />
         <LegendSwatch
           color="#B45309"
-          label={`Unexplained −£${(invoiceMatchingLive ? GP_BRIDGE_UNEXPLAINED_LIVE_K : GP_BRIDGE.unexplained).toFixed(1)}k (honest bucket)`}
+          label={`Unexplained −$${(invoiceMatchingLive ? GP_BRIDGE_UNEXPLAINED_LIVE_K : GP_BRIDGE.unexplained).toFixed(1)}k (honest bucket)`}
         />
         <LegendSwatch color={NAVY} label="Actual (measured from stocktakes)" />
       </div>
@@ -344,12 +344,12 @@ export default function PeriodEndTemplate({
                       <tr key={`${r.site}-${r.category}`}>
                         <td style={{ ...TD, textAlign: 'left', fontWeight: 600 }}>{r.site}</td>
                         <td style={{ ...TD, textAlign: 'left' }}>{r.category}</td>
-                        <td style={TD}>£{r.theoreticalK.toFixed(1)}k</td>
-                        <td style={{ ...TD, fontWeight: 600 }}>£{r.actualK.toFixed(1)}k</td>
+                        <td style={TD}>${r.theoreticalK.toFixed(1)}k</td>
+                        <td style={{ ...TD, fontWeight: 600 }}>${r.actualK.toFixed(1)}k</td>
                         <td style={TD}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontWeight: 700, color: over ? WARN_TEXT : OK_TEXT }}>
                             {over && <ArrowDownRight size={11} strokeWidth={2.6} />}
-                            {over ? '+' : '−'}£{Math.abs(varK).toFixed(1)}k
+                            {over ? '+' : '−'}${Math.abs(varK).toFixed(1)}k
                           </span>
                         </td>
                       </tr>
@@ -459,7 +459,7 @@ export default function PeriodEndTemplate({
                         <span style={{ marginLeft: 8 }}><FlagText text="estimated" /></span>
                       )}
                     </td>
-                    <td style={{ ...TD, fontWeight: 600 }}>£{s.valueK.toFixed(1)}k</td>
+                    <td style={{ ...TD, fontWeight: 600 }}>${s.valueK.toFixed(1)}k</td>
                     <td style={{ ...TD, fontWeight: 700, color: s.daysCover > 10 ? WARN_TEXT : 'var(--color-text-primary)' }}>
                       {s.daysCover.toFixed(1)}{s.daysCover > 10 ? ' · high' : ''}
                     </td>
@@ -475,7 +475,7 @@ export default function PeriodEndTemplate({
           <TileCard
             title="Dead and slow-moving stock"
             actions={periodActions('Dead and slow-moving stock')}
-            footer={`£${DEAD_STOCK_TOTAL} at risk. Seasonal lines dominate — transfer or promote before the value is written off.`}
+            footer={`$${DEAD_STOCK_TOTAL} at risk. Seasonal lines dominate — transfer or promote before the value is written off.`}
           >
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
@@ -491,7 +491,7 @@ export default function PeriodEndTemplate({
                   <tr key={r.item}>
                     <td style={{ ...TD, textAlign: 'left', fontWeight: 600 }}>{r.item}</td>
                     <td style={{ ...TD, textAlign: 'left' }}>{r.site}</td>
-                    <td style={{ ...TD, fontWeight: 600 }}>£{r.value}</td>
+                    <td style={{ ...TD, fontWeight: 600 }}>${r.value}</td>
                     <td style={{ ...TD, color: 'var(--color-text-secondary)' }}>{r.lastUsed}</td>
                   </tr>
                 ))}
@@ -507,7 +507,7 @@ export default function PeriodEndTemplate({
               title="Supplier inflation impact"
               badge={<FigureBadge kind="measured" />}
               actions={periodActions('Supplier inflation impact')}
-              footer={`Total price effect £${SUPPLIER_PRICE_EFFECT_TOTAL_K.toFixed(1)}k this period — the same figure the GP bridge deducts. Brakes carries nearly half of it; La Boulangerie's tier discount is the only deflation.`}
+              footer={`Total price effect $${SUPPLIER_PRICE_EFFECT_TOTAL_K.toFixed(1)}k this period — the same figure the GP bridge deducts. Brakes carries nearly half of it; La Boulangerie's tier discount is the only deflation.`}
             >
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
@@ -522,12 +522,12 @@ export default function PeriodEndTemplate({
                   {SUPPLIER_INFLATION.map((r) => (
                     <tr key={r.supplier}>
                       <td style={{ ...TD, textAlign: 'left', fontWeight: 600 }}>{r.supplier}</td>
-                      <td style={{ ...TD, fontWeight: 600 }}>£{r.spendK.toFixed(1)}k</td>
+                      <td style={{ ...TD, fontWeight: 600 }}>${r.spendK.toFixed(1)}k</td>
                       <td style={{ ...TD, fontWeight: 700, color: r.priceEffectK > 0 ? WARN_TEXT : OK_TEXT }}>
-                        {r.priceEffectK > 0 ? '+' : '−'}£{Math.abs(r.priceEffectK).toFixed(1)}k
+                        {r.priceEffectK > 0 ? '+' : '−'}${Math.abs(r.priceEffectK).toFixed(1)}k
                       </td>
                       <td style={{ ...TD, color: 'var(--color-text-secondary)' }}>
-                        {r.volumeMixK >= 0 ? '+' : '−'}£{Math.abs(r.volumeMixK).toFixed(1)}k
+                        {r.volumeMixK >= 0 ? '+' : '−'}${Math.abs(r.volumeMixK).toFixed(1)}k
                       </td>
                     </tr>
                   ))}
@@ -572,7 +572,7 @@ export default function PeriodEndTemplate({
           <TileCard
             title="CPU transfer reconciliation"
             actions={periodActions('CPU transfer reconciliation')}
-            footer="Two routes don't reconcile: £0.8k left the CPU that Kings X and Shoreditch never booked in. Until receipted, that value inflates CPU costs and flatters those sites' GP."
+            footer="Two routes don't reconcile: $0.8k left the CPU that Kings X and Shoreditch never booked in. Until receipted, that value inflates CPU costs and flatters those sites' GP."
           >
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
@@ -590,13 +590,13 @@ export default function PeriodEndTemplate({
                   return (
                     <tr key={t.route}>
                       <td style={{ ...TD, textAlign: 'left', fontWeight: 600 }}>{t.route}</td>
-                      <td style={TD}>£{t.sentK.toFixed(1)}k</td>
-                      <td style={TD}>£{t.receivedK.toFixed(1)}k</td>
+                      <td style={TD}>${t.sentK.toFixed(1)}k</td>
+                      <td style={TD}>${t.receivedK.toFixed(1)}k</td>
                       <td style={TD}>
                         {balanced ? (
                           <span style={{ fontWeight: 700, color: OK_TEXT }}>Nets out</span>
                         ) : (
-                          <FlagText text={`£${(gap * 1000).toFixed(0)} unbooked`} />
+                          <FlagText text={`$${(gap * 1000).toFixed(0)} unbooked`} />
                         )}
                       </td>
                     </tr>

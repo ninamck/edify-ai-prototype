@@ -12,7 +12,7 @@
  *  - For DEMO_TODAY the day is in progress (DEMO_NOW_HHMM = 07:30 in the
  *    prototype), so we compare forecast-so-far to actual-so-far via
  *    `compareDay`. Without this, a phase that hasn't started yet shows
- *    as a -100% miss against a £0 actual — exactly the trap the operator
+ *    as a -100% miss against a $0 actual — exactly the trap the operator
  *    spots first. Pending phases render as "Not yet" with the full-day
  *    forecast for context; current phases get an "in progress" tag.
  *  - For past dates everything reads full-day for both forecast and
@@ -775,7 +775,7 @@ function DualBar({
   value: string;
 }) {
   // Text row on top, bar below. Keeping the bar on its own line means
-  // long currency values (£4,200, £12.3k, etc.) can't squeeze the
+  // long currency values ($4,200, $12.3k, etc.) can't squeeze the
   // progress track or visually overlap the number — a problem the
   // previous side-by-side layout was hitting on narrow tiles.
   return (

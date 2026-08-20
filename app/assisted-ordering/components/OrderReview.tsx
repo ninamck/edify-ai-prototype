@@ -18,7 +18,7 @@ import { fmtSupplierAmount, fmtSupplierAmountParts, fmtSupplierUnitCost, supplie
 /**
  * Fixed-width amount column for rows with qty steppers: the supplier-currency
  * amount with the base equivalent stacked underneath, so the wide dual
- * display ("CA$392 (£227)") can't push the steppers out of vertical
+ * display ("CA$392 ($227)") can't push the steppers out of vertical
  * alignment across rows.
  */
 function StackedAmount({ amount, supplierId }: { amount: number; supplierId: string }) {
@@ -1185,7 +1185,7 @@ function ForecastCard({ card, hero }: { card: ForecastCardData; hero: boolean })
           lineHeight: 1.15,
         }}
       >
-        £{card.netSales.toLocaleString()}
+        ${card.netSales.toLocaleString()}
       </span>
       <span
         style={{
@@ -1703,7 +1703,7 @@ export default function OrderReview({
             (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-accent-active)';
           }}
         >
-          Confirm all — £{grandTotal.toFixed(0)}
+          Confirm all — ${grandTotal.toFixed(0)}
         </button>
       </div>
     </div>

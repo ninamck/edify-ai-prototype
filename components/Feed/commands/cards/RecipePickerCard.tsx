@@ -140,7 +140,7 @@ export default function RecipePickerCard({ state, onPick, onCancel }: RecipePick
             <div>
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{r.name}</div>
               <div style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '2px' }}>
-                {r.category} · £{r.priceDineIn.toFixed(2)}
+                {r.category} · ${r.priceDineIn.toFixed(2)}
               </div>
             </div>
             <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Pick →</span>

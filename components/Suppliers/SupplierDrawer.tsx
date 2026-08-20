@@ -24,7 +24,7 @@ import {
   currencySymbol, type CurrencyCode,
 } from '@/lib/currency';
 
-const SUPPLIER_CURRENCIES: CurrencyCode[] = ['GBP', 'CAD', 'USD', 'EUR', 'AED'];
+const SUPPLIER_CURRENCIES: CurrencyCode[] = ['USD', 'CAD', 'GBP', 'EUR', 'AED'];
 
 const ALL_DAYS: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 

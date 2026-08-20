@@ -123,8 +123,8 @@ export default function PODocDrawer({ po, onClose }: { po: PO; onClose: () => vo
               <tr>
                 <th style={{ ...th, textAlign: 'left', paddingLeft: 0 }}>Item</th>
                 <th style={th}>Ordered</th>
-                <th style={th}>Unit £</th>
-                <th style={th}>Total £</th>
+                <th style={th}>Unit $</th>
+                <th style={th}>Total $</th>
               </tr>
             </thead>
             <tbody>
@@ -143,7 +143,7 @@ export default function PODocDrawer({ po, onClose }: { po: PO; onClose: () => vo
             <tfoot>
               <tr>
                 <td colSpan={3} style={{ padding: '10px 10px 0 0', textAlign: 'right', fontWeight: 700, fontSize: '13px' }}>Order total</td>
-                <td style={{ padding: '10px 0 0 10px', textAlign: 'right', fontWeight: 800, fontSize: '13px', whiteSpace: 'nowrap' }}>£{total.toFixed(2)}</td>
+                <td style={{ padding: '10px 0 0 10px', textAlign: 'right', fontWeight: 800, fontSize: '13px', whiteSpace: 'nowrap' }}>${total.toFixed(2)}</td>
               </tr>
             </tfoot>
           </table>

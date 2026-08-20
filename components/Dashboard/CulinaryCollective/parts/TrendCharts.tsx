@@ -58,7 +58,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Non Alcoholic': '#10b981',
 };
 
-const KK_FORMATTER = (v: number) => `£${(v / 1000).toFixed(0)}k`;
+const KK_FORMATTER = (v: number) => `$${(v / 1000).toFixed(0)}k`;
 
 // ---------------------------------------------------------------------------
 // 1. Revenue by category -- 13-week line chart (5 drink categories)
@@ -274,7 +274,7 @@ export function WageCostStackedChart() {
 }
 
 // ---------------------------------------------------------------------------
-// 5. YoY growth -- 13-week grouped bar chart of Growth £ per outlet
+// 5. YoY growth -- 13-week grouped bar chart of Growth $ per outlet
 // ---------------------------------------------------------------------------
 
 const YOY_OUTLETS = ['Bar', 'Flock', 'Opa', 'Dough', 'Other'] as const;
@@ -283,7 +283,7 @@ const YOY_DATA = (() => {
     const entry = { week } as Record<string, string | number | null>;
     for (const outlet of YOY_OUTLETS) {
       const row = FIS_YOY_SALES_BY_OUTLET.find(
-        (r) => r.group === outlet && r.label === 'Growth £',
+        (r) => r.group === outlet && r.label === 'Growth $',
       );
       entry[outlet] = row?.values[i] ?? null;
     }

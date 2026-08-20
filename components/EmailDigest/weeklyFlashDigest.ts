@@ -17,7 +17,7 @@ import {
 } from '@/components/Dashboard/Templates/templateData';
 import type { DigestSection, LeagueCell } from './registry';
 
-const fmtK = (n: number) => `£${(n / 1000).toFixed(1)}k`;
+const fmtK = (n: number) => `$${(n / 1000).toFixed(1)}k`;
 
 // ── Derived estate numbers ──────────────────────────────────────────────────
 
@@ -164,16 +164,16 @@ export function buildWeeklyFlashSections(): DigestSection[] {
         { label: 'Supplier', align: 'left' },
         { label: 'Price' },
         { label: 'Change' },
-        { label: '£ / week' },
+        { label: '$ / week' },
       ],
       rows: PRICE_MOVERS.map((m) => [
         { kind: 'text', value: m.item, strong: true },
         { kind: 'text', value: m.supplier, muted: true },
         { kind: 'text', value: `${m.oldPrice} → ${m.newPrice}` },
         { kind: 'delta', delta: { value: m.changePct, goodWhenDown: true } },
-        { kind: 'delta', delta: { value: m.weeklyImpact, prefix: '£', suffix: '', dp: 0, goodWhenDown: true } },
+        { kind: 'delta', delta: { value: m.weeklyImpact, prefix: '$', suffix: '', dp: 0, goodWhenDown: true } },
       ] satisfies LeagueCell[]),
-      footnote: `Net £${priceCreepPerWeek}/week of price creep across the five. The oat milk rise alone is ~£1,120 annualised across the estate — worth a supplier conversation.`,
+      footnote: `Net $${priceCreepPerWeek}/week of price creep across the five. The oat milk rise alone is ~$1,120 annualised across the estate — worth a supplier conversation.`,
     },
     {
       shape: 'compliance',

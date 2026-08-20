@@ -316,7 +316,7 @@ const INTEGRITY_FINDINGS: IntegrityFinding[] = [
     priority: 1,
     title: 'Four iced drinks on the wrong cup',
     severity: 'fix',
-    summary: '£3.42 a cup instead of ~7p — the whole sleeve is charged to every drink.',
+    summary: '$3.42 a cup instead of ~7p — the whole sleeve is charged to every drink.',
     detail:
       'All four point at Disp SOHO 16oz Smoothie Cups, set up as a pack of one rather than a sleeve of 50. The cup is also a suspended product, so it shouldn\u2019t be in a live recipe at all. Relink to 16oz Smoothie Cups New (pack of 50).',
     affected: 'Iced Brown Sugar Latte · Iced Latte · Iced Long Black · Strawberry & Blueberry Smoothie',
@@ -338,7 +338,7 @@ const INTEGRITY_FINDINGS: IntegrityFinding[] = [
     priority: 3,
     title: 'Brown sauce set to 15 sachets on four recipes',
     severity: 'check',
-    summary: '£1.37 a portion instead of 9p. The norm everywhere else is 1.',
+    summary: '$1.37 a portion instead of 9p. The norm everywhere else is 1.',
     detail:
       'Ask the kitchen whether 15 is real before editing — a single jacket potato almost certainly wants 1, but a sharing platter might genuinely want a few.',
     fixLabel: 'Review',
@@ -376,7 +376,7 @@ const INTEGRITY_FINDINGS: IntegrityFinding[] = [
  *  15 sachets isn't real first. Two rows are rigged to fail on apply so
  *  the partial-failure path is visible. */
 const WRONG_CUP_WAS = {
-  was: { name: 'Disp SOHO - 16oz Smoothie Cups', qty: '1', unit: 'each', cost: '£3.42' },
+  was: { name: 'Disp SOHO - 16oz Smoothie Cups', qty: '1', unit: 'each', cost: '$3.42' },
   note: 'Suspended product, set up as a pack of 1 — the whole sleeve is charged to every drink',
 };
 
@@ -387,75 +387,75 @@ const INTEGRITY_FIX_GROUPS: Record<string, BatchReviewRow[]> = {
     // suspended, so the audit's recommendation is the relinks below.
     { id: 'fix-cup-product', entity: 'Disp SOHO - 16oz Smoothie Cups', entityMeta: 'The root cause — suspended, so relinking below is the better fix', confidence: 'low', impact: 'root cause', field: 'Pack quantity', before: '1', after: '50', product: { section: 'Product setup', fields: [
       { label: 'Supplier', value: 'Disposables Direct' },
-      { label: 'Pack quantity', value: '50', flagged: { was: '1', note: 'A pack of 1 means the whole £3.42 sleeve is charged to every single drink' } },
-      { label: 'Pack price', value: '£3.42' },
+      { label: 'Pack quantity', value: '50', flagged: { was: '1', note: 'A pack of 1 means the whole $3.42 sleeve is charged to every single drink' } },
+      { label: 'Pack price', value: '$3.42' },
       { label: 'Status', value: 'Suspended' },
     ] } },
-    { id: 'fix-cup-bsl', entity: 'Iced Brown Sugar Latte', confidence: 'high', impact: '−£3.35/drink', field: 'Relink to', before: 'Disp SOHO - 16oz Smoothie Cups', after: '16oz Smoothie Cups New', recipe: { section: 'Packaging', lines: [
-      { name: 'Espresso — double shot', qty: '1', unit: 'each', cost: '£0.28' },
-      { name: 'Oat Milk', qty: '200', unit: 'ml', cost: '£0.22' },
-      { name: 'Brown Sugar Syrup', qty: '20', unit: 'ml', cost: '£0.11' },
-      { name: '16oz Smoothie Cups New', qty: '1', unit: 'each', cost: '£0.07', flagged: WRONG_CUP_WAS },
-      { name: 'Paper Straw', qty: '1', unit: 'each', cost: '£0.02' },
+    { id: 'fix-cup-bsl', entity: 'Iced Brown Sugar Latte', confidence: 'high', impact: '−$3.35/drink', field: 'Relink to', before: 'Disp SOHO - 16oz Smoothie Cups', after: '16oz Smoothie Cups New', recipe: { section: 'Packaging', lines: [
+      { name: 'Espresso — double shot', qty: '1', unit: 'each', cost: '$0.28' },
+      { name: 'Oat Milk', qty: '200', unit: 'ml', cost: '$0.22' },
+      { name: 'Brown Sugar Syrup', qty: '20', unit: 'ml', cost: '$0.11' },
+      { name: '16oz Smoothie Cups New', qty: '1', unit: 'each', cost: '$0.07', flagged: WRONG_CUP_WAS },
+      { name: 'Paper Straw', qty: '1', unit: 'each', cost: '$0.02' },
     ] } },
-    { id: 'fix-cup-latte', entity: 'Iced Latte', confidence: 'high', impact: '−£3.35/drink', field: 'Relink to', before: 'Disp SOHO - 16oz Smoothie Cups', after: '16oz Smoothie Cups New', recipe: { section: 'Packaging', lines: [
-      { name: 'Espresso — double shot', qty: '1', unit: 'each', cost: '£0.28' },
-      { name: 'Whole Milk', qty: '200', unit: 'ml', cost: '£0.14' },
-      { name: '16oz Smoothie Cups New', qty: '1', unit: 'each', cost: '£0.07', flagged: WRONG_CUP_WAS },
-      { name: 'Sip Lid — clear', qty: '1', unit: 'each', cost: '£0.03' },
+    { id: 'fix-cup-latte', entity: 'Iced Latte', confidence: 'high', impact: '−$3.35/drink', field: 'Relink to', before: 'Disp SOHO - 16oz Smoothie Cups', after: '16oz Smoothie Cups New', recipe: { section: 'Packaging', lines: [
+      { name: 'Espresso — double shot', qty: '1', unit: 'each', cost: '$0.28' },
+      { name: 'Whole Milk', qty: '200', unit: 'ml', cost: '$0.14' },
+      { name: '16oz Smoothie Cups New', qty: '1', unit: 'each', cost: '$0.07', flagged: WRONG_CUP_WAS },
+      { name: 'Sip Lid — clear', qty: '1', unit: 'each', cost: '$0.03' },
     ] } },
-    { id: 'fix-cup-black', entity: 'Iced Long Black', confidence: 'high', impact: '−£3.35/drink', field: 'Relink to', before: 'Disp SOHO - 16oz Smoothie Cups', after: '16oz Smoothie Cups New', recipe: { section: 'Packaging', lines: [
-      { name: 'Espresso — double shot', qty: '2', unit: 'each', cost: '£0.56' },
+    { id: 'fix-cup-black', entity: 'Iced Long Black', confidence: 'high', impact: '−$3.35/drink', field: 'Relink to', before: 'Disp SOHO - 16oz Smoothie Cups', after: '16oz Smoothie Cups New', recipe: { section: 'Packaging', lines: [
+      { name: 'Espresso — double shot', qty: '2', unit: 'each', cost: '$0.56' },
       { name: 'Filtered Water', qty: '150', unit: 'ml', cost: '—' },
-      { name: '16oz Smoothie Cups New', qty: '1', unit: 'each', cost: '£0.07', flagged: WRONG_CUP_WAS },
+      { name: '16oz Smoothie Cups New', qty: '1', unit: 'each', cost: '$0.07', flagged: WRONG_CUP_WAS },
     ] } },
-    { id: 'fix-cup-smoothie', entity: 'Strawberry & Blueberry Smoothie', confidence: 'high', impact: '−£3.35/drink', field: 'Relink to', before: 'Disp SOHO - 16oz Smoothie Cups', after: '16oz Smoothie Cups New', recipe: { section: 'Packaging', lines: [
-      { name: 'Strawberries — frozen', qty: '80', unit: 'gram', cost: '£0.44' },
-      { name: 'Blueberries — frozen', qty: '60', unit: 'gram', cost: '£0.52' },
-      { name: 'Banana', qty: '1', unit: 'each', cost: '£0.18' },
-      { name: '16oz Smoothie Cups New', qty: '1', unit: 'each', cost: '£0.07', flagged: WRONG_CUP_WAS },
+    { id: 'fix-cup-smoothie', entity: 'Strawberry & Blueberry Smoothie', confidence: 'high', impact: '−$3.35/drink', field: 'Relink to', before: 'Disp SOHO - 16oz Smoothie Cups', after: '16oz Smoothie Cups New', recipe: { section: 'Packaging', lines: [
+      { name: 'Strawberries — frozen', qty: '80', unit: 'gram', cost: '$0.44' },
+      { name: 'Blueberries — frozen', qty: '60', unit: 'gram', cost: '$0.52' },
+      { name: 'Banana', qty: '1', unit: 'each', cost: '$0.18' },
+      { name: '16oz Smoothie Cups New', qty: '1', unit: 'each', cost: '$0.07', flagged: WRONG_CUP_WAS },
     ] } },
   ],
   'wrong-units': [
     { id: 'fix-unit-cucumber', entity: 'Club Sandwich', entityMeta: 'Cucumber line', confidence: 'high', impact: 'understated', field: 'Unit', before: '60 gram', after: '60 each', recipe: { section: 'Ingredients', lines: [
-      { name: 'Toasted Bloomer', qty: '3', unit: 'slice', cost: '£0.24' },
-      { name: 'Chicken Mayo', qty: '80', unit: 'gram', cost: '£0.62' },
+      { name: 'Toasted Bloomer', qty: '3', unit: 'slice', cost: '$0.24' },
+      { name: 'Chicken Mayo', qty: '80', unit: 'gram', cost: '$0.62' },
       { name: 'Cucumber Diced', qty: '60', unit: 'each', flagged: { was: { name: 'Cucumber Diced', qty: '60', unit: 'gram' }, note: 'The product is priced per item — counted, not weighed' } },
-      { name: 'Butter — unsalted', qty: '10', unit: 'gram', cost: '£0.08' },
+      { name: 'Butter — unsalted', qty: '10', unit: 'gram', cost: '$0.08' },
     ] } },
     { id: 'fix-unit-mushrooms', entity: 'Big Breakfast', entityMeta: 'Mushroom line', confidence: 'high', impact: 'understated', field: 'Unit', before: '75 gram', after: '75 each', recipe: { section: 'Ingredients', lines: [
-      { name: 'Free-Range Eggs', qty: '2', unit: 'each', cost: '£0.36' },
-      { name: 'Cumberland Sausage', qty: '2', unit: 'each', cost: '£0.58' },
+      { name: 'Free-Range Eggs', qty: '2', unit: 'each', cost: '$0.36' },
+      { name: 'Cumberland Sausage', qty: '2', unit: 'each', cost: '$0.58' },
       { name: 'Add Mushrooms', qty: '75', unit: 'each', flagged: { was: { name: 'Add Mushrooms', qty: '75', unit: 'gram' }, note: 'The product is priced per item — counted, not weighed' } },
-      { name: 'Baked Beans', qty: '120', unit: 'gram', cost: '£0.22' },
+      { name: 'Baked Beans', qty: '120', unit: 'gram', cost: '$0.22' },
     ] } },
     { id: 'fix-unit-ketchup', entity: 'Bacon Roll', entityMeta: 'Ketchup line', confidence: 'high', impact: 'understated', field: 'Unit', before: '15 gram', after: '15 ml', recipe: { section: 'Ingredients', lines: [
-      { name: 'Soft White Roll', qty: '1', unit: 'each', cost: '£0.32' },
-      { name: 'Back Bacon', qty: '3', unit: 'rasher', cost: '£0.66' },
+      { name: 'Soft White Roll', qty: '1', unit: 'each', cost: '$0.32' },
+      { name: 'Back Bacon', qty: '3', unit: 'rasher', cost: '$0.66' },
       { name: 'Ketchup', qty: '15', unit: 'ml', flagged: { was: { name: 'Ketchup', qty: '15', unit: 'gram' }, note: 'A liquid, priced by volume — gram lines are dropped or scaled wrongly' } },
     ] } },
     { id: 'fix-unit-cheese', entity: 'Jacket Potato — Cheese', entityMeta: 'Sauce line', confidence: 'high', impact: 'understated', field: 'Unit', before: '150 gram', after: '150 ml', recipe: { section: 'Ingredients', lines: [
-      { name: 'Jacket Potato', qty: '1', unit: 'each', cost: '£0.35' },
+      { name: 'Jacket Potato', qty: '1', unit: 'each', cost: '$0.35' },
       { name: 'Knorr Cheese Sauce', qty: '150', unit: 'ml', flagged: { was: { name: 'Knorr Cheese Sauce', qty: '150', unit: 'gram' }, note: 'A liquid, priced by volume — gram lines are dropped or scaled wrongly' } },
-      { name: 'Chives — fresh', qty: '5', unit: 'gram', cost: '£0.04' },
+      { name: 'Chives — fresh', qty: '5', unit: 'gram', cost: '$0.04' },
     ] } },
     { id: 'fix-unit-cream', entity: 'Hot Chocolate', entityMeta: 'Cream line', confidence: 'high', impact: 'understated', field: 'Unit', before: '30 g', after: '30 ml', recipe: { section: 'Ingredients', lines: [
-      { name: 'Whole Milk', qty: '250', unit: 'ml', cost: '£0.18' },
-      { name: 'Chocolate Powder', qty: '28', unit: 'gram', cost: '£0.30' },
+      { name: 'Whole Milk', qty: '250', unit: 'ml', cost: '$0.18' },
+      { name: 'Chocolate Powder', qty: '28', unit: 'gram', cost: '$0.30' },
       { name: 'Whipped Cream', qty: '30', unit: 'ml', flagged: { was: { name: 'Whipped Cream', qty: '30', unit: 'g' }, note: 'A liquid, priced by volume — gram lines are dropped or scaled wrongly' } },
-      { name: 'Mini Marshmallows', qty: '10', unit: 'gram', cost: '£0.09' },
+      { name: 'Mini Marshmallows', qty: '10', unit: 'gram', cost: '$0.09' },
     ] } },
     { id: 'fix-unit-honey', entity: 'Porridge', entityMeta: 'Honey line', confidence: 'medium', impact: 'line ignored', field: 'Unit', before: '—', after: 'gram', recipe: { section: 'Ingredients', lines: [
-      { name: 'Rolled Oats', qty: '60', unit: 'gram', cost: '£0.14' },
-      { name: 'Whole Milk', qty: '200', unit: 'ml', cost: '£0.14' },
-      { name: 'Honey', qty: '15', unit: 'gram', flagged: { was: { name: 'Honey', qty: '15', unit: '(no unit)', cost: '£0.00' }, note: 'No unit set — the line is ignored and costs nothing today' } },
+      { name: 'Rolled Oats', qty: '60', unit: 'gram', cost: '$0.14' },
+      { name: 'Whole Milk', qty: '200', unit: 'ml', cost: '$0.14' },
+      { name: 'Honey', qty: '15', unit: 'gram', flagged: { was: { name: 'Honey', qty: '15', unit: '(no unit)', cost: '$0.00' }, note: 'No unit set — the line is ignored and costs nothing today' } },
     ] } },
   ],
   'brown-sauce': [
-    { id: 'fix-brown-sauce', entity: 'Jacket Potato & Beans', entityMeta: 'Same change on 3 more recipes', confidence: 'low', impact: '−£1.28/portion', field: 'Qty per portion', before: '15 sachets', after: '1 sachet', recipe: { section: 'Ingredients', lines: [
-      { name: 'Jacket Potato', qty: '1', unit: 'each', cost: '£0.35' },
-      { name: 'Baked Beans', qty: '120', unit: 'gram', cost: '£0.22' },
-      { name: 'Brown Sauce', qty: '1', unit: 'sachet', cost: '£0.09', flagged: { was: { name: 'Brown Sauce', qty: '15', unit: 'sachets', cost: '£1.37' }, note: 'Norm everywhere else is 1 — confirm with the kitchen before applying' } },
+    { id: 'fix-brown-sauce', entity: 'Jacket Potato & Beans', entityMeta: 'Same change on 3 more recipes', confidence: 'low', impact: '−$1.28/portion', field: 'Qty per portion', before: '15 sachets', after: '1 sachet', recipe: { section: 'Ingredients', lines: [
+      { name: 'Jacket Potato', qty: '1', unit: 'each', cost: '$0.35' },
+      { name: 'Baked Beans', qty: '120', unit: 'gram', cost: '$0.22' },
+      { name: 'Brown Sauce', qty: '1', unit: 'sachet', cost: '$0.09', flagged: { was: { name: 'Brown Sauce', qty: '15', unit: 'sachets', cost: '$1.37' }, note: 'Norm everywhere else is 1 — confirm with the kitchen before applying' } },
     ] } },
   ],
 };
@@ -480,8 +480,8 @@ const INTEGRITY_BATCH_META: Record<string, {
     subtitle: 'Off the suspended pack-of-1 cup, onto the pack of 50',
     impact: [
       { value: '4', label: 'recipes affected' },
-      { value: '−£3.35', label: 'per drink, per sale' },
-      { value: '7p', label: 'true cup cost (was £3.42)' },
+      { value: '−$3.35', label: 'per drink, per sale' },
+      { value: '7p', label: 'true cup cost (was $3.42)' },
     ],
   },
   'wrong-units': {
@@ -502,7 +502,7 @@ const INTEGRITY_BATCH_META: Record<string, {
     subtitle: 'Needs the kitchen\u2019s confirmation before applying',
     impact: [
       { value: '4', label: 'recipes affected' },
-      { value: '£1.37', label: 'per portion today' },
+      { value: '$1.37', label: 'per portion today' },
       { value: '9p', label: 'after the fix' },
     ],
   },
@@ -514,7 +514,7 @@ const INTEGRITY_BATCH_META: Record<string, {
     impact: [
       { value: '12', label: 'changes prepared' },
       { value: '9+', label: 'recipes touched' },
-      { value: '−£3.35', label: 'biggest per-drink correction' },
+      { value: '−$3.35', label: 'biggest per-drink correction' },
     ],
   },
 };
@@ -1436,7 +1436,7 @@ function PackagingPicker({ options, selected, onToggle, onConfirm, onSkip, state
     <CardShell
       icon={Box}
       title="Packaging"
-      subtitle={selected.size > 0 ? `Packaging adds +£${totalPackaging.toFixed(2)}/serve` : 'Pick anything the recipe leaves the pass in'}
+      subtitle={selected.size > 0 ? `Packaging adds +$${totalPackaging.toFixed(2)}/serve` : 'Pick anything the recipe leaves the pass in'}
       state={state}
       confirmLabel={`Add selected (${selected.size})`}
       confirmDisabled={selected.size === 0}
@@ -1494,7 +1494,7 @@ function PackagingPicker({ options, selected, onToggle, onConfirm, onSkip, state
               per {pkg.unit}
             </span>
             <span style={{ fontSize: '12px', fontWeight: 600, color: isSelected ? 'var(--color-accent-active)' : 'var(--color-text-secondary)', minWidth: '42px', textAlign: 'right' }}>
-              £{pkg.cost.toFixed(2)}
+              ${pkg.cost.toFixed(2)}
             </span>
           </button>
         );
@@ -1750,11 +1750,11 @@ function ProductSheetImportCard({
           <DetailRow label="Category" value={data.category} />
           <DetailRow
             label="Pack"
-            value={`${data.packQty} × ${data.singleUnitVolumeOrWeight ?? 1}${data.unitOfMeasure ?? data.singleUnitType.toLowerCase()} · £${data.packCost.toFixed(2)}`}
+            value={`${data.packQty} × ${data.singleUnitVolumeOrWeight ?? 1}${data.unitOfMeasure ?? data.singleUnitType.toLowerCase()} · $${data.packCost.toFixed(2)}`}
           />
           <DetailRow
             label="Price per uom"
-            value={pricePerUom !== null ? `£${pricePerUom.toFixed(2)} / ${data.unitOfMeasure ?? data.singleUnitType.toLowerCase()}` : '—'}
+            value={pricePerUom !== null ? `$${pricePerUom.toFixed(2)} / ${data.unitOfMeasure ?? data.singleUnitType.toLowerCase()}` : '—'}
           />
           <DetailRow label="VAT" value={`${data.taxRatePct}%`} />
           <DetailRow label="Allergens" value={data.allergens.length ? data.allergens.join(', ') : 'None'} />
@@ -1914,14 +1914,14 @@ const CHAGEE_TEA_SWAP = {
     contact: 'orders@goldenleaf-tea.com',
     cutOff: '14:00',
     leadTime: '5 days',
-    minOrder: '£500',
+    minOrder: '$500',
     deliveryDays: 'Mon, Thu',
   },
   product: {
     name: 'Whole Tea Leaves — Jasmine Green Grade A',
     category: 'Tea',
-    pack: '4 × 5kg · £180.00',
-    pricePerUom: '£9.00 / kg',
+    pack: '4 × 5kg · $180.00',
+    pricePerUom: '$9.00 / kg',
     vat: '0%',
     allergens: 'None',
   },
@@ -1934,8 +1934,8 @@ const CHAGEE_TEA_SWAP = {
     oldIngredient: 'Jasmine Tea Leaves — Loose Grade B · Meadow Tea Supply',
     newIngredient: 'Whole Tea Leaves — Jasmine Green Grade A · Golden Leaf',
     qtyNote: '12g per serve · unchanged',
-    oldCost: '£0.14',
-    newCost: '£0.11',
+    oldCost: '$0.14',
+    newCost: '$0.11',
     costDelta: '−21% per serve',
   },
   franchises: [
@@ -2625,7 +2625,7 @@ function SupplierProductEditPanel({
 }) {
   const unitSize = product.singleUnitVolumeOrWeight ?? 1;
   // Catalogue cost shown per unit of the chosen UoM. Helps the
-  // operator sanity-check that "£48 / 24 × 1L = £2.00 per L" — a
+  // operator sanity-check that "$48 / 24 × 1L = $2.00 per L" — a
   // very common transcription error class for catalogue uploads.
   const perUom = product.packCost / Math.max(0.001, product.packQty * unitSize);
 
@@ -2757,7 +2757,7 @@ function SupplierProductEditPanel({
           />
         </div>
         <div>
-          <div style={labelStyle}>Pack cost (£)</div>
+          <div style={labelStyle}>Pack cost ($)</div>
           <input
             type="number"
             min={0}
@@ -2845,7 +2845,7 @@ function SupplierProductEditPanel({
               fontWeight: 600,
             }}
           >
-            £{perUom.toFixed(perUom < 1 ? 3 : 2)} / {product.singleUnitType}
+            ${perUom.toFixed(perUom < 1 ? 3 : 2)} / {product.singleUnitType}
           </div>
         </div>
       </div>
@@ -3485,7 +3485,7 @@ function NewSupplierImportCard({
           />
           <DetailRow
             label="Min order"
-            value={data.minimumOrderValue ? `£${data.minimumOrderValue.toFixed(0)}` : '—'}
+            value={data.minimumOrderValue ? `$${data.minimumOrderValue.toFixed(0)}` : '—'}
           />
           <DetailRow
             label="Delivery days"
@@ -3607,7 +3607,7 @@ function NewSupplierImportCard({
               <span>Product</span>
               <span>Code</span>
               <span>Pack</span>
-              <span style={{ textAlign: 'right' }}>£/pack</span>
+              <span style={{ textAlign: 'right' }}>$/pack</span>
               <span />
             </div>
             <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
@@ -3684,7 +3684,7 @@ function NewSupplierImportCard({
                         {p.packQty} × {p.singleUnitVolumeOrWeight ?? 1}{p.unitOfMeasure === 'L' ? 'L' : (p.unitOfMeasure ?? '')}
                       </span>
                       <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)', textAlign: 'right' }}>
-                        £{p.packCost.toFixed(2)}
+                        ${p.packCost.toFixed(2)}
                       </span>
                       <ChevronDown
                         size={13}
@@ -5190,9 +5190,9 @@ function DataIntegrityCard({
             onFix={f.fixLabel ? () => onFixFinding(f.id) : undefined}
           />
         ))}
-        {/* Trust caveat from the audit appendix — ranking reliable, exact £ not. */}
+        {/* Trust caveat from the audit appendix — ranking reliable, exact $ not. */}
         <div style={{ padding: '8px 14px', borderTop: '1px solid var(--color-border-subtle)', fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)', lineHeight: 1.4 }}>
-          £ figures are supplier list prices, not real cost — read them as a ranking.
+          $ figures are supplier list prices, not real cost — read them as a ranking.
         </div>
       </div>
     </CardShell>
@@ -5924,7 +5924,7 @@ export default function Feed({
   const [selectedSwaps, setSelectedSwaps] = useState<Record<string, string>>({});
   /** Final pricing snapshot taken at the moment the user locks in
    *  on the Margin Explorer. Used by the done summary so it can
-   *  echo "locked in at £X dine in (Y% food cost)". */
+   *  echo "locked in at $X dine in (Y% food cost)". */
   const lockedPricingRef = useRef<{ srpExVat: number; targetCogsPct: number } | null>(null);
   /** Seed text shown as the user's first turn after the greeting.
    *  Defaults to the template name; can be overridden when the chip
@@ -6264,7 +6264,7 @@ export default function Feed({
         const pricing = lockedPricingRef.current;
         pushFlowReceipt({
           headline: `Saved ${activeTemplate.name}`,
-          detail: `Live at ${sitesLabel}${pricing ? ` · £${pricing.srpExVat.toFixed(2)} at ${pricing.targetCogsPct}% food cost` : ''}`,
+          detail: `Live at ${sitesLabel}${pricing ? ` · $${pricing.srpExVat.toFixed(2)} at ${pricing.targetCogsPct}% food cost` : ''}`,
         });
         setRecipeFlow(17);
       }, 800);
@@ -6711,7 +6711,7 @@ export default function Feed({
 
     const summaryText =
       `Got it — I parsed **${opts.fileName}** and pulled the product details. ` +
-      `It's a new coffee bean, **${args.newProductName as string}**, at £${((args.packCost as number) / (args.packQty as number)).toFixed(2)}/kg. ` +
+      `It's a new coffee bean, **${args.newProductName as string}**, at $${((args.packCost as number) / (args.packQty as number)).toFixed(2)}/kg. ` +
       `That maps to the espresso blend your coffees already use, so I can swap it across all of them. ` +
       `The sheet doesn't include supplier terms, so I've kept it under your existing supplier for now — you can set up the new one later. ` +
       `Here's the new product — confirm and I'll line up the recipes.`;
@@ -7786,7 +7786,7 @@ export default function Feed({
     setMessages(prev => [...prev, {
       id: `u-margin-${Date.now()}`,
       role: 'user',
-      text: `Price it at £${srpEx.toFixed(2)} (${targetCogsPct}% food cost, £${penceToPounds(costP).toFixed(2)} cost)${swapFragment}`,
+      text: `Price it at $${srpEx.toFixed(2)} (${targetCogsPct}% food cost, $${penceToPounds(costP).toFixed(2)} cost)${swapFragment}`,
     }]);
     setRecipeFlow(7);
   }
@@ -7799,7 +7799,7 @@ export default function Feed({
       id: `u-packaging-${Date.now()}`,
       role: 'user',
       text: chosen.length > 0
-        ? `Add ${names} (+£${total.toFixed(2)}/serve)`
+        ? `Add ${names} (+$${total.toFixed(2)}/serve)`
         : 'No packaging needed',
     }]);
     setRecipeFlow(9);
@@ -7927,7 +7927,7 @@ export default function Feed({
     // keeps the question + answer in the transcript.
     //
     // Escape hatch: if the "reply" is actually a fully-formed command
-    // ("update Agility lead time to 3 days and MOV to £350"), the
+    // ("update Agility lead time to 3 days and MOV to $350"), the
     // operator has moved on — route it like any other message instead
     // of force-feeding it to the recipe builder as a recipe name.
     if (awaitingRecipeName) {

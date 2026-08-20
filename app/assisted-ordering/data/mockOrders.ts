@@ -640,7 +640,7 @@ export const SUGGESTED_ORDERS: SuggestedOrder[] = [
               movWarnShown: false,
               whyHighlight: true,
               whyOverride: [
-                'Central Supply bills in CAD — CA$28.00/bag is £16.24 at today\u2019s rate (1 CAD = 0.58 GBP)',
+                'Central Supply bills in CAD — CA$28.00/bag is $16.24 at today\u2019s rate (1 CAD = 0.58 USD)',
                 '10-day freight lead from Mississauga: 14 bags covers espresso sales through the next shipment window',
               ],
             },
@@ -766,7 +766,7 @@ export const RECURRING_ORDERS: RecurringOrder[] = [
         suggestedQty: 2,
         salesVelocity7d: 1.4,
         reasons: [
-          'You\'re wasting ~1.6 boxes/day — roughly £45/day or £315/week thrown away',
+          'You\'re wasting ~1.6 boxes/day — roughly $45/day or $315/week thrown away',
           'Reducing to 2 boxes still leaves a small buffer for busier days',
         ],
       },

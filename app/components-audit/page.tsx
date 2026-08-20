@@ -1463,7 +1463,7 @@ function CardsSection() {
         preview={
           <div style={{ width: 220, padding: '14px 16px', borderRadius: 10, border: '1px solid var(--color-border-subtle)', background: '#fff' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Revenue</div>
-            <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4 }}>£12,408</div>
+            <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4 }}>$12,408</div>
             <div style={{ fontSize: 11, color: 'var(--color-success)', marginTop: 4 }}>▲ 8.2%</div>
           </div>
         }
@@ -2334,7 +2334,7 @@ function ToastsSection() {
         preview={
           <div style={{ width: 280, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--color-text-secondary)' }}>
-              <span>£148 / £200 MoV</span>
+              <span>$148 / $200 MoV</span>
               <span>74%</span>
             </div>
             <div style={{ width: '100%', height: 6, borderRadius: 999, background: 'rgba(234,88,12,0.18)' }}>

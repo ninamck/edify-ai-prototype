@@ -9,14 +9,14 @@
 
 export type DailyPoint = {
   day: string; // 3-letter day label
-  netSales: number; // £
-  labour: number; // £
+  netSales: number; // $
+  labour: number; // $
 };
 
 export const SUMMARY = {
   /** Period-to-date headline (week-to-date in this prototype). */
   salesToDate: 108038,
-  /** £ value of operational profit and the % it represents of net sales. */
+  /** $ value of operational profit and the % it represents of net sales. */
   opProfit: 1555.74,
   opProfitPct: 20.82,
   /** Whole-number gross margin %. */
@@ -67,15 +67,15 @@ export const PALETTE = {
 // project-wide locale helpers and stay easy to fork).
 // ─────────────────────────────────────────────────────────────────────
 
-export function fmtGBP(n: number, opts: { decimals?: 0 | 2; compact?: boolean } = {}): string {
+export function fmtUSD(n: number, opts: { decimals?: 0 | 2; compact?: boolean } = {}): string {
   const { decimals = 0, compact = false } = opts;
   if (compact && Math.abs(n) >= 1000) {
     const k = n / 1000;
-    return `£${k.toFixed(k >= 100 ? 0 : 1)}k`;
+    return `$${k.toFixed(k >= 100 ? 0 : 1)}k`;
   }
-  return new Intl.NumberFormat('en-GB', {
+  return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'GBP',
+    currency: 'USD',
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(n);

@@ -67,7 +67,7 @@ const PAST_ENTRIES: PastEntry[] = [
       "Tom called out mid-morning so we were on three through lunch. Felt the queue in the line for about 20 minutes around 12:30. Two regulars left without ordering.",
     tags: ['Team', 'Customer'],
     edifyReply:
-      "Logged a one-down lunch shift on 19 May and matched it against a £210 dip on the 12–1pm window vs forecast. I've added a standby call to your Tuesday roster and lifted Wednesday's mid-shift to 4 to absorb any follow-on.",
+      "Logged a one-down lunch shift on 19 May and matched it against a $210 dip on the 12–1pm window vs forecast. I've added a standby call to your Tuesday roster and lifted Wednesday's mid-shift to 4 to absorb any follow-on.",
     outcome:
       "Wednesday ran on plan with the lifted shift — no further call-outs needed. I'll keep watching Tuesday cover for the next two weeks.",
   },
@@ -145,16 +145,16 @@ interface DataSignal {
 const DATA_SIGNALS: DataSignal[] = [
   {
     id: 's-fridge2',
-    headline: 'Fridge 2 has broken 3 times this month — costing you £820 so far',
+    headline: 'Fridge 2 has broken 3 times this month — costing you $820 so far',
     detail:
-      "Three engineer call-outs on 04, 11 and 22 May (£260), spoiled stock from the 22 May warm-period (£420), and 4 hours of lost trading on the rebuild (£140). Each visit closed as 'within tolerance' — but the pattern's getting more expensive. I've drafted the escalation to Cheryl with the cost line and the sensor evidence attached.",
+      "Three engineer call-outs on 04, 11 and 22 May ($260), spoiled stock from the 22 May warm-period ($420), and 4 hours of lost trading on the rebuild ($140). Each visit closed as 'within tolerance' — but the pattern's getting more expensive. I've drafted the escalation to Cheryl with the cost line and the sensor evidence attached.",
     action: {
       kind: 'email',
       to: 'Cheryl Davies',
       toRole: 'Area Manager',
       subject: 'Fridge 2 — third failure this month, escalation request',
       body:
-        "Hi Cheryl,\n\nFridge 2 at the shop has now failed three times in May (04, 11 and 22) at a combined cost of £820 — £260 in engineer call-outs, £420 in written-off stock from the 22 May warm-period, and £140 of lost trading on the rebuild.\n\nThe closing temp logs on each occasion are attached. The engineer has cleared the unit each time as 'within tolerance' but the pattern is consistent and getting more expensive.\n\nCan we get the unit replaced under the existing service contract before the next failure?\n\nThanks,",
+        "Hi Cheryl,\n\nFridge 2 at the shop has now failed three times in May (04, 11 and 22) at a combined cost of $820 — $260 in engineer call-outs, $420 in written-off stock from the 22 May warm-period, and $140 of lost trading on the rebuild.\n\nThe closing temp logs on each occasion are attached. The engineer has cleared the unit each time as 'within tolerance' but the pattern is consistent and getting more expensive.\n\nCan we get the unit replaced under the existing service contract before the next failure?\n\nThanks,",
       attachments: [
         'Sensor log · 04 May',
         'Sensor log · 11 May',

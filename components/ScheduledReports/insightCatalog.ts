@@ -31,7 +31,7 @@ export const INSIGHT_CATALOG: InsightGroup[] = [
     id: 'estate',
     label: 'Dashboard · Estate',
     insights: [
-      'Net sales — estate (£k / day)',
+      'Net sales — estate ($k / day)',
       'Gross profit % by site',
       'Wastage value by category',
       'COGS variance vs theoretical',

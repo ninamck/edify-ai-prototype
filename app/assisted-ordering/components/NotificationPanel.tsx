@@ -57,7 +57,7 @@ export default function NotificationPanel({
             margin: 0,
           }}
         >
-          {totalItems} items across {supplierCount} supplier{supplierCount !== 1 ? 's' : ''} — est. £{grandTotal.toFixed(0)}
+          {totalItems} items across {supplierCount} supplier{supplierCount !== 1 ? 's' : ''} — est. ${grandTotal.toFixed(0)}
         </p>
       </div>
 

@@ -2564,9 +2564,9 @@ function priceFor(line: PlanLine): number {
   return DEMO_PRICE_BY_CATEGORY[line.recipe.category] ?? 0;
 }
 
-const GBP = new Intl.NumberFormat('en-GB', {
+const USD = new Intl.NumberFormat('en-US', {
   style: 'currency',
-  currency: 'GBP',
+  currency: 'USD',
   maximumFractionDigits: 0,
 });
 
@@ -2668,7 +2668,7 @@ function LiveSalesTile({
               lineHeight: 1,
             }}
           >
-            {GBP.format(revenue)}
+            {USD.format(revenue)}
           </span>
           <span
             style={{
@@ -2894,19 +2894,19 @@ function ProductTotalsRow({
             Sales value
           </span>
           <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
-            Revenue at standard menu prices · GBP
+            Revenue at standard menu prices · USD
           </span>
         </div>
         <span
           style={{ ...cellAlignRight, fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}
           title="Forecast revenue across all visible products"
         >
-          {GBP.format(valueForecast)}
+          {USD.format(valueForecast)}
         </span>
         <span
           style={{ ...cellAlignRight, fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)' }}
         >
-          {valueCarryOver > 0 ? GBP.format(valueCarryOver) : '—'}
+          {valueCarryOver > 0 ? USD.format(valueCarryOver) : '—'}
         </span>
         {showLiveSales && (
         <span
@@ -2921,11 +2921,11 @@ function ProductTotalsRow({
           }}
           title={
             soldRollup
-              ? `${GBP.format(soldRollup.value)} sold across visible products vs ${GBP.format(valueForecast)} forecast`
+              ? `${USD.format(soldRollup.value)} sold across visible products vs ${USD.format(valueForecast)} forecast`
               : 'No live sales for this date'
           }
         >
-          {soldRollup ? GBP.format(soldRollup.value) : '—'}
+          {soldRollup ? USD.format(soldRollup.value) : '—'}
         </span>
         )}
         <div
@@ -2947,7 +2947,7 @@ function ProductTotalsRow({
               lineHeight: 1.1,
             }}
           >
-            {GBP.format(valuePlanned)}
+            {USD.format(valuePlanned)}
           </span>
           <span
             style={{

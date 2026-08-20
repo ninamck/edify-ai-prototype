@@ -60,7 +60,7 @@ interface Props {
   /** Storage locations that actually have items at this site. Becomes
    *  the inline button row inside the Area card. */
   availableLocations: StockLocation[];
-  /** Estimated £-value of stock on hand. For site mode this is the
+  /** Estimated $-value of stock on hand. For site mode this is the
    *  sum of `currentStock × unitPrice` across the site's items; for
    *  aggregated mode it's the same sum across every site in the
    *  estate. Powers the leading summary tile. */
@@ -561,7 +561,7 @@ export default function StocktakeList({
               <Th align="right">Items</Th>
               <Th align="right">Movements</Th>
               <Th align="right">Variances</Th>
-              <Th align="right">Net £</Th>
+              <Th align="right">Net $</Th>
               <Th>Status</Th>
               <Th aria-label="Open" />
             </tr>
@@ -667,7 +667,7 @@ export default function StocktakeList({
                           : record.netVarianceValue > 0
                             ? '+'
                             : ''}
-                        £{Math.abs(record.netVarianceValue).toFixed(0)}
+                        ${Math.abs(record.netVarianceValue).toFixed(0)}
                       </span>
                     )}
                   </Td>

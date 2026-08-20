@@ -120,7 +120,7 @@ interface BatchReviewCardProps {
   /** Per-row outcomes, provided by the caller after applying. */
   results?: BatchRowResult[];
   /** Blast-radius stats shown above the rows, e.g. 4 recipes affected ·
-   *  −£3.35 per drink. Required by rule #3 whenever the batch touches
+   *  −$3.35 per drink. Required by rule #3 whenever the batch touches
    *  more than one entity. */
   impactSummary?: Array<{ value: string; label: string }>;
 }

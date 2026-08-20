@@ -6,7 +6,7 @@
  * the record can close. Built around the few moves a reviewer
  * actually makes per line:
  *
- *   1. Read the headline numbers — counted vs theoretical, in £.
+ *   1. Read the headline numbers — counted vs theoretical, in $.
  *   2. Read the counter's note (why they think the gap exists).
  *   3. Pick a resolution: accept the new figure as the truth,
  *      attribute the loss to waste, or flag for a recount.
@@ -74,7 +74,7 @@ export interface ReviewSubmitSummary {
   acceptedCount: number;
   loggedWasteCount: number;
   pendingRecountCount: number;
-  /** Net £ value of the lines the reviewer accepted as stock-affecting
+  /** Net $ value of the lines the reviewer accepted as stock-affecting
    *  variance (excludes recount-pending lines). */
   netResolvedValue: number;
 }
@@ -329,7 +329,7 @@ export default function StocktakeReviewView({
           tone: 18px headline numbers with caption beneath. Three
           tiles read left-to-right as the operator's progress so far:
           how many lines settled cleanly, how many need a call, and
-          what £ is on the table. */}
+          what $ is on the table. */}
       <div
         style={{
           display: 'grid',
@@ -487,7 +487,7 @@ export default function StocktakeReviewView({
 
       {/* Sticky-feeling footer summary so the Submit CTA at the top
           isn't the only one. Mirrors the summary card up top but
-          with the resolved £ tally so the reviewer can sanity-check
+          with the resolved $ tally so the reviewer can sanity-check
           before committing. */}
       <div
         style={{

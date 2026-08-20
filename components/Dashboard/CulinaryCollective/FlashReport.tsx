@@ -217,7 +217,7 @@ function ThirteenWeekSalesSection() {
   return (
     <SectionCard
       title="13-week sales"
-      subtitle="Actual vs Budget vs Last Year · £k per week"
+      subtitle="Actual vs Budget vs Last Year · $k per week"
     >
       <div style={{ width: '100%', height: 280 }}>
         <ResponsiveContainer width="100%" height="100%">
@@ -345,7 +345,7 @@ function DailyDetailSection() {
         <DataTable columns={FIS_WAGE_HOURS_COLUMNS} data={FIS_WAGE_HOURS_ROWS} />
       </SectionCard>
 
-      <SectionCard title="Revenue per labour hour" subtitle="£ per hour">
+      <SectionCard title="Revenue per labour hour" subtitle="$ per hour">
         <DataTable
           columns={FIS_REVENUE_PER_LABOUR_HOUR_COLUMNS}
           data={FIS_REVENUE_PER_LABOUR_HOUR_ROWS}
@@ -490,7 +490,7 @@ function YoYSalesSection() {
   return (
     <SectionCard
       title="Year-on-year sales by outlet"
-      subtitle="13-week rolling · This Year / Last Year / Growth £ / Growth %"
+      subtitle="13-week rolling · This Year / Last Year / Growth $ / Growth %"
     >
       <div style={{ marginBottom: 12 }}>
         <YoyGrowthChart />
@@ -545,7 +545,7 @@ function HeatmapsSection() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <SectionCard
         title="Variance vs last year · heatmap"
-        subtitle="Pick an outlet · cells show daily £ variance vs prior year (green up, red down)"
+        subtitle="Pick an outlet · cells show daily $ variance vs prior year (green up, red down)"
         rightSlot={
           <div
             role="tablist"

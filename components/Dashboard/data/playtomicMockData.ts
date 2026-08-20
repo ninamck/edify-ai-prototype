@@ -16,7 +16,7 @@ export interface ChainKpi {
 }
 
 export const CHAIN_KPIS: ChainKpi[] = [
-  { id: 'revenue', label: 'Revenue', value: '£122,940', delta: '+4.2%', direction: 'up' },
+  { id: 'revenue', label: 'Revenue', value: '$122,940', delta: '+4.2%', direction: 'up' },
   { id: 'bookings', label: 'Bookings', value: '2,830', delta: '+1.8%', direction: 'up' },
   { id: 'occupancy', label: 'Occupancy', value: '70%', delta: '−2.1 pts', direction: 'down', invert: true },
   { id: 'cancellation', label: 'Cancellation', value: '6.4%', delta: '+0.9 pts', direction: 'up', invert: true },
@@ -147,8 +147,8 @@ export const AI_TAKE_OVERVIEW: string[] = [
 
 // Padel-flavoured overview KPIs (used by the first tab).
 export const OVERVIEW_KPIS: ChainKpi[] = [
-  { id: 'revenue', label: 'Court revenue · this week', value: '£122,940', delta: '+4.2%', direction: 'up' },
-  { id: 'bookings', label: 'Cafe revenue · this week', value: '£28,310', delta: '+6.1%', direction: 'up' },
+  { id: 'revenue', label: 'Court revenue · this week', value: '$122,940', delta: '+4.2%', direction: 'up' },
+  { id: 'bookings', label: 'Cafe revenue · this week', value: '$28,310', delta: '+6.1%', direction: 'up' },
   { id: 'occupancy', label: 'Cafe attach rate', value: '47%', delta: '+2.0 pts', direction: 'up' },
   { id: 'cancellation', label: 'Avg session length', value: '88 min', delta: '+3 min', direction: 'up' },
   { id: 'active-players', label: 'New members · week', value: '198', delta: '+24', direction: 'up' },

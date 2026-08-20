@@ -66,7 +66,7 @@ export function combineSectionsToCsv(sections: CsvSection[]): string {
 
 /**
  * Trigger a browser download for the given CSV text. Adds a UTF-8 BOM so
- * Excel renders £/€/é correctly when opening the file directly.
+ * Excel renders $/€/é correctly when opening the file directly.
  */
 export function triggerCsvDownload(filename: string, csv: string): void {
   if (typeof window === 'undefined') return;

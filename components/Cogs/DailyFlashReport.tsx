@@ -9,7 +9,7 @@ import { gbp } from './format';
  * Daily Flash Report — one trading day at the COGS hub. Mirrors the real
  * Edify flash report (net sales hero, metrics, margin cards, labour
  * breakdown, sales-vs-labour chart) with mock figures that reconcile with
- * the weekly COGS fixtures (£51,000 net sales, 27.8% actual COGS).
+ * the weekly COGS fixtures ($51,000 net sales, 27.8% actual COGS).
  */
 
 const FLASH_DAY_LABEL = 'Wednesday, Jan 07 2026';
@@ -37,7 +37,7 @@ const SPLH = FLASH.netSales / FLASH.labourHours;
 const TPLH = FLASH.netSales / FLASH.atv / FLASH.labourHours;
 const IPLH = TPLH * 2.4;
 
-/** Week of the stocktake period — sums to the £51,000 in the fixtures. */
+/** Week of the stocktake period — sums to the $51,000 in the fixtures. */
 const WEEK_SALES_VS_LABOUR = [
   { day: 'Thu 01', labour: 1860, sales: 6180 },
   { day: 'Fri 02', labour: 2050, sales: 7950 },
@@ -342,7 +342,7 @@ export default function DailyFlashReport() {
                   tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={(v: number) => `£${(v / 1000).toFixed(v >= 1000 ? 0 : 1)}k`}
+                  tickFormatter={(v: number) => `$${(v / 1000).toFixed(v >= 1000 ? 0 : 1)}k`}
                 />
                 <Tooltip
                   formatter={(value, name) => [

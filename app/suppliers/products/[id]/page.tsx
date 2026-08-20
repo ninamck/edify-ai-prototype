@@ -291,7 +291,7 @@ export default function ProductEditPage() {
               <Field label="Pack quantity">
                 <NumberInput value={draft.packQty} onChange={(v) => update('packQty', v)} />
               </Field>
-              <Field label="Pack cost ex VAT (£)">
+              <Field label="Pack cost ex VAT ($)">
                 <NumberInput value={draft.packCost} onChange={(v) => update('packCost', v)} step={0.01} />
               </Field>
               <Field label="Tax rate (%)">

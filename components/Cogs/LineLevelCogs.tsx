@@ -120,7 +120,7 @@ export default function LineLevelCogs() {
       >
         <EdifyMark size={13} color="var(--color-accent-deep)" />
         <span style={{ fontSize: 12.5, color: 'var(--color-text-primary)', flex: 1 }}>
-          <strong>{missingCount} sold items</strong> have no recipe match, so their cost shows £0 —{' '}
+          <strong>{missingCount} sold items</strong> have no recipe match, so their cost shows $0 —{' '}
           {gbp(missingSales, { decimals: 0 })} of sales is carrying no COGS.
         </span>
         <button

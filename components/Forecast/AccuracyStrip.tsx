@@ -15,7 +15,7 @@
  *    it here too made the page top read as a dashboard rather than a
  *    page header.
  *
- * The four figures we keep are: Forecast total · Sold · Sales (£) ·
+ * The four figures we keep are: Forecast total · Sold · Sales ($) ·
  * Accuracy. Together they answer "what did Quinn predict, what actually
  * happened (in units and pounds), and how close was Quinn?" — the four
  * facts the demo needs, in the units operators read in every other tool.
@@ -38,7 +38,7 @@ export default function AccuracyStrip({ siteId, backtestDates }: Props) {
     [siteId, backtestDates],
   );
 
-  // £ totals — derive from the per-recipe rows so the number ties out to
+  // $ totals — derive from the per-recipe rows so the number ties out to
   // the same data the units totals do. Done here rather than in
   // getAccuracyHeadline so accuracy.ts stays unit-only and revenue
   // concerns stay in economics.ts.

@@ -8,9 +8,9 @@
  * to work out how many base units one WAC covers, and derives a per-g /
  * per-ml / per-each cost from there.
  *
- *   unitCostGBP(ref)   → £ per base unit (g / ml / each), or null when
+ *   unitCostGBP(ref)   → $ per base unit (g / ml / each), or null when
  *                        no cost is known yet ("estimated" masters).
- *   lineCostGBP(row)   → £ for a RecipeIngredient line (qty × unit cost,
+ *   lineCostGBP(row)   → $ for a RecipeIngredient line (qty × unit cost,
  *                        with kg→g / L→ml conversion on the qty side).
  */
 
@@ -53,7 +53,7 @@ function productUnitCost(p: Product): number | null {
   return totalUnits > 0 ? p.packCost / totalUnits : null;
 }
 
-/** £ per base unit (g / ml / each) for an ingredient ref, or null when
+/** $ per base unit (g / ml / each) for an ingredient ref, or null when
  *  no cost is known. Sub-recipes use their seeded per-serve cost. */
 export function unitCostGBP(ref: IngredientRef): number | null {
   const resolved = resolveIngredientRef(ref);
@@ -72,7 +72,7 @@ export function unitCostGBP(ref: IngredientRef): number | null {
 /** Recipe qty units → base units (g / ml / each). */
 const QTY_UNIT_FACTOR: Record<string, number> = { kg: 1000, L: 1000, l: 1000 };
 
-/** £ for one RecipeIngredient line at its base quantity. */
+/** $ for one RecipeIngredient line at its base quantity. */
 export function lineCostGBP(row: RecipeIngredient): number | null {
   const unit = unitCostGBP(row.ref);
   if (unit == null) return null;
@@ -80,7 +80,7 @@ export function lineCostGBP(row: RecipeIngredient): number | null {
   return row.baseQty.value * factor * unit;
 }
 
-/** "£1.23", or an em-dash when the cost is unknown. */
+/** "$1.23", or an em-dash when the cost is unknown. */
 export function formatLineCost(n: number | null): string {
-  return n == null ? '—' : `£${n.toFixed(2)}`;
+  return n == null ? '—' : `$${n.toFixed(2)}`;
 }

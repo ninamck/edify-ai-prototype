@@ -169,7 +169,7 @@ export default function SupplierDetailPage() {
             </span>
             <span>
               {supplier.fxContractRate
-                ? `Contracted rate: 1 ${supplier.currency} = ${supplier.fxContractRate} GBP`
+                ? `Contracted rate: 1 ${supplier.currency} = ${supplier.fxContractRate} USD`
                 : `${fxRateLabel(supplier.currency)} · auto-updated ${FX_RATE_DATE}`}
             </span>
             {typeof supplier.minimumOrderValue === 'number' && (

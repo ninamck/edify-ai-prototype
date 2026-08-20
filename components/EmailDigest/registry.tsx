@@ -48,7 +48,7 @@ const UPPER: CSSProperties = {
 // ── Section data shapes ─────────────────────────────────────────────────────
 
 export type DeltaValue = {
-  /** Percentage (or pp/£) change; null = comparison unavailable → renders "—". */
+  /** Percentage (or pp/$) change; null = comparison unavailable → renders "—". */
   value: number | null;
   prefix?: string;
   suffix?: string;
@@ -376,7 +376,7 @@ function CellView({ cell }: { cell: LeagueCell }) {
         </span>
       );
     case 'money':
-      return <span style={{ fontWeight: 700 }}>{cell.currency ?? '£'}{cell.value.toLocaleString('en-GB')}</span>;
+      return <span style={{ fontWeight: 700 }}>{cell.currency ?? '$'}{cell.value.toLocaleString('en-GB')}</span>;
     case 'pct':
       return <span>{cell.value.toFixed(cell.dp ?? 1)}%</span>;
     case 'delta': {

@@ -71,7 +71,7 @@ const FIS_KPIS = (() => {
       label: 'Contribution',
       value: '55.3%',
       delta: '+4.8pp vs budget',
-      deltaLabel: 'last week · £60.0k',
+      deltaLabel: 'last week · $60.0k',
       positive: true,
     },
   ];
@@ -150,7 +150,7 @@ export default function CulinaryOverview() {
       {/* 13-week sales chart */}
       <ChartCard
         title="Weekly net sales — Actual vs Budget vs Last Year"
-        subtitle="13-week trailing window · £k per week"
+        subtitle="13-week trailing window · $k per week"
         height={260}
       >
         <ResponsiveContainer width="100%" height="100%">
@@ -166,7 +166,7 @@ export default function CulinaryOverview() {
             />
             <Tooltip
               contentStyle={tipStyle}
-              formatter={(v) => `£${Number(v).toFixed(1)}k`}
+              formatter={(v) => `$${Number(v).toFixed(1)}k`}
             />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             <Bar dataKey="actual" name="Actual" fill="var(--color-accent-deep)" radius={[3, 3, 0, 0]} />
@@ -296,7 +296,7 @@ export default function CulinaryOverview() {
         {/* Revenue by outlet trend */}
         <ChartCard
           title="Revenue by outlet — 13 weeks"
-          subtitle="£ per week · Bar / Flock / Opa / Dough / Other"
+          subtitle="$ per week · Bar / Flock / Opa / Dough / Other"
           height={220}
         >
           <ResponsiveContainer width="100%" height="100%">

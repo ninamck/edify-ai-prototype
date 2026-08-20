@@ -38,7 +38,7 @@ type WaterfallChartRow = {
 };
 
 /** Compute the y range the bars actually cover so we can lift the chart
- *  floor up to just below it. With totals at £55k+ and deltas at £1-3k,
+ *  floor up to just below it. With totals at $55k+ and deltas at $1-3k,
  *  starting the y-axis at 0 makes the variance bars look invisible. */
 function computeYRange(steps: WaterfallStep[]): { minY: number; maxY: number } {
   let running = 0;
@@ -65,7 +65,7 @@ function pickFloor(minY: number, maxY: number): number {
   const range = Math.max(maxY - minY, 1000);
   const raw = minY - range * 0.3;
   if (raw <= 0) return 0;
-  // Round down to nearest 5,000 so axis ticks read as £50k, £55k, £60k etc.
+  // Round down to nearest 5,000 so axis ticks read as $50k, $55k, $60k etc.
   return Math.max(0, Math.floor(raw / 5000) * 5000);
 }
 
@@ -110,7 +110,7 @@ const Y_MAX = Math.ceil((Y_RANGE.maxY + (Y_RANGE.maxY - Y_RANGE.minY) * 0.15) / 
 const ROWS = buildRows(FIS_WATERFALL_STEPS, FLOOR);
 
 /** Connector lines bridge consecutive bars at the running total -- so the
- *  reader can see "Budget ends at £55,403, then Sales drops it to £54,205"
+ *  reader can see "Budget ends at $55,403, then Sales drops it to $54,205"
  *  without having to compare bar tops by eye. */
 type Connector = { from: string; to: string; y: number };
 function buildConnectors(steps: WaterfallStep[]): Connector[] {
@@ -156,7 +156,7 @@ export default function WaterfallChart() {
             width={56}
             domain={[FLOOR, Y_MAX]}
             allowDataOverflow
-            tickFormatter={(v) => `£${(Number(v) / 1000).toFixed(0)}k`}
+            tickFormatter={(v) => `$${(Number(v) / 1000).toFixed(0)}k`}
           />
           <Tooltip
             contentStyle={tipStyle}

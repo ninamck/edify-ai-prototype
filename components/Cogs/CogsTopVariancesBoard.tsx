@@ -47,7 +47,7 @@ export default function CogsTopVariancesBoard({
           Top 10 variances
         </span>
         <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-          biggest £ swings — open a line for the breakdown and fix
+          biggest $ swings — open a line for the breakdown and fix
         </span>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -185,7 +185,7 @@ export default function CogsTopVariancesBoard({
                     {getVarianceReason(row)}
                   </div>
 
-                  {/* Footer — variance £ + % */}
+                  {/* Footer — variance $ + % */}
                   <div
                     style={{
                       marginTop: 'auto',

@@ -80,7 +80,7 @@ function ChartCard({
 // Insight titles on the estate view — offered as "include more insights"
 // in the schedule-report drawer.
 const ESTATE_INSIGHTS = [
-  'Net sales — estate (£k / day)',
+  'Net sales — estate ($k / day)',
   'Gross profit % by site',
   'Wastage value by category',
   'COGS variance vs theoretical',
@@ -151,7 +151,7 @@ export default function EstateDashboard({
     return {
       ...k,
       label: `Net sales (${periodDays}d)`,
-      value: `£${visibleSalesTotal.toFixed(1)}k`,
+      value: `$${visibleSalesTotal.toFixed(1)}k`,
       deltaLabel: `selected period (${periodSubtitle})`,
     };
   });
@@ -269,7 +269,7 @@ export default function EstateDashboard({
 
       case 'sales-trend':
         return (
-          <ChartCard title="Net sales — estate (£k / day)" subtitle={periodSubtitle} actions={estateActions('Net sales — estate (£k / day)')}>
+          <ChartCard title="Net sales — estate ($k / day)" subtitle={periodSubtitle} actions={estateActions('Net sales — estate ($k / day)')}>
             <SalesTrendChart data={visibleSalesTrend} />
           </ChartCard>
         );
@@ -283,7 +283,7 @@ export default function EstateDashboard({
 
       case 'wastage':
         return (
-          <ChartCard title="Wastage value by category" subtitle="£ thousands · spoilage + comps (7d)" actions={estateActions('Wastage value by category')}>
+          <ChartCard title="Wastage value by category" subtitle="$ thousands · spoilage + comps (7d)" actions={estateActions('Wastage value by category')}>
             <WastageChart />
           </ChartCard>
         );

@@ -20,7 +20,7 @@ const COLUMNS: { key: SortKey; label: string; align: 'left' | 'right' }[] = [
   { key: 'name', label: 'Venue', align: 'left' },
   { key: 'occPct', label: 'Occ %', align: 'right' },
   { key: 'revenue', label: 'Revenue', align: 'right' },
-  { key: 'pricePerHr', label: '£ / hr', align: 'right' },
+  { key: 'pricePerHr', label: '$ / hr', align: 'right' },
   { key: 'cancelPct', label: 'Cancel %', align: 'right' },
   { key: 'newPlayers', label: 'New', align: 'right' },
   { key: 'repeatPct', label: 'Repeat %', align: 'right' },
@@ -31,8 +31,8 @@ function formatCell(row: VenueRow, key: SortKey): string {
   switch (key) {
     case 'name': return row.name;
     case 'occPct': return `${row.occPct}%`;
-    case 'revenue': return `£${row.revenue.toLocaleString('en-GB')}`;
-    case 'pricePerHr': return `£${row.pricePerHr}`;
+    case 'revenue': return `$${row.revenue.toLocaleString('en-GB')}`;
+    case 'pricePerHr': return `$${row.pricePerHr}`;
     case 'cancelPct': return `${row.cancelPct.toFixed(1)}%`;
     case 'newPlayers': return `${row.newPlayers}`;
     case 'repeatPct': return `${row.repeatPct}%`;

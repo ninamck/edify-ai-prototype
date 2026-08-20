@@ -121,13 +121,13 @@ export default function PlaytomicOverview() {
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border-subtle)" />
             <XAxis dataKey="week" tick={TICK_STYLE} axisLine={false} tickLine={false} />
             <YAxis
-              tickFormatter={(v: number) => `£${Math.round(v / 1000)}k`}
+              tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`}
               tick={TICK_STYLE}
               axisLine={false}
               tickLine={false}
             />
             <Tooltip
-              formatter={(v, name) => [`£${Number(v).toLocaleString('en-GB')}`, String(name)]}
+              formatter={(v, name) => [`$${Number(v).toLocaleString('en-GB')}`, String(name)]}
               contentStyle={TOOLTIP_STYLE}
             />
             <Legend iconType="circle" wrapperStyle={{ fontSize: 12, fontFamily: 'var(--font-primary)' }} />
@@ -156,7 +156,7 @@ export default function PlaytomicOverview() {
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)', gap: 12 }}>
         <ChartCard
           title="Bookings and cafe revenue · today"
-          subtitle="Court bookings (bars) layered with cafe £ per hour (line)."
+          subtitle="Court bookings (bars) layered with cafe $ per hour (line)."
         >
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={HOURLY_BOOKINGS} margin={{ top: 4, right: 16, bottom: 0, left: -8 }}>
@@ -169,7 +169,7 @@ export default function PlaytomicOverview() {
                 tick={TICK_STYLE}
                 axisLine={false}
                 tickLine={false}
-                tickFormatter={(v: number) => `£${v}`}
+                tickFormatter={(v: number) => `$${v}`}
               />
               <Tooltip contentStyle={TOOLTIP_STYLE} />
               <Legend iconType="circle" wrapperStyle={{ fontSize: 12, fontFamily: 'var(--font-primary)' }} />
@@ -178,7 +178,7 @@ export default function PlaytomicOverview() {
                 yAxisId="right"
                 type="monotone"
                 dataKey="cafe"
-                name="Cafe £"
+                name="Cafe $"
                 stroke={ACCENT_DEEP}
                 strokeWidth={2.4}
                 dot={{ r: 3, fill: ACCENT_DEEP, strokeWidth: 0 }}
@@ -204,11 +204,11 @@ export default function PlaytomicOverview() {
                 tick={TICK_STYLE}
                 axisLine={false}
                 tickLine={false}
-                tickFormatter={(v: number) => `£${Math.round(v / 1000)}k`}
+                tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`}
               />
               <YAxis type="category" dataKey="site" tick={TICK_STYLE} axisLine={false} tickLine={false} width={92} />
               <Tooltip
-                formatter={(v, name) => [`£${Number(v).toLocaleString('en-GB')}`, String(name)]}
+                formatter={(v, name) => [`$${Number(v).toLocaleString('en-GB')}`, String(name)]}
                 contentStyle={TOOLTIP_STYLE}
               />
               <Legend iconType="circle" wrapperStyle={{ fontSize: 12, fontFamily: 'var(--font-primary)' }} />

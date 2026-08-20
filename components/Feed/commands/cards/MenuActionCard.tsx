@@ -119,7 +119,7 @@ export default function MenuActionCard({ initialArgs, state, onConfirm, onCancel
 
       {action === 'price-set' && (
         <>
-          <FieldRow label="Current price">£{previousPrice.toFixed(2)}</FieldRow>
+          <FieldRow label="Current price">${previousPrice.toFixed(2)}</FieldRow>
           <div
             style={{
               marginTop: '8px',
@@ -129,7 +129,7 @@ export default function MenuActionCard({ initialArgs, state, onConfirm, onCancel
             }}
           >
             <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>New</span>
-            <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-muted)' }}>£</span>
+            <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-muted)' }}>$</span>
             <input
               type="text"
               inputMode="decimal"
@@ -157,7 +157,7 @@ export default function MenuActionCard({ initialArgs, state, onConfirm, onCancel
               >
                 <ArrowRight size={12} style={{ verticalAlign: '-2px' }} />{' '}
                 {newPrice > previousPrice ? '+' : ''}
-                £{(newPrice - previousPrice).toFixed(2)}
+                ${(newPrice - previousPrice).toFixed(2)}
               </span>
             )}
           </div>
@@ -166,9 +166,9 @@ export default function MenuActionCard({ initialArgs, state, onConfirm, onCancel
 
       {action === 'price-delta' && (
         <>
-          <FieldRow label="Current price">£{previousPrice.toFixed(2)}</FieldRow>
+          <FieldRow label="Current price">${previousPrice.toFixed(2)}</FieldRow>
           <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>Adjust by £</span>
+            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>Adjust by $</span>
             <input
               type="text"
               inputMode="decimal"
@@ -188,7 +188,7 @@ export default function MenuActionCard({ initialArgs, state, onConfirm, onCancel
             />
             {newPrice !== null && (
               <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-                <ArrowRight size={12} style={{ verticalAlign: '-2px' }} /> £{newPrice.toFixed(2)}
+                <ArrowRight size={12} style={{ verticalAlign: '-2px' }} /> ${newPrice.toFixed(2)}
               </span>
             )}
           </div>

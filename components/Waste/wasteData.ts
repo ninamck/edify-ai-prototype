@@ -26,7 +26,7 @@ export interface WasteProduct {
   name: string;
   category: WasteCategory;
   uomOptions: string[]; // first is default
-  unitCost: number;     // £ per primary unit
+  unitCost: number;     // $ per primary unit
 }
 
 export const WASTE_PRODUCTS: WasteProduct[] = [

@@ -44,7 +44,7 @@ export default function SalesTrendChart({
         />
         <Tooltip
           contentStyle={tipStyle}
-          formatter={(v) => [`£${Number(v).toFixed(1)}k`, 'Net sales']}
+          formatter={(v) => [`$${Number(v).toFixed(1)}k`, 'Net sales']}
         />
         <Area type="monotone" dataKey="sales" stroke={ACCENT} strokeWidth={2} fill="url(#salesFill)" />
       </AreaChart>

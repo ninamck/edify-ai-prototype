@@ -24,7 +24,7 @@
  *   • The AI tracks the curve, so it does far less of both.
  *
  * We surface three things the room can read instantly:
- *   • £ the AI saved so far today (waste avoided + sales rescued)
+ *   • $ the AI saved so far today (waste avoided + sales rescued)
  *   • a live, side-by-side scoreboard that diverges as the clock advances
  *   • a projected full-day figure (a deterministic fast-forward of the whole
  *     service for both strategies), so the headline lands before you step.
@@ -115,7 +115,7 @@ type RecipeConfig = {
   cost: number;
 };
 
-/** Eyeballed BK-ish economics (£). Not load-bearing; tune freely per estate. */
+/** Eyeballed BK-ish economics ($). Not load-bearing; tune freely per estate. */
 const ECON: Record<string, { price: number; cost: number }> = {
   'bk-whopper-patty': { price: 5.49, cost: 1.4 },
   'bk-junior-patty': { price: 3.49, cost: 0.8 },
@@ -456,9 +456,9 @@ export type StrategyScore = {
   sold: number;
   wasteUnits: number;
   missedUnits: number;
-  /** £ of food binned. */
+  /** $ of food binned. */
   wasteCost: number;
-  /** £ of sales lost to empty cabinets. */
+  /** $ of sales lost to empty cabinets. */
   missedRevenue: number;
   /** wasteCost + missedRevenue — total money left on the table. */
   totalLoss: number;
@@ -616,9 +616,9 @@ export function useForecastImpact(): ForecastImpact {
 
 /** Currency formatting used across the scoreboard. */
 export function gbp(n: number): string {
-  return new Intl.NumberFormat('en-GB', {
+  return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'GBP',
+    currency: 'USD',
     maximumFractionDigits: 0,
   }).format(Math.round(n));
 }

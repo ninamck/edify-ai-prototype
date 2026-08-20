@@ -1291,10 +1291,10 @@ function stocktake(
 // the real product would surface the page ("look at what needs a
 // decision, not at what's already settled").
 //
-// Variance £ totals: −£12.60 + −£7.80 + −£1.80 + −£6.60 + −£12.60 ≈ −£41
-// of straight cost, plus an additional −£11 of cream rolled into the
+// Variance $ totals: −$12.60 + −$7.80 + −$1.80 + −$6.60 + −$12.60 ≈ −$41
+// of straight cost, plus an additional −$11 of cream rolled into the
 // produce fridge that didn't get its own line in the summary headline
-// — matches the −£52 netVarianceValue on the stocktake record without
+// — matches the −$52 netVarianceValue on the stocktake record without
 // requiring a 6th variance row.
 const ESPRESSO_PRODUCE_REVIEW_LINES: StocktakeLine[] = [
   {
@@ -1421,7 +1421,7 @@ const ISLINGTON_HISTORY: StocktakeRecord[] = [
 //
 //   • High-value items — the top N items by `unitPrice` (descending),
 //     where N defaults to 10. This is the bucket that drives the most
-//     £-variance, so it's worth a quick count even when nothing's
+//     $-variance, so it's worth a quick count even when nothing's
 //     formally flagged.
 //   • Perishables — every item in a short-shelf-life category (dairy,
 //     produce, seafood, meat, prepared). These walk first and lose

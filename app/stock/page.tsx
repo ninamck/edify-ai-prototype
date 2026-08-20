@@ -336,7 +336,7 @@ function StockPageInner() {
     ];
   }, [activeSite.itemGroups, activeSite.siteId, userGroups]);
 
-  // £-value rollups for the leading summary tile on the Stocktake
+  // $-value rollups for the leading summary tile on the Stocktake
   // list. Per-site for the standalone Stocktake tab; estate-wide for
   // the All-sites Stocktake tab.
   const siteEstimatedStockValue = useMemo(

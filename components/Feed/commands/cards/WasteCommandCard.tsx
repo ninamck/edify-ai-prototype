@@ -131,7 +131,7 @@ export default function WasteCommandCard({ initialArgs, state, onConfirm, onCanc
           <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
             Estimated value
           </span>
-          <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>£{value}</span>
+          <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>${value}</span>
         </div>
       )}
     </CardShell>

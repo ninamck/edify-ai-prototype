@@ -112,7 +112,7 @@ export const COMMAND_REGISTRY: ChatCommand[] = [
     examples: [
       '84 the almond croissant today',
       'raise flat white by 20p',
-      'set price of latte to £4.20',
+      'set price of latte to $4.20',
     ],
     parse: parseMenu,
     cardMsgType: 'cmd-menu-card',
@@ -166,7 +166,7 @@ export const COMMAND_REGISTRY: ChatCommand[] = [
     examples: [
       'set Bidvest cut-off to 2pm',
       'change Almarai lead time to 1 day',
-      'update Agility MOV to £300',
+      'update Agility MOV to $300',
     ],
     parse: parseSupplier,
     cardMsgType: 'cmd-supplier-card',

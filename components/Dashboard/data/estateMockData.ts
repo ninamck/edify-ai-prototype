@@ -97,7 +97,7 @@ export type Kpi = {
 };
 
 export const KPI: Kpi[] = [
-  { label: 'Net sales (7d)',     value: '£342.8k', delta: '+4.1%',        deltaLabel: 'vs prior week',     positive: true },
+  { label: 'Net sales (7d)',     value: '$342.8k', delta: '+4.1%',        deltaLabel: 'vs prior week',     positive: true },
   { label: 'Gross profit',       value: '68.2%',   delta: '−0.4pp',       deltaLabel: 'vs target 68.6%',   positive: false },
   { label: 'COGS vs theoretical',value: '+1.2%',   delta: 'unfavourable', deltaLabel: 'estate blend',      positive: false },
   { label: 'Wastage',            value: '2.4%',    delta: 'of net sales', deltaLabel: '−0.2pp vs LW',      positive: true },

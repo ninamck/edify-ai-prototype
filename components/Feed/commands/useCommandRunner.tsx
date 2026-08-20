@@ -621,7 +621,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           };
           const display = (f: { field: SupplierField; value?: string }): string => {
             if (f.field === 'leadTimeDays') return `${f.value} day${f.value === '1' ? '' : 's'}`;
-            if (f.field === 'minimumOrderValue') return `£${f.value}`;
+            if (f.field === 'minimumOrderValue') return `$${f.value}`;
             if (f.field === 'deliveryDays') return (f.value ?? '').split(',').join(', ');
             return f.value ?? '';
           };
@@ -941,7 +941,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
             skipped: false,
           };
           pushResponseFlow({
-            text: `Got it — ${input.newProductName} from ${input.supplierName}. I picked up the pack details from ${sourceLabel} (${imported.packQty}${imported.unitType} · £${imported.packCost.toFixed(2)}). Now — which recipes should I add it to?`,
+            text: `Got it — ${input.newProductName} from ${input.supplierName}. I picked up the pack details from ${sourceLabel} (${imported.packQty}${imported.unitType} · $${imported.packCost.toFixed(2)}). Now — which recipes should I add it to?`,
             commandId: 'product-swap',
             cardMsgType: 'cmd-product-pick-recipes',
             cardArgs: mergedWithPack,
@@ -1050,7 +1050,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           skipped: false,
         };
         pushResponseFlow({
-          text: `OK — replacing ${input.oldProductName}. I picked up the pack details from ${sourceLabel} (${importedPack.packQty}${importedPack.unitType} · £${importedPack.packCost.toFixed(2)}). Now — which recipes should I swap ${input.oldProductName} for ${newName} in?`,
+          text: `OK — replacing ${input.oldProductName}. I picked up the pack details from ${sourceLabel} (${importedPack.packQty}${importedPack.unitType} · $${importedPack.packCost.toFixed(2)}). Now — which recipes should I swap ${input.oldProductName} for ${newName} in?`,
           commandId: 'product-swap',
           cardMsgType: 'cmd-product-pick-recipes',
           cardArgs: merged,
@@ -1095,7 +1095,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       pushUserEcho(
         input.skipped
           ? 'Skipped pack details'
-          : `${input.packQty}${input.unitType} · £${input.packCost.toFixed(2)}${input.photoDataUrl ? ' · photo' : ''}`,
+          : `${input.packQty}${input.unitType} · $${input.packCost.toFixed(2)}${input.photoDataUrl ? ' · photo' : ''}`,
       );
       const mode = (args.mode as 'add' | 'replace' | undefined) ?? 'replace';
       const newName = (args.newProductName as string) ?? 'the new product';
@@ -1202,7 +1202,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       const value = (product.unitCost * final.qty).toFixed(2);
       const receipt: CommandReceipt = {
         headline: `Logged · ${final.qty} ${product.name}${final.qty === 1 ? '' : 's'}`,
-        detail: `${reason?.label ?? 'No reason'} · £${value}`,
+        detail: `${reason?.label ?? 'No reason'} · $${value}`,
         href: '/log-waste',
         hrefLabel: 'Open log',
         undo: () => {
@@ -1502,12 +1502,12 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         headline = `Back on · ${final.recipeName}`;
         detail = 'Available on POS';
       } else if (final.action === 'price-set' && final.price !== undefined) {
-        headline = `Price set · ${final.recipeName} · £${final.price.toFixed(2)}`;
-        detail = `was £${final.previousPrice.toFixed(2)}`;
+        headline = `Price set · ${final.recipeName} · $${final.price.toFixed(2)}`;
+        detail = `was $${final.previousPrice.toFixed(2)}`;
       } else if (final.action === 'price-delta' && final.priceDelta !== undefined) {
         const newPrice = final.previousPrice + final.priceDelta;
-        headline = `Price adjusted · ${final.recipeName} · £${newPrice.toFixed(2)}`;
-        detail = `${final.priceDelta > 0 ? '+' : ''}£${final.priceDelta.toFixed(2)} vs £${final.previousPrice.toFixed(2)}`;
+        headline = `Price adjusted · ${final.recipeName} · $${newPrice.toFixed(2)}`;
+        detail = `${final.priceDelta > 0 ? '+' : ''}$${final.priceDelta.toFixed(2)} vs $${final.previousPrice.toFixed(2)}`;
       } else {
         headline = `Updated · ${final.recipeName}`;
         detail = '';
@@ -1576,7 +1576,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           const n = Number(c.valueNormalised);
           return `${n} day${n === 1 ? '' : 's'}`;
         }
-        if (c.field === 'minimumOrderValue') return `£${c.valueNormalised}`;
+        if (c.field === 'minimumOrderValue') return `$${c.valueNormalised}`;
         return String(c.valueNormalised);
       };
 

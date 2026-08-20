@@ -87,7 +87,7 @@ export default function MobileDashboard({
       : {
           ...k,
           label: `Net sales (${periodDays}d)`,
-          value: `£${visibleSalesTotal.toFixed(1)}k`,
+          value: `$${visibleSalesTotal.toFixed(1)}k`,
           deltaLabel: `selected period`,
         },
   );
@@ -137,7 +137,7 @@ export default function MobileDashboard({
     },
     wastage: {
       title: 'Wastage by category',
-      subtitle: '£ thousands · spoilage + comps (7d)',
+      subtitle: '$ thousands · spoilage + comps (7d)',
       render: <WastageChart />,
     },
     'cogs-variance': {
@@ -269,7 +269,7 @@ export default function MobileDashboard({
         return (
           <DashboardTile
             label="Net sales"
-            value={`£${visibleSalesTotal.toFixed(1)}k`}
+            value={`$${visibleSalesTotal.toFixed(1)}k`}
             delta={`${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(1)}%`}
             deltaLabel={periodSubtitle}
             trend={diffPct >= 0 ? 'positive' : 'negative'}
@@ -300,7 +300,7 @@ export default function MobileDashboard({
         return (
           <DashboardTile
             label="Wastage (7d)"
-            value={`£${(totalK * 1000).toFixed(0)}`}
+            value={`$${(totalK * 1000).toFixed(0)}`}
             delta="−0.2pp vs LW"
             deltaLabel="of net sales"
             trend="positive"
@@ -363,7 +363,7 @@ export default function MobileDashboard({
         return (
           <DashboardTile
             label={`Sales vs forecast · as at ${nowHourLabel}`}
-            value={`£${shiftKpis.salesSoFar.toLocaleString()}`}
+            value={`$${shiftKpis.salesSoFar.toLocaleString()}`}
             delta={`${paceDelta >= 0 ? '+' : ''}${paceDelta.toFixed(1)}%`}
             deltaLabel="vs forecast to now"
             trend={paceDelta >= 0 ? 'positive' : 'negative'}
@@ -407,8 +407,8 @@ export default function MobileDashboard({
         return (
           <DashboardTile
             label={`Waste · as at ${nowHourLabel}`}
-            value={`£${totalSpend}`}
-            delta={`${diff >= 0 ? '+' : '−'}£${Math.abs(diff)} vs typical`}
+            value={`$${totalSpend}`}
+            delta={`${diff >= 0 ? '+' : '−'}$${Math.abs(diff)} vs typical`}
             deltaLabel={`${waste.length} items`}
             trend={diff > 5 ? 'negative' : diff < 0 ? 'positive' : 'neutral'}
             sparkline={waste.map((r) => r.spendToday)}

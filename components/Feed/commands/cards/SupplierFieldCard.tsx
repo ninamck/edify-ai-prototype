@@ -47,7 +47,7 @@ function formatValue(field: SupplierField, supplier: Supplier | undefined): stri
   switch (field) {
     case 'cutOffTime':         return supplier.cutOffTime ?? '—';
     case 'leadTimeDays':       return supplier.leadTimeDays !== undefined ? `${supplier.leadTimeDays} day${supplier.leadTimeDays === 1 ? '' : 's'}` : '—';
-    case 'minimumOrderValue':  return supplier.minimumOrderValue !== undefined ? `£${supplier.minimumOrderValue}` : '—';
+    case 'minimumOrderValue':  return supplier.minimumOrderValue !== undefined ? `$${supplier.minimumOrderValue}` : '—';
     case 'deliveryDays':       return supplier.deliveryDays?.join(', ') ?? '—';
     case 'email':              return supplier.email ?? '—';
     case 'phone':              return supplier.phone ?? '—';
@@ -364,7 +364,7 @@ export default function SupplierFieldCard({ initialArgs, state, onConfirm, onCan
                   : f === 'leadTimeDays'
                     ? 'days'
                     : f === 'minimumOrderValue'
-                      ? '£ amount'
+                      ? '$ amount'
                       : f === 'email'
                         ? 'orders@…'
                         : '+44…'

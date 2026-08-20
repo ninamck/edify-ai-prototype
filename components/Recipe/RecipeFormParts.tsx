@@ -867,7 +867,7 @@ function ComponentRowEdit({
       </select>
 
       <span style={{ textAlign: 'right', fontSize: '12.5px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-        £{cost.toFixed(2)}
+        ${cost.toFixed(2)}
       </span>
 
       <span style={{ display: 'inline-flex', gap: '2px', justifyContent: 'flex-end' }}>
@@ -1682,7 +1682,7 @@ export function PackagingTable({
               {UOMS.map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
             <span style={{ textAlign: 'right', fontSize: '12.5px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-              £{cost.toFixed(2)}
+              ${cost.toFixed(2)}
             </span>
             <button onClick={() => onRemove(row.id)} style={rowRemoveStyle} aria-label="Remove">
               <X size={14} />
@@ -1753,7 +1753,7 @@ export function CollapsibleSidebar({
   /** Sticky top offset, in px. */
   top?: number;
   /** Optional decorative icon shown in the collapsed rail. Defaults to
-   *  a £ glyph since the only current consumer is the pricing
+   *  a $ glyph since the only current consumer is the pricing
    *  sidebar; pass any lucide icon (16–18px) for other panels. */
   icon?: React.ReactNode;
   children: React.ReactNode;
@@ -1985,11 +1985,11 @@ function PriceChannel({
       <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{label}</div>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--color-text-secondary)' }}>
         <span>Ingredient cost</span>
-        <strong style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>£{ingCost.toFixed(2)}</strong>
+        <strong style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>${ingCost.toFixed(2)}</strong>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--color-text-secondary)' }}>
         <span>Packaging cost</span>
-        <strong style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>£{pkgCost.toFixed(2)}</strong>
+        <strong style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>${pkgCost.toFixed(2)}</strong>
       </div>
       {onCommission && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
@@ -2009,7 +2009,7 @@ function PriceChannel({
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', flex: 1 }}>SRP ex VAT</span>
         <div style={{ ...inputSuffixWrap, width: '104px' }}>
-          <span style={{ ...inputSuffix, left: '8px', right: 'auto', fontSize: '12px' }}>£</span>
+          <span style={{ ...inputSuffix, left: '8px', right: 'auto', fontSize: '12px' }}>$</span>
           <input
             type="number"
             min={0}
@@ -2023,7 +2023,7 @@ function PriceChannel({
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
         <span style={{ color: 'var(--color-text-secondary)' }}>SRP inc VAT</span>
         <strong style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-          {srpInc == null ? '—' : `£${srpInc.toFixed(2)}`}
+          {srpInc == null ? '—' : `$${srpInc.toFixed(2)}`}
         </strong>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>

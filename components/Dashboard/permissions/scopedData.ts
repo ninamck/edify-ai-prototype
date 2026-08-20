@@ -13,11 +13,11 @@ function wobble(seed: number): number {
 
 export type SiteWeekFigures = {
   site: Site;
-  /** Net sales this week, £k. */
+  /** Net sales this week, $k. */
   sales: number;
-  /** Net sales prior week, £k. */
+  /** Net sales prior week, $k. */
   priorSales: number;
-  /** Waste over the last 4 weeks, £. */
+  /** Waste over the last 4 weeks, $. */
   waste4wk: number;
   /** Labour as % of net sales this week. */
   labourPct: number;
@@ -26,7 +26,7 @@ export type SiteWeekFigures = {
 };
 
 function figuresFor(site: Site, index: number): SiteWeekFigures {
-  // Base weekly sales spread the estate between ~£26k and ~£54k.
+  // Base weekly sales spread the estate between ~$26k and ~$54k.
   const sales = 26 + ((index * 7) % 12) * 2.4 + wobble(index + 1) * 1.8;
   const priorSales = sales * (0.94 + 0.08 * ((index % 5) / 4));
   const waste4wk = sales * 1000 * 4 * (0.016 + 0.012 * ((index * 3) % 7) / 6);
@@ -61,7 +61,7 @@ export function figuresForSites(siteIds: SiteId[]): SiteWeekFigures[] {
 
 export type TrendPoint = { wk: string; sales: number };
 
-/** 12-week net sales trend summed over the given sites, £k per week. */
+/** 12-week net sales trend summed over the given sites, $k per week. */
 export function salesTrendForSites(siteIds: SiteId[]): TrendPoint[] {
   const rows = figuresForSites(siteIds);
   const weeks: TrendPoint[] = [];

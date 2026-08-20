@@ -34,7 +34,7 @@ const DRIVERS: FxDriver[] = [
     pp: 4.1,
     amount: 142,
     color: '#4a6cb5',
-    detail: 'GBP weakened against CAD across the period\u2019s receipts',
+    detail: 'USD weakened against CAD across the period\u2019s receipts',
   },
   {
     id: 'price',
@@ -93,7 +93,7 @@ export default function FxAttributionCard() {
             whiteSpace: 'nowrap',
           }}
         >
-          Supplier bills in CAD · reported in GBP
+          Supplier bills in CAD · reported in USD
         </span>
       </div>
 

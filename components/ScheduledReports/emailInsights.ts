@@ -36,7 +36,7 @@ export const EMAIL_INSIGHTS: Record<string, EmailInsight> = {
   },
 
   // Dashboard · Estate
-  'Net sales — estate (£k / day)': {
+  'Net sales — estate ($k / day)': {
     takeaway: 'Estate sales up 3.2% on last week, led by Riverside; no site is more than 4% off forecast.',
     chart: 'line',
   },
@@ -67,7 +67,7 @@ export const EMAIL_INSIGHTS: Record<string, EmailInsight> = {
     chart: 'line',
   },
   'Waste logged · yesterday': {
-    takeaway: '£146 logged against £86 typical (+70%) — whole milk steaming jugs are the repeat offender.',
+    takeaway: '$146 logged against $86 typical (+70%) — whole milk steaming jugs are the repeat offender.',
     chart: 'bars',
   },
   'Exceptions queue': {
@@ -97,7 +97,7 @@ export const EMAIL_INSIGHTS: Record<string, EmailInsight> = {
     chart: 'bars',
   },
   'Top 5 price movers': {
-    takeaway: 'Net £130/week of price creep — the oat milk rise alone is ~£1,120 annualised across the estate.',
+    takeaway: 'Net $130/week of price creep — the oat milk rise alone is ~$1,120 annualised across the estate.',
     chart: 'table',
   },
   'Compliance strip': {
@@ -115,7 +115,7 @@ export const EMAIL_INSIGHTS: Record<string, EmailInsight> = {
     chart: 'table',
   },
   'COGS variance · site × category': {
-    takeaway: 'Canary dairy is the single biggest variance line (+£1.2k) — start the five-step diagnostic there.',
+    takeaway: 'Canary dairy is the single biggest variance line (+$1.2k) — start the five-step diagnostic there.',
     chart: 'table',
   },
   'Menu profitability · margin vs volume': {
@@ -123,11 +123,11 @@ export const EMAIL_INSIGHTS: Record<string, EmailInsight> = {
     chart: 'bars',
   },
   'Stock holding · value and days of cover': {
-    takeaway: 'Kings X is holding 12.4 days of cover — £3.1k more stock than its sales rate justifies.',
+    takeaway: 'Kings X is holding 12.4 days of cover — $3.1k more stock than its sales rate justifies.',
     chart: 'table',
   },
   'Dead and slow-moving stock': {
-    takeaway: '£312 of stock had zero usage this period — seasonal syrups dominate; transfer before write-down.',
+    takeaway: '$312 of stock had zero usage this period — seasonal syrups dominate; transfer before write-down.',
     chart: 'table',
   },
   'Supplier inflation impact': {
@@ -135,7 +135,7 @@ export const EMAIL_INSIGHTS: Record<string, EmailInsight> = {
     chart: 'table',
   },
   'CPU transfer reconciliation': {
-    takeaway: '£0.8k left the CPU that Kings X and Shoreditch never booked in — their GP is flattered until receipted.',
+    takeaway: '$0.8k left the CPU that Kings X and Shoreditch never booked in — their GP is flattered until receipted.',
     chart: 'table',
   },
   'Trend · four periods': {

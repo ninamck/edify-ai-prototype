@@ -123,7 +123,7 @@ function getHeroAnswers(role: BriefingRole, phase: BriefingPhase): HeroAnswer[] 
   if (role === 'gm') {
     if (phase === 'morning') return [
       { id: 'h1', eyebrow: 'On today', value: '4 on the floor', context: '1 short of plan — Priya called out, Tom moved to mid' },
-      { id: 'h2', eyebrow: 'Expected sales', value: '£19,200', context: '+6% vs last Thursday · warm day forecast', detail: <LabourMiniCurve subtitle="Yesterday's actual vs forecast" /> },
+      { id: 'h2', eyebrow: 'Expected sales', value: '$19,200', context: '+6% vs last Thursday · warm day forecast', detail: <LabourMiniCurve subtitle="Yesterday's actual vs forecast" /> },
       { id: 'h3', eyebrow: 'Deliveries today', value: 'Fresh Direct · 11am', context: '1 line pre-flagged short before arrival' },
     ];
     if (phase === 'midday') return [
@@ -132,12 +132,12 @@ function getHeroAnswers(role: BriefingRole, phase: BriefingPhase): HeroAnswer[] 
       { id: 'h3', eyebrow: 'Next cut-off', value: 'Bidfood · 2pm', context: "Tomorrow's basket needs send" },
     ];
     if (phase === 'afternoon') return [
-      { id: 'h1', eyebrow: 'EOD tracking', value: '£20,250', context: '+£1,340 vs £18,910 plan' },
+      { id: 'h1', eyebrow: 'EOD tracking', value: '$20,250', context: '+$1,340 vs $18,910 plan' },
       { id: 'h2', eyebrow: 'Cut-offs before close', value: '1 left · 30 min', context: 'Bidfood basket — matcha +1, tomatoes +2' },
       { id: 'h3', eyebrow: 'Tomorrow opening', value: 'Priya · 6am', context: 'Reminder sent · confirmed' },
     ];
     if (phase === 'evening') return [
-      { id: 'h1', eyebrow: 'Today closed', value: '£20,180', context: '+£1,270 vs plan · waste £28' },
+      { id: 'h1', eyebrow: 'Today closed', value: '$20,180', context: '+$1,270 vs plan · waste $28' },
       { id: 'h2', eyebrow: 'Tomorrow ready', value: 'Basket sent · Priya 6am', context: 'Compliance pre-filled — temps + fire door' },
       { id: 'h3', eyebrow: 'Period margin', value: '+0.4 pt today', context: 'Posts overnight after close' },
     ];
@@ -146,7 +146,7 @@ function getHeroAnswers(role: BriefingRole, phase: BriefingPhase): HeroAnswer[] 
   if (role === 'ed') {
     if (phase === 'morning') return [
       { id: 'h1', eyebrow: 'Sites open today', value: '12 of 12', context: 'No openings flagged late' },
-      { id: 'h2', eyebrow: 'Chain forecast', value: '£182,400', context: '+4% vs last Thursday', detail: <LabourMiniCurve subtitle="Chain roll-up · yesterday" /> },
+      { id: 'h2', eyebrow: 'Chain forecast', value: '$182,400', context: '+4% vs last Thursday', detail: <LabourMiniCurve subtitle="Chain roll-up · yesterday" /> },
       { id: 'h3', eyebrow: 'Decisions for you', value: '4 calls', context: 'Bidvest GRN · Metro credit · matcha · muffins' },
     ];
     if (phase === 'midday') return [
@@ -155,12 +155,12 @@ function getHeroAnswers(role: BriefingRole, phase: BriefingPhase): HeroAnswer[] 
       { id: 'h3', eyebrow: 'Decisions for you', value: '4 calls', context: 'GRN · lunch staff · basket · muffins' },
     ];
     if (phase === 'afternoon') return [
-      { id: 'h1', eyebrow: 'Chain EOD tracking', value: '£196,800', context: '+£14k vs plan' },
-      { id: 'h2', eyebrow: 'Cut-offs before close', value: '1 left · 30 min', context: 'Bidfood basket — £1,240 est.' },
+      { id: 'h1', eyebrow: 'Chain EOD tracking', value: '$196,800', context: '+$14k vs plan' },
+      { id: 'h2', eyebrow: 'Cut-offs before close', value: '1 left · 30 min', context: 'Bidfood basket — $1,240 est.' },
       { id: 'h3', eyebrow: 'Loop closed today', value: 'Warm-day → +1 case', context: 'Sales → stock → orders ran itself' },
     ];
     if (phase === 'evening') return [
-      { id: 'h1', eyebrow: 'Chain closed', value: '£198,420', context: 'Best Thursday this quarter' },
+      { id: 'h1', eyebrow: 'Chain closed', value: '$198,420', context: 'Best Thursday this quarter' },
       { id: 'h2', eyebrow: 'Tomorrow ready', value: '12 of 12 baskets sent', context: 'Compliance + cost pack queued' },
       { id: 'h3', eyebrow: 'Recipes recosted', value: '12 SKUs · flour variance', context: 'Margins refreshed for Cheryl' },
     ];
@@ -184,7 +184,7 @@ function getHeroAnswers(role: BriefingRole, phase: BriefingPhase): HeroAnswer[] 
       {
         id: 'h2',
         eyebrow: 'Cleared overnight',
-        value: '£2,340',
+        value: '$2,340',
         context: '14 invoices auto-matched · 3 held for tolerance',
         detail: <InvoiceMatchBar />,
       },
@@ -192,17 +192,17 @@ function getHeroAnswers(role: BriefingRole, phase: BriefingPhase): HeroAnswer[] 
     ];
     if (phase === 'midday') return [
       { id: 'h1', eyebrow: 'COGS today', value: '28.4%', context: '+1.2 pts vs 27.2% target · flour driving 0.7' },
-      { id: 'h2', eyebrow: 'Posted so far', value: '£3,240', context: '18 invoices · running clean' },
+      { id: 'h2', eyebrow: 'Posted so far', value: '$3,240', context: '18 invoices · running clean' },
       { id: 'h3', eyebrow: 'Period close in', value: '3 days', context: 'Pace check — projecting 82% on target' },
     ];
     if (phase === 'afternoon') return [
       { id: 'h1', eyebrow: 'Period completeness', value: '78%', context: 'Up from 64% this morning · on target' },
-      { id: 'h2', eyebrow: 'Posted today', value: '£6,700', context: '27 cleared · 2 in review' },
+      { id: 'h2', eyebrow: 'Posted today', value: '$6,700', context: '27 cleared · 2 in review' },
       { id: 'h3', eyebrow: 'Accruals to approve', value: 'By 4pm', context: 'Urban Fresh · Lacto · Metro credit' },
     ];
     if (phase === 'evening') return [
       { id: 'h1', eyebrow: 'Period completeness', value: '84%', context: 'Above target' },
-      { id: 'h2', eyebrow: 'Posted today', value: '£4,820', context: '3 small holds queued for tomorrow' },
+      { id: 'h2', eyebrow: 'Posted today', value: '$4,820', context: '3 small holds queued for tomorrow' },
       { id: 'h3', eyebrow: 'Close pack', value: 'Ready for sign-off', context: '7pm distribution drafted' },
     ];
   }
@@ -211,7 +211,7 @@ function getHeroAnswers(role: BriefingRole, phase: BriefingPhase): HeroAnswer[] 
     if (phase === 'morning') return [
       { id: 'h1', eyebrow: 'Forward pipeline', value: '−22% Manchester', context: 'Tue/Thu evenings concentrated' },
       { id: 'h2', eyebrow: 'Coaches today', value: '2 swaps queued', context: 'Stockport — Diego off sick' },
-      { id: 'h3', eyebrow: 'Cafe basket', value: '£1,860 · weekend', context: 'Cut-off 11am · tournament Saturday' },
+      { id: 'h3', eyebrow: 'Cafe basket', value: '$1,860 · weekend', context: 'Cut-off 11am · tournament Saturday' },
     ];
     if (phase === 'midday') return [
       { id: 'h1', eyebrow: 'Off-peak discount', value: 'Live at 6pm', context: 'Needs approval by 2pm' },
@@ -224,7 +224,7 @@ function getHeroAnswers(role: BriefingRole, phase: BriefingPhase): HeroAnswer[] 
       { id: 'h3', eyebrow: 'Weekend roster', value: '+18% confirmed', context: 'All 7 sites' },
     ];
     if (phase === 'evening') return [
-      { id: 'h1', eyebrow: 'EOD revenue', value: '£22,600', context: 'Court £18.4k · cafe £4.2k' },
+      { id: 'h1', eyebrow: 'EOD revenue', value: '$22,600', context: 'Court $18.4k · cafe $4.2k' },
       { id: 'h2', eyebrow: 'Tomorrow pipeline', value: '84% booked', context: 'Manchester recovered to 71%' },
       { id: 'h3', eyebrow: 'Session ratings', value: '4.7 / 5 avg', context: '2 court-lighting tickets logged' },
     ];
@@ -1287,13 +1287,13 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'ed-m-n-1',
           headline: 'Bidvest 11:10 — Edify will sign the GRN and open credits for any shorts',
           detail:
-            'On drop, Edify scans against the PO, signs lines within tolerance, opens credit requests with the driver photo for any shorts, and posts to period margin. WTD spend is already £10 over budget so shorts get extra scrutiny — step in only if the team flags something off at the dock.',
+            'On drop, Edify scans against the PO, signs lines within tolerance, opens credit requests with the driver photo for any shorts, and posts to period margin. WTD spend is already $10 over budget so shorts get extra scrutiny — step in only if the team flags something off at the dock.',
           actionLabel: 'Let it run',
           actionSecondary: "I'll sign myself",
         },
         {
           id: 'ed-m-n-2',
-          headline: 'Metro credit £312 — Edify drafted the write-off, needs your approval',
+          headline: 'Metro credit $312 — Edify drafted the write-off, needs your approval',
           detail:
             'Reconciled against the original PO and short-shipment log. Approving posts the journal and closes the supplier loop before period margin locks. Escalate if you want Cheryl to push back on Metro instead.',
           actionLabel: 'Approve write-off',
@@ -1303,7 +1303,7 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'ed-m-n-3',
           headline: 'Matcha — Edify added 1 case to today\'s Bidfood basket',
           detail:
-            'Manchester and Lightwater stock out by Friday lunch without it (Bidfood doesn\'t deliver weekends). +£42 on the basket, sends at 1:55pm with the rest of your standing order — hold only if you want to swap suppliers.',
+            'Manchester and Lightwater stock out by Friday lunch without it (Bidfood doesn\'t deliver weekends). +$42 on the basket, sends at 1:55pm with the rest of your standing order — hold only if you want to swap suppliers.',
           actionLabel: 'Let it run',
           actionSecondary: 'Adjust basket',
         },
@@ -1311,7 +1311,7 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'ed-m-n-4',
           headline: 'AM bake — Edify drafted +3 muffins for today\'s warm-day pull',
           detail:
-            'Forecast 11% above yesterday on weather + last-week pattern. Batch sheet is queued for the 6am team. Locks to the standing plan at 7am if no decision — costs +£4.20 on prep.',
+            'Forecast 11% above yesterday on weather + last-week pattern. Batch sheet is queued for the 6am team. Locks to the standing plan at 7am if no decision — costs +$4.20 on prep.',
           actionLabel: 'Approve',
           actionSecondary: 'Keep standing plan',
         },
@@ -1319,17 +1319,17 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
     },
     {
       category: 'handled',
-      summary: '£1,840 invoices posted overnight · yesterday\'s basket cleared · night close filed',
+      summary: '$1,840 invoices posted overnight · yesterday\'s basket cleared · night close filed',
       items: [
         {
           id: 'ed-m-h-1',
-          headline: 'Overnight invoice match · £1,840 posted, 2 held for variance',
+          headline: 'Overnight invoice match · $1,840 posted, 2 held for variance',
           detail:
             '11 of 13 invoices auto-matched to POs and posted to the ledger. The two exceptions are queued for Cheryl — you don\'t need to touch them.',
         },
         {
           id: 'ed-m-h-2',
-          headline: 'Yesterday\'s Bidfood basket cleared at 2pm · £1,180 confirmed',
+          headline: 'Yesterday\'s Bidfood basket cleared at 2pm · $1,180 confirmed',
           detail:
             'Sent to supplier, confirmation received, Thursday delivery slot held. Full audit trail in the order log if you want to check.',
         },
@@ -1341,9 +1341,9 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
         },
         {
           id: 'ed-m-h-4',
-          headline: 'Night-shift close filed · EOD £19,820 vs plan £18,910',
+          headline: 'Night-shift close filed · EOD $19,820 vs plan $18,910',
           detail:
-            'Yesterday\'s final close posted. Waste £24, markdowns £0. The £910 over-plan is already baked into today\'s stock forecast.',
+            'Yesterday\'s final close posted. Waste $24, markdowns $0. The $910 over-plan is already baked into today\'s stock forecast.',
         },
       ],
     },
@@ -1397,7 +1397,7 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'ed-d-n-3',
           headline: 'Matcha basket — Edify will send at 1:55pm unless held',
           detail:
-            '5 min before the Bidfood cut-off. £280 as drafted; without it two sites stock out Friday. Holds the rest of your standing recurring order automatically if you want to swap.',
+            '5 min before the Bidfood cut-off. $280 as drafted; without it two sites stock out Friday. Holds the rest of your standing recurring order automatically if you want to swap.',
           actionLabel: 'Send now',
           actionSecondary: 'Hold and adjust',
         },
@@ -1417,7 +1417,7 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       items: [
         {
           id: 'ed-d-h-1',
-          headline: 'Bidvest GRN: 11 of 14 lines matched · £381 posted · 3 flagged',
+          headline: 'Bidvest GRN: 11 of 14 lines matched · $381 posted · 3 flagged',
           detail:
             'Auto-match hit the tolerances on 11 lines. Three are open: 2 short-shipments and 1 price variance — all queued for Cheryl.',
         },
@@ -1443,7 +1443,7 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'ed-d-w-1',
           headline: 'Sales +11% vs forecast at 11am — warm day pulling extra cover',
           detail:
-            '£13,770 vs £12,390 forecast. Iced drinks and cold food over-indexing as expected — keep ice and cold-brew topped up.',
+            '$13,770 vs $12,390 forecast. Iced drinks and cold food over-indexing as expected — keep ice and cold-brew topped up.',
         },
         {
           id: 'ed-d-w-2',
@@ -1469,7 +1469,7 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'ed-a-n-1',
           headline: 'Tomorrow\'s Bidfood basket — Edify will send in 30 min if no adjust',
           detail:
-            '£1,240, 47 lines. Three changes from last Thursday: matcha +1, tomatoes +2 (reorder point hit), cleaning roll −1 (overstock). Sends at 1:55pm and books the 11am Friday slot.',
+            '$1,240, 47 lines. Three changes from last Thursday: matcha +1, tomatoes +2 (reorder point hit), cleaning roll −1 (overstock). Sends at 1:55pm and books the 11am Friday slot.',
           actionLabel: 'Let it run',
           actionSecondary: 'Open to adjust',
         },
@@ -1501,11 +1501,11 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
     },
     {
       category: 'handled',
-      summary: 'Lunch £8,240 · shift change done · GRN reconciled · drink spec pushed',
+      summary: 'Lunch $8,240 · shift change done · GRN reconciled · drink spec pushed',
       items: [
         {
           id: 'ed-a-h-1',
-          headline: 'Lunch service wrapped · £8,240 taken · 12% above yesterday',
+          headline: 'Lunch service wrapped · $8,240 taken · 12% above yesterday',
           detail:
             'Strongest lunch of the week so far. Ham & cheese sold out by 13:45, coffee volumes flat, iced drinks up 30%.',
         },
@@ -1525,13 +1525,13 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
     },
     {
       category: 'worth-knowing',
-      summary: 'EOD tracking £20,250 · warm-day loop closed · ham & cheese sold out early',
+      summary: 'EOD tracking $20,250 · warm-day loop closed · ham & cheese sold out early',
       items: [
         {
           id: 'ed-a-w-1',
-          headline: 'Expected EOD £20,250 vs £18,910 plan — holding the pace',
+          headline: 'Expected EOD $20,250 vs $18,910 plan — holding the pace',
           detail:
-            'Pace suggests +£1.3k at close. That\'ll post through to period margin overnight — no action needed, just for your number.',
+            'Pace suggests +$1.3k at close. That\'ll post through to period margin overnight — no action needed, just for your number.',
         },
         {
           id: 'ed-a-w-2',
@@ -1556,7 +1556,7 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'ed-e-n-1',
           headline: 'End-of-day close — Edify pre-filled waste, markdowns and cash-up',
           detail:
-            'Waste: 6 muffins, 2 baguettes (pace-matched against the display log). Markdowns: £0. Cash variance: −£0.40, within tolerance. Submitting posts to period margin overnight.',
+            'Waste: 6 muffins, 2 baguettes (pace-matched against the display log). Markdowns: $0. Cash variance: −$0.40, within tolerance. Submitting posts to period margin overnight.',
           actionLabel: 'Submit close',
           actionSecondary: 'Adjust first',
         },
@@ -1588,17 +1588,17 @@ const ED_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
     },
     {
       category: 'handled',
-      summary: 'Today closed £20,180 · Bidfood sent · recipes recosted · PM temps logged',
+      summary: 'Today closed $20,180 · Bidfood sent · recipes recosted · PM temps logged',
       items: [
         {
           id: 'ed-e-h-1',
-          headline: 'Today\'s close wrapped · EOD £20,180 vs £18,910 plan (+£1,270)',
+          headline: 'Today\'s close wrapped · EOD $20,180 vs $18,910 plan (+$1,270)',
           detail:
             'Final numbers in. Best Thursday this quarter. Period margin delta posting overnight.',
         },
         {
           id: 'ed-e-h-2',
-          headline: 'Tomorrow\'s Bidfood basket sent at 2pm · £1,240 confirmed',
+          headline: 'Tomorrow\'s Bidfood basket sent at 2pm · $1,240 confirmed',
           detail:
             'Supplier confirmation received, delivery slot held. You\'ll see the basket again tomorrow morning as the GRN pre-check.',
         },
@@ -1660,14 +1660,14 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'gm-m-n-2',
           headline: 'Matcha — Edify added 1 case to today\'s Bidfood basket',
           detail:
-            'Without it you stock out Friday lunch. +£42 on the basket, sends at 1:55pm with the rest of your standing order. Hold only if you want to swap suppliers.',
+            'Without it you stock out Friday lunch. +$42 on the basket, sends at 1:55pm with the rest of your standing order. Hold only if you want to swap suppliers.',
           actionLabel: 'Let it run',
           actionHref: '/assisted-ordering',
           actionSecondary: 'Open to adjust',
         },
         {
           id: 'gm-m-n-3',
-          headline: 'Tomorrow\'s Bidfood basket — Edify drafted £1,240, sends at 2pm',
+          headline: 'Tomorrow\'s Bidfood basket — Edify drafted $1,240, sends at 2pm',
           detail:
             'Built from yesterday\'s pace + weather + your standing recurring order. Three changes from last Thursday: matcha +1, tomatoes +2, cleaning roll −1. Books the 11am Friday slot on send.',
           actionLabel: 'Approve',
@@ -1734,7 +1734,7 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'gm-d-n-1',
           headline: 'Fresh Direct GRN — Edify ready to sign with the milk short attached',
           detail:
-            'Physical check matches the pre-flag. On sign-off Edify logs the discrepancy, opens the £18 credit to Fresh Direct with the photo, and posts to period margin. Dispute if you think the count is wrong.',
+            'Physical check matches the pre-flag. On sign-off Edify logs the discrepancy, opens the $18 credit to Fresh Direct with the photo, and posts to period margin. Dispute if you think the count is wrong.',
           actionLabel: 'Sign with credit',
           actionSecondary: 'Dispute first',
         },
@@ -1821,7 +1821,7 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'gm-a-n-2',
           headline: 'Tomorrow\'s Bidfood basket — Edify will send in 20 min unless adjusted',
           detail:
-            '£1,240, matcha +1 case, tomatoes +2 trays. Built from your standing recurring order + today\'s pace. Sends at 1:55pm and books the 11am Friday slot.',
+            '$1,240, matcha +1 case, tomatoes +2 trays. Built from your standing recurring order + today\'s pace. Sends at 1:55pm and books the 11am Friday slot.',
           actionLabel: 'Let it run',
           actionSecondary: 'Open to adjust',
         },
@@ -1845,11 +1845,11 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
     },
     {
       category: 'handled',
-      summary: 'Lunch £8,240 · handover done',
+      summary: 'Lunch $8,240 · handover done',
       items: [
         {
           id: 'gm-a-h-1',
-          headline: 'Lunch service wrapped · £8,240 taken · ahead of yesterday',
+          headline: 'Lunch service wrapped · $8,240 taken · ahead of yesterday',
           detail:
             'Strongest lunch this week. Ham & cheese cleared by 13:45, coffee flat, iced drinks up 30%.',
         },
@@ -1900,7 +1900,7 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'gm-e-n-1',
           headline: 'Close cash-up — Edify pre-filled the close pack',
           detail:
-            'Waste: 2 muffins (pace-matched). Markdowns: £0. Cash variance: within tolerance. Submitting posts to period margin overnight and closes today\'s pack.',
+            'Waste: 2 muffins (pace-matched). Markdowns: $0. Cash variance: within tolerance. Submitting posts to period margin overnight and closes today\'s pack.',
           actionLabel: 'Submit',
           actionSecondary: 'Adjust waste',
         },
@@ -1924,7 +1924,7 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
     },
     {
       category: 'handled',
-      summary: 'EOD £20,180 · basket sent for tomorrow',
+      summary: 'EOD $20,180 · basket sent for tomorrow',
       items: [
         {
           id: 'gm-e-h-1',
@@ -1934,7 +1934,7 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
         },
         {
           id: 'gm-e-h-2',
-          headline: 'Close-of-day summary · £20,180 EOD · waste £28',
+          headline: 'Close-of-day summary · $20,180 EOD · waste $28',
           detail:
             'Best Thursday this quarter. Waste held low. Numbers post overnight to period margin.',
         },
@@ -1942,7 +1942,7 @@ const GM_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'gm-e-h-3',
           headline: 'Tomorrow\'s basket sent · confirmation received from Bidfood',
           detail:
-            '£1,240 confirmed, delivery booked for 11am. You\'ll see it again tomorrow morning as the pre-check.',
+            '$1,240 confirmed, delivery booked for 11am. You\'ll see it again tomorrow morning as the pre-check.',
         },
         {
           id: 'gm-e-h-4',
@@ -1994,7 +1994,7 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
         },
         {
           id: 'cheryl-m-n-2',
-          headline: 'Metro credit £312 — 18 days open, 4 past SLA',
+          headline: 'Metro credit $312 — 18 days open, 4 past SLA',
           detail:
             'It\'s sitting in the queue but it won\'t move without your workflow action. One click to open, one to close.',
           actionLabel: 'Open credit workflow',
@@ -2019,11 +2019,11 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
     },
     {
       category: 'handled',
-      summary: '£2,340 invoices cleared · recipes recosted · period accruals drafted',
+      summary: '$2,340 invoices cleared · recipes recosted · period accruals drafted',
       items: [
         {
           id: 'cheryl-m-h-1',
-          headline: 'Overnight invoice match · 14 cleared · £2,340 posted · 3 held for tolerance',
+          headline: 'Overnight invoice match · 14 cleared · $2,340 posted · 3 held for tolerance',
           detail:
             '14 invoices auto-matched to POs and posted to the ledger. The three held items are queued in the mismatch workflow above — no other action needed.',
         },
@@ -2080,7 +2080,7 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
         },
         {
           id: 'cheryl-d-n-2',
-          headline: 'Bidfood credit note £218 — approve payout?',
+          headline: 'Bidfood credit note $218 — approve payout?',
           detail:
             'Raised last week for a short-shipment. Supplier confirmed, refund ready to apply to the open invoice. Approve to net off.',
           actionLabel: 'Approve net-off',
@@ -2106,7 +2106,7 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
     },
     {
       category: 'handled',
-      summary: 'Chase worked · match run £3,240 · cost pack drafting',
+      summary: 'Chase worked · match run $3,240 · cost pack drafting',
       items: [
         {
           id: 'cheryl-d-h-1',
@@ -2116,7 +2116,7 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
         },
         {
           id: 'cheryl-d-h-2',
-          headline: 'Invoice match run continuing · 18 cleared · £3,240 posted',
+          headline: 'Invoice match run continuing · 18 cleared · $3,240 posted',
           detail:
             '4 more cleared since 11am. Running clean — no new holds this window.',
         },
@@ -2196,9 +2196,9 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       items: [
         {
           id: 'cheryl-a-h-1',
-          headline: 'Afternoon match run · 5 more cleared · £1,120 posted',
+          headline: 'Afternoon match run · 5 more cleared · $1,120 posted',
           detail:
-            'Total for the day: 27 cleared, £6,700 posted. 2 remain in review — both small-value, will roll to tomorrow.',
+            'Total for the day: 27 cleared, $6,700 posted. 2 remain in review — both small-value, will roll to tomorrow.',
         },
         {
           id: 'cheryl-a-h-2',
@@ -2262,7 +2262,7 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'cheryl-e-n-3',
           headline: 'Pending variance queue — 2 unresolved, defer or escalate?',
           detail:
-            'Both are small (£42 + £18). Edify can auto-write-off if you authorise, or escalate to the supplier for one more pass.',
+            'Both are small ($42 + $18). Edify can auto-write-off if you authorise, or escalate to the supplier for one more pass.',
           actionLabel: 'Auto write-off',
           actionSecondary: 'Escalate both',
         },
@@ -2270,7 +2270,7 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
     },
     {
       category: 'handled',
-      summary: 'Close pack ready · £4,820 posted today · accruals teed up',
+      summary: 'Close pack ready · $4,820 posted today · accruals teed up',
       items: [
         {
           id: 'cheryl-e-h-1',
@@ -2280,7 +2280,7 @@ const CHERYL_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
         },
         {
           id: 'cheryl-e-h-2',
-          headline: 'Today\'s invoices posted · £4,820 total · 3 flagged for tomorrow',
+          headline: 'Today\'s invoices posted · $4,820 total · 3 flagged for tomorrow',
           detail:
             'The three holdouts are low-priority variance checks. Edify has them queued as your first task tomorrow.',
         },
@@ -2413,7 +2413,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
         },
         {
           id: 'play-m-n-3',
-          headline: 'Cafe basket for the weekend needs your go-ahead — £1,860',
+          headline: 'Cafe basket for the weekend needs your go-ahead — $1,860',
           detail:
             'Weekend forecast is sun + tournament at North Leeds, so Edify has bumped soft drinks +18% and pastries +12% across the 7 sites. Cut-off with the supplier is 11am.',
           actionLabel: 'Review and send',
@@ -2429,7 +2429,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-m-h-1',
           headline: '54 cancelled court slots auto-rebooked overnight from the waitlist',
           detail:
-            '£1,212 of revenue saved versus letting them go empty. North Leeds and Alderley Park accounted for 42 of the 54. The full audit trail is in the bookings log if you want to spot-check.',
+            '$1,212 of revenue saved versus letting them go empty. North Leeds and Alderley Park accounted for 42 of the 54. The full audit trail is in the bookings log if you want to spot-check.',
         },
         {
           id: 'play-m-h-2',
@@ -2453,7 +2453,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-m-w-1',
           headline: 'Forward 14d pipeline tracking 22% under typical at Manchester',
           detail:
-            'Mostly Tue/Thu evenings. Same pattern as last quarter — that recovered after a £/hr cut. Edify has the pricing test ready if you want to run it again.',
+            'Mostly Tue/Thu evenings. Same pattern as last quarter — that recovered after a $/hr cut. Edify has the pricing test ready if you want to run it again.',
         },
         {
           id: 'play-m-w-2',
@@ -2478,7 +2478,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-d-n-1',
           headline: 'Off-peak weeknight discount needs final approval before 2pm',
           detail:
-            'Manchester Tue/Wed/Thu 5–7pm at £18/hr instead of £24/hr. Edify projects 38% additional fill, +£2,840 weekly net of the discount. Goes live at 6pm if approved.',
+            'Manchester Tue/Wed/Thu 5–7pm at $18/hr instead of $24/hr. Edify projects 38% additional fill, +$2,840 weekly net of the discount. Goes live at 6pm if approved.',
           actionLabel: 'Approve discount',
           actionSecondary: 'Skip this week',
         },
@@ -2486,7 +2486,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-d-n-2',
           headline: 'North Leeds running 84% occupancy — price test ready',
           detail:
-            'You are leaving money on the table. Edify proposes lifting peak £/hr from £31 to £34 (+10%) at North Leeds and watching for two weeks. Conservative model says +£1,210/week, no expected fill drop.',
+            'You are leaving money on the table. Edify proposes lifting peak $/hr from $31 to $34 (+10%) at North Leeds and watching for two weeks. Conservative model says +$1,210/week, no expected fill drop.',
           actionLabel: 'Run the test',
           actionSecondary: 'Hold',
         },
@@ -2545,7 +2545,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-a-n-2',
           headline: 'Tomorrow\'s rain — pre-empt cancellations with proactive rebook?',
           detail:
-            '78 outdoor-court bookings tomorrow at 6am–10am could be impacted. Edify can offer 1-tap rebook to Stockport / Alderley Park indoor courts at the same time. Saves an estimated £1,420.',
+            '78 outdoor-court bookings tomorrow at 6am–10am could be impacted. Edify can offer 1-tap rebook to Stockport / Alderley Park indoor courts at the same time. Saves an estimated $1,420.',
           actionLabel: 'Send rebook offer',
           actionSecondary: 'Wait and see',
         },
@@ -2608,7 +2608,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
       items: [
         {
           id: 'play-e-h-1',
-          headline: 'EOD revenue posted · £18,420 court · £4,180 cafe',
+          headline: 'EOD revenue posted · $18,420 court · $4,180 cafe',
           detail:
             'Court revenue +6% on yesterday, cafe -2% (rain affected the after-work crowd). All 7 sites closed cleanly. Tomorrow\'s opening checklists are pre-filled.',
         },
@@ -2634,7 +2634,7 @@ const PLAYTOMIC_INSIGHTS: Record<BriefingPhase, InsightGroup[]> = {
           id: 'play-e-w-2',
           headline: '5 top-spend players visited today — one is at risk of lapsing',
           detail:
-            'Sofia Almeida (£312, 14 bookings · 90d) hasn\'t booked in the last 12 days. Worth a personal note from a coach. Edify has drafted one if you want it.',
+            'Sofia Almeida ($312, 14 bookings · 90d) hasn\'t booked in the last 12 days. Worth a personal note from a coach. Edify has drafted one if you want it.',
         },
       ],
     },

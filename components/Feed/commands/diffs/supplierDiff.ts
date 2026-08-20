@@ -13,7 +13,7 @@ const FIELD_LABELS: Record<SupplierField, string> = {
 
 const FIELD_UNITS: Partial<Record<SupplierField, string>> = {
   leadTimeDays: 'days',
-  minimumOrderValue: '£',
+  minimumOrderValue: '$',
 };
 
 const FIELD_KIND: Record<SupplierField, 'number' | 'currency' | 'text' | 'array'> = {

@@ -11,7 +11,7 @@
 //   2. Day pills   — three options per scope:
 //                      • Forecast: Today / Tomorrow / Day after
 //                      • Result:   Today (live) / Yesterday / Day before
-//   3. Hero card   — three operator-language KPIs (revenue £, items,
+//   3. Hero card   — three operator-language KPIs (revenue $, items,
 //                    transactions), a one-line explanation, the phase
 //                    split (morning / midday / afternoon) and the
 //                    channel mix (takeaway / eat-in / delivery).

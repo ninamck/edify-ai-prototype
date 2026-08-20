@@ -219,7 +219,7 @@ export function masterCompanyAvg(m: MasterProduct): number | null {
   return entries.reduce((s, c) => s + c.wac, 0) / entries.length;
 }
 
-export const CURRENCY = '£';
+export const CURRENCY = '$';
 export const formatPrice = (amount: number) =>
   `${CURRENCY}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 

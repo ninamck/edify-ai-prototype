@@ -52,9 +52,9 @@ const BLOCKS = buildBlocks(FIS_FLASH_PNL);
 // Cell formatters
 // ---------------------------------------------------------------------------
 
-/** Currency cell -- 0 → blank, negatives in parentheses, no £ prefix because
+/** Currency cell -- 0 → blank, negatives in parentheses, no $ prefix because
  *  the unit is implied by the column header. Matches the spreadsheet style
- *  where every cell in a P&L row is in £. */
+ *  where every cell in a P&L row is in $. */
 function fmtCurrency(value: number | null | undefined): string {
   if (value === null || value === undefined) return '';
   if (value === 0) return '';

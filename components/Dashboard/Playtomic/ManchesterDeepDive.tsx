@@ -18,7 +18,7 @@ export default function ManchesterDeepDive({
 }) {
   const topPlayerItems = TOP_PLAYERS.map((p) => ({
     label: p.name,
-    trailing: `${p.bookings} · £${p.spend}`,
+    trailing: `${p.bookings} · $${p.spend}`,
   }));
   const coachItems = COACH_ACTIVITY.map((c) => ({
     label: c.name,

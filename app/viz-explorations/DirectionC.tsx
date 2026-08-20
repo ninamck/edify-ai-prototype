@@ -8,7 +8,7 @@ import {
   TODAY,
   HOURLY_SAMPLE,
   WEEK,
-  fmtGBP,
+  fmtUSD,
   fmtPct,
   fmtSignedPct,
 } from './mockData';
@@ -213,13 +213,13 @@ function MixedComparisonBar() {
       <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <Row
           label="Net Sales"
-          value={fmtGBP(TODAY.netSales, { decimals: 2 })}
+          value={fmtUSD(TODAY.netSales, { decimals: 2 })}
           fillPct={salesPct}
           fill={CYAN}
         />
         <Row
           label="Labour"
-          value={fmtGBP(TODAY.labourCosts, { decimals: 2 })}
+          value={fmtUSD(TODAY.labourCosts, { decimals: 2 })}
           subValue={`${fmtPct(TODAY.labourPct)} of sales`}
           fillPct={labourPct}
           fill={CREAM}
@@ -430,12 +430,12 @@ function MixedScrubber() {
       <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
         <Stat
           label="Net Sales"
-          value={fmtGBP(HOURLY_SAMPLE.netSales, { compact: true })}
+          value={fmtUSD(HOURLY_SAMPLE.netSales, { compact: true })}
           accent
         />
         <Stat
           label="Labour"
-          value={fmtGBP(HOURLY_SAMPLE.labourCosts, { compact: true })}
+          value={fmtUSD(HOURLY_SAMPLE.labourCosts, { compact: true })}
         />
       </div>
 
@@ -562,14 +562,14 @@ export default function DirectionC() {
       >
         <MixedTile
           label="Sales to date"
-          value={fmtGBP(SUMMARY.salesToDate)}
+          value={fmtUSD(SUMMARY.salesToDate)}
           sub="Week to date · all venues"
           delta={{ value: SUMMARY.salesDelta }}
           surface="navy"
         />
         <MixedTile
           label="Operational profit"
-          value={fmtGBP(SUMMARY.opProfit, { decimals: 2 })}
+          value={fmtUSD(SUMMARY.opProfit, { decimals: 2 })}
           sub={`${fmtPct(SUMMARY.opProfitPct, 2)} of sales`}
           delta={{ value: SUMMARY.opProfitDelta }}
           surface="cream"

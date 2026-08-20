@@ -24,8 +24,8 @@ export function toBase(amount: number, supplierId: string): number {
 
 /**
  * Compact supplier-currency amount with base equivalent for foreign
- * suppliers: "CA$392 (£227)". Base-currency suppliers render as before:
- * "£392". Whole units, matching the flow's existing style.
+ * suppliers: "CA$392 ($227)". Base-currency suppliers render as before:
+ * "$392". Whole units, matching the flow's existing style.
  */
 export function fmtSupplierAmount(amount: number, supplierId: string): string {
   const currency = supplierCurrency(supplierId);
@@ -37,7 +37,7 @@ export function fmtSupplierAmount(amount: number, supplierId: string): string {
 /**
  * Split variant of `fmtSupplierAmount` for line rows that need a fixed-width
  * amount column: the supplier-currency amount on one line with the base
- * equivalent stacked underneath ("CA$392" / "£227"), so the wide dual
+ * equivalent stacked underneath ("CA$392" / "$227"), so the wide dual
  * display doesn't push the qty steppers out of alignment. `base` is
  * undefined for base-currency suppliers.
  */
@@ -55,7 +55,7 @@ export function fmtSupplierAmountParts(
   };
 }
 
-/** Unit-cost variant at 2dp: "CA$28.00 (£16.24)" or "£9.50". */
+/** Unit-cost variant at 2dp: "CA$28.00 ($16.24)" or "$9.50". */
 export function fmtSupplierUnitCost(amount: number, supplierId: string): string {
   const currency = supplierCurrency(supplierId);
   if (currency === BASE_CURRENCY) return formatMoney(amount, BASE_CURRENCY);

@@ -417,7 +417,7 @@ export default function AddAlternativeProductModal({
               ))}
             </select>
           </Field>
-          <Field label="Pack cost ex VAT (£)">
+          <Field label="Pack cost ex VAT ($)">
             <input
               type="number"
               min={0}

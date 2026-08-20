@@ -99,7 +99,7 @@ export default function ConfirmationScreen({
               margin: 0,
             }}
           >
-            {totalItems} items · £{grandTotal.toFixed(0)}
+            {totalItems} items · ${grandTotal.toFixed(0)}
           </p>
           <p
             style={{

@@ -91,7 +91,7 @@ const REVENUE_BY_CATEGORY_SECTIONS = [
 ];
 
 const ORDERS_SECTIONS = [
-  'Revenue (£)', 'Revenue (£)', 'Revenue (£)',
+  'Revenue ($)', 'Revenue ($)', 'Revenue ($)',
   'Orders (count)', 'Orders (count)', 'Orders (count)',
 ];
 
@@ -115,12 +115,12 @@ const HEADLINE_SECTION: CsvSection = {
   note: FIS_HEADLINE.weekEndingLong,
   headers: ['Metric', 'Value', 'Unit'],
   rows: [
-    ['Last week sales', FIS_HEADLINE.lastWeekSales, '£'],
-    ['Last week vs Budget', FIS_HEADLINE.lastWeekVsBud, '£'],
+    ['Last week sales', FIS_HEADLINE.lastWeekSales, '$'],
+    ['Last week vs Budget', FIS_HEADLINE.lastWeekVsBud, '$'],
     ['Last week vs Budget %', FIS_HEADLINE.lastWeekVsBudPct, 'decimal'],
-    ['Month to date', FIS_HEADLINE.monthToDate, '£'],
-    ['Full month budget', FIS_HEADLINE.fullMonthBudget, '£'],
-    ['To go', FIS_HEADLINE.toGo, '£'],
+    ['Month to date', FIS_HEADLINE.monthToDate, '$'],
+    ['Full month budget', FIS_HEADLINE.fullMonthBudget, '$'],
+    ['To go', FIS_HEADLINE.toGo, '$'],
     ['Week GP %', FIS_HEADLINE.weekGpPct, 'decimal'],
     ['Month GP %', FIS_HEADLINE.monthGpPct, 'decimal'],
     ['Week wage %', FIS_HEADLINE.weekWagePct, 'decimal'],
@@ -131,15 +131,15 @@ const HEADLINE_SECTION: CsvSection = {
 const THIRTEEN_WEEK_SALES_SECTION: CsvSection = {
   label: '13-week sales',
   filenameSlug: '13-week-sales',
-  note: 'Actual / Budget / Last Year · £k',
-  headers: ['Label', 'Week ending', 'Actual (£k)', 'Budget (£k)', 'Last Year (£k)'],
+  note: 'Actual / Budget / Last Year · $k',
+  headers: ['Label', 'Week ending', 'Actual ($k)', 'Budget ($k)', 'Last Year ($k)'],
   rows: FIS_13_WEEK_SALES.map((w) => [w.label, w.weekEnding, w.actual, w.budget, w.lastYear]),
 };
 
 const REVENUE_BY_OUTLET_TREND_SECTION: CsvSection = {
   label: 'Revenue by outlet (13-week trend)',
   filenameSlug: 'revenue-by-outlet-trend',
-  note: '£ per week, full pounds',
+  note: '$ per week, full pounds',
   headers: ['Week ending', ...FIS_TRENDS_REVENUE_BY_OUTLET.map((s) => s.outlet)],
   rows: FIS_TRENDS_WEEKS.map((week, idx) => [
     week,
@@ -176,7 +176,7 @@ const REVENUE_MIX_LAST_WEEK_SECTION: CsvSection = (() => {
     label: 'Revenue mix · last week',
     filenameSlug: 'revenue-mix-last-week',
     note: `Week ending ${FIS_HEADLINE.weekEnding}`,
-    headers: ['Outlet', 'Revenue (£)', 'Share (decimal)'],
+    headers: ['Outlet', 'Revenue ($)', 'Share (decimal)'],
     rows,
   };
 })();
@@ -270,19 +270,19 @@ const REVENUE_BY_OUTLET_DAILY_SECTION = dailySection(
   'Revenue by outlet · daily',
   'revenue-by-outlet-daily',
   FIS_WEEK_REVENUE_BY_OUTLET,
-  '£ per day',
+  '$ per day',
 );
 const REVENUE_VS_LY_DAILY_SECTION = dailySection(
   'Revenue vs Last Year · daily',
   'revenue-vs-ly-daily',
   FIS_WEEK_REVENUE_VS_LY,
-  '£ per day; Growth % stores decimals',
+  '$ per day; Growth % stores decimals',
 );
 const REVENUE_BY_CATEGORY_DAILY_SECTION = dailySection(
   'Revenue by category · daily',
   'revenue-by-category-daily',
   FIS_WEEK_REVENUE_BY_CATEGORY,
-  '£ per day',
+  '$ per day',
   REVENUE_BY_CATEGORY_SECTIONS,
 );
 const ORDERS_SECTION = dailySection(
@@ -296,13 +296,13 @@ const AOV_SECTION = dailySection(
   'AOV',
   'aov',
   FIS_WEEK_AOV,
-  'Average order value (£)',
+  'Average order value ($)',
 );
 const SECURITY_PROGRAMMING_SECTION = dailySection(
   'Security & programming',
   'security-programming',
   FIS_WEEK_SECURITY_AND_PROGRAMMING,
-  'Hours and £ per day',
+  'Hours and $ per day',
   SECURITY_AND_PROGRAMMING_SECTIONS,
 );
 const WAGE_HOURS_SECTION = dailySection(
@@ -315,13 +315,13 @@ const REVENUE_PER_LABOUR_HOUR_SECTION = dailySection(
   'Revenue per labour hour',
   'revenue-per-labour-hour',
   FIS_WEEK_REVENUE_PER_LABOUR_HOUR,
-  '£ per labour hour',
+  '$ per labour hour',
 );
 const WAGE_COST_SECTION = dailySection(
   'Wage cost & on-costs',
   'wage-cost',
   FIS_WEEK_WAGE_COST,
-  '£ per day; Vs Revenue stores decimals',
+  '$ per day; Vs Revenue stores decimals',
   WAGE_COST_SECTIONS,
 );
 
@@ -347,50 +347,50 @@ function trendSection(
 const TRENDS_REVENUE_BY_CATEGORY_SECTION = trendSection(
   'Trends · revenue by category',
   'trends-revenue-by-category',
-  '£ per week (rolling 13)',
+  '$ per week (rolling 13)',
   FIS_TRENDS_REVENUE_BY_CATEGORY,
 );
 const TRENDS_REVENUE_TO_PNL_SECTION = trendSection(
   'Trends · revenue to P&L',
   'trends-revenue-to-pnl',
-  '£ per week; % Var stores decimals (rolling 13)',
+  '$ per week; % Var stores decimals (rolling 13)',
   FIS_TRENDS_REVENUE_TO_PNL,
 );
 const TRENDS_COGS_MOVEMENTS_SECTION = trendSection(
   'Trends · cost of sales movements',
   'trends-cogs-movements',
-  '£ per week; Vs Revenue stores decimals',
+  '$ per week; Vs Revenue stores decimals',
   FIS_TRENDS_COGS_MOVEMENTS,
 );
 const TRENDS_GP_DETAIL_SECTION = trendSection(
   'Trends · GP detail (Bar & Food)',
   'trends-gp-detail',
-  'Theoretical/actual COGS in £; GP %, COS % store decimals',
+  'Theoretical/actual COGS in $; GP %, COS % store decimals',
   FIS_TRENDS_GP_DETAIL,
 );
 const TRENDS_INDIRECTS_SECTION = trendSection(
   'Trends · indirects & security',
   'trends-indirects',
-  'Hours, £, decimals depending on row',
+  'Hours, $, decimals depending on row',
   FIS_TRENDS_INDIRECTS,
 );
 const TRENDS_WAGE_COST_SECTION = trendSection(
   'Trends · wage cost',
   'trends-wage-cost',
-  '£ per week; Vs Revenue stores decimals',
+  '$ per week; Vs Revenue stores decimals',
   FIS_TRENDS_WAGE_COST,
 );
 const YOY_SALES_BY_OUTLET_SECTION = trendSection(
   'Year-on-year sales by outlet',
   'yoy-sales-by-outlet',
-  '£ for TY/LY/Growth £; Growth % stores decimals',
+  '$ for TY/LY/Growth $; Growth % stores decimals',
   FIS_YOY_SALES_BY_OUTLET,
 );
 
 const BAR_INVENTORY_SECTION: CsvSection = {
   label: 'Bar inventory & COGS (Nory)',
   filenameSlug: 'bar-inventory-nory',
-  note: '£ per week · 13-week rolling window',
+  note: '$ per week · 13-week rolling window',
   headers: [
     'Week ending',
     'Opening stock',
@@ -426,7 +426,7 @@ const BAR_INVENTORY_SECTION: CsvSection = {
 const HEATMAP_FLAT_SECTION: CsvSection = {
   label: 'Variance vs Last Year (heatmap)',
   filenameSlug: 'variance-vs-ly-heatmap',
-  note: '£ daily variance vs prior year; decimals for var %',
+  note: '$ daily variance vs prior year; decimals for var %',
   headers: [
     'Outlet',
     'Week ending',

@@ -157,7 +157,7 @@ const MENU: MenuItem[] = (() => {
     if (subs.length === 0) continue; // assembled menu items only
     const components = subs.map(s => ({ recipeId: s.recipeId, qty: s.quantityPerUnit }));
     const raw = 2.2 + components.reduce((a, c) => a + (COMP_VALUE[c.recipeId] ?? 1.5) * c.qty, 0);
-    const price = Math.round(raw) - 0.01; // £x.99-ish
+    const price = Math.round(raw) - 0.01; // $x.99-ish
     items.push({ id: r.id, name: r.name, price, weight: MENU_WEIGHT[r.id] ?? 2, components });
   }
   return items;
@@ -575,5 +575,5 @@ export function useOrderFeed(): OrderFeed {
 }
 
 export function gbp(n: number): string {
-  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: n < 100 ? 2 : 0 }).format(n);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: n < 100 ? 2 : 0 }).format(n);
 }

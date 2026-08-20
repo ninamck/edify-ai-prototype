@@ -262,10 +262,10 @@ const COGS_PCT = [
 ];
 const COGS_TARGET = 30;
 
-// Waste heatmap: £ wasted by day × hour (last 4 weeks aggregated)
+// Waste heatmap: $ wasted by day × hour (last 4 weeks aggregated)
 const HEATMAP_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const HEATMAP_HOURS = ['6am', '7am', '8am', '9am', '10am', '11am', '12pm', '1pm', '2pm', '3pm', '4pm', '5pm'];
-// Rows = days, cols = hours. Values in £.
+// Rows = days, cols = hours. Values in $.
 const WASTE_HEATMAP: number[][] = [
   [3, 5, 8,  6,  4,  5, 12, 18, 14,  9, 22, 38], // Mon — big close-out spike
   [2, 4, 6,  5,  3,  4, 10, 14, 11,  8, 18, 30],
@@ -309,7 +309,7 @@ const WASTE_KPI = {
   sparkline: [2140, 2260, 2190, 2090, 2130, 2080, 2011, 1842],
 };
 
-// Waste trend stacked by reason — last 12 weeks (£)
+// Waste trend stacked by reason — last 12 weeks ($)
 const WASTE_TREND_STACKED = [
   { wk: 'Wk 1',  expired: 820, overproduction: 1040, spoilage: 360 },
   { wk: 'Wk 2',  expired: 790, overproduction: 1100, spoilage: 340 },
@@ -400,9 +400,9 @@ export function SalesChart() {
       <BarChart data={WEEKLY_SALES} margin={{ top: 4, right: 8, bottom: 0, left: -8 }} barCategoryGap="20%">
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border-subtle)" />
         <XAxis dataKey="site" tick={TICK_STYLE} axisLine={false} tickLine={false} />
-        <YAxis tickFormatter={(v: number) => `£${v}k`} tick={TICK_STYLE} axisLine={false} tickLine={false} />
+        <YAxis tickFormatter={(v: number) => `$${v}k`} tick={TICK_STYLE} axisLine={false} tickLine={false} />
         <Tooltip
-          formatter={(v, name) => [`£${Number(v)}k`, name === 'current' ? 'Last week' : 'Prior week']}
+          formatter={(v, name) => [`$${Number(v)}k`, name === 'current' ? 'Last week' : 'Prior week']}
           contentStyle={TOOLTIP_STYLE}
         />
         <Bar dataKey="prior" name="Prior week" fill="var(--color-border-subtle)" radius={[3, 3, 0, 0]} />
@@ -418,9 +418,9 @@ export function SalesByDayChart() {
       <BarChart data={WEEKLY_SALES_BY_DAY} margin={{ top: 4, right: 8, bottom: 0, left: -8 }} barCategoryGap="20%">
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border-subtle)" />
         <XAxis dataKey="day" tick={TICK_STYLE} axisLine={false} tickLine={false} />
-        <YAxis tickFormatter={(v: number) => `£${v}k`} tick={TICK_STYLE} axisLine={false} tickLine={false} />
+        <YAxis tickFormatter={(v: number) => `$${v}k`} tick={TICK_STYLE} axisLine={false} tickLine={false} />
         <Tooltip
-          formatter={(v, name) => [`£${Number(v)}k`, name === 'current' ? 'Last week' : 'Prior week']}
+          formatter={(v, name) => [`$${Number(v)}k`, name === 'current' ? 'Last week' : 'Prior week']}
           contentStyle={TOOLTIP_STYLE}
         />
         <Bar dataKey="prior" name="Prior week" fill="var(--color-border-subtle)" radius={[3, 3, 0, 0]} />
@@ -437,13 +437,13 @@ export function HourChart() {
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border-subtle)" />
         <XAxis dataKey="hour" tick={{ ...TICK_STYLE, fontSize: 10 }} axisLine={false} tickLine={false} interval={1} />
         <YAxis
-          tickFormatter={(v: number) => `£${(v / 1000).toFixed(1)}k`}
+          tickFormatter={(v: number) => `$${(v / 1000).toFixed(1)}k`}
           tick={TICK_STYLE}
           axisLine={false}
           tickLine={false}
         />
         <Tooltip
-          formatter={(v) => [`£${Number(v).toLocaleString()}`, 'Avg revenue']}
+          formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Avg revenue']}
           contentStyle={TOOLTIP_STYLE}
         />
         <Bar dataKey="avg" name="Avg revenue" radius={[3, 3, 0, 0]}>
@@ -469,14 +469,14 @@ export function TrendChart() {
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border-subtle)" />
         <XAxis dataKey="wk" tick={TICK_STYLE} axisLine={false} tickLine={false} />
         <YAxis
-          tickFormatter={(v: number) => `£${v}k`}
+          tickFormatter={(v: number) => `$${v}k`}
           tick={TICK_STYLE}
           axisLine={false}
           tickLine={false}
           domain={[250, 320]}
         />
         <Tooltip
-          formatter={(v) => [`£${Number(v)}k`, 'Revenue']}
+          formatter={(v) => [`$${Number(v)}k`, 'Revenue']}
           contentStyle={TOOLTIP_STYLE}
         />
         <Area type="monotone" dataKey="rev" stroke={ACCENT} strokeWidth={2} fill="url(#analyticsAreaGrad)" dot={false} />
@@ -526,14 +526,14 @@ export function LabourChart() {
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border-subtle)" />
         <XAxis dataKey="site" tick={TICK_STYLE} axisLine={false} tickLine={false} />
         <YAxis
-          tickFormatter={(v: number) => `£${v}`}
+          tickFormatter={(v: number) => `$${v}`}
           tick={TICK_STYLE}
           axisLine={false}
           tickLine={false}
           domain={[0, 56]}
         />
         <Tooltip
-          formatter={(v) => [`£${Number(v).toFixed(2)}`, 'Rev / labour hr']}
+          formatter={(v) => [`$${Number(v).toFixed(2)}`, 'Rev / labour hr']}
           contentStyle={TOOLTIP_STYLE}
         />
         <Bar dataKey="rplh" radius={[3, 3, 0, 0]}>
@@ -613,12 +613,12 @@ export function EatinChart() {
             const row = CHANNEL_SPLIT.find((c) => c.channel === value);
             if (!row) return value;
             const pct = Math.round((row.value / total) * 100);
-            return `${value} · £${row.value}k (${pct}%)`;
+            return `${value} · $${row.value}k (${pct}%)`;
           }}
           wrapperStyle={{ fontSize: 12, fontFamily: 'var(--font-primary)' }}
         />
         <Tooltip
-          formatter={(v, name) => [`£${Number(v)}k`, String(name)]}
+          formatter={(v, name) => [`$${Number(v)}k`, String(name)]}
           contentStyle={TOOLTIP_STYLE}
         />
       </PieChart>
@@ -633,7 +633,7 @@ export function DaypartChart() {
         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border-subtle)" />
         <XAxis
           type="number"
-          tickFormatter={(v: number) => `£${v}k`}
+          tickFormatter={(v: number) => `$${v}k`}
           tick={TICK_STYLE}
           axisLine={false}
           tickLine={false}
@@ -647,7 +647,7 @@ export function DaypartChart() {
           width={64}
         />
         <Tooltip
-          formatter={(v, name) => [`£${Number(v).toFixed(1)}k`, String(name)]}
+          formatter={(v, name) => [`$${Number(v).toFixed(1)}k`, String(name)]}
           contentStyle={TOOLTIP_STYLE}
         />
         <Legend iconType="circle" wrapperStyle={{ fontSize: 12, fontFamily: 'var(--font-primary)' }} />
@@ -666,14 +666,14 @@ export function LflChart() {
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border-subtle)" />
         <XAxis dataKey="day" tick={TICK_STYLE} axisLine={false} tickLine={false} />
         <YAxis
-          tickFormatter={(v: number) => `£${v}k`}
+          tickFormatter={(v: number) => `$${v}k`}
           tick={TICK_STYLE}
           axisLine={false}
           tickLine={false}
           domain={[40, 62]}
         />
         <Tooltip
-          formatter={(v, name) => [`£${Number(v)}k`, name === 'current' ? 'This week' : 'Same week last year']}
+          formatter={(v, name) => [`$${Number(v)}k`, name === 'current' ? 'This week' : 'Same week last year']}
           contentStyle={TOOLTIP_STYLE}
         />
         <Legend
@@ -696,7 +696,7 @@ export function WasteTop10Chart() {
         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border-subtle)" />
         <XAxis
           type="number"
-          tickFormatter={(v: number) => `£${v}`}
+          tickFormatter={(v: number) => `$${v}`}
           tick={TICK_STYLE}
           axisLine={false}
           tickLine={false}
@@ -715,7 +715,7 @@ export function WasteTop10Chart() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const payload = (entry as any)?.payload;
             const units = payload?.units ?? 0;
-            return [`£${Number(v)} · ${units} units`, 'Waste'];
+            return [`$${Number(v)} · ${units} units`, 'Waste'];
           }}
           contentStyle={TOOLTIP_STYLE}
         />
@@ -741,7 +741,7 @@ export function CogsTopIngredientsChart() {
         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border-subtle)" />
         <XAxis
           type="number"
-          tickFormatter={(v: number) => `£${(v / 1000).toFixed(1)}k`}
+          tickFormatter={(v: number) => `$${(v / 1000).toFixed(1)}k`}
           tick={TICK_STYLE}
           axisLine={false}
           tickLine={false}
@@ -760,7 +760,7 @@ export function CogsTopIngredientsChart() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const payload = (entry as any)?.payload;
             const volume = payload?.volume ?? '';
-            return [`£${Number(v).toLocaleString()} · ${volume}`, 'Spend MTD'];
+            return [`$${Number(v).toLocaleString()} · ${volume}`, 'Spend MTD'];
           }}
           contentStyle={TOOLTIP_STYLE}
         />
@@ -968,7 +968,7 @@ export function WasteHeatmapChart() {
               <g key={`${r}-${c}`}>
                 <rect x={x} y={y} width={cellW - 4} height={cellH - 4} rx={3} fill={tint(v)} />
                 <text x={x + (cellW - 4) / 2} y={y + (cellH - 4) / 2 + 4} fontSize={10} textAnchor="middle" fill={v / max > 0.55 ? '#fff' : 'var(--color-text-secondary)'} fontWeight={500}>
-                  £{v}
+                  ${v}
                 </text>
               </g>
             );
@@ -1071,7 +1071,7 @@ export function WasteKpiChart() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '12px 4px' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
         <div style={{ fontSize: 44, fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1, fontFamily: 'var(--font-primary)' }}>
-          £{totalThisWeek.toLocaleString()}
+          ${totalThisWeek.toLocaleString()}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: deltaColour }}>
@@ -1112,9 +1112,9 @@ export function WasteTrendStackedChart() {
       <AreaChart data={WASTE_TREND_STACKED} margin={{ top: 4, right: 8, bottom: 0, left: -8 }}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border-subtle)" />
         <XAxis dataKey="wk" tick={TICK_STYLE} axisLine={false} tickLine={false} />
-        <YAxis tickFormatter={(v: number) => `£${v / 1000}k`} tick={TICK_STYLE} axisLine={false} tickLine={false} />
+        <YAxis tickFormatter={(v: number) => `$${v / 1000}k`} tick={TICK_STYLE} axisLine={false} tickLine={false} />
         <Tooltip
-          formatter={(v, name) => [`£${Number(v)}`, String(name).charAt(0).toUpperCase() + String(name).slice(1)]}
+          formatter={(v, name) => [`$${Number(v)}`, String(name).charAt(0).toUpperCase() + String(name).slice(1)]}
           contentStyle={TOOLTIP_STYLE}
         />
         <Legend iconType="circle" wrapperStyle={{ fontSize: 12, fontFamily: 'var(--font-primary)' }} />
@@ -1159,7 +1159,7 @@ export function ProdAvailScatterChart() {
           formatter={(v, name) => {
             if (name === 'Adherence') return [`${v}%`, 'Adherence'];
             if (name === 'OOS events') return [`${v} events`, 'OOS events'];
-            if (name === 'Weekly sales') return [`£${v}k`, 'Weekly sales'];
+            if (name === 'Weekly sales') return [`$${v}k`, 'Weekly sales'];
             return [String(v), String(name)];
           }}
           labelFormatter={(_, items) => {
@@ -1211,7 +1211,7 @@ function TreemapContent(props: any) {
             {name}
           </text>
           <text x={x + 8} y={y + 34} fontSize={10} fill="rgba(255,255,255,0.85)" fontFamily="var(--font-primary)">
-            £{size} · {pct}%
+            ${size} · {pct}%
           </text>
         </>
       )}
@@ -1343,7 +1343,7 @@ const DELIVERY_ISSUES = [
     item: 'Cucumbers (5kg)',
     type: 'Credit note',
     severity: 'high' as const,
-    detail: 'Damaged on arrival · £42 credit raised',
+    detail: 'Damaged on arrival · $42 credit raised',
   },
   {
     supplier: 'Brakes',
@@ -1425,7 +1425,7 @@ export function NetSalesYesterdayChart() {
             fontFamily: 'var(--font-primary)',
           }}
         >
-          £{yesterday.toLocaleString()}
+          ${yesterday.toLocaleString()}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: deltaColour }}>
@@ -1516,7 +1516,7 @@ export function TopSellersYesterdayChart() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const payload = (entry as any)?.payload;
             const revenue = payload?.revenue ?? 0;
-            return [`${Number(v)} units · £${revenue}`, 'Sold yesterday'];
+            return [`${Number(v)} units · $${revenue}`, 'Sold yesterday'];
           }}
           contentStyle={TOOLTIP_STYLE}
         />
@@ -1545,7 +1545,7 @@ export function HourlySalesLabourChart() {
         />
         <YAxis
           yAxisId="left"
-          tickFormatter={(v: number) => `£${(v / 1000).toFixed(1)}k`}
+          tickFormatter={(v: number) => `$${(v / 1000).toFixed(1)}k`}
           tick={TICK_STYLE}
           axisLine={false}
           tickLine={false}
@@ -1553,7 +1553,7 @@ export function HourlySalesLabourChart() {
         <YAxis
           yAxisId="right"
           orientation="right"
-          tickFormatter={(v: number) => `£${v}`}
+          tickFormatter={(v: number) => `$${v}`}
           tick={TICK_STYLE}
           axisLine={false}
           tickLine={false}
@@ -1562,15 +1562,15 @@ export function HourlySalesLabourChart() {
         <Tooltip
           formatter={(v, name) =>
             name === 'sales'
-              ? [`£${Number(v).toLocaleString()}`, 'Sales']
-              : [`£${Number(v).toLocaleString()}`, 'Labour cost']
+              ? [`$${Number(v).toLocaleString()}`, 'Sales']
+              : [`$${Number(v).toLocaleString()}`, 'Labour cost']
           }
           contentStyle={TOOLTIP_STYLE}
         />
         <Legend
           iconType="circle"
           wrapperStyle={{ fontSize: 12, fontFamily: 'var(--font-primary)' }}
-          formatter={(value) => (value === 'sales' ? 'Sales (£)' : 'Labour cost (£)')}
+          formatter={(value) => (value === 'sales' ? 'Sales ($)' : 'Labour cost ($)')}
         />
         <Bar yAxisId="left" dataKey="sales" name="sales" fill={ACCENT} radius={[3, 3, 0, 0]} />
         <Line
@@ -1600,7 +1600,7 @@ export function DiscountsVoidsRefundsChart() {
             lineHeight: 1,
           }}
         >
-          £{total.toLocaleString()}
+          ${total.toLocaleString()}
         </span>
         <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)' }}>
           total · yesterday
@@ -1625,7 +1625,7 @@ export function DiscountsVoidsRefundsChart() {
                   </span>
                 </span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                  £{row.value}{' '}
+                  ${row.value}{' '}
                   <span style={{ color: 'var(--color-text-muted)', fontWeight: 500, fontSize: 11 }}>
                     ({pct.toFixed(0)}%)
                   </span>
@@ -1668,7 +1668,7 @@ export function WasteTop5YesterdayChart() {
         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border-subtle)" />
         <XAxis
           type="number"
-          tickFormatter={(v: number) => `£${v}`}
+          tickFormatter={(v: number) => `$${v}`}
           tick={TICK_STYLE}
           axisLine={false}
           tickLine={false}
@@ -1687,7 +1687,7 @@ export function WasteTop5YesterdayChart() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const payload = (entry as any)?.payload;
             const units = payload?.units ?? 0;
-            return [`£${Number(v)} · ${units} units`, 'Wasted yesterday'];
+            return [`$${Number(v)} · ${units} units`, 'Wasted yesterday'];
           }}
           contentStyle={TOOLTIP_STYLE}
         />
@@ -1712,14 +1712,14 @@ export function DeliveriesBySupplierChart() {
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border-subtle)" />
         <XAxis dataKey="supplier" tick={{ ...TICK_STYLE, fontSize: 11 }} axisLine={false} tickLine={false} />
         <YAxis
-          tickFormatter={(v: number) => `£${v / 1000}k`}
+          tickFormatter={(v: number) => `$${v / 1000}k`}
           tick={TICK_STYLE}
           axisLine={false}
           tickLine={false}
         />
         <Tooltip
           formatter={(v, name) => [
-            `£${Number(v).toLocaleString()}`,
+            `$${Number(v).toLocaleString()}`,
             name === 'yesterday' ? 'Yesterday' : 'Week to date',
           ]}
           contentStyle={TOOLTIP_STYLE}
@@ -1830,7 +1830,7 @@ export function GrossMarginProductsChart() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const payload = (entry as any)?.payload;
             const revenue = payload?.revenue ?? 0;
-            return [`${Number(v)}% GM · £${revenue} sold`, 'Yesterday'];
+            return [`${Number(v)}% GM · $${revenue} sold`, 'Yesterday'];
           }}
           contentStyle={TOOLTIP_STYLE}
         />
@@ -1874,7 +1874,7 @@ export function LowGrossMarginItemsChart() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const payload = (entry as any)?.payload;
             const revenue = payload?.revenue ?? 0;
-            return [`${Number(v)}% GM · £${Number(revenue).toLocaleString()} sold MTD`, 'Margin'];
+            return [`${Number(v)}% GM · $${Number(revenue).toLocaleString()} sold MTD`, 'Margin'];
           }}
           contentStyle={TOOLTIP_STYLE}
         />
@@ -1989,22 +1989,22 @@ export const ANALYTICS_CONFIG: Record<AnalyticsChartId, {
   sales: {
     label: 'Total sales by site — last week',
     chartLabel: 'Here\'s total sales by site for last week, compared against the prior week:',
-    reasoning: 'Fitzroy led the estate at **£52.4k**, up 6.2% week-on-week. Riverside showed the biggest jump (+11.2%), driven by extended trading hours. City Centre was the only site to soften slightly (-0.9%). The estate total came in at **£312k**, 3.8% ahead of the prior week — driven primarily by a strong Saturday across all sites.',
+    reasoning: 'Fitzroy led the estate at **$52.4k**, up 6.2% week-on-week. Riverside showed the biggest jump (+11.2%), driven by extended trading hours. City Centre was the only site to soften slightly (-0.9%). The estate total came in at **$312k**, 3.8% ahead of the prior week — driven primarily by a strong Saturday across all sites.',
   },
   'sales-by-day': {
     label: 'Total sales by day — last week',
     chartLabel: 'Here\'s the same week broken down per day, estate-wide, against the prior week:',
-    reasoning: '**Saturday led the week at £56.6k**, with Friday close behind at £53.8k — together those two days drove ~35% of last week\'s revenue. The biggest week-on-week growth came on **Wednesday (+£2.5k)** and **Thursday (+£2.2k)**, which suggests the midweek lunchtime push is starting to land. **Sunday is the only day that softened (-£1.2k)** — likely the cooler weather. The weekend stays the leverage point: keep an eye on Saturday staffing — you ran lean two weekends ago and missed the peak.',
+    reasoning: '**Saturday led the week at $56.6k**, with Friday close behind at $53.8k — together those two days drove ~35% of last week\'s revenue. The biggest week-on-week growth came on **Wednesday (+$2.5k)** and **Thursday (+$2.2k)**, which suggests the midweek lunchtime push is starting to land. **Sunday is the only day that softened (-$1.2k)** — likely the cooler weather. The weekend stays the leverage point: keep an eye on Saturday staffing — you ran lean two weekends ago and missed the peak.',
   },
   hour: {
     label: 'Revenue by hour — weekday average',
     chartLabel: 'Here\'s average revenue by hour of day across weekdays, estate-wide:',
-    reasoning: 'The **8–9am slot** is your highest-revenue hour, averaging **£2,840/day** across the estate — about 18% of total weekday revenue. A secondary peak at **12–1pm** contributes £2,210/day. Revenue drops sharply after 3pm. Consider scheduling staffing and production tightly around these two peaks rather than spreading evenly across the day.',
+    reasoning: 'The **8–9am slot** is your highest-revenue hour, averaging **$2,840/day** across the estate — about 18% of total weekday revenue. A secondary peak at **12–1pm** contributes $2,210/day. Revenue drops sharply after 3pm. Consider scheduling staffing and production tightly around these two peaks rather than spreading evenly across the day.',
   },
   trend: {
     label: 'Revenue trend — last 12 weeks',
     chartLabel: 'Here\'s estate revenue over the last 12 weeks:',
-    reasoning: 'Revenue has grown **14.2%** over the 12-week window, from £268k in week 1 to **£312k** in the most recent week. The trend shows steady upward momentum, with a notable acceleration in weeks 8–10 — likely driven by the seasonal upturn and the Riverside site reopening. Week 4 was the only dip; worth understanding what was different that period.',
+    reasoning: 'Revenue has grown **14.2%** over the 12-week window, from $268k in week 1 to **$312k** in the most recent week. The trend shows steady upward momentum, with a notable acceleration in weeks 8–10 — likely driven by the seasonal upturn and the Riverside site reopening. Week 4 was the only dip; worth understanding what was different that period.',
   },
   growth: {
     label: 'Month-on-month growth by site',
@@ -2014,7 +2014,7 @@ export const ANALYTICS_CONFIG: Record<AnalyticsChartId, {
   labour: {
     label: 'Revenue per labour hour by site',
     chartLabel: 'Here\'s revenue per labour hour across each site:',
-    reasoning: '**Fitzroy leads at £48.20/labour hour**, reflecting high average transaction value and efficient shift scheduling. Kings Cross follows closely at £44.60. **Canary Wharf is lowest at £31.80** — this site has a longer operating window with a late evening period that dilutes the metric. Consider reviewing rostering there.',
+    reasoning: '**Fitzroy leads at $48.20/labour hour**, reflecting high average transaction value and efficient shift scheduling. Kings Cross follows closely at $44.60. **Canary Wharf is lowest at $31.80** — this site has a longer operating window with a late evening period that dilutes the metric. Consider reviewing rostering there.',
   },
   cogs: {
     label: 'COGS variance vs budget by site',
@@ -2024,7 +2024,7 @@ export const ANALYTICS_CONFIG: Record<AnalyticsChartId, {
   eatin: {
     label: 'Sales split · eat-in v takeaway v delivery',
     chartLabel: 'Here\'s the channel split on this week\'s estate revenue:',
-    reasoning: '**Eat-in leads at £142k (45%)**, takeaway close behind at £128k (41%), and delivery contributes £42k (14%). Delivery margin nets out lower after aggregator fees — on an after-fee basis, eat-in and takeaway together deliver ~94% of cash margin. Keep an eye on the delivery share trending up on rainy days.',
+    reasoning: '**Eat-in leads at $142k (45%)**, takeaway close behind at $128k (41%), and delivery contributes $42k (14%). Delivery margin nets out lower after aggregator fees — on an after-fee basis, eat-in and takeaway together deliver ~94% of cash margin. Keep an eye on the delivery share trending up on rainy days.',
   },
   daypart: {
     label: 'Revenue by daypart · per site',
@@ -2038,13 +2038,13 @@ export const ANALYTICS_CONFIG: Record<AnalyticsChartId, {
   },
   'waste-top10': {
     label: 'Top 10 most wasted items · network',
-    chartLabel: 'Here are the 10 items driving the most waste £ across the network (last 30 days):',
-    reasoning: '**Blueberry muffin tops the list at £142** — 48 units wasted, largely from over-production on Mondays. The top three items alone account for 38% of network waste £. Oat flat white is the highest-volume drink waste (42 units) despite sitting at #4 by £. Focus production planning on the top 5 — tightening sell-through by 10% there would save ~£50/day across the estate.',
+    chartLabel: 'Here are the 10 items driving the most waste $ across the network (last 30 days):',
+    reasoning: '**Blueberry muffin tops the list at $142** — 48 units wasted, largely from over-production on Mondays. The top three items alone account for 38% of network waste $. Oat flat white is the highest-volume drink waste (42 units) despite sitting at #4 by $. Focus production planning on the top 5 — tightening sell-through by 10% there would save ~$50/day across the estate.',
   },
   'produced-sold': {
     label: 'Produced v sold · yesterday',
     chartLabel: 'Here\'s produced (hollow) versus sold (filled) per item yesterday, ordered by gap size:',
-    reasoning: 'Biggest overproduction was **blueberry muffin (made 48, sold 32)** — a 16-unit gap worth ~£48 in waste risk. The bottom two rows are the opposite story: **oat porridge pot and green juice both sold more than were made** (16 vs 22, 12 vs 18), which means lost sales. Bring morning prep down for muffins, nudge up for oat porridge and juice.',
+    reasoning: 'Biggest overproduction was **blueberry muffin (made 48, sold 32)** — a 16-unit gap worth ~$48 in waste risk. The bottom two rows are the opposite story: **oat porridge pot and green juice both sold more than were made** (16 vs 22, 12 vs 18), which means lost sales. Bring morning prep down for muffins, nudge up for oat porridge and juice.',
   },
   'labour-pct': {
     label: 'Labour % of sales · vs target',
@@ -2059,12 +2059,12 @@ export const ANALYTICS_CONFIG: Record<AnalyticsChartId, {
   'cogs-top-ingredients': {
     label: 'Top 5 ingredients by cost · this month',
     chartLabel: 'Here are the 5 ingredients driving the most cost across the estate this month:',
-    reasoning: '**Whole milk is by far the biggest line at £4,820** — about 36% of the top-5 spend, driven by 2,410L of throughput. **Espresso beans follow at £3,140** (184kg). Together those two ingredients account for nearly 60% of the top-5 cost. **Oat milk has climbed to £1,860 (£2.38/L)** and is the line most worth pressure-testing — even a 10% supplier discount or a switch to a cheaper alt-milk default would save ~£190/month estate-wide. Brioche & pastries (£1,420) and cured meats (£1,280) round out the top 5 — both stable month-on-month and harder to flex without changing the menu.',
+    reasoning: '**Whole milk is by far the biggest line at $4,820** — about 36% of the top-5 spend, driven by 2,410L of throughput. **Espresso beans follow at $3,140** (184kg). Together those two ingredients account for nearly 60% of the top-5 cost. **Oat milk has climbed to $1,860 ($2.38/L)** and is the line most worth pressure-testing — even a 10% supplier discount or a switch to a cheaper alt-milk default would save ~$190/month estate-wide. Brioche & pastries ($1,420) and cured meats ($1,280) round out the top 5 — both stable month-on-month and harder to flex without changing the menu.',
   },
   'waste-heatmap': {
     label: 'Waste heatmap · day × hour',
-    chartLabel: 'Here\'s where waste is happening, day-of-week by hour (last 4 weeks, £):',
-    reasoning: 'The hot spot is unmistakable: **Saturday 5pm (£46) and Friday 5pm (£42)** are the two worst cells, with Monday 5pm close behind. The **last hour of trading drives ~28% of total weekly waste** across the estate. Tightening production cut-offs 90 minutes before close on Fri/Sat/Mon would save ~£110/week. Morning cells (6–10am) are cool — no real waste signal there.',
+    chartLabel: 'Here\'s where waste is happening, day-of-week by hour (last 4 weeks, $):',
+    reasoning: 'The hot spot is unmistakable: **Saturday 5pm ($46) and Friday 5pm ($42)** are the two worst cells, with Monday 5pm close behind. The **last hour of trading drives ~28% of total weekly waste** across the estate. Tightening production cut-offs 90 minutes before close on Fri/Sat/Mon would save ~$110/week. Morning cells (6–10am) are cool — no real waste signal there.',
   },
   'oos-pareto': {
     label: 'Out-of-stock Pareto · items driving stockouts',
@@ -2079,12 +2079,12 @@ export const ANALYTICS_CONFIG: Record<AnalyticsChartId, {
   'waste-kpi': {
     label: 'Total waste this week · estate',
     chartLabel: 'Here\'s total recorded waste across the estate this week:',
-    reasoning: 'Total recorded waste for the past 7 days is **£1,842**, down **8.4% on the prior week** (£2,011) and **14% below the 8-week average**. The trend has been steadily improving since the production planning tightening in week 6. Keep going — another 10% reduction would bring total below £1,700 and unlock the monthly COGS % target.',
+    reasoning: 'Total recorded waste for the past 7 days is **$1,842**, down **8.4% on the prior week** ($2,011) and **14% below the 8-week average**. The trend has been steadily improving since the production planning tightening in week 6. Keep going — another 10% reduction would bring total below $1,700 and unlock the monthly COGS % target.',
   },
   'waste-trend-stacked': {
     label: 'Waste trend · 12 weeks by reason',
     chartLabel: 'Here\'s estate waste over the last 12 weeks, stacked by reason:',
-    reasoning: 'Total waste has fallen **~45% over 12 weeks** (£2,220 → £1,320). The biggest improvement is in **overproduction** (down from £1,040 to £580) — credit the production planning targets introduced in week 6. Expired stock is also trending down. **Spoilage is the flattest line** — the remaining cold-chain / storage issue is where the next 10% lives.',
+    reasoning: 'Total waste has fallen **~45% over 12 weeks** ($2,220 → $1,320). The biggest improvement is in **overproduction** (down from $1,040 to $580) — credit the production planning targets introduced in week 6. Expired stock is also trending down. **Spoilage is the flattest line** — the remaining cold-chain / storage issue is where the next 10% lives.',
   },
   'prod-avail-scatter': {
     label: 'Production adherence × availability failures',
@@ -2094,58 +2094,58 @@ export const ANALYTICS_CONFIG: Record<AnalyticsChartId, {
   'waste-category-treemap': {
     label: 'Waste by category · nested',
     chartLabel: 'Here\'s estate waste broken down by category and item type:',
-    reasoning: '**Food dominates at 62%** of estate waste £, led by pastries (£480) and sandwiches (£340). **Drink is 33%** — milk alone accounts for £280 (stock rotation gap in the walk-in). **Packaging is just 5%** — not where the cost lives. Focus: tighten pastry production and fix milk stock-rotation; everything else is noise.',
+    reasoning: '**Food dominates at 62%** of estate waste $, led by pastries ($480) and sandwiches ($340). **Drink is 33%** — milk alone accounts for $280 (stock rotation gap in the walk-in). **Packaging is just 5%** — not where the cost lives. Focus: tighten pastry production and fix milk stock-rotation; everything else is noise.',
   },
   'labour-day-radial': {
     label: 'Labour cost % by day of week',
     chartLabel: 'Here\'s labour as a % of revenue, by day of the week:',
-    reasoning: '**Sunday is by far the worst at 31.2%** — revenue is low but staffing hasn\'t been cut to match. Saturday is the leanest at 24.6% (high sales, standard crew). Weekdays sit in a tight 26–28% band. Biggest opportunity: cut one back-of-house shift on Sunday — would bring the day in line with Friday\'s 28% and save ~£180/week at the estate level.',
+    reasoning: '**Sunday is by far the worst at 31.2%** — revenue is low but staffing hasn\'t been cut to match. Saturday is the leanest at 24.6% (high sales, standard crew). Weekdays sit in a tight 26–28% band. Biggest opportunity: cut one back-of-house shift on Sunday — would bring the day in line with Friday\'s 28% and save ~$180/week at the estate level.',
   },
   // ── Pilot dashboard "yesterday" charts ──────────────────────────────────────
   'net-sales-yesterday': {
     label: 'Net sales · yesterday',
     chartLabel: 'Here\'s net sales for yesterday with the 7-day trend:',
-    reasoning: 'Yesterday\'s net sales came in at **£18,420**, up **6.7%** on the prior day (£17,260) and the strongest day of the past week. The trend is gently positive: 5 of the last 7 days have come in above the 7-day mean. Week-to-date net sales are running at £92,380.',
+    reasoning: 'Yesterday\'s net sales came in at **$18,420**, up **6.7%** on the prior day ($17,260) and the strongest day of the past week. The trend is gently positive: 5 of the last 7 days have come in above the 7-day mean. Week-to-date net sales are running at $92,380.',
   },
   'top-sellers-yesterday': {
     label: 'Top selling items · yesterday',
     chartLabel: 'Here are the top 5 selling items by units sold yesterday:',
-    reasoning: '**Flat white led the day at 312 units (£1,248)** — about 24% of all hot drink volume. Almond croissant and bacon roll round out the top three. Avocado smash is the standout £-per-unit item: 96 units sold but £768 in revenue (£8 ATV). Use this list to anchor the next production plan and to spot-check stock cover for tomorrow morning.',
+    reasoning: '**Flat white led the day at 312 units ($1,248)** — about 24% of all hot drink volume. Almond croissant and bacon roll round out the top three. Avocado smash is the standout $-per-unit item: 96 units sold but $768 in revenue ($8 ATV). Use this list to anchor the next production plan and to spot-check stock cover for tomorrow morning.',
   },
   'hourly-sales-labour': {
     label: 'Sales by hour · vs labour',
     chartLabel: 'Here are sales by hour yesterday with labour cost overlaid:',
-    reasoning: 'The **8–9am peak (£2,120)** carried the day, with a secondary lunch peak at noon (£1,820). Labour cost tracked sales reasonably well except in the **3–5pm window**, where £56–£28/hr labour kept running while sales fell from £720 to £360 — that\'s the leanest opportunity to pull a shift. Morning ramp from 7–8am could absorb a little more labour without hurting revenue per hour.',
+    reasoning: 'The **8–9am peak ($2,120)** carried the day, with a secondary lunch peak at noon ($1,820). Labour cost tracked sales reasonably well except in the **3–5pm window**, where $56–$28/hr labour kept running while sales fell from $720 to $360 — that\'s the leanest opportunity to pull a shift. Morning ramp from 7–8am could absorb a little more labour without hurting revenue per hour.',
   },
   'discounts-voids-refunds': {
     label: 'Discounts, voids & refunds · yesterday',
     chartLabel: 'Here\'s yesterday\'s reduction value broken down by discounts, voids, and refunds:',
-    reasoning: 'Total reductions came to **£592** (about 3.2% of net sales). **Discounts dominate at £312 across 48 transactions** — mostly the standing 10% staff discount and three loyalty redemptions. Voids (£184 / 21 txns) are running slightly above your normal baseline — worth a quick look at the till audit. Refunds (£96 / 7) are within tolerance.',
+    reasoning: 'Total reductions came to **$592** (about 3.2% of net sales). **Discounts dominate at $312 across 48 transactions** — mostly the standing 10% staff discount and three loyalty redemptions. Voids ($184 / 21 txns) are running slightly above your normal baseline — worth a quick look at the till audit. Refunds ($96 / 7) are within tolerance.',
   },
   'waste-top5-yesterday': {
     label: 'Top 5 wasted items · yesterday',
-    chartLabel: 'Here are the 5 items driving the most waste £ yesterday:',
-    reasoning: '**Blueberry muffin (£38, 12 units)** topped the list again — same pattern we saw last Monday. The top 3 items together account for £88 of the £120 wasted yesterday (73%). Tightening the muffin and almond-croissant production trigger by 6 units each would have cut yesterday\'s waste by roughly half without hurting availability.',
+    chartLabel: 'Here are the 5 items driving the most waste $ yesterday:',
+    reasoning: '**Blueberry muffin ($38, 12 units)** topped the list again — same pattern we saw last Monday. The top 3 items together account for $88 of the $120 wasted yesterday (73%). Tightening the muffin and almond-croissant production trigger by 6 units each would have cut yesterday\'s waste by roughly half without hurting availability.',
   },
   'deliveries-by-supplier': {
     label: 'Deliveries by supplier · yesterday + WTD',
     chartLabel: 'Here are yesterday\'s deliveries by supplier alongside the week-to-date totals:',
-    reasoning: 'Yesterday\'s deliveries totalled **£3,230** across 5 suppliers. **Bidfood was the largest drop at £1,280**, on plan with the standard Tuesday produce/dairy run. Week-to-date is **£13,010**, pacing ~£300 ahead of the equivalent point last week. Bunn Coffee\'s WTD is up sharply (+22%) on the back of the espresso machine refit at Riverside.',
+    reasoning: 'Yesterday\'s deliveries totalled **$3,230** across 5 suppliers. **Bidfood was the largest drop at $1,280**, on plan with the standard Tuesday produce/dairy run. Week-to-date is **$13,010**, pacing ~$300 ahead of the equivalent point last week. Bunn Coffee\'s WTD is up sharply (+22%) on the back of the espresso machine refit at Riverside.',
   },
   'delivery-issues': {
     label: 'Delivery issues · open',
     chartLabel: 'Here are the delivery exceptions raised on yesterday\'s drops:',
-    reasoning: 'Four exceptions are open across yesterday\'s deliveries. The one to action today is the **Bidfood credit note (£42, damaged cucumbers)** — confirm the credit has landed before week-end. The Brakes short-delivery on rocket needs a top-up call this morning so lunch service isn\'t affected. The Bunn order edit and Müller substitution are informational only.',
+    reasoning: 'Four exceptions are open across yesterday\'s deliveries. The one to action today is the **Bidfood credit note ($42, damaged cucumbers)** — confirm the credit has landed before week-end. The Brakes short-delivery on rocket needs a top-up call this morning so lunch service isn\'t affected. The Bunn order edit and Müller substitution are informational only.',
   },
   'gross-margin-products': {
     label: 'Highest gross margin products · yesterday',
     chartLabel: 'Here are yesterday\'s top products by gross margin %:',
-    reasoning: 'The hot-drink core is doing the heavy lifting on margin: **filter coffee at 88%, espresso at 84%, flat white at 78%**. Together they delivered ~£2,340 of yesterday\'s revenue at a combined 82% GM. Almond croissant is the lowest-GM item in the top 5 at 64% — still healthy, but worth keeping an eye on as butter prices climb.',
+    reasoning: 'The hot-drink core is doing the heavy lifting on margin: **filter coffee at 88%, espresso at 84%, flat white at 78%**. Together they delivered ~$2,340 of yesterday\'s revenue at a combined 82% GM. Almond croissant is the lowest-GM item in the top 5 at 64% — still healthy, but worth keeping an eye on as butter prices climb.',
   },
   'low-gross-margin-items': {
     label: 'Lowest gross margin menu items',
     chartLabel: 'Here are the 5 menu items with the lowest gross margin this month:',
-    reasoning: '**Avocado smash on sourdough is the worst margin on the menu at 38%** — and it\'s far from a marginal seller (£4,820 MTD), so this is the line where a price tweak or recipe change moves real money. Smoked salmon bagel (42%) and Chicken Caesar salad (44%) are the next two; the salad in particular pulls high revenue (£5,280) at a thin margin, making it the second-biggest opportunity. **A 2-point margin lift across the bottom three would add roughly £280/month at current sales mix.** Beef brisket and granola bowl round out the bottom 5 but trade lower volume, so they\'re less of a priority.',
+    reasoning: '**Avocado smash on sourdough is the worst margin on the menu at 38%** — and it\'s far from a marginal seller ($4,820 MTD), so this is the line where a price tweak or recipe change moves real money. Smoked salmon bagel (42%) and Chicken Caesar salad (44%) are the next two; the salad in particular pulls high revenue ($5,280) at a thin margin, making it the second-biggest opportunity. **A 2-point margin lift across the bottom three would add roughly $280/month at current sales mix.** Beef brisket and granola bowl round out the bottom 5 but trade lower volume, so they\'re less of a priority.',
   },
   'ingredient-price-changes': {
     label: 'Top ingredient price changes',

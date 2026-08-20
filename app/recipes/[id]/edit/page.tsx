@@ -2064,7 +2064,7 @@ function WhatGetsSoldPreview({
 
 function formatChannelPrice(v: number | null): string {
   if (v == null) return '—';
-  return `£${v.toFixed(2)}`;
+  return `$${v.toFixed(2)}`;
 }
 
 function PreviewLine({

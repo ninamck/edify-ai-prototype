@@ -215,7 +215,7 @@ export interface StockItem {
    *  eggs in trays of 30, `{ trays: 30 }`).
    *
    *  Used by the stocktake / quick-count flows to roll multi-UOM
-   *  entries into a single quantity in the primary unit so the £-value
+   *  entries into a single quantity in the primary unit so the $-value
    *  + variance line up regardless of which unit the operator counted
    *  in. Mass + volume conversions (g↔kg, mL↔L, etc.) are inferred
    *  automatically so only the pack-style alternates (cases, bags,
@@ -525,7 +525,7 @@ export function rollupCounts(
 // ─── Master-product count helpers ─────────────────────────────────────────────
 // Master products spread their count across supplier-variant sub-rows.
 // These helpers flatten that structure so the count surface (and the
-// page-level total / £-value rollups) treat simple items and master
+// page-level total / $-value rollups) treat simple items and master
 // products through one interface, keyed by a per-item "cell suffix".
 
 /** Resolve the countable units for a single supplier variant, building
@@ -764,7 +764,7 @@ export interface StocktakeRecord {
   itemsCounted: number;
   /** How many lines came out at != theoretical stock. */
   variancesFound: number;
-  /** Net £ value of the variance. Negative = shrinkage, positive = found stock. */
+  /** Net $ value of the variance. Negative = shrinkage, positive = found stock. */
   netVarianceValue?: number;
   /** Count of recorded stock movements (sales, deliveries, transfers,
    *  waste) attributable to the period this stocktake covers. Lets
@@ -1079,11 +1079,11 @@ export function getLinkedRecipes(item: StockItem): LinkedRecipe[] {
 
 /** Site currency. Hard-coded to GBP for the prototype; a future
  *  multi-region build would surface this via SiteSettings. */
-export const STOCK_CURRENCY_SYMBOL = '£';
+export const STOCK_CURRENCY_SYMBOL = '$';
 
 /** Render a price. Returns "—" for null so the UI can drop the field
  *  in cleanly when an item isn't priced yet. Pass `unit` to render
- *  unit-cost format (e.g. "£3.50/L"); omit it for plain totals. */
+ *  unit-cost format (e.g. "$3.50/L"); omit it for plain totals. */
 export function formatPrice(
   value: number | null,
   unit?: string,

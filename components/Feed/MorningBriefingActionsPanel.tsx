@@ -11,14 +11,14 @@ function getApprovals(role: BriefingRole): ApprovalItem[] {
   switch (role) {
     case 'ed':
       return [
-        { id: 'a1', title: 'Metro credit — £312', detail: 'Past the threshold agreed with finance — approve write-off path or escalate.' },
+        { id: 'a1', title: 'Metro credit — $312', detail: 'Past the threshold agreed with finance — approve write-off path or escalate.' },
         { id: 'a2', title: 'Matcha estate order', detail: 'Two sites will stock out before inbound unless you authorise a top-up.' },
         { id: 'a3', title: 'Urban Fresh GRN match', detail: 'Three lines need your sign-off before period margin locks.' },
       ];
     case 'cheryl':
       return [
         { id: 'a1', title: 'Bidfood PO mismatch', detail: 'Quantities vs GRN — approve queries or tolerance write-off.' },
-        { id: 'a2', title: 'Metro credit note £312', detail: '18 days open — release or dispute.' },
+        { id: 'a2', title: 'Metro credit note $312', detail: '18 days open — release or dispute.' },
         { id: 'a3', title: 'Flour +12% variance', detail: 'No contract change on file — accept or dispute before recipes update.' },
       ];
     case 'gm':

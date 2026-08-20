@@ -116,13 +116,13 @@ function VarianceTypeChip({ type }: { type: MatchVariance['type'] }) {
   );
 }
 
-function varianceShortLabel(variance: MatchVariance, priceDiff: number, sym = '£'): string {
+function varianceShortLabel(variance: MatchVariance, priceDiff: number, sym = '$'): string {
   if (variance.type === 'price') return `${priceDiff > 0 ? '+' : ''}${sym}${Math.abs(priceDiff).toFixed(2)}`;
   if (variance.type === 'over-invoice') return `+${variance.invoiceValue - variance.poValue} over`;
   return `${variance.invoiceValue > variance.grnValue ? '+' : ''}${variance.invoiceValue - variance.grnValue} unit${Math.abs(variance.invoiceValue - variance.grnValue) !== 1 ? 's' : ''}`;
 }
 
-function varianceDetailText(variance: MatchVariance, sym = '£'): string {
+function varianceDetailText(variance: MatchVariance, sym = '$'): string {
   if (variance.type === 'price') {
     const d = variance.invoiceValue - variance.poValue;
     return `PO: ${sym}${variance.poValue.toFixed(2)} → Invoice: ${sym}${variance.invoiceValue.toFixed(2)} (${d >= 0 ? '+' : ''}${sym}${d.toFixed(2)}/unit)`;
@@ -370,7 +370,7 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
             Invoiced in {invCurrency}
           </span>
           <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
-            Matched against the {invCurrency} PO · booked at 1 {invCurrency} = {lockedRate} GBP (locked at receipt)
+            Matched against the {invCurrency} PO · booked at 1 {invCurrency} = {lockedRate} USD (locked at receipt)
           </span>
           <span>
             The {BASE_CURRENCY} translation is stored alongside the original — never replacing it.
@@ -395,7 +395,7 @@ export default function InvoiceMatchView({ invoice, onApprove, onBack }: Invoice
           value={formatMoney(invoice.total + totalTax, invCurrency)}
           sub={isForeignCurrency
             ? `${formatMoney(toBaseAtLockedRate(invoice.total + totalTax), BASE_CURRENCY)} at locked rate`
-            : anyTax ? `Incl. VAT · Ex-VAT £${invoice.total.toFixed(2)}` : 'Per supplier invoice'}
+            : anyTax ? `Incl. VAT · Ex-VAT $${invoice.total.toFixed(2)}` : 'Per supplier invoice'}
           variant="default"
         />
         <MatchSummaryCard
@@ -665,7 +665,7 @@ function DeliverySubstitutionBanner({ substitutions }: { substitutions: Delivery
             <strong>{invoiceLine.description}</strong> on the invoice matches <strong>{grnLine.name}</strong> on {grnNumber}.
             {' '}The PO ordered <strong>{grnLine.alternativeFor?.poName}</strong>, but receiving marked it as an alternative product, linked it to the master product, and captured the delivered cost.
             <div style={{ marginTop: '4px', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-              Invoice/GRN: {invoiceLine.qty} × £{invoiceLine.unitPrice.toFixed(2)} · PO item replaced: {grnLine.alternativeFor?.poSku}
+              Invoice/GRN: {invoiceLine.qty} × ${invoiceLine.unitPrice.toFixed(2)} · PO item replaced: {grnLine.alternativeFor?.poSku}
             </div>
           </div>
         ))}
@@ -924,8 +924,8 @@ function AmbiguousGRNPicker({ invoice, candidates, onConfirm }: {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', paddingTop: '8px', borderTop: '1px solid var(--color-border-subtle)' }}>
-                <span style={{ color: 'var(--color-text-secondary)' }}>GRN total vs invoice £{invoice.total.toFixed(2)}</span>
-                <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>£{grnTotalOf(c).toFixed(2)}</span>
+                <span style={{ color: 'var(--color-text-secondary)' }}>GRN total vs invoice ${invoice.total.toFixed(2)}</span>
+                <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>${grnTotalOf(c).toFixed(2)}</span>
               </div>
               <p style={{ fontSize: '11px', color: 'var(--color-text-secondary)', margin: '8px 0 0', lineHeight: 1.45 }}>
                 {c.reason}
@@ -1627,7 +1627,7 @@ function SplitView({ invoice, grns, unmatchedLines, resolutions, onResolve, line
   // PO drawer — the order behind the agreed prices, opened from header chips
   const [showPO, setShowPO] = useState<PO | null>(null);
   // Amounts render in the invoice's own currency (CAD for Second Cup Central
-  // Supply); GBP invoices keep the familiar £.
+  // Supply); GBP invoices keep the familiar $.
   const sym = currencySymbol(invoice.currency ?? BASE_CURRENCY);
 
   const commitQty = (lineId: string, current: number, raw: string) => {
@@ -2420,8 +2420,8 @@ function VarianceCard({ variance, resolution, onResolve }: { variance: MatchVari
   const priceDiff = variance.invoiceValue - variance.poValue;
   const detail = varianceDetailText(variance);
   const impactLabel = variance.impact >= 0
-    ? `+£${variance.impact.toFixed(2)}`
-    : `-£${Math.abs(variance.impact).toFixed(2)}`;
+    ? `+$${variance.impact.toFixed(2)}`
+    : `-$${Math.abs(variance.impact).toFixed(2)}`;
 
   return (
     <div
@@ -2470,12 +2470,12 @@ function VarianceCard({ variance, resolution, onResolve }: { variance: MatchVari
 
       {resolution === 'Accept & Update Cost in Edify' && variance.type === 'price' && (
         <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '8px', background: 'var(--color-info-light)', fontSize: '12px', fontWeight: 500, color: 'var(--color-info)' }}>
-          Updates master ingredient cost to £{variance.invoiceValue.toFixed(2)} — cascades to recipe costing and GP%.
+          Updates master ingredient cost to ${variance.invoiceValue.toFixed(2)} — cascades to recipe costing and GP%.
         </div>
       )}
       {resolution === 'Accept for this delivery' && variance.type === 'price' && (
         <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '8px', background: 'var(--color-bg-hover)', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
-          Pays £{variance.invoiceValue.toFixed(2)} for this delivery only. Ingredient cost stays at £{variance.poValue.toFixed(2)}.
+          Pays ${variance.invoiceValue.toFixed(2)} for this delivery only. Ingredient cost stays at ${variance.poValue.toFixed(2)}.
         </div>
       )}
     </div>

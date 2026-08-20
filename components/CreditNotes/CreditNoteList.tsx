@@ -81,7 +81,7 @@ export default function CreditNoteList({ onView }: CreditNoteListProps) {
       {/* Summary line */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '14px', flexWrap: 'wrap', marginBottom: '16px', fontSize: '13px', color: 'var(--color-text-muted)' }}>
         <span>
-          <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text-primary)' }}>£{outstanding.toFixed(2)}</span>
+          <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text-primary)' }}>${outstanding.toFixed(2)}</span>
           {' '}outstanding
         </span>
         <span aria-hidden="true" style={{ color: 'var(--color-border-subtle)' }}>·</span>
@@ -271,7 +271,7 @@ function CreditNoteRow({ creditNote: cn, onView }: { creditNote: CreditNote; onV
           color: 'var(--color-text-primary)',
         }}
       >
-        £{cn.amount.toFixed(2)}
+        ${cn.amount.toFixed(2)}
       </td>
       <td
         style={{

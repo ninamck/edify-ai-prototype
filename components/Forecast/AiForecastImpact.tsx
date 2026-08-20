@@ -8,7 +8,7 @@
  *   • Fixed par (old way) — a flat number cooked every window, all day.
  *
  * The scoreboard makes the benefit money-legible: waste binned and sales
- * missed, in £, ticking live as the lunch rush plays out, with a projected
+ * missed, in $, ticking live as the lunch rush plays out, with a projected
  * full-day saving as the headline. Driven entirely by `forecastImpactStore`.
  */
 

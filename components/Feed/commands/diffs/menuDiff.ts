@@ -46,7 +46,7 @@ export function diffMenu(args: {
       fieldLabel: 'Price (all channels)',
       before: before.priceDineIn,
       after: after.priceDineIn,
-      unit: '£',
+      unit: '$',
       valueKind: 'currency',
     });
     if (

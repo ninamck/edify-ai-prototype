@@ -69,7 +69,7 @@ export default function HourlyCombo({ data }: { data: HourlyTradingRow[] }) {
           tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
           tickLine={false}
           axisLine={false}
-          tickFormatter={(v) => `£${v}`}
+          tickFormatter={(v) => `$${v}`}
           width={48}
         />
         <YAxis
@@ -91,15 +91,15 @@ export default function HourlyCombo({ data }: { data: HourlyTradingRow[] }) {
             if (nameStr === 'Staff on' || nameStr === 'Staff rostered') {
               return [`${valStr} on`, nameStr];
             }
-            if (valStr === '0' && nameStr === 'Actual £') return ['—', nameStr];
-            return [`£${valStr}`, nameStr];
+            if (valStr === '0' && nameStr === 'Actual $') return ['—', nameStr];
+            return [`$${valStr}`, nameStr];
           }}
         />
         <Legend wrapperStyle={{ fontSize: 11, paddingTop: 6 }} iconType="circle" />
         <Bar
           yAxisId="left"
           dataKey="actualBar"
-          name="Actual £"
+          name="Actual $"
           radius={[4, 4, 0, 0]}
           maxBarSize={28}
         >
@@ -111,7 +111,7 @@ export default function HourlyCombo({ data }: { data: HourlyTradingRow[] }) {
           yAxisId="left"
           type="monotone"
           dataKey="forecast"
-          name="Forecast £"
+          name="Forecast $"
           stroke={ACCENT}
           strokeWidth={2}
           dot={{ r: 2, fill: ACCENT }}

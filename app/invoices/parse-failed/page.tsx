@@ -165,7 +165,7 @@ function ParseFailedContent() {
                     </span>
                   </div>
                   <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-                    {grn.lines.length} item{grn.lines.length === 1 ? '' : 's'} · £{total.toFixed(2)}
+                    {grn.lines.length} item{grn.lines.length === 1 ? '' : 's'} · ${total.toFixed(2)}
                   </div>
                 </div>
               </button>
@@ -174,7 +174,7 @@ function ParseFailedContent() {
           {selectedGrns.length > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', paddingTop: '6px' }}>
               <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-                {selectedGrns.length} selected · {linkedItemCount} items · £{linkedTotal.toFixed(2)}
+                {selectedGrns.length} selected · {linkedItemCount} items · ${linkedTotal.toFixed(2)}
               </span>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                 <button
@@ -285,11 +285,11 @@ function ConfirmLinkModal({
         <ul style={{ margin: '0 0 18px', padding: '0 0 0 18px', fontSize: '13px', lineHeight: 1.7, color: 'var(--color-text-primary)' }}>
           {grns.map(g => (
             <li key={g.grnNumber}>
-              <strong>{g.grnNumber}</strong> · {g.lines.length} item{g.lines.length === 1 ? '' : 's'} · £{g.lines.reduce((s, l) => s + l.receivedQty * l.price, 0).toFixed(2)}
+              <strong>{g.grnNumber}</strong> · {g.lines.length} item{g.lines.length === 1 ? '' : 's'} · ${g.lines.reduce((s, l) => s + l.receivedQty * l.price, 0).toFixed(2)}
             </li>
           ))}
           <li style={{ color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-            Total invoice value: <strong style={{ color: 'var(--color-text-primary)' }}>£{total.toFixed(2)}</strong>
+            Total invoice value: <strong style={{ color: 'var(--color-text-primary)' }}>${total.toFixed(2)}</strong>
           </li>
         </ul>
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>

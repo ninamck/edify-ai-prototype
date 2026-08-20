@@ -281,7 +281,7 @@ export default function ReceivingScreen({ pos, onConfirm, onBack, onAddPO }: Rec
           if (currency !== BASE_CURRENCY) {
             return <span style={{ whiteSpace: 'nowrap' }}>{formatDual(row.line.price, currency)}</span>;
           }
-          return <span>£{row.line.price.toFixed(2)}</span>;
+          return <span>${row.line.price.toFixed(2)}</span>;
         }
         if (row.kind === 'extra') return <span>{formatPrice(row.extra.price)}</span>;
         return <span>{formatPrice(row.alt.packCost)}</span>;

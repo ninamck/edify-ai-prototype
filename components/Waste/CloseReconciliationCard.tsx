@@ -122,7 +122,7 @@ export default function CloseReconciliationCard({ phase }: { phase: BriefingPhas
               }}
             >
               <strong style={{ color: '#001C35' }}>{short} short</strong>
-              {' · £'}
+              {' · $'}
               {(short * product.unitCost).toFixed(2)} at stake
             </div>
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
