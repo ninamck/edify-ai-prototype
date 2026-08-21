@@ -10,15 +10,15 @@
 
 ## TL;DR
 
-A production hub (`STANDALONE` / `HUB` / `SPOKE` / `HYBRID`) serves an estate on a rolling 5-day horizon. Quinn drafts the forecast, the plan, the board, AND the setup/config; humans approve. Every batch passes a **PCR** gate before it dispatches to sites as an internal transfer, which settles via a site-side GRN and reconciles against sales + waste.
+A production hub (`STANDALONE` / `HUB` / `SPOKE` / `HYBRID`) serves an estate on a rolling 5-day horizon. Edify drafts the forecast, the plan, the board, AND the setup/config; humans approve. Every batch passes a **PCR** gate before it dispatches to sites as an internal transfer, which settles via a site-side GRN and reconciles against sales + waste.
 
 Three goals above all else:
 
 1. **Unify.** What today is split across hot-production, fixed-production (P1/P2/P3/P4), VP, and ad-hoc review UIs collapses into one spine with one mental model. "Hot production" as a separate thing goes away.
-2. **Settings become conversation.** Today's config tree (bench rule engines, forecast-windows-per-category-per-site-per-production-per-day, cutoffs, tier assignments, selection-tag setup) is brittle and goes stale. Tomorrow: Quinn interviews on setup, detects drift, proposes updates from observation. Chat-style where it fits; dashboards where they fit.
+2. **Settings become conversation.** Today's config tree (bench rule engines, forecast-windows-per-category-per-site-per-production-per-day, cutoffs, tier assignments, selection-tag setup) is brittle and goes stale. Tomorrow: Edify interviews on setup, detects drift, proposes updates from observation. Chat-style where it fits; dashboards where they fit.
 3. **Scale-shaped data model.** Pret-scale (hundreds of sites, multiple formats) means estate → region → format → site inheritance, templates, bulk operations with propagation preview, and audit trails are first-class — not bolt-ons.
 
-**Slice C builds the planning board + PCR gate + Quinn settings stub** — the smallest proof of the foundation. Everything else extends from there.
+**Slice C builds the planning board + PCR gate + Edify settings stub** — the smallest proof of the foundation. Everything else extends from there.
 
 ---
 
@@ -28,7 +28,7 @@ These guide every decision below.
 
 1. **One spine, one UI shape.** No separate hot/fixed/VP UIs. Production is production; mode is an attribute.
 2. **Settings as conversation, not configuration.** Interview-on-events, observation-driven proposals, stale-surfacing. Manual form editing is the escape hatch, not the primary surface.
-3. **Quinn replaces tuning knobs.** Bench rule engines, selection-tag scheduling logic, P1→P2 overflow, forecast-window trees — all collapse into a Quinn-drafted plan you adjust. Knobs remain as overrides, not as the primary interface.
+3. **Edify replaces tuning knobs.** Bench rule engines, selection-tag scheduling logic, P1→P2 overflow, forecast-window trees — all collapse into a Edify-drafted plan you adjust. Knobs remain as overrides, not as the primary interface.
 4. **Scale-first.** Estate → region → format → site inheritance. Bulk operations with propagation preview. Audit on anything that touches many sites.
 5. **Settings stay alive.** Every setting shows last-updated / last-used. Stale settings are surfaced, not silently present.
 6. **Reliability.** Clear state, trustworthy undo, no silent data inconsistencies, audit trails on propagation.
@@ -39,21 +39,21 @@ These guide every decision below.
 
 Canonical reference: [DESIGN-PRINCIPLES.md](DESIGN-PRINCIPLES.md). Production surfaces are used on the kitchen floor with floury hands on a mounted tablet, mid-service — the principles matter more here, not less. Every surface below must honour these actively (not just link to them):
 
-- **Fewer clicks, less thinking.** Every surface opens with Quinn's draft pre-populated. Users confirm or adjust; they never fill from blank. The 30-second test applies: could a harried manager complete this without looking up from their tablet?
-- **Conversational over transactional.** Settings come out of a chat, not a form tree. One question at a time, tappable options (not typed inputs), Quinn narrates. Structured data is built up through conversation.
+- **Fewer clicks, less thinking.** Every surface opens with Edify's draft pre-populated. Users confirm or adjust; they never fill from blank. The 30-second test applies: could a harried manager complete this without looking up from their tablet?
+- **Conversational over transactional.** Settings come out of a chat, not a form tree. One question at a time, tappable options (not typed inputs), Edify narrates. Structured data is built up through conversation.
 - **Status always visible.** Every batch block, spoke submission, PCR, carry-over item, and stale-settings card carries a status pill (`green = complete / reviewed`, `amber = needs attention`, `red = failed / dispute`). The board shows completion % per bench per day at a glance.
 - **Surface the right things, hide the rest.** Setup-time complexity (batch-rule tuning, cutoff configuration, selection-tag edits) lives in the settings-conversation surfaces — never clutters the daily-ops board.
-- **Errors handled gracefully.** Batch-rule collision → Quinn surfaces the binding rule + offers split-or-hold. Missed cutoff → offer unlock-with-reason. PCR fail → one-tap routes through waste log to a new remake batch. Transfer variance → two clear paths (accept as one-off / flag for hub follow-up), per the principle's "update system-wide vs. accept this time" shape.
+- **Errors handled gracefully.** Batch-rule collision → Edify surfaces the binding rule + offers split-or-hold. Missed cutoff → offer unlock-with-reason. PCR fail → one-tap routes through waste log to a new remake batch. Transfer variance → two clear paths (accept as one-off / flag for hub follow-up), per the principle's "update system-wide vs. accept this time" shape.
 - **Consistent, learnable patterns.** Reuse existing pills, +/− steppers, pill multi-select, success banners, and status colours. Don't invent new interaction shapes — a user who knows the invoice-matching or GRN flow should recognise the production flows.
 - **Respect the environment.** Board blocks have ≥ 40×40px tap targets. Bold typography for quantities and times. +/− steppers for any numeric adjust. Mobile collapses the board to per-bench cards that work one-handed; desktop shows the full grid for planning sessions.
 
 **UX notes applied per surface:**
 
 - **Kitchen board.** Status pill per block (`planned / in-progress / complete / failed / reviewed / dispatched`); bold numbers; tap-to-focus for a batch opens a stepper-shaped detail view; mobile = card-per-bench, desktop = full grid.
-- **Carry-over sheet.** Quinn's draft is the default answer. One-tap "accept all"; per-line override with +/− stepper. Green success banner + summary on confirm ("Tomorrow's plan adjusted for 3 recipes").
+- **Carry-over sheet.** Edify's draft is the default answer. One-tap "accept all"; per-line override with +/− stepper. Green success banner + summary on confirm ("Tomorrow's plan adjusted for 3 recipes").
 - **PCR gate.** Tap-to-confirm each quality / label check, never type. Checklist pattern reused from [app/checklists/](app/checklists/). Progress % on the bench tile; green success banner at bench-review submission.
-- **SPOKE submission.** Cutoff rendered as a countdown status pill (`4h 20m — on track` / `cutoff passed`). Quinn-drafted selection pre-filled from recent history; one-tap confirm. No blank form.
-- **Quinn setup chat.** One question at a time, tappable options, sensible template default pre-selected. Narrates next step. Summary card at the end ("Here's what we saved"), matching the invoice-matching confirmation shape.
+- **SPOKE submission.** Cutoff rendered as a countdown status pill (`4h 20m — on track` / `cutoff passed`). Edify-drafted selection pre-filled from recent history; one-tap confirm. No blank form.
+- **Edify setup chat.** One question at a time, tappable options, sensible template default pre-selected. Narrates next step. Summary card at the end ("Here's what we saved"), matching the invoice-matching confirmation shape.
 - **Settings health dashboard.** Each stale item is a card with a status pill (`stale 90+ days / unused / suspect`). Sorted by impact. One-tap remediation (archive / refresh / edit) from the card — no drill-down-and-return.
 - **Batch-rule tooltip.** Names the binding rule in plain language ("Oven holds max 12; this recipe caps at 8. Effective max: 8."). No error codes.
 
@@ -73,12 +73,12 @@ Canonical reference: [DESIGN-PRINCIPLES.md](DESIGN-PRINCIPLES.md). Production su
 - **ProductionWorkflow** — a DAG of stages: `{ stages, deps }`. Stage: `{ id, capability, leadOffset, optional?, parallelGroup? }`. `leadOffset` up to **D-2** for V1.
 - **Bench** — unified with live Edify's "Station". `{ capabilities, availabilitySlots, batchRules? }`. Lives at one hub or hybrid site.
 - **BatchRules** — `{ min, max, multipleOf }`. Set at **bench** or **recipe** level. Recipe wins.
-- **SelectionTag** — `'breakfast' | 'morning' | 'opening' | 'closing' | 'flexible' | 'must-stock'`. Tag on recipe-within-tier; informs Quinn's scheduling. Replaces live Edify's hard-coded tag logic with Quinn-drafted softer behaviour that still respects intent.
+- **SelectionTag** — `'breakfast' | 'morning' | 'opening' | 'closing' | 'flexible' | 'must-stock'`. Tag on recipe-within-tier; informs Edify's scheduling. Replaces live Edify's hard-coded tag logic with Edify-drafted softer behaviour that still respects intent.
 - **Assortment** — unified shape for **Range** (estate-level SKU grouping with temporal rules) and **Tier** (site-level day-of-week rule assigning one-or-more ranges). Tiers can stack (additive union).
 - **SiteTierAssignment** — `{ siteId, tierId, daysOfWeek[] }`.
 - **DemandForecast** — per-site × per-SKU × per-day qty, gated by active tier. Drivers: sales, weather, stock, orders, waste, events, promos.
 - **ProductionPlan** → **PlannedInstance** → **ProductionBatch** → **PCR** → **TransferManifest** → **TransferGRN** → **ReconciliationRecord**.
-- **CarryOver** — yesterday's unsold reduces today's planned quantities. Recipe-level `allowCarryOver`. Processed in production-order. Quinn drafts; Manager confirms.
+- **CarryOver** — yesterday's unsold reduces today's planned quantities. Recipe-level `allowCarryOver`. Processed in production-order. Edify drafts; Manager confirms.
 - **Duty** — non-recipe bench task (setup, cleanup). Assigned to benches; `assignToAllBenches` option.
 - **PCRRecord** — `{ batchId, type: 'batch' | 'on-demand' | 'preparation' | 'repackaging', qualityCheck, labelCheck, signedBy, signedAt }`. Ad-hoc types reuse the PCR shape for work outside the planned production.
 - **Roles (V1)** — `Manager` and `Staff`. Managers plan, approve, adjust, propagate. Staff log batches, tick stages, and sign PCRs (per live Edify: all roles can submit reviews). Richer split deferred.
@@ -92,10 +92,10 @@ Canonical reference: [DESIGN-PRINCIPLES.md](DESIGN-PRINCIPLES.md). Production su
 | Variable Production (VP) | `variable` mode | One spine |
 | Station | Bench | Unified workstation |
 | Production Control Review | PCR gate (same shape) | Already aligned |
-| `isFullSelectionTime` buffer | Quinn-drafted buffer from demand + assortment | Knob → Quinn's job |
-| Bench allocation rule engine (priority-weighted rules: Same-Key-Ingredients / Same-Category / Priority-Not-Made / Fixed-Order / AI-prompt) | Quinn draft + manager overrides | Rule engine → Quinn's job |
+| `isFullSelectionTime` buffer | Edify-drafted buffer from demand + assortment | Knob → Edify's job |
+| Bench allocation rule engine (priority-weighted rules: Same-Key-Ingredients / Same-Category / Priority-Not-Made / Fixed-Order / AI-prompt) | Edify draft + manager overrides | Rule engine → Edify's job |
 
-Users still configure specifics (slot times, batch rules, selection tags, cutoffs). But the settings come out of a **conversation with Quinn**, not a form tree.
+Users still configure specifics (slot times, batch rules, selection tags, cutoffs). But the settings come out of a **conversation with Edify**, not a form tree.
 
 ---
 
@@ -105,7 +105,7 @@ Users still configure specifics (slot times, batch rules, selection tags, cutoff
 flowchart LR
     Assortment["Range / Tier<br/>(site × day, selection tags)"] --> Forecast["DemandForecast<br/>5-day, drivers visible"]
     Forecast --> Plan["ProductionPlan<br/>mode: run / variable / increment"]
-    Plan --> Carry["Carry-over adjust<br/>(Quinn-drafted)"]
+    Plan --> Carry["Carry-over adjust<br/>(Edify-drafted)"]
     Carry --> Expand["Workflow expand<br/>lead-offsets land prep days earlier"]
     Expand --> Board["Kitchen board<br/>time x bench (unified)"]
     Board --> Batch["ProductionBatch"]
@@ -127,10 +127,10 @@ End-to-end one flow. Carry-over closes back to tomorrow's plan. Ranges/tiers gat
 | Mode | What it is | When to use | Scheduling unit | Live Edify equivalent |
 |---|---|---|---|---|
 | `run` | Fixed slots (R1, R2, R3…) | Large batches, scheduled peaks | `RunSlot { startTime, durationEst, workflow }` | P1 / P2 / P3 / P4 |
-| `variable` | On-demand; triggers: stock par / Quinn nudge / customer order / manual | Low-volume, bespoke, reactive | `VariableTrigger { reason, requestedBy, qty }` | VP (with its `adjustedForecast + closingRange - totalMade` math) |
+| `variable` | On-demand; triggers: stock par / Edify nudge / customer order / manual | Low-volume, bespoke, reactive | `VariableTrigger { reason, requestedBy, qty }` | VP (with its `adjustedForecast + closingRange - totalMade` math) |
 | `increment` | Continuous small-batch at a repeating interval, shelf life tracked | Fresh-through-the-day, short shelf life | `IncrementCadence { interval, perIncrementQty, shelfLifeMinutes }` | Hot Production (Stations + timed batches) |
 
-Mode is per-SKU. Quinn drafts the classification from history; Manager confirms. Increment interval: Quinn proposes from the demand curve; hub preset overrides.
+Mode is per-SKU. Edify drafts the classification from history; Manager confirms. Increment interval: Edify proposes from the demand curve; hub preset overrides.
 
 **One board renders all three.** A `run` shows as a single block; a `variable` shows as a trigger-marker that materialises into a block when fired; an `increment` shows as a repeating cadence along its row. Tapping any block opens a focus view — replaces the live Edify "production stepper" for hot batches with a tap-to-zoom on the same board.
 
@@ -140,7 +140,7 @@ Mode is per-SKU. Quinn drafts the classification from history; Manager confirms.
 
 - **Range** — estate-level SKU grouping with temporal rules (dates, days-of-week, timeslots).
 - **Tier** — site-level rule assigning one or more ranges to a site per day-of-week. Tiers can stack (additive union; most-permissive timeslot wins unless explicit priority).
-- **Selection tags** — lightweight recipe-within-tier tags (`breakfast / morning / opening / closing / flexible / must-stock`). Inform Quinn's scheduling. Replaces live Edify's hard-coded tag logic (P1→P2 overflow rule, closing-range inference) with softer, Quinn-drafted behaviour that still respects tag intent.
+- **Selection tags** — lightweight recipe-within-tier tags (`breakfast / morning / opening / closing / flexible / must-stock`). Inform Edify's scheduling. Replaces live Edify's hard-coded tag logic (P1→P2 overflow rule, closing-range inference) with softer, Edify-drafted behaviour that still respects tag intent.
 - **Intra-day availability** is a **hard gate** — no sell or produce outside the window. Granularity: per-hour / per-run / per-phase / custom, in any combination.
 - **Range lifecycle is run-aligned**, not midnight-aligned.
 
@@ -154,7 +154,7 @@ Mode is per-SKU. Quinn drafts the classification from history; Manager confirms.
 
 Every batch has an effective `{ min, max, multipleOf }`. The rule can live at **bench** level (hardware limit) and/or **recipe** level (recipe-specific constraint). **Recipe wins** when both exist.
 
-Quinn uses the tightest-binding rule:
+Edify uses the tightest-binding rule:
 - demand > max → split into N batches automatically
 - demand < min → flag as "too small to run — hold or combine?"
 - board tooltip always names the binding rule
@@ -165,7 +165,7 @@ Quinn uses the tightest-binding rule:
 
 **2D grid: benches (rows) × time-of-day (columns).** Each hub and each hybrid site gets its own board. One board renders run + variable + increment together.
 
-Quinn drafts, human adjusts:
+Edify drafts, human adjusts:
 - explodes workflows backwards across days (respecting `leadOffset`, D-2 max)
 - auto-allocates benches by capability, flagging conflicts with one-click shift-right / reassign nudges
 - enforces batch rules (splits above max, flags below min)
@@ -199,7 +199,7 @@ Daily mechanic: **unsold items from yesterday reduce today's planned quantities*
 - Processed in production-order (earliest `run` slots first).
 - Changing quantities after bench allocation invalidates bench assignments — the board surfaces this cleanly, not silently.
 
-**Quinn's job.** Quinn drafts tomorrow's carry-over adjustment from today's close-of-day data; Manager reviews and confirms. Replaces the "enter carry-over per recipe" chore with an approval step.
+**Edify's job.** Edify drafts tomorrow's carry-over adjustment from today's close-of-day data; Manager reviews and confirms. Replaces the "enter carry-over per recipe" chore with an approval step.
 
 ---
 
@@ -212,17 +212,17 @@ Daily mechanic: **unsold items from yesterday reduce today's planned quantities*
 - **Transfer status** — `TRANSFERRED | DISCARDED` per spoke-selected production.
 - **Spoke carry-over** feeds back into hub planning (aggregated by recipe across connected spokes).
 
-**V1 in slice C:** stub the submission surface — one SPOKE submitting, one cutoff rendered, one unlock demo, one Quinn-drafted spoke selection ready to approve. Full modification-with-reason + spoke carry-over aggregation = slice D.
+**V1 in slice C:** stub the submission surface — one SPOKE submitting, one cutoff rendered, one unlock demo, one Edify-drafted spoke selection ready to approve. Full modification-with-reason + spoke carry-over aggregation = slice D.
 
 ---
 
-## Quinn across the spine
+## Edify across the spine
 
-Quinn has two roles: **daily operator** and **settings maintainer**.
+Edify has two roles: **daily operator** and **settings maintainer**.
 
 ### Daily operator
 
-| Stage | Quinn drafts | Human decides |
+| Stage | Edify drafts | Human decides |
 |---|---|---|
 | Range / tier fit | Tier-swap suggestions from observed sales; SKUs under-/over-selling vs. range; selection-tag-aware scheduling | Manager approves swap; curates range contents |
 | Forecast | Multi-day per-site qty + drivers, gated by active tier | Manager accepts / nudges / overrides |
@@ -239,7 +239,7 @@ Quinn has two roles: **daily operator** and **settings maintainer**.
 
 ### Settings maintainer
 
-| Moment | Quinn drafts | Human decides |
+| Moment | Edify drafts | Human decides |
 |---|---|---|
 | New site onboarding | Interview: type, hours, format, ranges, tier, benches, hub/spoke relationship — with sensible template defaults | Manager confirms each answer |
 | Estate change detected | "3 new airport sites opened this week. Apply the airport-format template?" | Manager confirms / adjusts |
@@ -248,7 +248,7 @@ Quinn has two roles: **daily operator** and **settings maintainer**.
 | Change impact preview | "This range change affects 112 sites across 4 formats — review?" | Manager approves propagation or stages |
 | Settings health | Periodic surface: stale ranges, unassigned benches, recipes never produced, PCR checklists > 90 days old | Manager triages |
 
-This is the second load-bearing Quinn surface, alongside the planning board. Shipping both — even as stubs — is slice C's job.
+This is the second load-bearing Edify surface, alongside the planning board. Shipping both — even as stubs — is slice C's job.
 
 ---
 
@@ -258,13 +258,13 @@ Today's setup in live Edify: admin walks a form tree — benches per site, hub/s
 
 Tomorrow's setup — three intertwined patterns:
 
-1. **Interview-on-events.** Quinn interviews when something real happens (new site opens, new range drafted, new format added). Natural-language questions, multiple-choice answers, human confirms. No empty forms to wander.
-2. **Observation-driven proposals.** Quinn watches daily operations and proposes config updates from what it sees — "you override this every Tuesday; update the default?"
+1. **Interview-on-events.** Edify interviews when something real happens (new site opens, new range drafted, new format added). Natural-language questions, multiple-choice answers, human confirms. No empty forms to wander.
+2. **Observation-driven proposals.** Edify watches daily operations and proposes config updates from what it sees — "you override this every Tuesday; update the default?"
 3. **Stale-setting surfacing.** Every setting is visibly dated. A periodic "settings health" dashboard shows what's stale / unused / suspect, sorted by impact.
 
 **UI medium** — chat-style is the natural medium for (1) and (2); dashboard-style for (3). Chat isn't the only answer though — templates + inline editing in the surface a setting affects + progressive disclosure are all valid complementary patterns. Slice C demos the interview pattern and the health dashboard; the rest iterates.
 
-**Slice C stub:** Quinn interview on "new site opens" scenario + a settings-health dashboard with 5 representative stale items (one unused tier, one site with no cutoff configured, one bench with no recipes in 60 days, one range 10 months stale, one recipe with no `closingRange`). Enough to pressure-test the UX; not enough to replace the whole config surface yet.
+**Slice C stub:** Edify interview on "new site opens" scenario + a settings-health dashboard with 5 representative stale items (one unused tier, one site with no cutoff configured, one bench with no recipes in 60 days, one range 10 months stale, one recipe with no `closingRange`). Enough to pressure-test the UX; not enough to replace the whole config surface yet.
 
 ---
 
@@ -285,7 +285,7 @@ V1 fixtures include **one estate, two formats** to pressure-test the pattern eve
 
 ## V1 scope — slice C
 
-**Build.** Planning board + PCR gate + Quinn settings stub, across **one estate, four site types** (STANDALONE / HUB / SPOKE / HYBRID) and **two formats**, on a 5-day horizon.
+**Build.** Planning board + PCR gate + Edify settings stub, across **one estate, four site types** (STANDALONE / HUB / SPOKE / HYBRID) and **two formats**, on a 5-day horizon.
 
 **In scope:**
 - Multi-day planner strip (D-2 … D+2)
@@ -296,13 +296,13 @@ V1 fixtures include **one estate, two formats** to pressure-test the pattern eve
 - PCR gate, Staff OR Manager sign, fail → waste + remake path
 - At least one `on-demand` ad-hoc PCR item demoed
 - Range + tier with selection tags, 2 ranges, 2 tiers, ≥ 1 stacked tier-day, per-run + per-phase + custom window intra-day examples
-- Carry-over entry (Quinn-drafted, Manager-confirmed)
+- Carry-over entry (Edify-drafted, Manager-confirmed)
 - SPOKE submission stub (one spoke, one cutoff render, one unlock demo)
-- Quinn settings-interview stub ("new site opens" flow)
+- Edify settings-interview stub ("new site opens" flow)
 - Settings-health dashboard with 5 representative stale items
 - One AssemblyRecipe demo (e.g. Club Sandwich = bread + filling sub-recipes)
 - Manager / Staff role split
-- Quinn panels with "drafted → you approve" on every surface
+- Edify panels with "drafted → you approve" on every surface
 
 **Out of scope for slice C (later slices):**
 - Full forecast detail UI (drivers visible, not editable)
@@ -332,7 +332,7 @@ Follows conventions in [app/](app/) and [components/](components/).
 - `/production/spoke` — SPOKE submission surface
 - `/production/ranges`, `/production/tiers` — assortment management (read-mostly in V1)
 - `/production/settings` — settings-health dashboard
-- `/production/setup` — Quinn interview flow (new-site stub)
+- `/production/setup` — Edify interview flow (new-site stub)
 
 **Components (new, under `components/Production/`):**
 - `KitchenBoard.tsx`, `BenchRow.tsx`, `BatchBlock.tsx`, `IncrementCadence.tsx`, `StageBlock.tsx`
@@ -350,7 +350,7 @@ Follows conventions in [app/](app/) and [components/](components/).
 - PCR sign-off → [app/checklists/](app/checklists/) primitives
 - Failed batch → [app/log-waste/](app/log-waste/) flow
 - Transfer/GRN shape → mirror [app/invoices/](app/invoices/) and [app/purchase-orders/](app/purchase-orders/) when that slice lands
-- Quinn chat pattern → align with existing briefing / nudge surfaces in [components/Feed/](components/Feed/)
+- Edify chat pattern → align with existing briefing / nudge surfaces in [components/Feed/](components/Feed/)
 - **Design tokens + interaction shapes** → do not rebuild. Pull from the established system per [DESIGN-PRINCIPLES.md](DESIGN-PRINCIPLES.md) Look & Feel Reference:
   - Status pills (`green / amber / red`) on every list item with state — same anatomy as invoice-matching, GRN, waste
   - `+/−` stepper for any numeric adjust (planned qty, batch size, increment cadence qty, carry-over override)
@@ -380,11 +380,11 @@ Single `components/Production/fixtures.ts`:
 - **Ranges:** `range-core`, `range-brunch` (09:00–13:00 Sun only), `range-airport-commuter` (airport format only)
 - **Tiers:** `tier-weekday` = `[range-core]`; `tier-weekend` = `[range-core, range-brunch]`; `tier-airport` = `[range-core, range-airport-commuter]`
 - **SiteTierAssignments:** day-of-week grid per site
-- **Carry-over:** yesterday's close-of-day for 3 recipes; Quinn-drafted adjustment ready to approve
+- **Carry-over:** yesterday's close-of-day for 3 recipes; Edify-drafted adjustment ready to approve
 - **PCR scenarios:** one pass, one fail-and-remake, one `on-demand` ad-hoc item
-- **SPOKE submission:** `site-spoke-south` submitting for tomorrow; cutoff in 4 hours; Quinn-drafted selection ready to approve
+- **SPOKE submission:** `site-spoke-south` submitting for tomorrow; cutoff in 4 hours; Edify-drafted selection ready to approve
 - **Settings health:** 5 seeded stale items (one unused tier, one site with no cutoff, one bench idle 60 days, one range 10 months stale, one recipe with no `closingRange`)
-- **Quinn setup interview:** pre-seeded "new airport site opens" scenario; interview offers airport-format template + asks site-type + hours + hub
+- **Edify setup interview:** pre-seeded "new airport site opens" scenario; interview offers airport-format template + asks site-type + hours + hub
 
 ---
 
@@ -406,7 +406,7 @@ Single `components/Production/fixtures.ts`:
 ## Open threads (deferred on purpose)
 
 - **Product overlay** (richer than AssemblyRecipe): SKU wraps assemblies + workflow + PCR shape. Revisit when menu work demands it.
-- **Full role model** (supervisor / scheduler / merchandiser / estate-admin / site-manager / site-staff / Quinn). Revisit after V1 ships.
+- **Full role model** (supervisor / scheduler / merchandiser / estate-admin / site-manager / site-staff / Edify). Revisit after V1 ships.
 - **Parallel / branching workflows** — data shape ready; UI deferred.
 - **Typed transfer variances** — partial / damaged / short-dated / re-dispatch.
 - **Hub modification of spoke quantities** with mandatory reason + audit trail.
@@ -428,11 +428,11 @@ Single `components/Production/fixtures.ts`:
 6. **Mode spread.** Run / variable / increment visually distinct. Tap-to-focus for increment cadence.
 7. **PCR gate + ad-hoc types.** `PCRGate` using checklist primitives. One on-demand demo.
 8. **Failed batch → waste.** Route fail path through [app/log-waste/](app/log-waste/).
-9. **Carry-over.** `CarryOverSheet` — Quinn-drafted, Manager-confirmed.
+9. **Carry-over.** `CarryOverSheet` — Edify-drafted, Manager-confirmed.
 10. **SPOKE submission stub.** `SpokeSubmission` + `CutoffMarker`.
-11. **Quinn setup interview stub.** `QuinnSetupChat` — one "new site opens" flow.
+11. **Edify setup interview stub.** `QuinnSetupChat` — one "new site opens" flow.
 12. **Settings health dashboard.** 5 stale items rendered with remediation actions.
-13. **Quinn daily-ops panel.** `QuinnProductionPanel` — nudges threaded through every surface.
+13. **Edify daily-ops panel.** `QuinnProductionPanel` — nudges threaded through every surface.
 14. **Role gating.** Staff read-only on planning; full on log/tick-off + PCR sign.
 
 Stop at step 14 for slice C. Evaluate before extending into slice D.
@@ -440,7 +440,7 @@ Stop at step 14 for slice C. Evaluate before extending into slice D.
 **Acceptance bar on every step.** Before a step is "done":
 
 - Pass the 30-second test (a harried manager on a mounted tablet, floury hands, can complete the primary action).
-- Quinn's draft is pre-populated — no blank-form starts anywhere.
+- Edify's draft is pre-populated — no blank-form starts anywhere.
 - Status pill visible for every stateful item.
 - Green success banner + summary at flow completion.
 - Reuses existing tokens, steppers, pills — no new interaction shapes.

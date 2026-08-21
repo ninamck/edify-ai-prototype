@@ -129,12 +129,12 @@ commit"_, which is the moment we most need them to slow down.
 
 ---
 
-## Branding: Edify, not Quinn
+## Branding: Edify, not Edify
 
 **Decision.** All assistant-facing labels read "Edify". Removed the
 model-name button entirely from the composer.
 
-**Reasoning.** "Quinn" was an internal codename leaking into the
+**Reasoning.** "Edify" was an internal codename leaking into the
 product. Operators don't pick a model, so a model picker is noise.
 One name across header, chat bubble label, and signature reads as one
 product.

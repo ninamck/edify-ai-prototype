@@ -7,3 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 # Design principles
 
 Before building or editing any screen, read `DESIGN-PRINCIPLES.md` in this directory. It defines the operator-first mindset (fewer clicks, smart defaults, conversational-over-transactional, pill multi-select, +/− steppers, status-always-visible) and the look & feel tokens. Every new screen must pass the tests at the end of each principle.
+
+# Product voice
+
+Before writing any user-facing copy (labels, subtitles, chat messages, receipts, empty states, errors), read `EDIFY-PRODUCT-VOICE.md` in this directory and follow its prompt block. The two rules broken most often: the AI is Edify speaking, never named Quinn in anything a user sees (internal code identifiers like `role: 'quinn'` and `QuinnInsightButton` are rename-pending and fine to keep); and no em dashes in product copy — use commas, colons, or full stops.

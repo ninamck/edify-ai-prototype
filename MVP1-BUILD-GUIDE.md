@@ -22,14 +22,14 @@ When Claude Code starts veering off the spec, paste the relevant phase section b
 
 **Three concentric layers stacked on the same page:**
 
-1. **Greeting + Ask Quinn bar.** Time- and role-aware "Good morning, X". A conversation entry-point bar (Quinn = the AI assistant) with three pre-baked suggestion pills and a primary "Ask Quinn" CTA.
+1. **Greeting + Ask Edify bar.** Time- and role-aware "Good morning, X". A conversation entry-point bar (Edify = the AI assistant) with three pre-baked suggestion pills and a primary "Ask Edify" CTA.
 2. **Tab strip.** First tab is the role-specific **Dashboard** (a curated grid of charts/KPIs). Subsequent tabs are user-built **Views** that mix tables and pinned charts. There is one default seeded View ("Reports" with the flash-report table). Users add more, rename via double-click, remove via hover-X.
 3. **Content area.** Either renders the dashboard grid (with edit mode for drag/reorder/show-hide/half-or-full-width) or a vertically stacked list of table cards + chart cards belonging to the active View.
 
-**Quinn integration (the headline feature):**
+**Edify integration (the headline feature):**
 
-- Anywhere the user might want a new chart or table, an `Add insight` button opens **Quinn as a right-anchored side-sheet**.
-- The side-sheet has two modes: **Browse** (a curated question library, filterable by topic + by chart-vs-table) and **Chat** (Quinn replies, can preview a chart or a draft table, user pins it to dashboard / current view / new view).
+- Anywhere the user might want a new chart or table, an `Add insight` button opens **Edify as a right-anchored side-sheet**.
+- The side-sheet has two modes: **Browse** (a curated question library, filterable by topic + by chart-vs-table) and **Chat** (Edify replies, can preview a chart or a draft table, user pins it to dashboard / current view / new view).
 - The side-sheet keeps the underlying page visible — never a full-screen modal.
 
 **Persistence:** localStorage only for the prototype. Layout (per role) and tabs (with their tables and pinned charts) persist between reloads. Real DB persistence is a follow-up.
@@ -60,7 +60,7 @@ Define these as CSS variables in `app/globals.css` (or equivalent) and use them 
 ```css
 :root {
   --color-accent-active: #224444;   /* primary buttons, selected pills */
-  --color-accent-deep:   #1a3636;   /* Quinn surfaces, hover on primary */
+  --color-accent-deep:   #1a3636;   /* Edify surfaces, hover on primary */
   --color-accent-mid:    #2c5454;   /* mid-accent for chart series */
 
   --color-bg-surface:    #FFFFFF;   /* page background */
@@ -138,10 +138,10 @@ components/
       SalesTrendChart.tsx
       ... (one file per chart type, see §7)
     QuinnInsightButton.tsx         # popover with "why this matters" reasoning
-  Quinn/
+  Edify/
     AddInsightPopup.tsx            # the side-sheet
     QuestionLibraryPicker.tsx      # browse mode
-    ChatPanel.tsx                  # chat mode (Quinn dialogue + preview)
+    ChatPanel.tsx                  # chat mode (Edify dialogue + preview)
   Analytics/
     AnalyticsCharts.tsx            # ANALYTICS_CONFIG + renderAnalyticsChart()
 
@@ -160,7 +160,7 @@ data/
 hooks/
   useInsightsTabs.ts               # tab CRUD + localStorage persistence
   useDashboardLayout.ts            # layout per role + persistence + pinned-chart helpers
-  useConversationHistory.ts        # recent Quinn conversations
+  useConversationHistory.ts        # recent Edify conversations
   useMediaQuery.ts
 ```
 
@@ -239,8 +239,8 @@ Always validate the stored shape on read (a permissive type guard) and fall back
 │  d  │                                                                      │
 │  e  │   "Good morning, Ed"   ←  hero greeting                               │
 │  b  │                                                                      │
-│  a  │   ┌─ Ask Quinn bar ─────────────────────────────────────────────┐    │
-│  r  │   │ 💬  Add your next chart   [pill] [pill] [pill]   [Ask Quinn]│    │
+│  a  │   ┌─ Ask Edify bar ─────────────────────────────────────────────┐    │
+│  r  │   │ 💬  Add your next chart   [pill] [pill] [pill]   [Ask Edify]│    │
 │     │   └─────────────────────────────────────────────────────────────┘    │
 │  ( i│                                                                      │
 │  c  │   [Dashboard] [Reports] [View 2] [+]    ←  tab strip                 │
@@ -254,7 +254,7 @@ Always validate the stored shape on read (a permissive type guard) and fall back
 └─────┴──────────────────────────────────────────────────────────────────────┘
 
   ↘ Add insight button → right-anchored side-sheet (540px)
-                          [Browse library] ↔ [Chat with Quinn]
+                          [Browse library] ↔ [Chat with Edify]
                           Pin to: dashboard | current view | new view
 ```
 
@@ -266,14 +266,14 @@ Key constraints:
 
 ---
 
-## 4. Quinn's voice & UX rules
+## 4. Edify's voice & UX rules
 
-Quinn is the AI assistant. The whole product is built around the assumption that **Quinn drafts, the operator approves**. Some rules to keep her behaviour consistent across surfaces:
+Edify is the AI speaking, not a named assistant. The whole product is built around the assumption that **Edify drafts, the operator approves**. Some rules to keep its behaviour consistent across surfaces:
 
-1. **One question at a time.** No multi-step forms inside a Quinn message.
+1. **One question at a time.** No multi-step forms inside a Edify message.
 2. **Tappable choices over typed answers.** Pills, +/− steppers, and inline buttons before free-text inputs.
-3. **Show the math.** When Quinn states a number, she also shows where it came from ("£1,842 — that's 9 sites × £204 avg"). The `reasoning` field on each chart entry is rendered through a popover (`QuinnInsightButton`) and supports markdown bold.
-4. **Drafts not finals.** Anything Quinn produces is a draft until pinned. Pinning is the commit. The "session pin" state must persist between Browse and Chat modes within one session.
+3. **Show the math.** When Edify states a number, it also shows where it came from ("£1,842 — that's 9 sites × £204 avg"). The `reasoning` field on each chart entry is rendered through a popover (`QuinnInsightButton`) and supports markdown bold.
+4. **Drafts not finals.** Anything Edify produces is a draft until pinned. Pinning is the commit. The "session pin" state must persist between Browse and Chat modes within one session.
 5. **Cancellable.** The side-sheet is dismissable via Esc or backdrop click. Esc within Chat mode goes back to Browse first; another Esc closes.
 6. **Recent conversations persist.** A conversation is saved to history if it included ≥1 user message OR ≥1 pin. Picking from history rehydrates the chart preview/table — does not replay messages.
 
@@ -357,7 +357,7 @@ Each phase below is a **discrete prompt** you can paste into Claude Code. Each e
 
 ---
 
-### Phase 2 — Greeting + Ask Quinn bar
+### Phase 2 — Greeting + Ask Edify bar
 
 **Goal:** the page heading and the conversational entry-point bar.
 
@@ -369,9 +369,9 @@ Each phase below is a **discrete prompt** you can paste into Claude Code. Each e
 >
 > **AskQuinnBar** (`components/Insights/AskQuinnBar.tsx`):
 > - Card with 1px border `var(--color-border-subtle)`, radius 12px, padding `10px 14px`, min-height 64px.
-> - Layout (left → right): square 36×36 accent-filled icon tile (lucide `MessageSquare`, 18px, white), then a 2-line label block ("Add your next chart" 13px/700 + "Ask me anything about your data — I'll draw it, then you can pin it here." 12px/muted), then a flex spacer, then 3 suggestion pills, then the primary "Ask Quinn" CTA.
+> - Layout (left → right): square 36×36 accent-filled icon tile (lucide `MessageSquare`, 18px, white), then a 2-line label block ("Add your next chart" 13px/700 + "Ask me anything about your data — I'll draw it, then you can pin it here." 12px/muted), then a flex spacer, then 3 suggestion pills, then the primary "Ask Edify" CTA.
 > - Suggestion pills: `'Labour % by hour'`, `'Waste trend last 4 weeks'`, `'Site comparison'`. Each is a 100px-radius pill with sparkle icon, hover changes bg to `var(--color-bg-hover)`.
-> - Primary CTA: 100px-radius accent-filled button (sparkle icon + "Ask Quinn"), white text, drop shadow `0 2px 8px rgba(34,68,68,0.25)`.
+> - Primary CTA: 100px-radius accent-filled button (sparkle icon + "Ask Edify"), white text, drop shadow `0 2px 8px rgba(34,68,68,0.25)`.
 > - Below 900px viewport, hide the suggestion pills (CSS media query, `display: none !important`).
 >
 > The `onAsk(seed?: string)` prop is called with the suggestion text (or undefined for the main button). Wire it to a no-op for now — we'll hook it to the side-sheet in Phase 8.
@@ -457,7 +457,7 @@ Each phase below is a **discrete prompt** you can paste into Claude Code. Each e
 > ];
 > ```
 >
-> The `id` is either a built-in widget id (in the layout above) **or** a `pinned:<chartId>` id when a Quinn chart has been pinned to the dashboard.
+> The `id` is either a built-in widget id (in the layout above) **or** a `pinned:<chartId>` id when a Edify chart has been pinned to the dashboard.
 >
 > **Hook:** `useDashboardLayout()` exposes `{ layoutByRole, setLayoutForRole, addPinnedChart, removePinnedChart }`, persists to `edify:insights:layoutByRole:v1`. Defaults: `manager` and `employee` use `MANAGER_DEFAULT_LAYOUT`, `admin` uses `ESTATE_DEFAULT_LAYOUT` (define a stub for now).
 >
@@ -585,20 +585,20 @@ Each phase below is a **discrete prompt** you can paste into Claude Code. Each e
 > - Cells formatted via `formatCell(value, column.type)` from §2.5.
 >
 > **TableCard** (`Views/TableCard.tsx`):
-> - Wraps `DataTable` with a header row showing: editable title (double-click to rename, fallback "Sales 2"), a small origin label (`· From: <library question>` or `· Asked Quinn: <prompt>`), a pencil "Edit query" icon button (opens Quinn chat seeded with the table — Phase 9), and a trash icon (when removable).
+> - Wraps `DataTable` with a header row showing: editable title (double-click to rename, fallback "Sales 2"), a small origin label (`· From: <library question>` or `· Asked Edify: <prompt>`), a pencil "Edit query" icon button (opens Edify chat seeded with the table — Phase 9), and a trash icon (when removable).
 > - Runs `runQuery(instance.query)` (Phase 7) on mount to load rows + columns. Shows DataTable's loading state while pending.
 >
 > **ChartCard** (`Views/ChartCard.tsx`):
 > - Card wrapper with header (title + origin label + remove) and body that renders the chart via `renderAnalyticsChart(chartId)`. We'll build the analytics charts in Phase 8.
 >
 > **ViewTab** (`Views/ViewTab.tsx`):
-> - Props: `tables`, `charts`, `onChange` (table list), `onChartsChange`, plus action callbacks (`onAskQuinn`, `onBrowseLibrary`, `onOpenBuilder`, `onEditQuery`).
+> - Props: `tables`, `charts`, `onChange` (table list), `onChartsChange`, plus action callbacks (`onAskEdify`, `onBrowseLibrary`, `onOpenBuilder`, `onEditQuery`).
 > - When both tables and charts are empty, render an `EmptyState` with three choice cards:
->   - "Ask Quinn" — sparkle icon — "Describe the table you want in your own words." → calls `onAskQuinn`.
+>   - "Ask Edify" — sparkle icon — "Describe the table you want in your own words." → calls `onAskEdify`.
 >   - "Pick a question" — list-checks icon — "Start from a curated table-shaped question." → calls `onBrowseLibrary`.
->   - "Build from scratch" — database icon — "Quinn opens with a starter table you can refine in chat." → calls `onOpenBuilder`.
+>   - "Build from scratch" — database icon — "Edify opens with a starter table you can refine in chat." → calls `onOpenBuilder`.
 >   - Plus a dashed "Or just add a blank table" button below.
-> - When non-empty, render the cards in order (tables first, then charts), then a footer row of small `[+ Add table]`, `[Pick a question]`, `[Ask Quinn]` chip buttons.
+> - When non-empty, render the cards in order (tables first, then charts), then a footer row of small `[+ Add table]`, `[Pick a question]`, `[Ask Edify]` chip buttons.
 >
 > **Page layout** for an active View tab in `InsightsShell`:
 > - H2 with the tab name, on a row with `DashboardEditToolbar` (`editing` is local to tables view; we won't actually use editing mode for tables in MVP 1, but include the toolbar for consistency — it's the entry point for the date picker + Add insight).
@@ -764,7 +764,7 @@ Each phase below is a **discrete prompt** you can paste into Claude Code. Each e
 >
 > Hardcode mock data for each chart (rough plausible numbers — real data integration later). For each chart id, export:
 > - A render function: `renderAnalyticsChart(id: AnalyticsChartId): ReactNode` (uses Recharts).
-> - An entry in `ANALYTICS_CONFIG: Record<AnalyticsChartId, { label: string; chartLabel: string; reasoning: string }>`. `label` is the card title, `chartLabel` is what Quinn says before drawing it ("Here's total sales by site for last week..."), `reasoning` is the markdown-bold explanation popped from the QuinnInsightButton.
+> - An entry in `ANALYTICS_CONFIG: Record<AnalyticsChartId, { label: string; chartLabel: string; reasoning: string }>`. `label` is the card title, `chartLabel` is what Edify says before drawing it ("Here's total sales by site for last week..."), `reasoning` is the markdown-bold explanation popped from the QuinnInsightButton.
 >
 > Use the prototype's `ANALYTICS_CONFIG` as a starting point — it has good copy for all 20 charts. Charts should be ~220px tall by default.
 >
@@ -796,7 +796,7 @@ Each phase below is a **discrete prompt** you can paste into Claude Code. Each e
 >
 > Seed at least 8 questions per segment. Five tagged as table-shape per segment (return a real `TableQuery`); the rest as chart-shape (with `suggestedChartId`). A handful flagged as `both`.
 >
-> **AddInsightPopup — Browse mode** (`components/Quinn/AddInsightPopup.tsx`):
+> **AddInsightPopup — Browse mode** (`components/Edify/AddInsightPopup.tsx`):
 >
 > - Right-anchored side-sheet (see §3 for dimensions and motion).
 > - Backdrop: `rgba(3, 28, 89, 0.08)` (very subtle), no blur.
@@ -812,12 +812,12 @@ Each phase below is a **discrete prompt** you can paste into Claude Code. Each e
 >   - Pill row with the question text + a `→` arrow on hover.
 >   - If chart-shape, a tiny "chart" icon at the right; if table, "table" icon; if both, both.
 >   - If the chart is already pinned in the current view, render greyed out with a "Pinned" tag.
->   - Click → if chart-shape, transition to chat mode seeded with the question text (so Quinn explains and lets the user pin); if table-shape, call `onPickTable(entry, query)` which appends the table to the current View and closes the panel.
+>   - Click → if chart-shape, transition to chat mode seeded with the question text (so Edify explains and lets the user pin); if table-shape, call `onPickTable(entry, query)` which appends the table to the current View and closes the panel.
 >   - If `both`, prompt the user inline: "Which would you like — a chart or a table?" with two buttons.
 > - Footer: "Recent" section with a list of past conversations (Phase 12). Click to resume.
 
 **Acceptance criteria:**
-- Clicking the Ask Quinn primary button or any suggestion pill opens the side-sheet from the right.
+- Clicking the Ask Edify primary button or any suggestion pill opens the side-sheet from the right.
 - Browse mode shows the segment + shape filter and updates the list as you change them.
 - Clicking a table-shape question adds a TableCard to the active View tab (seeded query) and closes the panel.
 
@@ -825,21 +825,21 @@ Each phase below is a **discrete prompt** you can paste into Claude Code. Each e
 
 ### Phase 9 — AddInsightPopup chat mode + chart pinning
 
-**Goal:** the conversational half of Quinn — she previews a chart or table and the user decides what to do with it.
+**Goal:** the conversational half of Edify — it previews a chart or table and the user decides what to do with it.
 
 **Prompt for Claude:**
 
-> **ChatPanel** (`components/Quinn/ChatPanel.tsx`) — rendered inside `AddInsightPopup` when `mode === 'chat'`:
+> **ChatPanel** (`components/Edify/ChatPanel.tsx`) — rendered inside `AddInsightPopup` when `mode === 'chat'`:
 >
-> - Conversation list: alternating Quinn (left, neutral background, sparkle avatar) and User (right, accent bubble).
-> - Initial state when entered from a question pick: Quinn says `chartLabel` (or a table-pitch line) and renders the preview inline.
+> - Conversation list: alternating Edify (left, neutral background, sparkle avatar) and User (right, accent bubble).
+> - Initial state when entered from a question pick: Edify says `chartLabel` (or a table-pitch line) and renders the preview inline.
 >   - Chart preview: `renderAnalyticsChart(chatChartId)` inside a 220px-tall card.
 >   - Table preview: a mini-DataTable showing the first ~10 rows of `runQuery(chatTableQuery)`, with a "Open full table" link.
 > - Below the preview, an action row:
 >   - **For chart preview:** `[Pin to <target>]` button. If we have multiple pin targets (Phase 10), it's a dropdown. After pinning, swap to `[✓ Pinned]` (disabled) and add an inline "View dashboard" link if pinned to dashboard.
 >   - **For table preview:** `[Pin to current view]` (default), `[Open in new view]` (secondary).
 > - Sticky chat input at the bottom: textarea-styled input with sparkle icon + Send. Pressing Enter submits.
-> - Response simulation: when the user sends a message, append a Quinn reply that acknowledges and either (a) re-renders the same chart with a different parameter, (b) pivots to a different chart, or (c) for the prototype, just appends a canned "Updated — here's the latest cut" with a chart swap.
+> - Response simulation: when the user sends a message, append a Edify reply that acknowledges and either (a) re-renders the same chart with a different parameter, (b) pivots to a different chart, or (c) for the prototype, just appends a canned "Updated — here's the latest cut" with a chart swap.
 > - Track `userMessageCount` and `pinnedCount` in local state for the conversation-history rules.
 >
 > **Pin handlers in InsightsShell:**
@@ -930,7 +930,7 @@ Each phase below is a **discrete prompt** you can paste into Claude Code. Each e
 
 ### Phase 12 — Recent conversations
 
-**Goal:** Quinn remembers what the user asked about across sessions.
+**Goal:** Edify remembers what the user asked about across sessions.
 
 **Prompt for Claude:**
 
@@ -997,7 +997,7 @@ Each phase below is a **discrete prompt** you can paste into Claude Code. Each e
 > 3. **Focus visible** rings on tab/pill/button focus states (CSS `:focus-visible`).
 > 4. **localStorage migration:** if the schema changes mid-development, bump version suffix and write a migration in the hook's `loadStored()`.
 > 5. **Mobile breakpoint:** below 500px, render a stub `<MobileShell />` (a placeholder with a friendly "Insights is desktop-only for now" message; we'll do mobile properly later).
-> 6. **Test the demo path:** open `/insights`, switch role pill `Manager → Admin → Manager`, switch phase `Auto → Morning → Evening`, confirm dashboard data shifts. Add a View tab, drop a chart from Quinn into it, drop a table, rename, remove — all persists.
+> 6. **Test the demo path:** open `/insights`, switch role pill `Manager → Admin → Manager`, switch phase `Auto → Morning → Evening`, confirm dashboard data shifts. Add a View tab, drop a chart from Edify into it, drop a table, rename, remove — all persists.
 >
 > Run `npm run lint` and `npm run build`. Both should pass.
 
@@ -1019,9 +1019,9 @@ Tick every box before declaring MVP 1 done.
 - [ ] Role pills swap dashboard between Manager and Admin (Estate) layouts.
 - [ ] Below 500px viewport, a stub MobileShell renders.
 
-### Greeting + Ask Quinn bar
+### Greeting + Ask Edify bar
 - [ ] Hero greeting `"Good {time-of-day}, {name}"` driven by phase and role.
-- [ ] AskQuinnBar: 36px accent icon tile, label, three suggestion pills, primary "Ask Quinn" CTA.
+- [ ] AskQuinnBar: 36px accent icon tile, label, three suggestion pills, primary "Ask Edify" CTA.
 - [ ] Suggestion pills hide below 900px.
 - [ ] Clicking the CTA or any pill opens the AddInsightPopup.
 
@@ -1039,7 +1039,7 @@ Tick every box before declaring MVP 1 done.
 - [ ] Edit toolbar: date range picker pill + Edit/Done toggle + Add insight CTA.
 - [ ] 2-column grid with default widgets: ShiftKpiRow, HourlyCombo, WeatherStrip, ChecklistComplianceCard, WasteCard, DeliveriesCard.
 - [ ] Each widget renders correctly with mock data; updates as phase changes.
-- [ ] Pinned charts appear with the `📌 ` prefix and a Quinn reasoning popover.
+- [ ] Pinned charts appear with the `📌 ` prefix and a Edify reasoning popover.
 
 ### Dashboard tab — Estate (Admin)
 - [ ] Layout: date filter row, KPI grid, sales trend, checklist compliance, site GP, wastage, COGS variance, labour vs sales.
@@ -1053,9 +1053,9 @@ Tick every box before declaring MVP 1 done.
 - [ ] Trash icon only on pinned charts; removing also deletes from the role's pin list.
 
 ### View tabs
-- [ ] Empty state shows three choice cards: Ask Quinn / Pick a question / Build from scratch + dashed "blank table" fallback.
+- [ ] Empty state shows three choice cards: Ask Edify / Pick a question / Build from scratch + dashed "blank table" fallback.
 - [ ] Each choice routes to the right side-sheet mode/state.
-- [ ] Footer chip row: `+ Add table`, `Pick a question`, `Ask Quinn`.
+- [ ] Footer chip row: `+ Add table`, `Pick a question`, `Ask Edify`.
 - [ ] TableCards render with title (double-click to rename), origin label, edit-query pencil, remove icon, and a fully working DataTable.
 - [ ] ChartCards render with title, origin label, remove icon, and a Recharts chart.
 - [ ] Tables persist across reloads (per tab).
@@ -1083,7 +1083,7 @@ Tick every box before declaring MVP 1 done.
 - [ ] Browse mode: chat input on top, shape filter pills, segment tabs (with subsegment row for Production), question chips.
 - [ ] Already-pinned chips render greyed with "Pinned" tag.
 - [ ] Recent conversations render at the bottom; clicking resumes.
-- [ ] Chat mode: Quinn intro line + chart-or-table preview, action row (Pin / Open in new view / etc.).
+- [ ] Chat mode: Edify intro line + chart-or-table preview, action row (Pin / Open in new view / etc.).
 - [ ] Pin button (chart): split-button with dropdown of all pin targets + "+ New view".
 - [ ] Pin a chart to a View → appears as a ChartCard in that View.
 - [ ] Pin a chart to Dashboard → appears as a pinned widget in the role's layout.
@@ -1104,7 +1104,7 @@ Tick every box before declaring MVP 1 done.
 - [ ] Recent conversations persist (`edify:insights:conversations:v1`), capped at 30.
 - [ ] All readers validate shape and fall back to defaults on parse fail.
 
-### Quinn voice & UX
+### Edify voice & UX
 - [ ] Reasoning popovers (`QuinnInsightButton`) on every pinned chart and dashboard chart, rendering markdown bold.
 - [ ] Pin-confirm copy: "Added to {target name}".
 - [ ] Drafts are visible (chat preview) before commit (pin).
@@ -1142,9 +1142,9 @@ Tick every box before declaring MVP 1 done.
 | `AnalyticsCharts` | `components/Analytics/AnalyticsCharts.tsx` | `ANALYTICS_CONFIG` + `renderAnalyticsChart()` (the canonical chart catalogue). | No |
 | `ViewTab`, `TableCard`, `ChartCard`, `EmptyState` | `components/Insights/Views/` | View-tab content. | No |
 | `DataTable` | `components/Insights/Views/DataTable.tsx` | Generic Tanstack-table renderer. | No |
-| `AddInsightPopup` | `components/Quinn/AddInsightPopup.tsx` | Side-sheet shell, mode switch (browse / chat). | No |
-| `QuestionLibraryPicker` | `components/Quinn/QuestionLibraryPicker.tsx` | Browse mode — search + filters + chip list + recents. | No |
-| `ChatPanel` | `components/Quinn/ChatPanel.tsx` | Chat mode — conversation + preview + pin actions. | No |
+| `AddInsightPopup` | `components/Edify/AddInsightPopup.tsx` | Side-sheet shell, mode switch (browse / chat). | No |
+| `QuestionLibraryPicker` | `components/Edify/QuestionLibraryPicker.tsx` | Browse mode — search + filters + chip list + recents. | No |
+| `ChatPanel` | `components/Edify/ChatPanel.tsx` | Chat mode — conversation + preview + pin actions. | No |
 | `useInsightsTabs` | `hooks/useInsightsTabs.ts` | Tabs CRUD + persistence. | No |
 | `useDashboardLayout` | `hooks/useDashboardLayout.ts` | Layout per role + pin/unpin. | No |
 | `useConversationHistory` | `hooks/useConversationHistory.ts` | Recent conversations store. | No |
@@ -1197,7 +1197,7 @@ Out of scope but worth flagging now so the architecture leaves room:
 
 - **Multi-user layouts:** layouts are per-role for now. Real users want per-user. Plan: add a `userId` axis to `useDashboardLayout` once auth is in.
 - **Real-time updates:** revalidate on a heartbeat (e.g. SWR with a 30s revalidation) and lift the cache out of each loader.
-- **Chart builder UI:** today, custom charts only happen via Quinn chat. A direct "Build chart" form (metric → window → viz) is a fast-follow.
+- **Chart builder UI:** today, custom charts only happen via Edify chat. A direct "Build chart" form (metric → window → viz) is a fast-follow.
 - **Mobile dashboard:** today the page falls back to a stub MobileShell. Real mobile is a card-stack version of the same widgets.
 - **Server-side query push-down:** for prod data >10k rows, swap `runQuery(query)` for `fetch('/api/query', { method: 'POST', body: JSON.stringify(query) })` — same shape, different transport.
 - **Sharing & export:** "Export this view to CSV", "Share dashboard link with a colleague" — uncomplicated additions once persistence is server-side.

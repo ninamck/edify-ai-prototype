@@ -8,7 +8,7 @@ Context for future sessions on this prototype. Pair with `AGENTS.md` (which remi
 
 ## What the prototype is
 
-A mobile-friendly prototype of **Edify's floor-ops + insights experience** for a coffee-shop estate. Scenario is Fitzroy Espresso. All data is fixture-driven, no backend. Aim is to iterate on **how Quinn (the AI assistant) integrates into a real operator's day** — what it surfaces, when, and how actions get logged.
+A mobile-friendly prototype of **Edify's floor-ops + insights experience** for a coffee-shop estate. Scenario is Fitzroy Espresso. All data is fixture-driven, no backend. Aim is to iterate on **how Edify (the AI assistant) integrates into a real operator's day** — what it surfaces, when, and how actions get logged.
 
 ## Core mental model
 
@@ -20,7 +20,7 @@ Three axes combine to drive content across the whole app:
 | **Phase** | `morning`, `midday`, `afternoon`, `evening` | `components/briefing.ts` → `BriefingPhase` |
 | **Shell view** | `command-centre`, `dashboard` | `components/ShellTopBar.tsx` → `ShellViewMode` |
 
-Role + Phase together select what Quinn shows (briefing items, close nudges, dashboard numbers). Phase also drives the dashboard's "sales so far", bar chart fill, delivery statuses, weather actuals.
+Role + Phase together select what Edify shows (briefing items, close nudges, dashboard numbers). Phase also drives the dashboard's "sales so far", bar chart fill, delivery statuses, weather actuals.
 
 **Source of truth for phase lives in `HomeShell`** and flows down. There's a hidden clock-icon switcher in the top bar ([PhaseSwitcher.tsx](components/PhaseSwitcher.tsx)) that lets you override phase for demos (Auto / Morning / Midday / Afternoon / Evening). Dashed teal border = override active.
 
@@ -31,11 +31,11 @@ Role + Phase together select what Quinn shows (briefing items, close nudges, das
 - [components/HomeShell.tsx](components/HomeShell.tsx) — holds `phaseOverride` + `shellView` + `briefingRole` state; renders MobileShell below 430px
 - [components/ShellTopBar.tsx](components/ShellTopBar.tsx) — site switcher, shell view pills (Command centre / Dashboard), role pills, PhaseSwitcher clock icon
 - [components/MobileShell/MobileShell.tsx](components/MobileShell/MobileShell.tsx) — mobile-specific shell
-- [components/MobileShell/MobileBottomNav.tsx](components/MobileShell/MobileBottomNav.tsx) — bottom tab bar (Receive / Checklists / Tasks / Log waste / Quinn)
+- [components/MobileShell/MobileBottomNav.tsx](components/MobileShell/MobileBottomNav.tsx) — bottom tab bar (Receive / Checklists / Tasks / Log waste / Edify)
 
 ### Command centre
 - [components/FloorActionsBox.tsx](components/FloorActionsBox.tsx) — "On the floor" strip. `handleActionClick` has route switch for built-ins (checklists, receive-delivery, **log-waste**). Custom/unwired actions fall through — see focus area 1.
-- [components/Feed/Feed.tsx](components/Feed/Feed.tsx) — the Quinn chat entry point
+- [components/Feed/Feed.tsx](components/Feed/Feed.tsx) — the Edify chat entry point
 - [components/Feed/MorningBriefingTimeline.tsx](components/Feed/MorningBriefingTimeline.tsx) — right-hand briefing panel wrapper. Date + phase-aware title + body.
 - [components/Feed/MorningBriefingBody.tsx](components/Feed/MorningBriefingBody.tsx) — the big file. Contains all three role fixtures as `Record<BriefingPhase, InsightGroup[]>`, plus the renderer (`InsightFeed`, `InsightGroup`, `InsightCard`, `PinnedSection`). **Any content change for briefing copy lives here.**
 
@@ -132,7 +132,7 @@ Inside the table:
 - `TaxSelect` (still named `TaxSelect` internally but user-facing copy is VAT) shows an amber "Set VAT…" state when category is unknown
 
 ### Other routes
-- `/credit-notes` — list + detail slide-in (credit-notes feature). The Quinn banner on the detail panel has navy background — subtext is white there (fixed in earlier session).
+- `/credit-notes` — list + detail slide-in (credit-notes feature). The Edify banner on the detail panel has navy background — subtext is white there (fixed in earlier session).
 - `/receive`, `/checklists/*`, `/order-history`, `/assisted-ordering` — other floor actions.
 
 ---
@@ -141,11 +141,11 @@ Inside the table:
 
 **Phase-keyed fixtures.** When content varies by phase, model it as `Record<BriefingPhase, T>`. Examples: `ED_INSIGHTS`, `PREP_TODAY_BY_PHASE`. Not `T[]` with phase as a field.
 
-**Quinn's voice is "drafted → you approve".** Items should lead with what Quinn did, ask for a one-tap decision. Avoid generic reminders.
+**Edify's voice is "drafted → you approve".** Items should lead with what Edify did, ask for a one-tap decision. Avoid generic reminders.
 
 **Data-grounded nudges > pre-populated lists.** The close reconciliation card fires _only_ where `made - sold > 0`. It doesn't guess; it asks. Any new nudge should have a similar "here's the signal, here's the math" shape.
 
-**URL-driven state on transactional routes** (e.g. `/log-waste?itemId=...`). Makes deep linking from Quinn trivial and keeps React state minimal.
+**URL-driven state on transactional routes** (e.g. `/log-waste?itemId=...`). Makes deep linking from Edify trivial and keeps React state minimal.
 
 **Pills not dropdowns** for any small fixed set (reasons, UoM when >1, date quick-picks). See `WasteLogCard.Pill`.
 
@@ -221,17 +221,17 @@ Heavy work on the **invoice matching area** — what was one list + one match vi
 
 Rough chronology of what shipped:
 
-1. **Unified the Quinn insights panel.** Removed the two tabs (Insights / To Review), collapsed into a single feed with three purpose-based sections: `needs-call` (always open), `handled` (collapsible, green), `worth-knowing` (collapsible, amber). Added per-role seed content including receipts ("Overnight: 11 invoices auto-matched") and loop-narrative items ("Yesterday's warm spell pulled iced-drink cover down 3 days").
+1. **Unified the Edify insights panel.** Removed the two tabs (Insights / To Review), collapsed into a single feed with three purpose-based sections: `needs-call` (always open), `handled` (collapsible, green), `worth-knowing` (collapsible, amber). Added per-role seed content including receipts ("Overnight: 11 invoices auto-matched") and loop-narrative items ("Yesterday's warm spell pulled iced-drink cover down 3 days").
 2. **Pin an insight.** Pushpin icon top-right of each card. Pinned items float to a teal "Pinned · N" section at the top. State resets on phase change via `key` prop.
 3. **Widened the panel** from `clamp(340, 26vw, 420)` to `clamp(380, 30vw, 480)`.
 4. **Time-aware briefing label.** Morning / Midday / Afternoon / Evening titles + subtitles. Picks from clock by default.
 5. **Hidden demo phase switcher.** Clock icon (originally in briefing header, then moved to ShellTopBar after the Dashboard work). Menu: Auto + 4 phases. Dashed teal border when overridden.
 6. **Per-phase briefing content.** Each role × phase combo has its own items (~40 items per role across 4 phases). Same story evolves through the day — e.g. "Bidvest lands 11:10" (morning) → "just landed" (midday) → already done (afternoon/evening).
 7. **Phase-aware Dashboard.** `ManagerDashboard` now accepts `phase` prop. Full-day actuals for 12pm-9pm added; `FULL_DAY_ACTUALS` + `FULL_DAY_WEATHER_ACTUALS` reveal as phase advances. Deliveries statuses transition; waste scales morning→evening. Estate dashboard got subtitle tweaks (mostly stays MTD/7d).
-8. **Credit notes fix** — white text on navy Quinn banner (was `#6B5E55` which disappeared into the navy).
+8. **Credit notes fix** — white text on navy Edify banner (was `#6B5E55` which disappeared into the navy).
 9. **Log waste flow.**
    - `/log-waste` route with mobile-first design.
-   - Picker: Search + mic (placeholder) + "Likely to bin" (Quinn) + All products.
+   - Picker: Search + mic (placeholder) + "Likely to bin" (Edify) + All products.
    - Log card: big qty stepper, auto-UoM (pill when multi), reason pills (7), Today / Yesterday / Pick-a-date calendar pill, auto-computed value, Log + Log and add another.
    - Close reconciliation nudge at top of evening briefing: `made 12, sold 9 → [Waste 3] [Not waste]` per item. Uses the app's own prep+sales data.
    - Wired both desktop floor action + mobile bottom nav to route.
@@ -272,7 +272,7 @@ The "On the floor" strip ([FloorActionsBox.tsx](components/FloorActionsBox.tsx))
 - `transfer-stock` — needs a new route (see also focus 7 — CPU/production is adjacent)
 - Any custom actions the user creates from `EditFloorActionsPopup`
 
-Think about: does every custom action need a route, or can some be Quinn shortcuts (open chat pre-filled)? Consistent back behavior (all go to `/` on close, like log-waste does) will feel right.
+Think about: does every custom action need a route, or can some be Edify shortcuts (open chat pre-filled)? Consistent back behavior (all go to `/` on close, like log-waste does) will feel right.
 
 ### 2. Selecting multiple items to log waste at once
 **Open design question.** Worth discussing before building. Two candidate flows:
@@ -300,7 +300,7 @@ Affected files: [MorningBriefingBody.tsx](components/Feed/MorningBriefingBody.ts
 The current fixtures reference recurring orders ("Bidfood basket", "Fresh Direct 11am") but there's no UI model for the **pattern**. Next session ideas:
 - **Week-view calendar** — show the next 7-14 days of orders, recurring ones shaded differently, cut-off times marked
 - **Pattern editor** — "Bidfood every Mon/Thu by 2pm". Edit frequency, skip-next, change quantities on an instance without breaking the pattern
-- **Quinn role** — "You usually order 4 cases of milk on Monday; current stock trend suggests 5 this week"
+- **Edify role** — "You usually order 4 cases of milk on Monday; current stock trend suggests 5 this week"
 
 Affected/new files: probably a new `/orders` or `/schedule` route. Existing `/assisted-ordering` might be the seed — worth reviewing what's there first.
 
@@ -320,20 +320,20 @@ Existing pinning (chat → dashboard) at [HomeShell.tsx:166-168](components/Home
 
 ### 6. Count stock flow
 Shape is similar to Log waste: pick products, enter counts. Key differences:
-- **Expected count** — Quinn pre-fills par level or projected from yesterday's close + today's deliveries − today's sales
-- **Variance flag** — if actual ≠ expected by >tolerance, surface it (Quinn-drafted query to supplier, or waste-entry prompt)
+- **Expected count** — Edify pre-fills par level or projected from yesterday's close + today's deliveries − today's sales
+- **Variance flag** — if actual ≠ expected by >tolerance, surface it (Edify-drafted query to supplier, or waste-entry prompt)
 - **Stock take flows** — full vs partial counts, by section (drinks / pastry / lunch)
 - **Role** — usually opener or closer, so morning + evening phases matter most
 
 Reuse: `WasteLogPicker`'s tabbed + searchable catalog, pill-select, qty stepper. The `WASTE_PRODUCTS` shape could generalize to "tracked products".
 
-Possible route: `/stock-count`. Entry point: could be a new floor action or a Quinn-triggered flow.
+Possible route: `/stock-count`. Entry point: could be a new floor action or a Edify-triggered flow.
 
 ### 7. Production (new world) / CPU
 CPU = Central Production Unit. The screenshot the user shared earlier from the live Edify platform showed `(CPU) Blueberry Pecan Donut (Br)` as a product — CPU prefix signalled production-origin. Concepts to model:
 - **CPU produces, sites receive.** Production schedule at the CPU; transfers to sites.
 - **Site view** — "today's inbound from CPU: 24 donuts, 12 pastries, ETA 09:00"
-- **Quinn role** — forecast demand per site → suggest CPU production volumes → auto-build transfer manifests
+- **Edify role** — forecast demand per site → suggest CPU production volumes → auto-build transfer manifests
 - **Reconciliation** — what CPU sent vs what site received (transfer GRN, same shape as supplier GRN today)
 
 Big area. Worth a dedicated exploration pass before building — start by mapping the **real** flow the user's existing platform has, then decide what's worth prototyping here vs what's settled.

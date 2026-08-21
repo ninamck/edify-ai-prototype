@@ -9,7 +9,7 @@
 **Every unnecessary step is a cost.** Edify users are mid-service, dealing with deliveries, managing teams, and handling real problems. Every extra tap, confirmation screen, or navigation jump is time stolen from their actual job.
 
 - Decisions default to the most likely answer — users confirm or adjust, they don't fill in from blank
-- Smart defaults are pre-populated everywhere (Quinn pre-selects allergens, sites, product class, batch sizes)
+- Smart defaults are pre-populated everywhere (Edify pre-selects allergens, sites, product class, batch sizes)
 - Common actions are one tap from where the user already is — no hunting through menus
 - Progressive disclosure: show only what's needed now, reveal more only if asked
 - Flows complete in the same context they started — no jumping to new pages for sub-tasks
@@ -26,7 +26,7 @@ People only adopt new software if it's genuinely easier than what they're alread
 - Confirmations replace data entry — tap to agree, only type to override
 - The system does the calculation, the user just reviews
 - Errors are caught before submission, not after — the software is the expert
-- When something would take effort (e.g. looking up a supplier, calculating food cost %) Quinn does it automatically
+- When something would take effort (e.g. looking up a supplier, calculating food cost %) Edify does it automatically
 
 **The test:** If a user skips Edify for this task, what are they doing instead? Make Edify faster than that.
 
@@ -34,12 +34,12 @@ People only adopt new software if it's genuinely easier than what they're alread
 
 ## 3. Conversational Over Transactional
 
-Traditional back-office software is forms-first. Edify is conversation-first. Quinn meets users where they are — in plain language — and translates intent into structured data behind the scenes.
+Traditional back-office software is forms-first. Edify is conversation-first. Edify meets users where they are — in plain language — and translates intent into structured data behind the scenes.
 
-- Quinn asks one question at a time, in natural language
+- Edify asks one question at a time, in natural language
 - Choices are presented as tappable options, not typed inputs
 - Structured data (recipes, GRNs, production settings) is built up through conversation, not form-filling
-- The user always knows what's happening next — Quinn narrates the process
+- The user always knows what's happening next — Edify narrates the process
 - Confirmation messages summarise what was done in human terms, not system terms
 
 **The test:** Could someone complete a task in Edify the first time with zero training?
@@ -79,7 +79,7 @@ Information overload is as damaging as information absence. Edify surfaces what 
 Operations are messy. Deliveries don't match invoices. Quantities are short. Prices change. The software should anticipate this and make resolution fast, not punishing.
 
 - Discrepancies are highlighted immediately, not buried
-- When a match fails, Quinn suggests the most likely fix (e.g. "Link GRN-1245?" for an unmatched invoice line)
+- When a match fails, Edify suggests the most likely fix (e.g. "Link GRN-1245?" for an unmatched invoice line)
 - Users are given clear, human choices at decision points — not error codes
 - Price variances offer two resolution paths (update system-wide cost vs. accept for this delivery only) — acknowledging that not every variance is permanent
 - Approval always shows a "what happens next" summary so users can commit with confidence
@@ -123,7 +123,7 @@ Edify is used in kitchens, at loading docks, and on shop floors — not at a des
 | Token | Value | Role |
 |---|---|---|
 | `--color-accent-active` | `#224444` | Primary actions, selected states, buttons |
-| `--color-accent-deep` | `#1a3636` | Quinn, hover on primary |
+| `--color-accent-deep` | `#1a3636` | Edify, hover on primary |
 | `--color-bg-surface` | `#FFFFFF` | Page background |
 | `--color-bg-hover` | `#F5F4F2` | Row hover, section headers |
 | `--color-text-primary` | `#3A3028` | All primary body text |
