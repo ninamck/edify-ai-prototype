@@ -68,7 +68,9 @@ const DEFAULT_CHIPS: PromptChip[] = [
     count: 8,
   },
   {
-    label: 'Review data issues',
+    // Product Voice: "data issues" is config-speak — the glossary
+    // translation is "something in your data making a number wrong".
+    label: 'Fix wrong recipe costs',
     icon: ShieldCheck,
     text: '',
     action: 'integrity',

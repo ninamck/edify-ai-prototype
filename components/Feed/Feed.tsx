@@ -316,9 +316,9 @@ const INTEGRITY_FINDINGS: IntegrityFinding[] = [
     priority: 1,
     title: 'Four iced drinks on the wrong cup',
     severity: 'fix',
-    summary: '£3.42 a cup instead of ~7p — the whole sleeve is charged to every drink.',
+    summary: '£3.42 a cup instead of about 7p: the whole sleeve is charged to every drink.',
     detail:
-      'All four point at Disp SOHO 16oz Smoothie Cups, set up as a pack of one rather than a sleeve of 50. The cup is also a suspended product, so it shouldn\u2019t be in a live recipe at all. Relink to 16oz Smoothie Cups New (pack of 50).',
+      'All four point at Disp SOHO 16oz Smoothie Cups, priced as a single cup rather than the sleeve of 50. That product is no longer active, so it shouldn\u2019t be in a live recipe at all. Relink to 16oz Smoothie Cups New, the pack of 50.',
     affected: 'Iced Brown Sugar Latte · Iced Latte · Iced Long Black · Strawberry & Blueberry Smoothie',
     fixLabel: 'Fix 4 cups',
   },
@@ -327,9 +327,9 @@ const INTEGRITY_FINDINGS: IntegrityFinding[] = [
     priority: 2,
     title: 'Eight ingredients in the wrong kind of unit',
     severity: 'fix',
-    summary: 'Grams on counted items and liquids — these recipes look cheaper than they are.',
+    summary: 'Grams on counted items and liquids: these recipes look cheaper than they are.',
     detail:
-      'Use \u201ceach\u201d for the counted items, \u201cml\u201d for the liquids, and set grams on the honey line — it has no unit at all, so it costs nothing today. Six lines are named; the other two sit in the full 112-row audit list.',
+      'Use \u201ceach\u201d for the counted items, \u201cml\u201d for the liquids, and set grams on the honey line, which has no unit at all and so costs nothing today. Six lines are named; the other two sit in the full 112-row audit list.',
     affected: 'Cucumber Diced · Add Mushrooms · Ketchup · Knorr Cheese Sauce · Whipped Cream · Honey',
     fixLabel: 'Fix 6 units',
   },
@@ -340,7 +340,7 @@ const INTEGRITY_FINDINGS: IntegrityFinding[] = [
     severity: 'check',
     summary: '£1.37 a portion instead of 9p. The norm everywhere else is 1.',
     detail:
-      'Ask the kitchen whether 15 is real before editing — a single jacket potato almost certainly wants 1, but a sharing platter might genuinely want a few.',
+      'Ask the kitchen whether 15 is real before editing: a single jacket potato almost certainly wants 1, but a sharing platter might genuinely want a few.',
     fixLabel: 'Review',
   },
   {
@@ -357,7 +357,7 @@ const INTEGRITY_FINDINGS: IntegrityFinding[] = [
     priority: 5,
     title: 'Vanilla Cold Foam pulled in as \u201c30 items\u201d',
     severity: 'check',
-    summary: 'Could mean 30 ml or 30 whole batches — the costing engine can\u2019t tell.',
+    summary: 'Could mean 30 ml or 30 whole batches, and we can\u2019t tell which.',
     detail: 'Confirm it means 30 ml with whoever built the recipe, then set the unit to ml on each drink that uses it.',
   },
   {
@@ -365,7 +365,7 @@ const INTEGRITY_FINDINGS: IntegrityFinding[] = [
     priority: 6,
     title: '52 mini-recipe lines mix unit families',
     severity: 'tidy',
-    summary: 'Almost all cosmetic, cost nothing — clean up at the next menu review.',
+    summary: 'Almost all cosmetic and cost nothing. Clean up at the next menu review.',
     detail: 'Weight against volume, or volume against count. Nothing this week; tidying them stops the flag list crying wolf.',
   },
 ];
@@ -377,7 +377,7 @@ const INTEGRITY_FINDINGS: IntegrityFinding[] = [
  *  the partial-failure path is visible. */
 const WRONG_CUP_WAS = {
   was: { name: 'Disp SOHO - 16oz Smoothie Cups', qty: '1', unit: 'each', cost: '£3.42' },
-  note: 'Suspended product, set up as a pack of 1 — the whole sleeve is charged to every drink',
+  note: 'No longer active and priced as a single cup, so the whole sleeve is charged to every drink',
 };
 
 const INTEGRITY_FIX_GROUPS: Record<string, BatchReviewRow[]> = {
@@ -385,7 +385,7 @@ const INTEGRITY_FIX_GROUPS: Record<string, BatchReviewRow[]> = {
     // The root cause is the PRODUCT's setup, not any recipe — surfaced
     // first so the operator sees why, but unticked: the product is
     // suspended, so the audit's recommendation is the relinks below.
-    { id: 'fix-cup-product', entity: 'Disp SOHO - 16oz Smoothie Cups', entityMeta: 'The root cause — suspended, so relinking below is the better fix', confidence: 'low', impact: 'root cause', field: 'Pack quantity', before: '1', after: '50', product: { section: 'Product setup', fields: [
+    { id: 'fix-cup-product', entity: 'Disp SOHO - 16oz Smoothie Cups', entityMeta: 'The root cause. It\u2019s no longer active, so relinking below is the better fix', confidence: 'low', impact: 'root cause', field: 'Pack quantity', before: '1', after: '50', product: { section: 'Product setup', fields: [
       { label: 'Supplier', value: 'Disposables Direct' },
       { label: 'Pack quantity', value: '50', flagged: { was: '1', note: 'A pack of 1 means the whole £3.42 sleeve is charged to every single drink' } },
       { label: 'Pack price', value: '£3.42' },
@@ -475,9 +475,9 @@ const INTEGRITY_BATCH_META: Record<string, {
 }> = {
   'wrong-cup': {
     echo: 'Fix the cups',
-    intro: 'The root cause is the **product\u2019s setup** — the cup is a pack of 1, so the whole sleeve is charged per drink. It\u2019s suspended though, so the better fix is relinking the four recipes; I\u2019ve put the product row in **unticked** in case you\u2019d rather correct it instead. Every value is editable.',
+    intro: 'The root cause is the **product\u2019s setup**: the cup is priced as a pack of 1, so the whole £3.42 sleeve is charged to every drink. That product is no longer active, so the better fix is relinking the four recipes. The product row is **unticked** in case you\u2019d rather correct it instead, and every value is editable.',
     title: 'Relink four iced drinks',
-    subtitle: 'Off the suspended pack-of-1 cup, onto the pack of 50',
+    subtitle: 'Off the old single-cup price, onto the pack of 50',
     impact: [
       { value: '4', label: 'recipes affected' },
       { value: '−£3.35', label: 'per drink, per sale' },
@@ -497,7 +497,7 @@ const INTEGRITY_BATCH_META: Record<string, {
   },
   'brown-sauce': {
     echo: 'Review the brown sauce',
-    intro: 'Here\u2019s the line as it stands — **15 sachets a portion** against a norm of 1. I\u2019ve left it unticked until the kitchen confirms; tick and apply once they do.',
+    intro: 'Here\u2019s the line as it stands: **15 sachets a portion** against a norm of 1. It\u2019s unticked until the kitchen confirms; tick and apply once they do.',
     title: 'Brown sauce quantity',
     subtitle: 'Needs the kitchen\u2019s confirmation before applying',
     impact: [
@@ -508,9 +508,9 @@ const INTEGRITY_BATCH_META: Record<string, {
   },
   all: {
     echo: 'Fix everything for me',
-    intro: 'Everything that moves your numbers in one list — each row shows the recipe line as it reads today and the change I suggest. The brown-sauce row is **unticked** until the kitchen confirms. Every value is editable.',
+    intro: 'Everything that moves your numbers in one list. Each row shows the recipe line as it reads today and the change we suggest, and every value is editable. The brown-sauce row is **unticked** until the kitchen confirms.',
     title: 'Soho recipe fixes',
-    subtitle: 'Cup relinks and unit corrections — the brown-sauce row waits on the kitchen',
+    subtitle: 'Cup relinks and unit corrections. Brown sauce waits on the kitchen.',
     impact: [
       { value: '12', label: 'changes prepared' },
       { value: '9+', label: 'recipes touched' },
@@ -3013,7 +3013,7 @@ function POSMatchSuggestionsCard({
       subtitle={
         allHandled
           ? `${appliedCount} linked · ${skippedCount} skipped`
-          : `${total} unmatched POS ${total === 1 ? 'button lines up' : 'buttons line up'} with your catalogue${unsurePending > 0 ? ` · ${unsurePending} not sure — decide those one by one` : ''}`
+          : `${total} to review. Link one by one, or all the confident ones at once.${unsurePending > 0 ? ` ${unsurePending} need${unsurePending === 1 ? 's' : ''} your call.` : ''}`
       }
       state={allHandled ? 'confirmed' : 'pending'}
       confirmLabel={
@@ -3302,7 +3302,7 @@ function POSMatchSuggestionsCard({
                         }}
                       >
                         <Search size={12} strokeWidth={2.2} />
-                        None of these — browse the full list
+                        None of these? Browse the full list
                       </button>
                     </>
                   ) : (
@@ -3336,7 +3336,7 @@ function POSMatchSuggestionsCard({
                           autoFocus
                           value={browseQuery}
                           onChange={(e) => setBrowseQuery(e.target.value)}
-                          placeholder="Search products, recipes, master products…"
+                          placeholder="Search your recipes and products…"
                           style={{
                             flex: 1,
                             minWidth: 0,
@@ -5160,8 +5160,8 @@ function DataIntegrityCard({
   return (
     <CardShell
       icon={ShieldCheck}
-      title="Recipe & cost review — Soho"
-      subtitle="Mostly clean — a short to-do list, worked top to bottom"
+      title="Recipe & cost review: Soho"
+      subtitle="Mostly clean. Work the list top to bottom."
       state={state}
       confirmLabel="Fix these"
       onConfirm={onFixAll}
@@ -5192,7 +5192,7 @@ function DataIntegrityCard({
         ))}
         {/* Trust caveat from the audit appendix — ranking reliable, exact £ not. */}
         <div style={{ padding: '8px 14px', borderTop: '1px solid var(--color-border-subtle)', fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)', lineHeight: 1.4 }}>
-          £ figures are supplier list prices, not real cost — read them as a ranking.
+          £ figures are supplier list prices, not your real cost. Read them as a ranking.
         </div>
       </div>
     </CardShell>
@@ -7341,7 +7341,7 @@ export default function Feed({
             {
               id: `q-pos-check-none-${Date.now()}`,
               role: 'quinn' as const,
-              text: 'Every POS button is already matched to a recipe or product — nothing to triage. I\u2019ll flag it here if a new button lands unmatched.',
+              text: 'Every POS button is already matched to a recipe or product. Nothing to do here, just letting you know. We\u2019ll flag it if a new button lands unmatched.',
               streaming: true,
             },
           ];
@@ -7349,12 +7349,14 @@ export default function Feed({
         return;
       }
 
+      const n = allSuggestions.length;
       const introText =
-        `I\u2019ve checked your POS buttons against your catalogue — ` +
-        `**${allSuggestions.length} unmatched ${allSuggestions.length === 1 ? 'button lines' : 'buttons line'} up** with things you already have.` +
-        (uncertain.length > 0
-          ? ` ${suggestions.length} look right; **${uncertain.length} I\u2019m not sure about**, so I\u2019ve left those out of the bulk link — check the target on each and use the dropdown if I\u2019ve picked the wrong one.`
-          : ' Link them and sales start depleting the right stock; skip anything that doesn\u2019t look right.');
+        `**${n} POS button${n === 1 ? ' isn\u2019t' : 's aren\u2019t'} linked to anything**, so ${n === 1 ? 'its' : 'their'} sales aren\u2019t coming out of stock.` +
+        (uncertain.length > 0 && suggestions.length > 0
+          ? ` ${suggestions.length} match things you already have; **${uncertain.length} we\u2019re not sure about**, so those wait for your call. Want us to link the ${suggestions.length} confident ones?`
+          : uncertain.length > 0
+            ? ` We\u2019re not sure about ${uncertain.length === 1 ? 'it' : 'any of them'}, so each needs your call. Pick the right match on each row.`
+            : ` All ${n} match things you already have. Want us to link them?`);
       const introId = `q-pos-check-intro-${Date.now()}`;
       setMessages((prev) => {
         const without = prev.filter((msg) => msg.id !== thinkingId);
@@ -7663,12 +7665,12 @@ export default function Feed({
   function startIntegrityCheck() {
     setChatMinimized(false);
     setChatStarted(true);
-    setMessages([{ id: `u-integrity-${Date.now()}`, role: 'user', text: 'Check my data integrity' }]);
+    setMessages([{ id: `u-integrity-${Date.now()}`, role: 'user', text: 'Check my recipes and costs' }]);
     setTimeout(() => {
       setMessages(prev => [...prev, {
         id: `q-integrity-${Date.now()}`,
         role: 'quinn',
-        text: "I've been through all **456 live recipes** and the ~2,600 ingredient lines inside them. Good news first: they're mostly clean — no hidden mistake is quietly wrecking your numbers. What's left is a short, specific list — **12 clear fixes**, a couple of things to check with the kitchen, and some tidy-ups. In priority order:",
+        text: "We've checked all **456 live recipes** and the 2,600 ingredient lines inside them. Mostly clean: **12 clear fixes**, a couple of things to check with the kitchen, and some tidy-ups. In priority order:",
         msgType: 'integrity-check',
       }]);
     }, 2000);
@@ -7728,8 +7730,8 @@ export default function Feed({
     if (cur && cur.state !== 'pending') return;
 
     const FAILURES: Record<string, string> = {
-      'fix-cup-smoothie': 'Recipe locked by an open menu review — retry once it\u2019s published',
-      'fix-unit-honey': 'Two live honey products match this line — needs a manual pick',
+      'fix-cup-smoothie': 'This recipe is locked by an open menu review. Retry once it\u2019s published.',
+      'fix-unit-honey': 'Two live honey products match this line, so it needs a manual pick.',
     };
     const results: BatchRowResult[] = submitted.map((row) => (
       FAILURES[row.id]
@@ -7746,13 +7748,13 @@ export default function Feed({
 
     logHistoryEntry({
       kind: 'chat',
-      title: `Applied ${applied} data integrity fixes`,
-      subtitle: failed > 0 ? `${failed} failed — needs follow-up` : 'All fixes applied',
+      title: `Fixed ${applied} recipe cost issue${applied === 1 ? '' : 's'}`,
+      subtitle: failed > 0 ? `${failed} didn't save, needs follow-up` : 'All fixes applied',
     });
     pushFlowReceipt({
-      headline: `Applied ${applied} of ${results.length} integrity fixes`,
+      headline: `Done: ${applied} of ${results.length} fixes applied`,
       detail: failed > 0
-        ? `${failed} couldn't be applied — the rows above say why. Nothing else was touched.`
+        ? `${failed} didn't save; those lines are exactly as they were, and the rows above say why.`
         : 'All selected fixes applied.',
     });
   }
@@ -8505,10 +8507,10 @@ export default function Feed({
                             const applied = parsed!.suggestions.filter((s) => next[s.posItemId] === 'applied').length;
                             const skipped = parsed!.suggestions.length - applied;
                             pushFlowReceipt({
-                              headline: `Linked ${applied} POS button${applied === 1 ? '' : 's'}`,
+                              headline: `Done: ${applied} POS button${applied === 1 ? '' : 's'} linked`,
                               detail: skipped > 0
-                                ? `${skipped} skipped — still unmatched on the Item matching page.`
-                                : 'Sales on these buttons now deplete the right stock.',
+                                ? `Sales on ${applied === 1 ? 'it' : 'them'} now come out of the right stock. ${skipped} skipped; ${skipped === 1 ? 'it stays' : 'they stay'} on the Item matching page.`
+                                : 'Sales on these buttons now come out of the right stock.',
                               href: '/item-matching',
                               hrefLabel: 'Open Item matching',
                             });
@@ -9442,7 +9444,7 @@ export default function Feed({
                           type="button"
                           aria-label={
                             hasCount
-                              ? `${chip.label} — ${chip.count} item${chip.count === 1 ? '' : 's'} need attention`
+                              ? `${chip.label}: ${chip.count} waiting for you`
                               : chip.label
                           }
                           onClick={() => {

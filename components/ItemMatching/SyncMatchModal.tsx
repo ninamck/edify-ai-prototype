@@ -46,10 +46,10 @@ type Stage = {
 };
 
 const STAGES: Stage[] = [
-  { id: 'connect',  label: 'Connecting to Square POS',         durationMs: 700 },
-  { id: 'pull',     label: 'Pulling menu items + sales data',  durationMs: 900 },
-  { id: 'scan',     label: 'Scanning library for matches',     durationMs: 1100 },
-  { id: 'propose',  label: 'Preparing match proposals',        durationMs: 600 },
+  { id: 'connect',  label: 'Connecting to Square POS',                       durationMs: 700 },
+  { id: 'pull',     label: 'Pulling menu items and sales',                   durationMs: 900 },
+  { id: 'scan',     label: 'Checking your recipes and products for matches', durationMs: 1100 },
+  { id: 'propose',  label: 'Lining up suggestions',                          durationMs: 600 },
 ];
 
 type Phase = 'idle' | 'running' | 'done';
@@ -95,19 +95,19 @@ const UNCERTAIN_INJECTIONS: Array<{
   {
     posItemId: 'mi-almond-croissant',
     preferredTargetName: 'Croissant',
-    reason: '"Almond" might be a modifier on the base croissant — or its own recipe.',
+    reason: '"Almond" might be an add-on to the base croissant, or its own recipe. Worth a look.',
   },
   {
     posItemId: 'mi-babyccino',
     preferredTargetName: 'Cappuccino',
-    reason: 'Kids drink — could be a scaled cappuccino, or a separate recipe.',
+    reason: 'Kids drink: could be a scaled-down cappuccino or its own recipe. Worth a look.',
   },
   {
     posItemId: 'mod-add-oat-milk',
     posItemName: 'Add Oat Milk',
     posKind: 'Modifier',
     preferredTargetName: 'Oat Milk 1L',
-    reason: 'Modifier — could deplete the Oat Milk 1L master product, or you may want a poured-volume sub-recipe.',
+    reason: 'This could take stock straight from the Oat Milk 1L product, or you may want a poured-measure sub-recipe.',
   },
 ];
 
@@ -643,7 +643,7 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
               </div>
               <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 2 }}>
                 {exceptions.length === 0
-                  ? 'No site-specific matches — every site uses the company default.'
+                  ? 'No site-specific matches. Every site uses the company default.'
                   : `${exceptions.length} site${exceptions.length === 1 ? '' : 's'} override${exceptions.length === 1 ? 's' : ''} the company default.`}
               </div>
             </div>
@@ -831,7 +831,7 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
             fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
-            · POS sync & match
+            · POS matching
           </span>
           <button
             onClick={onClose}
@@ -855,12 +855,12 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
           <div style={{ maxWidth: 640, margin: '0 auto' }}>
             <CardShell
               icon={EdifyMark}
-              title="Sync & auto-match"
+              title="Match your POS buttons"
               subtitle={
                 phase !== 'done'
-                  ? 'Pulling fresh POS data and proposing matches — nothing links until you confirm…'
+                  ? 'Pulling fresh POS data. Nothing links until you confirm.'
                   : pendingAll.length > 0
-                    ? `${pendingAll.length} proposed ${pendingAll.length === 1 ? 'match' : 'matches'} — nothing is linked until you confirm.`
+                    ? `${pendingAll.length} to review. Link one by one, or all the confident ones at once.`
                     : `${linkedCount} linked · ${skippedCount} skipped${totalExceptions > 0 ? ` · ${totalExceptions} site exception${totalExceptions === 1 ? '' : 's'}` : ''}`
               }
               state={allDecided ? 'confirmed' : 'pending'}
@@ -981,7 +981,7 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
                       Confident matches
                     </span>
                     <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>
-                      — check them, then link one by one or all at once below.
+                      Check them, then link one by one or all at once below.
                     </span>
                   </div>
                   <div style={{
@@ -1016,7 +1016,7 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
                   border: '1px solid var(--color-border-subtle)',
                   fontSize: 12.5, color: 'var(--color-text-secondary)',
                 }}>
-                  Nothing new to propose. The remaining unmatched buttons need a human eye — open the dropdown on each row.
+                  Nothing new to suggest, just letting you know. The buttons still unmatched need a human eye; pick targets for them in the list behind this panel.
                 </div>
               )}
             </div>
@@ -1037,12 +1037,12 @@ export function SyncMatchModal({ onClose }: { onClose: () => void }) {
                 <CheckCircle2 size={16} color="#2D6A4F" style={{ flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0, fontSize: 12.5 }}>
                   <div style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                    POS sync finished
+                    Done: {linkedCount} linked · {skippedCount} skipped
+                    {totalExceptions > 0 ? ` · ${totalExceptions} site exception${totalExceptions === 1 ? '' : 's'}` : ''}
                   </div>
                   <div style={{ color: 'var(--color-text-muted)', marginTop: 1 }}>
-                    {linkedCount} linked by you · {skippedCount} skipped
-                    {totalExceptions > 0 ? ` · ${totalExceptions} site exception${totalExceptions === 1 ? '' : 's'}` : ''}
-                    {skippedCount > 0 ? ' — skipped buttons stay in Unmatched.' : ''}
+                    Sales on the linked buttons now come out of the right stock.
+                    {skippedCount > 0 ? ' Skipped buttons stay in Unmatched.' : ''}
                   </div>
                 </div>
                 <button
@@ -1230,7 +1230,7 @@ function CandidatePanel({
             }}
           >
             <Search size={12} strokeWidth={2.2} />
-            None of these — browse the full list
+            None of these? Browse the full list
           </button>
         </>
       ) : (
@@ -1258,7 +1258,7 @@ function CandidatePanel({
               autoFocus
               value={browseQuery}
               onChange={(e) => onQueryChange(e.target.value)}
-              placeholder="Search products, recipes, master products…"
+              placeholder="Search your recipes and products…"
               style={{
                 flex: 1, minWidth: 0,
                 border: 'none', outline: 'none', background: 'transparent',
