@@ -1008,26 +1008,12 @@ function QuestionCard({
             </span>
           </span>
         )}
-        {/* Audit: severity chip — who's alerted on a fail, and for Critical,
-            that a fail fails the whole audit */}
-        {isAudit && isScoreable(question) && (
-          <span style={{
-            marginLeft: 'auto',
-            fontSize: '11px',
-            fontWeight: 700,
-            padding: '2px 8px',
-            borderRadius: '100px',
-            background: SEVERITY_COLORS[question.severity ?? 'medium'].bg,
-            color: SEVERITY_COLORS[question.severity ?? 'medium'].text,
-          }}>
-            {severityLabel(question.severity ?? 'medium')}
-          </span>
-        )}
-        {/* Answered tick sits in the header row beside the severity chip,
-            so it never covers it. */}
+        {/* Severity is deliberately not shown while completing — it's
+            builder/actions/report information. The completer meets it only
+            when it matters: the fail-budget chip flips on a critical fail. */}
         {answered && !isFollowUp && (
           <span style={{
-            marginLeft: isAudit && isScoreable(question) ? '2px' : 'auto',
+            marginLeft: 'auto',
             width: '20px',
             height: '20px',
             borderRadius: '50%',
