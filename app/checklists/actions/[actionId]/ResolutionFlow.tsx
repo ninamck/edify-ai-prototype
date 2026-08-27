@@ -105,7 +105,9 @@ export function ResolutionFlowClient({ actionId }: { actionId: string }) {
   }
 
   return (
-    <div style={{ minHeight: '100%', background: '#fff', paddingBottom: isOpen ? '100px' : '40px' }}>
+    // Bottom padding reserves room for the fixed bar: two stacked buttons
+    // when the action is open, one while in progress.
+    <div style={{ minHeight: '100%', background: '#fff', paddingBottom: action.status === 'open' ? '170px' : isOpen ? '110px' : '40px' }}>
       <div style={{ maxWidth: '560px', margin: '0 auto', padding: '20px 16px' }}>
 
         {/* Summary card */}

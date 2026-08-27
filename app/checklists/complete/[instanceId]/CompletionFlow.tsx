@@ -1279,9 +1279,16 @@ export function CompletionFlowClient({ instanceId }: { instanceId: string }) {
   function handleAnswerWithScroll(questionId: string, value: string | number | boolean | null, rootIds: string[]) {
     handleAnswer(questionId, value);
     // Auto-advance for checkbox; number advances via confirm button
-    if (typeof value === 'boolean') {
-      setTimeout(() => scrollToNext(questionId, rootIds), 150);
+    if (typeof value !== 'boolean') return;
+    // Stay put when the answer opens work under the card (the corrective
+    // action panel or a follow-up question) — scrolling away would hide it.
+    const question = template?.questions.find((q) => q.id === questionId);
+    if (question) {
+      const opensCorrective = Boolean(question.correctiveActionConfig) && value === false;
+      const opensFollowUps = conditionMet(question, { questionId, value }).length > 0;
+      if (opensCorrective || opensFollowUps) return;
     }
+    setTimeout(() => scrollToNext(questionId, rootIds), 150);
   }
 
   function handlePhotoChange(questionId: string, url: string | undefined) {
