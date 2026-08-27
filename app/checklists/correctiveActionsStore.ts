@@ -18,9 +18,9 @@
 import { useSyncExternalStore } from 'react';
 import type { CorrectiveAction } from './types';
 
-// v4: points now come from the template's severity weight map (10/5/2)
-// — key bumped so existing demo browsers re-seed with consistent numbers.
-const STORAGE_KEY = 'edify:correctiveActions:v4';
+// v5: scoring moved to plain counting — actions no longer carry points,
+// only severity. Key bumped so existing demo browsers re-seed cleanly.
+const STORAGE_KEY = 'edify:correctiveActions:v5';
 
 /** Placeholder evidence photo for seeded fixtures (tiny inline SVG). */
 const SEED_PHOTO =
@@ -85,7 +85,6 @@ const SEED_ACTIONS: CorrectiveAction[] = [
     requirePhotoEvidence: true,
     status: 'open',
     severity: 'critical',
-    pointsLost: 10,
   },
   {
     id: 'ca-audit-2',
@@ -103,7 +102,6 @@ const SEED_ACTIONS: CorrectiveAction[] = [
     requirePhotoEvidence: false,
     status: 'in_progress',
     severity: 'medium',
-    pointsLost: 5,
   },
   {
     id: 'ca-audit-3',
@@ -121,7 +119,6 @@ const SEED_ACTIONS: CorrectiveAction[] = [
     requirePhotoEvidence: false,
     status: 'resolved',
     severity: 'low',
-    pointsLost: 2,
     resolutionText: 'Board wiped and reprinted with the autumn menu set; handwritten corrections removed.',
     resolutionPhotoDataUrl: SEED_PHOTO,
     resolvedBy: 'Jordan Beck',

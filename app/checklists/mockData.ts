@@ -431,14 +431,14 @@ export const MOCK_TEMPLATES: ChecklistTemplate[] = [
     active: true,
     scoringEnabled: true,
     passThresholdPct: 80,
-    severityWeights: { critical: 10, medium: 5, low: 2 },
     sections: [
       { id: 'sec-foh', name: 'Front of house' },
       { id: 'sec-food', name: 'Food safety' },
       { id: 'sec-brand', name: 'Brand standards' },
     ],
     questions: [
-      // Front of house — point values come from the severity weight map
+      // Front of house — every check counts for one; severity drives
+      // alert routing and the critical override, not the arithmetic
       auditCheck('qa-1', 'Storefront glass and windows intact, clean and free of damage?', 'sec-foh', 'critical'),
       auditCheck('qa-2', 'Seating area clean, tidy and free of damage?', 'sec-foh', 'medium'),
       auditCheck('qa-3', 'Music, lighting and temperature at brand standard?', 'sec-foh', 'low'),
@@ -965,16 +965,19 @@ export const MOCK_HISTORY: ChecklistInstance[] = [
     completedDate: '2026-03-30',
     completedBy: 'Ed Mehta',
     scoreResult: {
-      pointsAwarded: 39,
-      pointsTotal: 56,
+      // 10 checks, 3 failed (qa-1 critical, qa-7 medium, qa-8 low).
+      // 80% of 10 needs 8 passed — a fail budget of 2, so 3 fails is
+      // over budget AND the critical fail fails it outright.
+      checksPassed: 7,
+      checksTotal: 10,
       pct: 70,
       passThresholdPct: 80,
       criticalFails: 1,
       passed: false,
       sectionScores: [
-        { sectionId: 'sec-foh', name: 'Front of house', awarded: 7, total: 17 },
-        { sectionId: 'sec-food', name: 'Food safety', awarded: 25, total: 30 },
-        { sectionId: 'sec-brand', name: 'Brand standards', awarded: 7, total: 9 },
+        { sectionId: 'sec-foh', name: 'Front of house', passed: 2, total: 3 },
+        { sectionId: 'sec-food', name: 'Food safety', passed: 3, total: 4 },
+        { sectionId: 'sec-brand', name: 'Brand standards', passed: 2, total: 3 },
       ],
       failedQuestionIds: ['qa-1', 'qa-7', 'qa-8'],
     },

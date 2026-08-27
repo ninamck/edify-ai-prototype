@@ -24,8 +24,8 @@ import { MOCK_TEMPLATES, MOCK_SITES, MOCK_USERS, getSiteTeam } from './mockData'
 import { saveTemplate, findTemplateById } from './templatesStore';
 import {
   DEFAULT_PASS_THRESHOLD_PCT,
-  DEFAULT_SEVERITY_WEIGHTS,
   SEVERITY_COLORS,
+  allowedFails,
   isScoreable,
   severityLabel,
 } from './scoring';
@@ -40,7 +40,6 @@ import type {
   ResponseType,
   Frequency,
   Severity,
-  SeverityWeights,
   UserRole,
   FollowUpRule,
   FollowUpConditionType,
@@ -563,12 +562,10 @@ function scoringApplies(q: ChecklistQuestion): boolean {
 function ScoringSection({
   question,
   sections,
-  weights,
   onChange,
 }: {
   question: ChecklistQuestion;
   sections: AuditSection[];
-  weights: SeverityWeights;
   onChange: (updated: ChecklistQuestion) => void;
 }) {
   if (!scoringApplies(question)) {
@@ -633,7 +630,7 @@ function ScoringSection({
                     fontFamily: 'var(--font-primary)',
                   }}
                 >
-                  {severityLabel(s)} · {weights[s]} pts
+                  {severityLabel(s)}
                 </button>
               );
             })}
@@ -657,12 +654,13 @@ function ScoringSection({
 
       <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
         {question.responseType === 'checkbox'
-          ? 'Yes earns full points; No earns zero and raises an action.'
+          ? 'This is one check. Yes passes it; No fails it and raises an action.'
           : needsThresholdRule
           ? 'Add a greater-than / less-than follow-up rule below to define the in-range pass — until then this question isn\u2019t scored.'
-          : 'In range earns full points; a threshold breach earns zero and raises an action.'}
-        {` Worth ${weights[question.severity ?? 'medium']} points — set by the template's severity weights above.`}
-        {question.severity === 'critical' && ' A Critical fail fails the whole audit regardless of score.'}
+          : 'This is one check. In range passes it; a threshold breach fails it and raises an action.'}
+        {question.severity === 'critical'
+          ? ' Critical: if this check fails, the whole audit fails, whatever the score. It also alerts the escalation list.'
+          : ' Severity sets who is alerted when it fails, not how much it scores.'}
       </p>
     </div>
   );
@@ -679,7 +677,6 @@ function QuestionCard({
   sites,
   scoringEnabled,
   sections,
-  weights,
   onChange,
   onDelete,
   onMoveUp,
@@ -694,7 +691,6 @@ function QuestionCard({
   sites: string[];
   scoringEnabled: boolean;
   sections: AuditSection[];
-  weights: SeverityWeights;
   onChange: (updated: ChecklistQuestion) => void;
   onDelete: () => void;
   onMoveUp: () => void;
@@ -791,7 +787,7 @@ function QuestionCard({
             background: SEVERITY_COLORS[question.severity ?? 'medium'].bg,
             color: SEVERITY_COLORS[question.severity ?? 'medium'].text,
           }}>
-            {severityLabel(question.severity ?? 'medium')} · {weights[question.severity ?? 'medium']} pts
+            {severityLabel(question.severity ?? 'medium')}
           </span>
         )}
 
@@ -906,7 +902,7 @@ function QuestionCard({
 
           {/* Scoring — audit templates only */}
           {scoringEnabled && !isFollowUp && (
-            <ScoringSection question={question} sections={sections} weights={weights} onChange={onChange} />
+            <ScoringSection question={question} sections={sections} onChange={onChange} />
           )}
 
           {/* Corrective action — Yes/No questions only */}
@@ -1209,10 +1205,10 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
     });
     if (form.scoringEnabled) {
       const threshold = form.passThresholdPct ?? DEFAULT_PASS_THRESHOLD_PCT;
-      if (threshold < 1 || threshold > 100) errs.push('Pass threshold must be between 1 and 100%.');
-      const w = form.severityWeights ?? DEFAULT_SEVERITY_WEIGHTS;
-      if (w.critical <= 0 || w.medium <= 0 || w.low <= 0) {
-        errs.push('Every severity weight must be greater than zero.');
+      if (threshold < 1 || threshold > 100) errs.push('Pass mark must be between 1 and 100%.');
+      const scoredCount = form.questions.filter((q) => !q.parentQuestionId && isScoreable(q)).length;
+      if (scoredCount === 0) {
+        errs.push('Scoring is on but there are no scored checks — add a Yes/No or threshold-based number question.');
       }
       (form.sections ?? []).forEach((s, i) => {
         if (!s.name.trim()) errs.push(`Section ${i + 1} has no name.`);
@@ -1447,84 +1443,40 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
                   ...f,
                   scoringEnabled: v,
                   passThresholdPct: v ? f.passThresholdPct ?? DEFAULT_PASS_THRESHOLD_PCT : f.passThresholdPct,
-                  severityWeights: v ? f.severityWeights ?? { ...DEFAULT_SEVERITY_WEIGHTS } : f.severityWeights,
                   sections: v ? f.sections ?? [] : f.sections,
                 }))
               }
               label="Enable scoring — this checklist is an audit"
             />
             <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-              Questions carry points and a severity. Passing answers earn points; every fail raises
-              an action. The audit gets a percentage score and a pass/fail result — and any Critical
-              fail fails it outright. Off = normal checklist behaviour, unchanged.
+              Every Yes/No or in-range check counts for one. The score is simply the share of
+              checks passed, every fail raises an action, and any Critical fail fails the audit
+              on its own. Off = normal checklist behaviour, unchanged.
             </p>
           </div>
 
           {form.scoringEnabled && (
             <>
-              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <div>
-                  <label htmlFor={`${formId}-threshold`} style={labelStyle}>Pass threshold (%)</label>
-                  <input
-                    id={`${formId}-threshold`}
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={form.passThresholdPct ?? DEFAULT_PASS_THRESHOLD_PCT}
-                    onChange={(e) => update('passThresholdPct', Math.max(0, Number(e.target.value) || 0))}
-                    style={{ ...inputStyle, width: '90px' }}
-                  />
-                </div>
-
-                {/* Severity weight map — one place sets every question's value */}
-                <div>
-                  <label style={labelStyle}>Points per severity</label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    {(['critical', 'medium', 'low'] as Severity[]).map((s) => {
-                      const c = SEVERITY_COLORS[s];
-                      const weights = form.severityWeights ?? DEFAULT_SEVERITY_WEIGHTS;
-                      return (
-                        <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          <span style={{
-                            padding: '3px 9px',
-                            borderRadius: '100px',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            background: c.bg,
-                            color: c.text,
-                          }}>
-                            {severityLabel(s)}
-                          </span>
-                          <input
-                            type="number"
-                            min={0}
-                            value={weights[s]}
-                            onChange={(e) =>
-                              update('severityWeights', {
-                                ...weights,
-                                [s]: Math.max(0, Number(e.target.value) || 0),
-                              })
-                            }
-                            style={{ ...inputStyle, width: '58px' }}
-                            aria-label={`${severityLabel(s)} points`}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+              <div>
+                <label htmlFor={`${formId}-threshold`} style={labelStyle}>Pass mark (%)</label>
+                <input
+                  id={`${formId}-threshold`}
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={form.passThresholdPct ?? DEFAULT_PASS_THRESHOLD_PCT}
+                  onChange={(e) => update('passThresholdPct', Math.max(0, Number(e.target.value) || 0))}
+                  style={{ ...inputStyle, width: '90px' }}
+                />
               </div>
 
-              {/* How the points add up — live template total */}
+              {/* The pass mark translated into behaviour — the fail budget */}
               {(() => {
-                const weights = form.severityWeights ?? DEFAULT_SEVERITY_WEIGHTS;
                 const scoreableQs = form.questions.filter((q) => !q.parentQuestionId && isScoreable(q));
-                const totalPoints = scoreableQs.reduce(
-                  (sum, q) => sum + weights[q.severity ?? 'medium'],
-                  0,
-                );
+                const checksTotal = scoreableQs.length;
+                const criticalCount = scoreableQs.filter((q) => q.severity === 'critical').length;
                 const threshold = form.passThresholdPct ?? DEFAULT_PASS_THRESHOLD_PCT;
-                const passNeeds = Math.ceil((totalPoints * threshold) / 100);
+                const budget = allowedFails(checksTotal, threshold);
                 return (
                   <div style={{
                     padding: '10px 12px',
@@ -1535,15 +1487,24 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
                     color: 'var(--color-text-secondary)',
                     lineHeight: 1.5,
                   }}>
-                    {scoreableQs.length === 0 ? (
-                      <>No scoreable questions yet — add Yes/No or threshold-based number questions below.</>
+                    {checksTotal === 0 ? (
+                      <>No checks yet — add Yes/No or threshold-based number questions below. Each one counts for one check.</>
                     ) : (
                       <>
                         <strong style={{ color: 'var(--color-text-primary)' }}>
-                          {scoreableQs.length} scored question{scoreableQs.length === 1 ? '' : 's'} · {totalPoints} points possible
+                          {checksTotal} check{checksTotal === 1 ? '' : 's'} · pass mark {threshold}%
                         </strong>
-                        {' '}— a pass needs <strong style={{ color: 'var(--color-text-primary)' }}>{passNeeds} points</strong> ({threshold}%),
-                        and any Critical fail fails the audit outright.
+                        {' '}— in plain terms: a site can fail{' '}
+                        <strong style={{ color: 'var(--color-text-primary)' }}>
+                          up to {budget} of these {checksTotal} checks
+                        </strong>
+                        {' '}and still pass.
+                        {criticalCount > 0 && (
+                          <>
+                            {' '}The {criticalCount} Critical check{criticalCount === 1 ? ' is' : 's are'} the exception:
+                            failing any one of them fails the audit, whatever the score.
+                          </>
+                        )}
                       </>
                     )}
                   </div>
@@ -1649,7 +1610,6 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
                   sites={form.sites}
                   scoringEnabled={!!form.scoringEnabled}
                   sections={form.sections ?? []}
-                  weights={form.severityWeights ?? DEFAULT_SEVERITY_WEIGHTS}
                   onChange={(updated) => updateQuestion(q.id, updated)}
                   onDelete={() => deleteQuestion(q.id)}
                   onMoveUp={() => moveQuestion(q.id, 'up')}
@@ -1667,7 +1627,6 @@ export default function ChecklistTemplateEditor({ mode, templateId }: EditorProp
                     sites={form.sites}
                     scoringEnabled={!!form.scoringEnabled}
                     sections={form.sections ?? []}
-                    weights={form.severityWeights ?? DEFAULT_SEVERITY_WEIGHTS}
                     onChange={(updated) => updateQuestion(fq.id, updated)}
                     onDelete={() => deleteQuestion(fq.id)}
                     onMoveUp={() => {}}

@@ -25,7 +25,7 @@ import { getInstanceById, getTemplateForInstance, assigneeNameFor, getSiteTeam }
 import { PhotoCapture } from '../../PhotoCapture';
 import { addCorrectiveActions, newCorrectiveActionId } from '../../correctiveActionsStore';
 import { useChecklistStore, completeStoreInstance } from '../../templatesStore';
-import { computeScore, isScoreable, pointsFor, questionOutcome, severityLabel, severityWeightsOf, SEVERITY_COLORS } from '../../scoring';
+import { allowedFails, computeScore, isScoreable, questionOutcome, severityLabel, SEVERITY_COLORS } from '../../scoring';
 import { useAlertRouting, resolveRecipients } from '../../alertsStore';
 import type {
   AuditScoreResult,
@@ -39,7 +39,6 @@ import type {
   RepeatingRow,
   ResponseType,
   Severity,
-  SeverityWeights,
 } from '../../types';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -936,7 +935,6 @@ function QuestionCard({
   questionNumber,
   site,
   isAudit,
-  weights,
   onAnswer,
   onNoteChange,
   onPhotoChange,
@@ -952,7 +950,6 @@ function QuestionCard({
   questionNumber: number;
   site: string;
   isAudit: boolean;
-  weights: SeverityWeights;
   onAnswer: (questionId: string, value: string | number | boolean | null) => void;
   onNoteChange: (questionId: string, note: string) => void;
   onPhotoChange: (questionId: string, url: string | undefined) => void;
@@ -1011,7 +1008,8 @@ function QuestionCard({
             </span>
           </span>
         )}
-        {/* Audit: what this answer is worth, coloured by severity */}
+        {/* Audit: severity chip — who's alerted on a fail, and for Critical,
+            that a fail fails the whole audit */}
         {isAudit && isScoreable(question) && (
           <span style={{
             marginLeft: 'auto',
@@ -1022,10 +1020,10 @@ function QuestionCard({
             background: SEVERITY_COLORS[question.severity ?? 'medium'].bg,
             color: SEVERITY_COLORS[question.severity ?? 'medium'].text,
           }}>
-            {severityLabel(question.severity ?? 'medium')} · {weights[question.severity ?? 'medium']} pts
+            {severityLabel(question.severity ?? 'medium')}
           </span>
         )}
-        {/* Answered tick sits in the header row beside the points chip,
+        {/* Answered tick sits in the header row beside the severity chip,
             so it never covers it. */}
         {answered && !isFollowUp && (
           <span style={{
@@ -1430,7 +1428,7 @@ export function CompletionFlowClient({ instanceId }: { instanceId: string }) {
         requirePhotoEvidence: config.requirePhotoEvidence,
         status: 'open',
         ...(isAudit && isScoreable(q)
-          ? { severity: q.severity ?? ('medium' as Severity), pointsLost: pointsFor(template, q) }
+          ? { severity: q.severity ?? ('medium' as Severity) }
           : {}),
       });
     }
@@ -1464,7 +1462,6 @@ export function CompletionFlowClient({ instanceId }: { instanceId: string }) {
           requirePhotoEvidence: false,
           status: 'open',
           severity: q.severity ?? 'medium',
-          pointsLost: pointsFor(template, q),
         });
       }
     }
@@ -1565,7 +1562,7 @@ export function CompletionFlowClient({ instanceId }: { instanceId: string }) {
                   {finalScore.pct}%
                 </div>
                 <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-                  {finalScore.pointsAwarded} / {finalScore.pointsTotal} points · pass mark {finalScore.passThresholdPct}%
+                  Passed {finalScore.checksPassed} of {finalScore.checksTotal} checks · pass mark {finalScore.passThresholdPct}%
                 </div>
               </div>
               <span style={{
@@ -1603,7 +1600,7 @@ export function CompletionFlowClient({ instanceId }: { instanceId: string }) {
                 <div key={s.sectionId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }}>
                   <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{s.name}</span>
                   <span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-                    {s.awarded} / {s.total}
+                    {s.passed} / {s.total} passed
                   </span>
                 </div>
               ))}
@@ -1801,26 +1798,30 @@ export function CompletionFlowClient({ instanceId }: { instanceId: string }) {
             {template.name}
           </h1>
           <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-            {liveScore && (
-              <span style={{
-                padding: '2px 10px',
-                borderRadius: '100px',
-                fontSize: '12px',
-                fontWeight: 700,
-                background: liveScore.criticalFails > 0
-                  ? '#FDE8E8'
-                  : liveScore.pct >= liveScore.passThresholdPct
-                  ? '#E3F2E8'
-                  : '#FEF6DA',
-                color: liveScore.criticalFails > 0
-                  ? '#B91C1C'
-                  : liveScore.pct >= liveScore.passThresholdPct
-                  ? '#166534'
-                  : '#B45309',
-              }}>
-                {liveScore.pointsAwarded} / {liveScore.pointsTotal} · {liveScore.pct}%
-              </span>
-            )}
+            {liveScore && (() => {
+              // The fail budget, not an abstract score: how many checks have
+              // failed vs how many this audit can afford before it fails.
+              const budget = allowedFails(liveScore.checksTotal, liveScore.passThresholdPct);
+              const failsUsed = liveScore.failedQuestionIds.length;
+              const doomed = liveScore.criticalFails > 0 || failsUsed > budget;
+              const atLimit = !doomed && failsUsed === budget && budget > 0;
+              return (
+                <span style={{
+                  padding: '2px 10px',
+                  borderRadius: '100px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  background: doomed ? '#FDE8E8' : atLimit ? '#FEF6DA' : '#E3F2E8',
+                  color: doomed ? '#B91C1C' : atLimit ? '#B45309' : '#166534',
+                }}>
+                  {liveScore.criticalFails > 0
+                    ? `Critical fail · audit fails`
+                    : failsUsed > budget
+                    ? `${failsUsed} fails · over the ${budget} allowed`
+                    : `${failsUsed} fail${failsUsed === 1 ? '' : 's'} · ${budget} allowed`}
+                </span>
+              );
+            })()}
             <span style={{ fontSize: '13px', fontWeight: 400, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
               {answeredCount} of {totalCount} answered
             </span>
@@ -1986,7 +1987,7 @@ export function CompletionFlowClient({ instanceId }: { instanceId: string }) {
                     const sub = liveScore.sectionScores.find((s) => s.sectionId === group.section!.id);
                     return sub ? (
                       <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-                        {sub.awarded} / {sub.total}
+                        {sub.passed} / {sub.total} passed
                       </span>
                     ) : null;
                   })()}
@@ -2008,7 +2009,6 @@ export function CompletionFlowClient({ instanceId }: { instanceId: string }) {
                   questionNumber={i + 1}
                   site={instance.site}
                   isAudit={isAudit}
-                  weights={severityWeightsOf(template)}
                   onAnswer={(qid, val) => handleAnswerWithScroll(qid, val, rootIds)}
                   onNoteChange={handleNoteChange}
                   onConfirm={(qid) => scrollToNext(qid, rootIds)}
@@ -2035,7 +2035,6 @@ export function CompletionFlowClient({ instanceId }: { instanceId: string }) {
                         questionNumber={0}
                         site={instance.site}
                         isAudit={isAudit}
-                        weights={severityWeightsOf(template)}
                         onAnswer={handleAnswer}
                         onNoteChange={handleNoteChange}
                         onConfirm={() => scrollToNext(q.id, rootIds)}

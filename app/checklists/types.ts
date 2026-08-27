@@ -28,17 +28,14 @@ export interface FollowUpRule {
 
 // ── Audit scoring ─────────────────────────────────────────────────────
 //
-// An audit is a checklist with scoring switched on. Scoreable questions
-// carry points (awarded on pass, zero on fail) and a severity that
-// drives alert routing. Questions can be grouped into sections with
-// subtotals. The result is computed once at submit and stored on the
-// instance.
+// An audit is a checklist with scoring switched on. Every scoreable
+// check counts for one; the score is the share of checks passed.
+// Severity decides consequences, not arithmetic: it routes alerts and
+// any failed Critical check fails the audit outright. Questions can be
+// grouped into sections with subtotals. The result is computed once at
+// submit and stored on the instance.
 
 export type Severity = 'critical' | 'medium' | 'low';
-
-/** Template-level weight map: a question's point value comes from its
- *  severity, so the score and the alerts can never disagree. */
-export type SeverityWeights = Record<Severity, number>;
 
 export interface AuditSection {
   id: string;
@@ -48,13 +45,13 @@ export interface AuditSection {
 export interface SectionScore {
   sectionId: string;
   name: string;
-  awarded: number;
+  passed: number;
   total: number;
 }
 
 export interface AuditScoreResult {
-  pointsAwarded: number;
-  pointsTotal: number;
+  checksPassed: number;
+  checksTotal: number;
   /** Rounded percentage, 0–100. */
   pct: number;
   /** Pass threshold the result was judged against (template value at submit). */
@@ -108,8 +105,6 @@ export interface CorrectiveAction {
   status: CorrectiveActionStatus;
   /** Audit actions only — severity of the failed question, drives alerts. */
   severity?: Severity;
-  /** Audit actions only — points forfeited by the fail. */
-  pointsLost?: number;
   /** Completed by the store when resolving. */
   resolutionText?: string;
   resolutionPhotoDataUrl?: string;
@@ -187,11 +182,9 @@ export interface ChecklistTemplate {
   active: boolean;
   /** Audit mode — scoring on questions, pass/fail result, actions on fails. */
   scoringEnabled?: boolean;
-  /** Pass mark as a percentage (defaults to 80 when scoring is enabled). */
+  /** Pass mark as a percentage (defaults to 80 when scoring is enabled).
+   *  Translates to a fail budget: how many checks can fail and still pass. */
   passThresholdPct?: number;
-  /** Points per severity (defaults: Critical 10 · Medium 5 · Low 2).
-   *  Changing a weight re-scores every affected question. */
-  severityWeights?: SeverityWeights;
   /** Question groupings shown with subtotal scores. */
   sections?: AuditSection[];
 }

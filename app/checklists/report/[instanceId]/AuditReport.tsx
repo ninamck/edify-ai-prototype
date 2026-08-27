@@ -12,7 +12,7 @@ import { AlertTriangle, Printer } from 'lucide-react';
 import { getInstanceById, getTemplateForInstance } from '../../mockData';
 import { useChecklistStore } from '../../templatesStore';
 import { useCorrectiveActions } from '../../correctiveActionsStore';
-import { computeScore, pointsFor, questionOutcome, severityLabel, SEVERITY_COLORS } from '../../scoring';
+import { computeScore, questionOutcome, severityLabel, SEVERITY_COLORS } from '../../scoring';
 import type {
   ChecklistAnswer,
   ChecklistQuestion,
@@ -196,7 +196,7 @@ export function AuditReportClient({ instanceId }: { instanceId: string }) {
               {score.pct}%
             </div>
             <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
-              {score.pointsAwarded} / {score.pointsTotal} points · pass mark {score.passThresholdPct}%
+              Passed {score.checksPassed} of {score.checksTotal} checks · pass mark {score.passThresholdPct}%
             </div>
             <div style={{
               display: 'inline-block',
@@ -242,7 +242,7 @@ export function AuditReportClient({ instanceId }: { instanceId: string }) {
               <div key={s.sectionId} style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', fontSize: '12px', lineHeight: 1.8 }}>
                 <span>{s.name}</span>
                 <span style={{ fontWeight: 700 }}>
-                  {s.awarded} / {s.total} · {s.total > 0 ? Math.round((s.awarded / s.total) * 100) : 0}%
+                  {s.passed} / {s.total} · {s.total > 0 ? Math.round((s.passed / s.total) * 100) : 0}%
                 </span>
               </div>
             ))}
@@ -301,7 +301,7 @@ export function AuditReportClient({ instanceId }: { instanceId: string }) {
                 </h2>
                 {sub && (
                   <span style={{ fontSize: '13px', fontWeight: 700 }}>
-                    {sub.awarded} / {sub.total}
+                    {sub.passed} / {sub.total} passed
                   </span>
                 )}
               </div>
@@ -349,7 +349,7 @@ export function AuditReportClient({ instanceId }: { instanceId: string }) {
                         </span>
                         {outcome !== 'unscored' && (
                           <span style={{ fontSize: '12px', fontWeight: 700, color: failed ? '#B91C1C' : '#444' }}>
-                            {outcome === 'pass' ? pointsFor(template, q) : 0} / {pointsFor(template, q)} pts
+                            {outcome === 'pass' ? 'Pass' : 'Fail'}
                           </span>
                         )}
                       </div>

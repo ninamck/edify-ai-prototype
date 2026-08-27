@@ -401,7 +401,7 @@ export function HistoryDetailClient({ instanceId }: { instanceId: string }) {
                 {score ? (
                   <>
                     <span style={{ fontWeight: 800, color: 'var(--color-text-primary)' }}>
-                      {score.pct}% · {score.pointsAwarded}/{score.pointsTotal} points
+                      {score.pct}% · passed {score.checksPassed} of {score.checksTotal} checks
                     </span>
                     <span style={{
                       padding: '1px 9px',
@@ -463,7 +463,7 @@ export function HistoryDetailClient({ instanceId }: { instanceId: string }) {
                   border: '1px solid var(--color-border-subtle)',
                   color: 'var(--color-text-secondary)',
                 }}>
-                  {s.name} {s.awarded}/{s.total}
+                  {s.name} {s.passed}/{s.total} passed
                 </span>
               ))}
             </div>

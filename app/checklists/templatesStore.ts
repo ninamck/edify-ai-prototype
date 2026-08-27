@@ -23,9 +23,10 @@ import {
 } from './mockData';
 import type { AuditScoreResult, ChecklistAnswer, ChecklistInstance, ChecklistTemplate } from './types';
 
-// v2: the 'kitchen' role was renamed to 'employee' — key bumped so demo
-// browsers with stored templates re-seed with valid role values.
-const STORAGE_KEY = 'edify:checklistTemplates:v2';
+// v3: audit scoring moved from severity-weighted points to plain
+// counting (checksPassed/checksTotal) — key bumped so stored templates
+// and score results re-seed in the new shape.
+const STORAGE_KEY = 'edify:checklistTemplates:v3';
 
 /** The demo world's "today" (matches history date-heading fixtures). */
 const DEMO_TODAY = '2026-04-04';

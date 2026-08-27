@@ -1,15 +1,20 @@
 /**
- * Audit scoring engine — shared by the completion flow (running score),
+ * Audit scoring engine — shared by the completion flow (fail budget),
  * history (stored result display) and the printable report.
  *
+ * The model, in plain English: every check counts for one. The score is
+ * the share of checks passed. The pass mark translates into a number of
+ * checks a site can fail and still pass (the "fail budget"). Severity
+ * decides consequences, not arithmetic: it routes alerts, rides on the
+ * actions raised, and any failed Critical check fails the audit
+ * outright, whatever the percentage.
+ *
  * Rules:
- * - Yes/No questions: yes = full points, no = 0.
+ * - Yes/No questions: yes = pass, no = fail.
  * - Number/temperature questions with a threshold follow-up rule
- *   (greater_than / less_than): within range = full points, breach = 0.
+ *   (greater_than / less_than): within range = pass, breach = fail.
  * - Text, rating and table questions are unscored — excluded from the
  *   denominator so the score only reflects pass/fail-able checks.
- * - Any failed Critical question fails the audit outright, regardless
- *   of the percentage.
  */
 
 import type {
@@ -18,28 +23,19 @@ import type {
   ChecklistQuestion,
   ChecklistTemplate,
   SectionScore,
-  SeverityWeights,
 } from './types';
 
 export const DEFAULT_PASS_THRESHOLD_PCT = 80;
 
-/** Default severity weight map. Point values come from severity via
- *  the template's map (editable per template), so the score and the
- *  alerts can never disagree. */
-export const DEFAULT_SEVERITY_WEIGHTS: SeverityWeights = {
-  critical: 10,
-  medium: 5,
-  low: 2,
-};
-
-export function severityWeightsOf(template: ChecklistTemplate): SeverityWeights {
-  return template.severityWeights ?? DEFAULT_SEVERITY_WEIGHTS;
-}
-
-/** A question's point value: its severity looked up in the template's
- *  weight map. Changing a weight re-scores every affected question. */
-export function pointsFor(template: ChecklistTemplate, q: ChecklistQuestion): number {
-  return severityWeightsOf(template)[q.severity ?? 'medium'];
+/**
+ * The pass mark, translated into behaviour: how many checks can fail
+ * before the audit does. E.g. 24 checks at 80% = up to 4 fails.
+ * Critical checks sit outside this budget — one critical fail fails
+ * the audit regardless.
+ */
+export function allowedFails(checksTotal: number, passThresholdPct: number): number {
+  if (checksTotal <= 0) return 0;
+  return checksTotal - Math.ceil((checksTotal * passThresholdPct) / 100);
 }
 
 /** Threshold rules are the numeric conditions that define "in range". */
@@ -88,8 +84,8 @@ export function questionOutcome(
 
 /**
  * Compute the audit result from a template + answer set. Used live
- * while completing (unanswered questions simply haven't earned their
- * points yet) and as the final locked result at submit.
+ * while completing (unanswered questions simply haven't passed yet)
+ * and as the final locked result at submit.
  */
 export function computeScore(
   template: ChecklistTemplate,
@@ -98,8 +94,7 @@ export function computeScore(
   const byId = new Map(answers.map((a) => [a.questionId, a]));
   const scoreable = template.questions.filter(isScoreable);
 
-  let pointsAwarded = 0;
-  let pointsTotal = 0;
+  let checksPassed = 0;
   let criticalFails = 0;
   const failedQuestionIds: string[] = [];
 
@@ -107,28 +102,27 @@ export function computeScore(
   // scoreable questions without a (valid) section.
   const sections = template.sections ?? [];
   const subtotals = new Map<string, SectionScore>(
-    sections.map((s) => [s.id, { sectionId: s.id, name: s.name, awarded: 0, total: 0 }]),
+    sections.map((s) => [s.id, { sectionId: s.id, name: s.name, passed: 0, total: 0 }]),
   );
-  const GENERAL: SectionScore = { sectionId: 'general', name: 'General', awarded: 0, total: 0 };
+  const GENERAL: SectionScore = { sectionId: 'general', name: 'General', passed: 0, total: 0 };
 
   for (const q of scoreable) {
-    const pts = pointsFor(template, q);
-    pointsTotal += pts;
     const bucket = (q.sectionId && subtotals.get(q.sectionId)) || GENERAL;
-    bucket.total += pts;
+    bucket.total += 1;
 
     const outcome = questionOutcome(q, byId.get(q.id));
     if (outcome === 'pass') {
-      pointsAwarded += pts;
-      bucket.awarded += pts;
+      checksPassed += 1;
+      bucket.passed += 1;
     } else if (outcome === 'fail') {
       failedQuestionIds.push(q.id);
       if (q.severity === 'critical') criticalFails += 1;
     }
-    // 'unanswered' earns nothing yet but stays in the denominator.
+    // 'unanswered' hasn't passed yet but stays in the denominator.
   }
 
-  const pct = pointsTotal > 0 ? Math.round((pointsAwarded / pointsTotal) * 100) : 0;
+  const checksTotal = scoreable.length;
+  const pct = checksTotal > 0 ? Math.round((checksPassed / checksTotal) * 100) : 0;
   const passThresholdPct = template.passThresholdPct ?? DEFAULT_PASS_THRESHOLD_PCT;
 
   const sectionScores = [
@@ -136,13 +130,17 @@ export function computeScore(
     ...(GENERAL.total > 0 ? [GENERAL] : []),
   ];
 
+  // Pass/fail is decided on raw counts, never the rounded display:
+  // 159/200 = 79.5% renders as 80% but must still fail an 80% mark.
+  const checksNeeded = checksTotal - allowedFails(checksTotal, passThresholdPct);
+
   return {
-    pointsAwarded,
-    pointsTotal,
+    checksPassed,
+    checksTotal,
     pct,
     passThresholdPct,
     criticalFails,
-    passed: criticalFails === 0 && pct >= passThresholdPct,
+    passed: checksTotal > 0 && criticalFails === 0 && checksPassed >= checksNeeded,
     sectionScores,
     failedQuestionIds,
   };
