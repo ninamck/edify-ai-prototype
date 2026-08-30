@@ -13,25 +13,26 @@ import { useMemo, useState } from 'react';
 import { ArrowUpDown, Pencil, Plus, Search } from 'lucide-react';
 import StatusPill from '@/components/Production/StatusPill';
 import {
-  DIRECTORY_SITES,
-  type DirectorySite,
-} from '@/components/Settings/companyDirectory';
+  useSitesRegister,
+  type RegisterSite,
+} from '@/components/Settings/sitesRegisterStore';
 
 type SortField = 'name' | 'status';
 type SortDir = 'asc' | 'desc';
 
 export default function SitesSettingsPage() {
+  const allSites = useSitesRegister();
   const [query, setQuery] = useState('');
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
-  const rows = useMemo<DirectorySite[]>(() => {
+  const rows = useMemo<RegisterSite[]>(() => {
     const q = query.trim().toLowerCase();
     const filtered = q
-      ? DIRECTORY_SITES.filter(
+      ? allSites.filter(
           s => s.name.toLowerCase().includes(q) || s.location.toLowerCase().includes(q),
         )
-      : DIRECTORY_SITES;
+      : allSites;
     const sorted = [...filtered].sort((a, b) => {
       const va = (a[sortField] ?? '').toString().toLowerCase();
       const vb = (b[sortField] ?? '').toString().toLowerCase();
@@ -40,7 +41,7 @@ export default function SitesSettingsPage() {
       return 0;
     });
     return sorted;
-  }, [query, sortField, sortDir]);
+  }, [allSites, query, sortField, sortDir]);
 
   function toggleSort(f: SortField) {
     if (f === sortField) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
@@ -55,7 +56,7 @@ export default function SitesSettingsPage() {
       <div style={{ maxWidth: 1080, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <PageHeader
           title="Sites"
-          subtitle={`${DIRECTORY_SITES.length} active location${DIRECTORY_SITES.length === 1 ? '' : 's'} in the estate`}
+          subtitle={`${allSites.length} location${allSites.length === 1 ? '' : 's'} in the estate`}
           query={query}
           onQueryChange={setQuery}
           searchPlaceholder="Search sites..."
@@ -94,8 +95,8 @@ export default function SitesSettingsPage() {
                   </Td>
                   <Td>
                     <StatusPill
-                      tone={site.status === 'active' ? 'success' : 'neutral'}
-                      label={site.status === 'active' ? 'Active' : 'Inactive'}
+                      tone={site.statusLabel ? 'brand' : site.status === 'active' ? 'success' : 'neutral'}
+                      label={site.statusLabel ?? (site.status === 'active' ? 'Active' : 'Inactive')}
                       size="xs"
                     />
                   </Td>

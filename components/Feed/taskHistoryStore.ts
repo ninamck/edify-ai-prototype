@@ -35,6 +35,8 @@ export type TaskKind =
   | 'supplier'
   /** Add a new product + replace an existing one across recipes. */
   | 'product-swap'
+  /** Set up one or more new sites (Pret rollout wizard). */
+  | 'site-setup'
   /** Data questions the operator asked Edify (analytics, table
    *  queries — anything that produced an answer rather than a
    *  mutation). */

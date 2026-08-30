@@ -88,6 +88,19 @@ import {
   diffWaste,
   diffStock,
 } from '@/components/Feed/commands/diffs';
+import {
+  WORKDAY_NEW_SITES,
+  describeRoleCounts,
+  describeTierPattern,
+  getTemplateShop,
+  getWorkdaySite,
+  roleCounts,
+  type DayKey,
+  type EdifyRole,
+  type SiteBenchesHot,
+  type SiteProductionSchedules,
+} from '@/components/Feed/commands/siteSetupFixtures';
+import { addSites as addRegisterSites, removeSites as removeRegisterSites } from '@/components/Settings/sitesRegisterStore';
 
 // We import the parent's ChatMsg shape indirectly — Feed.tsx defines
 // it locally. The runner only needs a structural subset, so we duck-
@@ -573,6 +586,12 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       // the parser already populated.
       if (intent.commandId === 'product-swap') {
         startProductSwapWizard(intent.args);
+        return;
+      }
+      // Site setup is a six-step wizard: pick from Workday → copy a
+      // shop → load the people → ranges & tiers → production → go live.
+      if (intent.commandId === 'site-setup') {
+        startSiteSetupWizard(intent.args);
         return;
       }
 
@@ -1157,6 +1176,221 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       });
     },
     [pushResponseFlow, pushUserEcho],
+  );
+
+  // ── Site-setup wizard ────────────────────────────────────────────
+  //
+  // Seven steps, batch-first: every selected site moves through each
+  // step together, mirroring "ten shops a week". Args accumulate
+  // across steps in cmdArgsJson:
+  //   siteIds → templates + hubs → roles → rangeIds + tiers →
+  //   production → benchesHot → goLiveDates → confirm.
+
+  // Any confirmed wizard step stays editable until the final go-live
+  // confirm. Reopening rewinds the thread to that card: everything
+  // after it (echo, bridge text, later steps) is dropped, the card's
+  // controls re-enable with the operator's values still in place, and
+  // re-confirming walks the remaining steps again with the new answers.
+  const [siteSetupDone, setSiteSetupDone] = useState(false);
+
+  const reopenSiteSetupCard = useCallback(
+    (msgId: string) => {
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.id === msgId);
+        return idx === -1 ? prev : prev.slice(0, idx + 1);
+      });
+      writeCmdState(msgId, 'pending');
+    },
+    [setMessages, writeCmdState],
+  );
+
+  const startSiteSetupWizard = useCallback(
+    (args: Record<string, unknown>) => {
+      setSiteSetupDone(false);
+      const count = args.count as number | undefined;
+      const COUNT_WORDS = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+      const countWord = count && count <= 10 ? COUNT_WORDS[count] : count ? String(count) : undefined;
+      pushResponseFlow({
+        text: `Workday shows ${WORKDAY_NEW_SITES.length} shops not yet in Edify. ${countWord ? `Which ${countWord} are we setting up?` : 'Which ones are we setting up?'}`,
+        commandId: 'site-setup',
+        cardMsgType: 'cmd-site-pick',
+        cardArgs: { ...(count ? { requestedCount: count } : {}) },
+      });
+    },
+    [pushResponseFlow],
+  );
+
+  const submitSiteSetupPick = useCallback(
+    (msgId: string, args: Record<string, unknown>, input: { siteIds: string[] }) => {
+      writeCmdState(msgId, 'confirmed');
+      const names = input.siteIds
+        .map((id) => getWorkdaySite(id)?.shortName)
+        .filter((s): s is string => Boolean(s));
+      pushUserEcho(names.join(' · '));
+      pushResponseFlow({
+        text: 'Each one copies a live shop: range and tiers, the production week with forecasts, selection times, permissions. Link each shop to the hub that makes for it, or leave it standalone.',
+        commandId: 'site-setup',
+        cardMsgType: 'cmd-site-copy',
+        cardArgs: { ...args, siteIds: input.siteIds },
+      });
+    },
+    [pushResponseFlow, pushUserEcho, writeCmdState],
+  );
+
+  const submitSiteSetupCopy = useCallback(
+    (
+      msgId: string,
+      args: Record<string, unknown>,
+      input: { templates: Record<string, string>; hubs: Record<string, string> },
+    ) => {
+      writeCmdState(msgId, 'confirmed');
+      const siteIds = (args.siteIds as string[]) ?? [];
+      // Echo the copy sources, grouped: "Manchester Market Street ×1 · St Pancras ×2".
+      const byTemplate = new Map<string, number>();
+      for (const id of siteIds) {
+        const name = getTemplateShop(input.templates[id])?.name ?? '—';
+        byTemplate.set(name, (byTemplate.get(name) ?? 0) + 1);
+      }
+      pushUserEcho(
+        Array.from(byTemplate.entries())
+          .map(([name, n]) => (n > 1 ? `${name} ×${n}` : name))
+          .join(' · '),
+      );
+      const totalPeople = siteIds.reduce((n, id) => n + (getWorkdaySite(id)?.roster.length ?? 0), 0);
+      pushResponseFlow({
+        text: `Workday lists ${totalPeople} people across the ${siteIds.length === 1 ? 'shop' : `${siteIds.length} shops`}, roles mapped from their jobs. Invites go out the week before each opening.`,
+        commandId: 'site-setup',
+        cardMsgType: 'cmd-site-team',
+        cardArgs: { ...args, ...input },
+      });
+    },
+    [pushResponseFlow, pushUserEcho, writeCmdState],
+  );
+
+  const submitSiteSetupTeam = useCallback(
+    (msgId: string, args: Record<string, unknown>, input: { roles: Record<string, EdifyRole> }) => {
+      writeCmdState(msgId, 'confirmed');
+      const siteIds = (args.siteIds as string[]) ?? [];
+      const allPeople = siteIds.flatMap((id) => getWorkdaySite(id)?.roster ?? []);
+      pushUserEcho(`${allPeople.length} people · ${describeRoleCounts(roleCounts(allPeople, input.roles))}`);
+      // Prefill range + tier pattern from each site's copied shop.
+      const templates = (args.templates as Record<string, string>) ?? {};
+      const rangeIds: Record<string, string> = {};
+      const tiers: Record<string, Record<DayKey, number>> = {};
+      for (const id of siteIds) {
+        const t = getTemplateShop(templates[id]);
+        if (!t) continue;
+        rangeIds[id] = t.rangeId;
+        tiers[id] = { ...t.tierByDay };
+      }
+      pushResponseFlow({
+        text: 'Now the food. Tiers came with the copied shop. A tier includes everything below it, so one number sets a day\u2019s whole menu.',
+        commandId: 'site-setup',
+        cardMsgType: 'cmd-site-tiers',
+        cardArgs: { ...args, ...input, rangeIds, tiers },
+      });
+    },
+    [pushResponseFlow, pushUserEcho, writeCmdState],
+  );
+
+  const submitSiteSetupTiers = useCallback(
+    (
+      msgId: string,
+      args: Record<string, unknown>,
+      input: { rangeIds: Record<string, string>; tiers: Record<string, Record<DayKey, number>> },
+    ) => {
+      writeCmdState(msgId, 'confirmed');
+      const siteIds = (args.siteIds as string[]) ?? [];
+      pushUserEcho(
+        siteIds.length === 1
+          ? describeTierPattern(input.tiers[siteIds[0]])
+          : `Tiers set · ${siteIds.length} sites`,
+      );
+      pushResponseFlow({
+        text: 'Production came with the copy: each run\u2019s bench and forecast windows, forecasts by category. Check the times against each shop\u2019s hours.',
+        commandId: 'site-setup',
+        cardMsgType: 'cmd-site-production',
+        cardArgs: { ...args, ...input },
+      });
+    },
+    [pushResponseFlow, pushUserEcho, writeCmdState],
+  );
+
+  const submitSiteSetupProduction = useCallback(
+    (
+      msgId: string,
+      args: Record<string, unknown>,
+      input: { production: SiteProductionSchedules; benches: Record<string, number> },
+    ) => {
+      writeCmdState(msgId, 'confirmed');
+      pushUserEcho('Schedules set');
+      pushResponseFlow({
+        text: 'Hot production came with the copy too: stations, batch cycles, assigned recipes, full-selection times.',
+        commandId: 'site-setup',
+        cardMsgType: 'cmd-site-benches-hot',
+        cardArgs: { ...args, ...input },
+      });
+    },
+    [pushResponseFlow, pushUserEcho, writeCmdState],
+  );
+
+  const submitSiteSetupBenchesHot = useCallback(
+    (
+      msgId: string,
+      args: Record<string, unknown>,
+      input: { benchesHot: SiteBenchesHot },
+    ) => {
+      writeCmdState(msgId, 'confirmed');
+      pushUserEcho('Hot production set');
+      pushResponseFlow({
+        text: 'Last look before I set them up.',
+        commandId: 'site-setup',
+        cardMsgType: 'cmd-site-golive',
+        cardArgs: { ...args, ...input },
+      });
+    },
+    [pushResponseFlow, pushUserEcho, writeCmdState],
+  );
+
+  const confirmSiteSetup = useCallback(
+    (
+      msgId: string,
+      final: {
+        siteIds: string[];
+        templates: Record<string, string>;
+        goLiveDates: Record<string, string>;
+      },
+    ) => {
+      const sites = final.siteIds
+        .map((id) => getWorkdaySite(id))
+        .filter((s): s is NonNullable<typeof s> => Boolean(s));
+      const totalPeople = sites.reduce((n, s) => n + s.roster.length, 0);
+
+      addRegisterSites(
+        sites.map((s) => ({
+          id: s.id,
+          name: s.name,
+          location: s.location,
+          status: 'active' as const,
+          statusLabel: `Opening ${final.goLiveDates[s.id] ?? s.openingDate}`,
+        })),
+      );
+
+      const n = sites.length;
+      const receipt: CommandReceipt = {
+        headline: `${n} site${n === 1 ? '' : 's'} set up · ${totalPeople} people loaded`,
+        detail: 'Nothing shows on a planner before its date. Every setting stays editable in Settings \u2192 Sites.',
+        href: '/settings/sites',
+        hrefLabel: 'Open Sites',
+        undo: () => {
+          removeRegisterSites(sites.map((s) => s.id));
+        },
+      };
+      writeCmdState(msgId, 'confirmed');
+      setSiteSetupDone(true);
+      pushReceipt(receipt, msgId);
+    },
+    [pushReceipt, writeCmdState],
   );
 
   // ── Cancel ───────────────────────────────────────────────────────
@@ -2437,6 +2671,16 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     startProductSwapFromSheet,
     confirmProductSheetDetails,
     confirmProductSwapFromSheetRecipes,
+    // Site-setup wizard handlers
+    submitSiteSetupPick,
+    submitSiteSetupCopy,
+    submitSiteSetupTeam,
+    submitSiteSetupTiers,
+    submitSiteSetupProduction,
+    submitSiteSetupBenchesHot,
+    confirmSiteSetup,
+    reopenSiteSetupCard,
+    siteSetupDone,
     undoReceipt,
     restoreMessages,
     snapshotTask,

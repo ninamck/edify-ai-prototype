@@ -12,9 +12,9 @@
  * setCmdStates). The registry is purely descriptive.
  */
 
-import { Trash2, Boxes, ChefHat, Settings2, Utensils, Truck, ArrowLeftRight } from 'lucide-react';
+import { Trash2, Boxes, ChefHat, Settings2, Utensils, Truck, ArrowLeftRight, Building2 } from 'lucide-react';
 import type { ChatCommand } from './types';
-import { parseWaste, parseStock, parseRecipeEdit, parseProduction, parseMenu, parseSupplier, parseProductSwap } from './parsers';
+import { parseWaste, parseStock, parseRecipeEdit, parseProduction, parseMenu, parseSupplier, parseProductSwap, parseSiteSetup } from './parsers';
 
 export const COMMAND_REGISTRY: ChatCommand[] = [
   {
@@ -156,6 +156,28 @@ export const COMMAND_REGISTRY: ChatCommand[] = [
       if (arg === 'oldProductId')   return "Which product is this replacing?";
       return 'I need a bit more info.';
     },
+  },
+  {
+    id: 'site-setup',
+    slash: '/sites',
+    slashAliases: ['/site'],
+    chipLabel: 'Set up new sites',
+    chipIcon: Building2,
+    description: 'Set up one or many new sites: people, food and production in one pass.',
+    examples: [
+      'I want to set up three new Pret sites',
+      'set up 2 new shops',
+      'open a new site',
+    ],
+    parse: parseSiteSetup,
+    // Multi-step wizard. The runner emits step-specific msgTypes
+    // (`cmd-site-pick`, `cmd-site-copy`, `cmd-site-team`,
+    // `cmd-site-tiers`, `cmd-site-production`, `cmd-site-golive`);
+    // this field is the final step for downstream code that inspects it.
+    cardMsgType: 'cmd-site-golive',
+    // The wizard launches with no args and walks the user through.
+    requiredArgs: [],
+    promptFor: () => 'Which sites are we setting up?',
   },
   {
     id: 'supplier',

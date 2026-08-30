@@ -78,6 +78,13 @@ import ProductPackDetailsCard from '@/components/Feed/commands/cards/ProductPack
 import ProductPickRecipesCard from '@/components/Feed/commands/cards/ProductPickRecipesCard';
 import ProductSwapSummaryCard from '@/components/Feed/commands/cards/ProductSwapSummaryCard';
 import ProductSheetDetailsCard from '@/components/Feed/commands/cards/ProductSheetDetailsCard';
+import SiteSetupPickSitesCard from '@/components/Feed/commands/cards/SiteSetupPickSitesCard';
+import SiteSetupCopyCard from '@/components/Feed/commands/cards/SiteSetupCopyCard';
+import SiteSetupTeamCard from '@/components/Feed/commands/cards/SiteSetupTeamCard';
+import SiteSetupRangeTiersCard from '@/components/Feed/commands/cards/SiteSetupRangeTiersCard';
+import SiteSetupProductionCard from '@/components/Feed/commands/cards/SiteSetupProductionCard';
+import SiteSetupBenchesHotCard from '@/components/Feed/commands/cards/SiteSetupBenchesHotCard';
+import SiteSetupGoLiveCard from '@/components/Feed/commands/cards/SiteSetupGoLiveCard';
 import AmbiguityPicker from '@/components/Feed/commands/cards/AmbiguityPicker';
 import ReceiptCard from '@/components/Feed/commands/cards/ReceiptCard';
 import MarginExplorerCard from '@/components/Feed/commands/cards/MarginExplorerCard';
@@ -606,6 +613,13 @@ const WORKSPACE_MSG_TYPES = new Set<string>([
   'cmd-product-sheet-details',
   'cmd-product-pick-recipes',
   'cmd-product-swap-summary',
+  'cmd-site-pick',
+  'cmd-site-copy',
+  'cmd-site-team',
+  'cmd-site-tiers',
+  'cmd-site-production',
+  'cmd-site-benches-hot',
+  'cmd-site-golive',
 ]);
 
 function isWorkspaceMsg(m: ChatMsg): boolean {
@@ -634,6 +648,13 @@ const WORKSPACE_POINTER_LABELS: Record<string, string> = {
   'chagee-tea-recipe': 'Updating the recipe',
   'analytics-chart': 'Charting your data',
   'table-result': 'Building the table',
+  'cmd-site-pick': 'Choosing the sites',
+  'cmd-site-copy': 'Copying a shop setup',
+  'cmd-site-team': 'Loading the people',
+  'cmd-site-tiers': 'Setting ranges & tiers',
+  'cmd-site-production': 'Setting production times',
+  'cmd-site-benches-hot': 'Setting hot production',
+  'cmd-site-golive': 'Check and go live',
 };
 
 /** Working-state row for the in-Feed wizard. Mirrors
@@ -9129,6 +9150,152 @@ export default function Feed({
                                   ...args,
                                   ...final,
                                   totalMatched: args.totalMatched ?? 0,
+                                })
+                              }
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {/* ── Site-setup wizard ────────────────────────── */}
+                        {m.msgType === 'cmd-site-pick' && (() => {
+                          const args = m.cmdArgsJson ? (JSON.parse(m.cmdArgsJson) as {
+                            requestedCount?: number;
+                            siteIds?: string[];
+                          }) : {};
+                          return (
+                            <SiteSetupPickSitesCard
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              requestedCount={args.requestedCount}
+                              initialSiteIds={args.siteIds}
+                              onSubmit={(input) => commandRunner.submitSiteSetupPick(m.id, args, input)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                              onEdit={commandRunner.siteSetupDone ? undefined : () => commandRunner.reopenSiteSetupCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-site-copy' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            siteIds: string[];
+                            templates?: Record<string, string>;
+                            hubs?: Record<string, string>;
+                          };
+                          return (
+                            <SiteSetupCopyCard
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              siteIds={args.siteIds}
+                              initialTemplates={args.templates}
+                              initialHubs={args.hubs}
+                              onSubmit={(input) => commandRunner.submitSiteSetupCopy(m.id, args, input)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                              onEdit={commandRunner.siteSetupDone ? undefined : () => commandRunner.reopenSiteSetupCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-site-team' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            siteIds: string[];
+                            roles?: Record<string, import('@/components/Feed/commands/siteSetupFixtures').EdifyRole>;
+                          };
+                          return (
+                            <SiteSetupTeamCard
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              siteIds={args.siteIds}
+                              initialRoles={args.roles}
+                              onSubmit={(input) => commandRunner.submitSiteSetupTeam(m.id, args, input)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                              onEdit={commandRunner.siteSetupDone ? undefined : () => commandRunner.reopenSiteSetupCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-site-tiers' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            siteIds: string[];
+                            rangeIds: Record<string, string>;
+                            tiers: Record<string, Record<import('@/components/Feed/commands/siteSetupFixtures').DayKey, number>>;
+                          };
+                          return (
+                            <SiteSetupRangeTiersCard
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              siteIds={args.siteIds}
+                              initialRanges={args.rangeIds}
+                              initialTiers={args.tiers}
+                              onSubmit={(input) => commandRunner.submitSiteSetupTiers(m.id, args, input)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                              onEdit={commandRunner.siteSetupDone ? undefined : () => commandRunner.reopenSiteSetupCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-site-production' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            siteIds: string[];
+                            templates: Record<string, string>;
+                            hubs?: Record<string, string>;
+                            production?: import('@/components/Feed/commands/siteSetupFixtures').SiteProductionSchedules;
+                            benches?: Record<string, number>;
+                          };
+                          return (
+                            <SiteSetupProductionCard
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              siteIds={args.siteIds}
+                              templates={args.templates}
+                              hubs={args.hubs}
+                              initialProduction={args.production}
+                              initialBenches={args.benches}
+                              onSubmit={(input) => commandRunner.submitSiteSetupProduction(m.id, args, input)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                              onEdit={commandRunner.siteSetupDone ? undefined : () => commandRunner.reopenSiteSetupCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-site-benches-hot' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            siteIds: string[];
+                            templates: Record<string, string>;
+                            benchesHot?: import('@/components/Feed/commands/siteSetupFixtures').SiteBenchesHot;
+                          };
+                          return (
+                            <SiteSetupBenchesHotCard
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              siteIds={args.siteIds}
+                              templates={args.templates}
+                              initialBenchesHot={args.benchesHot}
+                              onSubmit={(input) => commandRunner.submitSiteSetupBenchesHot(m.id, args, input)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                              onEdit={commandRunner.siteSetupDone ? undefined : () => commandRunner.reopenSiteSetupCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-site-golive' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            siteIds: string[];
+                            templates: Record<string, string>;
+                            hubs: Record<string, string>;
+                            roles: Record<string, import('@/components/Feed/commands/siteSetupFixtures').EdifyRole>;
+                            rangeIds: Record<string, string>;
+                            tiers: Record<string, Record<import('@/components/Feed/commands/siteSetupFixtures').DayKey, number>>;
+                            production?: import('@/components/Feed/commands/siteSetupFixtures').SiteProductionSchedules;
+                            benches?: Record<string, number>;
+                            benchesHot?: import('@/components/Feed/commands/siteSetupFixtures').SiteBenchesHot;
+                            goLiveDates?: Record<string, string>;
+                          };
+                          return (
+                            <SiteSetupGoLiveCard
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              siteIds={args.siteIds}
+                              templates={args.templates}
+                              hubs={args.hubs}
+                              roles={args.roles ?? {}}
+                              rangeIds={args.rangeIds}
+                              tiers={args.tiers}
+                              production={args.production}
+                              benches={args.benches}
+                              benchesHot={args.benchesHot}
+                              initialDates={args.goLiveDates}
+                              onConfirm={(input) =>
+                                commandRunner.confirmSiteSetup(m.id, {
+                                  siteIds: args.siteIds,
+                                  templates: args.templates,
+                                  goLiveDates: input.goLiveDates,
                                 })
                               }
                               onCancel={() => commandRunner.cancelCard(m.id)}

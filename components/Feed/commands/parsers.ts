@@ -868,6 +868,48 @@ export function parseProductSwap(text: string): CommandIntent | null {
   };
 }
 
+// ─── Site setup ─────────────────────────────────────────────────────────────
+
+const COUNT_WORDS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5,
+  six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+};
+
+/**
+ * "I want to set up three new Pret sites", "open 2 new shops",
+ * "add a new site", "setting up new sites". Extracts the count when
+ * one is present (word or digit); the wizard defaults sensibly when
+ * it isn't.
+ */
+export function parseSiteSetup(text: string): CommandIntent | null {
+  const lower = text.toLowerCase();
+
+  const noun = /\b(sites?|shops?|stores?|locations?)\b/.test(lower);
+  if (!noun) return null;
+
+  const verb = /\b(set(?:ting)?\s+up|setup|open(?:ing)?|add(?:ing)?|creat(?:e|ing)|launch(?:ing)?|onboard(?:ing)?)\b/.test(lower);
+  if (!verb) return null;
+
+  // Guard against production-settings phrasing ("change the site's
+  // cutoff") — require "new" or an explicit count to be confident.
+  const isNew = /\bnew\b/.test(lower);
+  let count: number | undefined;
+  const digit = lower.match(/\b(\d{1,2})\s+(?:new\s+)?(?:pret\s+)?(?:sites?|shops?|stores?|locations?)\b/);
+  if (digit) count = Number(digit[1]);
+  if (count === undefined) {
+    const word = lower.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:new\s+)?(?:pret\s+)?(?:sites?|shops?|stores?|locations?)\b/);
+    if (word) count = COUNT_WORDS[word[1]];
+  }
+
+  if (!isNew && count === undefined) return null;
+
+  return {
+    commandId: 'site-setup',
+    args: { ...(count !== undefined ? { count } : {}) },
+    confidence: 0.95,
+  };
+}
+
 // ─── Top-level multiplexer ──────────────────────────────────────────────────
 
 /** Run every parser, return the highest-confidence match. Returns null
@@ -888,6 +930,7 @@ export function parseCommand(text: string): CommandIntent | null {
     if (/^\/menu\b/i.test(trimmed))         return parseMenu(trimmed) ?? { commandId: 'menu', args: {}, confidence: 1 };
     if (/^\/supplier\b/i.test(trimmed))     return parseSupplier(trimmed) ?? { commandId: 'supplier', args: {}, confidence: 1 };
     if (/^\/(swap|replace|add)-product\b/i.test(trimmed)) return parseProductSwap(trimmed) ?? { commandId: 'product-swap', args: {}, confidence: 1 };
+    if (/^\/sites?\b/i.test(trimmed))       return parseSiteSetup(trimmed) ?? { commandId: 'site-setup', args: {}, confidence: 1 };
   }
 
   // Natural-language path: normalise gerund verbs ("swapping" →
@@ -903,6 +946,7 @@ export function parseCommand(text: string): CommandIntent | null {
     parseMenu(nl),
     parseSupplier(nl),
     parseProductSwap(nl),
+    parseSiteSetup(nl),
   ];
   const hits = candidates.filter((c): c is CommandIntent => c !== null);
   if (hits.length === 0) return null;

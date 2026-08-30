@@ -26,7 +26,12 @@ export type CommandId =
    *  an existing product with it across a selected set of recipes.
    *  Implemented as a multi-step wizard — see useCommandRunner's
    *  startProductSwapWizard for the flow. */
-  | 'product-swap';
+  | 'product-swap'
+  /** Set up one or more new sites end to end: pick from Workday, copy
+   *  an existing shop's setup, load the people, set ranges & tiers per
+   *  day, production times, then go live. Multi-step wizard — see
+   *  useCommandRunner's startSiteSetupWizard. */
+  | 'site-setup';
 
 /** A single resolved invocation of a command. Args are command-specific
  *  — each command exports its own arg shape. We use `unknown` here to

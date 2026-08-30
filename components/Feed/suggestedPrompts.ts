@@ -9,7 +9,7 @@
  * brand by adding a case to `CHIPS_BY_CUSTOMER`.
  */
 
-import { ChefHat, Truck, ClipboardList, ShieldCheck, type LucideIcon } from 'lucide-react';
+import { ChefHat, Truck, ClipboardList, ShieldCheck, Building2, type LucideIcon } from 'lucide-react';
 import { demoCustomer } from '@/lib/demoConfig';
 
 export type PromptChip = {
@@ -43,6 +43,12 @@ export type PromptChip = {
  *  Labels follow one wording pattern — verb + object — so the list reads
  *  as a to-do list. Chips with pending data carry a count. */
 const DEFAULT_CHIPS: PromptChip[] = [
+  {
+    label: 'Set up new sites',
+    icon: Building2,
+    text: '',
+    commandId: 'site-setup',
+  },
   {
     label: 'Create a recipe',
     icon: ChefHat,
