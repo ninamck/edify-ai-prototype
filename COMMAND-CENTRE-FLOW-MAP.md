@@ -268,6 +268,8 @@ You are building the natural-language layer that replaces the prototype's keywor
 
 **Read in this order.** The decision note (what we build, in what order), then the three build specs, then this document. The specs carry the locked constraints: staged decisions only, no auto-apply, dual attribution on every write, undo, allergens always explicitly confirmed. This document carries the field-level contract those constraints apply to. Where they disagree, the spec wins; tell me where they disagree, because I wrote both.
 
+**Every word the AI says follows `EDIFY-PRODUCT-VOICE.md`** (this repo, mirrored in Notion). Its §10 prompt block is versioned and goes into the Command Centre system prompt verbatim: the doc and the block change together, so take the block from the doc, never a copy. The prototype's hard-coded copy already follows it; generated copy must too.
+
 **What the prototype gives you.** Working confirm surfaces for every flow in §1, with the full field set as of the §7 upgrades. Run it, type the entry phrases, and watch what the cards ask, state back and offer. The prototype's flows are the interaction design; the parsers are not. `parsers.ts` is regex standing in for you.
 
 **The contract in one paragraph.** Extract everything the user's prompt contains and stage it visibly, attributed to them. Ask only for tier-one fields the prompt did not cover. State tier-two defaults back with their reasoning so silence is consent to a visible value. Put tier three behind one "anything else to set?". Never silently write allergens, pack structure, UoM or price at any confidence: those four always get an explicit per-field confirm.
