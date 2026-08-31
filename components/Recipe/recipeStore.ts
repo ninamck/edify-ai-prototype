@@ -83,6 +83,15 @@ export function updateRecipe(updated: Recipe): void {
   notify();
 }
 
+/** Add a brand-new recipe to the library. Used by the Command Centre
+ *  create-recipe flow so a chat-built recipe lands in the same store
+ *  the recipes list and editor read from. Prepended so the newest
+ *  recipe is immediately visible at the top of the list. */
+export function addRecipe(recipe: Recipe): void {
+  state = { ...state, recipes: [recipe, ...state.recipes] };
+  notify();
+}
+
 export function updateWorkflow(wf: ProductionWorkflow): void {
   state = {
     ...state,

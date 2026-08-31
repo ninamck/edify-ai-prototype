@@ -74,8 +74,20 @@ export type Supplier = {
   categories: ProductCategory[];
   sites: string[];
   status: SupplierStatus;
+  /** Order email — where purchase orders send. Required in the
+   *  production supplier form; optional here only because legacy
+   *  fixtures predate it. */
   email?: string;
   phone?: string;
+  /** Named contact at the supplier (production: contactName). */
+  contactName?: string;
+  /** Where credit requests go (production allows up to 4; the
+   *  prototype models the first). */
+  accountsEmail?: string;
+  /** The account number the supplier knows this company by. */
+  companyAccountNumber?: string;
+  /** Free-text notes (production caps at 2000 chars). */
+  notes?: string;
   cutOffTime?: string;
   leadTimeDays?: number;
   /** In the supplier's transaction `currency`. */

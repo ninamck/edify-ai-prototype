@@ -7,8 +7,12 @@ const FIELD_LABELS: Record<SupplierField, string> = {
   leadTimeDays: 'Lead time',
   minimumOrderValue: 'MOV',
   deliveryDays: 'Delivery days',
-  email: 'Email',
+  email: 'Order email',
   phone: 'Phone',
+  contactName: 'Contact name',
+  accountsEmail: 'Accounts email',
+  companyAccountNumber: 'Account number',
+  notes: 'Notes',
 };
 
 const FIELD_UNITS: Partial<Record<SupplierField, string>> = {
@@ -23,6 +27,10 @@ const FIELD_KIND: Record<SupplierField, 'number' | 'currency' | 'text' | 'array'
   deliveryDays: 'array',
   email: 'text',
   phone: 'text',
+  contactName: 'text',
+  accountsEmail: 'text',
+  companyAccountNumber: 'text',
+  notes: 'text',
 };
 
 export function diffSupplier(args: {

@@ -34,8 +34,12 @@ const FIELD_LABELS: Record<SupplierField, string> = {
   leadTimeDays: 'Lead time',
   minimumOrderValue: 'Minimum order',
   deliveryDays: 'Delivery days',
-  email: 'Email',
+  email: 'Order email',
   phone: 'Phone',
+  contactName: 'Contact name',
+  accountsEmail: 'Accounts email',
+  companyAccountNumber: 'Account number',
+  notes: 'Notes',
 };
 
 const FIELD_ORDER = Object.keys(FIELD_LABELS) as SupplierField[];
@@ -45,24 +49,32 @@ const ALL_DAYS: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 function formatValue(field: SupplierField, supplier: Supplier | undefined): string {
   if (!supplier) return '—';
   switch (field) {
-    case 'cutOffTime':         return supplier.cutOffTime ?? '—';
-    case 'leadTimeDays':       return supplier.leadTimeDays !== undefined ? `${supplier.leadTimeDays} day${supplier.leadTimeDays === 1 ? '' : 's'}` : '—';
-    case 'minimumOrderValue':  return supplier.minimumOrderValue !== undefined ? `£${supplier.minimumOrderValue}` : '—';
-    case 'deliveryDays':       return supplier.deliveryDays?.join(', ') ?? '—';
-    case 'email':              return supplier.email ?? '—';
-    case 'phone':              return supplier.phone ?? '—';
+    case 'cutOffTime':            return supplier.cutOffTime ?? '—';
+    case 'leadTimeDays':          return supplier.leadTimeDays !== undefined ? `${supplier.leadTimeDays} day${supplier.leadTimeDays === 1 ? '' : 's'}` : '—';
+    case 'minimumOrderValue':     return supplier.minimumOrderValue !== undefined ? `£${supplier.minimumOrderValue}` : '—';
+    case 'deliveryDays':          return supplier.deliveryDays?.join(', ') ?? '—';
+    case 'email':                 return supplier.email ?? '—';
+    case 'phone':                 return supplier.phone ?? '—';
+    case 'contactName':           return supplier.contactName ?? '—';
+    case 'accountsEmail':         return supplier.accountsEmail ?? '—';
+    case 'companyAccountNumber':  return supplier.companyAccountNumber ?? '—';
+    case 'notes':                 return supplier.notes ?? '—';
   }
 }
 
 function previousValueOf(field: SupplierField, supplier: Supplier | undefined): string | number | DayOfWeek[] | undefined {
   if (!supplier) return undefined;
   switch (field) {
-    case 'cutOffTime':         return supplier.cutOffTime;
-    case 'leadTimeDays':       return supplier.leadTimeDays;
-    case 'minimumOrderValue':  return supplier.minimumOrderValue;
-    case 'deliveryDays':       return supplier.deliveryDays;
-    case 'email':              return supplier.email;
-    case 'phone':              return supplier.phone;
+    case 'cutOffTime':            return supplier.cutOffTime;
+    case 'leadTimeDays':          return supplier.leadTimeDays;
+    case 'minimumOrderValue':     return supplier.minimumOrderValue;
+    case 'deliveryDays':          return supplier.deliveryDays;
+    case 'email':                 return supplier.email;
+    case 'phone':                 return supplier.phone;
+    case 'contactName':           return supplier.contactName;
+    case 'accountsEmail':         return supplier.accountsEmail;
+    case 'companyAccountNumber':  return supplier.companyAccountNumber;
+    case 'notes':                 return supplier.notes;
   }
 }
 
@@ -367,7 +379,15 @@ export default function SupplierFieldCard({ initialArgs, state, onConfirm, onCan
                       ? '£ amount'
                       : f === 'email'
                         ? 'orders@…'
-                        : '+44…'
+                        : f === 'accountsEmail'
+                          ? 'accounts@…'
+                          : f === 'contactName'
+                            ? 'e.g. Jane Doe'
+                            : f === 'companyAccountNumber'
+                              ? 'e.g. FTZ-2041'
+                              : f === 'notes'
+                                ? 'e.g. Ring the bell at the side door'
+                                : '+44…'
               }
               style={{
                 padding: '8px 12px',
@@ -376,7 +396,8 @@ export default function SupplierFieldCard({ initialArgs, state, onConfirm, onCan
                 fontSize: '13px',
                 fontWeight: 600,
                 fontFamily: 'var(--font-primary)',
-                width: '160px',
+                width: f === 'notes' ? '100%' : '160px',
+                boxSizing: 'border-box',
                 background: '#fff',
               }}
             />

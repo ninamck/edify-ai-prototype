@@ -42,6 +42,8 @@ import type {
   Product,
   DayOfWeek,
   ProductCategory,
+  Allergen,
+  AltUom,
 } from '@/components/Suppliers/fixtures';
 import {
   appendWasteEntry,
@@ -635,8 +637,12 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
             leadTimeDays: 'lead time',
             minimumOrderValue: 'minimum order',
             deliveryDays: 'delivery days',
-            email: 'email',
+            email: 'order email',
             phone: 'phone',
+            contactName: 'contact name',
+            accountsEmail: 'accounts email',
+            companyAccountNumber: 'account number',
+            notes: 'notes',
           };
           const display = (f: { field: SupplierField; value?: string }): string => {
             if (f.field === 'leadTimeDays') return `${f.value} day${f.value === '1' ? '' : 's'}`;
@@ -968,7 +974,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           return;
         }
         pushResponseFlow({
-          text: `Got it — ${input.newProductName} from ${input.supplierName}. Quick pack details so it's orderable — feel free to skip and finish later.`,
+          text: `Got it — ${input.newProductName} from ${input.supplierName}. Now the details that make it orderable — supplier code, pack structure and cost. I can't guess these, so they're required.`,
           commandId: 'product-swap',
           cardMsgType: 'cmd-product-pack-details',
           cardArgs: merged,
@@ -993,13 +999,20 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     (
       msgId: string,
       args: Record<string, unknown>,
-      input: { supplierName: string; email?: string; leadTimeDays?: number },
+      input: {
+        supplierName: string;
+        email: string;
+        contactName?: string;
+        phone?: string;
+        minimumOrderValue?: number;
+      },
     ) => {
       writeCmdState(msgId, 'confirmed');
-      const echoBits: string[] = [];
-      if (input.email) echoBits.push(input.email);
-      if (input.leadTimeDays != null) echoBits.push(`${input.leadTimeDays}d lead`);
-      pushUserEcho(echoBits.length > 0 ? echoBits.join(' · ') : 'Skipped for now');
+      const echoBits: string[] = [input.email];
+      if (input.contactName) echoBits.push(input.contactName);
+      if (input.phone) echoBits.push(input.phone);
+      if (input.minimumOrderValue != null) echoBits.push(`MOV £${input.minimumOrderValue}`);
+      pushUserEcho(echoBits.join(' · '));
       const mode = (args.mode as 'add' | 'replace' | undefined) ?? 'replace';
       const merged = { ...args, ...input };
       if (mode === 'add') {
@@ -1086,9 +1099,18 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         defaultPackQty: replaced?.packQty,
         defaultPackCost: replaced?.packCost,
         defaultUnitType: replaced?.singleUnitType,
+        // Inherited from the replaced product so the operator confirms
+        // rather than retypes — every inherited value stays visible and
+        // editable on the card. The supplier code is NOT inherited: it
+        // belongs to the old supplier's catalogue, so the new SKU needs
+        // its own.
+        defaultTaxRatePct: replaced?.taxRatePct,
+        defaultSites: replaced?.sites,
+        defaultAllergensContains: replaced?.allergensContains,
+        defaultAllergensTraces: replaced?.allergensTraces,
       };
       pushResponseFlow({
-        text: `OK — replacing ${input.oldProductName}. Quick pack details for the new one — I've pre-filled what I know.`,
+        text: `OK — replacing ${input.oldProductName}. The details that make the new one orderable — I've pre-filled what carries over, but it needs its own supplier code.`,
         commandId: 'product-swap',
         cardMsgType: 'cmd-product-pack-details',
         cardArgs: merged,
@@ -1106,15 +1128,32 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         packQty: number;
         packCost: number;
         unitType: Product['singleUnitType'];
+        supplierCode?: string;
+        taxRatePct?: number;
+        sites?: string[];
+        allergensContains?: Allergen[];
+        allergensTraces?: Allergen[];
+        singleUnitVolumeOrWeight?: number;
+        altUom?: AltUom;
+        allowSplitPack?: boolean;
+        forceMultiples?: boolean;
+        excludeFromCogs?: boolean;
+        useActualUseForTheoreticalCogs?: boolean;
         photoDataUrl?: string;
         skipped: boolean;
       },
     ) => {
       writeCmdState(msgId, 'confirmed');
+      const unitCost = input.packQty > 0 ? input.packCost / input.packQty : 0;
+      const echoBits = [
+        input.supplierCode ? `Code ${input.supplierCode}` : null,
+        `${input.packQty}${input.unitType} · £${input.packCost.toFixed(2)}`,
+        unitCost > 0 ? `£${unitCost.toFixed(unitCost < 0.1 ? 3 : 2)}/${input.unitType}` : null,
+        input.taxRatePct != null ? `VAT ${input.taxRatePct}%` : null,
+        input.photoDataUrl ? 'photo' : null,
+      ].filter((s): s is string => Boolean(s));
       pushUserEcho(
-        input.skipped
-          ? 'Skipped pack details'
-          : `${input.packQty}${input.unitType} · £${input.packCost.toFixed(2)}${input.photoDataUrl ? ' · photo' : ''}`,
+        input.skipped ? 'Skipped pack details' : echoBits.join(' · '),
       );
       const mode = (args.mode as 'add' | 'replace' | undefined) ?? 'replace';
       const newName = (args.newProductName as string) ?? 'the new product';
@@ -1798,8 +1837,12 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         leadTimeDays: 'Lead time',
         minimumOrderValue: 'MOV',
         deliveryDays: 'Delivery days',
-        email: 'Email',
+        email: 'Order email',
         phone: 'Phone',
+        contactName: 'Contact name',
+        accountsEmail: 'Accounts email',
+        companyAccountNumber: 'Account number',
+        notes: 'Notes',
       };
 
       const displayOf = (c: (typeof final.changes)[number]): string => {
@@ -1852,18 +1895,35 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         supplierMode: 'existing' | 'new';
         supplierId?: string;
         supplierName: string;
-        // Step 2 (optional)
+        // Step 2 (new-supplier path; order email required there)
         email?: string;
+        contactName?: string;
+        phone?: string;
+        minimumOrderValue?: number;
+        /** @deprecated no longer collected — production suppliers
+         *  carry an ordering schedule, not a lead time. Kept so old
+         *  replayed tasks still commit. */
         leadTimeDays?: number;
         // Step 3 (replace path only)
         oldProductId?: string;
         oldProductName?: string;
         oldCategory?: string;
-        // Step 4 (skippable)
+        // Step 4 — the field step (pack structure + code required)
         packType?: 'Pack' | 'Single';
         packQty?: number;
         packCost?: number;
         unitType?: Product['singleUnitType'];
+        supplierCode?: string;
+        taxRatePct?: number;
+        sites?: string[];
+        allergensContains?: Allergen[];
+        allergensTraces?: Allergen[];
+        singleUnitVolumeOrWeight?: number;
+        altUom?: AltUom;
+        allowSplitPack?: boolean;
+        forceMultiples?: boolean;
+        excludeFromCogs?: boolean;
+        useActualUseForTheoreticalCogs?: boolean;
         photoDataUrl?: string;
         skipped?: boolean;
         // Step 5
@@ -1902,6 +1962,9 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           sites: replaced?.sites ?? [],
           status: 'Available',
           email: final.email,
+          contactName: final.contactName,
+          phone: final.phone,
+          minimumOrderValue: final.minimumOrderValue,
           leadTimeDays: final.leadTimeDays,
         };
         upsertSupplier(newSupplier);
@@ -1916,22 +1979,26 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         name: final.newProductName,
         source: 'supplier',
         supplierId: supplierId,
-        supplierCode: '',
+        supplierCode: final.supplierCode ?? '',
         productClass: replaced?.productClass ?? 'General',
         category: (replaced?.category ?? 'Other') as ProductCategory,
         tags: replaced?.tags ?? [],
         packType: final.packType ?? replaced?.packType ?? 'Single',
         packQty: final.packQty ?? replaced?.packQty ?? 1,
         packCost: final.packCost ?? replaced?.packCost ?? 0,
-        taxRatePct: replaced?.taxRatePct ?? 0,
+        taxRatePct: final.taxRatePct ?? replaced?.taxRatePct ?? 0,
         singleUnitType: final.unitType ?? replaced?.singleUnitType ?? 'Each',
-        singleUnitVolumeOrWeight: replaced?.singleUnitVolumeOrWeight,
+        singleUnitVolumeOrWeight: final.singleUnitVolumeOrWeight ?? replaced?.singleUnitVolumeOrWeight,
         unitOfMeasure: replaced?.unitOfMeasure,
-        altUoms: replaced?.altUoms ?? [],
-        allergensContains: replaced?.allergensContains ?? [],
-        allergensTraces: replaced?.allergensTraces ?? [],
+        altUoms: final.altUom ? [final.altUom] : (replaced?.altUoms ?? []),
+        allowSplitPack: final.allowSplitPack || undefined,
+        forceMultiples: final.forceMultiples || undefined,
+        excludeFromCogs: final.excludeFromCogs || undefined,
+        useActualUseForTheoreticalCogs: final.useActualUseForTheoreticalCogs || undefined,
+        allergensContains: final.allergensContains ?? replaced?.allergensContains ?? [],
+        allergensTraces: final.allergensTraces ?? replaced?.allergensTraces ?? [],
         nutrition: replaced?.nutrition ?? {},
-        sites: replaced?.sites ?? [],
+        sites: final.sites ?? replaced?.sites ?? [],
         status: 'Available',
       };
 

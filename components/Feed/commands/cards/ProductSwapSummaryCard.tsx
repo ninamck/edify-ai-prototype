@@ -22,11 +22,17 @@ interface ProductSwapSummaryCardProps {
   newProductName: string;
   supplierMode: 'existing' | 'new';
   supplierName: string;
-  /** Pack info — undefined when the operator skipped Step 3.5. */
+  /** Pack info — undefined only on legacy sheet-import paths that
+   *  carry their own extraction card. */
   packType?: 'Pack' | 'Single';
   packQty?: number;
   packCost?: number;
   unitType?: string;
+  supplierCode?: string;
+  taxRatePct?: number;
+  sites?: string[];
+  allergensContains?: string[];
+  allergensTraces?: string[];
   photoAttached?: boolean;
   /** Replacement target (replace mode only). */
   oldProductId?: string;
@@ -71,6 +77,11 @@ export default function ProductSwapSummaryCard({
   packQty,
   packCost,
   unitType,
+  supplierCode,
+  taxRatePct,
+  sites,
+  allergensContains,
+  allergensTraces,
   photoAttached,
   oldProductId,
   oldProductName,
@@ -114,9 +125,22 @@ export default function ProductSwapSummaryCard({
   const packLine = (() => {
     if (packType == null) return null;
     const parts: string[] = [];
+    if (supplierCode) parts.push(`code ${supplierCode}`);
     if (packType === 'Pack' && packQty) parts.push(`${packQty} per pack`);
     if (packType === 'Single' && packQty) parts.push(`${packQty}${unitType ?? ''}`);
     if (packCost && packCost > 0) parts.push(`£${packCost.toFixed(2)}`);
+    if (packCost && packCost > 0 && packQty && packQty > 0) {
+      const unitCost = packCost / packQty;
+      parts.push(`£${unitCost.toFixed(unitCost < 0.1 ? 3 : 2)}/${unitType ?? 'unit'}`);
+    }
+    if (taxRatePct != null) parts.push(`VAT ${taxRatePct}%`);
+    return parts.length > 0 ? parts.join(' · ') : null;
+  })();
+  const settingsLine = (() => {
+    const parts: string[] = [];
+    if (sites && sites.length > 0) parts.push(`${sites.length} site${sites.length === 1 ? '' : 's'}`);
+    if (allergensContains && allergensContains.length > 0) parts.push(`contains ${allergensContains.join(', ')}`);
+    if (allergensTraces && allergensTraces.length > 0) parts.push(`traces of ${allergensTraces.join(', ')}`);
     return parts.length > 0 ? parts.join(' · ') : null;
   })();
 
@@ -162,7 +186,7 @@ export default function ProductSwapSummaryCard({
           )}
           <SummaryRow
             icon={Package}
-            eyebrow={`New product${photoAttached ? ' · photo attached' : ''}`}
+            eyebrow={`New supplier product${photoAttached ? ' · photo attached' : ''}`}
             text={
               <>
                 {newProductName}{' '}
@@ -181,6 +205,11 @@ export default function ProductSwapSummaryCard({
                     strokeWidth={2.2}
                     style={{ marginLeft: '4px', verticalAlign: 'middle' }}
                   />
+                )}
+                {settingsLine && (
+                  <div style={{ color: 'var(--color-text-muted)', fontWeight: 500, fontSize: '11.5px', marginTop: '2px' }}>
+                    {settingsLine}
+                  </div>
                 )}
               </>
             }

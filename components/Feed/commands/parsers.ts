@@ -617,7 +617,7 @@ export function parseMenu(text: string): CommandIntent | null {
 
 // ─── Supplier ───────────────────────────────────────────────────────────────
 
-const SUPPLIER_KEYWORDS = /\b(cut[- ]?off|lead\s*time|mov|minimum\s*order|delivery\s*days?|email|phone|contact)\b/i;
+const SUPPLIER_KEYWORDS = /\b(cut[- ]?off|lead\s*time|mov|minimum\s*order|delivery\s*days?|email|phone|contact|account\s*number|notes?)\b/i;
 
 export type SupplierField =
   | 'cutOffTime'
@@ -625,7 +625,11 @@ export type SupplierField =
   | 'minimumOrderValue'
   | 'deliveryDays'
   | 'email'
-  | 'phone';
+  | 'phone'
+  | 'contactName'
+  | 'accountsEmail'
+  | 'companyAccountNumber'
+  | 'notes';
 
 export interface SupplierArgs {
   supplierId?: string;
@@ -661,8 +665,14 @@ export function parseSupplier(text: string): CommandIntent | null {
   if (/lead\s*time/.test(lower))              detected.push('leadTimeDays');
   if (/\bmov\b|minimum\s*order/.test(lower))  detected.push('minimumOrderValue');
   if (/delivery\s*days?/.test(lower))         detected.push('deliveryDays');
-  if (/email/.test(lower))                    detected.push('email');
+  // "accounts email" is its own field — strip those phrases before
+  // the generic email test so one phrase doesn't fire both.
+  if (/accounts?\s*email/.test(lower))        detected.push('accountsEmail');
+  if (/\bemail\b/.test(lower.replace(/accounts?\s*email/g, ''))) detected.push('email');
   if (/phone/.test(lower))                    detected.push('phone');
+  if (/contact\s*(?:name|person)/.test(lower)) detected.push('contactName');
+  if (/account\s*number/.test(lower))         detected.push('companyAccountNumber');
+  if (/\bnotes?\b/.test(lower))               detected.push('notes');
 
   // Per-field value extraction. Each field looks for its own
   // signature pattern so several values can coexist in one sentence
@@ -694,8 +704,19 @@ export function parseSupplier(text: string): CommandIntent | null {
       const hit = days.filter((d) => new RegExp(`\\b${d}|${d.toLowerCase()}day`, 'i').test(text));
       return hit.length > 0 ? hit.join(',') : undefined;
     }
-    if (f === 'email') {
+    if (f === 'email' || f === 'accountsEmail') {
       return text.match(/[\w._-]+@[\w.-]+/)?.[0];
+    }
+    if (f === 'contactName') {
+      // "contact name to Jane Doe" — capture the trailing name.
+      return text.match(/contact\s*(?:name|person)\s*(?:to|is|:)?\s+([A-Z][\w'-]*(?:\s+[A-Z][\w'-]*)?)/)?.[1];
+    }
+    if (f === 'companyAccountNumber') {
+      return text.match(/account\s*number\s*(?:to|is|:)?\s*([A-Za-z0-9-]{3,})/i)?.[1];
+    }
+    if (f === 'notes') {
+      // Notes are free text — the card collects them; don't guess.
+      return undefined;
     }
     // phone
     return text.match(/[+\d][\d\s-]{6,}/)?.[0]?.trim();

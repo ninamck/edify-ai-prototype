@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Truck, SkipForward } from 'lucide-react';
+import { Truck, ChevronDown, ChevronRight } from 'lucide-react';
 import CardShell, { type CardState } from './CardShell';
 
 interface ProductNewSupplierCardProps {
@@ -9,44 +9,51 @@ interface ProductNewSupplierCardProps {
   /** Pre-filled supplier name from Step 1. */
   supplierName: string;
   initialEmail?: string;
-  initialLeadTimeDays?: number;
   onSubmit: (input: {
     supplierName: string;
-    email?: string;
-    leadTimeDays?: number;
+    email: string;
+    contactName?: string;
+    phone?: string;
+    minimumOrderValue?: number;
   }) => void;
   onCancel: () => void;
 }
 
 /**
- * Step 2 of the Replace-a-product wizard. Only shown when Step 1's
- * supplier was a new (un-matched) name.
+ * Step 2 of the product wizard — only shown when Step 1's supplier
+ * was a new (un-matched) name.
  *
- * Captures the bare minimum to make the supplier addressable — email
- * + lead time. Everything else (categories, sites, cut-off, MOV,
- * delivery days) defaults sensibly downstream and can be filled in
- * later on the supplier detail page. A "Skip for now" affordance is
- * always available since most operators just want the swap and will
- * tidy supplier metadata afterward.
+ * Two required fields make a supplier real: its name (already
+ * captured) and the order email — that's where purchase orders send,
+ * so a supplier without one can't be ordered from. Everything else
+ * (contact name, phone, minimum order) is offered behind "More
+ * details" and never forced; categories, sites and status default
+ * downstream and live on the supplier page.
  */
 export default function ProductNewSupplierCard({
   state,
   supplierName,
   initialEmail,
-  initialLeadTimeDays,
   onSubmit,
   onCancel,
 }: ProductNewSupplierCardProps) {
   const [email, setEmail] = useState<string>(initialEmail ?? '');
-  const [leadTime, setLeadTime] = useState<string>(
-    initialLeadTimeDays != null ? String(initialLeadTimeDays) : '',
-  );
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [contactName, setContactName] = useState<string>('');
+  const [phone, setPhone] = useState<string>('');
+  const [mov, setMov] = useState<string>('');
 
-  function submit(skip: boolean) {
+  const emailValid = /\S+@\S+\.\S+/.test(email.trim());
+
+  function submit() {
+    if (!emailValid) return;
+    const movNum = Number(mov);
     onSubmit({
       supplierName,
-      email: skip ? undefined : email.trim() || undefined,
-      leadTimeDays: skip ? undefined : leadTime.trim() ? Number(leadTime) : undefined,
+      email: email.trim(),
+      contactName: contactName.trim() || undefined,
+      phone: phone.trim() || undefined,
+      minimumOrderValue: mov.trim() && Number.isFinite(movNum) && movNum > 0 ? movNum : undefined,
     });
   }
 
@@ -54,11 +61,12 @@ export default function ProductNewSupplierCard({
     <CardShell
       icon={Truck}
       title={`New supplier · ${supplierName}`}
-      subtitle="Step 2 of 4 — supplier basics (optional)"
+      subtitle="Order email is required — it's where purchase orders go"
       state={state}
       confirmLabel="Next"
       onCancel={onCancel}
-      onConfirm={() => submit(false)}
+      onConfirm={submit}
+      confirmDisabled={!emailValid}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <p
@@ -70,9 +78,9 @@ export default function ProductNewSupplierCard({
             lineHeight: 1.45,
           }}
         >
-          A bit of contact info now will save you a trip to the supplier
-          page later. Anything blank just defaults — you can edit it
-          later.
+          A supplier without an order email can&rsquo;t be ordered from, so
+          that one&rsquo;s required. Everything else can wait — add it now or
+          on the supplier page later.
         </p>
 
         <div>
@@ -89,53 +97,72 @@ export default function ProductNewSupplierCard({
         </div>
 
         <div>
-          <Label>Lead time (days)</Label>
-          <input
-            type="number"
-            min={0}
-            step={1}
-            value={leadTime}
-            disabled={state !== 'pending'}
-            onChange={(e) => setLeadTime(e.target.value)}
-            placeholder="e.g. 2"
-            style={{ ...inputStyle, width: '120px' }}
-          />
-          <div
-            style={{
-              fontSize: '11px',
-              fontWeight: 500,
-              color: 'var(--color-text-muted)',
-              marginTop: '4px',
-            }}
-          >
-            How many days between ordering and delivery.
-          </div>
-        </div>
-
-        {state === 'pending' && (
           <button
             type="button"
-            onClick={() => submit(true)}
+            onClick={() => setMoreOpen((v) => !v)}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              alignSelf: 'flex-start',
               gap: '6px',
               padding: '6px 12px',
               borderRadius: '100px',
-              border: '1.5px dashed var(--color-border, rgba(0,28,53,0.18))',
-              background: 'transparent',
+              border: '1.5px solid var(--color-border, rgba(0,28,53,0.18))',
+              background: '#fff',
               fontSize: '11px',
-              fontWeight: 600,
+              fontWeight: 700,
               fontFamily: 'var(--font-primary)',
               color: 'var(--color-text-secondary)',
               cursor: 'pointer',
+              letterSpacing: '0.03em',
+              textTransform: 'uppercase',
             }}
           >
-            <SkipForward size={12} strokeWidth={2.2} />
-            Skip for now
+            {moreOpen ? <ChevronDown size={12} strokeWidth={2.4} /> : <ChevronRight size={12} strokeWidth={2.4} />}
+            More details · contact, phone, minimum order
           </button>
-        )}
+
+          {moreOpen && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '150px' }}>
+                  <Label>Contact name</Label>
+                  <input
+                    type="text"
+                    value={contactName}
+                    disabled={state !== 'pending'}
+                    onChange={(e) => setContactName(e.target.value)}
+                    placeholder="e.g. Jane Doe"
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: '150px' }}>
+                  <Label>Phone</Label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    disabled={state !== 'pending'}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+44…"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Minimum order value (£)</Label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={mov}
+                  disabled={state !== 'pending'}
+                  onChange={(e) => setMov(e.target.value)}
+                  placeholder="e.g. 150"
+                  style={{ ...inputStyle, width: '150px' }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </CardShell>
   );

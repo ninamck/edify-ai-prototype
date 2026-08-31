@@ -94,9 +94,12 @@ import BatchReviewCard, { type BatchReviewRow, type BatchRowResult, type BatchRe
 import type { AmbiguityChoice } from '@/components/Feed/commands/types';
 import {
   DEFAULT_WIZARD_TEMPLATE,
+  deliveryNet,
+  effectiveCogsPct,
   findTemplateByName,
   penceToPounds,
   srpExVatForCogs,
+  srpIncVat,
   totalFoodCostP,
   type PackagingTemplate,
   type RecipeWizardTemplate,
@@ -116,7 +119,8 @@ import {
   genId,
   snapshot as snapshotSuppliersStore,
 } from '@/components/Suppliers/store';
-import { useRecipes } from '@/components/Recipe/recipeStore';
+import { useRecipes, addRecipe, updateRecipe, findRecipe } from '@/components/Recipe/recipeStore';
+import type { Recipe } from '@/components/Recipe/libraryFixtures';
 import { TypeChip as PosTypeChip, PosKindChip, type EntityType as POSTargetType } from '@/components/ItemMatching/TypeChip';
 import {
   masterCompanyAvg,
@@ -581,6 +585,8 @@ const WORKSPACE_MSG_TYPES = new Set<string>([
   'storage-area',
   'pos-match-suggestions',
   'recipe-card',
+  'yield-loss',
+  'variable-ingredients',
   'cogs-target',
   'margin-explorer',
   'integrity-check',
@@ -588,6 +594,7 @@ const WORKSPACE_MSG_TYPES = new Set<string>([
   'packaging-picker',
   'allergen-check',
   'site-selection',
+  'recipe-save-summary',
   'prod-prep',
   'prod-shelf',
   'prod-batch',
@@ -636,11 +643,14 @@ const WORKSPACE_POINTER_LABELS: Record<string, string> = {
   'product-sheet-import': 'Reviewing the product sheet',
   'new-supplier-import': 'Reviewing the supplier import',
   'recipe-card': 'Building the recipe',
+  'yield-loss': 'Setting yield loss',
+  'variable-ingredients': 'Adding variable ingredients',
   'cogs-target': 'Setting the cost target',
-  'margin-explorer': 'Exploring margins',
+  'margin-explorer': 'Pricing per channel',
   'packaging-picker': 'Choosing packaging',
   'allergen-check': 'Checking allergens',
   'site-selection': 'Choosing sites',
+  'recipe-save-summary': 'Reviewing before save',
   'storage-area': 'Updating storage areas',
   'stock-review': 'Reviewing stock takes',
   'stock-sites': 'Choosing stock sites',
@@ -668,7 +678,88 @@ type RecipeIngredient = {
   unitCostP: number;
   source: string;
   toTaste?: boolean;
+  /** Yield loss % (0–99), mirroring web-v2's per-ingredient field.
+   *  The qty stays net (what lands on the plate); costing grosses
+   *  it up by 1/(1−loss). */
+  yieldLossPct?: string;
 };
+
+/** A variable ingredient captured in the wizard — mirrors web-v2's
+ *  model: EXTRA layers on top of the base build when picked;
+ *  REPLACEMENT swaps out one base ingredient. No own price, no
+ *  channel flags, no min/max — those don't exist in production. */
+type VariableIngredientRow = {
+  id: string;
+  type: 'Extra' | 'Replacement';
+  /** Base-ingredient id this row replaces (Replacement only). */
+  replacesId?: string;
+  replacesName?: string;
+  name: string;
+  qty: string;
+  uom: string;
+  yieldLossPct?: string;
+};
+
+/** Per-channel flags on a packaging row — matches web-v2's
+ *  `dineIn` / `takeAway` / `delivery` booleans. Each channel's
+ *  price includes only the packaging flagged for it. */
+type PackagingChannels = { dineIn: boolean; takeaway: boolean; delivery: boolean };
+
+const DEFAULT_PACKAGING_CHANNELS: PackagingChannels = { dineIn: false, takeaway: true, delivery: true };
+
+/** Working packaging row in the wizard. The template's rows arrive
+ *  as AI suggestions (name + qty pre-filled); the operator can edit
+ *  qty and unit, and add more from the packaging catalogue. */
+type PackagingRow = {
+  id: string;
+  name: string;
+  /** £ per unit. */
+  cost: number;
+  unit: string;
+  qty: string;
+  aiSuggested?: boolean;
+};
+
+/** Web-v2's packaging unit list, trimmed to the prototype's casing. */
+const PACKAGING_UOM_OPTIONS = ['ea', 'sheet', 'pack', 'box', 'bag', 'roll', 'sleeve'];
+
+function packagingUomOptions(unit: string): string[] {
+  return PACKAGING_UOM_OPTIONS.includes(unit) ? PACKAGING_UOM_OPTIONS : [unit, ...PACKAGING_UOM_OPTIONS];
+}
+
+/** £ per serve for one packaging row — qty × unit cost. */
+function packagingLineGBP(row: PackagingRow): number {
+  return (Number(row.qty) || 0) * row.cost;
+}
+
+/** Compatible-unit pairs for the UoM select on the ingredient card.
+ *  Metric pairs convert (qty and unit cost together, so the line
+ *  cost never moves); count-style units stay fixed. */
+function uomOptionsFor(uom: string): string[] {
+  switch (uom) {
+    case 'g': case 'kg': return ['g', 'kg'];
+    case 'ml': case 'L': return ['ml', 'L'];
+    default: return [uom];
+  }
+}
+
+/** g↔kg and ml↔L conversion applied to a working row when the UoM
+ *  select changes. Qty scales down and unit cost scales up (or vice
+ *  versa) so the line cost is identical either way. */
+function convertRowUom(row: RecipeIngredient, nextUom: string): RecipeIngredient {
+  if (row.uom === nextUom) return row;
+  const up = (row.uom === 'g' && nextUom === 'kg') || (row.uom === 'ml' && nextUom === 'L');
+  const down = (row.uom === 'kg' && nextUom === 'g') || (row.uom === 'L' && nextUom === 'ml');
+  if (!up && !down) return { ...row, uom: nextUom };
+  const factor = up ? 1000 : 1 / 1000;
+  const qtyNum = Number(row.qty);
+  return {
+    ...row,
+    uom: nextUom,
+    qty: Number.isFinite(qtyNum) ? String(Number((qtyNum / factor).toFixed(4))) : row.qty,
+    unitCostP: row.unitCostP * factor,
+  };
+}
 
 /** Empty seed — the actual rows are pushed by `startRecipeFlow`
  *  once we know which template the user is building. */
@@ -734,20 +825,26 @@ function kindBadgeColor(kind: IngredientCatalogueRow['kind']): { bg: string; fg:
 }
 
 const RECIPE_GREETING =
-  "Hey, happy to add this to the menu. Have you got a target food-cost % in mind?";
+  "Let's build this recipe. Send a photo, voice note me, or describe it here, even just the dish name, and I'll draft the ingredients. Or build it yourself in the workspace on the left.";
 const RECIPE_ASK_MSG =
   "Sure — what kind of recipe would you like to update? Type the dish and I\u2019ll pull it up.";
 const RECIPE_COST_MSG =
-  "Here's the cost build-up and what the price needs to be to hit your target food cost. Tap a swap to see how the price moves:";
+  "Here's the price per channel at your target. Tap a different % to see how the prices move:";
 const RECIPE_COGS_TARGET_MSG =
-  "Before I price it — what's the **target food cost %** you want to aim for? 25% is a typical brunch-item target.";
+  "What's the **target food cost %** you want to aim for? 25% is a typical brunch-item target.";
+const RECIPE_YIELD_LOSS_MSG =
+  "Do any of these ingredients have **yield loss** — trim, peel or cooking loss? Set a % where it applies, or skip if everything is used as bought.";
+const RECIPE_VARIABLE_MSG =
+  "Any **variable ingredients**? These are extras the customer can add, or swaps for a base ingredient — like adding halloumi or switching the bread.";
+const RECIPE_PRODUCTION_OFFER_MSG =
+  "Want to set the **production settings** now — prep time, shelf life, batch sizes? You can also do this later from the recipe page.";
 
 function buildRecipeCardIntro(template: RecipeWizardTemplate): string {
-  return `Great — here's a starting build for **${template.name}**. Adjust the quantities to match your serve, then I'll price it.`;
+  return `Great — here's a starting build for **${template.name}**. Adjust the quantities and units to match your serve; we'll cover yield loss, options and packaging before I price it.`;
 }
 
 function buildPackagingMsg(template: RecipeWizardTemplate): string {
-  return `Would you like to include any packaging in the recipe cost? Here are common options for ${template.name.toLowerCase()}:`;
+  return `Which packaging does ${template.name.toLowerCase()} leave the pass in? I've suggested the likely items with quantities — adjust qty and unit, set the channels, and search below to add anything I've missed. Takeaway packaging changes the takeaway price:`;
 }
 
 function buildSitesMsg(template: RecipeWizardTemplate): string {
@@ -775,10 +872,34 @@ const MOCK_SITES: Site[] = [
   { id: 'airport', name: 'Airport Lounge' },
 ];
 
+/** Everything the margin-explorer lock captures, so the save summary
+ *  and the persisted recipe carry the full channel economics rather
+ *  than just the dine-in headline. */
+type LockedPricing = {
+  /** Dine-in SRP ex VAT at the target %. */
+  srpExVat: number;
+  targetCogsPct: number;
+  /** Ingredient cost per serve in £ at lock time (ex packaging). */
+  foodCostGBP: number;
+  /** VAT % applied to the dine-in / takeaway channels. */
+  vatPct: number;
+  /** Per-channel ex-VAT SRPs — each channel's cost includes only
+   *  the packaging flagged for that channel, so they can differ. */
+  takeawayExVat: number;
+  deliveryExVat: number;
+  dineInIncVat: number;
+  takeawayIncVat: number;
+  deliveryIncVat: number;
+  deliveryNetGBP: number;
+};
+
 function buildDoneMsg(
+  recipeName: string,
   template: RecipeWizardTemplate,
   siteNames: string[],
-  pricing: { srpExVat: number; targetCogsPct: number } | null,
+  pricing: LockedPricing | null,
+  supplierLinked: boolean,
+  productionConfigured: boolean,
 ): string {
   const sitesStr = siteNames.length === 1
     ? `**${siteNames[0]}**`
@@ -786,10 +907,14 @@ function buildDoneMsg(
   const pricingLine = pricing
     ? `Locked in at **\u00a3${pricing.srpExVat.toFixed(2)} dine in** — that's a **${pricing.targetCogsPct}% food cost**.\n\n`
     : '';
+  const supplierLine = supplierLinked ? `${template.supplierAddedFragment}\n\n` : '';
+  const productionTail = productionConfigured
+    ? 'production settings included.'
+    : 'You can add production settings from the recipe page whenever you need them.';
   return (
-    `**Done!** ${template.supplierAddedFragment}\n\n` +
+    `**Done!** ${supplierLine}` +
     pricingLine +
-    `Your **${template.name}** recipe is live in Edify under the **${template.productClass}** class, assigned to ${sitesStr}. You'll find it under Recipes \u2192 ${template.productClass}. The recipe is ready to add to any production plan.`
+    `Your **${recipeName}** recipe is live in Edify under the **${template.productClass}** class, assigned to ${sitesStr}. You'll find it under Recipes \u2192 ${template.productClass}${productionConfigured ? ', ' : '. '}${productionTail}`
   );
 }
 
@@ -807,26 +932,71 @@ function templateRowToRecipeIngredient(t: TemplateIngredient): RecipeIngredient 
 }
 
 /** Convert wizard working rows back to the template-shape rows
- *  the Margin Explorer consumes. Non-numeric qty entries fall
- *  back to 0 so the cost rollup degrades gracefully. */
+ *  the pricing step consumes. Non-numeric qty entries fall back
+ *  to 0 so the cost rollup degrades gracefully. Yield loss
+ *  grosses up the unit cost (you pay for what you prep, not what
+ *  lands on the plate) while the displayed qty stays net — the
+ *  same net-in, gross-costed model web-v2 uses. */
 function recipeIngredientsToTemplateRows(rows: RecipeIngredient[]): TemplateIngredient[] {
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    qty: Number(r.qty) || 0,
-    uom: r.uom,
-    unitCostP: r.unitCostP,
-    source: r.source,
-    toTaste: r.toTaste,
-  }));
+  return rows.map((r) => {
+    const loss = Math.min(99, Math.max(0, Number(r.yieldLossPct) || 0));
+    return {
+      id: r.id,
+      name: r.name,
+      qty: Number(r.qty) || 0,
+      uom: r.uom,
+      unitCostP: loss > 0 ? r.unitCostP / (1 - loss / 100) : r.unitCostP,
+      source: r.source,
+      toTaste: r.toTaste,
+    };
+  });
+}
+
+/** "chicken caesar wrap" → "Chicken Caesar Wrap" for the recipe name
+ *  when no template matched the typed dish. */
+function titleCaseDishName(input: string): string {
+  return input
+    .trim()
+    .split(/\s+/)
+    .map((w) => (w.length > 2 ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(' ');
+}
+
+/** "5 min" → 300 seconds. Unparseable values fall back to null. */
+function prepTimeToSeconds(label: string): number | null {
+  const m = /(\d+)/.exec(label);
+  return m ? Number(m[1]) * 60 : null;
+}
+
+/** "30 min" / "2 hours" / "End of day" → minutes for the recipe's
+ *  production block. End of day approximates to a 12-hour service. */
+function shelfLifeToMinutes(label: string): number | null {
+  if (/end of day/i.test(label)) return 720;
+  const m = /(\d+)\s*(min|hour)/i.exec(label);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return /hour/i.test(m[2]) ? n * 60 : n;
+}
+
+/** Production-category pill → the recipe library's category enum. */
+function prodCategoryToRecipeCategory(label: string): Recipe['category'] {
+  switch (label) {
+    case 'Sandwiches & Wraps': return 'Sandwich';
+    case 'Salads': return 'Salad';
+    case 'Snacks': return 'Snack';
+    case 'Cold Food':
+    case 'Hot Food':
+    default:
+      return 'Food';
+  }
 }
 
 // ─── Production flow constants ───────────────────────────────────────────────
 
-function buildProdPrepMsg(template: RecipeWizardTemplate): string {
+function buildProdPrepMsg(recipeName: string): string {
   return (
-    `Let's get your **${template.name}** onto a production schedule \u2014 I'll ask a few quick questions, with sensible defaults already filled in. ` +
-    `First up: what's the prep time per unit?`
+    `Before I save **${recipeName}**, I need its production settings \u2014 the production planner relies on them, so I can't skip this bit. ` +
+    `I've filled in sensible defaults; confirm or adjust each one. First up: what's the prep time per unit?`
   );
 }
 const PROD_SHELF_MSG =
@@ -867,19 +1037,31 @@ const DEFAULT_PROD_SETTINGS: ProdSettings = {
 
 function RecipeCardEditor({
   recipeName,
+  onNameChange,
   servesQty,
+  onServesChange,
   servesUom,
   ingredients,
   onChange,
+  onUomChange,
   onAdd,
   onRemove,
   onStartNewProduct,
 }: {
   recipeName: string;
-  servesQty: number;
+  /** Name and yield are asked, not assumed — both editable in the
+   *  header. Yield especially: it divides into every per-portion
+   *  number downstream, so it is kitchen knowledge the flow must
+   *  collect rather than a template default it displays. */
+  onNameChange: (name: string) => void;
+  servesQty: string;
+  onServesChange: (qty: string) => void;
   servesUom: string;
   ingredients: RecipeIngredient[];
   onChange: (idx: number, qty: string) => void;
+  /** UoM select per row — metric pairs (g↔kg, ml↔L) convert qty and
+   *  unit cost together so the line cost is unchanged. */
+  onUomChange: (idx: number, uom: string) => void;
   onAdd: (row: RecipeIngredient) => void;
   onRemove: (id: string) => void;
   /** Called when the operator wants to add a product that doesn't yet
@@ -976,42 +1158,89 @@ function RecipeCardEditor({
         gap: '8px',
       }}>
         <ChefHat size={14} color="var(--color-accent-active)" strokeWidth={2} />
-        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-          {recipeName}
-        </span>
-        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', marginLeft: 'auto' }}>
-          Serves {servesQty}{servesUom !== 'each' ? ` ${servesUom}` : ''}
+        <input
+          type="text"
+          value={recipeName}
+          onChange={(e) => onNameChange(e.target.value)}
+          aria-label="Recipe name"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            padding: '4px 8px',
+            borderRadius: '6px',
+            border: '1px solid transparent',
+            fontSize: '13px',
+            fontWeight: 700,
+            fontFamily: 'var(--font-primary)',
+            color: 'var(--color-text-primary)',
+            background: 'transparent',
+            outline: 'none',
+          }}
+          onFocus={(e) => { e.currentTarget.style.border = '1px solid var(--color-border-subtle)'; e.currentTarget.style.background = '#fff'; }}
+          onBlur={(e) => { e.currentTarget.style.border = '1px solid transparent'; e.currentTarget.style.background = 'transparent'; }}
+        />
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginLeft: 'auto', flexShrink: 0 }}>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>Serves</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={servesQty}
+            onChange={(e) => onServesChange(e.target.value)}
+            aria-label="Yield (serves)"
+            style={{
+              width: '36px',
+              padding: '4px 6px',
+              borderRadius: '6px',
+              border: '1px solid var(--color-border-subtle)',
+              fontSize: '12px',
+              fontWeight: 600,
+              fontFamily: 'var(--font-primary)',
+              textAlign: 'right',
+              color: 'var(--color-text-primary)',
+              background: '#fff',
+              outline: 'none',
+            }}
+          />
+          {servesUom !== 'each' && (
+            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>{servesUom}</span>
+          )}
         </span>
       </div>
 
-      {ingredients.map((ing, i) => (
+      {ingredients.map((ing, i) => {
+        const loss = Math.min(99, Math.max(0, Number(ing.yieldLossPct) || 0));
+        const grossUnitCostP = loss > 0 ? ing.unitCostP / (1 - loss / 100) : ing.unitCostP;
+        const lineGBP = ((Number(ing.qty) || 0) * grossUnitCostP) / 100;
+        return (
         <div
           key={ing.id}
           style={{
-            display: 'flex',
+            display: 'grid',
+            gridTemplateColumns: '1fr 48px 52px 56px 22px',
             alignItems: 'center',
             padding: '8px 14px',
             borderBottom: '1px solid var(--color-border-subtle)',
             fontSize: '13px',
-            gap: '8px',
+            gap: '6px',
           }}
         >
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ minWidth: 0 }}>
             <div style={{ color: 'var(--color-text-secondary)' }}>{ing.name}</div>
             <div style={{ fontSize: '10.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
               {ing.source}
             </div>
           </div>
           {ing.toTaste ? (
-            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', width: '64px', textAlign: 'right' }}>to taste</span>
+            <span style={{ gridColumn: '2 / 4', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', textAlign: 'right' }}>to taste</span>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <>
               <input
                 type="text"
                 value={ing.qty}
                 onChange={(e) => onChange(i, e.target.value)}
+                aria-label={`Quantity for ${ing.name}`}
                 style={{
-                  width: '48px',
+                  width: '100%',
                   padding: '4px 6px',
                   borderRadius: '6px',
                   border: '1px solid var(--color-border-subtle)',
@@ -1022,11 +1251,40 @@ function RecipeCardEditor({
                   color: 'var(--color-text-primary)',
                   background: '#fff',
                   outline: 'none',
+                  boxSizing: 'border-box',
                 }}
               />
-              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', minWidth: '16px' }}>{ing.uom}</span>
-            </div>
+              {/* Always a select — single-unit rows just have one
+                  option — so the columns line up row to row. */}
+              <select
+                value={ing.uom}
+                disabled={uomOptionsFor(ing.uom).length < 2}
+                onChange={(e) => onUomChange(i, e.target.value)}
+                aria-label={`Unit for ${ing.name}`}
+                style={{
+                  width: '100%',
+                  padding: '4px 2px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--color-border-subtle)',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  fontFamily: 'var(--font-primary)',
+                  color: 'var(--color-text-secondary)',
+                  background: '#fff',
+                  outline: 'none',
+                  cursor: uomOptionsFor(ing.uom).length > 1 ? 'pointer' : 'default',
+                  boxSizing: 'border-box',
+                }}
+              >
+                {uomOptionsFor(ing.uom).map((u) => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+              </select>
+            </>
           )}
+          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)', textAlign: 'right' }}>
+            £{lineGBP.toFixed(2)}
+          </span>
           <button
             type="button"
             onClick={() => onRemove(ing.id)}
@@ -1057,7 +1315,31 @@ function RecipeCardEditor({
             <X size={12} strokeWidth={2} />
           </button>
         </div>
-      ))}
+        );
+      })}
+
+      {/* Live food cost — updates as quantities, units and rows
+          change, so the price is visible from the first card. */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          padding: '9px 14px',
+          borderBottom: '1px solid var(--color-border-subtle)',
+          background: 'rgba(0, 28, 53, 0.02)',
+        }}
+      >
+        <span style={{ flex: 1, fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+          Food cost / serve
+        </span>
+        <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)', marginRight: '28px' }}>
+          £{(ingredients.reduce((s, ing) => {
+            const loss = Math.min(99, Math.max(0, Number(ing.yieldLossPct) || 0));
+            const gross = loss > 0 ? ing.unitCostP / (1 - loss / 100) : ing.unitCostP;
+            return s + (Number(ing.qty) || 0) * gross;
+          }, 0) / 100).toFixed(2)}
+        </span>
+      </div>
 
       {/* Add-ingredient row — always visible at the bottom so the
           operator can extend the template without flipping a mode.
@@ -1440,18 +1722,349 @@ function CogsTargetPicker({
   );
 }
 
-function PackagingPicker({ options, selected, onToggle, onConfirm, onSkip, state }: {
-  options: PackagingTemplate[];
-  selected: Set<string>;
-  onToggle: (id: string) => void;
+/** Post-ingredient step: per-ingredient yield loss %. Mirrors
+ *  web-v2's field (net qty in, gross qty costed) — the wizard asks
+ *  once, here, rather than burying an input on every row. */
+function YieldLossCard({ ingredients, values, onChange, onConfirm, onSkip, state }: {
+  ingredients: RecipeIngredient[];
+  values: Record<string, string>;
+  onChange: (id: string, v: string) => void;
   onConfirm: () => void;
   onSkip: () => void;
   state: CardState;
 }) {
-  const totalPackaging = options
-    .filter(p => selected.has(p.id))
-    .reduce((s, p) => s + p.cost, 0);
   const disabled = state !== 'pending';
+  const rows = ingredients.filter((i) => !i.toTaste);
+  const anySet = rows.some((r) => (Number(values[r.id]) || 0) > 0);
+  return (
+    <CardShell
+      icon={ChefHat}
+      title="Yield loss"
+      subtitle="Trim, peel or cooking loss — the cost grosses up to what you actually prep"
+      state={state}
+      confirmLabel="Apply yield loss"
+      confirmDisabled={!anySet}
+      cancelLabel="No yield loss"
+      onConfirm={onConfirm}
+      onCancel={onSkip}
+    >
+      <div style={{ margin: '-12px', borderRadius: 0 }}>
+        {rows.map((ing, i) => (
+          <div
+            key={ing.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '8px 14px',
+              gap: '10px',
+              borderBottom: i < rows.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
+              fontSize: '13px',
+            }}
+          >
+            <span style={{ flex: 1, color: 'var(--color-text-secondary)', minWidth: 0 }}>{ing.name}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <input
+                type="number"
+                min={0}
+                max={99}
+                value={values[ing.id] ?? ''}
+                disabled={disabled}
+                placeholder="0"
+                onChange={(e) => onChange(ing.id, e.target.value)}
+                aria-label={`Yield loss % for ${ing.name}`}
+                style={{
+                  width: '52px',
+                  padding: '4px 6px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--color-border-subtle)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  fontFamily: 'var(--font-primary)',
+                  textAlign: 'right',
+                  color: 'var(--color-text-primary)',
+                  background: disabled ? 'rgba(0,28,53,0.03)' : '#fff',
+                  outline: 'none',
+                }}
+              />
+              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>%</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </CardShell>
+  );
+}
+
+const VARIABLE_UOM_OPTIONS = ['g', 'kg', 'ml', 'L', 'pc', 'each', 'slice'];
+
+/** Variable-ingredients step — the web-v2 model: an Extra layers on
+ *  top of the base build; a Replacement swaps a named base
+ *  ingredient. Qty, UoM and yield loss per row; no own price, no
+ *  channel flags (neither exists in production). */
+function VariableIngredientsCard({ baseIngredients, rows, onAdd, onRemove, onConfirm, onSkip, state }: {
+  baseIngredients: RecipeIngredient[];
+  rows: VariableIngredientRow[];
+  onAdd: (row: VariableIngredientRow) => void;
+  onRemove: (id: string) => void;
+  onConfirm: () => void;
+  onSkip: () => void;
+  state: CardState;
+}) {
+  const disabled = state !== 'pending';
+  const [draftType, setDraftType] = useState<'Extra' | 'Replacement'>('Extra');
+  const [draftReplacesId, setDraftReplacesId] = useState<string>('');
+  const [draftName, setDraftName] = useState('');
+  const [draftQty, setDraftQty] = useState('');
+  const [draftUom, setDraftUom] = useState('g');
+  const [draftLoss, setDraftLoss] = useState('');
+
+  const canAdd =
+    draftName.trim().length > 0 &&
+    Number(draftQty) > 0 &&
+    (draftType === 'Extra' || draftReplacesId !== '');
+
+  function commitDraft() {
+    if (!canAdd) return;
+    const replaced = baseIngredients.find((b) => b.id === draftReplacesId);
+    onAdd({
+      id: `var-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      type: draftType,
+      replacesId: draftType === 'Replacement' ? draftReplacesId : undefined,
+      replacesName: draftType === 'Replacement' ? replaced?.name : undefined,
+      name: draftName.trim(),
+      qty: draftQty,
+      uom: draftUom,
+      yieldLossPct: Number(draftLoss) > 0 ? draftLoss : undefined,
+    });
+    setDraftName('');
+    setDraftQty('');
+    setDraftLoss('');
+    setDraftReplacesId('');
+  }
+
+  const pillStyle = (active: boolean): React.CSSProperties => ({
+    padding: '5px 12px',
+    borderRadius: '100px',
+    border: active ? '1.5px solid var(--color-accent-active)' : '1.5px solid var(--color-border)',
+    background: active ? 'var(--color-accent-active)' : '#fff',
+    color: active ? '#fff' : 'var(--color-text-secondary)',
+    fontSize: '12px',
+    fontWeight: 600,
+    fontFamily: 'var(--font-primary)',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+  });
+  const fieldStyle: React.CSSProperties = {
+    padding: '6px 8px',
+    borderRadius: '6px',
+    border: '1px solid var(--color-border-subtle)',
+    fontSize: '12px',
+    fontWeight: 500,
+    fontFamily: 'var(--font-primary)',
+    color: 'var(--color-text-primary)',
+    background: disabled ? 'rgba(0,28,53,0.03)' : '#fff',
+    outline: 'none',
+  };
+
+  return (
+    <CardShell
+      icon={ChefHat}
+      title="Variable ingredients"
+      subtitle="Extras the customer can add, or swaps for a base ingredient"
+      state={state}
+      confirmLabel={`Add ${rows.length} variable ingredient${rows.length === 1 ? '' : 's'}`}
+      confirmDisabled={rows.length === 0}
+      cancelLabel="None needed"
+      onConfirm={onConfirm}
+      onCancel={onSkip}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {rows.length > 0 && (
+          <div style={{ borderRadius: '8px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden' }}>
+            {rows.map((row, i) => (
+              <div
+                key={row.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '7px 10px',
+                  borderBottom: i < rows.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
+                  fontSize: '12.5px',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: '10.5px',
+                    fontWeight: 700,
+                    letterSpacing: '0.03em',
+                    textTransform: 'uppercase',
+                    padding: '1px 7px',
+                    borderRadius: '100px',
+                    background: row.type === 'Extra' ? 'rgba(40,175,201,0.12)' : 'rgba(231,184,0,0.16)',
+                    color: row.type === 'Extra' ? 'var(--color-accent-deep)' : '#8a6900',
+                    flexShrink: 0,
+                  }}
+                >
+                  {row.type}
+                </span>
+                <span style={{ flex: 1, minWidth: 0, color: 'var(--color-text-primary)', fontWeight: 600 }}>
+                  {row.name}
+                  {row.type === 'Replacement' && row.replacesName && (
+                    <span style={{ fontWeight: 500, color: 'var(--color-text-muted)' }}> · replaces {row.replacesName}</span>
+                  )}
+                </span>
+                <span style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-muted)', flexShrink: 0 }}>
+                  {row.qty}{row.uom}
+                  {row.yieldLossPct ? ` · ${row.yieldLossPct}% loss` : ''}
+                </span>
+                {!disabled && (
+                  <button
+                    type="button"
+                    onClick={() => onRemove(row.id)}
+                    aria-label={`Remove ${row.name}`}
+                    style={{ border: 'none', background: 'transparent', color: 'var(--color-text-muted)', cursor: 'pointer', padding: '2px', display: 'inline-flex' }}
+                  >
+                    <X size={12} strokeWidth={2} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!disabled && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button type="button" disabled={disabled} onClick={() => setDraftType('Extra')} style={pillStyle(draftType === 'Extra')}>Extra</button>
+              <button type="button" disabled={disabled} onClick={() => setDraftType('Replacement')} style={pillStyle(draftType === 'Replacement')}>Replacement</button>
+            </div>
+            {draftType === 'Replacement' && (
+              <select
+                value={draftReplacesId}
+                disabled={disabled}
+                onChange={(e) => setDraftReplacesId(e.target.value)}
+                aria-label="Replaces which base ingredient"
+                style={{ ...fieldStyle, cursor: 'pointer' }}
+              >
+                <option value="">Replaces…</option>
+                {baseIngredients.filter((b) => !b.toTaste).map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            )}
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={draftName}
+                disabled={disabled}
+                onChange={(e) => setDraftName(e.target.value)}
+                placeholder={draftType === 'Extra' ? 'e.g. Halloumi (grilled)' : 'e.g. Gluten-free bread'}
+                aria-label="Variable ingredient name"
+                style={{ ...fieldStyle, flex: 1, minWidth: '160px' }}
+              />
+              <input
+                type="number"
+                min={0}
+                value={draftQty}
+                disabled={disabled}
+                onChange={(e) => setDraftQty(e.target.value)}
+                placeholder="qty"
+                aria-label="Quantity"
+                style={{ ...fieldStyle, width: '56px', textAlign: 'right' }}
+              />
+              <select
+                value={draftUom}
+                disabled={disabled}
+                onChange={(e) => setDraftUom(e.target.value)}
+                aria-label="Unit"
+                style={{ ...fieldStyle, cursor: 'pointer' }}
+              >
+                {VARIABLE_UOM_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                <input
+                  type="number"
+                  min={0}
+                  max={99}
+                  value={draftLoss}
+                  disabled={disabled}
+                  onChange={(e) => setDraftLoss(e.target.value)}
+                  placeholder="loss"
+                  aria-label="Yield loss %"
+                  style={{ ...fieldStyle, width: '52px', textAlign: 'right' }}
+                />
+                <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)' }}>%</span>
+              </div>
+              <button
+                type="button"
+                disabled={!canAdd}
+                onClick={commitDraft}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: canAdd ? 'var(--color-accent-active)' : 'rgba(0,28,53,0.08)',
+                  color: canAdd ? '#fff' : 'var(--color-text-muted)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  fontFamily: 'var(--font-primary)',
+                  cursor: canAdd ? 'pointer' : 'not-allowed',
+                }}
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </CardShell>
+  );
+}
+
+function PackagingPicker({ rows, catalogue, selected, channels, onToggle, onToggleChannel, onQtyChange, onUomChange, onAddRow, onConfirm, onSkip, state }: {
+  rows: PackagingRow[];
+  /** Packaging-category products the operator can add beyond the
+   *  AI-suggested rows. Unit cost pre-derived (£/each). */
+  catalogue: { id: string; name: string; cost: number; unit: string }[];
+  selected: Set<string>;
+  /** Per-row channel flags (web-v2's dineIn/takeAway/delivery). */
+  channels: Record<string, PackagingChannels>;
+  onToggle: (id: string) => void;
+  onToggleChannel: (id: string, channel: keyof PackagingChannels) => void;
+  onQtyChange: (id: string, qty: string) => void;
+  onUomChange: (id: string, uom: string) => void;
+  onAddRow: (row: PackagingRow) => void;
+  onConfirm: () => void;
+  onSkip: () => void;
+  state: CardState;
+}) {
+  const totalPackaging = rows
+    .filter(p => selected.has(p.id))
+    .reduce((s, p) => s + packagingLineGBP(p), 0);
+  const disabled = state !== 'pending';
+  const [query, setQuery] = useState('');
+  const trimmed = query.trim().toLowerCase();
+  const existingIds = new Set(rows.map((r) => r.id));
+  const matches = trimmed.length > 0
+    ? catalogue.filter((c) => !existingIds.has(c.id) && c.name.toLowerCase().includes(trimmed)).slice(0, 5)
+    : [];
+  const CHANNEL_LABELS: { key: keyof PackagingChannels; label: string }[] = [
+    { key: 'dineIn', label: 'Dine in' },
+    { key: 'takeaway', label: 'Takeaway' },
+    { key: 'delivery', label: 'Delivery' },
+  ];
+  const inputStyle: React.CSSProperties = {
+    padding: '4px 6px',
+    borderRadius: '6px',
+    border: '1px solid var(--color-border-subtle)',
+    fontSize: '12px',
+    fontWeight: 600,
+    fontFamily: 'var(--font-primary)',
+    color: 'var(--color-text-primary)',
+    background: '#fff',
+    outline: 'none',
+    boxSizing: 'border-box',
+  };
 
   return (
     <CardShell
@@ -1466,60 +2079,169 @@ function PackagingPicker({ options, selected, onToggle, onConfirm, onSkip, state
       onCancel={onSkip}
     >
       <div style={{ margin: '-12px', borderRadius: '0' }}>
-      {options.map((pkg, i) => {
+      {rows.map((pkg) => {
         const isSelected = selected.has(pkg.id);
+        const rowChannels = channels[pkg.id] ?? DEFAULT_PACKAGING_CHANNELS;
         return (
-          <button
+          <div
             key={pkg.id}
-            type="button"
-            disabled={disabled}
-            onClick={() => onToggle(pkg.id)}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              width: '100%',
-              padding: '10px 14px',
-              gap: '10px',
-              borderBottom: i < options.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
+              borderBottom: '1px solid var(--color-border-subtle)',
               background: isSelected ? 'rgba(34,68,68,0.04)' : '#fff',
-              border: 'none',
               borderLeft: isSelected ? '3px solid var(--color-accent-active)' : '3px solid transparent',
-              cursor: 'pointer',
-              fontFamily: 'var(--font-primary)',
-              textAlign: 'left',
               transition: 'all 0.12s',
             }}
           >
-            <span style={{
-              width: '18px',
-              height: '18px',
-              borderRadius: '4px',
-              border: isSelected ? '2px solid var(--color-accent-active)' : '2px solid var(--color-border)',
-              background: isSelected ? 'var(--color-accent-active)' : '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              transition: 'all 0.12s',
-            }}>
-              {isSelected && (
-                <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                  <path d="M1 4L3.5 6.5L9 1" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              )}
-            </span>
-            <span style={{ flex: 1, fontSize: '13px', color: 'var(--color-text-primary)', fontWeight: isSelected ? 600 : 400 }}>
-              {pkg.name}
-            </span>
-            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
-              per {pkg.unit}
-            </span>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: isSelected ? 'var(--color-accent-active)' : 'var(--color-text-secondary)', minWidth: '42px', textAlign: 'right' }}>
-              £{pkg.cost.toFixed(2)}
-            </span>
-          </button>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '18px 1fr 48px 68px 52px',
+                alignItems: 'center',
+                padding: '10px 14px',
+                gap: '8px',
+              }}
+            >
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onToggle(pkg.id)}
+                aria-label={`${isSelected ? 'Remove' : 'Include'} ${pkg.name}`}
+                style={{
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '4px',
+                  border: isSelected ? '2px solid var(--color-accent-active)' : '2px solid var(--color-border)',
+                  background: isSelected ? 'var(--color-accent-active)' : '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  padding: 0,
+                  transition: 'all 0.12s',
+                }}
+              >
+                {isSelected && (
+                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                    <path d="M1 4L3.5 6.5L9 1" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </button>
+              <div style={{ minWidth: 0 }}>
+                <span style={{ fontSize: '13px', color: 'var(--color-text-primary)', fontWeight: isSelected ? 600 : 400 }}>
+                  {pkg.name}
+                </span>
+                <div style={{ fontSize: '10.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px' }}>
+                  {pkg.aiSuggested ? 'Suggested · ' : ''}£{pkg.cost.toFixed(2)} per {pkg.unit}
+                </div>
+              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={pkg.qty}
+                disabled={disabled || !isSelected}
+                onChange={(e) => onQtyChange(pkg.id, e.target.value)}
+                aria-label={`Quantity of ${pkg.name}`}
+                style={{ ...inputStyle, width: '100%', textAlign: 'right', opacity: isSelected ? 1 : 0.5 }}
+              />
+              <select
+                value={pkg.unit}
+                disabled={disabled || !isSelected}
+                onChange={(e) => onUomChange(pkg.id, e.target.value)}
+                aria-label={`Unit for ${pkg.name}`}
+                style={{ ...inputStyle, width: '100%', fontWeight: 500, color: 'var(--color-text-secondary)', cursor: disabled || !isSelected ? 'default' : 'pointer', opacity: isSelected ? 1 : 0.5, padding: '4px 2px' }}
+              >
+                {packagingUomOptions(pkg.unit).map((u) => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+              </select>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: isSelected ? 'var(--color-accent-active)' : 'var(--color-text-muted)', textAlign: 'right' }}>
+                £{packagingLineGBP(pkg).toFixed(2)}
+              </span>
+            </div>
+            {isSelected && (
+              <div style={{ display: 'flex', gap: '6px', padding: '0 14px 10px 40px' }}>
+                {CHANNEL_LABELS.map(({ key, label }) => {
+                  const on = rowChannels[key];
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => onToggleChannel(pkg.id, key)}
+                      style={{
+                        padding: '3px 10px',
+                        borderRadius: '100px',
+                        border: on ? '1.5px solid var(--color-accent-active)' : '1.5px solid var(--color-border)',
+                        background: on ? 'rgba(40,175,201,0.10)' : '#fff',
+                        color: on ? 'var(--color-accent-deep)' : 'var(--color-text-muted)',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        fontFamily: 'var(--font-primary)',
+                        cursor: disabled ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         );
       })}
+
+      {/* Add more — typeahead over the packaging catalogue, so the
+          four AI suggestions above are a starting point, not a cap. */}
+      {!disabled && (
+        <div style={{ padding: '8px 14px', background: 'rgba(0,28,53,0.02)' }}>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Add packaging — search the catalogue…"
+            aria-label="Search packaging catalogue"
+            style={{ ...inputStyle, width: '100%', fontWeight: 500 }}
+          />
+          {matches.length > 0 && (
+            <div style={{ marginTop: '6px', borderRadius: '8px', border: '1px solid var(--color-border-subtle)', overflow: 'hidden', background: '#fff' }}>
+              {matches.map((c, i) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => {
+                    onAddRow({ id: c.id, name: c.name, cost: c.cost, unit: c.unit, qty: '1' });
+                    setQuery('');
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    width: '100%',
+                    padding: '8px 10px',
+                    border: 'none',
+                    borderBottom: i < matches.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
+                    background: '#fff',
+                    fontFamily: 'var(--font-primary)',
+                    fontSize: '12.5px',
+                    color: 'var(--color-text-primary)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <span style={{ flex: 1, minWidth: 0 }}>{c.name}</span>
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)' }}>£{c.cost.toFixed(2)}/{c.unit}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {trimmed.length > 1 && matches.length === 0 && (
+            <div style={{ marginTop: '6px', fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
+              Nothing in the catalogue matches — add it as a product first and it&rsquo;ll be available here.
+            </div>
+          )}
+        </div>
+      )}
 
       </div>
     </CardShell>
@@ -2545,6 +3267,9 @@ type ExtractedSupplierSheet = {
   categories: ProductCategory[];
   email?: string;
   phone?: string;
+  contactName?: string;
+  accountsEmail?: string;
+  companyAccountNumber?: string;
   cutOffTime?: string;
   leadTimeDays?: number;
   minimumOrderValue?: number;
@@ -2584,6 +3309,9 @@ function mockSupplierSheet(): ExtractedSupplierSheet {
     categories: ['Beverage'],
     email: 'wholesale@atlasdrinks.co',
     phone: '+44 20 7946 1280',
+    contactName: 'Priya Shah',
+    accountsEmail: 'accounts@atlasdrinks.co',
+    companyAccountNumber: 'EDF-4471',
     cutOffTime: '14:00',
     leadTimeDays: 2,
     minimumOrderValue: 220,
@@ -3498,8 +4226,11 @@ function NewSupplierImportCard({
           <DetailRow label="Name" value={data.name} />
           <DetailRow label="Short code" value={data.shortCode} />
           <DetailRow label="Categories" value={data.categories.join(', ')} />
-          <DetailRow label="Email" value={data.email ?? '—'} />
+          <DetailRow label="Order email" value={data.email ?? '—'} />
+          <DetailRow label="Contact" value={data.contactName ?? '—'} />
           <DetailRow label="Phone" value={data.phone ?? '—'} />
+          <DetailRow label="Accounts email" value={data.accountsEmail ?? '—'} />
+          <DetailRow label="Account number" value={data.companyAccountNumber ?? '—'} />
           <DetailRow
             label="Cut-off · lead time"
             value={`${data.cutOffTime ?? '—'} · ${data.leadTimeDays ?? '—'}d`}
@@ -3952,10 +4683,10 @@ function CategoryClosingCard({ settings, onUpdate, onConfirm, state }: { setting
   );
 }
 
-function ProductionSummaryCard({ settings }: { settings: ProdSettings }) {
+function ProductionSummaryCard({ settings, recipeName = 'Chicken & Mayo Sandwich', productClass = 'Food' }: { settings: ProdSettings; recipeName?: string; productClass?: string }) {
   const rows = [
-    { label: 'Recipe', value: 'Chicken & Mayo Sandwich', bold: true },
-    { label: 'Product class', value: 'Food' },
+    { label: 'Recipe', value: recipeName, bold: true },
+    { label: 'Product class', value: productClass },
     { label: 'Category', value: settings.category },
     { label: 'Prep time', value: settings.prepTime },
     { label: 'Shelf life', value: settings.shelfLife },
@@ -3978,6 +4709,128 @@ function ProductionSummaryCard({ settings }: { settings: ProdSettings }) {
             <span style={{ fontSize: '12px', fontWeight: row.bold ? 700 : 600, color: 'var(--color-text-primary)' }}>{row.value}</span>
           </div>
         ))}
+      </div>
+    </CardShell>
+  );
+}
+
+/** The pre-save review — everything the recipe will be created with,
+ *  economics included, on one card. The one field it collects fresh
+ *  is the optional method/instructions note ("offer, don't force"). */
+function RecipeSaveSummaryCard({
+  recipeName,
+  productClass,
+  yieldQty,
+  yieldUom,
+  siteNames,
+  allergens,
+  packaging,
+  variableIngredients,
+  pricing,
+  instructions,
+  onInstructionsChange,
+  state,
+  onConfirm,
+}: {
+  recipeName: string;
+  productClass: string;
+  yieldQty: number;
+  yieldUom: string;
+  siteNames: string[];
+  allergens: string[];
+  packaging: PackagingRow[];
+  variableIngredients: VariableIngredientRow[];
+  pricing: LockedPricing | null;
+  instructions: string;
+  onInstructionsChange: (v: string) => void;
+  state: CardState;
+  onConfirm: () => void;
+}) {
+  const disabled = state !== 'pending';
+  const packagingCost = packaging.reduce((s, p) => s + packagingLineGBP(p), 0);
+  const detailRows: { label: string; value: string }[] = [
+    { label: 'Product class', value: productClass },
+    { label: 'Yield', value: `${yieldQty} ${yieldUom}` },
+    { label: 'Sites', value: siteNames.join(', ') || 'None selected' },
+    { label: 'Allergens', value: allergens.length > 0 ? allergens.join(', ') : 'None' },
+    {
+      label: 'Packaging',
+      value: packaging.length > 0
+        ? `${packaging.map((p) => (Number(p.qty) || 0) > 1 ? `${p.qty}× ${p.name}` : p.name).join(', ')} · £${packagingCost.toFixed(2)}/serve`
+        : 'None',
+    },
+    ...(variableIngredients.length > 0
+      ? [{
+          label: 'Variable ingredients',
+          value: variableIngredients.map((v) => `${v.name} (${v.type.toLowerCase()})`).join(', '),
+        }]
+      : []),
+    { label: 'Status', value: 'Active on save' },
+  ];
+  const econRows: { label: string; value: string }[] = pricing
+    ? [
+        { label: 'Food cost / serve', value: `£${pricing.foodCostGBP.toFixed(2)}` },
+        ...(packagingCost > 0 ? [{ label: 'Packaging / serve', value: `£${packagingCost.toFixed(2)}` }] : []),
+        { label: `Food cost vs target ${pricing.targetCogsPct}%`, value: `£${pricing.srpExVat.toFixed(2)} SRP ex VAT` },
+        { label: `Dine in${pricing.vatPct > 0 ? ` · inc ${pricing.vatPct}% VAT` : ''}`, value: `£${pricing.dineInIncVat.toFixed(2)}` },
+        { label: `Takeaway${pricing.vatPct > 0 ? ` · inc ${pricing.vatPct}% VAT` : ' · zero-rated'}`, value: `£${pricing.takeawayIncVat.toFixed(2)}` },
+        { label: 'Delivery · inc 20% VAT, net after 30% commission', value: `£${pricing.deliveryIncVat.toFixed(2)} · net £${pricing.deliveryNetGBP.toFixed(2)}` },
+      ]
+    : [];
+  return (
+    <CardShell
+      icon={ChefHat}
+      title={`Save ${recipeName}`}
+      state={state}
+      confirmLabel="Save recipe"
+      onConfirm={onConfirm}
+    >
+      <div>
+        {detailRows.map((row, i) => (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '12px', padding: '5px 0', borderBottom: '1px solid var(--color-border-subtle)' }}>
+            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', flexShrink: 0 }}>{row.label}</span>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)', textAlign: 'right' }}>{row.value}</span>
+          </div>
+        ))}
+        {econRows.length > 0 && (
+          <div style={{ margin: '10px 0 0', padding: '8px 10px', borderRadius: '8px', background: 'rgba(40,175,201,0.06)' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
+              Economics
+            </div>
+            {econRows.map((row, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '12px', padding: '3px 0' }}>
+                <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{row.label}</span>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>{row.value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ marginTop: '10px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
+            Method / instructions <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>· optional</span>
+          </div>
+          <textarea
+            value={instructions}
+            disabled={disabled}
+            onChange={(e) => onInstructionsChange(e.target.value)}
+            placeholder="e.g. Toast the sourdough, smash the avocado with lemon and salt, finish with chilli flakes…"
+            rows={3}
+            style={{
+              width: '100%',
+              padding: '8px 10px',
+              borderRadius: '8px',
+              border: '1px solid var(--color-border-subtle)',
+              fontSize: '12px',
+              fontWeight: 500,
+              fontFamily: 'var(--font-primary)',
+              color: 'var(--color-text-primary)',
+              background: disabled ? 'rgba(0,28,53,0.03)' : '#fff',
+              outline: 'none',
+              resize: 'vertical',
+              boxSizing: 'border-box',
+            }}
+          />
+        </div>
       </div>
     </CardShell>
   );
@@ -5917,6 +6770,20 @@ export default function Feed({
    *  matches" flow scans all of it, not just freshly-imported rows. */
   const allProducts = useProducts();
   const allRecipes = useRecipes();
+  /** Packaging-category products the packaging picker's "add more"
+   *  search offers, priced per each (pack cost ÷ pack qty). */
+  const packagingCatalogue = useMemo(
+    () =>
+      allProducts
+        .filter((p) => p.category === 'Packaging' && p.packQty > 0)
+        .map((p) => ({
+          id: `pkg-${p.id}`,
+          name: p.name,
+          cost: Math.round((p.packCost / p.packQty) * 100) / 100,
+          unit: 'ea',
+        })),
+    [allProducts],
+  );
   /** Everything a POS button could point at — feeds the "None of
    *  these — browse the full list" escape hatch in match triage. */
   const posCatalogue = useMemo<POSMatchCandidate[]>(
@@ -5931,9 +6798,25 @@ export default function Feed({
    *  guards against a second receipt when rows are undone/redone. */
   const posMatchReceiptSentRef = useRef<Set<string>>(new Set());
   const [selectedPackaging, setSelectedPackaging] = useState<Set<string>>(new Set());
+  /** Working packaging list — the template's rows land as AI
+   *  suggestions with a qty; the operator edits qty/unit and can
+   *  add more from the packaging catalogue. */
+  const [packagingRows, setPackagingRows] = useState<PackagingRow[]>([]);
+  /** Per-row channel flags for selected packaging (dine in /
+   *  takeaway / delivery). Only the flagged channels carry that
+   *  row's cost into their price. */
+  const [packagingChannels, setPackagingChannels] = useState<Record<string, PackagingChannels>>({});
   /** True when the operator chose "No packaging needed" — the persisted
    *  packaging card then shows Cancelled instead of Done. */
   const [packagingSkipped, setPackagingSkipped] = useState(false);
+  /** Draft yield-loss % per ingredient id, captured on the yield-loss
+   *  card then written onto `recipeIngredients` on confirm. */
+  const [yieldLossDraft, setYieldLossDraft] = useState<Record<string, string>>({});
+  /** True when the yield-loss step was skipped ("no yield loss"). */
+  const [yieldLossSkipped, setYieldLossSkipped] = useState(false);
+  /** Variable ingredients added in the wizard (extras / replacements). */
+  const [variableIngredients, setVariableIngredients] = useState<VariableIngredientRow[]>([]);
+  const [variableSkipped, setVariableSkipped] = useState(false);
   const [selectedAllergens, setSelectedAllergens] = useState<Set<string>>(new Set());
   const [selectedSites, setSelectedSites] = useState<Set<string>>(new Set(['fitzroy']));
   const doneSiteNamesRef = useRef<string[]>(['Fitzroy Espresso']);
@@ -5943,10 +6826,29 @@ export default function Feed({
   const [activeTemplate, setActiveTemplate] = useState<RecipeWizardTemplate>(DEFAULT_WIZARD_TEMPLATE);
   const [targetCogsPct, setTargetCogsPct] = useState<number>(DEFAULT_WIZARD_TEMPLATE.defaultTargetCogsPct);
   const [selectedSwaps, setSelectedSwaps] = useState<Record<string, string>>({});
+  /** Editable recipe name — seeded from the matched template, or from
+   *  whatever the user typed when no template matched, so an unknown
+   *  dish keeps its own name rather than saving as "Avocado Toast". */
+  const [recipeName, setRecipeName] = useState<string>(DEFAULT_WIZARD_TEMPLATE.name);
+  /** Editable yield — the spec treats yield as kitchen knowledge, so
+   *  the card asks for it (with the template's value as the suggestion)
+   *  rather than displaying it read-only. */
+  const [recipeYieldQty, setRecipeYieldQty] = useState<string>(String(DEFAULT_WIZARD_TEMPLATE.yieldQty));
+  /** Optional method / instructions captured on the save summary. */
+  const [recipeInstructions, setRecipeInstructions] = useState<string>('');
+  /** Whether the operator accepted the supplier-link offer — drives
+   *  the done-message copy. */
+  const supplierLinkedRef = useRef<boolean>(false);
+  /** Whether the operator took the optional post-save production
+   *  walkthrough — drives the done copy and the receipt detail. */
+  const productionConfiguredRef = useRef<boolean>(false);
+  /** Id of the recipe written by `confirmRecipeSave`, so the optional
+   *  production walkthrough can patch it after the fact. */
+  const savedRecipeIdRef = useRef<string | null>(null);
   /** Final pricing snapshot taken at the moment the user locks in
-   *  on the Margin Explorer. Used by the done summary so it can
-   *  echo "locked in at £X dine in (Y% food cost)". */
-  const lockedPricingRef = useRef<{ srpExVat: number; targetCogsPct: number } | null>(null);
+   *  on the Margin Explorer. Feeds the save summary's economics block,
+   *  the persisted recipe and the done copy. */
+  const lockedPricingRef = useRef<LockedPricing | null>(null);
   /** Seed text shown as the user's first turn after the greeting.
    *  Defaults to the template name; can be overridden when the chip
    *  passes its own copy through `startRecipeFlow(text)`. */
@@ -6196,33 +7098,34 @@ export default function Feed({
       }, 1200);
       return () => clearTimeout(t);
     }
-    // ── 3: ask for the target food-cost % ──────────────────────
+    // ── 3: yield-loss ask ──────────────────────────────────────
     if (recipeFlow === 3) {
       const t = setTimeout(() => {
         setMessages(prev => [...prev, {
-          id: `q-cogs-target-${Date.now()}`,
+          id: `q-yield-loss-${Date.now()}`,
           role: 'quinn',
-          text: RECIPE_COGS_TARGET_MSG,
-          msgType: 'cogs-target',
+          text: RECIPE_YIELD_LOSS_MSG,
+          msgType: 'yield-loss',
         }]);
         setRecipeFlow(4);
       }, 1000);
       return () => clearTimeout(t);
     }
-    // ── 5: post the margin explorer once the COGS target is set
+    // ── 5: variable ingredients offer ──────────────────────────
     if (recipeFlow === 5) {
       const t = setTimeout(() => {
         setMessages(prev => [...prev, {
-          id: `q-margin-${Date.now()}`,
+          id: `q-variable-${Date.now()}`,
           role: 'quinn',
-          text: RECIPE_COST_MSG,
-          msgType: 'margin-explorer',
+          text: RECIPE_VARIABLE_MSG,
+          msgType: 'variable-ingredients',
         }]);
         setRecipeFlow(6);
-      }, 1000);
+      }, 900);
       return () => clearTimeout(t);
     }
-    // ── 7: packaging picker ────────────────────────────────────
+    // ── 7: packaging picker — before pricing, because takeaway
+    //       and delivery packaging feed those channels' prices. ──
     if (recipeFlow === 7) {
       const t = setTimeout(() => {
         setMessages(prev => [...prev, {
@@ -6235,8 +7138,34 @@ export default function Feed({
       }, 900);
       return () => clearTimeout(t);
     }
-    // ── 9: allergen check ──────────────────────────────────────
+    // ── 9: ask for the target food-cost % ──────────────────────
     if (recipeFlow === 9) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: `q-cogs-target-${Date.now()}`,
+          role: 'quinn',
+          text: RECIPE_COGS_TARGET_MSG,
+          msgType: 'cogs-target',
+        }]);
+        setRecipeFlow(10);
+      }, 1000);
+      return () => clearTimeout(t);
+    }
+    // ── 11: pricing card once the COGS target is set ───────────
+    if (recipeFlow === 11) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: `q-margin-${Date.now()}`,
+          role: 'quinn',
+          text: RECIPE_COST_MSG,
+          msgType: 'margin-explorer',
+        }]);
+        setRecipeFlow(12);
+      }, 1000);
+      return () => clearTimeout(t);
+    }
+    // ── 13: allergen check ─────────────────────────────────────
+    if (recipeFlow === 13) {
       const t = setTimeout(() => {
         setMessages(prev => [...prev, {
           id: `q-allergen-${Date.now()}`,
@@ -6244,12 +7173,12 @@ export default function Feed({
           text: RECIPE_ALLERGEN_MSG,
           msgType: 'allergen-check',
         }]);
-        setRecipeFlow(10);
+        setRecipeFlow(14);
       }, 800);
       return () => clearTimeout(t);
     }
-    // ── 11: sites selection ────────────────────────────────────
-    if (recipeFlow === 11) {
+    // ── 15: sites selection ────────────────────────────────────
+    if (recipeFlow === 15) {
       const t = setTimeout(() => {
         setMessages(prev => [...prev, {
           id: `q-sites-${Date.now()}`,
@@ -6257,53 +7186,69 @@ export default function Feed({
           text: buildSitesMsg(activeTemplate),
           msgType: 'site-selection',
         }]);
-        setRecipeFlow(12);
+        setRecipeFlow(16);
       }, 700);
       return () => clearTimeout(t);
     }
-    // ── 14: supplier-link offer ────────────────────────────────
-    if (recipeFlow === 14) {
+    // ── 17: pre-save summary ───────────────────────────────────
+    if (recipeFlow === 17) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: `q-save-summary-${Date.now()}`,
+          role: 'quinn',
+          text: "Here's everything I'm about to save. Check the numbers, add method notes if you want them on the recipe, then save:",
+          msgType: 'recipe-save-summary',
+        }]);
+        setRecipeFlow(18);
+      }, 900);
+      return () => clearTimeout(t);
+    }
+    // ── 19: supplier-link offer (post-save) ────────────────────
+    if (recipeFlow === 19) {
       const t = setTimeout(() => {
         setMessages(prev => [...prev, {
           id: `q-supplier-${Date.now()}`,
           role: 'quinn',
           text: activeTemplate.supplierLinkMsg,
         }]);
-        setRecipeFlow(15);
+        setRecipeFlow(20);
       }, 800);
       return () => clearTimeout(t);
     }
-    // ── 16: done summary ──────────────────────────────────────
-    if (recipeFlow === 16) {
-      const t = setTimeout(() => {
-        setMessages(prev => [...prev, {
-          id: `q-done-${Date.now()}`,
-          role: 'quinn',
-          text: buildDoneMsg(activeTemplate, doneSiteNamesRef.current, lockedPricingRef.current),
-        }]);
-        const sitesLabel = doneSiteNamesRef.current.join(', ');
-        const pricing = lockedPricingRef.current;
-        pushFlowReceipt({
-          headline: `Saved ${activeTemplate.name}`,
-          detail: `Live at ${sitesLabel}${pricing ? ` · £${pricing.srpExVat.toFixed(2)} at ${pricing.targetCogsPct}% food cost` : ''}`,
-        });
-        setRecipeFlow(17);
-      }, 800);
-      return () => clearTimeout(t);
-    }
-    // ── 17: production setup offer ─────────────────────────────
-    if (recipeFlow === 17) {
+    // ── 21: production offer — optional, never forced. Skipping
+    //       saves the recipe with defaults; settings live on the
+    //       recipe page whenever the kitchen needs them. ─────────
+    if (recipeFlow === 21) {
       const t = setTimeout(() => {
         setMessages(prev => [...prev, {
           id: `q-prod-offer-${Date.now()}`,
           role: 'quinn',
-          text: "Want to add it to a production plan while we're here? I can walk you through the settings in a couple of quick questions.",
+          text: RECIPE_PRODUCTION_OFFER_MSG,
         }]);
-        setRecipeFlow(18);
-      }, 1400);
+        setRecipeFlow(22);
+      }, 800);
       return () => clearTimeout(t);
     }
-  }, [recipeFlow, activeTemplate]);
+    // ── 24: done summary ──────────────────────────────────────
+    if (recipeFlow === 24) {
+      const t = setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: `q-done-${Date.now()}`,
+          role: 'quinn',
+          text: buildDoneMsg(recipeName, activeTemplate, doneSiteNamesRef.current, lockedPricingRef.current, supplierLinkedRef.current, productionConfiguredRef.current),
+        }]);
+        const sitesLabel = doneSiteNamesRef.current.join(', ');
+        const pricing = lockedPricingRef.current;
+        pushFlowReceipt({
+          headline: `Saved ${recipeName}`,
+          detail: `Live at ${sitesLabel}${pricing ? ` · £${pricing.srpExVat.toFixed(2)} at ${pricing.targetCogsPct}% food cost` : ''}`,
+        });
+        setRecipeFlow(25);
+      }, 800);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipeFlow, activeTemplate, recipeName]);
 
   useEffect(() => {
     if (productionFlow === 3) {
@@ -6328,17 +7273,55 @@ export default function Feed({
       return () => clearTimeout(t);
     }
     if (productionFlow === 9) {
+      const inRecipeWizard = recipeFlow === 23;
       const t = setTimeout(() => {
-        setMessages(prev => [...prev, { id: `q-prod-done-${Date.now()}`, role: 'quinn', text: 'All done! Here\'s the production plan I\'ve set up for your **Chicken & Mayo Sandwich**:', msgType: 'prod-summary' }]);
-        pushFlowReceipt({
-          headline: 'Production plan configured — Chicken & Mayo Sandwich',
-          detail: `${prodSettings.prepTime} prep · ${prodSettings.shelfLife} shelf life · batches of ${prodSettings.batchMultiple}`,
-        });
+        setMessages(prev => [...prev, { id: `q-prod-done-${Date.now()}`, role: 'quinn', text: `Production settings confirmed for **${recipeName}**:`, msgType: 'prod-summary' }]);
+        if (!inRecipeWizard) {
+          pushFlowReceipt({
+            headline: `Production plan configured — ${recipeName}`,
+            detail: `${prodSettings.prepTime} prep · ${prodSettings.shelfLife} shelf life · batches of ${prodSettings.batchMultiple}`,
+          });
+        }
         setProductionFlow(10);
       }, 800);
       return () => clearTimeout(t);
     }
-  }, [productionFlow]);
+    // ── 10 inside the create flow: the optional post-save
+    //     walkthrough finished — patch the saved recipe with the
+    //     answers, then hand back to the wizard's done summary. ──
+    if (productionFlow === 10 && recipeFlow === 23) {
+      const saved = savedRecipeIdRef.current ? findRecipe(savedRecipeIdRef.current) : undefined;
+      if (saved) {
+        updateRecipe({
+          ...saved,
+          category: prodCategoryToRecipeCategory(prodSettings.category),
+          production: {
+            ...saved.production,
+            shelfLifeMinutes: shelfLifeToMinutes(prodSettings.shelfLife),
+            prepTimeSeconds: prepTimeToSeconds(prodSettings.prepTime),
+          },
+          formExtras: {
+            ...saved.formExtras,
+            productionExtras: {
+              ...saved.formExtras?.productionExtras,
+              minBatch: prodSettings.batchMin,
+              maxBatch: prodSettings.batchMax,
+              batchMultiple: prodSettings.batchMultiple,
+            },
+            advanced: {
+              ...saved.formExtras?.advanced,
+              allowCarryOver: prodSettings.allowCarryOver,
+              closingRange: prodSettings.closingRange,
+            },
+          },
+        });
+      }
+      productionConfiguredRef.current = true;
+      const t = setTimeout(() => setRecipeFlow(24), 400);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productionFlow, recipeFlow, recipeName]);
 
   // ─── Analytics flow ──────────────────────────────────────────────────────────
 
@@ -6489,9 +7472,23 @@ export default function Feed({
     setTargetCogsPct(template.defaultTargetCogsPct);
     setSelectedSwaps({});
     setSelectedPackaging(new Set(template.packagingDefaultIds));
+    setPackagingRows(template.packaging.map((p) => ({ ...p, qty: '1', aiSuggested: true })));
+    setPackagingChannels(Object.fromEntries(template.packaging.map((p) => [p.id, { ...DEFAULT_PACKAGING_CHANNELS }])));
     setPackagingSkipped(false);
+    setYieldLossDraft({});
+    setYieldLossSkipped(false);
+    setVariableIngredients([]);
+    setVariableSkipped(false);
     setSelectedAllergens(new Set(template.autoDetectedAllergens));
     setSelectedSites(new Set(['fitzroy']));
+    // Unknown dishes keep the operator's own name; the template is
+    // only a baseline for ingredients and costs.
+    setRecipeName(resolved || !seedText ? template.name : titleCaseDishName(seedText));
+    setRecipeYieldQty(String(template.yieldQty));
+    setRecipeInstructions('');
+    supplierLinkedRef.current = false;
+    productionConfiguredRef.current = false;
+    savedRecipeIdRef.current = null;
     lockedPricingRef.current = null;
     recipeSeedRef.current = seedText && seedText.trim().length > 0 ? seedText.trim() : template.name;
     recipeTemplateMatchedRef.current = !!resolved || !seedText;
@@ -7605,6 +8602,9 @@ export default function Feed({
       status: 'Available',
       email: data.email,
       phone: data.phone,
+      contactName: data.contactName,
+      accountsEmail: data.accountsEmail,
+      companyAccountNumber: data.companyAccountNumber,
       cutOffTime: data.cutOffTime,
       leadTimeDays: data.leadTimeDays,
       minimumOrderValue: data.minimumOrderValue,
@@ -7780,44 +8780,60 @@ export default function Feed({
     });
   }
 
-  /** State 4 → 5. User picked a target food-cost %. */
-  function confirmCogsTarget() {
+  /** Packaging cost (£/serve) for one channel — only rows flagged
+   *  for that channel count, mirroring web-v2's channel maths. */
+  function packagingCostForChannel(channel: keyof PackagingChannels): number {
+    return packagingRows
+      .filter((p) => selectedPackaging.has(p.id) && (packagingChannels[p.id] ?? DEFAULT_PACKAGING_CHANNELS)[channel])
+      .reduce((s, p) => s + packagingLineGBP(p), 0);
+  }
+
+  /** State 4 → 5. Yield-loss values applied to the working rows. */
+  function confirmYieldLoss() {
+    setRecipeIngredients(prev => prev.map((ing) => {
+      const v = yieldLossDraft[ing.id];
+      return Number(v) > 0 ? { ...ing, yieldLossPct: v } : { ...ing, yieldLossPct: undefined };
+    }));
+    const parts = recipeIngredients
+      .filter((ing) => Number(yieldLossDraft[ing.id]) > 0)
+      .map((ing) => `${ing.name} ${yieldLossDraft[ing.id]}%`);
     setMessages(prev => [...prev, {
-      id: `u-cogs-target-${Date.now()}`,
+      id: `u-yield-loss-${Date.now()}`,
       role: 'user',
-      text: `Target ${targetCogsPct}% food cost`,
+      text: parts.length > 0 ? `Yield loss: ${parts.join(', ')}` : 'No yield loss',
     }]);
     setRecipeFlow(5);
   }
 
-  /** State 6 → 7. User locked in the Margin Explorer price. */
-  function confirmMarginExplorer() {
-    const liveRows = recipeIngredientsToTemplateRows(recipeIngredients);
-    const resolvedRows = liveRows.map((row) => {
-      const swapId = selectedSwaps[row.id];
-      const original = activeTemplate.ingredients.find((i) => i.id === row.id);
-      if (!swapId || !original?.swaps) return row;
-      const swap = original.swaps.find((s) => s.id === swapId);
-      if (!swap) return row;
-      return { ...row, unitCostP: swap.unitCostP, name: swap.name, source: swap.source };
-    });
-    const costP = totalFoodCostP(resolvedRows);
-    const srpEx = srpExVatForCogs(costP, targetCogsPct);
-    lockedPricingRef.current = { srpExVat: srpEx, targetCogsPct };
-    const swapCount = Object.keys(selectedSwaps).length;
-    const swapFragment = swapCount > 0 ? ` (with ${swapCount} swap${swapCount === 1 ? '' : 's'})` : '';
+  function skipYieldLoss() {
+    setYieldLossSkipped(true);
+    setMessages(prev => [...prev, { id: `u-yield-skip-${Date.now()}`, role: 'user', text: 'No yield loss' }]);
+    setRecipeFlow(5);
+  }
+
+  /** State 6 → 7. Variable ingredients confirmed (or none). */
+  function confirmVariableIngredients() {
+    const parts = variableIngredients.map((v) =>
+      v.type === 'Extra' ? `add ${v.name}` : `${v.name} for ${v.replacesName ?? 'a base ingredient'}`,
+    );
     setMessages(prev => [...prev, {
-      id: `u-margin-${Date.now()}`,
+      id: `u-variable-${Date.now()}`,
       role: 'user',
-      text: `Price it at £${srpEx.toFixed(2)} (${targetCogsPct}% food cost, £${penceToPounds(costP).toFixed(2)} cost)${swapFragment}`,
+      text: `Variable ingredients: ${parts.join(', ')}`,
     }]);
     setRecipeFlow(7);
   }
 
+  function skipVariableIngredients() {
+    setVariableSkipped(true);
+    setMessages(prev => [...prev, { id: `u-variable-skip-${Date.now()}`, role: 'user', text: 'No variable ingredients' }]);
+    setRecipeFlow(7);
+  }
+
   function confirmPackaging() {
-    const chosen = activeTemplate.packaging.filter(p => selectedPackaging.has(p.id));
-    const total = chosen.reduce((s, p) => s + p.cost, 0);
-    const names = chosen.map(p => p.name).join(', ');
+    const chosen = packagingRows.filter(p => selectedPackaging.has(p.id));
+    const total = chosen.reduce((s, p) => s + packagingLineGBP(p), 0);
+    const names = chosen.map(p => (Number(p.qty) || 0) > 1 ? `${p.qty}× ${p.name}` : p.name).join(', ');
     setMessages(prev => [...prev, {
       id: `u-packaging-${Date.now()}`,
       role: 'user',
@@ -7838,6 +8854,47 @@ export default function Feed({
     setRecipeFlow(9);
   }
 
+  /** State 10 → 11. User picked a target food-cost %. */
+  function confirmCogsTarget() {
+    setMessages(prev => [...prev, {
+      id: `u-cogs-target-${Date.now()}`,
+      role: 'user',
+      text: `Target ${targetCogsPct}% food cost`,
+    }]);
+    setRecipeFlow(11);
+  }
+
+  /** State 12 → 13. Price locked. Each channel's SRP works forward
+   *  from that channel's cost — food cost plus the packaging flagged
+   *  for the channel — at the target %, the way web-v2 prices. */
+  function confirmMarginExplorer() {
+    const liveRows = recipeIngredientsToTemplateRows(recipeIngredients);
+    const costP = totalFoodCostP(liveRows);
+    const vatPct = activeTemplate.vatHot ? 20 : 0;
+    const dineInEx = srpExVatForCogs(costP + Math.round(packagingCostForChannel('dineIn') * 100), targetCogsPct);
+    const takeawayEx = srpExVatForCogs(costP + Math.round(packagingCostForChannel('takeaway') * 100), targetCogsPct);
+    const deliveryEx = srpExVatForCogs(costP + Math.round(packagingCostForChannel('delivery') * 100), targetCogsPct);
+    const deliveryInc = srpIncVat(deliveryEx, 20);
+    lockedPricingRef.current = {
+      srpExVat: dineInEx,
+      targetCogsPct,
+      foodCostGBP: penceToPounds(costP),
+      vatPct,
+      takeawayExVat: takeawayEx,
+      deliveryExVat: deliveryEx,
+      dineInIncVat: srpIncVat(dineInEx, vatPct),
+      takeawayIncVat: srpIncVat(takeawayEx, vatPct),
+      deliveryIncVat: deliveryInc,
+      deliveryNetGBP: deliveryNet(deliveryInc, 30),
+    };
+    setMessages(prev => [...prev, {
+      id: `u-margin-${Date.now()}`,
+      role: 'user',
+      text: `Price it at £${dineInEx.toFixed(2)} dine in (${targetCogsPct}% food cost, £${penceToPounds(costP).toFixed(2)} cost)`,
+    }]);
+    setRecipeFlow(13);
+  }
+
   function confirmAllergens() {
     const list = Array.from(selectedAllergens).join(', ');
     setMessages(prev => [...prev, {
@@ -7845,7 +8902,7 @@ export default function Feed({
       role: 'user',
       text: list.length > 0 ? `Confirmed — ${list}` : 'Confirmed — no allergens',
     }]);
-    setRecipeFlow(11);
+    setRecipeFlow(15);
   }
 
   function confirmSites() {
@@ -7857,34 +8914,139 @@ export default function Feed({
       role: 'user',
       text: `Assign to: ${sitesStr}`,
     }]);
-    setRecipeFlow(13);
+    setRecipeFlow(17);
   }
 
-  function confirmRecipe() {
+  /** State 18 → 19. The pre-save summary confirmed — this is the one
+   *  write in the flow. The recipe lands in `recipeStore` with every
+   *  field the wizard collected, so it shows up in the recipes list
+   *  exactly like a manually built one. Production settings save as
+   *  defaults; the optional walkthrough after the supplier offer
+   *  patches them if taken. */
+  function confirmRecipeSave() {
+    const pricing = lockedPricingRef.current;
+    const rows = recipeIngredientsToTemplateRows(recipeIngredients);
+    const chosenPackaging = packagingRows.filter((p) => selectedPackaging.has(p.id));
+    const siteNames = MOCK_SITES.filter((s) => selectedSites.has(s.id)).map((s) => s.name);
+    const foodCostGBP = pricing?.foodCostGBP ?? penceToPounds(totalFoodCostP(rows));
+    const srpEx = pricing?.srpExVat ?? 0;
+    const yieldQty = Number(recipeYieldQty) || activeTemplate.yieldQty;
+    const trimmedInstructions = recipeInstructions.trim();
+    const recipeId = `recipe-cc-${Date.now()}`;
+
+    const newRecipe: Recipe = {
+      id: recipeId,
+      name: recipeName,
+      category: prodCategoryToRecipeCategory(DEFAULT_PROD_SETTINGS.category),
+      ingredientCost: foodCostGBP,
+      priceDineIn: srpEx,
+      priceTakeaway: pricing?.takeawayExVat ?? srpEx,
+      priceDelivery: pricing?.deliveryExVat ?? srpEx,
+      marginPct: srpEx > 0 ? Math.max(0, 100 - effectiveCogsPct(Math.round(foodCostGBP * 100), srpEx)) : 0,
+      status: 'Active',
+      flag: null,
+      ingredients: recipeIngredients.map((r) => {
+        const loss = Number(r.yieldLossPct) || 0;
+        const grossUnitCostP = loss > 0 ? r.unitCostP / (1 - loss / 100) : r.unitCostP;
+        return {
+          name: loss > 0 ? `${r.name} (${loss}% yield loss)` : r.name,
+          qty: r.toTaste ? 'to taste' : `${r.qty}${r.uom}`,
+          supplier: r.source,
+          price: penceToPounds((Number(r.qty) || 0) * grossUnitCostP),
+        };
+      }),
+      posLinked: false,
+      production: {
+        visibility: 'Kitchen',
+        shelfLifeMinutes: shelfLifeToMinutes(DEFAULT_PROD_SETTINGS.shelfLife),
+        prepTimeSeconds: prepTimeToSeconds(DEFAULT_PROD_SETTINGS.prepTime),
+        expiryDate: null,
+      },
+      kind: 'standalone',
+      countInStockTake: true,
+      excludeFromCogs: false,
+      formExtras: {
+        yieldQty,
+        yieldUom: activeTemplate.yieldUom,
+        sites: siteNames,
+        allergens: Array.from(selectedAllergens),
+        ...(trimmedInstructions ? { instructions: trimmedInstructions } : {}),
+        packaging: chosenPackaging.map((p) => ({
+          id: p.id,
+          name: p.name,
+          supplier: 'Packaging',
+          qty: Number(p.qty) || 1,
+          uom: p.unit,
+          unitCostP: Math.round(p.cost * 100),
+        })),
+        ...(variableIngredients.length > 0
+          ? {
+              variableIngredients: variableIngredients.map((v) => ({
+                id: v.id,
+                name: v.replacesName ? `${v.name} (replaces ${v.replacesName})` : v.name,
+                supplier: 'Added in chat',
+                qty: Number(v.qty) || '',
+                uom: v.uom,
+                unitCostP: 0,
+                type: v.type,
+              })),
+            }
+          : {}),
+        advanced: {
+          productClass: activeTemplate.productClass,
+          countInStockTake: true,
+          excludeFromCogs: false,
+        },
+        pricing: {
+          vatPct: pricing?.vatPct ?? 20,
+          hotCold: activeTemplate.vatHot ? 'hot' : 'cold',
+          srpDineInEx: srpEx,
+          srpTakeawayEx: pricing?.takeawayExVat ?? srpEx,
+          srpDeliveryEx: pricing?.deliveryExVat ?? srpEx,
+          deliveryCommission: 30,
+        },
+      },
+    };
+    addRecipe(newRecipe);
+    savedRecipeIdRef.current = recipeId;
+    doneSiteNamesRef.current = siteNames;
     setMessages(prev => [...prev, { id: `u-confirm-${Date.now()}`, role: 'user', text: 'Looks good, save it' }]);
-    setRecipeFlow(14);
+    setRecipeFlow(19);
   }
 
   function confirmSupplier() {
+    supplierLinkedRef.current = true;
     setMessages(prev => [...prev, { id: `u-supplier-${Date.now()}`, role: 'user', text: 'Yes, add them' }]);
-    setRecipeFlow(16);
+    setRecipeFlow(21);
   }
 
-  // ─── Production flow actions ──────────────────────────────────────────────
+  function skipSupplierOffer() {
+    supplierLinkedRef.current = false;
+    setMessages(prev => [...prev, { id: `u-supplier-skip-${Date.now()}`, role: 'user', text: 'Not now, thanks' }]);
+    setRecipeFlow(21);
+  }
 
-  function startProductionFlow() {
-    setMessages(prev => [...prev,
-      { id: `u-prod-yes-${Date.now()}`, role: 'user', text: 'Yes, set it up' },
-      { id: `q-prod-start-${Date.now()}`, role: 'quinn', text: buildProdPrepMsg(activeTemplate), msgType: 'prod-prep' },
-    ]);
-    setRecipeFlow(19);
+  /** State 22 → 23. Optional production walkthrough accepted. */
+  function acceptProductionOffer() {
+    setMessages(prev => [...prev, { id: `u-prod-yes-${Date.now()}`, role: 'user', text: 'Yes, set them now' }]);
     setProdSettings({ ...DEFAULT_PROD_SETTINGS });
-    setProductionFlow(2);
+    setRecipeFlow(23);
+    window.setTimeout(() => {
+      setMessages(prev => [...prev, {
+        id: `q-prod-start-${Date.now()}`,
+        role: 'quinn',
+        text: buildProdPrepMsg(recipeName),
+        msgType: 'prod-prep',
+      }]);
+      setProductionFlow(2);
+    }, 700);
   }
 
+  /** State 22 → 24. Production declined — defaults stand. */
   function skipProductionOffer() {
-    setMessages(prev => [...prev, { id: `u-prod-skip-${Date.now()}`, role: 'user', text: 'Not now, thanks' }]);
-    setRecipeFlow(19);
+    productionConfiguredRef.current = false;
+    setMessages(prev => [...prev, { id: `u-prod-skip-${Date.now()}`, role: 'user', text: "Not now — I'll set them later" }]);
+    setRecipeFlow(24);
   }
 
   function confirmPrepTime(time: string) {
@@ -8275,9 +9437,12 @@ export default function Feed({
   // vanishing, so the panel doubles as the session's audit trail.
   const isWorkspaceCardLive = (m: ChatMsg): boolean => {
     switch (m.msgType) {
+      case 'yield-loss': return recipeFlow >= 4;
+      case 'variable-ingredients': return recipeFlow >= 6;
       case 'packaging-picker': return recipeFlow >= 8;
-      case 'allergen-check': return recipeFlow >= 10;
-      case 'site-selection': return recipeFlow >= 12;
+      case 'allergen-check': return recipeFlow >= 14;
+      case 'site-selection': return recipeFlow >= 16;
+      case 'recipe-save-summary': return recipeFlow >= 18;
       case 'prod-prep': return productionFlow >= 2;
       case 'prod-shelf': return productionFlow >= 4;
       case 'prod-batch': return productionFlow >= 6;
@@ -8591,12 +9756,17 @@ export default function Feed({
                         })()}
                         {m.msgType === 'recipe-card' && (
                           <RecipeCardEditor
-                            recipeName={activeTemplate.name}
-                            servesQty={activeTemplate.yieldQty}
+                            recipeName={recipeName}
+                            onNameChange={setRecipeName}
+                            servesQty={recipeYieldQty}
+                            onServesChange={setRecipeYieldQty}
                             servesUom={activeTemplate.yieldUom}
                             ingredients={recipeIngredients}
                             onChange={(idx, qty) => {
                               setRecipeIngredients(prev => prev.map((ing, i) => i === idx ? { ...ing, qty } : ing));
+                            }}
+                            onUomChange={(idx, uom) => {
+                              setRecipeIngredients(prev => prev.map((ing, i) => i === idx ? convertRowUom(ing, uom) : ing));
                             }}
                             onAdd={(row) => {
                               setRecipeIngredients(prev => [...prev, row]);
@@ -8636,30 +9806,49 @@ export default function Feed({
                             }}
                           />
                         )}
+                        {m.msgType === 'yield-loss' && recipeFlow >= 4 && (
+                          <YieldLossCard
+                            ingredients={recipeIngredients}
+                            values={yieldLossDraft}
+                            onChange={(id, v) => setYieldLossDraft(prev => ({ ...prev, [id]: v }))}
+                            state={recipeFlow > 4 ? (yieldLossSkipped ? 'cancelled' : 'confirmed') : 'pending'}
+                            onConfirm={confirmYieldLoss}
+                            onSkip={skipYieldLoss}
+                          />
+                        )}
+                        {m.msgType === 'variable-ingredients' && recipeFlow >= 6 && (
+                          <VariableIngredientsCard
+                            baseIngredients={recipeIngredients}
+                            rows={variableIngredients}
+                            onAdd={(row) => setVariableIngredients(prev => [...prev, row])}
+                            onRemove={(id) => setVariableIngredients(prev => prev.filter(r => r.id !== id))}
+                            state={recipeFlow > 6 ? (variableSkipped ? 'cancelled' : 'confirmed') : 'pending'}
+                            onConfirm={confirmVariableIngredients}
+                            onSkip={skipVariableIngredients}
+                          />
+                        )}
                         {m.msgType === 'cogs-target' && (
                           <CogsTargetPicker
                             value={targetCogsPct}
                             onChange={setTargetCogsPct}
                             onConfirm={confirmCogsTarget}
-                            disabled={recipeFlow !== 4}
+                            disabled={recipeFlow !== 10}
                           />
                         )}
                         {m.msgType === 'margin-explorer' && (
                           <MarginExplorerCard
-                            template={activeTemplate}
+                            recipeName={recipeName}
+                            serves={Number(recipeYieldQty) || activeTemplate.yieldQty}
+                            vatHot={activeTemplate.vatHot}
                             targetCogsPct={targetCogsPct}
-                            selectedSwaps={selectedSwaps}
-                            liveIngredients={recipeIngredientsToTemplateRows(recipeIngredients)}
-                            locked={recipeFlow !== 6}
-                            onTargetChange={setTargetCogsPct}
-                            onSwap={(ingredientId, swapId) => {
-                              setSelectedSwaps(prev => {
-                                const next = { ...prev };
-                                if (swapId === null) delete next[ingredientId];
-                                else next[ingredientId] = swapId;
-                                return next;
-                              });
+                            foodCostP={totalFoodCostP(recipeIngredientsToTemplateRows(recipeIngredients))}
+                            packagingCostGBP={{
+                              dineIn: packagingCostForChannel('dineIn'),
+                              takeaway: packagingCostForChannel('takeaway'),
+                              delivery: packagingCostForChannel('delivery'),
                             }}
+                            locked={recipeFlow !== 12}
+                            onTargetChange={setTargetCogsPct}
                             onConfirm={confirmMarginExplorer}
                           />
                         )}
@@ -8695,23 +9884,36 @@ export default function Feed({
                         })()}
                         {m.msgType === 'packaging-picker' && recipeFlow >= 8 && (
                           <PackagingPicker
-                            options={activeTemplate.packaging}
+                            rows={packagingRows}
+                            catalogue={packagingCatalogue}
                             selected={selectedPackaging}
+                            channels={packagingChannels}
                             state={recipeFlow > 8 ? (packagingSkipped ? 'cancelled' : 'confirmed') : 'pending'}
                             onToggle={(id) => setSelectedPackaging(prev => {
                               const next = new Set(prev);
                               if (next.has(id)) next.delete(id); else next.add(id);
                               return next;
                             })}
+                            onToggleChannel={(id, channel) => setPackagingChannels(prev => {
+                              const current = prev[id] ?? DEFAULT_PACKAGING_CHANNELS;
+                              return { ...prev, [id]: { ...current, [channel]: !current[channel] } };
+                            })}
+                            onQtyChange={(id, qty) => setPackagingRows(prev => prev.map(r => r.id === id ? { ...r, qty } : r))}
+                            onUomChange={(id, uom) => setPackagingRows(prev => prev.map(r => r.id === id ? { ...r, unit: uom } : r))}
+                            onAddRow={(row) => {
+                              setPackagingRows(prev => [...prev, row]);
+                              setSelectedPackaging(prev => new Set(prev).add(row.id));
+                              setPackagingChannels(prev => ({ ...prev, [row.id]: { ...DEFAULT_PACKAGING_CHANNELS } }));
+                            }}
                             onConfirm={confirmPackaging}
                             onSkip={skipPackaging}
                           />
                         )}
-                        {m.msgType === 'allergen-check' && recipeFlow >= 10 && (
+                        {m.msgType === 'allergen-check' && recipeFlow >= 14 && (
                           <AllergenCard
                             confirmed={selectedAllergens}
                             detected={new Set(activeTemplate.autoDetectedAllergens)}
-                            state={recipeFlow > 10 ? 'confirmed' : 'pending'}
+                            state={recipeFlow > 14 ? 'confirmed' : 'pending'}
                             onToggle={(a) => setSelectedAllergens(prev => {
                               const next = new Set(prev);
                               if (next.has(a)) next.delete(a); else next.add(a);
@@ -8720,16 +9922,33 @@ export default function Feed({
                             onConfirm={confirmAllergens}
                           />
                         )}
-                        {m.msgType === 'site-selection' && recipeFlow >= 12 && (
+                        {m.msgType === 'site-selection' && recipeFlow >= 16 && (
                           <SiteSelectionCard
                             selected={selectedSites}
-                            state={recipeFlow > 12 ? 'confirmed' : 'pending'}
+                            state={recipeFlow > 16 ? 'confirmed' : 'pending'}
                             onToggle={(id) => setSelectedSites(prev => {
                               const next = new Set(prev);
                               if (next.has(id)) next.delete(id); else next.add(id);
                               return next;
                             })}
                             onConfirm={confirmSites}
+                          />
+                        )}
+                        {m.msgType === 'recipe-save-summary' && recipeFlow >= 18 && (
+                          <RecipeSaveSummaryCard
+                            recipeName={recipeName}
+                            productClass={activeTemplate.productClass}
+                            yieldQty={Number(recipeYieldQty) || activeTemplate.yieldQty}
+                            yieldUom={activeTemplate.yieldUom}
+                            siteNames={MOCK_SITES.filter(s => selectedSites.has(s.id)).map(s => s.name)}
+                            allergens={Array.from(selectedAllergens)}
+                            packaging={packagingRows.filter(p => selectedPackaging.has(p.id))}
+                            variableIngredients={variableIngredients}
+                            pricing={lockedPricingRef.current}
+                            instructions={recipeInstructions}
+                            onInstructionsChange={setRecipeInstructions}
+                            state={recipeFlow > 18 ? 'confirmed' : 'pending'}
+                            onConfirm={confirmRecipeSave}
                           />
                         )}
                         {m.msgType === 'prod-prep' && productionFlow >= 2 && (
@@ -8769,7 +9988,7 @@ export default function Feed({
                           />
                         )}
                         {m.msgType === 'prod-summary' && productionFlow >= 10 && (
-                          <ProductionSummaryCard settings={prodSettings} />
+                          <ProductionSummaryCard settings={prodSettings} recipeName={recipeName} productClass={activeTemplate.productClass} />
                         )}
                         {m.msgType === 'analytics-chart' && m.chartId && (
                           <AnalyticsChartContent
@@ -8975,14 +10194,12 @@ export default function Feed({
                           const args = JSON.parse(m.cmdArgsJson) as {
                             supplierName: string;
                             email?: string;
-                            leadTimeDays?: number;
                           };
                           return (
                             <ProductNewSupplierCard
                               state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                               supplierName={args.supplierName}
                               initialEmail={args.email}
-                              initialLeadTimeDays={args.leadTimeDays}
                               onSubmit={(input) => commandRunner.submitProductNewSupplier(m.id, args, input)}
                               onCancel={() => commandRunner.cancelCard(m.id)}
                             />
@@ -9012,10 +10229,16 @@ export default function Feed({
                             defaultPackQty?: number;
                             defaultPackCost?: number;
                             defaultUnitType?: 'Each' | 'kg' | 'L' | 'g' | 'ml';
+                            defaultTaxRatePct?: number;
+                            defaultSites?: string[];
+                            defaultAllergensContains?: Allergen[];
+                            defaultAllergensTraces?: Allergen[];
                             packType?: 'Pack' | 'Single';
                             packQty?: number;
                             packCost?: number;
                             unitType?: 'Each' | 'kg' | 'L' | 'g' | 'ml';
+                            supplierCode?: string;
+                            taxRatePct?: number;
                             photoDataUrl?: string;
                           };
                           return (
@@ -9028,6 +10251,11 @@ export default function Feed({
                               initialPackQty={args.packQty ?? args.defaultPackQty}
                               initialPackCost={args.packCost ?? args.defaultPackCost}
                               initialUnitType={args.unitType ?? args.defaultUnitType}
+                              initialSupplierCode={args.supplierCode}
+                              initialTaxRatePct={args.taxRatePct ?? args.defaultTaxRatePct}
+                              initialSites={args.defaultSites}
+                              initialAllergensContains={args.defaultAllergensContains}
+                              initialAllergensTraces={args.defaultAllergensTraces}
                               initialPhotoDataUrl={args.photoDataUrl}
                               onSubmit={(input) => commandRunner.submitProductPackDetails(m.id, args, input)}
                               onCancel={() => commandRunner.cancelCard(m.id)}
@@ -9118,6 +10346,11 @@ export default function Feed({
                             packQty?: number;
                             packCost?: number;
                             unitType?: 'Each' | 'kg' | 'L' | 'g' | 'ml';
+                            supplierCode?: string;
+                            taxRatePct?: number;
+                            sites?: string[];
+                            allergensContains?: Allergen[];
+                            allergensTraces?: Allergen[];
                             photoDataUrl?: string;
                             skipped?: boolean;
                             recipeIds: string[];
@@ -9137,6 +10370,11 @@ export default function Feed({
                               packQty={args.packQty}
                               packCost={args.packCost}
                               unitType={args.unitType}
+                              supplierCode={args.supplierCode}
+                              taxRatePct={args.taxRatePct}
+                              sites={args.sites}
+                              allergensContains={args.allergensContains}
+                              allergensTraces={args.allergensTraces}
                               photoAttached={!!args.photoDataUrl}
                               oldProductId={args.oldProductId}
                               oldProductName={args.oldProductName}
@@ -9307,7 +10545,7 @@ export default function Feed({
   }
 
   const analyticsActive = analyticsStep > 0 && analyticsStep < 3;
-  const composerDisabled = (recipeFlow > 0 && recipeFlow < 19) || (productionFlow > 0 && productionFlow < 10) || analyticsActive;
+  const composerDisabled = (recipeFlow > 0 && recipeFlow < 25) || (productionFlow > 0 && productionFlow < 10) || analyticsActive;
   const composerPlaceholder = composerDisabled
     ? (productionFlow > 0
         ? 'Edify is setting up your production plan\u2026'
@@ -9859,19 +11097,24 @@ export default function Feed({
                     });
                     })()}
 
-                    {recipeFlow === 13 && (
-                      <ActionButton label="Looks good, save it" onClick={confirmRecipe} />
+                    {recipeFlow === 20 && (
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', maxWidth: '88%' }}>
+                        <button type="button" onClick={skipSupplierOffer} style={{ padding: '8px 14px', borderRadius: '10px', border: '1px solid var(--color-border)', background: '#fff', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-text-primary)', cursor: 'pointer' }}>
+                          Not now, thanks
+                        </button>
+                        <button type="button" onClick={confirmSupplier} style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: 'var(--color-accent-active)', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer' }}>
+                          Yes, add them
+                        </button>
+                      </div>
                     )}
-                    {recipeFlow === 15 && (
-                      <ActionButton label="Yes, add them" onClick={confirmSupplier} />
-                    )}
-                    {recipeFlow === 18 && (
+
+                    {recipeFlow === 22 && (
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', maxWidth: '88%' }}>
                         <button type="button" onClick={skipProductionOffer} style={{ padding: '8px 14px', borderRadius: '10px', border: '1px solid var(--color-border)', background: '#fff', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: 'var(--color-text-primary)', cursor: 'pointer' }}>
-                          Not now
+                          Not now — later
                         </button>
-                        <button type="button" onClick={startProductionFlow} style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: 'var(--color-accent-active)', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer' }}>
-                          Yes, set it up
+                        <button type="button" onClick={acceptProductionOffer} style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', background: 'var(--color-accent-active)', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-primary)', color: '#fff', cursor: 'pointer' }}>
+                          Yes, set them now
                         </button>
                       </div>
                     )}
