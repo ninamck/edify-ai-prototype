@@ -2278,11 +2278,14 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
   const confirmProductSheetDetails = useCallback(
     (msgId: string, args: Record<string, unknown>) => {
       writeCmdState(msgId, 'confirmed');
-      pushUserEcho('Looks right');
+      // `edited` is set by the card when the operator corrected the
+      // parse — echo it honestly rather than pretending the sheet was
+      // right first time.
+      pushUserEcho(args.edited === true ? 'Fixed the details, looks right now' : 'Looks right');
       const oldName = (args.oldProductName as string) ?? 'your current beans';
       const newName = (args.newProductName as string) ?? 'the new product';
       pushResponseFlow({
-        text: `Great. Here's every recipe that uses ${oldName} — confirm and I'll swap them all over to ${newName} in one go.`,
+        text: `Here's every recipe that uses ${oldName}. Confirm and I'll swap them all to ${newName} in one go.`,
         commandId: 'product-swap',
         cardMsgType: 'cmd-product-pick-recipes',
         cardArgs: { ...args, mode: 'replace', fromSheet: true },
@@ -2330,8 +2333,11 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         source: 'supplier',
         supplierId,
         masterProductId: oldMasterId,
-        supplierCode: 'SHEET-IMPORT',
-        productClass: 'Food',
+        // Base-product settings: parsed from the sheet or assumed by
+        // rule, shown (and editable) on the details card before this
+        // confirm — so what lands here is what the operator approved.
+        supplierCode: (args.supplierCode as string) || 'SHEET-IMPORT',
+        productClass: (args.productClass as Product['productClass']) ?? 'Food',
         category,
         tags: [],
         packType,
@@ -2341,7 +2347,11 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         singleUnitType: unitType,
         singleUnitVolumeOrWeight: args.singleUnitVolumeOrWeight as number | undefined,
         unitOfMeasure: args.unitOfMeasure as string | undefined,
-        altUoms: [],
+        altUoms: (args.altUoms as Product['altUoms']) ?? [],
+        allowSplitPack: (args.allowSplitPack as boolean) ?? false,
+        forceMultiples: (args.forceMultiples as boolean) ?? false,
+        excludeFromCogs: (args.excludeFromCogs as boolean) ?? false,
+        useActualUseForTheoreticalCogs: (args.useActualUseForTheoreticalCogs as boolean) ?? false,
         allergensContains: allergens as Product['allergensContains'],
         allergensTraces: [],
         nutrition: {},

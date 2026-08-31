@@ -267,7 +267,7 @@ export default function ProductPickRecipesCard({
   const cardSubtitle = (() => {
     if (mode === 'replace') {
       return totalCount === 0
-        ? "We'll just add the new product — no recipes to change"
+        ? "We'll just add the new product, no recipes to change"
         : `Pre-selected by what uses ${oldProductName ?? 'the old product'}`;
     }
     if (suggestedCategories.length > 0) {
@@ -294,7 +294,7 @@ export default function ProductPickRecipesCard({
       state={state}
       confirmLabel={
         confirmLabelOverride ??
-        (mode === 'replace' && totalCount === 0 ? 'Skip — just add the product' : 'Next')
+        (mode === 'replace' && totalCount === 0 ? 'Skip, just add the product' : 'Next')
       }
       confirmDisabled={!canSubmit}
       onCancel={onCancel}
@@ -319,7 +319,7 @@ export default function ProductPickRecipesCard({
           }}
         >
           No active recipes reference {oldProductName}. We can still
-          add {newProductName} to your catalogue — you can wire it
+          add {newProductName} to your catalogue and you can wire it
           into recipes later.
         </p>
       ) : (
@@ -458,9 +458,9 @@ export default function ProductPickRecipesCard({
                 }}
               >
                 I found {totalCount} recipe{totalCount === 1 ? '' : 's'}{' '}
-                using {oldProductName ?? 'the old product'} and
-                pre-selected them. Uncheck any you&rsquo;d rather skip
-                — name-only matches are flagged so you can
+                using {oldProductName ?? 'the old product'}{' '}and
+                pre-selected them. Uncheck any you&rsquo;d rather skip.
+                Name-only matches are flagged so you can
                 double-check them.
               </div>
             </div>
@@ -485,7 +485,7 @@ export default function ProductPickRecipesCard({
                   lineHeight: 1.45,
                 }}
               >
-                {newProductName} looks like a {suggestedCategories.join(' / ').toLowerCase()} ingredient — I&rsquo;ve pre-selected the {matchCount}{' '}
+                {newProductName} looks like a {suggestedCategories.join(' / ').toLowerCase()} ingredient, so I&rsquo;ve pre-selected the {matchCount}{' '}
                 {suggestedCategories.join(' / ').toLowerCase()} recipe{matchCount === 1 ? '' : 's'} on your menu. Adjust as needed.
               </div>
             </div>

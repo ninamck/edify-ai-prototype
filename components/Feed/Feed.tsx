@@ -9,6 +9,7 @@ import {
   Plus,
   Mic,
   ChevronDown,
+  ChevronRight,
   ChefHat,
   ShieldCheck,
   CheckCircle2,
@@ -900,6 +901,7 @@ function buildDoneMsg(
   pricing: LockedPricing | null,
   supplierLinked: boolean,
   productionConfigured: boolean,
+  stocktakeReconciled: boolean,
 ): string {
   const sitesStr = siteNames.length === 1
     ? `**${siteNames[0]}**`
@@ -911,10 +913,16 @@ function buildDoneMsg(
   const productionTail = productionConfigured
     ? 'production settings included.'
     : 'You can add production settings from the recipe page whenever you need them.';
+  // Only rendered when the walkthrough overrode an explicit untick of
+  // count-in-stocktake: a changed user choice is always stated, with
+  // the route to reverse it. The common path never mentions the flag.
+  const stocktakeLine = stocktakeReconciled
+    ? `\n\nOne thing I changed: **count in stocktake** is back on, because items on the production plan are tracked as stock. If this recipe shouldn't be, untick it on the recipe page.`
+    : '';
   return (
     `**Done!** ${supplierLine}` +
     pricingLine +
-    `Your **${recipeName}** recipe is live in Edify under the **${template.productClass}** class, assigned to ${sitesStr}. You'll find it under Recipes \u2192 ${template.productClass}${productionConfigured ? ', ' : '. '}${productionTail}`
+    `Your **${recipeName}** recipe is live in Edify under the **${template.productClass}** class, assigned to ${sitesStr}. You'll find it under Recipes \u2192 ${template.productClass}${productionConfigured ? ', ' : '. '}${productionTail}${stocktakeLine}`
   );
 }
 
@@ -1035,6 +1043,63 @@ const DEFAULT_PROD_SETTINGS: ProdSettings = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Tier-three recipe settings from the conversational contract:
+ *  offered on the card behind one tap, never forced. Mirrors the
+ *  production profile section's Type + Inventory & Costing pills. */
+type RecipeCardSettings = {
+  subRecipe: boolean;
+  countInStockTake: boolean;
+  excludeFromCogs: boolean;
+};
+
+const DEFAULT_RECIPE_CARD_SETTINGS: RecipeCardSettings = {
+  subRecipe: false,
+  countInStockTake: true,
+  excludeFromCogs: false,
+};
+
+/** One setting with its explanation always visible — these flags are
+ *  accounting jargon to most operators, so a hover-only hint isn't
+ *  enough. */
+function RecipeCardSettingRow({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '8px',
+        cursor: 'pointer',
+        fontFamily: 'var(--font-primary)',
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ accentColor: 'var(--color-accent-active, #001C35)', marginTop: '2px', flexShrink: 0 }}
+      />
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+          {label}
+        </span>
+        <span style={{ display: 'block', fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '1px', lineHeight: 1.45 }}>
+          {description}
+        </span>
+      </span>
+    </label>
+  );
+}
+
 function RecipeCardEditor({
   recipeName,
   onNameChange,
@@ -1047,6 +1112,8 @@ function RecipeCardEditor({
   onAdd,
   onRemove,
   onStartNewProduct,
+  settings,
+  onSettingsChange,
 }: {
   recipeName: string;
   /** Name and yield are asked, not assumed — both editable in the
@@ -1069,6 +1136,10 @@ function RecipeCardEditor({
    *  wizard rather than letting them type a name + cost free-form, so
    *  the new SKU is created against suppliers/MPs properly. */
   onStartNewProduct: (query: string) => void;
+  /** Sub-recipe / stocktake / COGS flags — tier three, so they sit
+   *  behind a collapsed expander with defaults stated. */
+  settings: RecipeCardSettings;
+  onSettingsChange: (patch: Partial<RecipeCardSettings>) => void;
 }) {
   const { search: searchCatalogue, resolveRef } = useIngredientCatalogue();
   const allProducts = useProducts();
@@ -1088,6 +1159,9 @@ function RecipeCardEditor({
   /** Hide the dropdown after a pick OR after `Escape`; reopens when
    *  the user edits the search input again. */
   const [searchFocused, setSearchFocused] = useState(false);
+  /** Recipe-settings expander, collapsed by default: the flags are
+   *  offered, not asked, and the defaults suit most recipes. */
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const trimmedQuery = draftName.trim();
   const showDropdown = !pickedRef && searchFocused && trimmedQuery.length > 0;
@@ -1499,6 +1573,70 @@ function RecipeCardEditor({
           </button>
         </div>
 
+      </div>
+
+      {/* Recipe settings — the three tier-three flags production keeps
+          on the recipe profile (Sub-Recipe under Type; Count in
+          Stocktake and Exclude from COGS under Inventory & Costing).
+          Collapsed by default; when a flag differs from its default
+          the collapsed row names it so nothing hides. */}
+      <div style={{ borderTop: '1px solid var(--color-border-subtle)', background: '#fff' }}>
+        <button
+          type="button"
+          onClick={() => setSettingsOpen((v) => !v)}
+          aria-expanded={settingsOpen}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            width: '100%',
+            padding: '9px 14px',
+            border: 'none',
+            background: 'transparent',
+            fontSize: '10.5px',
+            fontWeight: 700,
+            fontFamily: 'var(--font-primary)',
+            color: 'var(--color-text-secondary)',
+            cursor: 'pointer',
+            letterSpacing: '0.03em',
+            textTransform: 'uppercase',
+            textAlign: 'left',
+          }}
+        >
+          {settingsOpen ? <ChevronDown size={12} strokeWidth={2.4} /> : <ChevronRight size={12} strokeWidth={2.4} />}
+          {(() => {
+            const changed = [
+              settings.subRecipe ? 'sub-recipe' : null,
+              !settings.countInStockTake ? 'not counted in stocktake' : null,
+              settings.excludeFromCogs ? 'excluded from COGS' : null,
+            ].filter(Boolean);
+            return changed.length > 0
+              ? `Recipe settings · ${changed.join(', ')}`
+              : 'Recipe settings · sub-recipe, stocktake, COGS';
+          })()}
+        </button>
+        {settingsOpen && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '2px 14px 12px' }}>
+            <RecipeCardSettingRow
+              label="Sub-recipe"
+              description="Used inside other recipes, like a sauce or a base mix, rather than sold on its own."
+              checked={settings.subRecipe}
+              onChange={(v) => onSettingsChange({ subRecipe: v })}
+            />
+            <RecipeCardSettingRow
+              label="Count in stocktake"
+              description="The team counts this recipe when they do a stocktake. Turn off for made-to-order items that never sit on a shelf."
+              checked={settings.countInStockTake}
+              onChange={(v) => onSettingsChange({ countInStockTake: v })}
+            />
+            <RecipeCardSettingRow
+              label="Exclude from COGS"
+              description="Leaves this recipe's cost out of cost-of-goods reporting. For staff meals, comps, and items whose cost is already counted in a parent recipe."
+              checked={settings.excludeFromCogs}
+              onChange={(v) => onSettingsChange({ excludeFromCogs: v })}
+            />
+          </div>
+        )}
       </div>
     </div>
     {/* Dropdown sits OUTSIDE the rounded/clipped editor wrapper so it
@@ -6836,12 +6974,22 @@ export default function Feed({
   const [recipeYieldQty, setRecipeYieldQty] = useState<string>(String(DEFAULT_WIZARD_TEMPLATE.yieldQty));
   /** Optional method / instructions captured on the save summary. */
   const [recipeInstructions, setRecipeInstructions] = useState<string>('');
+  /** Tier-three recipe settings (sub-recipe flag, count in stocktake,
+   *  exclude from COGS) — surfaced on the ingredient card behind a
+   *  "Recipe settings" expander, per the contract: offered in one tap,
+   *  never forced. Defaults are the common case: sold on its own,
+   *  counted at stocktake, included in COGS. */
+  const [recipeSettings, setRecipeSettings] = useState<RecipeCardSettings>({ ...DEFAULT_RECIPE_CARD_SETTINGS });
   /** Whether the operator accepted the supplier-link offer — drives
    *  the done-message copy. */
   const supplierLinkedRef = useRef<boolean>(false);
   /** Whether the operator took the optional post-save production
    *  walkthrough — drives the done copy and the receipt detail. */
   const productionConfiguredRef = useRef<boolean>(false);
+  /** True when the walkthrough had to turn count-in-stocktake back on
+   *  against an explicit untick (planner eligibility) — drives one
+   *  stated line in the done message. */
+  const stocktakeReconciledRef = useRef<boolean>(false);
   /** Id of the recipe written by `confirmRecipeSave`, so the optional
    *  production walkthrough can patch it after the fact. */
   const savedRecipeIdRef = useRef<string | null>(null);
@@ -7235,7 +7383,7 @@ export default function Feed({
         setMessages(prev => [...prev, {
           id: `q-done-${Date.now()}`,
           role: 'quinn',
-          text: buildDoneMsg(recipeName, activeTemplate, doneSiteNamesRef.current, lockedPricingRef.current, supplierLinkedRef.current, productionConfiguredRef.current),
+          text: buildDoneMsg(recipeName, activeTemplate, doneSiteNamesRef.current, lockedPricingRef.current, supplierLinkedRef.current, productionConfiguredRef.current, stocktakeReconciledRef.current),
         }]);
         const sitesLabel = doneSiteNamesRef.current.join(', ');
         const pricing = lockedPricingRef.current;
@@ -7292,8 +7440,20 @@ export default function Feed({
     if (productionFlow === 10 && recipeFlow === 23) {
       const saved = savedRecipeIdRef.current ? findRecipe(savedRecipeIdRef.current) : undefined;
       if (saved) {
+        // Configuring production means this recipe is batch-made stock,
+        // and the planner only lists recipes counted at stocktake (the
+        // backend gates every planner query on `countInStockTake`).
+        // Reconcile in the background rather than explaining the
+        // coupling on the toggle: the flag can only be off here if the
+        // user explicitly unticked it, so when we flip it back the done
+        // message states the change with the route to reverse it.
+        stocktakeReconciledRef.current = saved.countInStockTake === false;
+        if (stocktakeReconciledRef.current) {
+          setRecipeSettings(prev => ({ ...prev, countInStockTake: true }));
+        }
         updateRecipe({
           ...saved,
+          countInStockTake: true,
           category: prodCategoryToRecipeCategory(prodSettings.category),
           production: {
             ...saved.production,
@@ -7310,6 +7470,7 @@ export default function Feed({
             },
             advanced: {
               ...saved.formExtras?.advanced,
+              countInStockTake: true,
               allowCarryOver: prodSettings.allowCarryOver,
               closingRange: prodSettings.closingRange,
             },
@@ -7486,8 +7647,10 @@ export default function Feed({
     setRecipeName(resolved || !seedText ? template.name : titleCaseDishName(seedText));
     setRecipeYieldQty(String(template.yieldQty));
     setRecipeInstructions('');
+    setRecipeSettings({ ...DEFAULT_RECIPE_CARD_SETTINGS });
     supplierLinkedRef.current = false;
     productionConfiguredRef.current = false;
+    stocktakeReconciledRef.current = false;
     savedRecipeIdRef.current = null;
     lockedPricingRef.current = null;
     recipeSeedRef.current = seedText && seedText.trim().length > 0 ? seedText.trim() : template.name;
@@ -7693,6 +7856,27 @@ export default function Feed({
       taxRatePct: 0,
       allergens: [],
       sites: [...ALL_SUPPLIER_SITES],
+      // ── Base-product settings the production form asks for. Each is
+      // either read off the sheet or assumed by rule; the card shows
+      // which and why, and every one is editable before confirm.
+      supplierCode: 'RR-COL-1KG',
+      productClass: 'Food',
+      // Alt UoMs derived from the pack structure ("6 × 1kg"): a bag is
+      // 1kg, a case is 6 bags. numberOfUnits = how many of that unit
+      // one pack contains, matching the production form's semantics.
+      altUoms: [
+        { type: 'Bag', numberOfUnits: 6 },
+        { type: 'Case', numberOfUnits: 1 },
+      ],
+      // The case is 6 identical retail-sized bags → sites may order by
+      // the bag. Force-multiples contradicts split pack, so off.
+      allowSplitPack: true,
+      forceMultiples: false,
+      // It's an ingredient in drinks that sell → counts in COGS, and
+      // recipes cost on the averaged price so one dear delivery
+      // doesn't spike GP.
+      excludeFromCogs: false,
+      useActualUseForTheoreticalCogs: false,
       // What we're swapping out — the coffee recipes reference this via
       // a master ref (typed rows) and a legacy "Espresso blend" row.
       oldProductName: 'Espresso blend',
@@ -7728,11 +7912,9 @@ export default function Feed({
     ]);
 
     const summaryText =
-      `Got it — I parsed **${opts.fileName}** and pulled the product details. ` +
-      `It's a new coffee bean, **${args.newProductName as string}**, at £${((args.packCost as number) / (args.packQty as number)).toFixed(2)}/kg. ` +
-      `That maps to the espresso blend your coffees already use, so I can swap it across all of them. ` +
-      `The sheet doesn't include supplier terms, so I've kept it under your existing supplier for now — you can set up the new one later. ` +
-      `Here's the new product — confirm and I'll line up the recipes.`;
+      `Parsed **${opts.fileName}**: a new coffee bean, **${args.newProductName as string}**, at £${((args.packCost as number) / (args.packQty as number)).toFixed(2)}/kg. ` +
+      `It matches the espresso blend your coffees already use, so I can swap it across all of them. ` +
+      `Check the details, fix anything the sheet got wrong, and I'll line up the recipes.`;
 
     window.setTimeout(() => {
       setMessages((prev) => {
@@ -8962,9 +9144,12 @@ export default function Feed({
         prepTimeSeconds: prepTimeToSeconds(DEFAULT_PROD_SETTINGS.prepTime),
         expiryDate: null,
       },
+      // Sub-recipe stays on `advanced.isSubRecipe` (production's shape);
+      // `kind` still describes how the recipe is sold, matching the
+      // manual builder's split between the two.
       kind: 'standalone',
-      countInStockTake: true,
-      excludeFromCogs: false,
+      countInStockTake: recipeSettings.countInStockTake,
+      excludeFromCogs: recipeSettings.excludeFromCogs,
       formExtras: {
         yieldQty,
         yieldUom: activeTemplate.yieldUom,
@@ -8994,8 +9179,9 @@ export default function Feed({
           : {}),
         advanced: {
           productClass: activeTemplate.productClass,
-          countInStockTake: true,
-          excludeFromCogs: false,
+          isSubRecipe: recipeSettings.subRecipe,
+          countInStockTake: recipeSettings.countInStockTake,
+          excludeFromCogs: recipeSettings.excludeFromCogs,
         },
         pricing: {
           vatPct: pricing?.vatPct ?? 20,
@@ -9758,6 +9944,8 @@ export default function Feed({
                           <RecipeCardEditor
                             recipeName={recipeName}
                             onNameChange={setRecipeName}
+                            settings={recipeSettings}
+                            onSettingsChange={(patch) => setRecipeSettings(prev => ({ ...prev, ...patch }))}
                             servesQty={recipeYieldQty}
                             onServesChange={setRecipeYieldQty}
                             servesUom={activeTemplate.yieldUom}
@@ -10275,6 +10463,14 @@ export default function Feed({
                             singleUnitVolumeOrWeight?: number;
                             allergens?: string[];
                             oldProductName: string;
+                            productClass?: string;
+                            supplierCode?: string;
+                            taxRatePct?: number;
+                            altUoms?: { type: string; numberOfUnits: number }[];
+                            allowSplitPack?: boolean;
+                            forceMultiples?: boolean;
+                            excludeFromCogs?: boolean;
+                            useActualUseForTheoreticalCogs?: boolean;
                           };
                           return (
                             <ProductSheetDetailsCard
@@ -10282,6 +10478,7 @@ export default function Feed({
                               fileName={args.fileName}
                               newProductName={args.newProductName}
                               supplierName={args.supplierName}
+                              productClass={args.productClass}
                               category={args.category}
                               packType={args.packType}
                               packQty={args.packQty}
@@ -10290,7 +10487,19 @@ export default function Feed({
                               singleUnitVolumeOrWeight={args.singleUnitVolumeOrWeight}
                               allergens={args.allergens ?? []}
                               oldProductName={args.oldProductName}
-                              onConfirm={() => commandRunner.confirmProductSheetDetails(m.id, args)}
+                              supplierCode={args.supplierCode}
+                              taxRatePct={args.taxRatePct}
+                              altUoms={args.altUoms}
+                              allowSplitPack={args.allowSplitPack}
+                              forceMultiples={args.forceMultiples}
+                              excludeFromCogs={args.excludeFromCogs}
+                              useActualUseForTheoreticalCogs={args.useActualUseForTheoreticalCogs}
+                              onConfirm={(input) =>
+                                // Merge the operator's corrections over the parsed
+                                // values so the recipe sweep, product record and
+                                // receipt all carry the fix.
+                                commandRunner.confirmProductSheetDetails(m.id, { ...args, ...input })
+                              }
                               onCancel={() => commandRunner.cancelCard(m.id)}
                             />
                           );
@@ -10320,7 +10529,7 @@ export default function Feed({
                               initialSelectedIds={args.recipeIds}
                               initialAddQty={args.addQty}
                               initialAddUom={args.addUom}
-                              confirmLabelOverride={args.fromSheet ? 'Confirm — swap them all' : undefined}
+                              confirmLabelOverride={args.fromSheet ? 'Swap them all' : undefined}
                               onConfirm={(input) =>
                                 args.fromSheet
                                   ? commandRunner.confirmProductSwapFromSheetRecipes(m.id, args, input)
@@ -11010,7 +11219,7 @@ export default function Feed({
                               color: 'var(--color-text-secondary)',
                             }}
                           >
-                            {WORKSPACE_POINTER_LABELS[m.msgType ?? ''] ?? 'Working on this'} — in the workspace
+                            {WORKSPACE_POINTER_LABELS[m.msgType ?? ''] ?? 'Working on this'} · in the workspace
                             <ChevronDown size={12} strokeWidth={2.4} style={{ transform: 'rotate(-90deg)' }} />
                           </motion.div>
                         );
