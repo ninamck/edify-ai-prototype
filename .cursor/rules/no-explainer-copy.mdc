@@ -47,10 +47,14 @@ the sentence, the layout is wrong; fix the layout.
 ## Related conventions from the same build
 
 - One unit vocabulary per screen. On production screens: demand in
-  portions, lines in containers (cast irons, gastronorms), catering in
-  containers with ordered boxes underneath, carry-over in containers,
-  output in batches, money in pounds. Grams and kilos only where something
-  is weighed on a scale (prep list, cascade), and nowhere else.
+  portions, lines in containers, catering in containers with ordered boxes
+  underneath, carry-over in containers, output in batches, money in pounds.
+  Grams and kilos only where something is weighed on a scale (prep list,
+  cascade), and nowhere else.
+- Containers are named by size only: small, medium, large, extra-large,
+  as many as the methods have fill sizes. Never "cast iron", "gastronorm",
+  "GN" or any other shape or material word on screen. The kitchen's own
+  names are a Setup setting.
 - A column that grows with the data (one column per catering order) is an
   Excel workaround. Consolidate into one column and put the detail in a
   drawer.

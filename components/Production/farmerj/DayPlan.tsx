@@ -187,12 +187,12 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
                       </th>
                       <th style={headStyle({ minWidth: 118 })}>
                         Second make line
-                        <HeadSub>small gastronorms</HeadSub>
+                        <HeadSub>small containers</HeadSub>
                       </th>
                       {plan.orders.length > 0 && (
                         <th style={headStyle({ minWidth: 124 })}>
                           Catering
-                          <HeadSub>small gastronorms · boxes ordered</HeadSub>
+                          <HeadSub>small containers · boxes ordered</HeadSub>
                           <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginTop: 5, flexWrap: 'wrap' }}>
                             <StatusPill
                               tone={plan.activeOrders.length > 0 ? 'info' : 'neutral'}
@@ -478,7 +478,7 @@ function TotalCard({ plan }: { plan: DayPlanModel }) {
           <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
           <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{products} products</span>
           <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
-          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{plan.totals.mainUnits} containers on the main line, {plan.totals.secondUnits} small gastronorms on the second make line</span>
+          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{plan.totals.mainUnits} containers on the main line, {plan.totals.secondUnits} small containers on the second make line</span>
           {plan.activeOrders.length > 0 && (
             <>
               <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
@@ -747,7 +747,7 @@ function FjFocusPanel({ plan, day, onClose }: { plan: ProductPlan; day: DayPlanM
             {plan.carriedGrams > 0 && <Ledger label="Carried from last night's count" value={`−${portionsOf(plan.product, plan.carriedGrams)} portions`} />}
             <Divider />
             <Ledger label={`Main line · ${mainUnit}s, ${perMain} portions each`} value={`${plan.main.plannedUnits}${plan.main.plannedUnits !== plan.main.suggestedUnits ? ` (fc ${plan.main.suggestedUnits})` : ''}`} edify />
-            <Ledger label={`Second make line · gastronorms, ${perSecond} portions each`} value={`${plan.second.plannedUnits}${plan.second.plannedUnits !== plan.second.suggestedUnits ? ` (fc ${plan.second.suggestedUnits})` : ''}`} edify />
+            <Ledger label={`Second make line · ${plan.second.unitName.toLowerCase()}s, ${perSecond} portions each`} value={`${plan.second.plannedUnits}${plan.second.plannedUnits !== plan.second.suggestedUnits ? ` (fc ${plan.second.suggestedUnits})` : ''}`} edify />
             <Divider />
             <Ledger label={`Both lines, in ${mainUnit}s`} value={(plan.main.plannedUnits + plan.second.plannedUnits * plan.product.secondLineFraction).toFixed(1)} />
             <Ledger label={`${mainUnit[0].toUpperCase()}${mainUnit.slice(1)}s per batch`} value={String(plan.product.unitsPerBatch)} />
@@ -785,7 +785,7 @@ function CateringPanel({ plan, locked, onToggle, onClose }: { plan: DayPlanModel
   if (typeof window === 'undefined') return null;
   const cancelled = new Set(plan.record.cancelledOrders);
   const active = plan.orders.filter(o => !cancelled.has(o.id));
-  const gastronorms = plan.plans.reduce((n, p) => n + Math.ceil(p.cateringGrams / p.second.gramsPerUnit), 0);
+  const smallContainers = plan.plans.reduce((n, p) => n + Math.ceil(p.cateringGrams / p.second.gramsPerUnit), 0);
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', justifyContent: 'flex-end', background: 'rgba(15, 23, 32, 0.18)' }} onClick={onClose}>
       <aside
@@ -801,7 +801,7 @@ function CateringPanel({ plan, locked, onToggle, onClose }: { plan: DayPlanModel
               {active.length} {active.length === 1 ? 'order' : 'orders'}
             </h2>
             <div style={{ display: 'flex', gap: 6, marginTop: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-              <StatusPill tone="neutral" label={`${gastronorms} gastronorms on the second make line`} size="xs" />
+              <StatusPill tone="neutral" label={`${smallContainers} small containers on the second make line`} size="xs" />
               {cancelled.size > 0 && <StatusPill tone="warning" label={`${cancelled.size} cancelled`} size="xs" />}
             </div>
           </div>
@@ -838,8 +838,8 @@ function CateringPanel({ plan, locked, onToggle, onClose }: { plan: DayPlanModel
                   <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column' }}>
                     {o.lines.map(l => {
                       const perGn = plan.plans.find(p => p.productId === l.productId)?.second.gramsPerUnit;
-                      const gn = perGn ? Math.ceil(lineGrams(l) / perGn) : 0;
-                      return <Pair key={l.productId} label={PRODUCT_NAME(l.productId)} value={`${lineLabel(l)}${gn > 0 ? ` · ${gn} GN` : ''}`} muted={isCancelled} />;
+                      const small = perGn ? Math.ceil(lineGrams(l) / perGn) : 0;
+                      return <Pair key={l.productId} label={PRODUCT_NAME(l.productId)} value={`${lineLabel(l)}${small > 0 ? ` · ${small} small` : ''}`} muted={isCancelled} />;
                     })}
                   </div>
                 </div>
