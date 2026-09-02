@@ -10,7 +10,7 @@ import QtyStepper from '@/components/Production/QtyStepper';
 import StatusPill from '@/components/Production/StatusPill';
 import { batchesLabel, batchesToNumber, gbp, kg, mainUnitsOf, portionsOf, portionsPerMainUnit, portionsPerSecondUnit, type ProductPlan } from './cascade';
 import { boxesLabel, lineGrams, lineLabel, orderBoxesLabel, orderGramsFor, type CateringOrder } from './catering';
-import { addDays, FJ_DEMO_TODAY, longDate, shortDate, weekdayLabel } from './calendar';
+import { addDays, FJ_DAY_STRIP_DATES, FJ_DEMO_TODAY, longDate, shortDate, weekdayLabel } from './calendar';
 import { computeDayPlan, useFjDayPlan, useFjPlanStore, useWindowApproval, type DayPlan as DayPlanModel } from './FjPlanStore';
 import { COMPONENTS, INGREDIENTS, PRODUCT_BY_ID, PRODUCT_GROUP_LABELS, type ProductGroup } from './recipes';
 import { daySales, fohReminders } from './sales';
@@ -86,11 +86,9 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
   const locked = plan.approved;
   const cancelledOrder = plan.orders.find(o => o.id === justCancelled);
   const focusedPlan = focused ? plan.plans.find(p => p.productId === focused) : undefined;
-  const strip = [addDays(plan.window.days[0], -1), ...plan.window.days];
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', fontFamily: 'var(--font-primary)' }}>
-      <FjDayStrip shopId={shopId} dates={strip} selectedDate={date} onSelect={d => { onDateChange(d); setFocused(null); }} />
+      <FjDayStrip shopId={shopId} dates={FJ_DAY_STRIP_DATES} selectedDate={date} onSelect={d => { onDateChange(d); setFocused(null); }} />
 
       {/* Selected day caption, with the reference days on the right so the
           GM sees what the draft was averaged from without leaving the row. */}
@@ -280,7 +278,7 @@ function secondShare(plan: DayPlanModel): number {
 
 // ─── Day strip ────────────────────────────────────────────────────────────────
 
-function FjDayStrip({ shopId, dates, selectedDate, onSelect }: { shopId: string; dates: string[]; selectedDate: string; onSelect: (d: string) => void }) {
+export function FjDayStrip({ shopId, dates, selectedDate, onSelect }: { shopId: string; dates: string[]; selectedDate: string; onSelect: (d: string) => void }) {
   return (
     <div role="tablist" aria-label="Select day" style={{ display: 'flex', gap: 8, alignItems: 'stretch', padding: '12px 30px', background: '#ffffff', borderBottom: '1px solid var(--color-border-subtle)', overflowX: 'auto' }}>
       {dates.map(d => (
@@ -896,7 +894,7 @@ function HeadSub({ children }: { children: ReactNode }) {
   return <span style={{ display: 'block', fontSize: 9, fontWeight: 500, letterSpacing: 0, textTransform: 'none', color: 'var(--color-text-muted)', marginTop: 2 }}>{children}</span>;
 }
 
-function Notice({ children }: { children: ReactNode }) {
+export function Notice({ children }: { children: ReactNode }) {
   return <div style={{ padding: '32px 30px', fontSize: 12, color: 'var(--color-text-muted)', fontFamily: 'var(--font-primary)' }}>{children}</div>;
 }
 

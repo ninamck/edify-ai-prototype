@@ -138,13 +138,13 @@ export const CONTAINERS: Record<ContainerId, Container> = {
   'round-cast-iron': { id: 'round-cast-iron', name: 'Extra-large container', fillG: 2400, note: 'Round cast iron. Rice and grains on the main line. About 2400 g (Rice Service HTC).' },
   'rect-cast-iron': { id: 'rect-cast-iron', name: 'Medium container', fillG: 1200, note: 'Rectangular cast iron. Proteins and hot sides on the main line. One bag of chicken cooked fills one.' },
   'salad-gn': { id: 'salad-gn', name: 'Large container', fillG: 1800, note: 'Salad tray on the line. Holds a half batch.' },
-  'gn-1-1-20': { id: 'gn-1-1-20', name: 'GN 1:1, 20 cm', fillG: 6000, note: 'Prep container for dressings and vegetable prep.' },
+  'gn-1-1-20': { id: 'gn-1-1-20', name: 'Prep tray', fillG: 6000, note: 'GN 1:1, 20 cm deep. Dressings and vegetable prep.' },
   'gn-1-2': { id: 'gn-1-2', name: 'Small container', fillG: 600, note: 'Second make line gastronorm. Holds half a rectangular cast iron of anything hot.' },
-  'blue-box': { id: 'blue-box', name: 'Blue shari box', fillG: 17000, note: 'One rice cooker fills one blue box.' },
-  'gn-1-6-10': { id: 'gn-1-6-10', name: 'GN 1:6, 10 cm (10 litre)', fillG: 7140, note: 'Rice kit container, stored ambient with the lid on.' },
+  'blue-box': { id: 'blue-box', name: 'Blue box', fillG: 17000, note: 'Shari box. One rice cooker fills one.' },
+  'gn-1-6-10': { id: 'gn-1-6-10', name: '10 litre tub', fillG: 7140, note: 'GN 1:6, 10 cm. Rice kit container, stored ambient with the lid on.' },
   'squeezy-bottle': { id: 'squeezy-bottle', name: 'Squeezy bottle', fillG: 500, note: 'Lemon juice and oil for seasoning cast irons. Bottle size is a setting.' },
   'breakfast-pot': { id: 'breakfast-pot', name: 'Breakfast pot', fillG: 150, note: 'Coconut chia and overnight oats.' },
-  'oven-tray': { id: 'oven-tray', name: 'Gastronorm oven tray', fillG: 2000, note: 'One bag of chicken per tray. Oven holds six trays.' },
+  'oven-tray': { id: 'oven-tray', name: 'Oven tray', fillG: 2000, note: 'Gastronorm oven tray. One bag of chicken per tray. Oven holds six trays.' },
 };
 
 /** Equipment limits that shape timing. Stated as facts about kit, never

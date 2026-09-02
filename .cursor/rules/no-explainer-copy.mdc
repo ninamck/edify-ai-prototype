@@ -54,7 +54,17 @@ the sentence, the layout is wrong; fix the layout.
 - Containers are named by size only: small, medium, large, extra-large,
   as many as the methods have fill sizes. Never "cast iron", "gastronorm",
   "GN" or any other shape or material word on screen. The kitchen's own
-  names are a Setup setting.
+  names are a Setup setting. Prep and kitchen vessels use plain words the
+  same way: "prep tray", "10 litre tub", "oven tray", "blue box".
+- Prep quantities are in the unit written on the label: batches for kits,
+  kilos for dressings and mixes (the 1 to 18 kg matrix), packs where the
+  rule is "open the can, prep the can", bags for parsley. Edify's number
+  stays visible as "fc" under any figure the manager types over, with a
+  clear action next to it. Same pattern as the Day plan steppers.
+- New Farmer J screens reuse an existing Pret chassis. Day plan sits on
+  the Plan grid; Prep list sits on the Run sheet (sticky toolbar with a
+  segmented switcher and Print, cards tiled in a grid, name left and
+  quantity right). Do not invent a third layout language.
 - A column that grows with the data (one column per catering order) is an
   Excel workaround. Consolidate into one column and put the detail in a
   drawer.

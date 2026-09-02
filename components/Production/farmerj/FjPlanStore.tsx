@@ -34,9 +34,13 @@ export type DayRecord = {
   approvedAtISO?: string;
   approvedBy?: string;
   close?: CloseCount;
-  /** Section task ticks and reassignments (Step 4). */
+  /** Prep list quantities typed over Edify's suggestion, in the component's own unit. */
+  prepOverrides?: Record<string, number>;
+  /** Section task ticks (task id → ISO time), tasks moved to another
+   *  section (task id → section id) and people set per section. */
   ticks?: Record<string, string>;
   reassigned?: Record<string, string>;
+  people?: Record<string, string>;
 };
 
 type StoreState = Record<string, DayRecord>;
@@ -103,6 +107,12 @@ export function useFjPlanStore(): Ctx {
   const ctx = useContext(FjPlanContext);
   if (!ctx) throw new Error('useFjPlanStore must be used inside FjPlanProvider');
   return ctx;
+}
+
+/** For surfaces shared with other brands (the chat), where the provider
+ *  may be absent in tests or storybooks. */
+export function useFjPlanStoreOptional(): Ctx | null {
+  return useContext(FjPlanContext);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
