@@ -3,38 +3,41 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion } from 'framer-motion';
-import { CheckCircle2, ChevronRight, Info, RotateCcw, Sparkles, Store, X } from 'lucide-react';
+import { Calculator, CheckCircle2, ChevronRight, ClipboardCheck, GitBranch, Lock, LockOpen, Package, RotateCcw, Store, TrendingUp, X } from 'lucide-react';
+import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
-import QtyStepper, { getStepperValueStyle } from '@/components/Production/QtyStepper';
+import QtyStepper from '@/components/Production/QtyStepper';
+import StatusPill from '@/components/Production/StatusPill';
 import { batchesLabel, batchesToNumber, gbp, kg, type ProductPlan } from './cascade';
 import { orderGramsFor, orderPortions, type CateringOrder } from './catering';
-import { FJ_DEMO_TODAY, longDate, shortDate, weekdayLabel } from './calendar';
-import { useFjDayPlan, useWindowApproval, type DayPlan as DayPlanModel } from './FjPlanStore';
+import { addDays, FJ_DEMO_TODAY, longDate, shortDate, weekdayLabel } from './calendar';
+import { computeDayPlan, useFjDayPlan, useFjPlanStore, useWindowApproval, type DayPlan as DayPlanModel } from './FjPlanStore';
 import { COMPONENTS, INGREDIENTS, PRODUCT_GROUP_LABELS, type ProductGroup } from './recipes';
 import { daySales, fohReminders } from './sales';
 import { FJ_ALL_SHOPS_ID, getShop } from './shops';
 
 const GROUP_ORDER: ProductGroup[] = ['breakfast', 'bases', 'proteins', 'hot-sides', 'salads'];
+type GroupFilter = 'all' | ProductGroup;
 
 /**
- * The GM's first screen. One row per finished sellable product, nothing
- * else. Suggested cast irons and gastronorms from the reference days, a
- * catering column per order, an override on every number, a whole-day
- * flex, and a plain-words derivation one tap away.
+ * Farmer J day plan on the same chassis as the Pret Plan surface: day
+ * strip, caption, confirm bar, filter toolbar, "total to make" card,
+ * recipe-first table with a stepper and a faded `fc` under every number,
+ * and a focus panel per row.
+ *
+ * What changes for Farmer J is what the numbers mean. Rows are finished
+ * sellable products only. The two editable columns are the main line (cast
+ * irons) and the second make line (gastronorms), catering orders get a
+ * column each, and the row total is batches.
  */
 export default function DayPlan() {
   const { isFarmerJ, productionSiteId } = useActiveSite();
   const [date, setDate] = useState(FJ_DEMO_TODAY);
   const shopId = productionSiteId ?? FJ_ALL_SHOPS_ID;
 
-  if (!isFarmerJ) return <Notice title="Day plan">Switch the Brand pill in demo controls to Farmer J to see this screen.</Notice>;
+  if (!isFarmerJ) return <Notice>Switch the Brand pill in demo controls to Farmer J to see this screen.</Notice>;
   if (shopId === FJ_ALL_SHOPS_ID) {
-    return (
-      <Notice title="Day plan">
-        Pick a shop in the site switcher to see its day plan. The all-shops view is Jana&apos;s board, on the Plan side under Shops.
-      </Notice>
-    );
+    return <Notice>Pick a shop in the site switcher to see its day plan. The all-shops view is Jana&apos;s board, on the Plan side under Shops.</Notice>;
   }
   return <DayPlanForShop shopId={shopId} date={date} onDateChange={setDate} />;
 }
@@ -43,7 +46,8 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
   const shop = getShop(shopId);
   const { plan, setOverride, clearOverride, setFlex, toggleOrder, toggleReferenceDay, approve, reopen } = useFjDayPlan(shopId, date);
   const approval = useWindowApproval(shopId, date);
-  const [openProduct, setOpenProduct] = useState<string | null>(null);
+  const [focused, setFocused] = useState<string | null>(null);
+  const [groupFilter, setGroupFilter] = useState<GroupFilter>('all');
   const [justCancelled, setJustCancelled] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,449 +56,288 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
     return () => window.clearTimeout(t);
   }, [justCancelled]);
 
-  // Escape closes the derivation drawer.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpenProduct(null);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFocused(null);
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const byGroup = useMemo(() => {
+  const grouped = useMemo(() => {
     const m = new Map<ProductGroup, ProductPlan[]>();
     for (const p of plan.plans) {
+      if (groupFilter !== 'all' && p.product.group !== groupFilter) continue;
       const g = p.product.group;
       if (!m.has(g)) m.set(g, []);
       m.get(g)!.push(p);
     }
     return GROUP_ORDER.filter(g => m.has(g)).map(g => ({ group: g, rows: m.get(g)! }));
-  }, [plan.plans]);
+  }, [plan.plans, groupFilter]);
 
+  const groupsPresent = useMemo(() => GROUP_ORDER.filter(g => plan.plans.some(p => p.product.group === g)), [plan.plans]);
   const closed = plan.demand.net === 0 && plan.activeOrders.length === 0;
   const isToday = date === FJ_DEMO_TODAY;
-  const dayWord = isToday ? 'today' : longDate(date).split(' ')[0];
-  const reminders = fohReminders(shopId, date === FJ_DEMO_TODAY ? date : date);
+  const isPast = date < FJ_DEMO_TODAY;
+  const dayName = longDate(date).split(' ')[0];
+  const locked = plan.approved;
   const cancelledOrder = plan.orders.find(o => o.id === justCancelled);
-  const shownAnomaly = plan.referenceDays.find(r => r.anomaly);
-  const openPlan = openProduct ? plan.plans.find(p => p.productId === openProduct) : undefined;
+  const focusedPlan = focused ? plan.plans.find(p => p.productId === focused) : undefined;
+  const strip = [addDays(plan.window.days[0], -1), ...plan.window.days];
 
   return (
-    <div style={page}>
-      {/* Header: shop, date strip, status */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={eyebrow}>
-            <Store size={12} /> Farmer J {shop?.name} · {shop?.area}
-          </div>
-          <h1 style={h1}>Day plan, {longDate(date)}</h1>
-          <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4 }}>{plan.window.label}. Reviewed the morning of.</div>
-        </div>
-        <StatusPill plan={plan} approvedDays={approval.approvedDays.length} windowDays={approval.window.days.length} />
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', fontFamily: 'var(--font-primary)' }}>
+      <FjDayStrip shopId={shopId} dates={strip} selectedDate={date} onSelect={d => { onDateChange(d); setFocused(null); }} />
 
-      <DateStrip days={plan.window.days} date={date} onChange={d => { onDateChange(d); setOpenProduct(null); }} shopId={shopId} />
-
-      {closed ? (
-        <Notice title={`${shop?.name} is closed on ${longDate(date)}`}>Nothing to plan. Weekend-closed shops do their Monday chickpeas on Sunday or first thing.</Notice>
-      ) : (
-        <>
-          <Tiles plan={plan} onToggleReferenceDay={toggleReferenceDay} />
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: 20, alignItems: 'start' }}>
-            <div style={{ minWidth: 0 }}>
-              <FlexControl plan={plan} onChange={setFlex} />
-              {cancelledOrder && (
-                <div style={undoStrip}>
-                  <span>
-                    <strong>{cancelledOrder.customer}</strong> cancelled. Every row it touched has re-derived.
-                  </span>
-                  <button type="button" style={linkButton} onClick={() => { toggleOrder(cancelledOrder.id); setJustCancelled(null); }}>
-                    Undo
-                  </button>
-                </div>
-              )}
-              <PlanTable
-                plan={plan}
-                byGroup={byGroup}
-                openProduct={openProduct}
-                onOpen={setOpenProduct}
-                onOverride={setOverride}
-                onClear={clearOverride}
-                onCancelOrder={id => { toggleOrder(id); setJustCancelled(id); }}
-                locked={plan.approved}
-              />
-              <ApproveBar
-                plan={plan}
-                approval={approval}
-                dayWord={dayWord}
-                onApproveWindow={() => approve(`${shop?.name} GM`, approval.window.days)}
-                onApproveDay={() => approve(`${shop?.name} GM`)}
-                onReopen={reopen}
-              />
-            </div>
-
-            <aside style={{ display: 'flex', flexDirection: 'column', gap: 14, position: 'sticky', top: 76 }}>
-              <EdifyNote plan={plan} anomalyReason={shownAnomaly?.anomaly?.reason} />
-              <FohCard reminders={reminders} dayLabel={isToday ? 'Tomorrow' : shortDate(date)} />
-            </aside>
-          </div>
-        </>
-      )}
-
-      <AnimatePresence>
-        {openPlan && <DerivationDrawer plan={openPlan} day={plan} onClose={() => setOpenProduct(null)} />}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Header pieces
-// ─────────────────────────────────────────────────────────────────────────────
-
-function StatusPill({ plan, approvedDays, windowDays }: { plan: DayPlanModel; approvedDays: number; windowDays: number }) {
-  if (plan.approved) {
-    const at = plan.record.approvedAtISO ? new Date(plan.record.approvedAtISO).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
-    return (
-      <div style={{ ...pill, background: 'var(--color-success-light)', border: '1px solid var(--color-success-border)', color: 'var(--color-success)' }}>
-        <CheckCircle2 size={13} /> Approved {at}{plan.record.approvedBy ? ` by ${plan.record.approvedBy}` : ''} · {approvedDays} of {windowDays} days in this window
-      </div>
-    );
-  }
-  return (
-    <div style={{ ...pill, background: 'var(--color-review-light)', border: '1px solid var(--color-review-border)', color: 'var(--color-review)' }}>
-      Draft · {plan.overriddenCount === 0 ? 'all lines suggested by Edify' : `${plan.overriddenCount} ${plan.overriddenCount === 1 ? 'line' : 'lines'} set by hand`}
-    </div>
-  );
-}
-
-function DateStrip({ days, date, onChange, shopId }: { days: string[]; date: string; onChange: (d: string) => void; shopId: string }) {
-  return (
-    <div style={{ display: 'flex', gap: 6, marginTop: 16, flexWrap: 'wrap' }} role="tablist" aria-label="Days in this planning window">
-      {days.map(d => {
-        const active = d === date;
-        const isToday = d === FJ_DEMO_TODAY;
-        const closed = daySales(shopId, d).net === 0;
-        return (
-          <button
-            key={d}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={() => onChange(d)}
-            style={{
-              ...dateChip,
-              background: active ? 'var(--color-accent-active)' : '#fff',
-              color: active ? 'var(--color-text-on-active)' : closed ? 'var(--color-text-muted)' : 'var(--color-text-primary)',
-              borderColor: active ? 'var(--color-accent-active)' : 'var(--color-border)',
-            }}
-          >
-            <span style={{ fontWeight: 700 }}>{weekdayLabel(d)}</span>
-            <span style={{ opacity: 0.8 }}>{shortDate(d).split(' ').slice(1).join(' ')}</span>
-            {isToday && <span style={{ ...miniTag, background: active ? 'rgba(255,255,255,0.18)' : 'var(--color-bg-hover)', color: active ? '#fff' : 'var(--color-text-secondary)' }}>Today</span>}
-            {closed && <span style={{ ...miniTag, background: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' }}>Closed</span>}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function Tiles({ plan, onToggleReferenceDay }: { plan: DayPlanModel; onToggleReferenceDay: (d: string) => void }) {
-  const d = plan.demand;
-  const secondShare = d.net > 0 ? (d.netByChannel.deliveroo + d.netByChannel.clickcollect) / d.net : 0;
-  const tiles: { label: string; value: string; sub?: string }[] = [];
-  if (d.netByDayPart.breakfast > 0) tiles.push({ label: 'Breakfast', value: gbp(d.netByDayPart.breakfast), sub: 'to 11:00' });
-  tiles.push({ label: 'Lunch', value: gbp(d.netByDayPart.lunch), sub: '11:00 to 17:00' });
-  if (d.netByDayPart.dinner > 0) tiles.push({ label: 'Dinner', value: gbp(d.netByDayPart.dinner), sub: 'from 17:00' });
-  tiles.push({ label: 'Trays', value: Math.round(d.trays).toLocaleString('en-GB'), sub: `${Math.round(d.items).toLocaleString('en-GB')} items` });
-  tiles.push({ label: 'Second make line', value: `${Math.round(secondShare * 100)}%`, sub: 'Deliveroo and Click & Collect' });
-  if (plan.activeOrders.length) tiles.push({ label: 'Catering', value: `${plan.activeOrders.length} ${plan.activeOrders.length === 1 ? 'order' : 'orders'}`, sub: `${plan.activeOrders.reduce((n, o) => n + orderPortions(o), 0)} covers` });
-
-  return (
-    <div style={{ display: 'flex', gap: 12, marginTop: 16, alignItems: 'stretch', flexWrap: 'wrap' }}>
-      {tiles.map(t => (
-        <div key={t.label} style={tile}>
-          <div style={tileLabel}>{t.label}</div>
-          <div style={tileValue}>{t.value}</div>
-          {t.sub && <div style={tileSub}>{t.sub}</div>}
-        </div>
-      ))}
-      <div style={{ ...tile, flex: '1 1 320px', minWidth: 280 }}>
-        <div style={tileLabel}>Drafted from the last four {longDate(plan.date).split(' ')[0]}s</div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-          {plan.referenceDays.map(r => {
-            const anomaly = r.anomaly;
-            const bg = !r.included ? 'var(--color-bg-hover)' : anomaly ? 'var(--color-warning-light)' : '#fff';
-            const border = anomaly && r.included ? 'var(--color-warning-border)' : 'var(--color-border)';
-            return (
+      {/* Selected day caption, with the reference days on the right so the
+          GM sees what the draft was averaged from without leaving the row. */}
+      <div style={captionStrip}>
+        <span style={{ fontWeight: 700, color: 'var(--color-text-secondary)' }}>{isToday ? 'Planning today' : `Planning ${weekdayLabel(date)} ${date}`}</span>
+        <span>· {plan.window.label.replace(/\.$/, '')}</span>
+        {isPast && <span>· historical view</span>}
+        {!closed && (
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <EdifyMark size={10} color="var(--color-text-muted)" /> Drafted from the last four {dayName}s
+            </span>
+            {plan.referenceDays.map(r => (
               <button
                 key={r.date}
                 type="button"
-                onClick={() => onToggleReferenceDay(r.date)}
-                title={anomaly ? `${anomaly.reason}. ${r.included ? 'Tap to exclude.' : 'Excluded. Tap to include.'}` : r.included ? 'Included. Tap to exclude.' : 'Excluded. Tap to include.'}
+                onClick={() => toggleReferenceDay(r.date)}
                 aria-pressed={r.included}
+                title={r.anomaly ? `${r.anomaly.reason}. ${r.included ? 'Tap to leave out.' : 'Left out. Tap to include.'}` : r.included ? 'In the average. Tap to leave out.' : 'Left out. Tap to include.'}
                 style={{
                   ...refChip,
-                  background: bg,
-                  borderColor: border,
-                  color: r.included ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+                  color: r.included ? (r.anomaly ? 'var(--color-warning)' : 'var(--color-text-secondary)') : 'var(--color-text-muted)',
+                  borderColor: r.included ? (r.anomaly ? 'var(--color-warning)' : 'var(--color-border)') : 'var(--color-border-subtle)',
                   textDecoration: r.included ? 'none' : 'line-through',
                 }}
               >
                 {shortDate(r.date)}
-                {anomaly && <span style={{ fontWeight: 500, marginLeft: 4, color: 'var(--color-text-secondary)' }}>· {anomaly.reason.split(' ').slice(0, 1).join(' ')}</span>}
+                {r.anomaly ? ` · ${r.anomaly.reason.split(' ')[0].toLowerCase()}` : ''}
               </button>
-            );
-          })}
-        </div>
-        <div style={{ ...tileSub, marginTop: 6 }}>
-          {plan.includedReferenceDates.length} of {plan.referenceDays.length} days in the average. Tap a day to leave it out.
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FlexControl({ plan, onChange }: { plan: DayPlanModel; onChange: (pct: number) => void }) {
-  const pct = plan.record.flexPct;
-  const hand = plan.overriddenCount;
-  return (
-    <div style={flexRow}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)' }}>Whole day</span>
-        <QtyStepper
-          size="compact"
-          onDecrement={() => onChange(Math.max(-50, pct - 5))}
-          onIncrement={() => onChange(Math.min(50, pct + 5))}
-          decrementLabel="Take 5% off the day"
-          incrementLabel="Add 5% to the day"
-          disabled={plan.approved}
-        >
-          <span style={{ ...getStepperValueStyle('compact'), minWidth: 44 }}>{pct > 0 ? '+' : ''}{pct}%</span>
-        </QtyStepper>
-        {pct !== 0 && (
-          <button type="button" style={linkButton} onClick={() => onChange(0)}>
-            Back to 0%
-          </button>
-        )}
-      </div>
-      <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-        {pct === 0
-          ? 'Flex the whole day up or down in 5% steps. Lines you set by hand are never touched.'
-          : `Applied to suggested lines. ${hand === 0 ? 'No lines' : `${hand} ${hand === 1 ? 'line' : 'lines'}`} set by hand ${hand === 1 ? 'is' : 'are'} unchanged.`}
-      </span>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// The table
-// ─────────────────────────────────────────────────────────────────────────────
-
-function PlanTable({
-  plan,
-  byGroup,
-  openProduct,
-  onOpen,
-  onOverride,
-  onClear,
-  onCancelOrder,
-  locked,
-}: {
-  plan: DayPlanModel;
-  byGroup: { group: ProductGroup; rows: ProductPlan[] }[];
-  openProduct: string | null;
-  onOpen: (id: string) => void;
-  onOverride: (productId: string, line: 'main' | 'second', units: number | undefined) => void;
-  onClear: (productId: string) => void;
-  onCancelOrder: (id: string) => void;
-  locked: boolean;
-}) {
-  const orders = plan.activeOrders;
-  const cols = `minmax(190px, 1.2fr) minmax(130px, 0.8fr) minmax(230px, 1.2fr) minmax(215px, 1.1fr) ${orders.map(() => 'minmax(150px, 0.9fr)').join(' ')} minmax(150px, 0.9fr)`;
-  return (
-    <div style={{ overflowX: 'auto', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-card)', background: '#fff' }}>
-      <div role="table" aria-label="Day plan" style={{ minWidth: 915 + orders.length * 150 }}>
-        <div role="row" style={{ ...gridRow(cols), ...headRow }}>
-          <div role="columnheader" style={th}>Finished product</div>
-          <div role="columnheader" style={th}>Sold on reference days</div>
-          <div role="columnheader" style={th}>
-            Main line <span style={thSub}>cast irons, theatre kitchen</span>
-          </div>
-          <div role="columnheader" style={th}>
-            Second make line <span style={thSub}>gastronorms, delivery and catering</span>
-          </div>
-          {orders.map(o => (
-            <div role="columnheader" key={o.id} style={{ ...th, position: 'relative', paddingRight: 26 }}>
-              <span style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={`${o.customer} · ${o.reference}`}>{o.customer}</span>
-              <span style={thSub}>{o.time} · {orderPortions(o)} covers</span>
-              {!locked && (
-                <button type="button" onClick={() => onCancelOrder(o.id)} title={`Cancel ${o.customer}`} aria-label={`Cancel ${o.customer}`} style={cancelX}>
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-          ))}
-          <div role="columnheader" style={th}>To make</div>
-        </div>
-
-        {byGroup.map(({ group, rows }) => (
-          <div key={group} role="rowgroup">
-            <div role="row" style={groupRow}>{PRODUCT_GROUP_LABELS[group]}</div>
-            {rows.map(p => (
-              <PlanRow
-                key={p.productId}
-                p={p}
-                orders={orders}
-                cols={cols}
-                open={openProduct === p.productId}
-                onOpen={() => onOpen(p.productId)}
-                onOverride={onOverride}
-                onClear={onClear}
-                locked={locked}
-              />
             ))}
           </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function PlanRow({
-  p,
-  orders,
-  cols,
-  open,
-  onOpen,
-  onOverride,
-  onClear,
-  locked,
-}: {
-  p: ProductPlan;
-  orders: CateringOrder[];
-  cols: string;
-  open: boolean;
-  onOpen: () => void;
-  onOverride: (productId: string, line: 'main' | 'second', units: number | undefined) => void;
-  onClear: (productId: string) => void;
-  locked: boolean;
-}) {
-  const hasHand = p.overridden;
-  // Bases and sides ride on the tray at £0; the odd "extra side" pound
-  // would only confuse a GM, so pounds show on proteins and breakfast.
-  const net = p.product.group === 'proteins' || p.product.group === 'breakfast' ? p.referenceNet : 0;
-  return (
-    <div role="row" style={{ ...gridRow(cols), ...bodyRow, background: open ? 'var(--color-bg-hover)' : '#fff' }}>
-      <div role="cell" style={{ ...td, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button type="button" onClick={onOpen} style={nameButton} aria-expanded={open} title="Why this number">
-          <span style={{ fontWeight: 600 }}>{p.product.name}</span>
-          <ChevronRight size={14} style={{ opacity: 0.6, flexShrink: 0 }} />
-        </button>
-        {p.product.provenance === 'invented' && <span style={{ ...miniTag, background: 'var(--chip-stone-bg)', color: 'var(--chip-stone)' }} title="Recipe invented for the demo. Jana to correct.">Demo recipe</span>}
+        )}
       </div>
 
-      <div role="cell" style={td}>
-        <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{Math.round(p.referencePortions)} portions</div>
-        <div style={tdSub}>
-          {net > 0 ? gbp(net) : 'on trays'} · {kg(p.referenceGrams)}
+      {closed ? (
+        <div style={{ padding: '32px 30px', fontSize: 12, color: 'var(--color-text-muted)' }}>
+          {shop?.name} is closed on {longDate(date)}. Nothing to plan.
         </div>
-      </div>
+      ) : (
+        <>
+          <FjApproveBar
+            plan={plan}
+            approval={approval}
+            isToday={isToday}
+            isPast={isPast}
+            onApproveWindow={() => approve(`${shop?.name} GM`, approval.window.days)}
+            onApproveDay={() => approve(`${shop?.name} GM`)}
+            onReopen={reopen}
+          />
 
-      <LineCell p={p} line="main" onOverride={onOverride} locked={locked} />
-      <LineCell p={p} line="second" onOverride={onOverride} locked={locked} />
+          <div style={{ padding: '16px 30px 32px' }}>
+            {/* Toolbar: group filter left, whole-day flex right. */}
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
+              <PillTabs
+                ariaLabel="Product group filter"
+                tabs={[{ id: 'all' as GroupFilter, label: 'All' }, ...groupsPresent.map(g => ({ id: g as GroupFilter, label: PRODUCT_GROUP_LABELS[g] }))]}
+                value={groupFilter}
+                onChange={setGroupFilter}
+              />
+              <div style={{ flex: 1 }} />
+              <FlexPill pct={plan.record.flexPct} onChange={setFlex} locked={locked} handCount={plan.overriddenCount} />
+            </div>
 
-      {orders.map(o => {
-        const g = orderGramsFor(o, p.productId);
-        const line = o.lines.find(l => l.productId === p.productId);
-        return (
-          <div role="cell" key={o.id} style={{ ...td, color: g ? 'var(--color-text-primary)' : 'var(--color-text-muted)' }}>
-            {g ? (
-              <>
-                <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{line!.portions} × {line!.gramsEach} g</div>
-                <div style={tdSub}>{kg(g)} · {Math.ceil(g / p.second.gramsPerUnit)} {Math.ceil(g / p.second.gramsPerUnit) === 1 ? 'gastronorm' : 'gastronorms'}</div>
-              </>
-            ) : (
-              <span style={{ fontSize: 12 }}>—</span>
-            )}
-          </div>
-        );
-      })}
+            <TotalCard plan={plan} />
 
-      <div role="cell" style={td}>
-        <div style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{batchesLabel(p.batches)}</div>
-        <div style={{ ...tdSub, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span>{kg(p.gramsMade)}</span>
-          {hasHand && (
-            <>
-              <span style={{ ...miniTag, background: 'var(--color-info-light)', color: 'var(--color-info)' }}>Edited</span>
-              {!locked && (
-                <button type="button" onClick={() => onClear(p.productId)} style={{ ...iconButton }} title="Back to Edify's number" aria-label="Back to Edify's number">
-                  <RotateCcw size={12} />
+            {cancelledOrder && (
+              <div style={undoStrip}>
+                <span>
+                  <strong>{cancelledOrder.customer}</strong> cancelled. Every row it touched has re-derived.
+                </span>
+                <button type="button" style={linkButton} onClick={() => { toggleOrder(cancelledOrder.id); setJustCancelled(null); }}>
+                  Undo
                 </button>
-              )}
-            </>
-          )}
-          {p.carriedGrams > 0 && <span style={{ ...miniTag, background: 'var(--color-success-light)', color: 'var(--color-success)' }}>−{kg(p.carriedGrams)} carried</span>}
-        </div>
-      </div>
+              </div>
+            )}
+
+            <div style={{ background: '#ffffff', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', minWidth: 760, borderCollapse: 'separate', borderSpacing: 0 }}>
+                  <thead>
+                    <tr>
+                      <th style={headStyle({ left: true, sticky: true, minWidth: 240 })}>Product</th>
+                      <th style={headStyle({ minWidth: 96 })}>Sold · ref days</th>
+                      <th style={headStyle({ minWidth: 72 })}>Carry-over</th>
+                      <th style={headStyle({ minWidth: 118 })}>
+                        Main line
+                        <HeadSub>cast irons · salads in GNs</HeadSub>
+                      </th>
+                      <th style={headStyle({ minWidth: 118 })}>
+                        Second make line
+                        <HeadSub>gastronorms</HeadSub>
+                      </th>
+                      {plan.activeOrders.map(o => (
+                        <th key={o.id} style={headStyle({ minWidth: 124 })}>
+                          <span title={`${o.customer} · ${o.reference}`} style={{ display: 'block', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', margin: '0 auto' }}>
+                            {o.customer}
+                          </span>
+                          <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginTop: 5, flexWrap: 'wrap' }}>
+                            <StatusPill tone="info" size="xs" label={`${o.time} · ${orderPortions(o)} covers`} />
+                            {!locked && (
+                              <button type="button" onClick={() => { toggleOrder(o.id); setJustCancelled(o.id); }} style={cancelPill} title={`Cancel ${o.customer}`}>
+                                <X size={9} strokeWidth={2.6} /> Cancel
+                              </button>
+                            )}
+                          </div>
+                        </th>
+                      ))}
+                      <th style={headStyle({ minWidth: 104, totalCol: true })}>Batches</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {grouped.map(({ group, rows }) => (
+                      <GroupRows
+                        key={group}
+                        label={PRODUCT_GROUP_LABELS[group]}
+                        rows={rows}
+                        orders={plan.activeOrders}
+                        colCount={6 + plan.activeOrders.length}
+                        focused={focused}
+                        locked={locked}
+                        onSelect={setFocused}
+                        onOverride={setOverride}
+                        onClear={clearOverride}
+                      />
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td style={footStyle({ left: true, sticky: true })}>Total to make</td>
+                      <td style={footStyle()}><span style={numStyle}>{Math.round(plan.plans.reduce((n, p) => n + p.referencePortions, 0)).toLocaleString('en-GB')}</span></td>
+                      <td style={footStyle()}>{Object.keys(plan.carried).length ? <span style={numStyle}>−{kg(plan.plans.reduce((n, p) => n + p.carriedGrams, 0))}</span> : '—'}</td>
+                      <td style={footStyle()}><span style={numStyle}>{plan.totals.mainUnits}</span></td>
+                      <td style={footStyle()}><span style={numStyle}>{plan.totals.secondUnits}</span></td>
+                      {plan.activeOrders.map(o => (
+                        <td key={o.id} style={footStyle()}>
+                          <span style={numStyle}>{kg(o.lines.reduce((n, l) => n + l.portions * l.gramsEach, 0))}</span>
+                        </td>
+                      ))}
+                      <td style={footStyle({ totalCol: true })}><span style={numStyle}>{Math.round(plan.totals.batches * 2) / 2}</span></td>
+                    </tr>
+                    <tr>
+                      <td style={footSubStyle({ left: true, sticky: true })}>Sales · ref days</td>
+                      <td style={footSubStyle()}><span style={moneyStyle}>{gbp(plan.demand.net)}</span></td>
+                      <td style={footSubStyle()}>—</td>
+                      <td style={footSubStyle()}><span style={moneyStyle}>{gbp(plan.demand.net * (1 - secondShare(plan)))}</span></td>
+                      <td style={footSubStyle()}><span style={moneyStyle}>{gbp(plan.demand.net * secondShare(plan))}</span></td>
+                      {plan.activeOrders.map(o => (
+                        <td key={o.id} style={footSubStyle()}>—</td>
+                      ))}
+                      <td style={footSubStyle({ totalCol: true })}><span style={moneyStyle}>{kg(plan.totals.gramsMade)}</span></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            <p style={footnote}>
+              {locked
+                ? 'Plan approved. Numbers are read-only; reopen from the bar above to change them.'
+                : 'Each cell is editable. Use the steppers to set cast irons on the main line and gastronorms on the second make line.'}{' '}
+              The faded <em>fc</em> number underneath is Edify&apos;s suggestion from the reference days, shown for reference. Batches follow both lines together, rounded to the half where the recipe allows. Tap a row for the working and what it cascades to.
+              {plan.demand.modelled && ' Reference days are modelled from one real Marylebone Wednesday (16 April 2025).'}
+            </p>
+
+            <FohCard shopId={shopId} date={date} isToday={isToday} />
+          </div>
+        </>
+      )}
+
+      {focusedPlan && <FjFocusPanel plan={focusedPlan} day={plan} onClose={() => setFocused(null)} />}
     </div>
   );
 }
 
-function LineCell({
-  p,
-  line,
-  onOverride,
-  locked,
-}: {
-  p: ProductPlan;
-  line: 'main' | 'second';
-  onOverride: (productId: string, line: 'main' | 'second', units: number | undefined) => void;
-  locked: boolean;
-}) {
-  const l = line === 'main' ? p.main : p.second;
-  const overridden = p.product && ((line === 'main' && p.main.plannedUnits !== p.main.suggestedUnits) || (line === 'second' && p.second.plannedUnits !== p.second.suggestedUnits));
-  const unit = l.unitName.replace(' (second make line)', '').toLowerCase();
-  const none = l.suggestedUnits === 0 && l.plannedUnits === 0;
+function secondShare(plan: DayPlanModel): number {
+  const d = plan.demand;
+  return d.net > 0 ? (d.netByChannel.deliveroo + d.netByChannel.clickcollect) / d.net : 0;
+}
+
+// ─── Day strip ────────────────────────────────────────────────────────────────
+
+function FjDayStrip({ shopId, dates, selectedDate, onSelect }: { shopId: string; dates: string[]; selectedDate: string; onSelect: (d: string) => void }) {
   return (
-    <div role="cell" style={{ ...td, display: 'flex', alignItems: 'center', gap: 10 }}>
-      <QtyStepper
-        size="compact"
-        disabled={locked}
-        canDecrement={l.plannedUnits > 0}
-        onDecrement={() => onOverride(p.productId, line, l.plannedUnits - 1)}
-        onIncrement={() => onOverride(p.productId, line, l.plannedUnits + 1)}
-        decrementLabel={`One fewer ${unit}`}
-        incrementLabel={`One more ${unit}`}
-      >
-        <span style={{ ...getStepperValueStyle('compact', { muted: none }), minWidth: 30, fontSize: 14, color: overridden ? 'var(--color-info)' : undefined }}>{l.plannedUnits}</span>
-      </QtyStepper>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{l.plannedUnits === 1 ? unit : `${unit}s`}</div>
-        <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-          {overridden ? `Edify: ${l.suggestedUnits}` : none ? 'none needed' : `about ${kg(l.gramsPerUnit)} each`}
-        </div>
-      </div>
+    <div role="tablist" aria-label="Select day" style={{ display: 'flex', gap: 8, alignItems: 'stretch', padding: '12px 30px', background: '#ffffff', borderBottom: '1px solid var(--color-border-subtle)', overflowX: 'auto' }}>
+      {dates.map(d => (
+        <FjDayCard key={d} shopId={shopId} date={d} selected={d === selectedDate} onSelect={() => onSelect(d)} />
+      ))}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Approve
-// ─────────────────────────────────────────────────────────────────────────────
+function FjDayCard({ shopId, date, selected, onSelect }: { shopId: string; date: string; selected: boolean; onSelect: () => void }) {
+  const store = useFjPlanStore();
+  const record = store.get(shopId, date);
+  const yesterday = store.get(shopId, addDays(date, -1));
+  const plan = useMemo(() => computeDayPlan(shopId, date, record, yesterday.close), [shopId, date, record, yesterday.close]);
+  const isToday = date === FJ_DEMO_TODAY;
+  const isPast = date < FJ_DEMO_TODAY;
+  const closed = plan.demand.net === 0 && plan.activeOrders.length === 0;
+  const batches = Math.round(plan.totals.batches * 2) / 2;
+  const borderColor = selected ? 'var(--color-accent-active)' : isToday ? 'var(--color-border)' : 'var(--color-border-subtle)';
+  return (
+    <button
+      role="tab"
+      aria-selected={selected}
+      type="button"
+      onClick={onSelect}
+      title={`${weekdayLabel(date)} ${date}${isToday ? ' (today)' : ''} · ${closed ? 'closed' : `${batches} batches`}`}
+      style={{
+        flex: '0 0 auto',
+        minWidth: 96,
+        padding: '10px 12px',
+        borderRadius: 10,
+        border: `1px solid ${borderColor}`,
+        background: selected ? 'var(--color-accent-active)' : '#ffffff',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        gap: 4,
+        fontFamily: 'var(--font-primary)',
+        textAlign: 'left',
+        opacity: isPast && !selected ? 0.85 : 1,
+      }}
+    >
+      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: selected ? '#fff' : isPast ? 'var(--color-text-muted)' : 'var(--color-text-secondary)' }}>
+        {isToday ? 'Today' : weekdayLabel(date)}
+      </span>
+      <span style={{ fontSize: 18, fontWeight: 700, color: selected ? '#fff' : 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{date.slice(8, 10)}</span>
+      <span style={{ fontSize: 10, fontWeight: 600, color: selected ? 'rgba(255,255,255,0.85)' : 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {closed ? 'closed' : `${batches} batches`}
+        {plan.approved && <CheckCircle2 size={10} color={selected ? '#fff' : 'var(--color-success)'} aria-label="approved" />}
+      </span>
+    </button>
+  );
+}
 
-function ApproveBar({
+// ─── Approve bar (mirrors PlanConfirmBar) ─────────────────────────────────────
+
+function FjApproveBar({
   plan,
   approval,
-  dayWord,
+  isToday,
+  isPast,
   onApproveWindow,
   onApproveDay,
   onReopen,
 }: {
   plan: DayPlanModel;
   approval: ReturnType<typeof useWindowApproval>;
-  dayWord: string;
+  isToday: boolean;
+  isPast: boolean;
   onApproveWindow: () => void;
   onApproveDay: () => void;
   onReopen: () => void;
@@ -502,232 +345,544 @@ function ApproveBar({
   const w = approval.window;
   const from = weekdayLabel(w.from);
   const to = weekdayLabel(w.to);
+  const dayWord = isToday ? "today's" : `${weekdayLabel(plan.date)}'s`;
+  if (isPast) return null;
+
   if (plan.approved) {
+    const at = plan.record.approvedAtISO ? new Date(plan.record.approvedAtISO).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
     return (
-      <div style={{ ...approveBar, background: 'var(--color-success-light)', border: '1px solid var(--color-success-border)' }}>
-        <CheckCircle2 size={16} color="var(--color-success)" />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 700 }}>Approved. The kitchen runs to these numbers {dayWord}.</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-            Prep list, sections and the order sheet follow this plan. Reopen to change a number; anything you change re-derives below it.
-          </div>
+      <div style={confirmedBanner}>
+        <Lock size={14} color="var(--color-text-muted)" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={bannerTitle}>{isToday ? 'Today\u2019s plan is approved and in the kitchen.' : `${weekdayLabel(plan.date)}\u2019s plan is approved.`}</span>
+          <span style={bannerSub}>
+            Approved {at}{plan.record.approvedBy ? ` by ${plan.record.approvedBy}` : ''}. Prep list, sections and the order sheet follow these numbers. {approval.approvedDays.length} of {w.days.length} days in this window approved.
+          </span>
         </div>
-        <button type="button" onClick={onReopen} style={secondaryButton}>Reopen</button>
+        <button type="button" onClick={onReopen} style={reopenButton}>
+          <LockOpen size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+          Reopen to edit
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={draftBar}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+        <div style={draftIcon}>
+          <ClipboardCheck size={16} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+          <span style={bannerTitle}>Approve {dayWord} plan</span>
+          <span style={bannerSub}>
+            {plan.totals.mainUnits} on the main line, {plan.totals.secondUnits} gastronorms on the second make line, {Math.round(plan.totals.batches * 2) / 2} batches.
+            {plan.overriddenCount > 0 ? ` ${plan.overriddenCount} ${plan.overriddenCount === 1 ? 'line' : 'lines'} set by hand.` : ''}
+            {approval.approvedDays.length > 0 ? ` ${approval.approvedDays.length} of ${w.days.length} days in this window already approved.` : ` Approving the window covers ${from} to ${to}; each morning you can still change the day.`}
+          </span>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+        <button type="button" onClick={onApproveDay} style={secondaryButton}>Approve {isToday ? 'today' : weekdayLabel(plan.date)} only</button>
+        <button type="button" onClick={onApproveWindow} style={primaryButton}>
+          <ClipboardCheck size={14} /> Approve {from} to {to}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Toolbar pieces ───────────────────────────────────────────────────────────
+
+function PillTabs<T extends string>({ tabs, value, onChange, ariaLabel }: { tabs: { id: T; label: string }[]; value: T; onChange: (v: T) => void; ariaLabel: string }) {
+  return (
+    <div role="tablist" aria-label={ariaLabel} style={{ display: 'flex', background: 'var(--color-bg-hover)', borderRadius: 100, padding: 3, width: 'fit-content' }}>
+      {tabs.map(t => {
+        const active = t.id === value;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(t.id)}
+            style={{ padding: '8px 14px', borderRadius: 100, border: 'none', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-primary)', cursor: 'pointer', background: active ? 'var(--color-accent-active)' : 'transparent', color: active ? '#fff' : 'var(--color-text-secondary)', transition: 'all 0.15s' }}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function FlexPill({ pct, onChange, locked, handCount }: { pct: number; onChange: (n: number) => void; locked: boolean; handCount: number }) {
+  return (
+    <div
+      title={`Flex the whole day up or down in 5% steps. Applies to lines still on Edify's number; ${handCount === 0 ? 'no lines are' : `${handCount} ${handCount === 1 ? 'line is' : 'lines are'}`} set by hand and left alone.`}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 10, height: 38, padding: '0 6px 0 14px', background: '#ffffff', border: `1px solid ${pct !== 0 ? 'var(--color-accent-active)' : 'var(--color-border-subtle)'}`, borderRadius: 100, fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)' }}
+    >
+      <TrendingUp size={13} style={{ color: pct !== 0 ? 'var(--color-accent-active)' : 'var(--color-text-muted)' }} />
+      <span>Whole day</span>
+      <QtyStepper
+        size="compact"
+        chromeless
+        disabled={locked}
+        onDecrement={() => onChange(Math.max(-50, pct - 5))}
+        onIncrement={() => onChange(Math.min(50, pct + 5))}
+        decrementLabel="Take 5% off the day"
+        incrementLabel="Add 5% to the day"
+      >
+        <span style={{ minWidth: 44, textAlign: 'center', fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: pct !== 0 ? 'var(--color-accent-active)' : 'var(--color-text-primary)' }}>
+          {pct > 0 ? '+' : ''}{pct}%
+        </span>
+      </QtyStepper>
+    </div>
+  );
+}
+
+function TotalCard({ plan }: { plan: DayPlanModel }) {
+  const d = plan.demand;
+  const products = plan.plans.length;
+  const covers = plan.activeOrders.reduce((n, o) => n + orderPortions(o), 0);
+  const parts = [
+    d.netByDayPart.breakfast > 0 ? `${gbp(d.netByDayPart.breakfast)} breakfast` : null,
+    `${gbp(d.netByDayPart.lunch)} lunch`,
+    d.netByDayPart.dinner > 0 ? `${gbp(d.netByDayPart.dinner)} dinner` : null,
+  ].filter(Boolean);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', marginBottom: 10, background: '#ffffff', border: '1px solid var(--color-border-subtle)', borderLeft: '3px solid var(--color-info)', borderRadius: 'var(--radius-card)' }}>
+      <div style={{ width: 36, height: 36, borderRadius: 9, background: 'var(--color-info-light)', color: 'var(--color-info)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Package size={18} />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total to make {plan.date === FJ_DEMO_TODAY ? 'today' : weekdayLabel(plan.date)}</span>
+        <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{Math.round(plan.totals.batches * 2) / 2}</span>
+          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', fontWeight: 600 }}>batches</span>
+          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
+          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{products} products</span>
+          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
+          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{plan.totals.mainUnits} on the main line, {plan.totals.secondUnits} gastronorms</span>
+          {plan.activeOrders.length > 0 && (
+            <>
+              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
+              <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{plan.activeOrders.length} catering {plan.activeOrders.length === 1 ? 'order' : 'orders'}, {covers} covers</span>
+            </>
+          )}
+        </div>
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
+          Reference days: {parts.join(', ')} · {Math.round(d.trays).toLocaleString('en-GB')} trays · {Math.round(secondShare(plan) * 100)}% through Deliveroo and Click &amp; Collect.
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Table rows ───────────────────────────────────────────────────────────────
+
+function GroupRows({
+  label,
+  rows,
+  orders,
+  colCount,
+  focused,
+  locked,
+  onSelect,
+  onOverride,
+  onClear,
+}: {
+  label: string;
+  rows: ProductPlan[];
+  orders: CateringOrder[];
+  colCount: number;
+  focused: string | null;
+  locked: boolean;
+  onSelect: (id: string) => void;
+  onOverride: (productId: string, line: 'main' | 'second', units: number | undefined) => void;
+  onClear: (productId: string) => void;
+}) {
+  return (
+    <>
+      <tr>
+        <td colSpan={colCount} style={{ padding: '8px 12px', background: 'var(--color-bg-hover)', borderTop: '1px solid var(--color-border-subtle)', borderBottom: '1px solid var(--color-border-subtle)', position: 'sticky', left: 0, zIndex: 1 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--color-text-muted)', marginRight: 8 }}>{label}</span>
+          <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{rows.length} product{rows.length === 1 ? '' : 's'}</span>
+        </td>
+      </tr>
+      {rows.map(p => (
+        <ProductRow key={p.productId} p={p} orders={orders} focused={focused === p.productId} locked={locked} onSelect={() => onSelect(p.productId)} onOverride={onOverride} onClear={onClear} />
+      ))}
+    </>
+  );
+}
+
+function ProductRow({
+  p,
+  orders,
+  focused,
+  locked,
+  onSelect,
+  onOverride,
+  onClear,
+}: {
+  p: ProductPlan;
+  orders: CateringOrder[];
+  focused: boolean;
+  locked: boolean;
+  onSelect: () => void;
+  onOverride: (productId: string, line: 'main' | 'second', units: number | undefined) => void;
+  onClear: (productId: string) => void;
+}) {
+  const net = p.product.group === 'proteins' || p.product.group === 'breakfast' ? p.referenceNet : 0;
+  return (
+    <tr onClick={onSelect} style={{ cursor: 'pointer', background: focused ? 'var(--color-info-light)' : '#ffffff' }}>
+      <td style={bodyStyle({ left: true, sticky: true, focused })}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, rowGap: 3, minWidth: 0, flex: 1, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{p.product.name}</span>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', flexShrink: 0 }}>
+              {p.overridden && <StatusPill tone="info" label="Edited" size="xs" />}
+              {p.cateringGrams > 0 && <StatusPill tone="neutral" label="Catering" size="xs" />}
+              {p.product.provenance === 'invented' && <StatusPill tone="neutral" label="Demo recipe" size="xs" />}
+            </div>
+          </div>
+          <ChevronRight size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+        </div>
+      </td>
+      <td style={bodyStyle({ focused })}>
+        <span style={numStyle}>{Math.round(p.referencePortions)}</span>
+        <div style={cellSub}>{net > 0 ? gbp(net) : kg(p.referenceGrams)}</div>
+      </td>
+      <td style={bodyStyle({ focused })}>
+        {p.carriedGrams > 0 ? <span style={{ ...numStyle, color: 'var(--color-success)' }}>−{kg(p.carriedGrams)}</span> : <span style={{ color: 'var(--color-text-muted)' }}>0</span>}
+      </td>
+      <td style={bodyStyle({ focused })}>
+        <LineStepper p={p} line="main" locked={locked} onOverride={onOverride} />
+      </td>
+      <td style={bodyStyle({ focused })}>
+        <LineStepper p={p} line="second" locked={locked} onOverride={onOverride} />
+      </td>
+      {orders.map(o => {
+        const g = orderGramsFor(o, p.productId);
+        const line = o.lines.find(l => l.productId === p.productId);
+        return (
+          <td key={o.id} style={bodyStyle({ focused })}>
+            {g > 0 && line ? (
+              <>
+                <span style={numStyle}>{line.portions} × {line.gramsEach} g</span>
+                <div style={cellSub}>{kg(g)} · {Math.ceil(g / p.second.gramsPerUnit)} GN</div>
+              </>
+            ) : (
+              <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+            )}
+          </td>
+        );
+      })}
+      <td style={bodyStyle({ focused, totalCol: true })}>
+        <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.15 }}>
+          <span style={numStyle}>{batchesLabel(p.batches)}</span>
+          <span style={{ ...cellSub, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            {kg(p.gramsMade)}
+            {p.overridden && !locked && (
+              <button type="button" onClick={e => { e.stopPropagation(); onClear(p.productId); }} title="Back to Edify's number" style={clearButton}>
+                <RotateCcw size={9} /> clear
+              </button>
+            )}
+          </span>
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+function LineStepper({ p, line, locked, onOverride }: { p: ProductPlan; line: 'main' | 'second'; locked: boolean; onOverride: (productId: string, line: 'main' | 'second', units: number | undefined) => void }) {
+  const l = line === 'main' ? p.main : p.second;
+  const changed = l.plannedUnits !== l.suggestedUnits;
+  if (locked) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+        <span style={{ ...numStyle, color: changed ? 'var(--color-info)' : 'var(--color-text-primary)' }}>{l.plannedUnits}</span>
+        <span style={fcStyle} title="Edify's suggestion from the reference days">fc {l.suggestedUnits}</span>
       </div>
     );
   }
   return (
-    <div style={approveBar}>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13, fontWeight: 700 }}>
-          Main line {plan.totals.mainUnits} cast irons and salad trays. Second make line {plan.totals.secondUnits} gastronorms. {Math.round(plan.totals.batches * 2) / 2} batches, {kg(plan.totals.gramsMade)} cooked.
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-          Approving the window approves {from} to {to}. Each morning you can still change the day and approve it again.
-          {approval.approvedDays.length > 0 && ` ${approval.approvedDays.length} of ${w.days.length} days already approved.`}
-        </div>
-      </div>
-      <button type="button" onClick={onApproveDay} style={secondaryButton}>Approve {dayWord} only</button>
-      <button type="button" onClick={onApproveWindow} style={primaryButton}>
-        <CheckCircle2 size={14} /> Approve {from} to {to}
-      </button>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }} onClick={e => e.stopPropagation()}>
+      <QtyStepper
+        size="compact"
+        canDecrement={l.plannedUnits > 0}
+        onDecrement={() => onOverride(p.productId, line, l.plannedUnits - 1)}
+        onIncrement={() => onOverride(p.productId, line, l.plannedUnits + 1)}
+        decrementLabel={`One fewer ${l.unitName.toLowerCase()}`}
+        incrementLabel={`One more ${l.unitName.toLowerCase()}`}
+      >
+        <input
+          type="number"
+          value={l.plannedUnits}
+          onChange={e => {
+            const next = Number(e.target.value);
+            if (Number.isFinite(next)) onOverride(p.productId, line, Math.max(0, Math.round(next)));
+          }}
+          min={0}
+          step={1}
+          aria-label={`${p.product.name}, ${line === 'main' ? 'main line' : 'second make line'}`}
+          style={{ width: 36, border: 'none', background: 'transparent', fontSize: 13, fontWeight: 700, textAlign: 'center', color: changed ? 'var(--color-info)' : 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-primary)', outline: 'none', padding: 0, MozAppearance: 'textfield' }}
+        />
+      </QtyStepper>
+      <span style={fcStyle} title={`Edify's suggestion from the reference days: ${l.suggestedUnits} ${l.unitName.toLowerCase()}${l.suggestedUnits === 1 ? '' : 's'} at about ${kg(l.gramsPerUnit)} each`}>
+        fc {l.suggestedUnits}
+      </span>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Right rail
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Front of house ───────────────────────────────────────────────────────────
 
-function EdifyNote({ plan, anomalyReason }: { plan: DayPlanModel; anomalyReason?: string }) {
-  const dayName = longDate(plan.date).split(' ')[0];
-  const excluded = plan.referenceDays.filter(r => !r.included);
-  const shared = Object.values(plan.explosion.components).filter(c => c.shared).length;
-  const orders = plan.activeOrders;
-  return (
-    <div style={card}>
-      <div style={{ ...cardTitle, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Sparkles size={13} color="var(--color-accent-pink)" /> Edify&apos;s note
-      </div>
-      <p style={cardText}>
-        Drafted from the last four {dayName}s at {getShop(plan.shopId)?.name}
-        {excluded.length > 0 ? `, skipping ${excluded.map(r => shortDate(r.date)).join(' and ')}${anomalyReason ? ` (${anomalyReason.toLowerCase()})` : ''}` : ''}.
-        {plan.record.flexPct !== 0 ? ` Whole day flexed ${plan.record.flexPct > 0 ? '+' : ''}${plan.record.flexPct}%.` : ''}
-      </p>
-      <p style={cardText}>
-        {orders.length > 0
-          ? `${orders.map(o => `${o.customer} at ${o.time}`).join(' and ')} ${orders.length === 1 ? 'is' : 'are'} on the second make line as gastronorms.`
-          : 'No catering on this day.'}{' '}
-        Below the plan: {Object.keys(plan.explosion.components).length} preps and dressings, {shared} of them shared between dishes.
-      </p>
-      {plan.demand.modelled && (
-        <p style={{ ...cardText, color: 'var(--color-text-muted)' }}>
-          <Info size={11} style={{ verticalAlign: '-1px', marginRight: 4 }} />
-          Reference days are modelled from one real Marylebone Wednesday (16 April 2025). Labelled on the dashboard.
-        </p>
-      )}
-    </div>
-  );
-}
-
-function FohCard({ reminders, dayLabel }: { reminders: ReturnType<typeof fohReminders>; dayLabel: string }) {
+function FohCard({ shopId, date, isToday }: { shopId: string; date: string; isToday: boolean }) {
+  const target = isToday ? addDays(date, 1) : date;
+  const reminders = fohReminders(shopId, target);
   if (reminders.length === 0) return null;
   return (
-    <div style={card}>
-      <div style={cardTitle}>Front of house, {dayLabel.toLowerCase()}</div>
-      <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>Things the kitchen does not make. Sent to the front-of-house manager the night before.</div>
-      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ marginTop: 14, background: '#ffffff', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-card)', padding: '12px 14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        <Store size={13} style={{ color: 'var(--color-text-secondary)' }} />
+        <span style={{ fontSize: 12, fontWeight: 700 }}>Front of house, {isToday ? 'tomorrow' : shortDate(target)}</span>
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>· things the kitchen does not make, sent to the front-of-house manager the night before</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
         {reminders.map(r => (
-          <li key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-            <span aria-hidden style={{ width: 6, height: 6, borderRadius: 3, background: 'var(--color-accent-mid)', marginTop: 6, flexShrink: 0 }} />
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{r.label}</div>
-              <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{r.detail}</div>
-            </div>
-          </li>
+          <div key={r.id} style={{ fontSize: 12 }}>
+            <div style={{ fontWeight: 600 }}>{r.label}</div>
+            <div style={{ fontSize: 11, color: 'var(--color-text-muted)', lineHeight: 1.4 }}>{r.detail}</div>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Derivation drawer: "why this number", in Farmer J words
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Focus panel (mirrors RecipeFocusPanel) ───────────────────────────────────
 
-function DerivationDrawer({ plan, day, onClose }: { plan: ProductPlan; day: DayPlanModel; onClose: () => void }) {
+function FjFocusPanel({ plan, day, onClose }: { plan: ProductPlan; day: DayPlanModel; onClose: () => void }) {
+  if (typeof window === 'undefined') return null;
   const perDay = day.referenceDays.map(r => ({ ...r, demand: daySales(day.shopId, r.date).products[plan.productId] }));
-  const firstLevel = plan.product.recipe.map(l => {
+  const batches = batchesToNumber(plan.batches);
+  const cascade = plan.product.recipe.map(l => {
     const c = COMPONENTS[l.ref];
     const ing = INGREDIENTS[l.ref];
-    const grams = l.grams * batchesToNumber(plan.batches);
-    return { name: c?.name ?? ing?.name ?? l.ref, grams, kind: c ? c.kind : 'ingredient', shared: (day.explosion.components[l.ref]?.consumers.length ?? 0) > 1 };
+    return { id: l.ref, name: c?.name ?? ing?.name ?? l.ref, grams: l.grams * batches, kind: c ? c.kind : 'ingredient', shared: (day.explosion.components[l.ref]?.consumers.length ?? 0) > 1 };
   });
-  // Portalled: the production page body is its own stacking context under
-  // the sticky top bar, so a fixed drawer inside it would sit beneath the
-  // chrome.
-  if (typeof document === 'undefined') return null;
   return createPortal(
-    <>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,28,53,0.35)', zIndex: 1200 }} />
-      <motion.aside
+    <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', justifyContent: 'flex-end', background: 'rgba(15, 23, 32, 0.18)' }} onClick={onClose}>
+      <aside
         role="dialog"
-        aria-label={`Why ${plan.main.plannedUnits} ${plan.main.unitName.toLowerCase()}s of ${plan.product.name}`}
-        initial={{ x: 40, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        exit={{ x: 40, opacity: 0 }}
-        transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-        style={drawer}
+        aria-label={`${plan.product.name} details`}
+        onClick={e => e.stopPropagation()}
+        style={{ width: 'min(520px, 100vw)', height: '100%', background: '#ffffff', borderLeft: '1px solid var(--color-border)', boxShadow: '-12px 0 36px rgba(10, 20, 25, 0.18)', display: 'flex', flexDirection: 'column', fontFamily: 'var(--font-primary)', overflow: 'hidden' }}
       >
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-          <div>
-            <div style={eyebrow}>{PRODUCT_GROUP_LABELS[plan.product.group]}</div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{plan.product.name}</h2>
-            <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4 }}>
-              {plan.main.plannedUnits} {plan.main.unitName.toLowerCase()}{plan.main.plannedUnits === 1 ? '' : 's'} on the main line, {plan.second.plannedUnits} on the second make line. {batchesLabel(plan.batches)} {batchesToNumber(plan.batches) === 1 ? 'batch' : 'batches'}.
+        <div style={{ flexShrink: 0, padding: '14px 18px', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'flex-start', gap: 12, background: 'var(--color-bg-surface)' }}>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>Focus · {PRODUCT_GROUP_LABELS[plan.product.group]}</span>
+            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--color-text-primary)' }}>{plan.product.name}</h2>
+            <div style={{ display: 'flex', gap: 6, marginTop: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+              <StatusPill tone="info" label={`${plan.product.unitsPerBatch} ${plan.main.unitName.toLowerCase()}${plan.product.unitsPerBatch === 1 ? '' : 's'} per batch`} size="xs" />
+              <StatusPill tone="neutral" label={plan.product.halfBatch ? 'half batches' : 'whole batches'} size="xs" />
+              <StatusPill tone="neutral" label={`${Math.round(plan.product.holdMinutes / 60)}h hold`} size="xs" />
+              {plan.product.provenance === 'invented' && <StatusPill tone="neutral" label="Demo recipe" size="xs" />}
             </div>
           </div>
-          <button type="button" onClick={onClose} style={iconButton} aria-label="Close">
-            <X size={16} />
+          <button type="button" onClick={onClose} aria-label="Close" style={closeButton}>
+            <X size={14} />
           </button>
         </div>
 
-        <section style={{ marginTop: 20 }}>
-          <div style={cardTitle}>Sold on each reference day</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px 18px 32px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <Section icon={<TrendingUp size={13} />} title="Sold on the reference days" subtitle="Portions, whatever the format: tray, bowl, extra. Struck-through days are left out of the average.">
             {perDay.map(r => (
-              <div key={r.date} style={{ ...tile, padding: '10px 12px', opacity: r.included ? 1 : 0.5 }}>
-                <div style={tileLabel}>{shortDate(r.date)}</div>
-                <div style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.demand ? Math.round(r.demand.portions) : 0}</div>
-                <div style={tileSub}>{r.included ? 'in average' : r.anomaly ? 'left out' : 'left out'}</div>
+              <Pair key={r.date} label={`${shortDate(r.date)}${r.anomaly ? ` · ${r.anomaly.reason}` : ''}`} value={`${r.demand ? Math.round(r.demand.portions) : 0} portions`} muted={!r.included} />
+            ))}
+            <Divider />
+            <Pair label="Average" value={`${Math.round(plan.referencePortions)} portions · ${kg(plan.referenceGrams)}`} bold />
+          </Section>
+
+          <Section icon={<Calculator size={13} />} title="Production math">
+            <Ledger label="Reference days" value={kg(plan.referenceGrams)} />
+            {plan.flexPct !== 0 && (
+              <Ledger
+                label={`Whole-day flex ${plan.flexPct > 0 ? '+' : ''}${plan.flexPct}%`}
+                value={`${plan.flexPct > 0 ? '+' : '−'}${kg(Math.abs(plan.referenceGrams * (plan.flexPct / 100)))}`}
+              />
+            )}
+            {plan.cateringGrams > 0 && <Ledger label="Catering, second make line" value={kg(plan.cateringGrams)} signed />}
+            {plan.carriedGrams > 0 && <Ledger label="Carried from last night's count" value={`−${kg(plan.carriedGrams)}`} />}
+            <Divider />
+            <Ledger label={`Main line · ${plan.main.unitName.toLowerCase()}s at ${kg(plan.main.gramsPerUnit)}`} value={`${plan.main.plannedUnits}${plan.main.plannedUnits !== plan.main.suggestedUnits ? ` (fc ${plan.main.suggestedUnits})` : ''}`} edify />
+            <Ledger label={`Second make line · gastronorms at ${kg(plan.second.gramsPerUnit)}`} value={`${plan.second.plannedUnits}${plan.second.plannedUnits !== plan.second.suggestedUnits ? ` (fc ${plan.second.suggestedUnits})` : ''}`} edify />
+            <Divider />
+            <Ledger label="Final plan" value={`${batchesLabel(plan.batches)} · ${kg(plan.gramsMade)}`} bold />
+            <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>{plan.notes[plan.notes.length - (plan.overridden ? 2 : 1)]}</p>
+          </Section>
+
+          <Section icon={<GitBranch size={13} />} title="Cascades to" subtitle="The team never sees these on the day plan. They arrive as tasks on the prep list and the section cards.">
+            {cascade.map(c => (
+              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '5px 0', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                <span style={{ fontWeight: 600 }}>{c.name}</span>
+                {c.shared && <StatusPill tone="info" label="Shared" size="xs" />}
+                <span style={{ marginLeft: 'auto', fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary)' }}>{kg(c.grams)}</span>
               </div>
             ))}
-          </div>
-        </section>
+          </Section>
 
-        <section style={{ marginTop: 20 }}>
-          <div style={cardTitle}>How Edify got here</div>
-          <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {plan.notes.map((n, i) => (
-              <li key={i} style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--color-text-primary)' }}>{n}</li>
-            ))}
-          </ol>
-        </section>
-
-        <section style={{ marginTop: 20 }}>
-          <div style={cardTitle}>What this cascades to</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>The team never sees these on the day plan. They arrive as tasks on the prep list and the section cards.</div>
-          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {firstLevel.map(f => (
-              <li key={f.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13, padding: '6px 0', borderBottom: '1px solid var(--color-border-subtle)' }}>
-                <span>
-                  {f.name}
-                  {f.shared && <span style={{ ...miniTag, marginLeft: 6, background: 'var(--chip-teal-bg)', color: 'var(--chip-teal)' }}>Shared</span>}
-                </span>
-                <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary)' }}>{kg(f.grams)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        {plan.product.note && (
-          <section style={{ marginTop: 20 }}>
-            <div style={cardTitle}>Recipe note</div>
-            <p style={cardText}>{plan.product.note}</p>
-            {plan.product.provenance === 'invented' && <p style={{ ...cardText, color: 'var(--color-text-muted)' }}>Invented for the demo. Marked so Jana can correct it in Setup.</p>}
-          </section>
-        )}
-      </motion.aside>
-    </>,
+          {plan.product.note && (
+            <Section icon={<Package size={13} />} title="Recipe note">
+              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5 }}>{plan.product.note}</p>
+              {plan.product.provenance === 'invented' && <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--color-text-muted)' }}>Invented for the demo. Jana corrects it in Setup.</p>}
+            </Section>
+          )}
+        </div>
+      </aside>
+    </div>,
     document.body,
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Small pieces and styles
-// ─────────────────────────────────────────────────────────────────────────────
-
-function Notice({ title, children }: { title: string; children: ReactNode }) {
+function Section({ icon, title, subtitle, children }: { icon: ReactNode; title: string; subtitle?: string; children: ReactNode }) {
   return (
-    <div style={{ ...page, maxWidth: 720 }}>
-      <h1 style={h1}>{title}</h1>
-      <p style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--color-text-secondary)' }}>{children}</p>
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ color: 'var(--color-text-secondary)', display: 'inline-flex' }}>{icon}</span>
+        <h3 style={{ margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: '0.02em' }}>{title}</h3>
+      </div>
+      {subtitle && <p style={{ margin: 0, fontSize: 11, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>{subtitle}</p>}
+      <div>{children}</div>
+    </section>
+  );
+}
+
+function Ledger({ label, value, bold, signed, edify }: { label: string; value: string; bold?: boolean; signed?: boolean; edify?: boolean }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12, color: 'var(--color-text-primary)', padding: '3px 0' }}>
+      {edify && <EdifyMark size={11} color="var(--color-info)" />}
+      <span style={{ fontWeight: bold ? 700 : 500 }}>{label}</span>
+      <span style={{ marginLeft: 'auto', fontVariantNumeric: 'tabular-nums', fontWeight: bold ? 700 : 500 }}>{signed ? `+${value}` : value}</span>
     </div>
   );
 }
 
-const page: CSSProperties = { padding: '20px 30px 40px', fontFamily: 'var(--font-primary)', color: 'var(--color-text-primary)' };
-const eyebrow: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: 6 };
-const h1: CSSProperties = { fontSize: 22, fontWeight: 700, margin: 0 };
-const pill: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, padding: '6px 12px', borderRadius: 999, whiteSpace: 'nowrap' };
-const miniTag: CSSProperties = { display: 'inline-block', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 999, letterSpacing: '0.02em', lineHeight: '16px' };
-const dateChip: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 999, border: '1px solid', fontSize: 12, cursor: 'pointer', fontFamily: 'var(--font-primary)' };
-const tile: CSSProperties = { background: '#fff', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-card)', padding: '12px 14px', minWidth: 120 };
-const tileLabel: CSSProperties = { fontSize: 11, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--color-text-muted)' };
-const tileValue: CSSProperties = { fontSize: 20, fontWeight: 700, fontVariantNumeric: 'tabular-nums', marginTop: 2 };
-const tileSub: CSSProperties = { fontSize: 11, color: 'var(--color-text-secondary)' };
-const refChip: CSSProperties = { fontSize: 11, fontWeight: 600, padding: '4px 9px', borderRadius: 999, border: '1px solid', cursor: 'pointer', fontFamily: 'var(--font-primary)' };
-const flexRow: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, padding: '10px 14px', margin: '16px 0 10px', background: 'var(--color-bg-hover)', borderRadius: 'var(--radius-card)', flexWrap: 'wrap' };
-const undoStrip: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '8px 14px', marginBottom: 10, background: 'var(--color-warning-light)', border: '1px solid var(--color-warning-border)', borderRadius: 'var(--radius-card)', fontSize: 12 };
-const linkButton: CSSProperties = { background: 'none', border: 'none', padding: 0, color: 'var(--color-link)', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'var(--font-primary)', textDecoration: 'underline' };
-const headRow: CSSProperties = { background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)', position: 'sticky', top: 0, zIndex: 2 };
-const th: CSSProperties = { padding: '10px 12px', fontSize: 11, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--color-text-secondary)' };
-const thSub: CSSProperties = { display: 'block', fontSize: 10, fontWeight: 500, letterSpacing: 0, textTransform: 'none', color: 'var(--color-text-muted)', marginTop: 2 };
-const groupRow: CSSProperties = { padding: '8px 12px 4px', fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-muted)', background: '#fff' };
-const bodyRow: CSSProperties = { borderBottom: '1px solid var(--color-border-subtle)' };
-const td: CSSProperties = { padding: '10px 12px', fontSize: 13, minWidth: 0 };
-const tdSub: CSSProperties = { fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 };
-const nameButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', padding: 0, fontSize: 13, color: 'var(--color-text-primary)', cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-primary)' };
-const iconButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, border: '1px solid var(--color-border-subtle)', background: '#fff', color: 'var(--color-text-secondary)', cursor: 'pointer', padding: 0 };
-const cancelX: CSSProperties = { position: 'absolute', top: 8, right: 6, width: 20, height: 20, borderRadius: 5, border: '1px solid var(--color-border)', background: '#fff', color: 'var(--color-text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 };
-const approveBar: CSSProperties = { display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', marginTop: 14, background: '#fff', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-card)', boxShadow: '0 1px 2px rgba(0,28,53,0.06)', flexWrap: 'wrap' };
-const primaryButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 40, padding: '10px 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, background: 'var(--color-accent-active)', color: 'var(--color-text-on-active)', border: '1px solid var(--color-accent-active)', cursor: 'pointer', fontFamily: 'var(--font-primary)', whiteSpace: 'nowrap' };
-const secondaryButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 40, padding: '10px 14px', borderRadius: 10, fontSize: 13, fontWeight: 600, background: '#fff', color: 'var(--color-text-primary)', border: '1px solid var(--color-border)', cursor: 'pointer', fontFamily: 'var(--font-primary)', whiteSpace: 'nowrap' };
-const card: CSSProperties = { background: '#fff', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-card)', padding: '14px 16px' };
-const cardTitle: CSSProperties = { fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: 8 };
-const cardText: CSSProperties = { margin: '0 0 8px', fontSize: 13, lineHeight: 1.5, color: 'var(--color-text-primary)' };
-const drawer: CSSProperties = { position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(520px, 100vw)', background: '#fff', zIndex: 1201, boxShadow: '-12px 0 40px rgba(0,28,53,0.18)', padding: '24px 24px 40px', overflowY: 'auto', fontFamily: 'var(--font-primary)', color: 'var(--color-text-primary)' };
-
-function gridRow(cols: string): CSSProperties {
-  return { display: 'grid', gridTemplateColumns: cols, alignItems: 'stretch' };
+function Pair({ label, value, bold, muted }: { label: string; value: string; bold?: boolean; muted?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, padding: '3px 0', color: muted ? 'var(--color-text-muted)' : 'var(--color-text-primary)', textDecoration: muted ? 'line-through' : 'none' }}>
+      <span style={{ fontWeight: bold ? 700 : 500 }}>{label}</span>
+      <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: bold ? 700 : 500 }}>{value}</span>
+    </div>
+  );
 }
+
+function Divider() {
+  return <div style={{ borderTop: '1px dashed var(--color-border-subtle)', margin: '4px 0' }} />;
+}
+
+function HeadSub({ children }: { children: ReactNode }) {
+  return <span style={{ display: 'block', fontSize: 9, fontWeight: 500, letterSpacing: 0, textTransform: 'none', color: 'var(--color-text-muted)', marginTop: 2 }}>{children}</span>;
+}
+
+function Notice({ children }: { children: ReactNode }) {
+  return <div style={{ padding: '32px 30px', fontSize: 12, color: 'var(--color-text-muted)', fontFamily: 'var(--font-primary)' }}>{children}</div>;
+}
+
+// ─── Styles (copied from RecipeFirstGrid / PlanConfirmBar so both surfaces read as one) ──
+
+function headStyle({ left, sticky, minWidth, totalCol }: { left?: boolean; sticky?: boolean; minWidth?: number; totalCol?: boolean }): CSSProperties {
+  return {
+    padding: '10px 8px',
+    background: 'var(--color-bg-surface)',
+    borderBottom: '1px solid var(--color-border-subtle)',
+    textAlign: left ? 'left' : 'center',
+    verticalAlign: 'top',
+    position: sticky ? 'sticky' : undefined,
+    left: sticky ? 0 : undefined,
+    zIndex: sticky ? 2 : undefined,
+    boxShadow: sticky ? '1px 0 0 var(--color-border-subtle)' : undefined,
+    minWidth,
+    fontSize: 9,
+    fontWeight: 700,
+    color: 'var(--color-text-muted)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    whiteSpace: 'nowrap',
+    fontFamily: 'var(--font-primary)',
+    borderLeft: totalCol ? '1px solid var(--color-border-subtle)' : undefined,
+  };
+}
+
+function bodyStyle({ left, sticky, focused, totalCol }: { left?: boolean; sticky?: boolean; focused?: boolean; totalCol?: boolean }): CSSProperties {
+  return {
+    padding: '10px 8px',
+    background: focused ? 'var(--color-info-light)' : '#ffffff',
+    borderBottom: '1px solid var(--color-border-subtle)',
+    textAlign: left ? 'left' : 'center',
+    position: sticky ? 'sticky' : undefined,
+    left: sticky ? 0 : undefined,
+    zIndex: sticky ? 1 : undefined,
+    boxShadow: sticky ? '1px 0 0 var(--color-border-subtle)' : undefined,
+    fontSize: 12,
+    color: 'var(--color-text-primary)',
+    fontFamily: 'var(--font-primary)',
+    verticalAlign: 'middle',
+    borderLeft: totalCol ? '1px solid var(--color-border-subtle)' : undefined,
+  };
+}
+
+function footStyle({ left, sticky, totalCol }: { left?: boolean; sticky?: boolean; totalCol?: boolean } = {}): CSSProperties {
+  return {
+    padding: '12px 8px',
+    background: 'var(--color-bg-surface)',
+    borderTop: '2px solid var(--color-border)',
+    textAlign: left ? 'left' : 'center',
+    position: sticky ? 'sticky' : undefined,
+    left: sticky ? 0 : undefined,
+    zIndex: sticky ? 1 : undefined,
+    boxShadow: sticky ? '1px 0 0 var(--color-border-subtle)' : undefined,
+    fontSize: left ? 11 : 13,
+    fontWeight: left ? 700 : 600,
+    color: left ? 'var(--color-text-muted)' : 'var(--color-text-primary)',
+    textTransform: left ? 'uppercase' : undefined,
+    letterSpacing: left ? '0.05em' : undefined,
+    fontFamily: 'var(--font-primary)',
+    whiteSpace: 'nowrap',
+    borderLeft: totalCol ? '1px solid var(--color-border-subtle)' : undefined,
+  };
+}
+
+function footSubStyle({ left, sticky, totalCol }: { left?: boolean; sticky?: boolean; totalCol?: boolean } = {}): CSSProperties {
+  return {
+    ...footStyle({ left, sticky, totalCol }),
+    padding: '10px 8px',
+    borderTop: '1px solid var(--color-border-subtle)',
+    fontSize: left ? 11 : 12,
+    color: left ? 'var(--color-text-muted)' : 'var(--color-text-secondary)',
+  };
+}
+
+const numStyle: CSSProperties = { fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--color-text-primary)' };
+const moneyStyle: CSSProperties = { fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--color-text-secondary)' };
+const cellSub: CSSProperties = { fontSize: 10, color: 'var(--color-text-muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums' };
+const fcStyle: CSSProperties = { fontSize: 10, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-muted)', letterSpacing: '0.02em' };
+const captionStrip: CSSProperties = { padding: '8px 30px', background: 'var(--color-bg-surface)', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--color-text-muted)', flexWrap: 'wrap' };
+const refChip: CSSProperties = { fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, border: '1.5px solid', background: '#ffffff', cursor: 'pointer', fontFamily: 'var(--font-primary)', letterSpacing: '0.02em', whiteSpace: 'nowrap' };
+const footnote: CSSProperties = { fontSize: 10, color: 'var(--color-text-muted)', marginTop: 10, lineHeight: 1.5, paddingLeft: 4 };
+const undoStrip: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '8px 14px', marginBottom: 10, background: 'var(--color-warning-light)', border: '1px solid var(--color-warning-border)', borderRadius: 'var(--radius-card)', fontSize: 12, color: 'var(--color-text-primary)' };
+const linkButton: CSSProperties = { background: 'none', border: 'none', padding: 0, color: 'var(--color-link)', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'var(--font-primary)', textDecoration: 'underline' };
+const cancelPill: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 7px', borderRadius: 999, background: '#ffffff', color: 'var(--color-text-secondary)', border: '1.5px solid var(--color-border)', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', cursor: 'pointer', fontFamily: 'var(--font-primary)', lineHeight: 1 };
+const clearButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 4px', border: 'none', background: 'transparent', color: 'var(--color-info)', fontSize: 9, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'var(--font-primary)' };
+const closeButton: CSSProperties = { width: 32, height: 32, borderRadius: 8, border: '1px solid var(--color-border-subtle)', background: '#ffffff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-secondary)', flexShrink: 0 };
+
+const bannerTitle: CSSProperties = { fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)' };
+const bannerSub: CSSProperties = { fontSize: 11, color: 'var(--color-text-secondary)' };
+const confirmedBanner: CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', margin: '12px 30px 0', background: 'var(--color-bg-hover)', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-card)', fontFamily: 'var(--font-primary)' };
+const draftBar: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 16px', margin: '12px 30px 0', background: '#ffffff', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-card)', boxShadow: '0 1px 2px rgba(12,20,44,0.06)', fontFamily: 'var(--font-primary)', flexWrap: 'wrap' };
+const draftIcon: CSSProperties = { width: 32, height: 32, flexShrink: 0, borderRadius: 9, background: 'var(--color-info-light)', color: 'var(--color-info)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' };
+const primaryButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, minHeight: 40, padding: '10px 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-primary)', background: 'var(--color-accent-active)', color: 'var(--color-text-on-active)', border: '1px solid var(--color-accent-active)', cursor: 'pointer', whiteSpace: 'nowrap' };
+const secondaryButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, minHeight: 40, padding: '10px 14px', borderRadius: 10, fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-primary)', background: '#ffffff', color: 'var(--color-text-primary)', border: '1px solid var(--color-border)', cursor: 'pointer', whiteSpace: 'nowrap' };
+const reopenButton: CSSProperties = { marginLeft: 'auto', flexShrink: 0, padding: '6px 12px', fontSize: 11, fontWeight: 700, background: '#ffffff', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)', borderRadius: 6, cursor: 'pointer', fontFamily: 'var(--font-primary)' };
