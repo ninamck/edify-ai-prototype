@@ -1,0 +1,56 @@
+---
+description: Screens state facts, never explain themselves. Explanation goes to Nina in chat and the handover notes.
+alwaysApply: true
+---
+
+# No explainer copy in the software
+
+Set by Nina, 2 Sep 2026, during the Farmer J day plan build.
+
+The screen states facts about the user's data. It never explains how the
+product works, why a number is what it is, or what will happen when a button
+is pressed. That explanation belongs in the chat reply and the handover
+notes for Nina and Ed, not in the UI.
+
+## Never add
+
+- Footnotes or paragraphs under tables ("Each cell is editable. Use the
+  steppers to...").
+- Intro copy at the top of panels and drawers ("Orders arrive from the
+  catering platform and land on...").
+- Section subtitles that describe the section ("Struck-through days are
+  left out of the average.").
+- Consequence sentences on buttons and banners ("Approving the window
+  covers Wed to Sun; each morning you can still change the day.").
+- Feedback that narrates the mechanism ("Every row it touched has
+  re-derived."). State the event only: "Hines cancelled."
+- Provenance or demo tags on data rows ("Demo recipe", "Catering"). If the
+  build needs to remember which data is invented, keep it in a code comment
+  or a note the user does not see on the working screen.
+
+## Allowed
+
+- Numbers, names, dates, units, statuses.
+- A unit label in a column header ("portions", "cast irons", "gastronorms").
+- A sub-line that is another fact about the same cell ("≈ 22 round cast
+  irons", "20 buffet boxes", "fc 12").
+- A pill only when it changes what the user does next ("Edited", "Locked",
+  "Cancelled").
+- Working shown as ledger rows (label, value), never as prose.
+
+## When tempted to explain
+
+Turn the sentence into a fact row, or delete it and write the explanation
+in the chat reply to Nina instead. If a screen cannot be understood without
+the sentence, the layout is wrong; fix the layout.
+
+## Related conventions from the same build
+
+- One unit vocabulary per screen. On production screens: demand in
+  portions, lines in containers (cast irons, gastronorms), catering in
+  containers with ordered boxes underneath, carry-over in containers,
+  output in batches, money in pounds. Grams and kilos only where something
+  is weighed on a scale (prep list, cascade), and nowhere else.
+- A column that grows with the data (one column per catering order) is an
+  Excel workaround. Consolidate into one column and put the detail in a
+  drawer.
