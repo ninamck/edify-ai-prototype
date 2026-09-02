@@ -49,13 +49,17 @@ export const FJ_SHOPS: Shop[] = [
     id: 'fj-marylebone',
     name: 'Marylebone',
     area: 'Marylebone High Street',
-    opensAt: '08:00',
-    closesAt: '21:00',
-    breakfast: true,
-    breakfastShare: 0.08,
+    // The till export runs 10:00 to 14:59 with no breakfast or evening
+    // rows, so the demo treats Marylebone as a lunch shop. If the export
+    // was filtered rather than the shop's real hours, Ed corrects this
+    // and the modelled history re-scales.
+    opensAt: '10:30',
+    closesAt: '15:30',
+    breakfast: false,
+    breakfastShare: 0,
     weekend: true,
     sizeFactor: 1.0,
-    deliveryShare: 0.25,
+    deliveryShare: 0.11,
     provenance: 'calls',
   },
   {
@@ -64,10 +68,12 @@ export const FJ_SHOPS: Shop[] = [
     area: 'Paddington Central',
     opensAt: '07:30',
     closesAt: '21:00',
+    // "Paddington does about £2k of breakfast" (Jana). 18% of a modelled
+    // £11k day lands there.
     breakfast: true,
-    breakfastShare: 0.25,
+    breakfastShare: 0.18,
     weekend: true,
-    sizeFactor: 1.15,
+    sizeFactor: 1.05,
     deliveryShare: 0.2,
     provenance: 'calls',
   },
