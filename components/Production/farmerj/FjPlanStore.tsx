@@ -43,6 +43,9 @@ export type DayRecord = {
   people?: Record<string, string>;
   /** Manager's drag order per list, keyed `${sectionId}::${slot}`. */
   taskOrder?: Record<string, string[]>;
+  /** Order sheet: packs already in the store room, keyed by ingredient.
+   *  Stored on the record for the day the window is set. */
+  stock?: Record<string, number>;
 };
 
 type StoreState = Record<string, DayRecord>;
