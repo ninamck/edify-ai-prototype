@@ -1,25 +1,26 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties, DragEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowRightLeft, Check, ChevronRight, Clock, Flame, Pause, Play, Printer, RotateCcw, Thermometer, Timer, User, X, Zap } from 'lucide-react';
+import { ArrowRightLeft, Check, ChevronRight, Clock, Flame, GripVertical, Pause, Play, PlaySquare, Printer, RotateCcw, Thermometer, Timer, User, X, Zap } from 'lucide-react';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import StatusPill from '@/components/Production/StatusPill';
 import { FJ_DAY_STRIP_DATES, FJ_DEMO_TODAY, longDate, weekdayLabel } from './calendar';
 import { FjDayStrip, Notice } from './DayPlan';
 import { useFjPlanStore } from './FjPlanStore';
-import { clearTimer, clockNudge, clockPlay, clockReset, clockSet, dismissNudge, hhmm, startTimer, timerRemaining, useFjClock } from './fjClock';
-import { computeSectionsDay, plural, scaleStep, type Nudge, type SectionCard, type SectionTask, type SectionsDay } from './sections';
+import { clearTimer, clockNudge, clockPlay, clockReset, clockSet, dismissNudge, hhmm, startTimer, timerRemaining, useFjClock, type FjTimer } from './fjClock';
+import { computeSectionsDay, listKey, plural, stepsForTask, type Nudge, type SectionCard, type SectionTask, type SectionsDay } from './sections';
 import { COMPONENTS, CONTAINERS, SHELF_LIFE_GROUPS, type Section as SectionId } from './recipes';
 import { FJ_ALL_SHOPS_ID, getShop } from './shops';
+import FjStepper, { type StepperTarget } from './FjStepper';
 
 /**
- * Sections. Built on the Pret Benches board: one card per section with the
- * person on it, task rows with quantity and time, hands-on totals and the
- * start/end window in the footer. Farmer J differences: AM and PM instead
- * of runs, a tick on every row, cook loads timed off the sales curve, and
- * a simulated clock so timing prompts can be shown landing.
+ * Sections, on the Pret Benches board. One card per section with the
+ * person on it, task rows the manager can drag into order or move to
+ * another section, hands-on totals and the start/end window. AM and PM
+ * take the place of Pret's runs. "Open stepper" walks the person on the
+ * floor through their list one task at a time.
  */
 
 type SlotFilter = 'all' | 'am' | 'pm';
@@ -52,19 +53,24 @@ function useSectionsDay(shopId: string, date: string) {
     (taskId: string, sectionId: SectionId) => store.update(shopId, date, r => ({ ...r, reassigned: { ...(r.reassigned ?? {}), [taskId]: sectionId } })),
     [store, shopId, date],
   );
+  const reorder = useCallback(
+    (key: string, ids: string[]) => store.update(shopId, date, r => ({ ...r, taskOrder: { ...(r.taskOrder ?? {}), [key]: ids } })),
+    [store, shopId, date],
+  );
   const setPerson = useCallback(
     (sectionId: SectionId, name: string) => store.update(shopId, date, r => ({ ...r, people: { ...(r.people ?? {}), [sectionId]: name } })),
     [store, shopId, date],
   );
-  return { day, ticks: record.ticks ?? {}, tick, move, setPerson };
+  return { day, ticks: record.ticks ?? {}, tick, move, reorder, setPerson };
 }
 
 function SectionsForShop({ shopId, date, onDateChange }: { shopId: string; date: string; onDateChange: (d: string) => void }) {
   const shop = getShop(shopId);
-  const { day, ticks, tick, move, setPerson } = useSectionsDay(shopId, date);
+  const { day, ticks, tick, move, reorder, setPerson } = useSectionsDay(shopId, date);
   const clock = useFjClock();
   const [slot, setSlot] = useState<SlotFilter>('all');
   const [focused, setFocused] = useState<string | null>(null);
+  const [stepper, setStepper] = useState<{ open: boolean; target: StepperTarget | null }>({ open: false, target: null });
   const isToday = date === FJ_DEMO_TODAY;
 
   useEffect(() => {
@@ -73,8 +79,6 @@ function SectionsForShop({ shopId, date, onDateChange }: { shopId: string; date:
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Stop the clock when leaving the screen so it is not still running on
-  // the way back.
   useEffect(() => () => clockPlay(false), []);
 
   const focusedTask = focused ? day.tasks.find(t => t.id === focused) : undefined;
@@ -82,13 +86,8 @@ function SectionsForShop({ shopId, date, onDateChange }: { shopId: string; date:
     ? day.nudges.filter(n => clock.mins >= n.atMins && !clock.dismissed.includes(n.id) && !clock.started.includes(n.taskId) && !ticks[n.taskId])
     : [];
 
-  const startTask = (task: SectionTask) => {
-    if (task.cookMins) startTimer(task.id, task.cookMins + 0, `${task.title}`);
-    else startTimer(task.id, task.durationMins, task.title);
-  };
-
-  const printAll = () => printSections(day, shop?.name ?? shopId, date);
-  const tasksShown = day.cards.reduce((n, c) => n + (slot === 'pm' ? 0 : c.am.length) + (slot === 'am' ? 0 : c.pm.length), 0);
+  const startTask = (task: SectionTask) => startTimer(task.id, task.cookMins ?? task.durationMins, task.title);
+  const openStepper = (target: StepperTarget | null = null) => { setFocused(null); setStepper({ open: true, target }); };
   const ticked = Object.keys(ticks).filter(id => day.tasks.some(t => t.id === id)).length;
 
   return (
@@ -102,22 +101,21 @@ function SectionsForShop({ shopId, date, onDateChange }: { shopId: string; date:
         {isToday && <div style={{ marginLeft: 'auto' }}><ClockControl mins={clock.mins} playing={clock.playing} /></div>}
       </div>
 
-      <div style={{ padding: '14px 30px 48px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>Slots</span>
-          {(['all', 'am', 'pm'] as SlotFilter[]).map(s => (
-            <RunPill key={s} label={s === 'all' ? 'All' : s.toUpperCase()} active={slot === s} onClick={() => setSlot(s)} count={s === 'all' ? day.tasks.length : day.tasks.filter(t => t.slot === s).length} />
-          ))}
-          <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tasksShown} tasks</span>
-          <div style={{ marginLeft: 'auto' }}>
-            <button type="button" onClick={printAll} style={secondaryButton} title="Print every section, one per page">
-              <Printer size={14} /> Print sections
-            </button>
-          </div>
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, padding: '12px 30px 0' }}>
+        <button type="button" onClick={() => openStepper()} style={ghostButton} aria-label="Open stepper"><PlaySquare size={14} /> Open stepper</button>
+        <button type="button" onClick={() => printSections(day, shop?.name ?? shopId, date)} style={ghostButton}><Printer size={14} /> Print</button>
+      </div>
 
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 30px 12px', borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>Slots</span>
+        {(['all', 'am', 'pm'] as SlotFilter[]).map(s => (
+          <RunPill key={s} label={s === 'all' ? 'All' : s.toUpperCase()} active={slot === s} onClick={() => setSlot(s)} />
+        ))}
+      </div>
+
+      <div style={{ padding: '16px 30px 48px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {liveNudges.map(n => (
-          <NudgeBanner key={n.id} nudge={n} onStart={() => { const t = day.tasks.find(x => x.id === n.taskId); if (t) { startTask(t); setFocused(t.id); } }} onLater={() => dismissNudge(n.id)} />
+          <NudgeBanner key={n.id} nudge={n} onStart={() => { const t = day.tasks.find(x => x.id === n.taskId); if (t) { startTask(t); openStepper({ sectionId: t.sectionId, slot: t.slot, taskId: t.id }); } }} onLater={() => dismissNudge(n.id)} />
         ))}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(520px, 1fr))', gap: 16, alignItems: 'start' }}>
@@ -131,10 +129,11 @@ function SectionsForShop({ shopId, date, onDateChange }: { shopId: string; date:
               timers={clock.timers}
               team={day.team}
               sections={day.cards.map(c => c.section)}
-              onTick={tick}
               onMove={move}
+              onReorder={reorder}
               onPerson={setPerson}
               onOpen={setFocused}
+              onPrint={() => printSections({ ...day, cards: [card] }, shop?.name ?? shopId, date)}
             />
           ))}
         </div>
@@ -148,9 +147,21 @@ function SectionsForShop({ shopId, date, onDateChange }: { shopId: string; date:
           done={Boolean(ticks[focusedTask.id])}
           onStart={() => startTask(focusedTask)}
           onTick={done => tick(focusedTask.id, done)}
+          onStepper={() => openStepper({ sectionId: focusedTask.sectionId, slot: focusedTask.slot, taskId: focusedTask.id })}
           onClose={() => setFocused(null)}
         />
       )}
+
+      <FjStepper
+        open={stepper.open}
+        onClose={() => setStepper({ open: false, target: null })}
+        day={day}
+        date={date}
+        ticks={ticks}
+        onTick={tick}
+        initial={stepper.target}
+        live={isToday}
+      />
     </div>
   );
 }
@@ -191,99 +202,211 @@ function NudgeBanner({ nudge, onStart, onLater }: { nudge: Nudge; onStart: () =>
 
 // ─── Section card (Bench card chassis) ────────────────────────────────────────
 
-function SectionCardView({ card, slot, nowMins, ticks, timers, team, sections, onTick, onMove, onPerson, onOpen }: {
+function SectionCardView({ card, slot, nowMins, ticks, timers, team, sections, onMove, onReorder, onPerson, onOpen, onPrint }: {
   card: SectionCard;
   slot: SlotFilter;
   nowMins?: number;
   ticks: Record<string, string>;
-  timers: ReturnType<typeof useFjClock>['timers'];
+  timers: Record<string, FjTimer>;
   team: string[];
   sections: SectionCard['section'][];
-  onTick: (id: string, done: boolean) => void;
   onMove: (id: string, to: SectionId) => void;
+  onReorder: (key: string, ids: string[]) => void;
   onPerson: (sectionId: SectionId, name: string) => void;
   onOpen: (id: string) => void;
+  onPrint: () => void;
 }) {
-  const groups: { label: 'AM' | 'PM'; rows: SectionTask[] }[] = [];
-  if (slot !== 'pm') groups.push({ label: 'AM', rows: card.am });
-  if (slot !== 'am') groups.push({ label: 'PM', rows: card.pm });
+  const groups: { slot: 'am' | 'pm'; rows: SectionTask[] }[] = [];
+  if (slot !== 'pm') groups.push({ slot: 'am', rows: card.am });
+  if (slot !== 'am') groups.push({ slot: 'pm', rows: card.pm });
   const all = [...card.am, ...card.pm];
   const done = all.filter(t => ticks[t.id]).length;
   const remaining = all.filter(t => !ticks[t.id]).reduce((n, t) => n + t.durationMins, 0);
-  const next = nowMins !== undefined ? all.find(t => !ticks[t.id] && t.startMins >= nowMins - 5) : undefined;
+  const amEnd = card.am.length ? Math.max(...card.am.map(t => t.startMins + t.durationMins)) : undefined;
+  const pmStart = card.pm.length ? Math.min(...card.pm.map(t => t.startMins)) : undefined;
 
   return (
     <section style={{ background: '#ffffff', border: '1.5px solid var(--color-accent-active)', borderRadius: 'var(--radius-card)', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: '1px solid var(--color-border-subtle)', gap: 16 }}>
+      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 22px', borderBottom: '1px solid var(--color-border-subtle)', gap: 16 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
           <h3 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: 'var(--color-text-primary)', letterSpacing: '-0.005em' }}>{card.section.name}</h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <StatusPill tone="neutral" size="xs" label={`${done} of ${all.length} ticked`} />
-            {next && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
-                <Clock size={12} /> next {hhmm(next.startMins)} · {next.title}
-              </span>
-            )}
+            <SlotChip nowMins={nowMins} amEnd={amEnd} pmStart={pmStart} done={done === all.length && all.length > 0} />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+              <Clock size={12} /> {hhmm(card.startMins)} → {hhmm(card.endMins)}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{done} of {all.length} ticked</span>
           </div>
         </div>
-        <PersonChip name={card.section.person} team={team} onPick={n => onPerson(card.section.id, n)} />
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <PersonChip name={card.section.person} team={team} onPick={n => onPerson(card.section.id, n)} />
+          <button type="button" onClick={onPrint} aria-label={`Print ${card.section.name}`} title="Print this section" style={{ width: 32, height: 32, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: '#ffffff', border: '1px solid var(--color-border-subtle)', color: 'var(--color-text-secondary)', cursor: 'pointer', flexShrink: 0 }}>
+            <Printer size={15} />
+          </button>
+        </div>
       </header>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '22px 1fr auto auto 22px 14px', gap: 12, padding: '8px 22px', fontSize: 10, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--color-border-subtle)' }}>
-        <span />
-        <span>Task</span>
-        <span style={{ textAlign: 'right', minWidth: 90 }}>Qty</span>
-        <span style={{ textAlign: 'right', minWidth: 56 }}>Time</span>
-        <span />
-        <span />
-      </div>
+      {all.length === 0 && <div style={{ padding: '18px 22px', fontSize: 12, color: 'var(--color-text-muted)' }}>Nothing on this section today.</div>}
 
-      {groups.map(g => (
-        <div key={g.label}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 22px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)' }}>
-            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--color-text-secondary)' }}>{g.label}</span>
-            <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{g.rows.length} {g.rows.length === 1 ? 'task' : 'tasks'}</span>
-          </div>
-          {g.rows.length === 0 && <div style={{ padding: '12px 22px', fontSize: 12, color: 'var(--color-text-muted)' }}>Nothing in the {g.label}.</div>}
-          {g.rows.map(t => (
-            <TaskRow
-              key={t.id}
-              task={t}
-              done={Boolean(ticks[t.id])}
-              timer={timers[t.id]}
-              nowMins={nowMins}
-              sections={sections}
-              onTick={d => onTick(t.id, d)}
-              onMove={to => onMove(t.id, to)}
-              onOpen={() => onOpen(t.id)}
-            />
-          ))}
+      {groups.map((g, gi) => (
+        <div key={g.slot} style={{ borderTop: gi === 0 ? 'none' : '1px dashed var(--color-border-subtle)' }}>
+          {g.slot === 'pm' && slot === 'all' && <SlotDivider label="PM · after 12:00" />}
+          {g.rows.length > 0 && <ColumnHeader />}
+          {g.rows.length === 0 && all.length > 0 && <div style={{ padding: '14px 22px', fontSize: 12, color: 'var(--color-text-muted)' }}>Nothing in the {g.slot.toUpperCase()}.</div>}
+          <ReorderableRows
+            rows={g.rows}
+            listKey={listKey(card.section.id, g.slot)}
+            onReorder={onReorder}
+            rowProps={t => ({
+              done: Boolean(ticks[t.id]),
+              timer: timers[t.id],
+              nowMins,
+              sections,
+              onMove: to => onMove(t.id, to),
+              onOpen: () => onOpen(t.id),
+            })}
+          />
         </div>
       ))}
 
-      <div style={{ padding: '14px 22px', borderTop: '1px solid var(--color-border-subtle)', background: 'var(--color-bg-hover)', display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
-        <TotalRow label="Hands-on time" value={fmtMins(card.totalMins)} />
-        <TotalRow label="Remaining" value={fmtMins(remaining)} />
-      </div>
-      <footer style={{ padding: '12px 22px', borderTop: '1px solid var(--color-border-subtle)', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, fontSize: 11, color: 'var(--color-text-muted)' }}>
+      {all.length > 0 && (
+        <div style={{ padding: '16px 22px', borderTop: '1px solid var(--color-border-subtle)', background: 'var(--color-bg-hover)', display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+          <TotalRow label="Hands-on time" value={fmtMins(card.totalMins)} />
+          <TotalRow label="Cooker and oven time" value={fmtMins(card.passiveMins)} />
+          <TotalRow label="Remaining hands-on" value={fmtMins(remaining)} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--color-border-subtle)', paddingTop: 10, marginTop: 4, fontWeight: 700, color: 'var(--color-text-primary)', fontSize: 13 }}>
+            <span>Total time</span><span>{fmtMins(card.totalMins + card.passiveMins)}</span>
+          </div>
+        </div>
+      )}
+
+      <footer style={{ padding: '14px 22px', borderTop: '1px solid var(--color-border-subtle)', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, fontSize: 11, color: 'var(--color-text-muted)' }}>
         <Stopwatch label="Start" value={hhmm(card.startMins)} />
         <Stopwatch label="End" value={hhmm(card.endMins)} />
-        <Stopwatch label="Now" value={nowMins !== undefined ? hhmm(nowMins) : '—'} muted />
+        <Stopwatch label="Remaining" value={fmtMins(remaining)} muted />
       </footer>
+      {nowMins !== undefined && nowMins >= card.startMins && (
+        <div style={{ padding: '8px 22px', fontSize: 10, color: 'var(--color-text-muted)', borderTop: '1px dashed var(--color-border-subtle)' }}>Started · {hhmm(card.startMins)}</div>
+      )}
     </section>
   );
 }
 
-function TaskRow({ task, done, timer, nowMins, sections, onTick, onMove, onOpen }: {
-  task: SectionTask;
+function SlotChip({ nowMins, amEnd, pmStart, done }: { nowMins?: number; amEnd?: number; pmStart?: number; done: boolean }) {
+  let copy: string;
+  let tone: 'active' | 'upcoming' | 'done' = 'upcoming';
+  if (done) { copy = 'All ticked'; tone = 'done'; }
+  else if (nowMins === undefined) copy = amEnd !== undefined ? `AM · ends ${hhmm(amEnd)}` : pmStart !== undefined ? `PM · ${hhmm(pmStart)}` : 'No tasks';
+  else if (amEnd !== undefined && nowMins < amEnd) { copy = `In AM · ends ${hhmm(amEnd)}`; tone = 'active'; }
+  else if (pmStart !== undefined && nowMins < pmStart) copy = `Next: PM · ${hhmm(pmStart)}`;
+  else if (pmStart !== undefined) { copy = 'In PM'; tone = 'active'; }
+  else { copy = 'AM done'; tone = 'done'; }
+  const s = tone === 'active' ? { fg: 'var(--color-success)', border: 'var(--color-success)' } : tone === 'upcoming' ? { fg: 'var(--color-text-secondary)', border: 'var(--color-border)' } : { fg: 'var(--color-text-muted)', border: 'var(--color-border-subtle)' };
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, background: '#ffffff', color: s.fg, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', border: `1.5px solid ${s.border}` }}>
+      <Clock size={10} /> {copy}
+    </span>
+  );
+}
+
+function SlotDivider({ label }: { label: string }) {
+  return (
+    <div style={{ padding: '6px 14px', background: 'var(--color-bg-hover)', borderBottom: '1px dashed var(--color-border-subtle)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+      <Clock size={11} /> {label}
+    </div>
+  );
+}
+
+const ROW_GRID: CSSProperties = { display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto auto', gap: 14 };
+
+function ColumnHeader() {
+  return (
+    <div style={{ ...ROW_GRID, padding: '10px 22px', fontSize: 10, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--color-border-subtle)' }}>
+      <span style={{ width: 16 }} />
+      <span>Task</span>
+      <span style={{ textAlign: 'right', minWidth: 36 }}>Qty</span>
+      <span style={{ textAlign: 'right', minWidth: 56 }}>Time</span>
+      <span style={{ width: 22 }} />
+      <span style={{ width: 14 }} />
+    </div>
+  );
+}
+
+type DragProps = {
+  reorderable: boolean;
+  dragging: boolean;
+  dragOver: boolean;
+  onHandlePress: () => void;
+  onHandleRelease: () => void;
+  onRowDragStart: (e: DragEvent) => void;
+  onRowDragEnd: () => void;
+  onRowDragOver: (e: DragEvent) => void;
+  onRowDrop: (e: DragEvent) => void;
+};
+
+/** Drag by the grip to reorder. Arms only from the handle so clicks and
+ *  the move picker keep working. */
+function ReorderableRows({ rows, listKey: key, onReorder, rowProps }: {
+  rows: SectionTask[];
+  listKey: string;
+  onReorder: (key: string, ids: string[]) => void;
+  rowProps: (task: SectionTask) => TaskRowOwnProps;
+}) {
+  const armed = useRef(false);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const ids = rows.map(r => r.id);
+  const reorderable = rows.length > 1;
+
+  const drop = (targetId: string) => {
+    const from = dragId;
+    setDragId(null); setOverId(null); armed.current = false;
+    if (!from || from === targetId) return;
+    const fromIdx = ids.indexOf(from);
+    const toIdx = ids.indexOf(targetId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const next = ids.filter(id => id !== from);
+    next.splice(fromIdx < toIdx ? next.indexOf(targetId) + 1 : next.indexOf(targetId), 0, from);
+    onReorder(key, next);
+  };
+
+  return (
+    <>
+      {rows.map(t => (
+        <TaskRow
+          key={t.id}
+          task={t}
+          {...rowProps(t)}
+          reorderable={reorderable}
+          dragging={dragId === t.id}
+          dragOver={overId === t.id && dragId !== null && dragId !== t.id}
+          onHandlePress={() => { armed.current = true; }}
+          onHandleRelease={() => { armed.current = false; }}
+          onRowDragStart={e => {
+            if (!armed.current) { e.preventDefault(); return; }
+            setDragId(t.id);
+            e.dataTransfer.effectAllowed = 'move';
+            try { e.dataTransfer.setData('text/plain', t.id); } catch { /* jsdom */ }
+          }}
+          onRowDragEnd={() => { setDragId(null); setOverId(null); armed.current = false; }}
+          onRowDragOver={e => { if (dragId) { e.preventDefault(); setOverId(t.id); } }}
+          onRowDrop={e => { e.preventDefault(); drop(t.id); }}
+        />
+      ))}
+    </>
+  );
+}
+
+type TaskRowOwnProps = {
   done: boolean;
-  timer?: ReturnType<typeof useFjClock>['timers'][string];
+  timer?: FjTimer;
   nowMins?: number;
   sections: SectionCard['section'][];
-  onTick: (done: boolean) => void;
   onMove: (to: SectionId) => void;
   onOpen: () => void;
-}) {
+};
+
+function TaskRow({ task, done, timer, nowMins, sections, onMove, onOpen, reorderable, dragging, dragOver, onHandlePress, onHandleRelease, onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop }: { task: SectionTask } & TaskRowOwnProps & DragProps) {
   const late = nowMins !== undefined && !done && !timer && nowMins > task.startMins + 10;
   const remaining = timer && nowMins !== undefined ? timerRemaining(timer, nowMins) : undefined;
   const cooking = remaining !== undefined && remaining > 0;
@@ -294,36 +417,50 @@ function TaskRow({ task, done, timer, nowMins, sections, onTick, onMove, onOpen 
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
-      style={{ display: 'grid', gridTemplateColumns: '22px 1fr auto auto 22px 14px', gap: 12, alignItems: 'center', padding: '11px 22px', fontSize: 13, color: 'var(--color-text-primary)', background: ready ? 'var(--color-success-light, #eef8f1)' : '#ffffff', borderBottom: '1px solid var(--color-border-subtle)', borderLeft: `3px solid ${cooking ? 'var(--color-info)' : late ? 'var(--color-warning)' : 'transparent'}`, cursor: 'pointer', opacity: done ? 0.55 : 1 }}
+      draggable={reorderable}
+      onDragStart={onRowDragStart}
+      onDragEnd={onRowDragEnd}
+      onDragOver={onRowDragOver}
+      onDrop={onRowDrop}
+      style={{
+        ...ROW_GRID, alignItems: 'center', padding: '14px 22px', fontSize: 13, color: 'var(--color-text-primary)',
+        background: dragOver ? 'var(--color-bg-hover)' : ready ? 'var(--color-success-light, #eef8f1)' : '#ffffff',
+        borderBottom: '1px solid var(--color-border-subtle)',
+        borderTop: dragOver ? '2px solid var(--color-accent-active)' : '2px solid transparent',
+        borderLeft: `3px solid ${cooking ? 'var(--color-info)' : late ? 'var(--color-warning)' : 'transparent'}`,
+        cursor: 'pointer', opacity: dragging ? 0.4 : done ? 0.5 : 1, transition: 'opacity 120ms ease, background 120ms ease',
+      }}
     >
-      <button
-        type="button"
-        onClick={e => { e.stopPropagation(); onTick(!done); }}
-        aria-label={done ? `Untick ${task.title}` : `Tick ${task.title}`}
-        aria-pressed={done}
-        style={{ width: 20, height: 20, borderRadius: 6, border: `1.5px solid ${done ? 'var(--color-success)' : 'var(--color-border)'}`, background: done ? 'var(--color-success)' : '#ffffff', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0 }}
-      >
-        {done && <Check size={12} />}
-      </button>
-      <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-        <span style={{ fontWeight: 500, fontSize: 13.5, textDecoration: done ? 'line-through' : 'none', lineHeight: 1.25 }}>{task.title}</span>
-        {task.detail && <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.detail}</span>}
+      {done ? (
+        <span aria-label="Ticked" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, color: 'var(--color-success)' }}><Check size={14} /></span>
+      ) : (
+        <span aria-hidden title={reorderable ? 'Drag to reorder' : undefined} onMouseDown={reorderable ? onHandlePress : undefined} onMouseUp={reorderable ? onHandleRelease : undefined} onClick={e => e.stopPropagation()}
+          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, color: 'var(--color-text-muted)', cursor: reorderable ? 'grab' : 'default', opacity: reorderable ? 0.6 : 0, touchAction: 'none' }}>
+          <GripVertical size={14} />
+        </span>
+      )}
+      <span style={{ minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 500, fontSize: 13.5, textDecoration: done ? 'line-through' : 'none' }}>
+        {task.title}
+        {task.load && <span style={{ color: 'var(--color-text-muted)', fontWeight: 500, marginLeft: 8, fontSize: 12 }}>load {task.load.n} of {task.load.of}</span>}
       </span>
-      <span style={{ textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', minWidth: 90, whiteSpace: 'nowrap' }}>{task.qty}</span>
-      <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: 56, fontVariantNumeric: 'tabular-nums', lineHeight: 1.15 }}>
+      <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1, whiteSpace: 'nowrap' }}>
+        <span style={{ fontWeight: 700 }}>{task.qty}</span>
+        {task.containers && <span style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--color-text-muted)', marginTop: 2 }}>{task.containers}</span>}
+      </span>
+      <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: 56, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
         <span style={{ color: late ? 'var(--color-warning)' : 'var(--color-text-secondary)', fontWeight: task.timed ? 700 : 500 }}>{hhmm(task.startMins)}</span>
         {cooking ? (
-          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-info)', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Timer size={9} /> {remaining} min</span>
+          <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--color-info)', display: 'inline-flex', alignItems: 'center', gap: 3, marginTop: 2 }}><Timer size={9} /> {remaining} min</span>
         ) : ready ? (
-          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-success)' }}>ready</span>
+          <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--color-success)', marginTop: 2 }}>ready</span>
         ) : task.readyMins ? (
-          <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>ready {hhmm(task.readyMins)}</span>
+          <span style={{ fontSize: 9.5, color: 'var(--color-text-muted)', marginTop: 2 }}>ready {hhmm(task.readyMins)}</span>
         ) : (
-          <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{task.durationMins} min</span>
+          <span style={{ fontSize: 9.5, color: 'var(--color-text-muted)', marginTop: 2 }}>{task.durationMins} min</span>
         )}
       </span>
       <MoveButton current={task.sectionId} sections={sections} onMove={onMove} />
-      <ChevronRight size={14} color="var(--color-text-muted)" style={{ opacity: 0.5 }} />
+      <ChevronRight size={14} color="var(--color-text-muted)" style={{ opacity: 0.4 }} />
     </div>
   );
 }
@@ -348,11 +485,11 @@ function PersonChip({ name, team, onPick }: { name: string; team: string[]; onPi
   const { open, setOpen, ref } = usePopover();
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button type="button" onClick={() => setOpen(o => !o)} aria-haspopup="listbox" aria-expanded={open} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 999, background: '#ffffff', color: 'var(--color-info)', fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap', border: '1.5px solid var(--color-info)', cursor: 'pointer', fontFamily: 'var(--font-primary)' }}>
+      <button type="button" onClick={() => setOpen(o => !o)} aria-haspopup="listbox" aria-expanded={open} title={`${name} · click to change`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 999, background: '#ffffff', color: 'var(--color-info)', fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap', border: '1.5px solid var(--color-info)', cursor: 'pointer', fontFamily: 'var(--font-primary)' }}>
         <User size={12} /> {name}
       </button>
       {open && (
-        <div role="listbox" aria-label="Who is on this section" style={popover}>
+        <div role="listbox" aria-label="Who is on this section" style={{ ...popover, right: 0, left: 'auto' }}>
           {team.map(n => (
             <button key={n} type="button" role="option" aria-selected={n === name} onClick={() => { onPick(n); setOpen(false); }} style={{ ...popoverItem, fontWeight: n === name ? 700 : 500 }}>{n}</button>
           ))}
@@ -382,22 +519,23 @@ function MoveButton({ current, sections, onMove }: { current: SectionId; section
   );
 }
 
-// ─── Method card ──────────────────────────────────────────────────────────────
+// ─── Method card (manager's quick look from the board) ────────────────────────
 
-function MethodPanel({ task, nowMins, timer, done, onStart, onTick, onClose }: {
+function MethodPanel({ task, nowMins, timer, done, onStart, onTick, onStepper, onClose }: {
   task: SectionTask;
   nowMins?: number;
-  timer?: ReturnType<typeof useFjClock>['timers'][string];
+  timer?: FjTimer;
   done: boolean;
   onStart: () => void;
   onTick: (done: boolean) => void;
+  onStepper: () => void;
   onClose: () => void;
 }) {
   if (typeof window === 'undefined') return null;
   const comp = task.componentId ? COMPONENTS[task.componentId] : undefined;
   const batches = task.batches ?? 1;
   const remaining = timer && nowMins !== undefined ? timerRemaining(timer, nowMins) : undefined;
-  const steps = comp?.steps?.map(s => scaleStep(s, batches)) ?? [];
+  const steps = stepsForTask(task);
   const group = comp ? SHELF_LIFE_GROUPS[comp.shelfLife] : undefined;
   const batchLabel = batches === 0.5 ? 'Half batch' : batches === 1 ? 'One batch' : `${batches % 1 === 0 ? batches : batches.toFixed(1)} batches`;
 
@@ -407,7 +545,7 @@ function MethodPanel({ task, nowMins, timer, done, onStart, onTick, onClose }: {
         <div style={{ flexShrink: 0, padding: '14px 18px', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'flex-start', gap: 12, background: 'var(--color-bg-surface)' }}>
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>{task.slot.toUpperCase()} · {hhmm(task.startMins)}{comp?.htcCode ? ` · ${comp.htcCode}` : ''}</span>
-            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--color-text-primary)' }}>{task.title}</h2>
+            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--color-text-primary)' }}>{task.title}{task.load ? ` · load ${task.load.n} of ${task.load.of}` : ''}</h2>
             <div style={{ display: 'flex', gap: 6, marginTop: 4, alignItems: 'center', flexWrap: 'wrap' }}>
               <StatusPill tone="info" size="xs" label={task.qty} />
               {comp && !/batch/.test(task.qty) && <StatusPill tone="neutral" size="xs" label={batchLabel} />}
@@ -448,16 +586,6 @@ function MethodPanel({ task, nowMins, timer, done, onStart, onTick, onClose }: {
             </Block>
           )}
 
-          {comp && !comp.steps && (
-            <Block icon={<Check size={13} />} title="Inputs">
-              {comp.inputs.map(l => {
-                const sub = COMPONENTS[l.ref];
-                const grams = l.grams * batches;
-                return <Pair key={l.ref} label={sub?.name ?? l.ref.replace(/-/g, ' ')} value={grams >= 1000 ? `${(grams / 1000).toFixed(1)} kg` : `${Math.round(grams)} g`} />;
-              })}
-            </Block>
-          )}
-
           {comp?.container && comp.containersPerBatch && (
             <Block icon={<Clock size={13} />} title="Container and label">
               <Pair label="Into" value={`${Math.ceil(batches * comp.containersPerBatch)} ${plural(Math.ceil(batches * comp.containersPerBatch), CONTAINERS[comp.container].name.toLowerCase())}`} />
@@ -473,10 +601,11 @@ function MethodPanel({ task, nowMins, timer, done, onStart, onTick, onClose }: {
               <button type="button" onClick={() => clearTimer(task.id)} style={{ ...linkButton, marginLeft: 6 }}>clear</button>
             </span>
           ) : (
-            <button type="button" onClick={onStart} style={secondaryButton} disabled={done}>
-              <Play size={13} /> Start{task.cookMins ? ` · ${task.cookMins} min timer` : ''}
+            <button type="button" onClick={onStart} style={secondaryButton} disabled={done || nowMins === undefined}>
+              <Play size={13} /> Start{task.cookMins ? ` · ${task.cookMins} min` : ''}
             </button>
           )}
+          <button type="button" onClick={onStepper} style={secondaryButton}><PlaySquare size={13} /> Stepper</button>
           <div style={{ flex: 1 }} />
           <button type="button" onClick={() => onTick(!done)} style={done ? secondaryButton : primaryButton}>
             <Check size={13} /> {done ? 'Untick' : 'Tick done'}
@@ -498,7 +627,7 @@ function printSections(day: SectionsDay, shopName: string, date: string) {
   const w = window.open('', '_blank', 'width=900,height=1000');
   if (!w) return;
   const rows = (tasks: SectionTask[]) => tasks.map(t => `
-    <tr><td class="tick">☐</td><td>${esc(t.title)}${t.detail ? `<div class="sub">${esc(t.detail)}</div>` : ''}</td><td class="r"><strong>${esc(t.qty)}</strong></td><td class="r">${hhmm(t.startMins)}${t.readyMins ? `<div class="sub">ready ${hhmm(t.readyMins)}</div>` : ''}</td></tr>`).join('');
+    <tr><td class="tick">☐</td><td>${esc(t.title)}${t.load ? ` <span class="sub">load ${t.load.n} of ${t.load.of}</span>` : ''}${t.detail ? `<div class="sub">${esc(t.detail)}</div>` : ''}</td><td class="r"><strong>${esc(t.qty)}</strong></td><td class="r">${hhmm(t.startMins)}${t.readyMins ? `<div class="sub">ready ${hhmm(t.readyMins)}</div>` : ''}</td></tr>`).join('');
   const body = day.cards.map(c => `
     <section class="page">
       <h2>${esc(c.section.name)} <span class="meta">${esc(c.section.person)} · ${hhmm(c.startMins)} to ${hhmm(c.endMins)} · ${fmtMins(c.totalMins)} hands-on</span></h2>
@@ -522,11 +651,10 @@ function printSections(day: SectionsDay, shopName: string, date: string) {
 
 // ─── Small bits ───────────────────────────────────────────────────────────────
 
-function RunPill({ label, count, active, onClick }: { label: string; count?: number; active: boolean; onClick: () => void }) {
+function RunPill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <button type="button" role="tab" aria-selected={active} onClick={onClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 999, fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-primary)', cursor: 'pointer', background: active ? 'var(--color-accent-active)' : '#ffffff', color: active ? '#ffffff' : 'var(--color-text-secondary)', border: `1px solid ${active ? 'var(--color-accent-active)' : 'var(--color-border)'}`, fontVariantNumeric: 'tabular-nums' }}>
+    <button type="button" role="tab" aria-selected={active} onClick={onClick} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 32, height: 26, padding: '0 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-primary)', cursor: 'pointer', background: active ? 'var(--color-accent-active)' : '#ffffff', color: active ? '#ffffff' : 'var(--color-text-secondary)', border: `1px solid ${active ? 'var(--color-accent-active)' : 'var(--color-border)'}` }}>
       {label}
-      {count !== undefined && <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 16, height: 16, padding: '0 4px', borderRadius: 100, fontSize: 10, fontWeight: 700, background: active ? 'rgba(255,255,255,0.25)' : 'var(--color-border-subtle)', color: active ? '#fff' : 'var(--color-text-secondary)' }}>{count}</span>}
     </button>
   );
 }
@@ -537,9 +665,9 @@ function TotalRow({ label, value }: { label: string; value: string }) {
 
 function Stopwatch({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</span>
-      <span style={{ fontSize: 14, fontWeight: 700, color: muted ? 'var(--color-text-muted)' : 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-muted)' }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: muted ? 'var(--color-text-muted)' : 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
     </div>
   );
 }
@@ -570,6 +698,7 @@ export function fmtMins(m: number): string {
 
 const captionStrip: CSSProperties = { padding: '8px 30px', background: 'var(--color-bg-surface)', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--color-text-muted)', flexWrap: 'wrap' };
 const iconButton: CSSProperties = { height: 26, minWidth: 26, padding: '0 7px', borderRadius: 7, border: '1px solid var(--color-border)', background: '#ffffff', color: 'var(--color-text-secondary)', fontSize: 10.5, fontWeight: 700, fontFamily: 'var(--font-primary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontVariantNumeric: 'tabular-nums' };
+const ghostButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-primary)', background: '#ffffff', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)', cursor: 'pointer', whiteSpace: 'nowrap' };
 const secondaryButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, minHeight: 36, padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-primary)', background: '#ffffff', color: 'var(--color-text-primary)', border: '1px solid var(--color-border)', cursor: 'pointer', whiteSpace: 'nowrap' };
 const primaryButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, minHeight: 36, padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-primary)', background: 'var(--color-accent-active)', color: 'var(--color-text-on-active, #fff)', border: '1px solid var(--color-accent-active)', cursor: 'pointer', whiteSpace: 'nowrap' };
 const closeButton: CSSProperties = { width: 32, height: 32, borderRadius: 8, border: '1px solid var(--color-border-subtle)', background: '#ffffff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-secondary)', flexShrink: 0 };

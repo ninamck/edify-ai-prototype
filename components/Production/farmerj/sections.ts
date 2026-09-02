@@ -21,7 +21,7 @@ import { batchesToNumber, type ProductPlan } from './cascade';
 import { computeDayPlan, type DayPlan, type DayRecord } from './FjPlanStore';
 import { computePrepDay, qtyLabel, type PrepDay } from './prep';
 import { orderBoxesLabel } from './catering';
-import { COMPONENTS, CONTAINERS, PRODUCT_GROUP_LABELS, type Component, type Section as SectionId } from './recipes';
+import { COMPONENTS, CONTAINERS, INGREDIENTS, PRODUCT_GROUP_LABELS, type Component, type Section as SectionId } from './recipes';
 import { getShop } from './shops';
 import { hhmm } from './fjClock';
 
@@ -36,6 +36,8 @@ export type SectionTask = {
   qty: string;
   /** Second line under the title: containers, order reference, hold. */
   detail?: string;
+  /** Containers this task fills, shown under the quantity. */
+  containers?: string;
   startMins: number;
   /** Hands-on minutes for the person. Oven and cooker time is not theirs. */
   durationMins: number;
@@ -49,6 +51,8 @@ export type SectionTask = {
   cookMins?: number;
   /** True when the time comes from the sales curve rather than the open. */
   timed?: boolean;
+  /** Cook load n of m for the day. */
+  load?: { n: number; of: number };
 };
 
 export type SectionDef = { id: SectionId; name: string; person: string };
@@ -57,7 +61,10 @@ export type SectionCard = {
   section: SectionDef;
   am: SectionTask[];
   pm: SectionTask[];
+  /** Hands-on minutes for the person. */
   totalMins: number;
+  /** Cooker and oven minutes the person is not tied up for. */
+  passiveMins: number;
   startMins: number;
   endMins: number;
 };
@@ -202,6 +209,7 @@ function cookTasks(day: DayPlan, openMins: number, pace: Record<string, number>)
         title: plan.product.name,
         qty: `${sizeLabel} ${size === 1 ? 'batch' : 'batches'}`,
         detail: [loadsTotal > 1 ? `Load ${load} of ${loadsTotal}` : undefined, containers, comp.cook ? `${comp.cook.programme}, ${cookMinutes(comp)} min` : undefined].filter(Boolean).join(' · '),
+        containers, load: loadsTotal > 1 ? { n: load, of: loadsTotal } : undefined,
         startMins, durationMins: HANDS_ON_PER_LOAD, readyMins: startMins + lead,
         componentId: comp.id, productId: plan.productId, batches: size, cookMins: cookMinutes(comp),
         timed: !firstLoad,
@@ -237,6 +245,7 @@ function saladTasks(day: DayPlan, prep: PrepDay, openMins: number): SectionTask[
       id: `prep-${line.componentId}`, sectionId: 'salads', slot: 'am', kind: 'kit',
       title: line.component.name, qty: qtyLabel(line),
       detail: line.containers ? `${line.containers.count} ${plural(line.containers.count, line.containers.name.toLowerCase())}` : undefined,
+      containers: line.containers ? `${line.containers.count} ${plural(line.containers.count, line.containers.name.toLowerCase())}` : undefined,
       startMins: cursor, durationMins: mins, componentId: line.componentId, batches: line.plannedQty,
     });
     cursor += mins;
@@ -287,6 +296,7 @@ function prepTasks(prep: PrepDay, openMins: number): SectionTask[] {
       id: `prep-${line.componentId}`, sectionId: 'prep', slot: am ? 'am' : 'pm', kind: line.component.kind === 'kit' ? 'kit' : 'prep',
       title: line.component.name, qty: qtyLabel(line),
       detail: line.reason === 'tomorrow' ? 'for tomorrow' : line.reason === 'ahead' ? `covers to ${weekdayShort(line.covers[line.covers.length - 1])}` : undefined,
+      containers: line.containers ? `${line.containers.count} ${plural(line.containers.count, line.containers.name.toLowerCase())}` : undefined,
       startMins, durationMins: mins, componentId: line.componentId, batches: line.plannedQty, cookMins: line.component.cook ? cookMinutes(line.component) : undefined,
     });
   }
@@ -362,20 +372,56 @@ export function computeSectionsDay(shopId: string, date: string, getRecord: GetR
 
   const team = teamFor(shopId);
   const people = record.people ?? {};
+  const order = record.taskOrder ?? {};
   const cards: SectionCard[] = SECTION_ORDER.map(id => {
     const mine = all.filter(t => t.sectionId === id).sort((a, b) => a.startMins - b.startMins);
-    const am = mine.filter(t => t.slot === 'am');
-    const pm = mine.filter(t => t.slot === 'pm');
+    const am = applyOrder(mine.filter(t => t.slot === 'am'), order[listKey(id, 'am')]);
+    const pm = applyOrder(mine.filter(t => t.slot === 'pm'), order[listKey(id, 'pm')]);
     const totalMins = mine.reduce((n, t) => n + t.durationMins, 0);
+    const passiveMins = mine.reduce((n, t) => n + (t.readyMins ? Math.max(0, t.readyMins - t.startMins - t.durationMins) : 0), 0);
     const startMins = mine.length ? Math.min(...mine.map(t => t.startMins)) : openMins - 180;
-    const endMins = mine.length ? Math.max(...mine.map(t => t.startMins + t.durationMins)) : openMins;
-    return { section: { id, name: SECTION_NAMES[id], person: people[id] ?? team[id] }, am, pm, totalMins, startMins, endMins };
+    const endMins = mine.length ? Math.max(...mine.map(t => t.readyMins ?? t.startMins + t.durationMins)) : openMins;
+    return { section: { id, name: SECTION_NAMES[id], person: people[id] ?? team[id] }, am, pm, totalMins, passiveMins, startMins, endMins };
   });
 
   return {
     shopId, date, cards, tasks: all, nudges: cook.nudges, openMins, closeMins,
     team: Array.from(new Set([...Object.values(team), ...NAME_POOL.slice(0, 4)])),
   };
+}
+
+export function listKey(sectionId: SectionId, slot: 'am' | 'pm'): string {
+  return `${sectionId}::${slot}`;
+}
+
+/** Rows the manager has dragged lead in that order; anything new keeps
+ *  its time order at the tail. */
+function applyOrder(rows: SectionTask[], order: string[] | undefined): SectionTask[] {
+  if (!order || order.length === 0) return rows;
+  const rank = new Map(order.map((id, i) => [id, i]));
+  return [...rows].sort((a, b) => (rank.get(a.id) ?? order.length) - (rank.get(b.id) ?? order.length));
+}
+
+export type ScaledInput = { name: string; grams: number; label: string };
+
+/** What goes into this task, scaled to its batches. Sub-recipes stay as
+ *  one line (the rice kit, not rice plus za'atar). */
+export function inputsForTask(task: SectionTask): ScaledInput[] {
+  const comp = task.componentId ? COMPONENTS[task.componentId] : undefined;
+  if (!comp) return [];
+  const batches = task.batches ?? 1;
+  return comp.inputs.map(l => {
+    const grams = l.grams * batches;
+    const sub = COMPONENTS[l.ref];
+    const ing = INGREDIENTS[l.ref];
+    const name = sub?.name ?? ing?.name ?? l.ref.replace(/-/g, ' ');
+    return { name, grams, label: gramsLabel(grams) };
+  });
+}
+
+export function gramsLabel(grams: number): string {
+  if (grams >= 1000) return `${(grams / 1000).toFixed(grams >= 10000 ? 0 : 1)} kg`;
+  return `${Math.round(grams)} g`;
 }
 
 function addDaysIso(iso: string, n: number): string {
@@ -390,14 +436,67 @@ export function scaleStep(step: string, batches: number): string {
   if (batches === 0.5) {
     // "7000 g (half: 3500 g)" and "one kit (7140 g; half 3570 g)" both
     // become the half figure.
-    return step
+    return kilos(step
       .replace(/(\d[\d,.]*\s?(?:g|kg|ml|L)?)\s*\([^)]*?(?:half|½):?\s*([^);]+?)\s*\)/gi, '$2')
-      .replace(/\s*\([^)]*(?:half|½)[^)]*\)/gi, '');
+      .replace(/\s*\([^)]*(?:half|½)[^)]*\)/gi, ''));
   }
-  const cleaned = step.replace(/\s*\([^)]*(?:half|½)[^)]*\)/gi, '');
-  if (batches === 1) return cleaned;
-  return cleaned.replace(/(\d[\d,]*(?:\.\d+)?)\s?(g|kg|ml|L)\b/g, (_m, n: string, u: string) => {
-    const v = Number(n.replace(/,/g, '')) * batches;
-    return `${Number.isInteger(v) ? v : v.toFixed(1)} ${u}`;
+  // "(7140 g; half 3570 g)" keeps the full figure; "(half: 3500 g)" goes.
+  let s = step
+    .replace(/\(([^)]*?)\s*;\s*(?:half|½)[^)]*\)/gi, '($1)')
+    .replace(/\s*\(\s*(?:half|½):?[^)]*\)/gi, '');
+  if (batches !== 1) {
+    s = s.replace(/(\d[\d,]*(?:\.\d+)?)\s?(g|kg|ml|L)\b/g, (_m, n: string, u: string) => {
+      const v = Number(n.replace(/,/g, '')) * batches;
+      return `${Number.isInteger(v) ? v : v.toFixed(1)} ${u}`;
+    });
+    if (batches > 1) s = s.replace(/\bone (kit|bag|tray|tub|box|can|tin)\b/gi, (_m, w: string) => `${batchWord(batches)} ${w}s`);
+  }
+  return kilos(s);
+}
+
+/** 2 → "2", 1.5 → "1½". */
+export function batchWord(batches: number): string {
+  if (Number.isInteger(batches)) return `${batches}`;
+  return batches === 0.5 ? '½' : `${Math.floor(batches)}½`;
+}
+
+/** Gram figures of a kilo or more read as kilos. */
+function kilos(s: string): string {
+  return s.replace(/(\d[\d,]*(?:\.\d+)?)\s?g\b/g, (_m, n: string) => {
+    const v = Number(n.replace(/,/g, ''));
+    if (v < 1000) return `${v} g`;
+    const k = v / 1000;
+    return `${Number.isInteger(k) ? k : k.toFixed(1).replace(/\.0$/, '')} kg`;
   });
+}
+
+/** The method for a task: the HTC steps scaled to its batches, or a
+ *  plain sequence built from what the recipe record knows when the sheet
+ *  has no steps yet. */
+export function stepsForTask(task: SectionTask): string[] {
+  const comp = task.componentId ? COMPONENTS[task.componentId] : undefined;
+  const batches = task.batches ?? 1;
+  if (comp?.steps) return comp.steps.map(s => scaleStep(s, batches));
+  const out: string[] = [];
+  const into = comp?.container && comp.containersPerBatch
+    ? `${Math.ceil(batches * comp.containersPerBatch)} ${plural(Math.ceil(batches * comp.containersPerBatch), CONTAINERS[comp.container].name.toLowerCase())}`
+    : undefined;
+  if (comp) {
+    for (const l of inputsForTask(task)) out.push(`Weigh ${l.label} ${l.name.toLowerCase()}`);
+    if (comp.cook) {
+      out.push(`Load the ${comp.cook.programme.toLowerCase()}`);
+      out.push(`Cook ${Array.isArray(comp.cook.minutes) ? `${comp.cook.minutes[0]} to ${comp.cook.minutes[1]}` : comp.cook.minutes} min${comp.cook.coreTempC ? `, probe to ${comp.cook.coreTempC}°C` : ''}`);
+      if (comp.restMinutes) out.push(`Rest ${comp.restMinutes} min`);
+    } else if (comp.kind === 'dressing') {
+      out.push('Blend until smooth');
+    } else if (comp.kind === 'kit' || comp.kind === 'mix') {
+      out.push('Mix through');
+    }
+    out.push(into ? `Into ${into}, lid on, label` : 'Lid on, label');
+    return out;
+  }
+  if (task.kind === 'dress') return ['Dress the kit', `Plate ${task.qty}`, 'Label with the time dressed'];
+  if (task.kind === 'plate') return [...(task.detail?.split(', ').map(s => `Plate ${s}`) ?? []), 'Lid on, label, to the second make line fridge'];
+  if (task.kind === 'pack') return [`Pack ${task.qty}`, task.detail ?? '', 'Seal and label with the order reference'].filter(Boolean);
+  return task.detail ? [task.detail] : [];
 }

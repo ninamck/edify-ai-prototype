@@ -41,6 +41,8 @@ export type DayRecord = {
   ticks?: Record<string, string>;
   reassigned?: Record<string, string>;
   people?: Record<string, string>;
+  /** Manager's drag order per list, keyed `${sectionId}::${slot}`. */
+  taskOrder?: Record<string, string[]>;
 };
 
 type StoreState = Record<string, DayRecord>;
