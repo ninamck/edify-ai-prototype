@@ -37,6 +37,13 @@ export type DemoCustomer = {
   features?: {
     /** Per-supplier currency + dual-display purchasing journey (Second Cup). */
     multiCurrency?: boolean;
+    /**
+     * Finished-product-first production for scratch kitchens (Farmer J):
+     * day plan in cast irons and batches, shelf-life-driven prep days,
+     * sections instead of benches. Opens the app on a Farmer J shop and
+     * hides the Pret and Burger King personas.
+     */
+    farmerJProduction?: boolean;
   };
 };
 
@@ -64,6 +71,15 @@ const CUSTOMERS: Record<string, DemoCustomer> = {
     accent: '#C8102E',
     demoSiteLabel: 'Second Cup · international franchise — morning service, replayed',
     features: { multiCurrency: true },
+  },
+  farmerj: {
+    id: 'farmerj',
+    name: 'Farmer J',
+    tagline: 'Scratch-cooked, in every shop',
+    // Placeholder Farmer J green — swap for the exact brand hex once confirmed.
+    accent: '#2F6B4F',
+    demoSiteLabel: 'Farmer J · Marylebone — lunch service, replayed',
+    features: { farmerJProduction: true },
   },
 };
 
@@ -120,3 +136,10 @@ export const isDemoBuild = demoCustomer.id !== 'edify';
  * (per-supplier currency, dual display, FX attribution). Second Cup only.
  */
 export const isMultiCurrencyDemo = demoCustomer.features?.multiCurrency === true;
+
+/**
+ * True when this build is the Farmer J pilot demo. Locks the site switcher
+ * to Farmer J shops and opens on Marylebone. On the internal build the
+ * Farmer J shops are still reachable via the Brand pill in demo controls.
+ */
+export const isFarmerJDemo = demoCustomer.features?.farmerJProduction === true;

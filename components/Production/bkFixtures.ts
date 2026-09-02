@@ -36,7 +36,12 @@ import type {
 } from './fixtures';
 
 /** Brand discriminator shared with the fixture `Site` type. */
-export type Brand = 'pret' | 'bk';
+/**
+ * `'farmerj'` is the Farmer J scratch-kitchen brand (see
+ * `./farmerj/`). Every Farmer J shop is self-producing with no hub, so
+ * the brand drives its own production shell the same way `'bk'` does.
+ */
+export type Brand = 'pret' | 'bk' | 'farmerj';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Demo clock — Burger King runs its own lunch-rush scenario so the crew

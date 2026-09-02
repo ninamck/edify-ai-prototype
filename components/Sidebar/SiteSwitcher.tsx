@@ -88,13 +88,18 @@ function siteTypeTheme(type: ActiveSite['type']) {
  *  Keeps the internal HYBRID_HUB enum value out of the UI — a producing
  *  hybrid still reads as "HYBRID" on the chip, matching the persona's
  *  user-facing "Hybrid" framing. */
-function siteTypeChipLabel(type: ActiveSite['type']): string {
-  return type === 'HYBRID_HUB' ? 'HYBRID' : type;
+function siteTypeChipLabel(site: ActiveSite): string {
+  if (site.brand === 'farmerj') return site.type === 'ALL' ? 'ALL SHOPS' : 'SHOP';
+  return site.type === 'HYBRID_HUB' ? 'HYBRID' : site.type;
 }
 
 /** One-line "what kind of site this is" caption used under the name. */
-function siteTypeCaption(type: ActiveSite['type']): string {
-  switch (type) {
+function siteTypeCaption(site: ActiveSite): string {
+  // Farmer J has no hub/spoke vocabulary. Every shop is a scratch kitchen.
+  if (site.brand === 'farmerj') {
+    return site.type === 'ALL' ? 'All 19 shops' : 'Shop kitchen';
+  }
+  switch (site.type) {
     case 'ALL':
       return 'All sites';
     case 'HUB':
@@ -147,7 +152,8 @@ export default function SiteSwitcher({ siteName, compact = false }: SiteSwitcher
     setMenuPos({
       left: r.left,
       top: r.bottom + 6,
-      width: Math.max(r.width, 280),
+      // Wide enough that a two-word shop name plus its chip stays on one line.
+      width: Math.max(r.width, 360),
     });
   }, [open]);
 
@@ -224,7 +230,7 @@ export default function SiteSwitcher({ siteName, compact = false }: SiteSwitcher
                   marginTop: '1px',
                 }}
               >
-                {siteTypeCaption(activeSite.type)} · Switch
+                {siteTypeCaption(activeSite)} · Switch
               </span>
             </span>
 
@@ -273,9 +279,11 @@ export default function SiteSwitcher({ siteName, compact = false }: SiteSwitcher
               background: 'var(--color-bg-surface)',
             }}
           >
-            Site
+            {activeSite.brand === 'farmerj' ? 'Farmer J shop' : 'Site'}
           </div>
-          <div style={{ padding: 4 }}>
+          {/* Farmer J has 20 rows; cap the list height so it scrolls
+              rather than running off the bottom of the viewport. */}
+          <div style={{ padding: 4, maxHeight: 'min(520px, 70vh)', overflowY: 'auto' }}>
             {sites.map(site => (
               <SiteRow
                 key={site.id}
@@ -375,7 +383,7 @@ function SiteRow({
               color: siteTypeTheme(site.type).chipFg,
             }}
           >
-            {siteTypeChipLabel(site.type)}
+            {siteTypeChipLabel(site)}
           </span>
         </span>
         <span

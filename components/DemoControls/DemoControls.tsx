@@ -8,6 +8,7 @@ import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import {
   isDemoBuild,
   isBrandSwitchable,
+  isFarmerJDemo,
   DEMO_CUSTOMERS,
   DEMO_CUSTOMER_ID,
   setDemoBrand,
@@ -216,10 +217,18 @@ const VIEW_OPTIONS: { id: FranchiseViewMode; label: string }[] = [
   { id: 'group', label: 'Franchise admin' },
 ];
 
-const BRAND_OPTIONS: { id: 'pret' | 'bk'; label: string; activeSiteId: string }[] = [
-  { id: 'pret', label: 'Pret', activeSiteId: 'fitzroy-espresso' },
-  { id: 'bk', label: 'Burger King', activeSiteId: 'burger-king-stratford' },
+const BRAND_OPTIONS: { id: 'pret' | 'bk' | 'farmerj'; label: string; activeSiteId: string; landing: string }[] = [
+  { id: 'pret', label: 'Pret', activeSiteId: 'fitzroy-espresso', landing: '/production' },
+  { id: 'bk', label: 'Burger King', activeSiteId: 'burger-king-stratford', landing: '/production' },
+  { id: 'farmerj', label: 'Farmer J', activeSiteId: 'fj-marylebone', landing: '/production/day' },
 ];
+
+const BRAND_HINT: Record<'pret' | 'bk' | 'farmerj', string> = {
+  pret: 'Pret is a hub-and-spoke estate — the hub bakes and dispatches to spokes.',
+  bk: 'Burger King is a standalone hot-production restaurant — plan + make, no dispatch.',
+  farmerj:
+    'Farmer J scratch-cooks in every shop — day plan in cast irons and batches, prep by shelf life, no hub.',
+};
 
 function PanelBody({ extraSection }: { extraSection?: ReactNode }) {
   const router = useRouter();
@@ -267,6 +276,9 @@ function PanelBody({ extraSection }: { extraSection?: ReactNode }) {
         </div>
       )}
 
+      {/* The Farmer J customer build is locked to Farmer J shops, so the
+          production-brand pill is hidden there. */}
+      {!isFarmerJDemo && (
       <div>
         <div style={sectionLabelStyle}>Brand</div>
         <div style={{ display: 'flex', gap: 4 }}>
@@ -278,7 +290,7 @@ function PanelBody({ extraSection }: { extraSection?: ReactNode }) {
                 type="button"
                 onClick={() => {
                   setActiveSiteId(b.activeSiteId);
-                  router.push('/production');
+                  router.push(b.landing);
                 }}
                 style={pillOptionStyle(active)}
               >
@@ -295,9 +307,10 @@ function PanelBody({ extraSection }: { extraSection?: ReactNode }) {
             marginTop: 6,
           }}
         >
-          Burger King is a standalone hot-production restaurant — plan + make, no dispatch.
+          {BRAND_HINT[brand]}
         </div>
       </div>
+      )}
 
       <div>
         <div style={sectionLabelStyle}>View</div>

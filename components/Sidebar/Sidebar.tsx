@@ -34,6 +34,11 @@ import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import { useFranchise } from '@/components/Franchise/FranchiseContext';
 import { ESTATE_SITES } from '@/components/Stock/fixtures';
 import { getStockStatus } from '@/components/Stock/status';
+import {
+  FJ_PLAN_HOME,
+  FJ_RUN_HOME,
+  isFarmerJRunPath,
+} from '@/components/Production/farmerj/nav';
 
 export default function Sidebar() {
   const router = useRouter();
@@ -82,6 +87,7 @@ export default function Sidebar() {
     ...RUN_PRODUCTION_SUFFIXES.map(s => `/prod-2/production${s}`),
   ];
   const isRunProductionPath = (p: string) => {
+    if (isFarmerJ) return isFarmerJRunPath(p);
     if (
       isBurgerKing &&
       (p === '/production/board' || p.startsWith('/production/board/'))
@@ -109,7 +115,8 @@ export default function Sidebar() {
   // don't dispatch (the hub does), don't match invoices or own credit
   // notes (estate-level), and don't see analytics / compare-sites
   // (estate-level performance views).
-  const { isSpoke, isHub, isProducingHybrid, isAllSites, isBurgerKing, activeSiteId } = useActiveSite();
+  const { isSpoke, isHub, isProducingHybrid, isAllSites, isBurgerKing, isFarmerJ, activeSiteId } =
+    useActiveSite();
   // In the franchise-admin "group view" the operator sits above the whole
   // group, so the sidebar surfaces a dedicated entry back to the group
   // overview alongside the normal store nav.
@@ -196,7 +203,9 @@ export default function Sidebar() {
             they don't send. */}
         <NavGroup
           title={
-            isSpoke
+            isFarmerJ
+              ? 'Kitchen'
+              : isSpoke
               ? 'Plan & order'
               : dispatchesToStores
                 ? 'Make, plan & dispatch'
@@ -205,7 +214,29 @@ export default function Sidebar() {
           showDivider={true}
           compact={compact}
         >
-          {isSpoke ? (
+          {isFarmerJ ? (
+            // Farmer J: every shop scratch-cooks for itself. Two entries,
+            // named the way a kitchen lead thinks about the day rather
+            // than in Pret's "production" vocabulary. Today = day plan,
+            // prep list, sections, close. Plan = week plan, order sheet,
+            // Jana's shops board and setup.
+            <>
+              <NavItem
+                label="Today's kitchen"
+                icon={ChefHat}
+                compact={compact}
+                active={isFarmerJRunPath(pathname)}
+                onClick={() => router.push(FJ_RUN_HOME)}
+              />
+              <NavItem
+                label="Plan the week"
+                icon={CalendarClock}
+                compact={compact}
+                active={isProductionPath(pathname) && !isFarmerJRunPath(pathname)}
+                onClick={() => router.push(FJ_PLAN_HOME)}
+              />
+            </>
+          ) : isSpoke ? (
             // Spoke keeps a single Plan production entry — they don't
             // run production (they receive + sell), so the floor/plan
             // split a hub gets doesn't apply here.

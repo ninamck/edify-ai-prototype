@@ -13,6 +13,7 @@
 
 import type { SiteId } from './fixtures';
 import { BK_SITE_ID } from './bkFixtures';
+import { FJ_ALL_SHOPS_ID, FJ_SHOPS } from './farmerj/shops';
 
 export type ProductionSiteOption = {
   /** Underlying fixture site id — what state/data layers actually use. */
@@ -35,6 +36,15 @@ export const PRODUCTION_SITE_OPTIONS: ProductionSiteOption[] = [
   // persona is active (see ProductionSiteContext), so it never mixes with
   // the Pret site picker in practice.
   { id: BK_SITE_ID,              label: 'Burger King — Stratford', tag: 'YOUR SITE' },
+  // Farmer J — 19 scratch-kitchen shops plus Jana's All shops roll-up.
+  // Each Farmer J persona pins its own shop id, so like Burger King these
+  // never appear in the Pret picker.
+  { id: FJ_ALL_SHOPS_ID,         label: 'Farmer J · All shops',   tag: 'YOUR SITE' },
+  ...FJ_SHOPS.map<ProductionSiteOption>(shop => ({
+    id: shop.id,
+    label: `Farmer J ${shop.name}`,
+    tag: 'YOUR SITE',
+  })),
 ];
 
 /**

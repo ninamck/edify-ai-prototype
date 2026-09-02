@@ -14,6 +14,11 @@ import SpokeAdhocRequestCard from '@/components/Production/SpokeAdhocRequestCard
 import EndProductionControl from '@/components/Production/EndProductionControl';
 import { useProductionSite } from '@/components/Production/ProductionSiteContext';
 import { DEMO_TODAY } from '@/components/Production/fixtures';
+import {
+  FJ_PLAN_TABS,
+  FJ_RUN_TABS,
+  isFarmerJRunPath,
+} from '@/components/Production/farmerj/nav';
 
 const SPOKE_PERSONA_SITE_ID = 'site-spoke-south';
 const SPOKE_PERSONA_HUB_ID = 'hub-central';
@@ -147,10 +152,14 @@ const BK_PLAN_TABS: SubTab[] = [
   { id: 'plan', label: 'Plan', href: '/production/plan' },
 ];
 
+// Farmer J's tab strips live in `components/Production/farmerj/nav.ts`
+// (shared with the sidebar). See that file for the Run / Plan rationale.
+
 export default function ProductionLayout({ children }: { children: React.ReactNode }) {
   const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
   const pathname = usePathname();
-  const { isSpoke, isHybrid, isStandalone, isProducingHybrid, isBurgerKing } = useActiveSite();
+  const { isSpoke, isHybrid, isStandalone, isProducingHybrid, isBurgerKing, isFarmerJ } =
+    useActiveSite();
 
   // Persona drives the tab set. Every baking persona (Hub, Standalone,
   // Hybrid, producing HYBRID_HUB) now gets a Run/Plan split so the chrome
@@ -159,8 +168,16 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
   // so they keep their single strip. Burger King gets its own trimmed
   // hot-production strips (crew line + drop plan).
   const isSelfProducing = isHybrid || isStandalone || isProducingHybrid;
-  const productionGroup = productionGroupForPath(pathname, isBurgerKing);
-  const subTabs = isBurgerKing
+  const productionGroup = isFarmerJ
+    ? isFarmerJRunPath(pathname)
+      ? 'run'
+      : 'plan'
+    : productionGroupForPath(pathname, isBurgerKing);
+  const subTabs = isFarmerJ
+    ? productionGroup === 'run'
+      ? FJ_RUN_TABS
+      : FJ_PLAN_TABS
+    : isBurgerKing
     ? productionGroup === 'run'
       ? BK_RUN_TABS
       : BK_PLAN_TABS
@@ -182,7 +199,11 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
   const isBkPrep =
     isBurgerKing &&
     (pathname === '/production/prep' || pathname.startsWith('/production/prep/'));
-  const headerLabel = isSpoke
+  const headerLabel = isFarmerJ
+    ? productionGroup === 'run'
+      ? 'Kitchen today'
+      : 'Plan the week'
+    : isSpoke
     ? 'Production'
     : isBurgerKing
       ? isBkOrders
@@ -265,7 +286,10 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
                   id="production-nav-actions"
                   style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                 >
-                  {!isSpoke && productionGroup === 'run' && (
+                  {/* Farmer J closes the day from its own Close tab
+                      (carryover count), so the Pret End production
+                      control stays off its chrome. */}
+                  {!isSpoke && !isFarmerJ && productionGroup === 'run' && (
                     <RunNavEndProductionSlot />
                   )}
                 </div>
@@ -280,8 +304,11 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
                 }
               />
               {/* Quinn lives in the header; the floating bottom-right
-                  trigger is suppressed below via `hideTrigger`. */}
-              <QuinnTrigger />
+                  trigger is suppressed below via `hideTrigger`. Quinn's
+                  production panel reads the Pret plan graph, so it is
+                  off for Farmer J until its own kitchen assistant lands
+                  in the Sections step. */}
+              {!isFarmerJ && <QuinnTrigger />}
             </>
           }
         />
@@ -301,7 +328,7 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
         </div>
       </div>
 
-      <QuinnProductionPanel hideTrigger />
+      {!isFarmerJ && <QuinnProductionPanel hideTrigger />}
     </div>
     </HubOperatorProviders>
   );

@@ -25,6 +25,13 @@ import {
 
 import type { Brand } from '@/components/Production/bkFixtures';
 import { BK_SITE_ID } from '@/components/Production/bkFixtures';
+import {
+  FJ_ALL_SHOPS_ID,
+  FJ_DEFAULT_SHOP_ID,
+  FJ_SHOPS,
+  shopCaption,
+} from '@/components/Production/farmerj/shops';
+import { isFarmerJDemo } from '@/lib/demoConfig';
 
 export type ActiveSiteType = 'HUB' | 'SPOKE' | 'HYBRID' | 'HYBRID_HUB' | 'STANDALONE' | 'ALL';
 
@@ -113,9 +120,40 @@ export const ACTIVE_SITES: ActiveSite[] = [
     productionSiteId: BK_SITE_ID,
     caption: 'Burger King · Hot production',
   },
+  // Farmer J. Nineteen self-producing shops plus Jana's "All shops" meta
+  // persona. Every shop is STANDALONE: scratch kitchen in the basement,
+  // main line and second make line upstairs, no hub anywhere. The shop
+  // list itself lives in `farmerj/shops.ts` so the production fixtures
+  // and the shell read the same 19 rows.
+  {
+    id: FJ_ALL_SHOPS_ID,
+    name: 'All shops',
+    type: 'ALL',
+    brand: 'farmerj',
+    productionSiteId: FJ_ALL_SHOPS_ID,
+    caption: 'Farmer J · Every shop at once (Jana)',
+  },
+  ...FJ_SHOPS.map<ActiveSite>(shop => ({
+    id: shop.id,
+    name: `Farmer J ${shop.name}`,
+    type: 'STANDALONE',
+    brand: 'farmerj',
+    productionSiteId: shop.id,
+    caption: shopCaption(shop),
+  })),
 ];
 
-const DEFAULT_ACTIVE_SITE_ID = 'fitzroy-espresso';
+/** Personas visible for a given brand. Farmer J shops only ever appear
+ *  when a Farmer J shop is active (or on the Farmer J demo build); the
+ *  Pret + Burger King personas keep sharing one list as before. */
+export function sitesForBrand(brand: Brand): ActiveSite[] {
+  if (brand === 'farmerj' || isFarmerJDemo) {
+    return ACTIVE_SITES.filter(s => s.brand === 'farmerj');
+  }
+  return ACTIVE_SITES.filter(s => s.brand !== 'farmerj');
+}
+
+const DEFAULT_ACTIVE_SITE_ID = isFarmerJDemo ? FJ_DEFAULT_SHOP_ID : 'fitzroy-espresso';
 
 type ActiveSiteContextValue = {
   sites: ActiveSite[];
@@ -140,9 +178,35 @@ type ActiveSiteContextValue = {
   brand: Brand;
   /** True when the active persona is the Burger King restaurant. */
   isBurgerKing: boolean;
+  /** True when the active persona is a Farmer J shop or Jana's All shops. */
+  isFarmerJ: boolean;
   /** Explicit production-fixture site id for the persona, when it pins one. */
   productionSiteId?: string;
 };
+
+function deriveValue(
+  activeSite: ActiveSite,
+  activeSiteId: string,
+  setActiveSiteId: (id: string) => void,
+): ActiveSiteContextValue {
+  const brand: Brand = activeSite.brand ?? 'pret';
+  return {
+    sites: sitesForBrand(brand),
+    activeSiteId,
+    activeSite,
+    setActiveSiteId,
+    isHub: activeSite.type === 'HUB',
+    isSpoke: activeSite.type === 'SPOKE',
+    isHybrid: activeSite.type === 'HYBRID',
+    isProducingHybrid: activeSite.type === 'HYBRID_HUB',
+    isStandalone: activeSite.type === 'STANDALONE' || activeSite.type === 'ALL',
+    isAllSites: activeSite.type === 'ALL',
+    brand,
+    isBurgerKing: brand === 'bk',
+    isFarmerJ: brand === 'farmerj',
+    productionSiteId: activeSite.productionSiteId,
+  };
+}
 
 const ActiveSiteContext = createContext<ActiveSiteContextValue | null>(null);
 
@@ -154,8 +218,11 @@ export function ActiveSiteProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored && ACTIVE_SITES.some(s => s.id === stored)) {
-        setActiveSiteIdState(stored);
+      const match = stored ? ACTIVE_SITES.find(s => s.id === stored) : undefined;
+      // The Farmer J demo build never shows another brand's persona, even
+      // if one was left in localStorage by an internal session.
+      if (match && (!isFarmerJDemo || match.brand === 'farmerj')) {
+        setActiveSiteIdState(match.id);
       }
     } catch {
       // ignore — localStorage unavailable, just stay on default
@@ -174,23 +241,10 @@ export function ActiveSiteProvider({ children }: { children: React.ReactNode }) 
 
   const value = useMemo<ActiveSiteContextValue>(() => {
     const activeSite =
-      ACTIVE_SITES.find(s => s.id === activeSiteId) ?? ACTIVE_SITES[0];
-    return {
-      sites: ACTIVE_SITES,
-      activeSiteId,
-      activeSite,
-      setActiveSiteId,
-      isHub: activeSite.type === 'HUB',
-      isSpoke: activeSite.type === 'SPOKE',
-      isHybrid: activeSite.type === 'HYBRID',
-      isProducingHybrid: activeSite.type === 'HYBRID_HUB',
-      isStandalone:
-        activeSite.type === 'STANDALONE' || activeSite.type === 'ALL',
-      isAllSites: activeSite.type === 'ALL',
-      brand: activeSite.brand ?? 'pret',
-      isBurgerKing: (activeSite.brand ?? 'pret') === 'bk',
-      productionSiteId: activeSite.productionSiteId,
-    };
+      ACTIVE_SITES.find(s => s.id === activeSiteId) ??
+      ACTIVE_SITES.find(s => s.id === DEFAULT_ACTIVE_SITE_ID) ??
+      ACTIVE_SITES[0];
+    return deriveValue(activeSite, activeSiteId, setActiveSiteId);
   }, [activeSiteId, setActiveSiteId]);
 
   return <ActiveSiteContext.Provider value={value}>{children}</ActiveSiteContext.Provider>;
@@ -201,23 +255,9 @@ export function useActiveSite(): ActiveSiteContextValue {
   if (!ctx) {
     // Safe defaults so components used outside the provider (e.g. in
     // isolated tests) don't crash. Reads as the default hub persona.
-    const fallback = ACTIVE_SITES[0];
-    return {
-      sites: ACTIVE_SITES,
-      activeSiteId: fallback.id,
-      activeSite: fallback,
-      setActiveSiteId: () => {},
-      isHub: fallback.type === 'HUB',
-      isSpoke: fallback.type === 'SPOKE',
-      isHybrid: fallback.type === 'HYBRID',
-      isProducingHybrid: fallback.type === 'HYBRID_HUB',
-      isStandalone:
-        fallback.type === 'STANDALONE' || fallback.type === 'ALL',
-      isAllSites: fallback.type === 'ALL',
-      brand: fallback.brand ?? 'pret',
-      isBurgerKing: (fallback.brand ?? 'pret') === 'bk',
-      productionSiteId: fallback.productionSiteId,
-    };
+    const fallback =
+      ACTIVE_SITES.find(s => s.id === DEFAULT_ACTIVE_SITE_ID) ?? ACTIVE_SITES[0];
+    return deriveValue(fallback, fallback.id, () => {});
   }
   return ctx;
 }
