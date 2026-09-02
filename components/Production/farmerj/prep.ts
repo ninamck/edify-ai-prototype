@@ -18,7 +18,7 @@
  * type over any of them; the order sheet follows the typed number.
  */
 
-import { batchesLabel, batchesToNumber, explode, roundComponent, type Consumer } from './cascade';
+import { batchesLabel, batchesToNumber, explode, inputScale, roundComponent, type Consumer } from './cascade';
 import { addDays, daysCoveredFrom, isProductionDay, weekdayOf } from './calendar';
 import { computeDayPlan, type DayRecord } from './FjPlanStore';
 import {
@@ -128,7 +128,7 @@ function suggestedQtyFor(c: Component, unit: PrepUnit, netGrams: number): number
 }
 
 function inputsFor(c: Component, gramsMade: number): PrepInput[] {
-  const scale = gramsMade / c.batch.fullG;
+  const scale = (gramsMade / c.batch.fullG) * inputScale(c);
   return c.inputs
     .map(l => {
       const grams = l.grams * scale;
@@ -173,7 +173,7 @@ export function computePrepDay(shopId: string, date: string, getRecord: GetRecor
     const override = overrides[c.id];
     const plannedQty = override ?? suggestedQty;
     const gramsMade = plannedQty * unit.gramsEach;
-    const grossGrams = c.inputs.reduce((n, l) => n + l.grams, 0) * (gramsMade / c.batch.fullG);
+    const grossGrams = c.inputs.reduce((n, l) => n + l.grams, 0) * (gramsMade / c.batch.fullG) * inputScale(c);
     const containers = c.container && c.containersPerBatch
       ? { count: Math.ceil((gramsMade / c.batch.fullG) * c.containersPerBatch - 0.001), name: CONTAINERS[c.container].name }
       : undefined;

@@ -1,16 +1,11 @@
 'use client';
 
-// /production/shops — Jana's cross-shop board. Every shop's plan status,
-// yield drift and waste for the day, with drill-in to coach live.
+// /production/shops — Jana's board. Every shop's plan for the day, status,
+// forecast, make-ahead groups due, yesterday's close, and a way into any
+// shop so she can coach live.
 
-import FjPlaceholder from '@/components/Production/farmerj/FjPlaceholder';
+import ShopsBoard from '@/components/Production/farmerj/ShopsBoard';
 
 export default function FjShopsPage() {
-  return (
-    <FjPlaceholder
-      title="Shops"
-      purpose="Jana's view across all 19 shops: who has approved today's plan, who is running ahead or behind forecast, where yield is drifting and where waste is climbing. Click a shop to open its day plan remotely and coach."
-      step={6}
-    />
-  );
+  return <ShopsBoard />;
 }

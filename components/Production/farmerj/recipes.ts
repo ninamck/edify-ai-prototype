@@ -150,7 +150,11 @@ export const CONTAINERS: Record<ContainerId, Container> = {
 /** Equipment limits that shape timing. Stated as facts about kit, never
  *  as batch multiples. */
 export const EQUIPMENT_LIMITS = {
+  /** Trays one oven holds (Chicken HTC: maximum six trays at once). */
   ovenTrays: 6,
+  /** Per shop, for the demo. Both are Setup settings. */
+  ovens: 2,
+  riceCookers: 2,
   riceCookerKitsAtOnce: 1,
   foodProcessorFillFraction: 0.5,
   chickpeaTinsMixedAtOnce: 4,
@@ -669,6 +673,16 @@ export const COMPONENTS: Record<string, Component> = {
 // ─────────────────────────────────────────────────────────────────────────────
 // Finished products (the only rows on the day plan)
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Yield loss the recipe book was written with, per component. Each
+ * component's `batch.fullG` is its inputs less this loss, so when Jana
+ * edits the percentage in Setup the inputs scale by the ratio of the two
+ * (see `inputScale` in cascade.ts). Captured before Setup can touch it.
+ */
+export const AUTHORED_YIELD_LOSS: Record<string, number> = Object.fromEntries(
+  Object.values(COMPONENTS).map(c => [c.id, c.yieldLossPct]),
+);
 
 export type ProductGroup = 'breakfast' | 'bases' | 'proteins' | 'hot-sides' | 'salads';
 

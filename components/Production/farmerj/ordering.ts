@@ -1,4 +1,4 @@
-import { batchesLabel, batchesToNumber, type Batches } from './cascade';
+import { batchesLabel, batchesToNumber, inputScale, type Batches } from './cascade';
 import { addDays, isShopOpen, planningWindowFor, weekdayLabel, type PlanningWindow } from './calendar';
 import { computeDayPlan, type DayRecord } from './FjPlanStore';
 import { computePrepDay, qtyLabel } from './prep';
@@ -75,7 +75,7 @@ export function computeIngredientNeeds(shopId: string, days: string[], getRecord
     const plan = computeDayPlan(shopId, date, record, getRecord(shopId, addDays(date, -1)).close);
     for (const need of Object.values(plan.explosion.components)) {
       if (need.component.section !== 'hot' || need.gramsMade <= 0) continue;
-      const scale = need.gramsMade / need.component.batch.fullG;
+      const scale = (need.gramsMade / need.component.batch.fullG) * inputScale(need.component);
       for (const inp of need.component.inputs) {
         if (INGREDIENTS[inp.ref]) add(inp.ref, date, inp.grams * scale, inp.grams * scale, need.component);
       }

@@ -12,6 +12,7 @@ import ManagerDashboard from '@/components/Dashboard/ManagerDashboard';
 import PlaytomicDashboard from '@/components/Dashboard/PlaytomicDashboard';
 import PlatoDashboard from '@/components/Dashboard/PlatoDashboard';
 import CulinaryCollectiveDashboard from '@/components/Dashboard/CulinaryCollective/CulinaryCollectiveDashboard';
+import FarmerJDashboard from '@/components/Dashboard/FarmerJDashboard';
 import MorningBriefingTimeline from '@/components/Feed/MorningBriefingTimeline';
 import BriefingDrawer, { briefingLabelForPhase } from '@/components/Feed/BriefingDrawer';
 import NoteForEdifyPopup from '@/components/Feed/NoteForEdifyPopup';
@@ -126,7 +127,7 @@ const MOBILE_SHELL_BREAKPOINT = '(max-width: 500px)';
 export default function HomeShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { activeSite } = useActiveSite();
+  const { activeSite, isFarmerJ } = useActiveSite();
   const flowParam = searchParams?.get('flow');
   const autoStartFlow =
     flowParam === 'recipe' || flowParam === 'integrity' || flowParam === 'pos-match'
@@ -333,6 +334,21 @@ export default function HomeShell() {
   );
 
   function renderRoleDashboard() {
+    // Farmer J follows the brand, not the persona: the dashboard reads the
+    // shop (or All shops) picked in the site switcher.
+    if (isFarmerJ) {
+      return (
+        <FarmerJDashboard
+          layout={currentLayout}
+          editing={editingDashboard}
+          onLayoutChange={updateCurrentLayout}
+          onToggleEdit={() => setEditingDashboard((v) => !v)}
+          onAddInsight={() => setAddInsightOpen(true)}
+          onRemovePinned={removePinnedChart}
+          toolbarLeadingControls={dateControls}
+        />
+      );
+    }
     if (briefingRole === 'culinary') {
       return (
         <CulinaryCollectiveDashboard

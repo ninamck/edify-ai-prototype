@@ -17,11 +17,11 @@
  * tasks off and the manager can move a task to another section.
  */
 
-import { batchesToNumber, type ProductPlan } from './cascade';
+import { batchesToNumber, inputScale, type ProductPlan } from './cascade';
 import { computeDayPlan, type DayPlan, type DayRecord } from './FjPlanStore';
 import { computePrepDay, qtyLabel, type PrepDay } from './prep';
 import { orderBoxesLabel } from './catering';
-import { COMPONENTS, CONTAINERS, INGREDIENTS, PRODUCT_GROUP_LABELS, type Component, type Section as SectionId } from './recipes';
+import { COMPONENTS, CONTAINERS, EQUIPMENT_LIMITS, INGREDIENTS, PRODUCT_GROUP_LABELS, type Component, type Section as SectionId } from './recipes';
 import { getShop } from './shops';
 import { hhmm } from './fjClock';
 
@@ -126,14 +126,13 @@ function loadMinutes(c: Component): number {
   return 10 + cookMinutes(c) + (c.restMinutes ?? 0);
 }
 
-/** Cooker or oven capacity in batches per load. Two rice cookers and two
- *  six-tray ovens per shop for the demo; both are Setup settings. */
-const RICE_COOKERS = 2;
-const OVEN_TRAYS = 12;
-
+/** Cooker or oven capacity in batches per load, from the Setup screen's
+ *  equipment counts. */
 function batchesPerLoad(c: Component): number {
-  if (c.container === 'blue-box') return c.id === 'rice-cooked' ? RICE_COOKERS : 1;
-  if (c.container === 'oven-tray' && c.containersPerBatch) return Math.max(1, Math.floor(OVEN_TRAYS / c.containersPerBatch));
+  if (c.container === 'blue-box') return c.id === 'rice-cooked' ? EQUIPMENT_LIMITS.riceCookers : 1;
+  if (c.container === 'oven-tray' && c.containersPerBatch) {
+    return Math.max(1, Math.floor((EQUIPMENT_LIMITS.ovenTrays * EQUIPMENT_LIMITS.ovens) / c.containersPerBatch));
+  }
   return 1;
 }
 
@@ -409,7 +408,7 @@ export type ScaledInput = { name: string; grams: number; label: string };
 export function inputsForTask(task: SectionTask): ScaledInput[] {
   const comp = task.componentId ? COMPONENTS[task.componentId] : undefined;
   if (!comp) return [];
-  const batches = task.batches ?? 1;
+  const batches = (task.batches ?? 1) * inputScale(comp);
   return comp.inputs.map(l => {
     const grams = l.grams * batches;
     const sub = COMPONENTS[l.ref];

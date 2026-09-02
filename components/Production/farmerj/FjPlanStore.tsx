@@ -7,6 +7,7 @@ import { cateringFor, cateringGrams, type CateringOrder } from './catering';
 import { addDays, planningWindowFor, referenceDaysFor, type ReferenceDay } from './calendar';
 import { PRODUCT_BY_ID, PRODUCTS, type FinishedProduct } from './recipes';
 import { averageDemand, type DayDemand } from './sales';
+import { applySettings, defaultSettings, normaliseSettings, type FjSettings } from './fjSettings';
 
 /**
  * Everything a manager changes on a Farmer J plan, per shop and day, kept
@@ -48,6 +49,7 @@ export type DayRecord = {
 type StoreState = Record<string, DayRecord>;
 
 const STORAGE_KEY = 'edify.farmerj.plan.v1';
+const SETTINGS_KEY = 'edify.farmerj.settings.v1';
 
 const emptyRecord = (): DayRecord => ({ overrides: {}, flexPct: 0, cancelledOrders: [], excludedReferenceDays: [] });
 
@@ -60,12 +62,16 @@ type Ctx = {
   get: (shopId: string, date: string) => DayRecord;
   update: (shopId: string, date: string, fn: (r: DayRecord) => DayRecord) => void;
   reset: () => void;
+  /** Jana's central settings (draft, published, publish log). */
+  settings: FjSettings;
+  updateSettings: (fn: (s: FjSettings) => FjSettings) => void;
 };
 
 const FjPlanContext = createContext<Ctx | null>(null);
 
 export function FjPlanProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<StoreState>({});
+  const [settings, setSettings] = useState<FjSettings>(defaultSettings);
   const [hydrated, setHydrated] = useState(false);
 
   // Hydrate once on mount. Reading localStorage in the initialiser would
@@ -77,6 +83,8 @@ export function FjPlanProvider({ children }: { children: ReactNode }) {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (raw) setState(JSON.parse(raw));
+      const rawSettings = window.localStorage.getItem(SETTINGS_KEY);
+      if (rawSettings) setSettings(normaliseSettings(JSON.parse(rawSettings)));
     } catch {
       // ignore
     }
@@ -87,10 +95,15 @@ export function FjPlanProvider({ children }: { children: ReactNode }) {
     if (!hydrated) return;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     } catch {
       // ignore
     }
-  }, [state, hydrated]);
+  }, [state, settings, hydrated]);
+
+  // The engines read the recipe book's constants, so the published
+  // settings are written into them here, before any child derives a plan.
+  applySettings(settings.published);
 
   const get = useCallback((shopId: string, date: string) => state[keyFor(shopId, date)] ?? emptyRecord(), [state]);
   const update = useCallback((shopId: string, date: string, fn: (r: DayRecord) => DayRecord) => {
@@ -99,9 +112,16 @@ export function FjPlanProvider({ children }: { children: ReactNode }) {
       return { ...s, [k]: fn(s[k] ?? emptyRecord()) };
     });
   }, []);
-  const reset = useCallback(() => setState({}), []);
+  const reset = useCallback(() => {
+    setState({});
+    setSettings(defaultSettings());
+  }, []);
+  const updateSettings = useCallback((fn: (s: FjSettings) => FjSettings) => setSettings(s => fn(s)), []);
 
-  const value = useMemo(() => ({ state, get, update, reset }), [state, get, update, reset]);
+  const value = useMemo(
+    () => ({ state, get, update, reset, settings, updateSettings }),
+    [state, get, update, reset, settings, updateSettings],
+  );
   return <FjPlanContext.Provider value={value}>{children}</FjPlanContext.Provider>;
 }
 
@@ -200,7 +220,9 @@ export function useFjDayPlan(shopId: string, date: string) {
   const store = useFjPlanStore();
   const record = store.get(shopId, date);
   const yesterday = store.get(shopId, addDays(date, -1));
-  const plan = useMemo(() => computeDayPlan(shopId, date, record, yesterday.close), [shopId, date, record, yesterday.close]);
+  const published = store.settings.published;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- published settings change the recipe book the plan derives from
+  const plan = useMemo(() => computeDayPlan(shopId, date, record, yesterday.close), [shopId, date, record, yesterday.close, published]);
 
   const setOverride = useCallback(
     (productId: string, line: 'main' | 'second', units: number | undefined) =>

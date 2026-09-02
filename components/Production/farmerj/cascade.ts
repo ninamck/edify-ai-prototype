@@ -18,6 +18,7 @@
  */
 
 import {
+  AUTHORED_YIELD_LOSS,
   CONTAINERS,
   COMPONENTS,
   INGREDIENTS,
@@ -120,6 +121,17 @@ export type PlanOptions = {
   /** Manager overrides in units, per product and line. */
   overrides?: Record<string, { main?: number; second?: number }>;
 };
+
+/**
+ * How much more (or less) raw input a component needs than the recipe
+ * book wrote down, because Jana has changed its yield loss in Setup.
+ * 30% authored and 35% set: every input scales by 0.70 / 0.65.
+ */
+export function inputScale(c: Component): number {
+  const authored = AUTHORED_YIELD_LOSS[c.id] ?? c.yieldLossPct;
+  const now = Math.min(99, c.yieldLossPct);
+  return (1 - authored / 100) / (1 - now / 100);
+}
 
 export function fullBatchGrams(p: FinishedProduct): number {
   return p.batch.fullG * (1 - p.yieldLossPct / 100);
@@ -396,7 +408,7 @@ export function explode(plans: ProductPlan[], direct: Record<string, { grams: nu
       changed = true;
       const delta = need.gramsMade - already;
       expandedGrams[need.componentId] = need.gramsMade;
-      const scale = delta / need.component.batch.fullG;
+      const scale = (delta / need.component.batch.fullG) * inputScale(need.component);
       for (const line of need.component.inputs) {
         const grams = line.grams * scale;
         const from: Consumer = { ref: need.componentId, name: need.component.name, grams };
@@ -418,7 +430,7 @@ export function explode(plans: ProductPlan[], direct: Record<string, { grams: nu
   }
 
   for (const need of Object.values(comps)) {
-    need.grossGrams = need.component.inputs.reduce((n, l) => n + l.grams, 0) * (need.gramsMade / need.component.batch.fullG);
+    need.grossGrams = need.component.inputs.reduce((n, l) => n + l.grams, 0) * (need.gramsMade / need.component.batch.fullG) * inputScale(need.component);
     need.shared = need.consumers.length > 1;
   }
   for (const need of Object.values(ings)) {

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'next/navigation';
 import { Calculator, CheckCircle2, ChevronRight, ClipboardCheck, GitBranch, Lock, LockOpen, Package, RotateCcw, Store, TrendingUp, X } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
@@ -16,7 +17,7 @@ import { COMPONENTS, INGREDIENTS, PRODUCT_BY_ID, PRODUCT_GROUP_LABELS, type Prod
 import { daySales, fohReminders } from './sales';
 import { FJ_ALL_SHOPS_ID, getShop } from './shops';
 
-const GROUP_ORDER: ProductGroup[] = ['breakfast', 'bases', 'proteins', 'hot-sides', 'salads'];
+export const GROUP_ORDER: ProductGroup[] = ['breakfast', 'bases', 'proteins', 'hot-sides', 'salads'];
 type GroupFilter = 'all' | ProductGroup;
 
 /**
@@ -31,8 +32,10 @@ type GroupFilter = 'all' | ProductGroup;
  * column each, and the row total is batches.
  */
 export default function DayPlan() {
+  const searchParams = useSearchParams();
+  const linked = searchParams?.get('date') ?? null;
   const { isFarmerJ, productionSiteId } = useActiveSite();
-  const [date, setDate] = useState(FJ_DEMO_TODAY);
+  const [date, setDate] = useState(linked && /^\d{4}-\d{2}-\d{2}$/.test(linked) ? linked : FJ_DEMO_TODAY);
   const shopId = productionSiteId ?? FJ_ALL_SHOPS_ID;
 
   if (!isFarmerJ) return <Notice>Switch the Brand pill in demo controls to Farmer J to see this screen.</Notice>;
@@ -408,7 +411,7 @@ function FjApproveBar({
 
 // ─── Toolbar pieces ───────────────────────────────────────────────────────────
 
-function PillTabs<T extends string>({ tabs, value, onChange, ariaLabel }: { tabs: { id: T; label: string }[]; value: T; onChange: (v: T) => void; ariaLabel: string }) {
+export function PillTabs<T extends string>({ tabs, value, onChange, ariaLabel }: { tabs: { id: T; label: string }[]; value: T; onChange: (v: T) => void; ariaLabel: string }) {
   return (
     <div role="tablist" aria-label={ariaLabel} style={{ display: 'flex', background: 'var(--color-bg-hover)', borderRadius: 100, padding: 3, width: 'fit-content' }}>
       {tabs.map(t => {
@@ -900,7 +903,7 @@ export function Notice({ children }: { children: ReactNode }) {
 
 // ─── Styles (copied from RecipeFirstGrid / PlanConfirmBar so both surfaces read as one) ──
 
-function headStyle({ left, sticky, minWidth, totalCol }: { left?: boolean; sticky?: boolean; minWidth?: number; totalCol?: boolean }): CSSProperties {
+export function headStyle({ left, sticky, minWidth, totalCol }: { left?: boolean; sticky?: boolean; minWidth?: number; totalCol?: boolean }): CSSProperties {
   return {
     padding: '10px 8px',
     background: 'var(--color-bg-surface)',
@@ -923,7 +926,7 @@ function headStyle({ left, sticky, minWidth, totalCol }: { left?: boolean; stick
   };
 }
 
-function bodyStyle({ left, sticky, focused, totalCol }: { left?: boolean; sticky?: boolean; focused?: boolean; totalCol?: boolean }): CSSProperties {
+export function bodyStyle({ left, sticky, focused, totalCol }: { left?: boolean; sticky?: boolean; focused?: boolean; totalCol?: boolean }): CSSProperties {
   return {
     padding: '10px 8px',
     background: focused ? 'var(--color-info-light)' : '#ffffff',
@@ -941,7 +944,7 @@ function bodyStyle({ left, sticky, focused, totalCol }: { left?: boolean; sticky
   };
 }
 
-function footStyle({ left, sticky, totalCol }: { left?: boolean; sticky?: boolean; totalCol?: boolean } = {}): CSSProperties {
+export function footStyle({ left, sticky, totalCol }: { left?: boolean; sticky?: boolean; totalCol?: boolean } = {}): CSSProperties {
   return {
     padding: '12px 8px',
     background: 'var(--color-bg-surface)',
@@ -962,7 +965,7 @@ function footStyle({ left, sticky, totalCol }: { left?: boolean; sticky?: boolea
   };
 }
 
-function footSubStyle({ left, sticky, totalCol }: { left?: boolean; sticky?: boolean; totalCol?: boolean } = {}): CSSProperties {
+export function footSubStyle({ left, sticky, totalCol }: { left?: boolean; sticky?: boolean; totalCol?: boolean } = {}): CSSProperties {
   return {
     ...footStyle({ left, sticky, totalCol }),
     padding: '10px 8px',
@@ -972,11 +975,11 @@ function footSubStyle({ left, sticky, totalCol }: { left?: boolean; sticky?: boo
   };
 }
 
-const numStyle: CSSProperties = { fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--color-text-primary)' };
-const moneyStyle: CSSProperties = { fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--color-text-secondary)' };
+export const numStyle: CSSProperties = { fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--color-text-primary)' };
+export const moneyStyle: CSSProperties = { fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--color-text-secondary)' };
 const cellSub: CSSProperties = { fontSize: 10, color: 'var(--color-text-muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums' };
 const fcStyle: CSSProperties = { fontSize: 10, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-muted)', letterSpacing: '0.02em' };
-const captionStrip: CSSProperties = { padding: '8px 30px', background: 'var(--color-bg-surface)', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--color-text-muted)', flexWrap: 'wrap' };
+export const captionStrip: CSSProperties = { padding: '8px 30px', background: 'var(--color-bg-surface)', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--color-text-muted)', flexWrap: 'wrap' };
 const refChip: CSSProperties = { fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, border: '1.5px solid', background: '#ffffff', cursor: 'pointer', fontFamily: 'var(--font-primary)', letterSpacing: '0.02em', whiteSpace: 'nowrap' };
 const undoStrip: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '8px 14px', marginBottom: 10, background: 'var(--color-warning-light)', border: '1px solid var(--color-warning-border)', borderRadius: 'var(--radius-card)', fontSize: 12, color: 'var(--color-text-primary)' };
 const linkButton: CSSProperties = { background: 'none', border: 'none', padding: 0, color: 'var(--color-link)', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'var(--font-primary)', textDecoration: 'underline' };

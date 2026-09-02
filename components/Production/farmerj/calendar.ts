@@ -21,6 +21,12 @@ import { getShop } from './shops';
 
 export const FJ_DEMO_TODAY = '2026-09-16';
 
+/** Wall-clock time on the demo day, for stamping actions the demo takes. */
+export function demoNowISO(): string {
+  const now = new Date();
+  return `${FJ_DEMO_TODAY}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`;
+}
+
 /** Day strip range, same as the Pret Plan and Today screens: yesterday on
  *  the far left, today second, twelve days drafting forward. */
 export const FJ_DAY_STRIP_DATES: string[] = [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => addDays('2026-09-16', n));
