@@ -159,7 +159,7 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
             {cancelledOrder && (
               <div style={undoStrip}>
                 <span>
-                  <strong>{cancelledOrder.customer}</strong> cancelled. Every row it touched has re-derived.
+                  <strong>{cancelledOrder.customer}</strong> cancelled.
                 </span>
                 <button type="button" style={linkButton} onClick={() => { toggleOrder(cancelledOrder.id); setJustCancelled(null); }}>
                   Undo
@@ -254,14 +254,6 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
                 </table>
               </div>
             </div>
-
-            <p style={footnote}>
-              {locked
-                ? 'Plan approved. Numbers are read-only; reopen from the bar above to change them.'
-                : 'Each cell is editable. Use the steppers to set cast irons on the main line and gastronorms on the second make line.'}{' '}
-              The faded <em>fc</em> number underneath is Edify&apos;s suggestion from the reference days, shown for reference. Catering lands on the second make line in gastronorms; the boxes ordered sit underneath. Batches follow both lines together, rounded to the half where the recipe allows. Tap a row for the working in portions and containers, and what it cascades to.
-              {plan.demand.modelled && ' Reference days are modelled from one real Marylebone Wednesday (16 April 2025).'}
-            </p>
 
             <FohCard shopId={shopId} date={date} isToday={isToday} />
           </div>
@@ -377,7 +369,7 @@ function FjApproveBar({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span style={bannerTitle}>{isToday ? 'Today\u2019s plan is approved and in the kitchen.' : `${weekdayLabel(plan.date)}\u2019s plan is approved.`}</span>
           <span style={bannerSub}>
-            Approved {at}{plan.record.approvedBy ? ` by ${plan.record.approvedBy}` : ''}. Prep list, sections and the order sheet follow these numbers. {approval.approvedDays.length} of {w.days.length} days in this window approved.
+            Approved {at}{plan.record.approvedBy ? ` by ${plan.record.approvedBy}` : ''} · {approval.approvedDays.length} of {w.days.length} days in this window approved.
           </span>
         </div>
         <button type="button" onClick={onReopen} style={reopenButton}>
@@ -396,11 +388,14 @@ function FjApproveBar({
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
           <span style={bannerTitle}>Approve {dayWord} plan</span>
-          <span style={bannerSub}>
-            {plan.totals.mainUnits} cast irons on the main line, {plan.totals.secondUnits} gastronorms on the second make line, {Math.round(plan.totals.batches * 2) / 2} batches.
-            {plan.overriddenCount > 0 ? ` ${plan.overriddenCount} ${plan.overriddenCount === 1 ? 'line' : 'lines'} set by hand.` : ''}
-            {approval.approvedDays.length > 0 ? ` ${approval.approvedDays.length} of ${w.days.length} days in this window already approved.` : ` Approving the window covers ${from} to ${to}; each morning you can still change the day.`}
-          </span>
+          {(plan.overriddenCount > 0 || approval.approvedDays.length > 0) && (
+            <span style={bannerSub}>
+              {[
+                plan.overriddenCount > 0 ? `${plan.overriddenCount} ${plan.overriddenCount === 1 ? 'line' : 'lines'} set by hand` : null,
+                approval.approvedDays.length > 0 ? `${approval.approvedDays.length} of ${w.days.length} days in this window approved` : null,
+              ].filter(Boolean).join(' · ')}
+            </span>
+          )}
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
@@ -671,7 +666,6 @@ function FohCard({ shopId, date, isToday }: { shopId: string; date: string; isTo
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
         <Store size={13} style={{ color: 'var(--color-text-secondary)' }} />
         <span style={{ fontSize: 12, fontWeight: 700 }}>Front of house, {isToday ? 'tomorrow' : shortDate(target)}</span>
-        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>· things the kitchen does not make, sent to the front-of-house manager the night before</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
         {reminders.map(r => (
@@ -723,7 +717,7 @@ function FjFocusPanel({ plan, day, onClose }: { plan: ProductPlan; day: DayPlanM
         </div>
 
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px 18px 32px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <Section icon={<TrendingUp size={13} />} title="Sold on the reference days" subtitle="Portions, whatever the format: tray, bowl, extra. Struck-through days are left out of the average.">
+          <Section icon={<TrendingUp size={13} />} title="Sold on the reference days">
             {perDay.map(r => (
               <Pair key={r.date} label={`${shortDate(r.date)}${r.anomaly ? ` · ${r.anomaly.reason}` : ''}`} value={`${r.demand ? Math.round(r.demand.portions) : 0} portions`} muted={!r.included} struck={!r.included} />
             ))}
@@ -731,7 +725,7 @@ function FjFocusPanel({ plan, day, onClose }: { plan: ProductPlan; day: DayPlanM
             <Pair label="Average" value={`${Math.round(plan.referencePortions)} portions`} bold />
           </Section>
 
-          <Section icon={<Calculator size={13} />} title="Production math" subtitle={`Counted in portions, then plated: one ${mainUnit} serves about ${perMain} portions, one gastronorm about ${perSecond}.`}>
+          <Section icon={<Calculator size={13} />} title="Production math">
             <Ledger label="Reference days" value={`${Math.round(plan.referencePortions)} portions`} />
             {plan.flexPct !== 0 && (
               <Ledger
@@ -755,14 +749,14 @@ function FjFocusPanel({ plan, day, onClose }: { plan: ProductPlan; day: DayPlanM
             <Ledger label={`Main line · ${mainUnit}s, ${perMain} portions each`} value={`${plan.main.plannedUnits}${plan.main.plannedUnits !== plan.main.suggestedUnits ? ` (fc ${plan.main.suggestedUnits})` : ''}`} edify />
             <Ledger label={`Second make line · gastronorms, ${perSecond} portions each`} value={`${plan.second.plannedUnits}${plan.second.plannedUnits !== plan.second.suggestedUnits ? ` (fc ${plan.second.suggestedUnits})` : ''}`} edify />
             <Divider />
+            <Ledger label={`Both lines, in ${mainUnit}s`} value={(plan.main.plannedUnits + plan.second.plannedUnits * plan.product.secondLineFraction).toFixed(1)} />
+            <Ledger label={`${mainUnit[0].toUpperCase()}${mainUnit.slice(1)}s per batch`} value={String(plan.product.unitsPerBatch)} />
+            <Ledger label="Rounding" value={plan.product.batch.halfG ? 'half batches' : 'whole batches'} />
+            <Divider />
             <Ledger label="Final plan" value={batchesLabel(plan.batches)} bold />
-            <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-              Both lines together fill the equivalent of {(plan.main.plannedUnits + plan.second.plannedUnits * plan.product.secondLineFraction).toFixed(1)} {mainUnit}s. One full batch fills {plan.product.unitsPerBatch}, so that is {batchesLabel(plan.batches)}, {plan.product.batch.halfG ? 'rounded up to the nearest half batch' : 'rounded up to whole batches'}.
-              {plan.overridden ? ' The manager changed the line counts; the batches follow the edited numbers.' : ''}
-            </p>
           </Section>
 
-          <Section icon={<GitBranch size={13} />} title="Cascades to" subtitle="Weighed in the basement, so shown in kilos. The team never sees these on the day plan; they arrive as tasks on the prep list and the section cards.">
+          <Section icon={<GitBranch size={13} />} title="Cascades to">
             {cascade.map(c => (
               <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '5px 0', borderBottom: '1px solid var(--color-border-subtle)' }}>
                 <span style={{ fontWeight: 600 }}>{c.name}</span>
@@ -817,9 +811,6 @@ function CateringPanel({ plan, locked, onToggle, onClose }: { plan: DayPlanModel
         </div>
 
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px 18px 32px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <p style={{ margin: 0, fontSize: 11, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-            Orders arrive from the catering platform and land on the second make line as gastronorms. Cancelling one re-derives every product it touched; nothing else on the plan moves. Restore puts it back.
-          </p>
           {plan.orders.length === 0 && <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-muted)' }}>No catering on this day.</p>}
           {plan.orders
             .slice()
@@ -989,7 +980,6 @@ const cellSub: CSSProperties = { fontSize: 10, color: 'var(--color-text-muted)',
 const fcStyle: CSSProperties = { fontSize: 10, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-muted)', letterSpacing: '0.02em' };
 const captionStrip: CSSProperties = { padding: '8px 30px', background: 'var(--color-bg-surface)', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--color-text-muted)', flexWrap: 'wrap' };
 const refChip: CSSProperties = { fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, border: '1.5px solid', background: '#ffffff', cursor: 'pointer', fontFamily: 'var(--font-primary)', letterSpacing: '0.02em', whiteSpace: 'nowrap' };
-const footnote: CSSProperties = { fontSize: 10, color: 'var(--color-text-muted)', marginTop: 10, lineHeight: 1.5, paddingLeft: 4 };
 const undoStrip: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '8px 14px', marginBottom: 10, background: 'var(--color-warning-light)', border: '1px solid var(--color-warning-border)', borderRadius: 'var(--radius-card)', fontSize: 12, color: 'var(--color-text-primary)' };
 const linkButton: CSSProperties = { background: 'none', border: 'none', padding: 0, color: 'var(--color-link)', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'var(--font-primary)', textDecoration: 'underline' };
 const cancelPill: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 7px', borderRadius: 999, background: '#ffffff', color: 'var(--color-text-secondary)', border: '1.5px solid var(--color-border)', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', cursor: 'pointer', fontFamily: 'var(--font-primary)', lineHeight: 1 };
