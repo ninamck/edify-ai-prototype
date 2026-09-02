@@ -21,6 +21,7 @@ import {
   CONTAINERS,
   COMPONENTS,
   INGREDIENTS,
+  PORTION_GRAMS,
   PRODUCT_BY_ID,
   type Component,
   type FinishedProduct,
@@ -127,6 +128,40 @@ export function fullBatchGrams(p: FinishedProduct): number {
 /** Grams of finished product one main-line unit holds. */
 export function gramsPerMainUnit(p: FinishedProduct): number {
   return fullBatchGrams(p) / p.unitsPerBatch;
+}
+
+/**
+ * The portion a GM pictures for this product: a tray protein (100 g), a
+ * tray base (150 g), a side (100 g), a breakfast pot (150 g). Used to turn
+ * grams back into portions and "portions per cast iron" on the screens,
+ * so the plan reads in kitchen words rather than kilos.
+ */
+export function portionGrams(p: FinishedProduct): number {
+  switch (p.group) {
+    case 'proteins': return PORTION_GRAMS.trayProtein;
+    case 'bases': return PORTION_GRAMS.trayBase;
+    case 'breakfast': return 150;
+    default: return PORTION_GRAMS.side;
+  }
+}
+
+export function portionsOf(p: FinishedProduct, grams: number): number {
+  return Math.round(grams / portionGrams(p));
+}
+
+/** Portions one main-line container serves. */
+export function portionsPerMainUnit(p: FinishedProduct): number {
+  return Math.round(gramsPerMainUnit(p) / portionGrams(p));
+}
+
+/** Portions one second-make-line container serves. */
+export function portionsPerSecondUnit(p: FinishedProduct): number {
+  return Math.round((gramsPerMainUnit(p) * p.secondLineFraction) / portionGrams(p));
+}
+
+/** Grams as main-line containers, to the nearest half. */
+export function mainUnitsOf(p: FinishedProduct, grams: number): number {
+  return Math.round((grams / gramsPerMainUnit(p)) * 2) / 2;
 }
 
 export function secondLineUnitName(p: FinishedProduct): string {

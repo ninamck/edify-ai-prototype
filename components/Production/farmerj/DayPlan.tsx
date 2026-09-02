@@ -8,11 +8,11 @@ import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import QtyStepper from '@/components/Production/QtyStepper';
 import StatusPill from '@/components/Production/StatusPill';
-import { batchesLabel, batchesToNumber, gbp, kg, type ProductPlan } from './cascade';
-import { orderGramsFor, orderPortions, type CateringOrder } from './catering';
+import { batchesLabel, batchesToNumber, gbp, kg, mainUnitsOf, portionsOf, portionsPerMainUnit, portionsPerSecondUnit, type ProductPlan } from './cascade';
+import { boxesLabel, lineGrams, lineLabel, orderBoxesLabel, orderGramsFor, type CateringOrder } from './catering';
 import { addDays, FJ_DEMO_TODAY, longDate, shortDate, weekdayLabel } from './calendar';
 import { computeDayPlan, useFjDayPlan, useFjPlanStore, useWindowApproval, type DayPlan as DayPlanModel } from './FjPlanStore';
-import { COMPONENTS, INGREDIENTS, PRODUCT_GROUP_LABELS, type ProductGroup } from './recipes';
+import { COMPONENTS, INGREDIENTS, PRODUCT_BY_ID, PRODUCT_GROUP_LABELS, type ProductGroup } from './recipes';
 import { daySales, fohReminders } from './sales';
 import { FJ_ALL_SHOPS_ID, getShop } from './shops';
 
@@ -49,6 +49,7 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
   const [focused, setFocused] = useState<string | null>(null);
   const [groupFilter, setGroupFilter] = useState<GroupFilter>('all');
   const [justCancelled, setJustCancelled] = useState<string | null>(null);
+  const [cateringOpen, setCateringOpen] = useState(false);
 
   useEffect(() => {
     if (!justCancelled) return;
@@ -57,7 +58,11 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
   }, [justCancelled]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFocused(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setFocused(null);
+      setCateringOpen(false);
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
@@ -168,8 +173,14 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
                   <thead>
                     <tr>
                       <th style={headStyle({ left: true, sticky: true, minWidth: 240 })}>Product</th>
-                      <th style={headStyle({ minWidth: 96 })}>Sold · ref days</th>
-                      <th style={headStyle({ minWidth: 72 })}>Carry-over</th>
+                      <th style={headStyle({ minWidth: 96 })}>
+                        Sold · ref days
+                        <HeadSub>portions</HeadSub>
+                      </th>
+                      <th style={headStyle({ minWidth: 72 })}>
+                        Carry-over
+                        <HeadSub>cast irons</HeadSub>
+                      </th>
                       <th style={headStyle({ minWidth: 118 })}>
                         Main line
                         <HeadSub>cast irons · salads in GNs</HeadSub>
@@ -178,21 +189,22 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
                         Second make line
                         <HeadSub>gastronorms</HeadSub>
                       </th>
-                      {plan.activeOrders.map(o => (
-                        <th key={o.id} style={headStyle({ minWidth: 124 })}>
-                          <span title={`${o.customer} · ${o.reference}`} style={{ display: 'block', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', margin: '0 auto' }}>
-                            {o.customer}
-                          </span>
+                      {plan.orders.length > 0 && (
+                        <th style={headStyle({ minWidth: 124 })}>
+                          Catering
+                          <HeadSub>gastronorms · boxes ordered</HeadSub>
                           <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginTop: 5, flexWrap: 'wrap' }}>
-                            <StatusPill tone="info" size="xs" label={`${o.time} · ${orderPortions(o)} covers`} />
-                            {!locked && (
-                              <button type="button" onClick={() => { toggleOrder(o.id); setJustCancelled(o.id); }} style={cancelPill} title={`Cancel ${o.customer}`}>
-                                <X size={9} strokeWidth={2.6} /> Cancel
-                              </button>
-                            )}
+                            <StatusPill
+                              tone={plan.activeOrders.length > 0 ? 'info' : 'neutral'}
+                              size="xs"
+                              label={plan.activeOrders.length > 0 ? `${plan.activeOrders.length} ${plan.activeOrders.length === 1 ? 'order' : 'orders'}` : 'none today'}
+                            />
+                            <button type="button" onClick={() => setCateringOpen(true)} style={cancelPill} title="See and cancel catering orders">
+                              Manage
+                            </button>
                           </div>
                         </th>
-                      ))}
+                      )}
                       <th style={headStyle({ minWidth: 104, totalCol: true })}>Batches</th>
                     </tr>
                   </thead>
@@ -203,7 +215,8 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
                         label={PRODUCT_GROUP_LABELS[group]}
                         rows={rows}
                         orders={plan.activeOrders}
-                        colCount={6 + plan.activeOrders.length}
+                        showCatering={plan.orders.length > 0}
+                        colCount={6 + (plan.orders.length > 0 ? 1 : 0)}
                         focused={focused}
                         locked={locked}
                         onSelect={setFocused}
@@ -216,14 +229,16 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
                     <tr>
                       <td style={footStyle({ left: true, sticky: true })}>Total to make</td>
                       <td style={footStyle()}><span style={numStyle}>{Math.round(plan.plans.reduce((n, p) => n + p.referencePortions, 0)).toLocaleString('en-GB')}</span></td>
-                      <td style={footStyle()}>{Object.keys(plan.carried).length ? <span style={numStyle}>−{kg(plan.plans.reduce((n, p) => n + p.carriedGrams, 0))}</span> : '—'}</td>
+                      <td style={footStyle()}>
+                        {plan.plans.some(p => p.carriedGrams > 0) ? <span style={numStyle}>−{plan.plans.reduce((n, p) => n + mainUnitsOf(p.product, p.carriedGrams), 0)}</span> : <span style={{ color: 'var(--color-text-muted)' }}>0</span>}
+                      </td>
                       <td style={footStyle()}><span style={numStyle}>{plan.totals.mainUnits}</span></td>
                       <td style={footStyle()}><span style={numStyle}>{plan.totals.secondUnits}</span></td>
-                      {plan.activeOrders.map(o => (
-                        <td key={o.id} style={footStyle()}>
-                          <span style={numStyle}>{kg(o.lines.reduce((n, l) => n + l.portions * l.gramsEach, 0))}</span>
+                      {plan.orders.length > 0 && (
+                        <td style={footStyle()}>
+                          <span style={numStyle}>{plan.activeOrders.length ? plan.plans.reduce((n, p) => n + Math.ceil(p.cateringGrams / p.second.gramsPerUnit), 0) : '—'}</span>
                         </td>
-                      ))}
+                      )}
                       <td style={footStyle({ totalCol: true })}><span style={numStyle}>{Math.round(plan.totals.batches * 2) / 2}</span></td>
                     </tr>
                     <tr>
@@ -232,10 +247,8 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
                       <td style={footSubStyle()}>—</td>
                       <td style={footSubStyle()}><span style={moneyStyle}>{gbp(plan.demand.net * (1 - secondShare(plan)))}</span></td>
                       <td style={footSubStyle()}><span style={moneyStyle}>{gbp(plan.demand.net * secondShare(plan))}</span></td>
-                      {plan.activeOrders.map(o => (
-                        <td key={o.id} style={footSubStyle()}>—</td>
-                      ))}
-                      <td style={footSubStyle({ totalCol: true })}><span style={moneyStyle}>{kg(plan.totals.gramsMade)}</span></td>
+                      {plan.orders.length > 0 && <td style={footSubStyle()}>—</td>}
+                      <td style={footSubStyle({ totalCol: true })}>—</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -246,7 +259,7 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
               {locked
                 ? 'Plan approved. Numbers are read-only; reopen from the bar above to change them.'
                 : 'Each cell is editable. Use the steppers to set cast irons on the main line and gastronorms on the second make line.'}{' '}
-              The faded <em>fc</em> number underneath is Edify&apos;s suggestion from the reference days, shown for reference. Batches follow both lines together, rounded to the half where the recipe allows. Tap a row for the working and what it cascades to.
+              The faded <em>fc</em> number underneath is Edify&apos;s suggestion from the reference days, shown for reference. Catering lands on the second make line in gastronorms; the boxes ordered sit underneath. Batches follow both lines together, rounded to the half where the recipe allows. Tap a row for the working in portions and containers, and what it cascades to.
               {plan.demand.modelled && ' Reference days are modelled from one real Marylebone Wednesday (16 April 2025).'}
             </p>
 
@@ -256,6 +269,14 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
       )}
 
       {focusedPlan && <FjFocusPanel plan={focusedPlan} day={plan} onClose={() => setFocused(null)} />}
+      {cateringOpen && (
+        <CateringPanel
+          plan={plan}
+          locked={locked}
+          onToggle={id => { toggleOrder(id); setJustCancelled(plan.record.cancelledOrders.includes(id) ? null : id); }}
+          onClose={() => setCateringOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -376,7 +397,7 @@ function FjApproveBar({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
           <span style={bannerTitle}>Approve {dayWord} plan</span>
           <span style={bannerSub}>
-            {plan.totals.mainUnits} on the main line, {plan.totals.secondUnits} gastronorms on the second make line, {Math.round(plan.totals.batches * 2) / 2} batches.
+            {plan.totals.mainUnits} cast irons on the main line, {plan.totals.secondUnits} gastronorms on the second make line, {Math.round(plan.totals.batches * 2) / 2} batches.
             {plan.overriddenCount > 0 ? ` ${plan.overriddenCount} ${plan.overriddenCount === 1 ? 'line' : 'lines'} set by hand.` : ''}
             {approval.approvedDays.length > 0 ? ` ${approval.approvedDays.length} of ${w.days.length} days in this window already approved.` : ` Approving the window covers ${from} to ${to}; each morning you can still change the day.`}
           </span>
@@ -444,7 +465,6 @@ function FlexPill({ pct, onChange, locked, handCount }: { pct: number; onChange:
 function TotalCard({ plan }: { plan: DayPlanModel }) {
   const d = plan.demand;
   const products = plan.plans.length;
-  const covers = plan.activeOrders.reduce((n, o) => n + orderPortions(o), 0);
   const parts = [
     d.netByDayPart.breakfast > 0 ? `${gbp(d.netByDayPart.breakfast)} breakfast` : null,
     `${gbp(d.netByDayPart.lunch)} lunch`,
@@ -463,11 +483,11 @@ function TotalCard({ plan }: { plan: DayPlanModel }) {
           <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
           <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{products} products</span>
           <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
-          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{plan.totals.mainUnits} on the main line, {plan.totals.secondUnits} gastronorms</span>
+          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{plan.totals.mainUnits} cast irons on the main line, {plan.totals.secondUnits} gastronorms on the second make line</span>
           {plan.activeOrders.length > 0 && (
             <>
               <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
-              <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{plan.activeOrders.length} catering {plan.activeOrders.length === 1 ? 'order' : 'orders'}, {covers} covers</span>
+              <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{plan.activeOrders.length} catering {plan.activeOrders.length === 1 ? 'order' : 'orders'} inside that</span>
             </>
           )}
         </div>
@@ -485,6 +505,7 @@ function GroupRows({
   label,
   rows,
   orders,
+  showCatering,
   colCount,
   focused,
   locked,
@@ -495,6 +516,7 @@ function GroupRows({
   label: string;
   rows: ProductPlan[];
   orders: CateringOrder[];
+  showCatering: boolean;
   colCount: number;
   focused: string | null;
   locked: boolean;
@@ -511,7 +533,7 @@ function GroupRows({
         </td>
       </tr>
       {rows.map(p => (
-        <ProductRow key={p.productId} p={p} orders={orders} focused={focused === p.productId} locked={locked} onSelect={() => onSelect(p.productId)} onOverride={onOverride} onClear={onClear} />
+        <ProductRow key={p.productId} p={p} orders={orders} showCatering={showCatering} focused={focused === p.productId} locked={locked} onSelect={() => onSelect(p.productId)} onOverride={onOverride} onClear={onClear} />
       ))}
     </>
   );
@@ -520,6 +542,7 @@ function GroupRows({
 function ProductRow({
   p,
   orders,
+  showCatering,
   focused,
   locked,
   onSelect,
@@ -528,13 +551,14 @@ function ProductRow({
 }: {
   p: ProductPlan;
   orders: CateringOrder[];
+  showCatering: boolean;
   focused: boolean;
   locked: boolean;
   onSelect: () => void;
   onOverride: (productId: string, line: 'main' | 'second', units: number | undefined) => void;
   onClear: (productId: string) => void;
 }) {
-  const net = p.product.group === 'proteins' || p.product.group === 'breakfast' ? p.referenceNet : 0;
+  const refUnits = mainUnitsOf(p.product, p.referenceGrams);
   return (
     <tr onClick={onSelect} style={{ cursor: 'pointer', background: focused ? 'var(--color-info-light)' : '#ffffff' }}>
       <td style={bodyStyle({ left: true, sticky: true, focused })}>
@@ -552,10 +576,15 @@ function ProductRow({
       </td>
       <td style={bodyStyle({ focused })}>
         <span style={numStyle}>{Math.round(p.referencePortions)}</span>
-        <div style={cellSub}>{net > 0 ? gbp(net) : kg(p.referenceGrams)}</div>
+        <div style={cellSub}>≈ {refUnits} {p.main.unitName.toLowerCase()}{refUnits === 1 ? '' : 's'}</div>
       </td>
       <td style={bodyStyle({ focused })}>
-        {p.carriedGrams > 0 ? <span style={{ ...numStyle, color: 'var(--color-success)' }}>−{kg(p.carriedGrams)}</span> : <span style={{ color: 'var(--color-text-muted)' }}>0</span>}
+        {p.carriedGrams > 0 ? (
+          <>
+            <span style={{ ...numStyle, color: 'var(--color-success)' }}>−{mainUnitsOf(p.product, p.carriedGrams)}</span>
+            <div style={cellSub}>{portionsOf(p.product, p.carriedGrams)} portions in the fridge</div>
+          </>
+        ) : <span style={{ color: 'var(--color-text-muted)' }}>0</span>}
       </td>
       <td style={bodyStyle({ focused })}>
         <LineStepper p={p} line="main" locked={locked} onOverride={onOverride} />
@@ -563,27 +592,23 @@ function ProductRow({
       <td style={bodyStyle({ focused })}>
         <LineStepper p={p} line="second" locked={locked} onOverride={onOverride} />
       </td>
-      {orders.map(o => {
-        const g = orderGramsFor(o, p.productId);
-        const line = o.lines.find(l => l.productId === p.productId);
-        return (
-          <td key={o.id} style={bodyStyle({ focused })}>
-            {g > 0 && line ? (
-              <>
-                <span style={numStyle}>{line.portions} × {line.gramsEach} g</span>
-                <div style={cellSub}>{kg(g)} · {Math.ceil(g / p.second.gramsPerUnit)} GN</div>
-              </>
-            ) : (
-              <span style={{ color: 'var(--color-text-muted)' }}>—</span>
-            )}
-          </td>
-        );
-      })}
+      {showCatering && (
+        <td style={bodyStyle({ focused })}>
+          {p.cateringGrams > 0 ? (
+            <>
+              <span style={numStyle}>{Math.ceil(p.cateringGrams / p.second.gramsPerUnit)}</span>
+              <div style={cellSub}>{boxesLabel(orders, p.productId)}</div>
+            </>
+          ) : (
+            <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+          )}
+        </td>
+      )}
       <td style={bodyStyle({ focused, totalCol: true })}>
         <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.15 }}>
           <span style={numStyle}>{batchesLabel(p.batches)}</span>
           <span style={{ ...cellSub, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            {kg(p.gramsMade)}
+            {p.product.batch.halfG ? 'halves allowed' : 'full batches only'}
             {p.overridden && !locked && (
               <button type="button" onClick={e => { e.stopPropagation(); onClear(p.productId); }} title="Back to Edify's number" style={clearButton}>
                 <RotateCcw size={9} /> clear
@@ -630,7 +655,7 @@ function LineStepper({ p, line, locked, onOverride }: { p: ProductPlan; line: 'm
           style={{ width: 36, border: 'none', background: 'transparent', fontSize: 13, fontWeight: 700, textAlign: 'center', color: changed ? 'var(--color-info)' : 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-primary)', outline: 'none', padding: 0, MozAppearance: 'textfield' }}
         />
       </QtyStepper>
-      <span style={fcStyle} title={`Edify's suggestion from the reference days: ${l.suggestedUnits} ${l.unitName.toLowerCase()}${l.suggestedUnits === 1 ? '' : 's'} at about ${kg(l.gramsPerUnit)} each`}>
+      <span style={fcStyle} title={`Edify's suggestion from the reference days: ${l.suggestedUnits} ${l.unitName.toLowerCase()}${l.suggestedUnits === 1 ? '' : 's'}, about ${line === 'main' ? portionsPerMainUnit(p.product) : portionsPerSecondUnit(p.product)} portions each`}>
         fc {l.suggestedUnits}
       </span>
     </div>
@@ -668,6 +693,9 @@ function FjFocusPanel({ plan, day, onClose }: { plan: ProductPlan; day: DayPlanM
   if (typeof window === 'undefined') return null;
   const perDay = day.referenceDays.map(r => ({ ...r, demand: daySales(day.shopId, r.date).products[plan.productId] }));
   const batches = batchesToNumber(plan.batches);
+  const mainUnit = plan.main.unitName.toLowerCase();
+  const perMain = portionsPerMainUnit(plan.product);
+  const perSecond = portionsPerSecondUnit(plan.product);
   const cascade = plan.product.recipe.map(l => {
     const c = COMPONENTS[l.ref];
     const ing = INGREDIENTS[l.ref];
@@ -700,31 +728,44 @@ function FjFocusPanel({ plan, day, onClose }: { plan: ProductPlan; day: DayPlanM
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px 18px 32px', display: 'flex', flexDirection: 'column', gap: 18 }}>
           <Section icon={<TrendingUp size={13} />} title="Sold on the reference days" subtitle="Portions, whatever the format: tray, bowl, extra. Struck-through days are left out of the average.">
             {perDay.map(r => (
-              <Pair key={r.date} label={`${shortDate(r.date)}${r.anomaly ? ` · ${r.anomaly.reason}` : ''}`} value={`${r.demand ? Math.round(r.demand.portions) : 0} portions`} muted={!r.included} />
+              <Pair key={r.date} label={`${shortDate(r.date)}${r.anomaly ? ` · ${r.anomaly.reason}` : ''}`} value={`${r.demand ? Math.round(r.demand.portions) : 0} portions`} muted={!r.included} struck={!r.included} />
             ))}
             <Divider />
-            <Pair label="Average" value={`${Math.round(plan.referencePortions)} portions · ${kg(plan.referenceGrams)}`} bold />
+            <Pair label="Average" value={`${Math.round(plan.referencePortions)} portions`} bold />
           </Section>
 
-          <Section icon={<Calculator size={13} />} title="Production math">
-            <Ledger label="Reference days" value={kg(plan.referenceGrams)} />
+          <Section icon={<Calculator size={13} />} title="Production math" subtitle={`Counted in portions, then plated: one ${mainUnit} serves about ${perMain} portions, one gastronorm about ${perSecond}.`}>
+            <Ledger label="Reference days" value={`${Math.round(plan.referencePortions)} portions`} />
             {plan.flexPct !== 0 && (
               <Ledger
                 label={`Whole-day flex ${plan.flexPct > 0 ? '+' : ''}${plan.flexPct}%`}
-                value={`${plan.flexPct > 0 ? '+' : '−'}${kg(Math.abs(plan.referenceGrams * (plan.flexPct / 100)))}`}
+                value={`${plan.flexPct > 0 ? '+' : '−'}${portionsOf(plan.product, Math.abs(plan.referenceGrams * (plan.flexPct / 100)))} portions`}
               />
             )}
-            {plan.cateringGrams > 0 && <Ledger label="Catering, second make line" value={kg(plan.cateringGrams)} signed />}
-            {plan.carriedGrams > 0 && <Ledger label="Carried from last night's count" value={`−${kg(plan.carriedGrams)}`} />}
+            {plan.cateringGrams > 0 && <Ledger label="Catering, second make line" value={`${portionsOf(plan.product, plan.cateringGrams)} portions`} signed />}
+            {day.activeOrders
+              .filter(o => orderGramsFor(o, plan.productId) > 0)
+              .map(o => (
+                <Pair
+                  key={o.id}
+                  label={`　${o.customer}, ${o.time}`}
+                  value={o.lines.filter(l => l.productId === plan.productId).map(lineLabel).join(' + ')}
+                  muted
+                />
+              ))}
+            {plan.carriedGrams > 0 && <Ledger label="Carried from last night's count" value={`−${portionsOf(plan.product, plan.carriedGrams)} portions`} />}
             <Divider />
-            <Ledger label={`Main line · ${plan.main.unitName.toLowerCase()}s at ${kg(plan.main.gramsPerUnit)}`} value={`${plan.main.plannedUnits}${plan.main.plannedUnits !== plan.main.suggestedUnits ? ` (fc ${plan.main.suggestedUnits})` : ''}`} edify />
-            <Ledger label={`Second make line · gastronorms at ${kg(plan.second.gramsPerUnit)}`} value={`${plan.second.plannedUnits}${plan.second.plannedUnits !== plan.second.suggestedUnits ? ` (fc ${plan.second.suggestedUnits})` : ''}`} edify />
+            <Ledger label={`Main line · ${mainUnit}s, ${perMain} portions each`} value={`${plan.main.plannedUnits}${plan.main.plannedUnits !== plan.main.suggestedUnits ? ` (fc ${plan.main.suggestedUnits})` : ''}`} edify />
+            <Ledger label={`Second make line · gastronorms, ${perSecond} portions each`} value={`${plan.second.plannedUnits}${plan.second.plannedUnits !== plan.second.suggestedUnits ? ` (fc ${plan.second.suggestedUnits})` : ''}`} edify />
             <Divider />
-            <Ledger label="Final plan" value={`${batchesLabel(plan.batches)} · ${kg(plan.gramsMade)}`} bold />
-            <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>{plan.notes[plan.notes.length - (plan.overridden ? 2 : 1)]}</p>
+            <Ledger label="Final plan" value={batchesLabel(plan.batches)} bold />
+            <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+              Both lines together fill the equivalent of {(plan.main.plannedUnits + plan.second.plannedUnits * plan.product.secondLineFraction).toFixed(1)} {mainUnit}s. One full batch fills {plan.product.unitsPerBatch}, so that is {batchesLabel(plan.batches)}, {plan.product.batch.halfG ? 'rounded up to the nearest half batch' : 'rounded up to whole batches'}.
+              {plan.overridden ? ' The manager changed the line counts; the batches follow the edited numbers.' : ''}
+            </p>
           </Section>
 
-          <Section icon={<GitBranch size={13} />} title="Cascades to" subtitle="The team never sees these on the day plan. They arrive as tasks on the prep list and the section cards.">
+          <Section icon={<GitBranch size={13} />} title="Cascades to" subtitle="Weighed in the basement, so shown in kilos. The team never sees these on the day plan; they arrive as tasks on the prep list and the section cards.">
             {cascade.map(c => (
               <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '5px 0', borderBottom: '1px solid var(--color-border-subtle)' }}>
                 <span style={{ fontWeight: 600 }}>{c.name}</span>
@@ -745,6 +786,86 @@ function FjFocusPanel({ plan, day, onClose }: { plan: ProductPlan; day: DayPlanM
     </div>,
     document.body,
   );
+}
+
+// ─── Catering panel: every order for the day, cancel or restore each ──────────
+
+function CateringPanel({ plan, locked, onToggle, onClose }: { plan: DayPlanModel; locked: boolean; onToggle: (id: string) => void; onClose: () => void }) {
+  if (typeof window === 'undefined') return null;
+  const cancelled = new Set(plan.record.cancelledOrders);
+  const active = plan.orders.filter(o => !cancelled.has(o.id));
+  const gastronorms = plan.plans.reduce((n, p) => n + Math.ceil(p.cateringGrams / p.second.gramsPerUnit), 0);
+  return createPortal(
+    <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', justifyContent: 'flex-end', background: 'rgba(15, 23, 32, 0.18)' }} onClick={onClose}>
+      <aside
+        role="dialog"
+        aria-label="Catering orders"
+        onClick={e => e.stopPropagation()}
+        style={{ width: 'min(520px, 100vw)', height: '100%', background: '#ffffff', borderLeft: '1px solid var(--color-border)', boxShadow: '-12px 0 36px rgba(10, 20, 25, 0.18)', display: 'flex', flexDirection: 'column', fontFamily: 'var(--font-primary)', overflow: 'hidden' }}
+      >
+        <div style={{ flexShrink: 0, padding: '14px 18px', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'flex-start', gap: 12, background: 'var(--color-bg-surface)' }}>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>Catering · {longDate(plan.date)}</span>
+            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+              {active.length} {active.length === 1 ? 'order' : 'orders'}
+            </h2>
+            <div style={{ display: 'flex', gap: 6, marginTop: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+              <StatusPill tone="neutral" label={`${gastronorms} gastronorms on the second make line`} size="xs" />
+              {cancelled.size > 0 && <StatusPill tone="warning" label={`${cancelled.size} cancelled`} size="xs" />}
+            </div>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" style={closeButton}>
+            <X size={14} />
+          </button>
+        </div>
+
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px 18px 32px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ margin: 0, fontSize: 11, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+            Orders arrive from the catering platform and land on the second make line as gastronorms. Cancelling one re-derives every product it touched; nothing else on the plan moves. Restore puts it back.
+          </p>
+          {plan.orders.length === 0 && <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-muted)' }}>No catering on this day.</p>}
+          {plan.orders
+            .slice()
+            .sort((a, b) => a.time.localeCompare(b.time))
+            .map(o => {
+              const isCancelled = cancelled.has(o.id);
+              return (
+                <div key={o.id} style={{ border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-card)', padding: '12px 14px', opacity: isCancelled ? 0.6 : 1, background: isCancelled ? 'var(--color-bg-hover)' : '#ffffff' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, textDecoration: isCancelled ? 'line-through' : 'none' }}>{o.customer}</span>
+                        <StatusPill tone={isCancelled ? 'neutral' : 'info'} size="xs" label={isCancelled ? 'Cancelled' : o.time} />
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                        {o.reference} · {orderBoxesLabel(o)}{o.note ? ` · ${o.note}` : ''}
+                      </div>
+                    </div>
+                    {!locked && (
+                      <button type="button" onClick={() => onToggle(o.id)} style={isCancelled ? secondaryButtonSmall : cancelPill} title={isCancelled ? `Restore ${o.customer}` : `Cancel ${o.customer}`}>
+                        {isCancelled ? <><RotateCcw size={10} /> Restore</> : <><X size={9} strokeWidth={2.6} /> Cancel</>}
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column' }}>
+                    {o.lines.map(l => {
+                      const perGn = plan.plans.find(p => p.productId === l.productId)?.second.gramsPerUnit;
+                      const gn = perGn ? Math.ceil(lineGrams(l) / perGn) : 0;
+                      return <Pair key={l.productId} label={PRODUCT_NAME(l.productId)} value={`${lineLabel(l)}${gn > 0 ? ` · ${gn} GN` : ''}`} muted={isCancelled} />;
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      </aside>
+    </div>,
+    document.body,
+  );
+}
+
+function PRODUCT_NAME(id: string): string {
+  return PRODUCT_BY_ID[id]?.name ?? id;
 }
 
 function Section({ icon, title, subtitle, children }: { icon: ReactNode; title: string; subtitle?: string; children: ReactNode }) {
@@ -770,9 +891,9 @@ function Ledger({ label, value, bold, signed, edify }: { label: string; value: s
   );
 }
 
-function Pair({ label, value, bold, muted }: { label: string; value: string; bold?: boolean; muted?: boolean }) {
+function Pair({ label, value, bold, muted, struck }: { label: string; value: string; bold?: boolean; muted?: boolean; struck?: boolean }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, padding: '3px 0', color: muted ? 'var(--color-text-muted)' : 'var(--color-text-primary)', textDecoration: muted ? 'line-through' : 'none' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, padding: '3px 0', color: muted ? 'var(--color-text-muted)' : 'var(--color-text-primary)', textDecoration: struck ? 'line-through' : 'none' }}>
       <span style={{ fontWeight: bold ? 700 : 500 }}>{label}</span>
       <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: bold ? 700 : 500 }}>{value}</span>
     </div>
@@ -884,5 +1005,6 @@ const confirmedBanner: CSSProperties = { display: 'flex', alignItems: 'center', 
 const draftBar: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 16px', margin: '12px 30px 0', background: '#ffffff', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-card)', boxShadow: '0 1px 2px rgba(12,20,44,0.06)', fontFamily: 'var(--font-primary)', flexWrap: 'wrap' };
 const draftIcon: CSSProperties = { width: 32, height: 32, flexShrink: 0, borderRadius: 9, background: 'var(--color-info-light)', color: 'var(--color-info)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' };
 const primaryButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, minHeight: 40, padding: '10px 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-primary)', background: 'var(--color-accent-active)', color: 'var(--color-text-on-active)', border: '1px solid var(--color-accent-active)', cursor: 'pointer', whiteSpace: 'nowrap' };
+const secondaryButtonSmall: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 9px', borderRadius: 999, fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', fontFamily: 'var(--font-primary)', background: '#ffffff', color: 'var(--color-text-secondary)', border: '1.5px solid var(--color-border)', cursor: 'pointer', lineHeight: 1 };
 const secondaryButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, minHeight: 40, padding: '10px 14px', borderRadius: 10, fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-primary)', background: '#ffffff', color: 'var(--color-text-primary)', border: '1px solid var(--color-border)', cursor: 'pointer', whiteSpace: 'nowrap' };
 const reopenButton: CSSProperties = { marginLeft: 'auto', flexShrink: 0, padding: '6px 12px', fontSize: 11, fontWeight: 700, background: '#ffffff', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)', borderRadius: 6, cursor: 'pointer', fontFamily: 'var(--font-primary)' };
