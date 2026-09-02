@@ -132,11 +132,13 @@ export type Container = {
 };
 
 export const CONTAINERS: Record<ContainerId, Container> = {
-  'round-cast-iron': { id: 'round-cast-iron', name: 'Round cast iron', fillG: 2400, note: 'Rice and grains on the main line. About 2400 g (Rice Service HTC).' },
-  'rect-cast-iron': { id: 'rect-cast-iron', name: 'Rectangular cast iron', fillG: 1200, note: 'Proteins and hot sides on the main line. One bag of chicken cooked fills one.' },
-  'salad-gn': { id: 'salad-gn', name: 'Salad gastronorm', fillG: 1800, note: 'Salads on the line. Holds a half batch.' },
+  // Line containers are named by size, not shape. The methods show two sizes
+  // of each family; the kitchen's own names for them are a Setup setting.
+  'round-cast-iron': { id: 'round-cast-iron', name: 'Large cast iron', fillG: 2400, note: 'Round. Rice and grains on the main line. About 2400 g (Rice Service HTC).' },
+  'rect-cast-iron': { id: 'rect-cast-iron', name: 'Small cast iron', fillG: 1200, note: 'Rectangular. Proteins and hot sides on the main line. One bag of chicken cooked fills one.' },
+  'salad-gn': { id: 'salad-gn', name: 'Large gastronorm', fillG: 1800, note: 'Salads on the line. Holds a half batch.' },
   'gn-1-1-20': { id: 'gn-1-1-20', name: 'GN 1:1, 20 cm', fillG: 6000, note: 'Prep container for dressings and vegetable prep.' },
-  'gn-1-2': { id: 'gn-1-2', name: 'Gastronorm (second make line)', fillG: 600, note: 'Second make line holds half a cast iron of anything hot.' },
+  'gn-1-2': { id: 'gn-1-2', name: 'Small gastronorm', fillG: 600, note: 'Second make line. Holds half a cast iron of anything hot.' },
   'blue-box': { id: 'blue-box', name: 'Blue shari box', fillG: 17000, note: 'One rice cooker fills one blue box.' },
   'gn-1-6-10': { id: 'gn-1-6-10', name: 'GN 1:6, 10 cm (10 litre)', fillG: 7140, note: 'Rice kit container, stored ambient with the lid on.' },
   'squeezy-bottle': { id: 'squeezy-bottle', name: 'Squeezy bottle', fillG: 500, note: 'Lemon juice and oil for seasoning cast irons. Bottle size is a setting.' },

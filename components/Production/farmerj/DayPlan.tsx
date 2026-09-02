@@ -179,20 +179,20 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
                       </th>
                       <th style={headStyle({ minWidth: 72 })}>
                         Carry-over
-                        <HeadSub>cast irons</HeadSub>
+                        <HeadSub>main-line containers</HeadSub>
                       </th>
-                      <th style={headStyle({ minWidth: 118 })}>
+                      <th style={headStyle({ minWidth: 128 })}>
                         Main line
-                        <HeadSub>cast irons · salads in GNs</HeadSub>
+                        <HeadSub>containers</HeadSub>
                       </th>
                       <th style={headStyle({ minWidth: 118 })}>
                         Second make line
-                        <HeadSub>gastronorms</HeadSub>
+                        <HeadSub>small gastronorms</HeadSub>
                       </th>
                       {plan.orders.length > 0 && (
                         <th style={headStyle({ minWidth: 124 })}>
                           Catering
-                          <HeadSub>gastronorms · boxes ordered</HeadSub>
+                          <HeadSub>small gastronorms · boxes ordered</HeadSub>
                           <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginTop: 5, flexWrap: 'wrap' }}>
                             <StatusPill
                               tone={plan.activeOrders.length > 0 ? 'info' : 'neutral'}
@@ -478,7 +478,7 @@ function TotalCard({ plan }: { plan: DayPlanModel }) {
           <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
           <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{products} products</span>
           <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
-          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{plan.totals.mainUnits} cast irons on the main line, {plan.totals.secondUnits} gastronorms on the second make line</span>
+          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{plan.totals.mainUnits} containers on the main line, {plan.totals.secondUnits} small gastronorms on the second make line</span>
           {plan.activeOrders.length > 0 && (
             <>
               <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
@@ -621,7 +621,7 @@ function LineStepper({ p, line, locked, onOverride }: { p: ProductPlan; line: 'm
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
         <span style={{ ...numStyle, color: changed ? 'var(--color-info)' : 'var(--color-text-primary)' }}>{l.plannedUnits}</span>
-        <span style={fcStyle} title="Edify's suggestion from the reference days">fc {l.suggestedUnits}</span>
+        <span style={fcStyle} title="Edify's suggestion from the reference days">fc {l.suggestedUnits}{line === 'main' ? ` ${l.unitName.toLowerCase()}s` : ''}</span>
       </div>
     );
   }
@@ -649,7 +649,7 @@ function LineStepper({ p, line, locked, onOverride }: { p: ProductPlan; line: 'm
         />
       </QtyStepper>
       <span style={fcStyle} title={`Edify's suggestion from the reference days: ${l.suggestedUnits} ${l.unitName.toLowerCase()}${l.suggestedUnits === 1 ? '' : 's'}, about ${line === 'main' ? portionsPerMainUnit(p.product) : portionsPerSecondUnit(p.product)} portions each`}>
-        fc {l.suggestedUnits}
+        fc {l.suggestedUnits}{line === 'main' ? ` ${l.unitName.toLowerCase()}s` : ''}
       </span>
     </div>
   );
