@@ -28,6 +28,8 @@ const MAX_ENTRIES = 200;
 export type TaskStatus = 'pending' | 'completed' | 'cancelled' | 'undone';
 export type TaskKind =
   | 'waste'
+  /** Farmer J: whole-day plan flex from the chat. */
+  | 'fj-flex'
   | 'stock'
   | 'recipe-edit'
   | 'production'

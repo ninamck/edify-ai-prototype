@@ -15,7 +15,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { COMMAND_REGISTRY } from './registry';
+import { COMMAND_REGISTRY, BRAND_COMMANDS } from './registry';
+import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 
 // Commands hidden from the slash menu (same set as the `+` popover).
 // They still get parsed if the user types the slash form directly —
@@ -38,8 +39,13 @@ export default function SlashMenu({ value, visible, anchorEl, onPick, onClose }:
     return m ? m[1].toLowerCase() : '';
   }, [value]);
 
+  const { isFarmerJ } = useActiveSite();
   const filtered = useMemo(() => {
-    const list = COMMAND_REGISTRY.filter((c) => !HIDDEN_FROM_MENU.has(c.id));
+    const list = COMMAND_REGISTRY.filter((c) => {
+      if (HIDDEN_FROM_MENU.has(c.id)) return false;
+      const brand = BRAND_COMMANDS[c.id];
+      return !brand || (brand === 'farmerj' && isFarmerJ);
+    });
     if (!query) return list;
     return list.filter(
       (c) =>
@@ -47,7 +53,7 @@ export default function SlashMenu({ value, visible, anchorEl, onPick, onClose }:
         c.chipLabel.toLowerCase().includes(query) ||
         c.description.toLowerCase().includes(query),
     );
-  }, [query]);
+  }, [query, isFarmerJ]);
 
   // Keyed by the live query so the hover index resets when the user
   // types — without us needing to call setState inside an effect.

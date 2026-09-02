@@ -25,6 +25,7 @@ import {
   ChevronDown,
   ChevronRight,
   Trash2,
+  Percent,
   Boxes,
   ChefHat,
   Settings2,
@@ -64,6 +65,7 @@ import { formatTimestamp } from './format';
 // decorative for a page meant to read as a record.
 const KIND_VISUALS: Record<TaskKind, { icon: LucideIcon; label: string }> = {
   'waste':        { icon: Trash2,         label: 'Waste' },
+  'fj-flex':      { icon: Percent,        label: 'Flex' },
   'stock':        { icon: Boxes,          label: 'Stock' },
   'recipe-edit':  { icon: ChefHat,        label: 'Recipe' },
   'production':   { icon: Settings2,      label: 'Production' },

@@ -17,6 +17,8 @@ import type { LucideIcon } from 'lucide-react';
 
 export type CommandId =
   | 'waste'
+  /** Farmer J: flex a whole day's plan up or down by a percentage. */
+  | 'fj-flex'
   | 'stock'
   | 'recipe-edit'
   | 'production'

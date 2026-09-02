@@ -53,7 +53,16 @@ import {
 import DataTable from '@/components/Mvp1/Tables/DataTable';
 import type { Column } from '@/components/Mvp1/Tables/dataSources';
 import { parseCommand } from '@/components/Feed/commands/parsers';
-import { COMMAND_REGISTRY, getCommand } from '@/components/Feed/commands/registry';
+import { COMMAND_REGISTRY, BRAND_COMMANDS, getCommand } from '@/components/Feed/commands/registry';
+import { parseFjFlex } from '@/components/Feed/commands/farmerjCommands';
+import FjFlexCard from '@/components/Feed/commands/cards/FjFlexCard';
+import FjNudgeCard, { type FjNudgePayload } from '@/components/Feed/commands/cards/FjNudgeCard';
+import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+import { useFjPlanStoreOptional } from '@/components/Production/farmerj/FjPlanStore';
+import { computeSectionsDay } from '@/components/Production/farmerj/sections';
+import { FJ_DEMO_TODAY } from '@/components/Production/farmerj/calendar';
+import { FJ_ALL_SHOPS_ID } from '@/components/Production/farmerj/shops';
+import { dismissNudge, startTimer, useFjClock } from '@/components/Production/farmerj/fjClock';
 import { useCommandRunner } from '@/components/Feed/commands/useCommandRunner';
 import SlashMenu from '@/components/Feed/commands/SlashMenu';
 import TaskHistoryList from '@/components/Feed/TaskHistoryList';
@@ -5551,6 +5560,11 @@ function ClaudeComposer({
   onClearAttachment,
 }: ComposerProps) {
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
+  const { isFarmerJ: composerIsFarmerJ } = useActiveSite();
+  const quickActionChips = QUICK_ACTION_CHIPS.filter((chip) => {
+    const brand = BRAND_COMMANDS[chip.commandId];
+    return !brand || (brand === 'farmerj' && composerIsFarmerJ);
+  });
   /** Hidden file input — opened by the paperclip button. Any
    *  filename the user picks is mocked into the chat as a supplier
    *  sheet; we never read the file's contents. */
@@ -5946,7 +5960,7 @@ function ClaudeComposer({
                     </span>
                   </button>
                 )}
-                {QUICK_ACTION_CHIPS.map((chip) => {
+                {quickActionChips.map((chip) => {
                   const Icon = chip.icon;
                   return (
                     <button
@@ -7086,6 +7100,40 @@ export default function Feed({
       setAwaitingRecipeName(false);
     },
   });
+
+  // ── Farmer J ─────────────────────────────────────────────────────────────
+  // Brand-gated chat behaviour: the flex command parses before the shared
+  // parsers (so "drop Saturday 20%" is a plan flex, not a price change),
+  // and timing prompts from the sections engine land in the thread when
+  // the demo clock crosses them.
+  const { isFarmerJ, productionSiteId: fjSiteId } = useActiveSite();
+  const fjStore = useFjPlanStoreOptional();
+  const fjClock = useFjClock();
+  const fjShopId = fjSiteId && fjSiteId !== FJ_ALL_SHOPS_ID ? fjSiteId : 'fj-marylebone';
+  const fjNudges = useMemo(() => {
+    if (!isFarmerJ || !fjStore) return [];
+    const day = computeSectionsDay(fjShopId, FJ_DEMO_TODAY, fjStore.get, true);
+    return day.nudges.map((n) => {
+      const task = day.tasks.find((t) => t.id === n.taskId);
+      const payload: FjNudgePayload = { ...n, cookMins: task?.cookMins, taskTitle: task?.title ?? n.title };
+      return payload;
+    });
+  }, [isFarmerJ, fjStore, fjShopId]);
+  const fjPostedRef = useRef<Set<string>>(new Set());
+  const [fjNudgeState, setFjNudgeState] = useState<Record<string, 'started' | 'dismissed'>>({});
+  useEffect(() => {
+    if (!isFarmerJ) return;
+    const due = fjNudges.filter(
+      (n) => fjClock.mins >= n.atMins && !fjClock.dismissed.includes(n.id) && !fjClock.started.includes(n.taskId) && !fjPostedRef.current.has(n.id),
+    );
+    if (due.length === 0) return;
+    for (const n of due) fjPostedRef.current.add(n.id);
+    setMessages((prev) => [
+      ...prev,
+      ...due.map((n) => ({ id: `fj-nudge-${n.id}`, role: 'quinn' as const, text: '', msgType: 'fj-nudge', cmdArgsJson: JSON.stringify(n) })),
+    ]);
+    setChatStarted(true);
+  }, [isFarmerJ, fjNudges, fjClock.mins, fjClock.dismissed, fjClock.started]);
 
   // Shared handler for the composer's `+` popover.
   const handleQuickAction = (commandId: string) => {
@@ -9434,7 +9482,7 @@ export default function Feed({
     // Skip when an explicit chart / table query was forced by the caller
     // (auto-send / pinned chart re-runs).
     if (explicitChart === undefined && !tableOpts) {
-      const intent = parseCommand(text);
+      const intent = (isFarmerJ ? parseFjFlex(text) : null) ?? parseCommand(text);
       if (intent) {
         commandRunner.runCommand(intent, { userText: text });
         return;
@@ -10224,6 +10272,31 @@ export default function Feed({
                           />
                         )}
                         {/* ── Chat-command cards ───────────────────────── */}
+                        {m.msgType === 'cmd-fj-flex-card' && (
+                          <FjFlexCard
+                            initialArgs={m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : {}}
+                            state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                            onConfirm={(final) => commandRunner.confirmFjFlex(m.id, final)}
+                            onCancel={() => commandRunner.cancelCard(m.id)}
+                          />
+                        )}
+                        {m.msgType === 'fj-nudge' && m.cmdArgsJson && (() => {
+                          const nudge = JSON.parse(m.cmdArgsJson) as FjNudgePayload;
+                          return (
+                            <FjNudgeCard
+                              nudge={nudge}
+                              state={fjNudgeState[nudge.id] ?? 'pending'}
+                              onStart={() => {
+                                startTimer(nudge.taskId, nudge.cookMins ?? 15, nudge.taskTitle);
+                                setFjNudgeState((s) => ({ ...s, [nudge.id]: 'started' }));
+                              }}
+                              onLater={() => {
+                                dismissNudge(nudge.id);
+                                setFjNudgeState((s) => ({ ...s, [nudge.id]: 'dismissed' }));
+                              }}
+                            />
+                          );
+                        })()}
                         {m.msgType === 'cmd-waste-card' && (
                           <WasteCommandCard
                             initialArgs={m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : {}}

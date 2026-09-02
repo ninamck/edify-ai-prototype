@@ -12,11 +12,36 @@
  * setCmdStates). The registry is purely descriptive.
  */
 
-import { Trash2, Boxes, ChefHat, Settings2, Utensils, Truck, ArrowLeftRight, Building2 } from 'lucide-react';
+import { Trash2, Boxes, ChefHat, Settings2, Utensils, Truck, ArrowLeftRight, Building2, Percent } from 'lucide-react';
 import type { ChatCommand } from './types';
 import { parseWaste, parseStock, parseRecipeEdit, parseProduction, parseMenu, parseSupplier, parseProductSwap, parseSiteSetup } from './parsers';
+import { parseFjFlex } from './farmerjCommands';
+
+/** Commands that only make sense for one brand. The slash menu and the
+ *  `+` popover hide these unless the active brand matches. */
+export const BRAND_COMMANDS: Record<string, 'farmerj'> = { 'fj-flex': 'farmerj' };
 
 export const COMMAND_REGISTRY: ChatCommand[] = [
+  {
+    id: 'fj-flex',
+    slash: '/flex',
+    chipLabel: 'Flex a day',
+    chipIcon: Percent,
+    description: "Move a whole day's plan up or down by a percentage. Lines set by hand stay.",
+    examples: [
+      'drop Saturday 20%',
+      'reduce tomorrow by 15 percent',
+      'increase Friday 10%',
+    ],
+    parse: parseFjFlex,
+    cardMsgType: 'cmd-fj-flex-card',
+    requiredArgs: [],
+    promptFor: (arg) => {
+      if (arg === 'date') return 'Which day?';
+      if (arg === 'pct') return 'By how much?';
+      return 'I need a bit more info.';
+    },
+  },
   {
     id: 'waste',
     slash: '/waste',

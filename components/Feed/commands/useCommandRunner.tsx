@@ -55,6 +55,11 @@ import {
 import { saveCount, removeCount } from '@/components/Stock/countStore';
 import type { CommandIntent, CommandReceipt, AmbiguityChoice } from './types';
 import { getCommand } from './registry';
+import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+import { computeDayPlan, useFjPlanStoreOptional } from '@/components/Production/farmerj/FjPlanStore';
+import { FJ_DEMO_TODAY, longDay, shortDate } from '@/components/Production/farmerj/calendar';
+import { batchesToNumber } from '@/components/Production/farmerj/cascade';
+import { FJ_ALL_SHOPS_ID } from '@/components/Production/farmerj/shops';
 import type {
   RecipeEditKind,
   ProductionField,
@@ -1458,6 +1463,35 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
   // ── Confirm handlers, one per command ────────────────────────────
   // Each commits the mutation and pushes a receipt.
 
+  // Farmer J whole-day flex. Writes flexPct on the day record; the day
+  // plan, prep list and sections all re-derive from it. Lines the manager
+  // set by hand are untouched by design (cascade rule).
+  const fjStore = useFjPlanStoreOptional();
+  const { productionSiteId: fjSiteId } = useActiveSite();
+  const confirmFjFlex = useCallback(
+    (msgId: string, final: { date: string; pct: number }) => {
+      if (!fjStore) return;
+      const shopId = fjSiteId && fjSiteId !== FJ_ALL_SHOPS_ID ? fjSiteId : 'fj-marylebone';
+      const before = fjStore.get(shopId, final.date);
+      const previousPct = before.flexPct;
+      const planBefore = computeDayPlan(shopId, final.date, before);
+      const plan = computeDayPlan(shopId, final.date, { ...before, flexPct: final.pct });
+      fjStore.update(shopId, final.date, r => ({ ...r, flexPct: final.pct }));
+      const dayLabel = final.date === FJ_DEMO_TODAY ? "Today's" : `${longDay(final.date)}'s`;
+      const moved = plan.plans.filter((p, i) => batchesToNumber(p.batches) !== batchesToNumber(planBefore.plans[i].batches)).length;
+      const receipt: CommandReceipt = {
+        headline: `${dayLabel} plan ${final.pct < 0 ? 'down' : 'up'} ${Math.abs(final.pct)}%`,
+        detail: `${shortDate(final.date)} · ${moved} lines re-rounded${plan.overriddenCount ? `, ${plan.overriddenCount} you set by hand unchanged` : ''}. Prep list and sections follow.`,
+        href: '/production/day',
+        hrefLabel: 'Open day plan',
+        undo: () => fjStore.update(shopId, final.date, r => ({ ...r, flexPct: previousPct })),
+      };
+      writeCmdState(msgId, 'confirmed');
+      pushReceipt(receipt, msgId);
+    },
+    [fjStore, fjSiteId, pushReceipt],
+  );
+
   const confirmWaste = useCallback(
     (
       msgId: string,
@@ -2725,6 +2759,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     getReceipt,
     runCommand,
     cancelCard,
+    confirmFjFlex,
     confirmWaste,
     confirmStock,
     confirmRecipeEdit,

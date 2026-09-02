@@ -1,17 +1,11 @@
 'use client';
 
-// /production/sections — Farmer J section view. One column per person on
-// shift with AM and PM tasks, how-to cards, and intraday prompts driven by
-// 15-minute sales pace.
+// /production/sections — Farmer J sections. One card per section with the
+// person on it, AM and PM tasks drafted from the day plan and prep list,
+// cook loads timed off the sales curve, method card on tap.
 
-import FjPlaceholder from '@/components/Production/farmerj/FjPlaceholder';
+import SectionsBoard from '@/components/Production/farmerj/SectionsBoard';
 
 export default function FjSectionsPage() {
-  return (
-    <FjPlaceholder
-      title="Sections"
-      purpose="One column per person on shift, named by the shop. AM tasks from the prep list, PM tasks from the day plan, a how-to card behind every task, and timing prompts such as 'start rice batch 3 now' when lunch runs ahead of forecast."
-      step={4}
-    />
-  );
+  return <SectionsBoard />;
 }

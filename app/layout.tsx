@@ -6,6 +6,7 @@ import { FranchiseProvider } from "@/components/Franchise/FranchiseContext";
 import { SiteSettingsStoreProvider } from "@/components/Settings/siteSettingsStore";
 import { NightShiftPolicyProvider } from "@/components/Settings/nightShiftPolicyStore";
 import { CompanyContextProvider } from "@/components/Settings/companyContextStore";
+import { FjPlanProvider } from "@/components/Production/farmerj/FjPlanStore";
 import Analytics from "@/components/Analytics/Analytics";
 
 const poppins = Poppins({
@@ -33,7 +34,9 @@ export default function RootLayout({
             <SiteSettingsStoreProvider>
               <NightShiftPolicyProvider>
                 <CompanyContextProvider>
-                  {children}
+                  <FjPlanProvider>
+                    {children}
+                  </FjPlanProvider>
                 </CompanyContextProvider>
               </NightShiftPolicyProvider>
             </SiteSettingsStoreProvider>
