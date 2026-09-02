@@ -89,6 +89,8 @@ export type ProductPlan = {
   /** Portions on the reference days (average). */
   referencePortions: number;
   referenceGrams: number;
+  /** Pounds where this product is the headline till line (trays, bowls, extras). */
+  referenceNet: number;
   flexPct: number;
   cateringGrams: number;
   carriedGrams: number;
@@ -201,6 +203,7 @@ export function planProduct(productId: string, demand: DayDemand, opts: PlanOpti
     product,
     referencePortions,
     referenceGrams,
+    referenceNet: d?.net ?? 0,
     flexPct,
     cateringGrams,
     carriedGrams,
@@ -219,7 +222,12 @@ function ceilUnits(n: number): number {
 }
 
 function plural(n: number, word: string): string {
-  return n === 1 ? word.toLowerCase() : `${word.toLowerCase()}s`;
+  // Container names can carry a bracketed qualifier: pluralise the noun,
+  // keep the qualifier ("gastronorms (second make line)").
+  const m = word.match(/^(.*?)(\s*\(.*\))?$/);
+  const noun = (m?.[1] ?? word).toLowerCase();
+  const tail = m?.[2] ?? '';
+  return n === 1 ? `${noun}${tail}` : `${noun}s${tail}`;
 }
 
 /** Plan every product that has demand (or an override) for the day. */

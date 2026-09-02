@@ -41,6 +41,9 @@ export type ProductDemand = {
   grams: number;
   /** Portions sold, whatever the format. */
   portions: number;
+  /** Pounds taken on till lines where this product is the headline (a
+   *  tray, a bowl, an extra). Bases and sides ride on the tray at £0. */
+  net: number;
   byChannel: Record<SalesChannel, number>;
   byHour: Record<number, number>;
   mainGrams: number;
@@ -80,7 +83,7 @@ function emptyDemand(shopId: string, date: string, modelled: boolean): DayDemand
 }
 
 function productDemandFor(d: DayDemand, id: string): ProductDemand {
-  return (d.products[id] ??= { productId: id, grams: 0, portions: 0, byChannel: emptyChannels(), byHour: {}, mainGrams: 0, secondGrams: 0 });
+  return (d.products[id] ??= { productId: id, grams: 0, portions: 0, net: 0, byChannel: emptyChannels(), byHour: {}, mainGrams: 0, secondGrams: 0 });
 }
 
 /** Turn till rows into grams of finished product and direct component demand. */
@@ -98,12 +101,14 @@ export function demandFromRows(rows: SalesRow[], shopId: string, date: string, m
       const h = (d.traysByHour[r.hour] ??= emptyChannels());
       h[r.channel] += r.items;
     }
-    for (const y of tillYields(r.category, r.name)) {
+    const yields = tillYields(r.category, r.name);
+    yields.forEach((y, i) => {
       const grams = y.grams * r.items;
       if (y.kind === 'product') {
         const p = productDemandFor(d, y.ref);
         p.grams += grams;
         p.portions += r.items;
+        if (i === 0) p.net += r.net;
         p.byChannel[r.channel] += grams;
         p.byHour[r.hour] = (p.byHour[r.hour] ?? 0) + grams;
         if (CHANNEL_LINE[r.channel] === 'main') p.mainGrams += grams;
@@ -113,7 +118,7 @@ export function demandFromRows(rows: SalesRow[], shopId: string, date: string, m
         c.grams += grams;
         c.portions += r.items;
       }
-    }
+    });
   }
   d.net = round2(d.net);
   return d;
@@ -197,6 +202,7 @@ export function daySales(shopId: string, date: string): DayDemand {
       else q.secondGrams += g;
     }
     q.portions = Math.round(p.portions * factor * pn);
+    q.net = p.net * factor * pn;
     for (const [h, g] of Object.entries(p.byHour)) q.byHour[Number(h)] = g * factor * pn;
     // Dinner: a smaller second sitting on the same mix, main line only
     // for hot food (delivery still runs).
@@ -206,6 +212,7 @@ export function daySales(shopId: string, date: string): DayDemand {
       q.mainGrams += dinnerG * (1 - shop.deliveryShare);
       q.secondGrams += dinnerG * shop.deliveryShare;
       q.portions += Math.round(q.portions * (dinnerShare / lunchShare));
+      q.net += q.net * (dinnerShare / lunchShare);
       for (const [h, w] of Object.entries(DINNER_CURVE)) q.byHour[Number(h)] = (q.byHour[Number(h)] ?? 0) + dinnerG * w;
     }
   }
@@ -221,6 +228,7 @@ export function daySales(shopId: string, date: string): DayDemand {
     const pots = Math.round((bfNet / 4.2) * 0.15);
     const q = productDemandFor(out, 'coconut-chia');
     q.portions = pots;
+    q.net = pots * 4.2;
     q.grams = pots * 150;
     q.mainGrams = q.grams;
     q.byChannel.instore = q.grams;
@@ -278,6 +286,7 @@ export function averageDemand(shopId: string, dates: string[]): DayDemand {
       const q = productDemandFor(out, id);
       q.grams += p.grams / n;
       q.portions += p.portions / n;
+      q.net += p.net / n;
       q.mainGrams += p.mainGrams / n;
       q.secondGrams += p.secondGrams / n;
       for (const ch of Object.keys(p.byChannel) as SalesChannel[]) q.byChannel[ch] += p.byChannel[ch] / n;
@@ -296,6 +305,44 @@ export function averageDemand(shopId: string, dates: string[]): DayDemand {
     for (const [h, v] of Object.entries(d.netByHour)) out.netByHour[Number(h)] = (out.netByHour[Number(h)] ?? 0) + v / n;
   }
   out.net = round2(out.net);
+  return out;
+}
+
+/**
+ * What the front-of-house manager owns and the kitchen does not: cookies,
+ * cold drinks, toppings. Scaled from the real day for the shop and date so
+ * the "tomorrow" card reads in real quantities.
+ */
+export type FohReminder = { id: string; label: string; detail: string };
+
+export function fohReminders(shopId: string, date: string): FohReminder[] {
+  const factor = shopId === FJ_DEFAULT_SHOP_ID && date === FJ_DEMO_TODAY ? 1 : dayFactor(shopId, date);
+  if (factor === 0) return [];
+  let cookies = 0;
+  let coldDrinks = 0;
+  let cakes = 0;
+  let pickledCucumber = 0;
+  let pickledOnion = 0;
+  for (const r of MARYLEBONE_SALES_DAY) {
+    if (r.category === 'Snacks/Impluse' && /Cookie/.test(r.name)) cookies += r.items;
+    else if (r.category === 'Snacks/Impluse' && /Cupcake|Brownie|Banana Bread|Flapjack/.test(r.name)) cakes += r.items;
+    else if (r.category === 'Cold Drinks') coldDrinks += r.items;
+    else if ((r.category === 'FT Extras' || r.category === 'Toppings') && r.name === 'Pickled Cucumber') pickledCucumber += r.items;
+    else if (r.category === 'FT Extras' && r.name === 'Pickled Onion') pickledOnion += r.items;
+  }
+  const scale = (n: number, up = 1.1) => Math.ceil((n * factor * up) / 6) * 6;
+  const out: FohReminder[] = [
+    { id: 'cookies', label: `Defrost ${scale(cookies)} cookies tonight`, detail: `${Math.round(cookies * factor)} sold on a day like tomorrow. Chocolate chip first, then matcha.` },
+    { id: 'drinks', label: `${scale(coldDrinks, 1.15)} cold drinks on the shelf`, detail: 'Fridge fill before open. Kombucha and sparkling run out first.' },
+    { id: 'cakes', label: `${scale(cakes)} cakes and brownies out`, detail: 'From the ambient delivery. Cupcakes go on the top shelf.' },
+  ];
+  if (pickledCucumber + pickledOnion > 0) {
+    out.push({
+      id: 'toppings',
+      label: 'One tub each of pickled cucumber and pickled onion at the till',
+      detail: `${Math.round((pickledCucumber + pickledOnion) * factor)} topping portions on a day like tomorrow. The basement preps the tubs; front of house puts them out.`,
+    });
+  }
   return out;
 }
 

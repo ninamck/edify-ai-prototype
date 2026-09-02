@@ -14,6 +14,7 @@ import SpokeAdhocRequestCard from '@/components/Production/SpokeAdhocRequestCard
 import EndProductionControl from '@/components/Production/EndProductionControl';
 import { useProductionSite } from '@/components/Production/ProductionSiteContext';
 import { DEMO_TODAY } from '@/components/Production/fixtures';
+import { FjPlanProvider } from '@/components/Production/farmerj/FjPlanStore';
 import {
   FJ_PLAN_TABS,
   FJ_RUN_TABS,
@@ -219,6 +220,7 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
 
   return (
     <HubOperatorProviders>
+    <FjPlanProvider>
     <div
       style={{
         display: 'flex',
@@ -330,6 +332,7 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
 
       {!isFarmerJ && <QuinnProductionPanel hideTrigger />}
     </div>
+    </FjPlanProvider>
     </HubOperatorProviders>
   );
 }
