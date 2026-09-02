@@ -567,8 +567,6 @@ function ProductRow({
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{p.product.name}</span>
             <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', flexShrink: 0 }}>
               {p.overridden && <StatusPill tone="info" label="Edited" size="xs" />}
-              {p.cateringGrams > 0 && <StatusPill tone="neutral" label="Catering" size="xs" />}
-              {p.product.provenance === 'invented' && <StatusPill tone="neutral" label="Recipe" size="xs" />}
             </div>
           </div>
           <ChevronRight size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
@@ -717,7 +715,6 @@ function FjFocusPanel({ plan, day, onClose }: { plan: ProductPlan; day: DayPlanM
               <StatusPill tone="info" label={`${plan.product.unitsPerBatch} ${plan.main.unitName.toLowerCase()}${plan.product.unitsPerBatch === 1 ? '' : 's'} per batch`} size="xs" />
               <StatusPill tone="neutral" label={plan.product.halfBatch ? 'half batches' : 'whole batches'} size="xs" />
               <StatusPill tone="neutral" label={`${Math.round(plan.product.holdMinutes / 60)}h hold`} size="xs" />
-              {plan.product.provenance === 'invented' && <StatusPill tone="neutral" label="Recipe" size="xs" />}
             </div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" style={closeButton}>
