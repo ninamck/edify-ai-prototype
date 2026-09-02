@@ -5,8 +5,16 @@ import { SUGGESTED_ORDERS, RECURRING_ORDERS } from './data/mockOrders';
 import NotificationPanel from './components/NotificationPanel';
 import OrderReview from './components/OrderReview';
 import ConfirmationScreen from './components/ConfirmationScreen';
+import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+import FarmerJPredictiveOrdering from '@/components/Production/farmerj/PredictiveOrdering';
 
 export default function AssistedOrderingPage() {
+  const { isFarmerJ } = useActiveSite();
+  if (isFarmerJ) return <FarmerJPredictiveOrdering />;
+  return <PretAssistedOrdering />;
+}
+
+function PretAssistedOrdering() {
   const state = useAssistedOrdering();
 
   const {

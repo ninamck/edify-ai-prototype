@@ -9,9 +9,10 @@
  *            cascades to, each person's section with AM/PM tasks and
  *            timing prompts, and the end-of-day close (carryover count).
  *   • Plan = shaping ahead. The twice-weekly plan managers set on Monday
- *            and Friday, the order sheet it produces, Jana's cross-shop
- *            board and the central setup she owns (yield, shelf life,
- *            production days, portion-to-batch mapping).
+ *            and Friday, Jana's cross-shop board and the central setup she
+ *            owns (yield, shelf life, production days, portion-to-batch
+ *            mapping). Ordering lives in the Orders area (Predictive
+ *            ordering), built from the same plans.
  * Routes are Farmer J-only so they never collide with the Pret or Burger
  * King pages that share /production.
  */
@@ -26,10 +27,9 @@ export const FJ_RUN_TABS: FjSubTab[] = [
 ];
 
 export const FJ_PLAN_TABS: FjSubTab[] = [
-  { id: 'week',        label: 'Week plan',   href: '/production/week' },
-  { id: 'order-sheet', label: 'Order sheet', href: '/production/order-sheet' },
-  { id: 'shops',       label: 'Shops',       href: '/production/shops' },
-  { id: 'setup',       label: 'Setup',       href: '/production/setup' },
+  { id: 'week',  label: 'Week plan', href: '/production/week' },
+  { id: 'shops', label: 'Shops',     href: '/production/shops' },
+  { id: 'setup', label: 'Setup',     href: '/production/setup' },
 ];
 
 /** Where each sidebar entry lands. */

@@ -34,6 +34,8 @@ export interface Supplier {
    * UI shows the base-currency equivalent alongside (dual display).
    */
   currency?: CurrencyCode;
+  /** Cut-off is close: sort first and show the due chip. */
+  urgent?: boolean;
 }
 
 // ─── Ingredient ──────────────────────────────────────────────────────────────
@@ -92,6 +94,8 @@ export interface SuggestedOrderLine {
   // Optional overrides for the "Why?" panel
   whyOverride?: string[];
   whyHighlight?: boolean;
+  /** Insights panel data supplied by the line's own model (other brands). */
+  trust?: TrustPanelData;
 }
 
 // ─── Suggested Order ─────────────────────────────────────────────────────────

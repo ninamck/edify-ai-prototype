@@ -3,6 +3,11 @@
 import type { ReactNode } from 'react';
 import type { TrustPanelData } from '../types';
 
+// Weight and volume units sit tight against the number (12kg); words get a space (12 boxes).
+function unitSep(unit: string): string {
+  return /^(kg|g|ml|l|L|units?)$/.test(unit) ? '' : ' ';
+}
+
 interface Props {
   data: TrustPanelData;
   why: string[];
@@ -150,7 +155,7 @@ function HistoryBody({
                   marginLeft: '1px',
                 }}
               >
-                {unit}
+                {unitSep(unit)}{unit}
               </span>
             </span>
             <span
@@ -169,7 +174,7 @@ function HistoryBody({
       </div>
       <SubLabel>
         Avg: {average}
-        {unit}
+        {unitSep(unit)}{unit}
       </SubLabel>
     </>
   );
@@ -254,7 +259,7 @@ export default function TrustPanels({ data, why, whyHighlightFirst = false }: Pr
       </Panel>
 
       <Panel heading="We think you'll use">
-        <Hero value={`${consumption.value}${consumption.unit}`} />
+        <Hero value={`${consumption.value}${unitSep(consumption.unit)}${consumption.unit}`} />
         <SubLabel>{consumption.window}</SubLabel>
         <Secondary>{consumption.driver}</Secondary>
       </Panel>

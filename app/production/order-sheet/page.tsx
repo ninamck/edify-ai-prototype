@@ -1,11 +1,16 @@
 'use client';
 
-// /production/order-sheet — Farmer J order sheet for a planning window.
-// What to make (sub-recipes as single lines, per day) and what to order
-// (ingredients in supplier packs, less what is in the store room).
+// /production/order-sheet — Farmer J ordering moved to the Orders area
+// (Predictive ordering), where suggested orders are built from the same
+// day plans. Old links land here and are sent on.
 
-import OrderSheet from '@/components/Production/farmerj/OrderSheet';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
-export default function FjOrderSheetPage() {
-  return <OrderSheet />;
+export default function FjOrderSheetRedirect() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace('/assisted-ordering');
+  }, [router]);
+  return null;
 }

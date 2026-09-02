@@ -3,6 +3,7 @@
 import Sidebar from '@/components/Sidebar/Sidebar';
 import AreaTopBar from '@/components/TopBar/AreaTopBar';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
 
@@ -16,6 +17,7 @@ const ORDERS_TABS = [
 
 export default function OrderHistoryLayout({ children }: { children: React.ReactNode }) {
   const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
+  const { isFarmerJ } = useActiveSite();
 
   return (
     <div
@@ -42,7 +44,7 @@ export default function OrderHistoryLayout({ children }: { children: React.React
         <AreaTopBar
           title="Orders"
           tabs={ORDERS_TABS}
-          siteName="Fitzroy Espresso"
+          siteName={isFarmerJ ? undefined : 'Fitzroy Espresso'}
           backTo="/"
         />
 

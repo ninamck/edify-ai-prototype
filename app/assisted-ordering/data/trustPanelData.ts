@@ -114,7 +114,7 @@ export function getTrustPanelDataForLine(
   line: SuggestedOrderLine,
   ingredient: Ingredient,
 ): TrustPanelData {
-  const override = TRUST_PANEL_OVERRIDES[line.id];
+  const override = line.trust ?? TRUST_PANEL_OVERRIDES[line.id];
   if (override) return override;
 
   const { points, average } = deriveHistory(line, ingredient);

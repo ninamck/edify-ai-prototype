@@ -710,32 +710,50 @@ export const SUGGESTED_ORDERS: SuggestedOrder[] = [
     : []),
 ];
 
+// ─── Extra datasets ───────────────────────────────────────────────────────────
+//
+// Other brands (Farmer J) register their own suppliers, ingredients and
+// products here so the ordering components, which look everything up by id,
+// work unchanged. Ids must not collide with the Pret fixtures above.
+
+export type OrderingDataset = {
+  suppliers: Supplier[];
+  ingredients: Ingredient[];
+  products: SupplierProduct[];
+};
+
+const EXTRA: OrderingDataset[] = [];
+
+export function registerOrderingDataset(ds: OrderingDataset): void {
+  if (!EXTRA.includes(ds)) EXTRA.push(ds);
+}
+
 // ─── Lookup helpers ───────────────────────────────────────────────────────────
 
 export function getSupplier(id: string): Supplier {
-  const s = SUPPLIERS.find((s) => s.id === id);
+  const s = SUPPLIERS.find((s) => s.id === id) ?? EXTRA.flatMap((d) => d.suppliers).find((s) => s.id === id);
   if (!s) throw new Error(`Supplier ${id} not found`);
   return s;
 }
 
 export function getIngredient(id: string): Ingredient {
-  const i = INGREDIENTS.find((i) => i.id === id);
+  const i = INGREDIENTS.find((i) => i.id === id) ?? EXTRA.flatMap((d) => d.ingredients).find((i) => i.id === id);
   if (!i) throw new Error(`Ingredient ${id} not found`);
   return i;
 }
 
 export function getProduct(ingredientId: string, supplierId: string): SupplierProduct {
-  const p = SUPPLIER_PRODUCTS.find(
-    (p) => p.ingredientId === ingredientId && p.supplierId === supplierId,
-  );
+  const match = (p: SupplierProduct) => p.ingredientId === ingredientId && p.supplierId === supplierId;
+  const p = SUPPLIER_PRODUCTS.find(match) ?? EXTRA.flatMap((d) => d.products).find(match);
   if (!p) throw new Error(`Product ${ingredientId}/${supplierId} not found`);
   return p;
 }
 
 // Near-cutoff: treat Cheese Board as urgent (cutoff at 09:30 — would already be past in a real app,
-// here we mark it as urgent for demo purposes to show the urgency UI)
+// here we mark it as urgent for demo purposes to show the urgency UI). Other
+// datasets set `urgent` on the supplier.
 export function isUrgent(supplier: Supplier): boolean {
-  return supplier.id === 'sup-cheese';
+  return supplier.id === 'sup-cheese' || Boolean(supplier.urgent);
 }
 
 // ─── Recurring Orders ─────────────────────────────────────────────────────────

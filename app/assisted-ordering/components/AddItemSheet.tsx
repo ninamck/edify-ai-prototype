@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { INGREDIENTS, SUPPLIER_PRODUCTS, SUPPLIERS } from '../data/mockOrders';
+import { INGREDIENTS, SUPPLIER_PRODUCTS, SUPPLIERS, type OrderingDataset } from '../data/mockOrders';
 import type { Ingredient, SupplierProduct } from '../types';
 import QtyControl from './QtyControl';
 import { fmtSupplierAmount, fmtSupplierUnitCost } from '../lib/money';
@@ -12,9 +12,13 @@ interface Props {
   onClose: () => void;
   onAdd: (ingredientId: string, supplierId: string, qty: number) => void;
   existingSupplierIds: string[];
+  catalogue?: OrderingDataset;
 }
 
-export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Props) {
+export default function AddItemSheet({ onClose, onAdd, existingSupplierIds, catalogue }: Props) {
+  const ingredients = catalogue?.ingredients ?? INGREDIENTS;
+  const products = catalogue?.products ?? SUPPLIER_PRODUCTS;
+  const suppliers = catalogue?.suppliers ?? SUPPLIERS;
   const [step, setStep] = useState<Step>('ingredient');
   const [search, setSearch] = useState('');
   const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
@@ -22,22 +26,22 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
   const [qty, setQty] = useState(1);
 
   const filteredIngredients = useMemo(() => {
-    if (!search.trim()) return INGREDIENTS;
+    if (!search.trim()) return ingredients;
     const q = search.toLowerCase();
-    return INGREDIENTS.filter(
+    return ingredients.filter(
       (i) => i.name.toLowerCase().includes(q) || i.variant.toLowerCase().includes(q),
     );
-  }, [search]);
+  }, [search, ingredients]);
 
   const availableProducts = useMemo(() => {
     if (!selectedIngredient) return [];
-    return SUPPLIER_PRODUCTS.filter(
+    return products.filter(
       (p) => p.ingredientId === selectedIngredient.id && p.available,
     );
-  }, [selectedIngredient]);
+  }, [selectedIngredient, products]);
 
   const selectedSupplier = selectedProduct
-    ? SUPPLIERS.find((s) => s.id === selectedProduct.supplierId) ?? null
+    ? suppliers.find((s) => s.id === selectedProduct.supplierId) ?? null
     : null;
 
   function reset() {
@@ -274,7 +278,7 @@ export default function AddItemSheet({ onClose, onAdd, existingSupplierIds }: Pr
             </p>
           ) : (
             availableProducts.map((product) => {
-              const supplier = SUPPLIERS.find((s) => s.id === product.supplierId);
+              const supplier = suppliers.find((s) => s.id === product.supplierId);
               if (!supplier) return null;
               const isNew = !existingSupplierIds.includes(supplier.id);
               return (

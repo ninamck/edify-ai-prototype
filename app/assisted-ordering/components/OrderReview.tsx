@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { SuggestedOrder, GroupBy, DismissReason, ManualLine, RecurringOrder } from '../types';
 import { getVariancePercent, needsReview, recurringFrequencyBadgeLabel } from '../types';
-import { getSupplier, getIngredient, getProduct, SUPPLIER_PRODUCTS } from '../data/mockOrders';
+import { getSupplier, getIngredient, getProduct, SUPPLIER_PRODUCTS, type OrderingDataset } from '../data/mockOrders';
 import GroupToggle from './GroupToggle';
 import DetailToggle from './DetailToggle';
 import SupplierSection from './SupplierSection';
@@ -76,6 +76,12 @@ interface Props {
   onRecurringQtyChange: (lineId: string, qty: number) => void;
   onRecurringAccept: (lineId: string) => void;
   onRecurringRevert: (lineId: string) => void;
+  /** Other brands pass their own forecast strip; default is the Pret fixture. */
+  forecastCards?: ForecastCardData[];
+  /** Line under the title. `null` hides it. */
+  intro?: string | null;
+  /** Catalogue for the Add item sheet; default is the Pret fixture. */
+  catalogue?: OrderingDataset;
 }
 
 // Oldest stocktake across all suggested order lines (for the banner)
@@ -105,7 +111,16 @@ function groupByDay(orders: SuggestedOrder[]) {
     }
     map.get(order.deliveryDate)!.orders.push(order);
   }
-  return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+  return Array.from(map.values()).sort((a, b) => dateOrder(a.date) - dateOrder(b.date));
+}
+
+// Delivery dates are display strings ("Thu 10 Apr"); order them by calendar
+// day rather than alphabetically.
+const MONTH_INDEX: Record<string, number> = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+function dateOrder(label: string): number {
+  const m = label.match(/(\d{1,2})\s+([A-Z][a-z]{2})/);
+  if (!m) return Number.MAX_SAFE_INTEGER;
+  return (MONTH_INDEX[m[2]] ?? 12) * 100 + Number(m[1]);
 }
 
 // ─── By Ingredient view helpers ───────────────────────────────────────────────
@@ -1093,12 +1108,14 @@ function RecurringVarianceBadge({ variance }: { variance: number }) {
 
 // ─── Forecast net sales (demo, hard-coded) ───────────────────────────────────
 
-interface ForecastCardData {
+export interface ForecastCardData {
   label: string;
   date: string;
   netSales: number;
   covers: number;
   comparison: string;
+  /** Replaces the "covers · comparison" line when set. */
+  detail?: string;
 }
 
 const FORECAST_CARDS: ForecastCardData[] = [
@@ -1196,7 +1213,7 @@ function ForecastCard({ card, hero }: { card: ForecastCardData; hero: boolean })
           color: hero ? '#fff' : 'var(--color-text-secondary)',
         }}
       >
-        {card.covers} covers · {card.comparison}
+        {card.detail ?? `${card.covers} covers · ${card.comparison}`}
       </span>
     </div>
   );
@@ -1232,6 +1249,9 @@ export default function OrderReview({
   onRecurringQtyChange,
   onRecurringAccept,
   onRecurringRevert,
+  forecastCards = FORECAST_CARDS,
+  intro = 'All items included by default. Edit quantities or remove what you don\u2019t need.',
+  catalogue,
 }: Props) {
   const [showAddSheet, setShowAddSheet] = useState(false);
   const stocktakeAge = getStocktakeAge(orders);
@@ -1298,16 +1318,18 @@ export default function OrderReview({
               >
                 Review orders
               </h1>
-              <p
-                style={{
-                  fontSize: '13px',
-                  color: 'var(--color-text-secondary)',
-                  fontFamily: 'var(--font-primary)',
-                  margin: '4px 0 0',
-                }}
-              >
-                All items included by default. Edit quantities or remove what you don&apos;t need.
-              </p>
+              {intro && (
+                <p
+                  style={{
+                    fontSize: '13px',
+                    color: 'var(--color-text-secondary)',
+                    fontFamily: 'var(--font-primary)',
+                    margin: '4px 0 0',
+                  }}
+                >
+                  {intro}
+                </p>
+              )}
             </div>
           </div>
 
@@ -1320,7 +1342,7 @@ export default function OrderReview({
               flexWrap: 'nowrap',
             }}
           >
-            {FORECAST_CARDS.map((card, i) => (
+            {forecastCards.map((card, i) => (
               <ForecastCard key={card.date} card={card} hero={i === 0} />
             ))}
           </div>
@@ -1588,6 +1610,7 @@ export default function OrderReview({
               onClose={() => setShowAddSheet(false)}
               onAdd={onAddItem}
               existingSupplierIds={orders.map((o) => o.supplierId)}
+              catalogue={catalogue}
             />
           ) : (
             <button
