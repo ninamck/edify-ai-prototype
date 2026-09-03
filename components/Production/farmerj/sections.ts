@@ -1,35 +1,49 @@
 /**
  * Sections: each person's list for the day, drafted from the day plan and
- * the prep list. Farmer J's equivalent of Pret benches, named by the site.
+ * the prep list. The cards are the shop's benches (site settings, edited
+ * on Setup > Benches and the shop's own Settings), each taking work by
+ * role:
  *
- *   Hot section        Cook tasks for the hot products, in oven or cooker
- *                      loads, timed off the hourly sales curve so the
- *                      second rice cooker goes on when the first is about
- *                      to run out, not at 08:00 with the rest.
- *   Salads             Kits, then dressing and plating in two waves
- *                      because a dressed salad holds two hours.
- *   Basement prep      Today's prep in the morning, tomorrow's and the
- *                      make-ahead groups in the afternoon.
- *   Second make line   Plating into small containers before open, and
- *                      packing each catering order against its time.
+ *   hot          Cook tasks for the hot products, in oven or cooker loads,
+ *                timed off the hourly sales curve so the second rice
+ *                cooker goes on when the first is about to run out.
+ *   salads       Kits, then dressing and plating in two waves because a
+ *                dressed salad holds two hours.
+ *   prep         Today's prep in the morning, tomorrow's and the
+ *                make-ahead groups in the afternoon.
+ *   second       Plating into small containers before open, and packing
+ *                each catering order against its time. The second make
+ *                line takes this, so a line is on the board too.
+ *   breakfast    Breakfast shops only. Cooks the shakshuka, eggs, bacon
+ *                and porridge for a 07:30 open; the lunch benches start
+ *                later.
  *
- * AM is before 12:00, PM after. Times are suggestions; the person ticks
- * tasks off and the manager can move a task to another section.
+ * Every task is drafted with a role; the bench that takes the role at this
+ * shop is its card. A shop that merges salads into its prep bench ticks
+ * both roles on one bench. AM is before 12:00, PM after. Times are
+ * suggestions; the person ticks tasks off and the manager can move a task
+ * to another bench.
  */
 
-import { batchesToNumber, inputScale, type ProductPlan } from './cascade';
+import { batchesToNumber, fullLineUnits, halfLineUnits, inputScale, mainUnitName, type ProductPlan } from './cascade';
 import { computeDayPlan, type DayPlan, type DayRecord } from './FjPlanStore';
 import { computePrepDay, qtyLabel, type PrepDay } from './prep';
-import { orderBoxesLabel } from './catering';
-import { COMPONENTS, CONTAINERS, EQUIPMENT_LIMITS, INGREDIENTS, PRODUCT_GROUP_LABELS, type Component, type Section as SectionId } from './recipes';
+import { orderBoxCount, orderBoxesLabel } from './catering';
+import { COMPONENTS, CONTAINERS, INGREDIENTS, PRODUCT_GROUP_LABELS, PRODUCTS, type Component, type Section as SectionId } from './recipes';
+import { batchesPerLoadFor, kitFor, type ShopKit } from './kit';
+import { bookEquipment } from './recipeBridge';
 import { getShop } from './shops';
 import { hhmm } from './fjClock';
+import { stationForRole, stationsFor, type Station } from './stations';
 
 export type TaskKind = 'cook' | 'kit' | 'prep' | 'dress' | 'plate' | 'pack';
 
 export type SectionTask = {
   id: string;
-  sectionId: SectionId;
+  /** The bench this task sits on (a bench id from the site settings). */
+  sectionId: string;
+  /** The kind of work, which is what routed it to the bench. */
+  role: SectionId;
   slot: 'am' | 'pm';
   kind: TaskKind;
   title: string;
@@ -55,7 +69,17 @@ export type SectionTask = {
   load?: { n: number; of: number };
 };
 
-export type SectionDef = { id: SectionId; name: string; person: string };
+export type SectionDef = {
+  /** Bench id, or `unassigned-<role>` when no bench takes the role. */
+  id: string;
+  name: string;
+  person: string;
+  roles: SectionId[];
+  /** True when no bench at this shop takes this work. */
+  unassigned?: boolean;
+  /** Kit on the bench, for the card header. */
+  kit?: Station['kit'];
+};
 
 export type SectionCard = {
   section: SectionDef;
@@ -88,13 +112,16 @@ export type SectionsDay = {
   team: string[];
 };
 
-const SECTION_NAMES: Record<SectionId, string> = { hot: 'Hot section', salads: 'Salads', prep: 'Basement prep', second: 'Second make line' };
-const SECTION_ORDER: SectionId[] = ['hot', 'salads', 'prep', 'second'];
+const ROLE_NAMES: Record<SectionId, string> = { breakfast: 'Breakfast', hot: 'Hot cooking', salads: 'Salads', prep: 'Prep', second: 'Second line' };
+const ROLE_ORDER: SectionId[] = ['breakfast', 'hot', 'salads', 'prep', 'second'];
+
+/** The lunch line opens at 11:00 whatever time the shop opens for breakfast. */
+const LUNCH_OPEN_MINS = 11 * 60;
 
 const TEAMS: Record<string, Record<SectionId, string>> = {
-  'fj-marylebone': { hot: 'Tomasz', salads: 'Aisha', prep: 'Marco', second: 'Priya' },
-  'fj-paddington': { hot: 'Deniz', salads: 'Chloe', prep: 'Samuel', second: 'Ines' },
-  'fj-leadenhall': { hot: 'Kwame', salads: 'Sofia', prep: 'Luca', second: 'Hana' },
+  'fj-marylebone': { breakfast: 'Nadia', hot: 'Tomasz', salads: 'Aisha', prep: 'Marco', second: 'Priya' },
+  'fj-paddington': { breakfast: 'Ruth', hot: 'Deniz', salads: 'Chloe', prep: 'Samuel', second: 'Ines' },
+  'fj-leadenhall': { breakfast: 'Omar', hot: 'Kwame', salads: 'Sofia', prep: 'Luca', second: 'Hana' },
 };
 const NAME_POOL = ['Amara', 'Ben', 'Carla', 'Dev', 'Elif', 'Femi', 'Greta', 'Hugo', 'Ida', 'Jonas', 'Kaya', 'Leo', 'Mia', 'Noor', 'Oscar', 'Pia'];
 
@@ -108,7 +135,19 @@ export function teamFor(shopId: string): Record<SectionId, string> {
   if (TEAMS[shopId]) return TEAMS[shopId];
   const start = hash(shopId) % NAME_POOL.length;
   const pick = (n: number) => NAME_POOL[(start + n * 3) % NAME_POOL.length];
-  return { hot: pick(0), salads: pick(1), prep: pick(2), second: pick(3) };
+  return { breakfast: pick(4), hot: pick(0), salads: pick(1), prep: pick(2), second: pick(3) };
+}
+
+/** Components only breakfast products use: their prep sits with the breakfast person. */
+const BREAKFAST_COMPONENT_IDS: Set<string> = (() => {
+  const bf = new Set<string>();
+  const other = new Set<string>();
+  for (const p of PRODUCTS) for (const l of p.recipe) (p.group === 'breakfast' ? bf : other).add(l.ref);
+  return new Set([...bf].filter(id => !other.has(id)));
+})();
+
+export function isBreakfastComponent(id: string): boolean {
+  return BREAKFAST_COMPONENT_IDS.has(id);
 }
 
 export function toMins(hhmmStr: string): number {
@@ -126,14 +165,11 @@ function loadMinutes(c: Component): number {
   return 10 + cookMinutes(c) + (c.restMinutes ?? 0);
 }
 
-/** Cooker or oven capacity in batches per load, from the Setup screen's
- *  equipment counts. */
-function batchesPerLoad(c: Component): number {
-  if (c.container === 'blue-box') return c.id === 'rice-cooked' ? EQUIPMENT_LIMITS.riceCookers : 1;
-  if (c.container === 'oven-tray' && c.containersPerBatch) {
-    return Math.max(1, Math.floor((EQUIPMENT_LIMITS.ovenTrays * EQUIPMENT_LIMITS.ovens) / c.containersPerBatch));
-  }
-  return 1;
+/** Cooker or oven capacity in batches per load: the kit the recipe needs
+ *  (its class default or its own override) against the kit this shop's
+ *  benches own. */
+function batchesPerLoad(c: Component, kit: ShopKit): number {
+  return batchesPerLoadFor(kit, c.requiresEquipment ?? bookEquipment(c), c.containersPerBatch);
 }
 
 /** Hands-on minutes for one cook load: weigh, tray up, load, probe, transfer. */
@@ -177,16 +213,19 @@ function timeWhenSold(plan: ProductPlan, day: DayPlan, grams: number, pace = 1):
   return hours.length ? (hours[hours.length - 1] + 1) * 60 : 12 * 60;
 }
 
-function cookTasks(day: DayPlan, openMins: number, pace: Record<string, number>): { tasks: SectionTask[]; nudges: Nudge[] } {
+function cookTasks(day: DayPlan, lunchOpenMins: number, breakfastOpenMins: number, pace: Record<string, number>, kit: ShopKit): { tasks: SectionTask[]; nudges: Nudge[] } {
   const tasks: SectionTask[] = [];
   const nudges: Nudge[] = [];
   for (const plan of day.plans) {
-    if (plan.product.section !== 'hot' || !plan.product.countedAs) continue;
+    const breakfast = plan.product.section === 'breakfast';
+    if ((plan.product.section !== 'hot' && !breakfast) || !plan.product.countedAs) continue;
     const comp = COMPONENTS[plan.product.countedAs];
-    if (!comp) continue;
+    if (!comp || !comp.cook) continue;
+    const openMins = breakfast ? breakfastOpenMins : lunchOpenMins;
+    const sectionId: SectionId = breakfast ? 'breakfast' : 'hot';
     const total = batchesToNumber(plan.batches);
     if (total <= 0) continue;
-    const perLoad = batchesPerLoad(comp);
+    const perLoad = batchesPerLoad(comp, kit);
     const lead = loadMinutes(comp);
     const batchG = plan.product.batch.fullG;
     let done = 0;
@@ -198,13 +237,13 @@ function cookTasks(day: DayPlan, openMins: number, pace: Record<string, number>)
       // margin so the fresh load lands before the last container empties.
       const readyBy = firstLoad ? openMins : timeWhenSold(plan, day, done * batchG * 0.85);
       const startMins = Math.max(openMins - 150, readyBy - lead);
-      const sizeLabel = size % 1 === 0 ? `${size}` : `${Math.floor(size)}½`;
+      const sizeLabel = size % 1 === 0 ? `${size}` : `${Math.floor(size) || ''}½`;
       const nContainers = comp.containersPerBatch ? Math.ceil(size * comp.containersPerBatch) : 0;
       const containers = nContainers && comp.container ? `${nContainers} ${plural(nContainers, CONTAINERS[comp.container].name.toLowerCase())}` : undefined;
       const id = `cook-${plan.productId}-${load}`;
       const loadsTotal = Math.ceil(total / perLoad);
       tasks.push({
-        id, sectionId: 'hot', slot: slotFor(startMins), kind: 'cook',
+        id, sectionId, role: sectionId, slot: slotFor(startMins), kind: 'cook',
         title: plan.product.name,
         qty: `${sizeLabel} ${size === 1 ? 'batch' : 'batches'}`,
         detail: [loadsTotal > 1 ? `Load ${load} of ${loadsTotal}` : undefined, containers, comp.cook ? `${comp.cook.programme}, ${cookMinutes(comp)} min` : undefined].filter(Boolean).join(' · '),
@@ -231,6 +270,40 @@ function cookTasks(day: DayPlan, openMins: number, pace: Record<string, number>)
       load++;
     }
   }
+
+  // Hot components no product counts as its own (poached eggs go into
+  // three breakfast items): one load before open, sized from the cascade.
+  const counted = new Set(day.plans.map(p => p.product.countedAs));
+  for (const need of Object.values(day.explosion.components)) {
+    const comp = need.component;
+    if (comp.section !== 'hot' || !comp.cook || counted.has(comp.id)) continue;
+    const total = batchesToNumber(need.batches);
+    if (total <= 0) continue;
+    const breakfast = isBreakfastComponent(comp.id);
+    const openMins = breakfast ? breakfastOpenMins : lunchOpenMins;
+    const perLoad = batchesPerLoad(comp, kit);
+    const lead = loadMinutes(comp);
+    const loadsTotal = Math.ceil(total / perLoad);
+    let done = 0;
+    for (let load = 1; done < total - 0.001; load++) {
+      const size = Math.min(perLoad, total - done);
+      const startMins = openMins - lead - 10 * (loadsTotal - load);
+      const sizeLabel = size % 1 === 0 ? `${size}` : `${Math.floor(size) || ''}½`;
+      const nContainers = comp.containersPerBatch ? Math.ceil(size * comp.containersPerBatch) : 0;
+      const containers = nContainers && comp.container ? `${nContainers} ${plural(nContainers, CONTAINERS[comp.container].name.toLowerCase())}` : undefined;
+      const role: SectionId = breakfast ? 'breakfast' : 'hot';
+      tasks.push({
+        id: `cook-${comp.id}-${load}`, sectionId: role, role, slot: slotFor(startMins), kind: 'cook',
+        title: comp.name,
+        qty: `${sizeLabel} ${size === 1 ? 'batch' : 'batches'}`,
+        detail: [loadsTotal > 1 ? `Load ${load} of ${loadsTotal}` : undefined, containers, `${comp.cook.programme}, ${cookMinutes(comp)} min`, `for ${need.consumers.map(c => c.name).join(', ')}`].filter(Boolean).join(' · '),
+        containers, load: loadsTotal > 1 ? { n: load, of: loadsTotal } : undefined,
+        startMins, durationMins: HANDS_ON_PER_LOAD, readyMins: startMins + lead,
+        componentId: comp.id, batches: size, cookMins: cookMinutes(comp),
+      });
+      done += size;
+    }
+  }
   return { tasks, nudges };
 }
 
@@ -241,7 +314,7 @@ function saladTasks(day: DayPlan, prep: PrepDay, openMins: number): SectionTask[
     if (line.component.section !== 'salads') continue;
     const mins = Math.round(prepMinutes(line.component.kind, line.gramsMade, line.component));
     tasks.push({
-      id: `prep-${line.componentId}`, sectionId: 'salads', slot: 'am', kind: 'kit',
+      id: `prep-${line.componentId}`, sectionId: 'salads', role: 'salads', slot: 'am', kind: 'kit',
       title: line.component.name, qty: qtyLabel(line),
       detail: line.containers ? `${line.containers.count} ${plural(line.containers.count, line.containers.name.toLowerCase())}` : undefined,
       containers: line.containers ? `${line.containers.count} ${plural(line.containers.count, line.containers.name.toLowerCase())}` : undefined,
@@ -255,15 +328,15 @@ function saladTasks(day: DayPlan, prep: PrepDay, openMins: number): SectionTask[
   let wave2 = openMins + 100;
   for (const plan of day.plans) {
     if (plan.product.group !== 'salads') continue;
-    const units = plan.main.plannedUnits;
+    const units = fullLineUnits(plan);
     if (units <= 0) continue;
     const first = Math.ceil(units / 2);
     const second = units - first;
-    const unitName = plan.main.unitName.toLowerCase();
+    const unitName = mainUnitName(plan.product);
     const hold = `${plan.product.holdMinutes / 60} hour hold once dressed`;
     const m1 = 3 + 2 * first;
     tasks.push({
-      id: `dress-${plan.productId}-1`, sectionId: 'salads', slot: slotFor(wave1), kind: 'dress',
+      id: `dress-${plan.productId}-1`, sectionId: 'salads', role: 'salads', slot: slotFor(wave1), kind: 'dress',
       title: `Dress and plate ${plan.product.name}`, qty: `${first} ${plural(first, unitName)}`, detail: hold,
       startMins: wave1, durationMins: m1, productId: plan.productId,
     });
@@ -271,7 +344,7 @@ function saladTasks(day: DayPlan, prep: PrepDay, openMins: number): SectionTask[
     if (second > 0) {
       const m2 = 3 + 2 * second;
       tasks.push({
-        id: `dress-${plan.productId}-2`, sectionId: 'salads', slot: slotFor(wave2), kind: 'dress',
+        id: `dress-${plan.productId}-2`, sectionId: 'salads', role: 'salads', slot: slotFor(wave2), kind: 'dress',
         title: `Dress and plate ${plan.product.name}`, qty: `${second} ${plural(second, unitName)}`, detail: hold,
         startMins: wave2, durationMins: m2, productId: plan.productId, timed: true,
       });
@@ -291,8 +364,9 @@ function prepTasks(prep: PrepDay, openMins: number): SectionTask[] {
     const am = line.reason === 'today';
     const startMins = am ? amCursor : pmCursor;
     if (am) amCursor += mins; else pmCursor += mins;
+    const role: SectionId = isBreakfastComponent(line.componentId) && am ? 'breakfast' : 'prep';
     tasks.push({
-      id: `prep-${line.componentId}`, sectionId: 'prep', slot: am ? 'am' : 'pm', kind: line.component.kind === 'kit' ? 'kit' : 'prep',
+      id: `prep-${line.componentId}`, sectionId: role, role, slot: am ? 'am' : 'pm', kind: line.component.kind === 'kit' ? 'kit' : 'prep',
       title: line.component.name, qty: qtyLabel(line),
       detail: line.reason === 'tomorrow' ? 'for tomorrow' : line.reason === 'ahead' ? `covers to ${weekdayShort(line.covers[line.covers.length - 1])}` : undefined,
       containers: line.containers ? `${line.containers.count} ${plural(line.containers.count, line.containers.name.toLowerCase())}` : undefined,
@@ -313,25 +387,25 @@ function secondLineTasks(day: DayPlan, openMins: number): SectionTask[] {
   // so the hot food is plated last (closest to open).
   let cursor = openMins - 75;
   for (const group of ['salads', 'bases', 'hot-sides', 'proteins'] as const) {
-    const plating = day.plans.filter(p => p.product.group === group && p.second.plannedUnits > 0);
+    const plating = day.plans.filter(p => p.product.group === group && halfLineUnits(p) > 0);
     if (!plating.length) continue;
-    const units = plating.reduce((n, p) => n + p.second.plannedUnits, 0);
+    const units = plating.reduce((n, p) => n + halfLineUnits(p), 0);
     const mins = 5 + Math.round(1.5 * units);
     tasks.push({
-      id: `plate-${group}`, sectionId: 'second', slot: slotFor(cursor), kind: 'plate',
+      id: `plate-${group}`, sectionId: 'second', role: 'second', slot: slotFor(cursor), kind: 'plate',
       title: `Plate ${PRODUCT_GROUP_LABELS[group].toLowerCase()}`, qty: `${units} ${plural(units, 'small container')}`,
-      detail: plating.map(p => `${p.second.plannedUnits} ${p.product.name}`).join(', '),
+      detail: plating.map(p => `${halfLineUnits(p)} ${p.product.name}`).join(', '),
       startMins: cursor, durationMins: mins,
     });
     cursor += mins;
   }
   for (const order of day.activeOrders) {
     const due = toMins(order.time);
-    const boxes = order.lines.reduce((n, l) => n + l.qty, 0);
+    const boxes = orderBoxCount(order);
     const mins = 10 + Math.ceil(boxes * 1.5);
     const startMins = due - mins - 20;
     tasks.push({
-      id: `pack-${order.id}`, sectionId: 'second', slot: slotFor(startMins), kind: 'pack',
+      id: `pack-${order.id}`, sectionId: 'second', role: 'second', slot: slotFor(startMins), kind: 'pack',
       title: `Pack ${order.customer}`, qty: orderBoxesLabel(order),
       detail: `${order.reference} · ready by ${hhmm(due - 15)} for ${order.time}`,
       startMins, durationMins: mins, timed: true,
@@ -351,7 +425,10 @@ export function paceFor(shopId: string, date: string, isToday: boolean): Record<
 
 export function computeSectionsDay(shopId: string, date: string, getRecord: GetRecord, isToday: boolean): SectionsDay {
   const shop = getShop(shopId);
-  const openMins = toMins(shop?.opensAt ?? '11:00');
+  const shopOpenMins = toMins(shop?.opensAt ?? '11:00');
+  // Lunch sections work to the lunch line's open; a breakfast shop's
+  // earlier open only moves the breakfast section.
+  const openMins = Math.max(shopOpenMins, LUNCH_OPEN_MINS);
   const closeMins = toMins(shop?.closesAt ?? '19:00');
   const record = getRecord(shopId, date);
   const yesterday = getRecord(shopId, addDaysIso(date, -1));
@@ -359,37 +436,62 @@ export function computeSectionsDay(shopId: string, date: string, getRecord: GetR
   const prep = computePrepDay(shopId, date, getRecord);
   const pace = paceFor(shopId, date, isToday);
 
-  const cook = cookTasks(day, openMins, pace);
+  const cook = cookTasks(day, openMins, shopOpenMins, pace, kitFor(shopId));
   const all = [...cook.tasks, ...saladTasks(day, prep, openMins), ...prepTasks(prep, openMins), ...secondLineTasks(day, openMins)];
 
-  // Manager moves live in the record: task id → section id.
+  // Route each task's role to the bench that takes it at this shop. A role
+  // no bench takes gets a card of its own, flagged, so the work still shows.
+  const stations = stationsFor(shopId);
+  const defs: SectionDef[] = stations.map(st => ({ id: st.id, name: st.name, person: '', roles: st.roles, kit: st.kit }));
+  const benchForRole = (role: SectionId): string => {
+    const st = stationForRole(stations, role);
+    if (st) return st.id;
+    const id = `unassigned-${role}`;
+    if (!defs.some(d => d.id === id)) defs.push({ id, name: ROLE_NAMES[role], person: '', roles: [role], unassigned: true });
+    return id;
+  };
+  for (const t of all) t.sectionId = benchForRole(t.role);
+
+  // Manager moves live in the record: task id → bench id. Records written
+  // before benches carried roles hold a role id; map it to today's bench.
   const moved = record.reassigned ?? {};
   for (const t of all) {
-    const to = moved[t.id] as SectionId | undefined;
-    if (to && SECTION_ORDER.includes(to)) t.sectionId = to;
+    const to = moved[t.id];
+    if (!to) continue;
+    if (defs.some(d => d.id === to)) t.sectionId = to;
+    else if (ROLE_ORDER.includes(to as SectionId)) t.sectionId = benchForRole(to as SectionId);
   }
 
   const team = teamFor(shopId);
   const people = record.people ?? {};
   const order = record.taskOrder ?? {};
-  const cards: SectionCard[] = SECTION_ORDER.map(id => {
+  // A breakfast-only bench is a card at breakfast shops or when breakfast work exists.
+  const breakfastHere = shop?.breakfast || all.some(t => t.role === 'breakfast');
+  const shown = defs.filter(d => !(d.roles.length === 1 && d.roles[0] === 'breakfast' && !breakfastHere));
+  const cards: SectionCard[] = shown.map(def => {
+    const id = def.id;
     const mine = all.filter(t => t.sectionId === id).sort((a, b) => a.startMins - b.startMins);
     const am = applyOrder(mine.filter(t => t.slot === 'am'), order[listKey(id, 'am')]);
     const pm = applyOrder(mine.filter(t => t.slot === 'pm'), order[listKey(id, 'pm')]);
     const totalMins = mine.reduce((n, t) => n + t.durationMins, 0);
     const passiveMins = mine.reduce((n, t) => n + (t.readyMins ? Math.max(0, t.readyMins - t.startMins - t.durationMins) : 0), 0);
-    const startMins = mine.length ? Math.min(...mine.map(t => t.startMins)) : openMins - 180;
-    const endMins = mine.length ? Math.max(...mine.map(t => t.readyMins ?? t.startMins + t.durationMins)) : openMins;
-    return { section: { id, name: SECTION_NAMES[id], person: people[id] ?? team[id] }, am, pm, totalMins, passiveMins, startMins, endMins };
+    const breakfastOnly = def.roles.length === 1 && def.roles[0] === 'breakfast';
+    const open = breakfastOnly ? shopOpenMins : openMins;
+    const startMins = mine.length ? Math.min(...mine.map(t => t.startMins)) : open - 180;
+    const endMins = mine.length ? Math.max(...mine.map(t => t.readyMins ?? t.startMins + t.durationMins)) : open;
+    // Default person: whoever the shop's team has on the bench's first role.
+    const lead = def.roles.find(r => team[r]) ?? def.roles[0];
+    const person = people[id] ?? people[lead] ?? (lead ? team[lead] : NAME_POOL[hash(id) % NAME_POOL.length]);
+    return { section: { ...def, person }, am, pm, totalMins, passiveMins, startMins, endMins };
   });
 
   return {
-    shopId, date, cards, tasks: all, nudges: cook.nudges, openMins, closeMins,
+    shopId, date, cards, tasks: all, nudges: cook.nudges, openMins: shopOpenMins, closeMins,
     team: Array.from(new Set([...Object.values(team), ...NAME_POOL.slice(0, 4)])),
   };
 }
 
-export function listKey(sectionId: SectionId, slot: 'am' | 'pm'): string {
+export function listKey(sectionId: string, slot: 'am' | 'pm'): string {
   return `${sectionId}::${slot}`;
 }
 

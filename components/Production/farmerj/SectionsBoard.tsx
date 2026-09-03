@@ -11,9 +11,10 @@ import { FjDayStrip, Notice } from './DayPlan';
 import { useFjPlanStore } from './FjPlanStore';
 import { clearTimer, clockNudge, clockPlay, clockReset, clockSet, dismissNudge, hhmm, startTimer, timerRemaining, useFjClock, type FjTimer } from './fjClock';
 import { computeSectionsDay, listKey, plural, stepsForTask, type Nudge, type SectionCard, type SectionTask, type SectionsDay } from './sections';
-import { COMPONENTS, CONTAINERS, SHELF_LIFE_GROUPS, type Section as SectionId } from './recipes';
+import { COMPONENTS, CONTAINERS, SHELF_LIFE_GROUPS } from './recipes';
 import { FJ_ALL_SHOPS_ID, getShop } from './shops';
 import FjStepper, { type StepperTarget } from './FjStepper';
+import { EQUIPMENT_CAPACITY_UNIT, EQUIPMENT_LABELS } from '../fixtures';
 
 /**
  * Sections, on the Pret Benches board. One card per section with the
@@ -40,17 +41,38 @@ function useSectionsDay(shopId: string, date: string) {
   const isToday = date === FJ_DEMO_TODAY;
   const day = useMemo(() => computeSectionsDay(shopId, date, store.get, isToday), [shopId, date, store, isToday]);
   const record = store.get(shopId, date);
+  // Ticking a task also records what was made: the planned batches unless
+  // the person typed a different figure on the method card.
   const tick = useCallback(
-    (taskId: string, done: boolean) =>
+    (taskId: string, done: boolean, madeBatches?: number) =>
       store.update(shopId, date, r => {
         const ticks = { ...(r.ticks ?? {}) };
-        if (done) ticks[taskId] = new Date().toISOString(); else delete ticks[taskId];
-        return { ...r, ticks };
+        const made = { ...(r.made ?? {}) };
+        const task = day.tasks.find(t => t.id === taskId);
+        const card = task ? day.cards.find(c => c.section.id === task.sectionId) : undefined;
+        if (done) {
+          const at = new Date().toISOString();
+          ticks[taskId] = at;
+          made[taskId] = { batches: madeBatches ?? task?.batches ?? 0, by: card?.section.person ?? '', atISO: at };
+        } else {
+          delete ticks[taskId];
+          delete made[taskId];
+        }
+        return { ...r, ticks, made };
+      }),
+    [store, shopId, date, day],
+  );
+  const setMade = useCallback(
+    (taskId: string, batches: number) =>
+      store.update(shopId, date, r => {
+        const cur = r.made?.[taskId];
+        if (!cur) return r;
+        return { ...r, made: { ...(r.made ?? {}), [taskId]: { ...cur, batches } } };
       }),
     [store, shopId, date],
   );
   const move = useCallback(
-    (taskId: string, sectionId: SectionId) => store.update(shopId, date, r => ({ ...r, reassigned: { ...(r.reassigned ?? {}), [taskId]: sectionId } })),
+    (taskId: string, sectionId: string) => store.update(shopId, date, r => ({ ...r, reassigned: { ...(r.reassigned ?? {}), [taskId]: sectionId } })),
     [store, shopId, date],
   );
   const reorder = useCallback(
@@ -58,15 +80,15 @@ function useSectionsDay(shopId: string, date: string) {
     [store, shopId, date],
   );
   const setPerson = useCallback(
-    (sectionId: SectionId, name: string) => store.update(shopId, date, r => ({ ...r, people: { ...(r.people ?? {}), [sectionId]: name } })),
+    (sectionId: string, name: string) => store.update(shopId, date, r => ({ ...r, people: { ...(r.people ?? {}), [sectionId]: name } })),
     [store, shopId, date],
   );
-  return { day, ticks: record.ticks ?? {}, tick, move, reorder, setPerson };
+  return { day, ticks: record.ticks ?? {}, made: record.made ?? {}, tick, setMade, move, reorder, setPerson };
 }
 
 function SectionsForShop({ shopId, date, onDateChange }: { shopId: string; date: string; onDateChange: (d: string) => void }) {
   const shop = getShop(shopId);
-  const { day, ticks, tick, move, reorder, setPerson } = useSectionsDay(shopId, date);
+  const { day, ticks, made, tick, setMade, move, reorder, setPerson } = useSectionsDay(shopId, date);
   const clock = useFjClock();
   const [slot, setSlot] = useState<SlotFilter>('all');
   const [focused, setFocused] = useState<string | null>(null);
@@ -141,12 +163,15 @@ function SectionsForShop({ shopId, date, onDateChange }: { shopId: string; date:
 
       {focusedTask && (
         <MethodPanel
+          key={focusedTask.id}
           task={focusedTask}
           nowMins={isToday ? clock.mins : undefined}
           timer={clock.timers[focusedTask.id]}
           done={Boolean(ticks[focusedTask.id])}
+          made={made[focusedTask.id]?.batches}
           onStart={() => startTask(focusedTask)}
-          onTick={done => tick(focusedTask.id, done)}
+          onTick={(done, batches) => tick(focusedTask.id, done, batches)}
+          onMade={b => setMade(focusedTask.id, b)}
           onStepper={() => openStepper({ sectionId: focusedTask.sectionId, slot: focusedTask.slot, taskId: focusedTask.id })}
           onClose={() => setFocused(null)}
         />
@@ -210,9 +235,9 @@ function SectionCardView({ card, slot, nowMins, ticks, timers, team, sections, o
   timers: Record<string, FjTimer>;
   team: string[];
   sections: SectionCard['section'][];
-  onMove: (id: string, to: SectionId) => void;
+  onMove: (id: string, to: string) => void;
   onReorder: (key: string, ids: string[]) => void;
-  onPerson: (sectionId: SectionId, name: string) => void;
+  onPerson: (sectionId: string, name: string) => void;
   onOpen: (id: string) => void;
   onPrint: () => void;
 }) {
@@ -236,7 +261,15 @@ function SectionCardView({ card, slot, nowMins, ticks, timers, team, sections, o
               <Clock size={12} /> {hhmm(card.startMins)} → {hhmm(card.endMins)}
             </span>
             <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{done} of {all.length} ticked</span>
+            {card.section.kit && card.section.kit.length > 0 && (
+              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }} title="Kit on this bench, from the shop's settings">
+                · {card.section.kit.map(k => `${k.count} ${plural(k.count, EQUIPMENT_LABELS[k.equipment].toLowerCase())}${EQUIPMENT_CAPACITY_UNIT[k.equipment] && k.capacity ? ` of ${k.capacity}` : ''}`).join(', ')}
+              </span>
+            )}
           </div>
+          {card.section.unassigned && (
+            <div style={{ fontSize: 11, color: 'var(--color-error)', fontWeight: 600 }}>No bench takes this work at this shop. Tick it on a bench under Setup, Benches.</div>
+          )}
         </div>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           <PersonChip name={card.section.person} team={team} onPick={n => onPerson(card.section.id, n)} />
@@ -402,7 +435,7 @@ type TaskRowOwnProps = {
   timer?: FjTimer;
   nowMins?: number;
   sections: SectionCard['section'][];
-  onMove: (to: SectionId) => void;
+  onMove: (to: string) => void;
   onOpen: () => void;
 };
 
@@ -499,7 +532,7 @@ function PersonChip({ name, team, onPick }: { name: string; team: string[]; onPi
   );
 }
 
-function MoveButton({ current, sections, onMove }: { current: SectionId; sections: SectionCard['section'][]; onMove: (to: SectionId) => void }) {
+function MoveButton({ current, sections, onMove }: { current: string; sections: SectionCard['section'][]; onMove: (to: string) => void }) {
   const { open, setOpen, ref } = usePopover();
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-flex' }} onClick={e => e.stopPropagation()}>
@@ -521,19 +554,27 @@ function MoveButton({ current, sections, onMove }: { current: SectionId; section
 
 // ─── Method card (manager's quick look from the board) ────────────────────────
 
-function MethodPanel({ task, nowMins, timer, done, onStart, onTick, onStepper, onClose }: {
+function MethodPanel({ task, nowMins, timer, done, made, onStart, onTick, onMade, onStepper, onClose }: {
   task: SectionTask;
   nowMins?: number;
   timer?: FjTimer;
   done: boolean;
+  /** Batches recorded as made, once ticked. */
+  made?: number;
   onStart: () => void;
-  onTick: (done: boolean) => void;
+  onTick: (done: boolean, madeBatches?: number) => void;
+  onMade: (batches: number) => void;
   onStepper: () => void;
   onClose: () => void;
 }) {
+  const [draftMade, setDraftMade] = useState<number | undefined>(undefined);
   if (typeof window === 'undefined') return null;
   const comp = task.componentId ? COMPONENTS[task.componentId] : undefined;
   const batches = task.batches ?? 1;
+  // What goes on the record: the saved figure when ticked, else the draft, else the plan.
+  const madeNow = done ? (made ?? task.batches ?? 0) : (draftMade ?? task.batches ?? 0);
+  const step = comp?.batch.halfG ? 0.5 : 1;
+  const setMadeNow = (n: number) => { const v = Math.max(0, Math.round(n * 2) / 2); if (done) onMade(v); else setDraftMade(v); };
   const remaining = timer && nowMins !== undefined ? timerRemaining(timer, nowMins) : undefined;
   const steps = stepsForTask(task);
   const group = comp ? SHELF_LIFE_GROUPS[comp.shelfLife] : undefined;
@@ -607,7 +648,15 @@ function MethodPanel({ task, nowMins, timer, done, onStart, onTick, onStepper, o
           )}
           <button type="button" onClick={onStepper} style={secondaryButton}><PlaySquare size={13} /> Stepper</button>
           <div style={{ flex: 1 }} />
-          <button type="button" onClick={() => onTick(!done)} style={done ? secondaryButton : primaryButton}>
+          {task.batches !== undefined && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} aria-label="Batches made">
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>Made</span>
+              <button type="button" aria-label="Fewer batches made" onClick={() => setMadeNow(madeNow - step)} disabled={madeNow <= 0} style={stepButton}>−</button>
+              <span style={{ minWidth: 30, textAlign: 'center', fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: madeNow !== (task.batches ?? 0) ? 'var(--color-warning)' : 'var(--color-text-primary)' }}>{madeNow % 1 === 0 ? madeNow : madeNow.toFixed(1).replace('.5', '½')}</span>
+              <button type="button" aria-label="More batches made" onClick={() => setMadeNow(madeNow + step)} style={stepButton}>+</button>
+            </div>
+          )}
+          <button type="button" onClick={() => onTick(!done, done ? undefined : madeNow)} style={done ? secondaryButton : primaryButton}>
             <Check size={13} /> {done ? 'Untick' : 'Tick done'}
           </button>
         </div>
@@ -703,5 +752,6 @@ const secondaryButton: CSSProperties = { display: 'inline-flex', alignItems: 'ce
 const primaryButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, minHeight: 36, padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-primary)', background: 'var(--color-accent-active)', color: 'var(--color-text-on-active, #fff)', border: '1px solid var(--color-accent-active)', cursor: 'pointer', whiteSpace: 'nowrap' };
 const closeButton: CSSProperties = { width: 32, height: 32, borderRadius: 8, border: '1px solid var(--color-border-subtle)', background: '#ffffff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-secondary)', flexShrink: 0 };
 const linkButton: CSSProperties = { background: 'none', border: 'none', padding: 0, color: 'var(--color-link)', fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: 'var(--font-primary)', textDecoration: 'underline' };
+const stepButton: CSSProperties = { width: 28, height: 28, borderRadius: 6, border: '1px solid var(--color-border)', background: '#ffffff', cursor: 'pointer', fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-primary)' };
 const popover: CSSProperties = { position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 60, minWidth: 200, background: '#ffffff', border: '1px solid var(--color-border)', borderRadius: 10, boxShadow: '0 12px 32px rgba(10, 20, 25, 0.18)', padding: 4, display: 'flex', flexDirection: 'column', gap: 2 };
 const popoverItem: CSSProperties = { display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', background: 'transparent', border: 'none', borderRadius: 6, textAlign: 'left', cursor: 'pointer', fontFamily: 'var(--font-primary)', color: 'var(--color-text-primary)', fontSize: 12.5, whiteSpace: 'nowrap' };

@@ -25,6 +25,8 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { Calendar, ChevronDown, ChevronRight } from 'lucide-react';
+import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+import FjForecastScreen from '@/components/Production/farmerj/ForecastScreen';
 import { DEMO_TODAY, dayOffset } from '@/components/Production/fixtures';
 import DatePickerPopover from '@/components/Forecast/DatePickerPopover';
 import { useProductionSite } from '@/components/Production/ProductionSiteContext';
@@ -65,7 +67,18 @@ const RESULT_QUICK = [
 const FORECAST_MAX_OFFSET = 14;
 const RESULT_MIN_OFFSET = -30;
 
+/**
+ * Farmer J reads its forecast from the Day plan's own model (reference-day
+ * average × flex), so the brand gets its own screen with the same shape.
+ * Branching here, above the hub page's hooks, keeps hook order stable.
+ */
 export default function ForecastPage() {
+  const { isFarmerJ } = useActiveSite();
+  if (isFarmerJ) return <FjForecastScreen />;
+  return <HubForecastPage />;
+}
+
+function HubForecastPage() {
   const { siteId } = useProductionSite();
 
   const [scope, setScope] = useState<Scope>('forecast');

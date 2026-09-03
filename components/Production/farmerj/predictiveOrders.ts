@@ -6,6 +6,7 @@ import { addDays, FJ_DEMO_TODAY, isShopOpen, longDay, shortDate, weekdayLabel, w
 import { FJ_CLOCK_START } from './fjClock';
 import { computeDayPlan, type DayRecord } from './FjPlanStore';
 import { computeIngredientNeeds, type IngredientNeed } from './ordering';
+import { casesFor, computePackagingNeeds, PACKAGING, PACKAGING_ORDER, PACKAGING_SUPPLIER, type PackagingId, type PackagingNeed } from './packaging';
 import { INGREDIENTS, type Ingredient } from './recipes';
 import { daySales } from './sales';
 
@@ -19,9 +20,13 @@ import { daySales } from './sales';
  * prep-list overrides and the flex all land in the order, less what the
  * store-room count says is on the shelf, rounded up to the supplier's pack.
  *
+ * Packaging is a supplier like any other. Its lines are counted per tray and
+ * per portion from the same day plans (see `packaging.ts`), so a flex or a
+ * catering order moves the box count the way it moves the chicken.
+ *
  * Supplier profiles and store-room counts are demo-modelled. Supplier names
- * are the ones on Farmer J's recipe sheets (Med Cuisine, H&B) or the
- * category the sheet uses; Ed swaps in the real accounts.
+ * are the ones on Farmer J's recipe sheets (Med Cuisine, H&B, Packaging
+ * Environmental) or the category the sheet uses; Ed swaps in the real accounts.
  */
 
 type SupplierProfile = {
@@ -46,7 +51,11 @@ const PROFILES: SupplierProfile[] = [
   { id: 'fj-sup-frozen', name: 'Frozen', matches: 'Frozen', cutOffTime: '16:00', leadTimeDays: 2, minimumOrderValue: 0, deliveryDays: [3], email: 'orders@frozen.example' },
   { id: 'fj-sup-med', name: 'Med Cuisine', matches: 'Med Cuisine', cutOffTime: '12:00', leadTimeDays: 3, minimumOrderValue: 120, deliveryDays: [2], email: 'orders@medcuisine.example' },
   { id: 'fj-sup-hb', name: 'H&B', matches: 'H&B', cutOffTime: '17:00', leadTimeDays: 3, minimumOrderValue: 0, deliveryDays: [4], email: 'orders@hb.example' },
+  // ProMap: "Packaging Environmental, order by 11AM". Two deliveries a week.
+  { id: 'fj-sup-packaging', name: PACKAGING_SUPPLIER, matches: PACKAGING_SUPPLIER, cutOffTime: '11:00', leadTimeDays: 2, minimumOrderValue: 100, deliveryDays: [1, 3], email: 'orders@packagingenvironmental.example' },
 ];
+
+const PACKAGING_PROFILE = PROFILES.find(p => p.matches === PACKAGING_SUPPLIER)!;
 
 const STOCK_COUNTED_DAYS_AGO = 2;
 
@@ -149,10 +158,43 @@ export const FJ_ORDER_PRODUCTS: SupplierProduct[] = Object.values(INGREDIENTS)
     available: true,
   }));
 
+export function packagingIngredientId(id: PackagingId): string {
+  return `fj-pack-${id}`;
+}
+
+/** Cases on the shelf at Monday's count. High-volume lines usually have a case open. */
+export function onHandCases(id: PackagingId): number {
+  if (id === 'catering-box-x4' || id === 'catering-box-x6') return 0;
+  return hash(id) % 2;
+}
+
+export const FJ_PACKAGING_INGREDIENTS: OrderIngredient[] = PACKAGING_ORDER.map(id => ({
+  id: packagingIngredientId(id),
+  name: PACKAGING[id].name,
+  variant: 'Packaging',
+  // Leading space: the review reads `${stock}${unit}`, so this prints "8.0 cases".
+  stockUnit: ' cases',
+  currentStock: onHandCases(id),
+  stockDataAgeDays: STOCK_COUNTED_DAYS_AGO,
+  parLevel: null,
+  parConfirmed: false,
+}));
+
+export const FJ_PACKAGING_PRODUCTS: SupplierProduct[] = PACKAGING_ORDER.map(id => ({
+  ingredientId: packagingIngredientId(id),
+  supplierId: PACKAGING_PROFILE.id,
+  isPrimary: true,
+  unitName: PACKAGING[id].caseLabel,
+  // Stock is counted in cases, so one case moves stock by one.
+  unitSize: 1,
+  unitCost: PACKAGING[id].costPerCase,
+  available: true,
+}));
+
 export const FJ_ORDERING_DATASET: OrderingDataset = {
   suppliers: FJ_ORDER_SUPPLIERS,
-  ingredients: FJ_ORDER_INGREDIENTS,
-  products: FJ_ORDER_PRODUCTS,
+  ingredients: [...FJ_ORDER_INGREDIENTS, ...FJ_PACKAGING_INGREDIENTS],
+  products: [...FJ_ORDER_PRODUCTS, ...FJ_PACKAGING_PRODUCTS],
 };
 
 registerOrderingDataset(FJ_ORDERING_DATASET);
@@ -204,9 +246,90 @@ function whyFor(need: IngredientNeed, packs: number, onHandGrams: number, cycle:
   return out;
 }
 
+function packagingTrust(need: PackagingNeed, cases: number, cycle: DeliveryCycle): TrustPanelData {
+  const h = hash(need.item.id);
+  const points = [4, 3, 2, 1].map(n => {
+    const date = addDays(cycle.deliveryDate, -7 * n);
+    const jitter = 0.8 + ((h + n * 13) % 40) / 100;
+    return { date: shortDate(date).slice(4), qty: Math.max(0, Math.round(cases * jitter)) };
+  });
+  const average = Math.round((points.reduce((s, p) => s + p.qty, 0) / points.length) * 10) / 10;
+  return {
+    history: { dayOfWeek: `${longDay(cycle.deliveryDate)} deliveries`, points, unit: 'cases', average },
+    consumption: {
+      value: need.units,
+      unit: 'units',
+      window: `${coverLabel(cycle.coverDays)}, until the ${shortDate(cycle.nextDeliveryDate)} delivery`,
+      driver: `trays and portions on the day plans for ${coverLabel(cycle.coverDays)}`,
+    },
+  };
+}
+
+function packagingWhy(need: PackagingNeed, cases: number, onHand: number, cycle: DeliveryCycle): string[] {
+  const out: string[] = [];
+  out.push(`${need.units} ${need.item.name.toLowerCase()}${need.units === 1 ? '' : 's'} needed ${coverLabel(cycle.coverDays)}`);
+  out.push(...need.drivers);
+  out.push(onHand > 0 ? `${onHand} ${onHand === 1 ? 'case' : 'cases'} on the shelf at Monday's count` : `Nothing on the shelf at Monday's count`);
+  out.push(`${cases} × ${need.item.caseLabel} = ${cases * need.item.caseSize}`);
+  return out;
+}
+
+function packagingOrder(shopId: string, getRecord: GetRecord): SuggestedOrder | null {
+  const profile = PACKAGING_PROFILE;
+  const cycle = deliveryCycle(profile);
+  const days = cycle.coverDays.filter(d => isShopOpen(shopId, d));
+  if (days.length === 0) return null;
+  const lines: SuggestedOrderLine[] = [];
+  for (const need of computePackagingNeeds(shopId, days, getRecord)) {
+    const onHand = onHandCases(need.item.id);
+    const cases = casesFor(need.item, need.units, onHand);
+    if (cases <= 0) continue;
+    const suggestedCases = casesFor(need.item, need.suggestedUnits, onHand);
+    const edited = cases !== suggestedCases;
+    const perDay = need.units / days.length;
+    lines.push({
+      id: `fj-line-${profile.id}-${need.item.id}`,
+      orderId: `fj-ord-${profile.id}`,
+      ingredientId: packagingIngredientId(need.item.id),
+      supplierId: profile.id,
+      suggestedQty: cases,
+      suggestedPar: Math.ceil(need.units / need.item.caseSize),
+      currentStockAtSuggestion: onHand,
+      stockDataAgeDays: STOCK_COUNTED_DAYS_AGO,
+      posDataAvailable: true,
+      salesVelocity7d: Math.round(perDay),
+      salesVelocity14d: Math.round(perDay),
+      confidenceScore: edited ? 'medium' : 'high',
+      confidenceFactors: { stocktake: 'aging', pos: 'active', par: 'suggested', variance: edited ? 'moderate' : 'stable' },
+      movAutoAdded: false,
+      userAction: null,
+      finalQty: null,
+      dismissReason: null,
+      movWarnShown: false,
+      whyOverride: packagingWhy(need, cases, onHand, cycle),
+      whyHighlight: edited,
+      trust: packagingTrust(need, cases, cycle),
+    });
+  }
+  if (lines.length === 0) return null;
+  return {
+    id: `fj-ord-${profile.id}`,
+    supplierId: profile.id,
+    state: 'draft',
+    deliveryDate: shortDate(cycle.deliveryDate),
+    sendTime: minusMins(profile.cutOffTime, 30),
+    lines,
+  };
+}
+
 export function computeFarmerJOrders(shopId: string, getRecord: GetRecord): SuggestedOrder[] {
   const orders: SuggestedOrder[] = [];
   for (const profile of PROFILES) {
+    if (profile === PACKAGING_PROFILE) {
+      const o = packagingOrder(shopId, getRecord);
+      if (o) orders.push(o);
+      continue;
+    }
     const cycle = deliveryCycle(profile);
     const days = cycle.coverDays.filter(d => isShopOpen(shopId, d));
     if (days.length === 0) continue;
@@ -264,7 +387,7 @@ export function computeFarmerJOrders(shopId: string, getRecord: GetRecord): Sugg
 export function applySuggestedPars(orders: SuggestedOrder[]): void {
   for (const o of orders) {
     for (const l of o.lines) {
-      const ing = FJ_ORDER_INGREDIENTS.find(i => i.id === l.ingredientId);
+      const ing = FJ_ORDER_INGREDIENTS.find(i => i.id === l.ingredientId) ?? FJ_PACKAGING_INGREDIENTS.find(i => i.id === l.ingredientId);
       if (ing) ing.parLevel = l.suggestedPar;
     }
   }

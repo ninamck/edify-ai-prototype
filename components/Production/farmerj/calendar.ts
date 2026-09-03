@@ -10,13 +10,12 @@
  */
 
 import {
-  DEEP_CLEAN_DAY,
-  productionDaysFor,
   SHELF_LIFE_GROUPS,
   WEEKDAY_LABELS,
   type ShelfLifeGroupId,
   type Weekday,
 } from './recipes';
+import { deepCleanDaysFor, productionDaysFor } from './makeOn';
 import { getShop } from './shops';
 
 export const FJ_DEMO_TODAY = '2026-09-16';
@@ -158,7 +157,7 @@ export function referenceDaysFor(iso: string, count = 4): ReferenceDay[] {
 
 export function isProductionDay(shopId: string, group: ShelfLifeGroupId, iso: string): boolean {
   const wd = weekdayOf(iso);
-  if (group !== 'daily' && wd === DEEP_CLEAN_DAY) return false;
+  if (group !== 'daily' && deepCleanDaysFor(shopId).includes(wd)) return false;
   if (!isShopOpen(shopId, iso)) return false;
   return productionDaysFor(shopId, group).includes(wd);
 }
@@ -188,8 +187,8 @@ export function daysCoveredFrom(shopId: string, group: ShelfLifeGroupId, madeOn:
   return days;
 }
 
-export function isDeepCleanDay(iso: string): boolean {
-  return weekdayOf(iso) === DEEP_CLEAN_DAY;
+export function isDeepCleanDay(shopId: string, iso: string): boolean {
+  return deepCleanDaysFor(shopId).includes(weekdayOf(iso));
 }
 
 export function isWeekend(iso: string): boolean {

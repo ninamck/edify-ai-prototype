@@ -4,8 +4,13 @@
 // today: kits and preps for today, day-before preps for tomorrow, and
 // make-ahead dressings and mixes on this shop's make-on days.
 
+import { Suspense } from 'react';
 import PrepList from '@/components/Production/farmerj/PrepList';
 
 export default function FjPrepListPage() {
-  return <PrepList />;
+  return (
+    <Suspense fallback={null}>
+      <PrepList />
+    </Suspense>
+  );
 }

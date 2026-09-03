@@ -34,15 +34,16 @@ export function siteName(id: SiteId): string {
   return ALL_SITES.find((s) => s.id === id)?.name ?? id;
 }
 
-export function siteNames(ids: SiteId[]): string[] {
+export function siteNames(ids: SiteId[], sites: Site[] = ALL_SITES): string[] {
   // Preserve estate order so summaries read consistently.
-  return ALL_SITES.filter((s) => ids.includes(s.id)).map((s) => s.name);
+  return sites.filter((s) => ids.includes(s.id)).map((s) => s.name);
 }
 
-/** "Soho, Borough and Fitzroy" — plain-English site list. */
-export function siteListPhrase(ids: SiteId[]): string {
-  if (ids.length >= ALL_SITES.length) return `all ${ALL_SITES.length} sites`;
-  const names = siteNames(ids);
+/** "Soho, Borough and Fitzroy" — plain-English site list. Pass `sites` for
+ *  an estate other than the roles-demo one (Farmer J's shops). */
+export function siteListPhrase(ids: SiteId[], sites: Site[] = ALL_SITES): string {
+  if (ids.length >= sites.length) return `all ${sites.length} sites`;
+  const names = siteNames(ids, sites);
   if (names.length === 0) return 'no sites';
   if (names.length === 1) return names[0];
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;

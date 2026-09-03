@@ -32,26 +32,11 @@ import {
 } from 'recharts';
 import { Lock, Star, ArrowDownRight } from 'lucide-react';
 import {
-  BRIDGE_DRILL,
-  BRIDGE_DRILL_PRICE,
-  BRIDGE_DRILL_UNEXPLAINED_LIVE,
   BUDGET_DEPENDENCY,
-  COGS_VARIANCE,
-  CPU_TRANSFERS,
-  DATA_CONFIDENCE,
-  DEAD_STOCK,
-  DEAD_STOCK_TOTAL,
-  GP_BRIDGE,
-  GP_BRIDGE_PRICE_VARIANCE_K,
-  GP_BRIDGE_UNEXPLAINED_LIVE_K,
-  MENU_PROFITABILITY,
-  PERIOD_LABEL,
-  PERIOD_TREND,
-  STOCK_HOLDING,
-  SUPPLIER_INFLATION,
+  ESPRESSO_PERIOD,
   SUPPLIER_INFLATION_DEPENDENCY,
-  SUPPLIER_PRICE_EFFECT_TOTAL_K,
   type BridgeDrillItem,
+  type PeriodData,
 } from './templateData';
 import TileActions from '@/components/ScheduledReports/TileActions';
 import { TemplateIntro } from './DailyTemplate';
@@ -88,15 +73,31 @@ const PERIOD_INSIGHTS = [
   'Trend · four periods',
 ];
 
-function periodActions(insightTitle: string) {
+function periodActions(insightTitle: string, data: PeriodData) {
+  const siblings = data.cpuTransfers ? PERIOD_INSIGHTS : PERIOD_INSIGHTS.filter((t) => !t.startsWith('CPU'));
   return (
     <TileActions
       insightTitle={insightTitle}
-      siteLabel="All sites (estate view)"
-      siblingInsights={PERIOD_INSIGHTS}
+      siteLabel={data.scopeLabel}
+      siblingInsights={siblings}
       dataWindowLabel="Last complete period as of send date"
     />
   );
+}
+
+/** Unexplained once price movement is measured out of the bucket. */
+function unexplainedLiveK(data: PeriodData): number {
+  return data.gpBridge.unexplained - data.priceVarianceK;
+}
+
+/** A £k axis window that keeps the bridge's drop legible whatever the estate's size. */
+function bridgeDomain(data: PeriodData): [number, number] {
+  const { theoreticalGp, actualGp } = data.gpBridge;
+  const span = theoreticalGp - actualGp;
+  const step = span >= 100 ? 50 : span >= 20 ? 10 : 5;
+  const low = Math.floor((actualGp - span * 0.6) / step) * step;
+  const high = Math.ceil((theoreticalGp + span * 0.3) / step) * step;
+  return [Math.max(0, low), high];
 }
 
 // ─── GP bridge (waterfall) ────────────────────────────────────────────────────
@@ -117,23 +118,24 @@ type BridgeStep = {
  * a measured price-variance step joins the bridge and the unexplained bucket
  * shrinks by exactly that amount — the ends of the bridge don't move.
  */
-function bridgeSteps(invoiceMatchingLive: boolean): BridgeStep[] {
+function bridgeSteps(data: PeriodData, invoiceMatchingLive: boolean): BridgeStep[] {
+  const bridge = data.gpBridge;
   if (!invoiceMatchingLive) {
     return [
-      { key: 'theoretical', label: 'Theoretical GP', base: 0, value: GP_BRIDGE.theoreticalGp, kind: 'total' },
-      { key: 'waste', label: 'Logged waste', base: GP_BRIDGE.theoreticalGp - GP_BRIDGE.waste, value: GP_BRIDGE.waste, kind: 'down' },
-      { key: 'unexplained', label: 'Unexplained', base: GP_BRIDGE.actualGp, value: GP_BRIDGE.unexplained, kind: 'down' },
-      { key: 'actual', label: 'Actual GP', base: 0, value: GP_BRIDGE.actualGp, kind: 'total' },
+      { key: 'theoretical', label: 'Theoretical GP', base: 0, value: bridge.theoreticalGp, kind: 'total' },
+      { key: 'waste', label: 'Logged waste', base: bridge.theoreticalGp - bridge.waste, value: bridge.waste, kind: 'down' },
+      { key: 'unexplained', label: 'Unexplained', base: bridge.actualGp, value: bridge.unexplained, kind: 'down' },
+      { key: 'actual', label: 'Actual GP', base: 0, value: bridge.actualGp, kind: 'total' },
     ];
   }
-  const afterPrice = GP_BRIDGE.theoreticalGp - GP_BRIDGE_PRICE_VARIANCE_K;
-  const afterWaste = afterPrice - GP_BRIDGE.waste;
+  const afterPrice = bridge.theoreticalGp - data.priceVarianceK;
+  const afterWaste = afterPrice - bridge.waste;
   return [
-    { key: 'theoretical', label: 'Theoretical GP', base: 0, value: GP_BRIDGE.theoreticalGp, kind: 'total' },
-    { key: 'price', label: 'Price variance', base: afterPrice, value: GP_BRIDGE_PRICE_VARIANCE_K, kind: 'down' },
-    { key: 'waste', label: 'Logged waste', base: afterWaste, value: GP_BRIDGE.waste, kind: 'down' },
-    { key: 'unexplained', label: 'Unexplained', base: GP_BRIDGE.actualGp, value: GP_BRIDGE_UNEXPLAINED_LIVE_K, kind: 'down' },
-    { key: 'actual', label: 'Actual GP', base: 0, value: GP_BRIDGE.actualGp, kind: 'total' },
+    { key: 'theoretical', label: 'Theoretical GP', base: 0, value: bridge.theoreticalGp, kind: 'total' },
+    { key: 'price', label: 'Price variance', base: afterPrice, value: data.priceVarianceK, kind: 'down' },
+    { key: 'waste', label: 'Logged waste', base: afterWaste, value: bridge.waste, kind: 'down' },
+    { key: 'unexplained', label: 'Unexplained', base: bridge.actualGp, value: unexplainedLiveK(data), kind: 'down' },
+    { key: 'actual', label: 'Actual GP', base: 0, value: bridge.actualGp, kind: 'total' },
   ];
 }
 
@@ -153,10 +155,10 @@ const DRILL_TITLES: Record<BridgeStepKey, string> = {
   actual: 'Actual GP build-up (stock movement)',
 };
 
-function drillItemsFor(key: BridgeStepKey, invoiceMatchingLive: boolean): BridgeDrillItem[] {
-  if (key === 'price') return BRIDGE_DRILL_PRICE;
-  if (key === 'unexplained' && invoiceMatchingLive) return BRIDGE_DRILL_UNEXPLAINED_LIVE;
-  return BRIDGE_DRILL[key];
+function drillItemsFor(data: PeriodData, key: BridgeStepKey, invoiceMatchingLive: boolean): BridgeDrillItem[] {
+  if (key === 'price') return data.bridgeDrillPrice;
+  if (key === 'unexplained' && invoiceMatchingLive) return data.bridgeDrillUnexplainedLive;
+  return data.bridgeDrill[key];
 }
 
 function BridgeDrill({ stepKey, items }: { stepKey: BridgeStepKey; items: BridgeDrillItem[] }) {
@@ -178,9 +180,10 @@ function BridgeDrill({ stepKey, items }: { stepKey: BridgeStepKey; items: Bridge
   );
 }
 
-function GpBridgeTile({ invoiceMatchingLive }: { invoiceMatchingLive: boolean }) {
+function GpBridgeTile({ data, invoiceMatchingLive }: { data: PeriodData; invoiceMatchingLive: boolean }) {
   const [drill, setDrill] = useState<BridgeStepKey | null>('unexplained');
-  const steps = bridgeSteps(invoiceMatchingLive);
+  const steps = bridgeSteps(data, invoiceMatchingLive);
+  const bridge = data.gpBridge;
   // The price step only exists while invoice matching is live — if the flag
   // flips off with that drill open, fall back to no drill rather than
   // rendering a drill for a bar that isn't on the chart.
@@ -190,14 +193,15 @@ function GpBridgeTile({ invoiceMatchingLive }: { invoiceMatchingLive: boolean })
     <TileCard
       title="GP bridge · theoretical to actual"
       badge={<FigureBadge kind="measured" />}
-      actions={periodActions('GP bridge · theoretical to actual')}>
+      actions={periodActions('GP bridge · theoretical to actual', data)}>
       <div style={{ padding: '0 12px', width: '100%', height: 280 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={steps} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="rgba(0, 28, 53,0.08)" vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={{ stroke: 'rgba(0, 28, 53,0.15)' }} />
             <YAxis
-              domain={[380, 420]}
+              domain={bridgeDomain(data)}
+              allowDataOverflow
               tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
               tickLine={false}
               axisLine={false}
@@ -239,16 +243,16 @@ function GpBridgeTile({ invoiceMatchingLive }: { invoiceMatchingLive: boolean })
       <div style={{ padding: '4px 16px 10px', display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--color-text-secondary)' }}>
         <LegendSwatch color={MID} label="Theoretical (measured from POS + recipes)" />
         {invoiceMatchingLive && (
-          <LegendSwatch color={VALUE_INK} label={`Price variance −£${GP_BRIDGE_PRICE_VARIANCE_K.toFixed(1)}k (measured from matched invoices)`} />
+          <LegendSwatch color={VALUE_INK} label={`Price variance −£${data.priceVarianceK.toFixed(1)}k (measured from matched invoices)`} />
         )}
-        <LegendSwatch color={WARN} label={`Logged waste −£${GP_BRIDGE.waste.toFixed(1)}k (measured)`} />
+        <LegendSwatch color={WARN} label={`Logged waste −£${bridge.waste.toFixed(1)}k (measured)`} />
         <LegendSwatch
           color="#B45309"
-          label={`Unexplained −£${(invoiceMatchingLive ? GP_BRIDGE_UNEXPLAINED_LIVE_K : GP_BRIDGE.unexplained).toFixed(1)}k (honest bucket)`}
+          label={`Unexplained −£${(invoiceMatchingLive ? unexplainedLiveK(data) : bridge.unexplained).toFixed(1)}k (honest bucket)`}
         />
         <LegendSwatch color={NAVY} label="Actual (measured from stocktakes)" />
       </div>
-      {activeDrill && <BridgeDrill stepKey={activeDrill} items={drillItemsFor(activeDrill, invoiceMatchingLive)} />}
+      {activeDrill && <BridgeDrill stepKey={activeDrill} items={drillItemsFor(data, activeDrill, invoiceMatchingLive)} />}
     </TileCard>
   );
 }
@@ -266,51 +270,73 @@ function LegendSwatch({ color, label }: { color: string; label: string }) {
 
 export default function PeriodEndTemplate({
   invoiceMatchingLive = false,
+  data = ESPRESSO_PERIOD,
 }: {
   /**
    * Line-level invoice prices + point-in-time WAC captured — unlocks the
    * supplier inflation tile and the bridge's price-variance step together.
    */
   invoiceMatchingLive?: boolean;
+  data?: PeriodData;
 }) {
+  const {
+    dataConfidence,
+    cogsVariance,
+    menuProfitability,
+    stockHolding,
+    deadStock,
+    cpuTransfers,
+    supplierInflation,
+    periodTrend,
+    copy,
+    siteNoun,
+    unitNoun,
+  } = data;
+  const sitePlural = siteNoun.toLowerCase() + 's';
+  const supplierPriceEffectK = supplierInflation.reduce((s, r) => s + r.priceEffectK, 0);
+  const gpValues = periodTrend.map((p) => p.gpPct);
+  const trendGpDomain: [number, number] = [Math.floor(Math.min(...gpValues) - 3), Math.ceil(Math.max(...gpValues) + 3)];
+  const smallMax = Math.max(...periodTrend.flatMap((p) => [p.wastePct, p.unexplainedPct]));
+  const trendSmallDomain: [number, number] = [0, Math.max(4, Math.ceil(smallMax + 1))];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1400, margin: '0 auto', width: '100%' }}>
-      <TemplateIntro title={`Estate · ${PERIOD_LABEL}`} />
+      <TemplateIntro title={`${data.scopeTitle} · ${data.periodLabel}`} />
 
       <Grid>
         {/* Hero: GP bridge */}
         <div style={FULL}>
-          <GpBridgeTile invoiceMatchingLive={invoiceMatchingLive} />
+          <GpBridgeTile data={data} invoiceMatchingLive={invoiceMatchingLive} />
         </div>
 
         {/* Data confidence panel */}
         <div style={HALF}>
           <TileCard
             title="Data confidence"
-            actions={periodActions('Data confidence')}>
+            actions={periodActions('Data confidence', data)}>
             <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 9 }}>
               <ConfidenceRow
                 label="Stocktake completion"
-                value={`${DATA_CONFIDENCE.stocktakesDone} of ${DATA_CONFIDENCE.stocktakesDue} sites`}
-                good={DATA_CONFIDENCE.stocktakesDone === DATA_CONFIDENCE.stocktakesDue}
-                detail={`${DATA_CONFIDENCE.stocktakeMissingSite} estimated from theoretical usage — its actual GP carries that caveat`}
+                value={`${dataConfidence.stocktakesDone} of ${dataConfidence.stocktakesDue} ${sitePlural}`}
+                good={dataConfidence.stocktakesDone === dataConfidence.stocktakesDue}
+                detail={`${dataConfidence.stocktakeMissingSite} estimated from theoretical usage — its actual GP carries that caveat`}
               />
               <ConfidenceRow
                 label="POS sales recipe-mapped"
-                value={`${DATA_CONFIDENCE.posMappedPct}%`}
-                good={DATA_CONFIDENCE.posMappedPct >= 95}
+                value={`${dataConfidence.posMappedPct}%`}
+                good={dataConfidence.posMappedPct >= 95}
                 detail="unmapped items are excluded from theoretical GP, not guessed"
               />
               <ConfidenceRow
                 label="Invoices matched"
-                value={`${DATA_CONFIDENCE.invoicesMatchedPct}%`}
-                good={DATA_CONFIDENCE.invoicesMatchedPct >= 95}
+                value={`${dataConfidence.invoicesMatchedPct}%`}
+                good={dataConfidence.invoicesMatchedPct >= 95}
                 detail="unmatched spend sits in purchases at invoice value"
               />
               <ConfidenceRow
                 label="Stocktake adjustment size"
-                value={`${DATA_CONFIDENCE.stocktakeAdjustmentPctOfCogs.toFixed(1)}% of COGS`}
-                good={DATA_CONFIDENCE.stocktakeAdjustmentPctOfCogs <= 1}
+                value={`${dataConfidence.stocktakeAdjustmentPctOfCogs.toFixed(1)}% of COGS`}
+                good={dataConfidence.stocktakeAdjustmentPctOfCogs <= 1}
                 detail="small adjustments mean counts and the book are close"
               />
             </div>
@@ -321,13 +347,13 @@ export default function PeriodEndTemplate({
         <div style={HALF}>
           <TileCard
             title="COGS variance · site × category"
-            actions={periodActions('COGS variance · site × category')}
+            actions={periodActions('COGS variance · site × category', data)}
             footer="Diagnostic order: mapping gaps → count errors → un-logged waste → price movement → yield. Work the list, not the hunch."
           >
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <th style={{ ...TH, textAlign: 'left' }}>Site</th>
+                  <th style={{ ...TH, textAlign: 'left' }}>{siteNoun}</th>
                   <th style={{ ...TH, textAlign: 'left' }}>Category</th>
                   <th style={TH}>Theoretical</th>
                   <th style={TH}>Actual</th>
@@ -335,7 +361,7 @@ export default function PeriodEndTemplate({
                 </tr>
               </thead>
               <tbody>
-                {[...COGS_VARIANCE]
+                {[...cogsVariance]
                   .sort((a, b) => (b.actualK - b.theoreticalK) - (a.actualK - a.theoreticalK))
                   .map((r) => {
                     const varK = r.actualK - r.theoreticalK;
@@ -365,7 +391,7 @@ export default function PeriodEndTemplate({
           <TileCard
             title="Menu profitability · margin vs volume"
             badge={<FigureBadge kind="theoretical" />}
-            actions={periodActions('Menu profitability · margin vs volume')}>
+            actions={periodActions('Menu profitability · margin vs volume', data)}>
             <div style={{ padding: '0 12px 12px', width: '100%', height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <ScatterChart margin={{ top: 12, right: 20, left: 0, bottom: 4 }}>
@@ -378,7 +404,7 @@ export default function PeriodEndTemplate({
                     tickLine={false}
                     axisLine={{ stroke: 'rgba(0, 28, 53,0.15)' }}
                     tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
-                    label={{ value: 'Units sold this period', position: 'insideBottom', offset: -2, fontSize: 11, fill: 'var(--color-text-muted)' }}
+                    label={{ value: `${unitNoun} sold this period`, position: 'insideBottom', offset: -2, fontSize: 11, fill: 'var(--color-text-muted)' }}
                   />
                   <YAxis
                     type="number"
@@ -397,7 +423,7 @@ export default function PeriodEndTemplate({
                     cursor={{ strokeDasharray: '3 3' }}
                     formatter={(value, name) =>
                       name === 'Units sold'
-                        ? [`${Number(value ?? 0).toLocaleString('en-GB')}`, 'Units']
+                        ? [`${Number(value ?? 0).toLocaleString('en-GB')}`, unitNoun]
                         : [`${value}%`, 'Theoretical margin']
                     }
                     labelFormatter={() => ''}
@@ -408,15 +434,15 @@ export default function PeriodEndTemplate({
                       return (
                         <div style={{ ...tipStyle, padding: '8px 10px' }}>
                           <div style={{ fontWeight: 700 }}>{p.item}</div>
-                          <div>{p.marginPct}% margin · {p.units.toLocaleString('en-GB')} units</div>
+                          <div>{p.marginPct}% margin · {p.units.toLocaleString('en-GB')} {unitNoun.toLowerCase()}</div>
                           {p.flag === 'star' && <div style={{ color: OK_TEXT, fontWeight: 700 }}>Star</div>}
                           {p.flag === 'delist' && <div style={{ color: WARN_TEXT, fontWeight: 700 }}>Delist candidate</div>}
                         </div>
                       );
                     }}
                   />
-                  <Scatter data={MENU_PROFITABILITY} name="Menu items">
-                    {MENU_PROFITABILITY.map((m) => (
+                  <Scatter data={menuProfitability} name="Menu items">
+                    {menuProfitability.map((m) => (
                       <Cell
                         key={m.item}
                         fill={m.flag === 'star' ? OK : m.flag === 'delist' ? WARN : MID}
@@ -428,10 +454,10 @@ export default function PeriodEndTemplate({
             </div>
             <div style={{ padding: '0 16px 12px', display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--color-text-secondary)' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <Star size={11} color={OK_TEXT} strokeWidth={2.6} /> Stars: {MENU_PROFITABILITY.filter((m) => m.flag === 'star').map((m) => m.item).join(', ')}
+                <Star size={11} color={OK_TEXT} strokeWidth={2.6} /> Stars: {menuProfitability.filter((m) => m.flag === 'star').map((m) => m.item).join(', ')}
               </span>
               <span style={{ fontWeight: 600, color: WARN_TEXT }}>
-                Delist candidates: {MENU_PROFITABILITY.filter((m) => m.flag === 'delist').map((m) => m.item).join(', ')}
+                Delist candidates: {menuProfitability.filter((m) => m.flag === 'delist').map((m) => m.item).join(', ')}
               </span>
             </div>
           </TileCard>
@@ -441,21 +467,21 @@ export default function PeriodEndTemplate({
         <div style={HALF}>
           <TileCard
             title="Stock holding · value and days of cover"
-            actions={periodActions('Stock holding · value and days of cover')}>
+            actions={periodActions('Stock holding · value and days of cover', data)}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <th style={{ ...TH, textAlign: 'left' }}>Site</th>
+                  <th style={{ ...TH, textAlign: 'left' }}>{siteNoun}</th>
                   <th style={TH}>Value</th>
                   <th style={TH}>Days of cover</th>
                 </tr>
               </thead>
               <tbody>
-                {STOCK_HOLDING.map((s) => (
+                {stockHolding.map((s) => (
                   <tr key={s.site}>
                     <td style={{ ...TD, textAlign: 'left', fontWeight: 600 }}>
                       {s.site}
-                      {s.site === DATA_CONFIDENCE.stocktakeMissingSite && (
+                      {s.site === dataConfidence.stocktakeMissingSite && (
                         <span style={{ marginLeft: 8 }}><FlagText text="estimated" /></span>
                       )}
                     </td>
@@ -474,20 +500,20 @@ export default function PeriodEndTemplate({
         <div style={HALF}>
           <TileCard
             title="Dead and slow-moving stock"
-            actions={periodActions('Dead and slow-moving stock')}
-            footer={`£${DEAD_STOCK_TOTAL} at risk. Seasonal lines dominate — transfer or promote before the value is written off.`}
+            actions={periodActions('Dead and slow-moving stock', data)}
+            footer={copy.deadStockFooter}
           >
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
                   <th style={{ ...TH, textAlign: 'left' }}>Item</th>
-                  <th style={{ ...TH, textAlign: 'left' }}>Site</th>
+                  <th style={{ ...TH, textAlign: 'left' }}>{siteNoun}</th>
                   <th style={TH}>Value</th>
                   <th style={TH}>Last used</th>
                 </tr>
               </thead>
               <tbody>
-                {DEAD_STOCK.map((r) => (
+                {deadStock.map((r) => (
                   <tr key={r.item}>
                     <td style={{ ...TD, textAlign: 'left', fontWeight: 600 }}>{r.item}</td>
                     <td style={{ ...TD, textAlign: 'left' }}>{r.site}</td>
@@ -506,8 +532,8 @@ export default function PeriodEndTemplate({
             <TileCard
               title="Supplier inflation impact"
               badge={<FigureBadge kind="measured" />}
-              actions={periodActions('Supplier inflation impact')}
-              footer={`Total price effect £${SUPPLIER_PRICE_EFFECT_TOTAL_K.toFixed(1)}k this period — the same figure the GP bridge deducts. Brakes carries nearly half of it; La Boulangerie's tier discount is the only deflation.`}
+              actions={periodActions('Supplier inflation impact', data)}
+              footer={`Total price effect £${supplierPriceEffectK.toFixed(1)}k this period — the same figure the GP bridge deducts. ${copy.supplierFooter}`}
             >
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
@@ -519,7 +545,7 @@ export default function PeriodEndTemplate({
                   </tr>
                 </thead>
                 <tbody>
-                  {SUPPLIER_INFLATION.map((r) => (
+                  {supplierInflation.map((r) => (
                     <tr key={r.supplier}>
                       <td style={{ ...TD, textAlign: 'left', fontWeight: 600 }}>{r.supplier}</td>
                       <td style={{ ...TD, fontWeight: 600 }}>£{r.spendK.toFixed(1)}k</td>
@@ -567,12 +593,13 @@ export default function PeriodEndTemplate({
           )}
         </div>
 
-        {/* CPU transfer reconciliation */}
+        {/* CPU transfer reconciliation. Brands without a central kitchen have no routes, so no tile. */}
+        {cpuTransfers && (
         <div style={HALF}>
           <TileCard
             title="CPU transfer reconciliation"
-            actions={periodActions('CPU transfer reconciliation')}
-            footer="Two routes don't reconcile: £0.8k left the CPU that Kings X and Shoreditch never booked in. Until receipted, that value inflates CPU costs and flatters those sites' GP."
+            actions={periodActions('CPU transfer reconciliation', data)}
+            footer={copy.cpuFooter}
           >
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
@@ -584,7 +611,7 @@ export default function PeriodEndTemplate({
                 </tr>
               </thead>
               <tbody>
-                {CPU_TRANSFERS.map((t) => {
+                {cpuTransfers.map((t) => {
                   const gap = t.sentK - t.receivedK;
                   const balanced = Math.abs(gap) < 0.05;
                   return (
@@ -606,19 +633,20 @@ export default function PeriodEndTemplate({
             </table>
           </TileCard>
         </div>
+        )}
 
         {/* Period-on-period trend */}
         <div style={HALF}>
           <TileCard
             title="Trend · four periods"
-            actions={periodActions('Trend · four periods')}>
+            actions={periodActions('Trend · four periods', data)}>
             <div style={{ padding: '0 12px 12px', width: '100%', height: 240 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={PERIOD_TREND} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                <ComposedChart data={periodTrend} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke="rgba(0, 28, 53,0.08)" vertical={false} />
                   <XAxis dataKey="period" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={{ stroke: 'rgba(0, 28, 53,0.15)' }} />
-                  <YAxis yAxisId="gp" domain={[60, 70]} tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={42} />
-                  <YAxis yAxisId="small" orientation="right" domain={[0, 4]} tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={36} />
+                  <YAxis yAxisId="gp" domain={trendGpDomain} tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={42} />
+                  <YAxis yAxisId="small" orientation="right" domain={trendSmallDomain} tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={36} />
                   <Tooltip contentStyle={tipStyle} formatter={(v) => `${Number(v ?? 0).toFixed(1)}%`} />
                   <Line yAxisId="gp" dataKey="gpPct" name="Actual GP %" stroke={NAVY} strokeWidth={2.4} dot={{ r: 3 }} />
                   <Line yAxisId="small" dataKey="wastePct" name="Waste % of sales" stroke={OK} strokeWidth={2} dot={{ r: 3 }} />
@@ -629,7 +657,7 @@ export default function PeriodEndTemplate({
             <div style={{ padding: '0 16px 12px', display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--color-text-secondary)' }}>
               <LegendSwatch color={NAVY} label="Actual GP % (left)" />
               <LegendSwatch color={OK} label="Waste % of sales (right)" />
-              <LegendSwatch color={WARN} label="Unexplained % of sales (right) — down 1.1pp in three periods" />
+              <LegendSwatch color={WARN} label={`Unexplained % of sales (right) — ${copy.trendNote}`} />
             </div>
           </TileCard>
         </div>

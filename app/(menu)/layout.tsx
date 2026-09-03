@@ -76,7 +76,6 @@ export default function MenuLayout({ children }: { children: React.ReactNode }) 
         <AreaTopBar
           title="Menu"
           tabs={MENU_TABS}
-          siteName="Fitzroy Espresso"
           rightSlot={<DemoControls variant="inline" />}
           backTo="/"
         />

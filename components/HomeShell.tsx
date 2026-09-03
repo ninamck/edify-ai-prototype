@@ -115,6 +115,15 @@ const SECOND_CUP_TABS: Mvp1Tab[] = [
   { id: 'sc-network', name: 'Franchise Network', kind: 'dashboard' },
 ];
 
+// Farmer J: the two dashboard views sit on the workspace strip itself, in
+// place of the generic Dashboard tab. Pinned so they can't be renamed or
+// removed. The roles-model dashboards (Ed's, Company, Weekend trading) are
+// not Farmer J content and stay off this brand's strip.
+const FARMER_J_TABS: Mvp1Tab[] = [
+  { id: 'fj-sales', name: 'Sales', kind: 'dashboard' },
+  { id: 'fj-production', name: 'Production', kind: 'dashboard' },
+];
+
 // MVP1-seeded views that belong to the /mvp-1 page's demo script — hidden
 // from the home tab strip. User-created views still show in both places.
 const HIDDEN_MVP1_TAB_IDS = new Set(['flash-report', 'summary-analysis', 'sales-deep-dive']);
@@ -228,7 +237,9 @@ export default function HomeShell() {
   /** Chat-pin destination for the original role dashboard (layout-based). */
   const LEGACY_PIN_TARGET_ID = 'legacy-dashboard';
   const rolesPinTargets = (() => {
-    if (!rolesViewer) return undefined;
+    // Farmer J has no roles dashboards on its strip, so chat pins go straight
+    // to the pinned-insights section of the Farmer J dashboard.
+    if (!rolesViewer || isFarmerJ) return undefined;
     const editable = rolesVisibleDashboards
       .filter((d) => canEditDashboard(rolesViewer, d))
       .map((d) => ({
@@ -290,13 +301,23 @@ export default function HomeShell() {
 
   const visibleMvp1Tabs = mvp1Tabs.filter((t) => !HIDDEN_MVP1_TAB_IDS.has(t.id));
   const templateTabs = canSeeTemplates ? TEMPLATE_TABS : [];
-  const baseTabs: Mvp1Tab[] = isMultiCurrencyDemo
-    ? [...visibleMvp1Tabs, ...templateTabs, ...SECOND_CUP_TABS]
-    : [...visibleMvp1Tabs, ...templateTabs];
+  // Farmer J swaps the generic Dashboard tab for Sales + Production and keeps
+  // the user's own views and Templates. The roles-model dashboards and the
+  // roles admin tools stay off this brand entirely.
+  const farmerJBaseTabs: Mvp1Tab[] = [
+    ...FARMER_J_TABS,
+    ...visibleMvp1Tabs.filter((t) => t.id !== 'dashboard'),
+    ...templateTabs,
+  ];
+  const baseTabs: Mvp1Tab[] = isFarmerJ
+    ? farmerJBaseTabs
+    : isMultiCurrencyDemo
+      ? [...visibleMvp1Tabs, ...templateTabs, ...SECOND_CUP_TABS]
+      : [...visibleMvp1Tabs, ...templateTabs];
   // Roles personas: the roles-model dashboards slot in right after the
   // original Dashboard tab. During a "View as" preview only the previewed
   // viewer's dashboards show — that's exactly what they'd see.
-  const allTabs: Mvp1Tab[] = !rolesPersona
+  const allTabs: Mvp1Tab[] = !rolesPersona || isFarmerJ
     ? baseTabs
     : rolesViewer?.previewing
       ? rolesTabs
@@ -307,19 +328,25 @@ export default function HomeShell() {
         ];
   // Guard against a stale stored id (e.g. a Second Cup tab id persisted, then
   // the brand switched away) — fall back to the main dashboard, or the first
-  // available tab when the Dashboard tab itself is hidden (view-as preview).
+  // available tab when the Dashboard tab itself is hidden (view-as preview,
+  // or Farmer J where Sales takes the first slot).
   const fallbackTabId = allTabs.some((t) => t.id === 'dashboard')
     ? 'dashboard'
     : (allTabs[0]?.id ?? 'dashboard');
   const effectiveTabId = allTabs.some((t) => t.id === activeTabId) ? activeTabId : fallbackTabId;
   const activeHomeTab = allTabs.find((t) => t.id === effectiveTabId) ?? allTabs[0];
   const dateControls = <DateRangePicker value={dateRange} onChange={setDateRange} />;
+  // The "+" menu's shared-dashboard options create roles-model dashboards.
+  // Farmer J keeps those off its strip, so creating one there would land in
+  // a tab nobody can reach; the menu only offers private views on that brand.
+  const canAddRolesDashboards =
+    !isFarmerJ && !!rolesPersona && !!rolesViewer && canCreateDashboards(rolesViewer);
   // Workspace-level admin tools ("All published" governance overview and
   // "View as" preview), collapsed into one dropdown. They operate across
   // every dashboard, so they sit on the tab-strip row rather than inside any
   // single dashboard's toolbar.
   const adminDashboardControls =
-    rolesViewer?.role === 'admin' && !rolesViewer.previewing ? (
+    !isFarmerJ && rolesViewer?.role === 'admin' && !rolesViewer.previewing ? (
       <AdminToolsMenu onOpenPublishedOverview={() => setPublishedOverviewOpen(true)} />
     ) : null;
   // Same toolbar cluster the main dashboard shows (date range + Add insight +
@@ -333,22 +360,26 @@ export default function HomeShell() {
     />
   );
 
+  // Farmer J follows the brand, not the persona: the dashboard reads the
+  // shop (or All shops) picked in the site switcher. Sales and Production
+  // are separate home tabs sharing one component.
+  function renderFarmerJDashboard(view: 'sales' | 'production') {
+    return (
+      <FarmerJDashboard
+        view={view}
+        layout={currentLayout}
+        editing={editingDashboard}
+        onLayoutChange={updateCurrentLayout}
+        onToggleEdit={() => setEditingDashboard((v) => !v)}
+        onAddInsight={() => setAddInsightOpen(true)}
+        onRemovePinned={removePinnedChart}
+        toolbarLeadingControls={dateControls}
+      />
+    );
+  }
+
   function renderRoleDashboard() {
-    // Farmer J follows the brand, not the persona: the dashboard reads the
-    // shop (or All shops) picked in the site switcher.
-    if (isFarmerJ) {
-      return (
-        <FarmerJDashboard
-          layout={currentLayout}
-          editing={editingDashboard}
-          onLayoutChange={updateCurrentLayout}
-          onToggleEdit={() => setEditingDashboard((v) => !v)}
-          onAddInsight={() => setAddInsightOpen(true)}
-          onRemovePinned={removePinnedChart}
-          toolbarLeadingControls={dateControls}
-        />
-      );
-    }
+    if (isFarmerJ) return renderFarmerJDashboard('sales');
     if (briefingRole === 'culinary') {
       return (
         <CulinaryCollectiveDashboard
@@ -417,6 +448,8 @@ export default function HomeShell() {
   }
 
   function renderActiveHomeTab() {
+    if (effectiveTabId === 'fj-sales') return renderFarmerJDashboard('sales');
+    if (effectiveTabId === 'fj-production') return renderFarmerJDashboard('production');
     if (rolesPersona && effectiveTabId.startsWith(ROLES_TAB_PREFIX)) {
       return (
         <RolesDashboardTab
@@ -677,26 +710,26 @@ export default function HomeShell() {
                 onRemove={removeTab}
                 onRename={renameTab}
                 onAddDashboard={
-                  rolesPersona && rolesViewer && canCreateDashboards(rolesViewer)
+                  canAddRolesDashboards
                     ? () => {
-                        const d = createRolesDashboard(rolesPersona);
+                        const d = createRolesDashboard(rolesPersona!);
                         setActiveTabId(`${ROLES_TAB_PREFIX}${d.id}`);
                       }
                     : undefined
                 }
                 onAddPeriodDashboard={
-                  rolesPersona && rolesViewer && canCreateDashboards(rolesViewer)
+                  canAddRolesDashboards
                     ? (period) => {
-                        const d = createRolesDashboard(rolesPersona, undefined, period);
+                        const d = createRolesDashboard(rolesPersona!, undefined, period);
                         setActiveTabId(`${ROLES_TAB_PREFIX}${d.id}`);
                       }
                     : undefined
                 }
                 onAddRangeDashboard={
-                  rolesPersona && rolesViewer && canCreateDashboards(rolesViewer)
+                  canAddRolesDashboards
                     ? (range) => {
                         const d = createRolesDashboard(
-                          rolesPersona,
+                          rolesPersona!,
                           undefined,
                           undefined,
                           range,

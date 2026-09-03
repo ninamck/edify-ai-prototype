@@ -11,9 +11,13 @@
  * recipes list when you return.
  */
 
+import { CONTAINERS as FJ_CONTAINERS, SHELF_LIFE_GROUPS as FJ_SHELF_LIFE_GROUPS } from '@/components/Production/farmerj/recipes';
+import { FJ_SITE_NAMES } from '@/components/Production/farmerj/recipeBridge';
+import { EQUIPMENT_LABELS, EQUIPMENT_ORDER, type Equipment } from '@/components/Production/fixtures';
+import { describeMethod, METHOD_DEFAULTS, RECIPE_CLASSES, recipeClassFrom, resolveMethod, type RecipeMethod } from '@/components/Recipe/recipeClasses';
 import React, { useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Save, Image as ImageIcon, Pencil, Plus, X } from 'lucide-react';
+import { Save, Image as ImageIcon, Pencil, Plus, X } from 'lucide-react';
 import {
   type Recipe,
   type RecipeCategory,
@@ -97,6 +101,9 @@ import {
 
 // All recipe categories — broader than the manual intake's set so existing
 // Pret recipes (Bakery, Sandwich, Salad, Snack, Beverage) keep their category.
+const FJ_SHELF_LIFE_GROUP_OPTIONS = Object.values(FJ_SHELF_LIFE_GROUPS).map((g) => g.label);
+const FJ_GROUP_ID_BY_LABEL = Object.fromEntries(Object.values(FJ_SHELF_LIFE_GROUPS).map((g) => [g.label, g.id]));
+
 const ALL_CATEGORIES: FormCategory[] = [
   'Coffee', 'Tea', 'Pastry', 'Food', 'Wine', 'Spirits', 'Kids',
   'Bakery', 'Sandwich', 'Salad', 'Snack', 'Beverage',
@@ -165,6 +172,15 @@ type FormDraft = {
   minBatch: number | '';
   maxBatch: number | '' | 'unlimited';
   batchMultiple: number | '';
+  yieldLossPct: number | '';
+  shelfLifeGroup: string;
+  halfBatch: boolean;
+  outputContainer: string;
+  containersPerBatch: number | '';
+  /** Kit override. null inherits the recipe class's default. */
+  requiresEquipment: string[] | null;
+  /** Method fields set on this recipe. A missing key inherits the class default. */
+  method: Partial<RecipeMethod>;
   // Advanced
   showAdvanced: boolean;
   status: string;
@@ -368,7 +384,8 @@ function recipeToDraft(r: Recipe): FormDraft {
     packaging: fx.packaging?.map((row) => ({ ...row })) ?? [],
     showVariable: (fx.variableIngredients?.length ?? 0) > 0,
     showPackaging: (fx.packaging?.length ?? 0) > 0,
-    showProduction: false,
+    // Farmer J's recipes are kitchen-made; the production card is the point of opening them.
+    showProduction: r.brand === 'farmerj',
     productionVis: fx.productionExtras?.visibility ?? (
       r.production.visibility === 'Both' ? ['Bar', 'Kitchen'] :
       r.production.visibility ? [r.production.visibility] : []
@@ -380,11 +397,18 @@ function recipeToDraft(r: Recipe): FormDraft {
     minBatch: fx.productionExtras?.minBatch ?? 1,
     maxBatch: fx.productionExtras?.maxBatch ?? 'unlimited',
     batchMultiple: fx.productionExtras?.batchMultiple ?? 1,
+    yieldLossPct: fx.productionExtras?.yieldLossPct ?? '',
+    shelfLifeGroup: fx.productionExtras?.shelfLifeGroup ?? '',
+    halfBatch: fx.productionExtras?.halfBatch ?? false,
+    outputContainer: fx.productionExtras?.outputContainer ?? '',
+    requiresEquipment: fx.productionExtras?.requiresEquipment ?? null,
+    method: (fx.productionExtras?.method as Partial<RecipeMethod> | undefined) ?? {},
+    containersPerBatch: fx.productionExtras?.containersPerBatch ?? '',
     showAdvanced: false,
     status: fx.advanced?.productClass != null
       ? r.status
       : r.status,
-    productClass: fx.advanced?.productClass ?? '',
+    productClass: recipeClassFrom(fx.advanced?.productClass)?.id ?? '',
     isSubRecipe: fx.advanced?.isSubRecipe ?? r.kind === 'component',
     countInStockTake: fx.advanced?.countInStockTake ?? false,
     excludeFromCogs: fx.advanced?.excludeFromCogs ?? false,
@@ -465,6 +489,13 @@ function draftToRecipe(
         minBatch: draft.minBatch,
         maxBatch: draft.maxBatch,
         batchMultiple: draft.batchMultiple,
+        yieldLossPct: draft.yieldLossPct,
+        shelfLifeGroup: draft.shelfLifeGroup,
+        halfBatch: draft.halfBatch,
+        outputContainer: draft.outputContainer,
+        requiresEquipment: draft.requiresEquipment ?? undefined,
+        method: draft.method,
+        containersPerBatch: draft.containersPerBatch,
       },
       advanced: {
         productClass: draft.productClass,
@@ -498,7 +529,8 @@ function draftToRecipe(
 export default function EditRecipePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const id = params?.id;
+  // Farmer J ids carry colons (`fj:c:kale-prep`), which arrive percent-encoded.
+  const id = params?.id ? decodeURIComponent(params.id) : params?.id;
 
   const recipes = useRecipes();
   const workflows = useWorkflows();
@@ -694,65 +726,7 @@ function EditRecipeForm({
   const workflows = allWorkflows;
 
   return (
-    <div style={{ padding: '20px 24px 130px', maxWidth: '1260px', margin: '0 auto', fontFamily: 'var(--font-primary)' }}>
-      {/* Sticky header */}
-      <div
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 50,
-          margin: '-20px -24px 14px',
-          padding: '12px 24px',
-          background: 'rgba(255,255,255,0.96)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-          borderBottom: '1px solid var(--color-border-subtle)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '14px',
-        }}
-      >
-        <button onClick={handleCancel} style={{ ...secondaryBtnStyle, padding: '8px 13px', fontSize: '13.5px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-          <ArrowLeft size={15} /> Back
-        </button>
-
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
-              Editing recipe
-            </span>
-            <KindPill kind={draftKind} isPrep={original.isPrep} />
-            {isDirty && (
-              <span
-                style={{
-                  padding: '3px 9px', borderRadius: '100px',
-                  background: 'rgba(241,180,52,0.18)', color: 'var(--color-warning)',
-                  fontSize: '12px', fontWeight: 700, letterSpacing: '0.04em',
-                }}
-              >
-                Unsaved changes
-              </span>
-            )}
-          </div>
-          <div style={{ fontSize: '17px', fontWeight: 700, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {draft.name || <span style={{ color: 'var(--color-text-muted)' }}>Untitled recipe</span>}
-          </div>
-        </div>
-
-        <button onClick={handleCancel} style={secondaryBtnStyle}>Cancel</button>
-        <button
-          onClick={handleSave}
-          disabled={saveDisabled}
-          style={{
-            ...primaryBtnStyle,
-            display: 'inline-flex', alignItems: 'center', gap: '7px',
-            opacity: saveDisabled ? 0.5 : 1, cursor: saveDisabled ? 'not-allowed' : 'pointer',
-          }}
-        >
-          <Save size={14} strokeWidth={2.4} /> Save changes
-        </button>
-      </div>
-
+    <div style={{ padding: '20px 24px 0', maxWidth: '1260px', margin: '0 auto', fontFamily: 'var(--font-primary)' }}>
       <p style={{ fontSize: '14px', color: 'var(--color-text-muted)', margin: '0 0 16px', lineHeight: 1.5 }}>
         Edit any field below. Workflow and sub-recipe sections appear if this recipe drives a production workflow or is built from components.
       </p>
@@ -797,20 +771,49 @@ function EditRecipeForm({
               </div>
             </div>
 
-            <div style={{ marginTop: '16px' }}>
-              <FieldLabel>Product class</FieldLabel>
-              <StyledSelect
-                width={260}
-                value={draft.category}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  patch('category', (v as FormCategory | ''));
-                  if (v) applyCategoryDefaults(v as FormCategory);
-                }}
-              >
-                <option value="">— None —</option>
-                {ALL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </StyledSelect>
+            <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', alignItems: 'start' }}>
+              <div>
+                <FieldLabel help="Menu category: where the recipe sits on the menu and in reports.">Category</FieldLabel>
+                <StyledSelect
+                  width={260}
+                  value={draft.category}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    patch('category', (v as FormCategory | ''));
+                    if (v) applyCategoryDefaults(v as FormCategory);
+                  }}
+                >
+                  <option value="">— None —</option>
+                  {ALL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </StyledSelect>
+              </div>
+              <div>
+                <FieldLabel
+                  help={
+                    <>
+                      What sort of thing this is in the kitchen. Each class carries the kit it normally needs:{' '}
+                      {RECIPE_CLASSES.map((c) => `${c.label} (${c.defaultEquipment.map((e) => EQUIPMENT_LABELS[e].toLowerCase()).join(', ') || 'none'})`).join('; ')}.
+                      The recipe inherits that kit unless you set its own under Production settings.
+                    </>
+                  }
+                >
+                  Recipe class
+                </FieldLabel>
+                <StyledSelect
+                  width={260}
+                  value={draft.productClass}
+                  onChange={(e) => patch('productClass', e.target.value)}
+                  aria-label="Recipe class"
+                >
+                  <option value="">— None —</option>
+                  {RECIPE_CLASSES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </StyledSelect>
+                {recipeClassFrom(draft.productClass) && (
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '6px' }}>
+                    {recipeClassFrom(draft.productClass)?.description}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div style={{ marginTop: '16px' }}>
@@ -828,7 +831,7 @@ function EditRecipeForm({
                   value={draft.yieldUom}
                   onChange={(e) => patch('yieldUom', e.target.value)}
                 >
-                  {YIELD_UOMS.map((u) => <option key={u} value={u}>{u}</option>)}
+                  {(YIELD_UOMS.includes(draft.yieldUom) || !draft.yieldUom ? YIELD_UOMS : [draft.yieldUom, ...YIELD_UOMS]).map((u) => <option key={u} value={u}>{u}</option>)}
                 </StyledSelect>
               </div>
             </div>
@@ -836,7 +839,7 @@ function EditRecipeForm({
             <div style={{ marginTop: '16px' }}>
               <FieldLabel>Sites</FieldLabel>
               <PillMulti
-                options={SITES}
+                options={original.brand === 'farmerj' ? FJ_SITE_NAMES : SITES}
                 selected={draft.sites}
                 onChange={(v) => patch('sites', v)}
                 size="sm"
@@ -1109,6 +1112,132 @@ function EditRecipeForm({
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', alignItems: 'start' }}>
                 <div>
+                  <FieldLabel help="Trim and cook loss between what goes in and what comes out, as a percentage of input. 40 means 2 kg in gives 1.2 kg out. Changes what you buy and weigh; the quantity made stays the same.">
+                    Yield loss (%)
+                  </FieldLabel>
+                  <input
+                    type="number"
+                    min={0}
+                    max={90}
+                    value={draft.yieldLossPct}
+                    onChange={(e) => patch('yieldLossPct', e.target.value === '' ? '' : Math.max(0, Math.min(90, Number(e.target.value))))}
+                    style={{ ...inputStyle, width: '100px' }}
+                    aria-label="Yield loss (%)"
+                  />
+                </div>
+                <div>
+                  <FieldLabel help="The kitchen may make half a batch of this recipe. The bench it runs on must allow halves too.">
+                    Half batches
+                  </FieldLabel>
+                  <CheckRow
+                    label="Allow half batches"
+                    checked={draft.halfBatch}
+                    onChange={(v) => patch('halfBatch', v)}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <FieldLabel help="The kit this recipe needs. Cook loads are sized from it against what each shop's benches own: two ovens of six trays and four trays a batch is three batches a load. Leave on the class default unless this recipe differs.">
+                  Kit
+                </FieldLabel>
+                {(() => {
+                  const cls = recipeClassFrom(draft.productClass);
+                  const inherited = cls?.defaultEquipment ?? [];
+                  const own = draft.requiresEquipment as Equipment[] | null;
+                  const shown = own ?? inherited;
+                  const label = (e: Equipment) => EQUIPMENT_LABELS[e];
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                        {own === null
+                          ? cls
+                            ? `Class default (${cls.label}): ${inherited.map(label).join(', ') || 'none'}`
+                            : 'No recipe class set, so no kit is assumed. Pick a class above or set kit here.'
+                          : `Set on this recipe${cls ? `; ${cls.label} default is ${inherited.map(label).join(', ') || 'none'}` : ''}.`}
+                      </div>
+                      <PillMulti
+                        options={EQUIPMENT_ORDER.map(label)}
+                        selected={shown.map(label)}
+                        size="sm"
+                        onChange={(labels) => {
+                          const ids = EQUIPMENT_ORDER.filter((e) => labels.includes(label(e)));
+                          const same = ids.length === inherited.length && ids.every((e, i) => e === inherited[i]);
+                          patch('requiresEquipment', same && cls ? null : ids);
+                        }}
+                      />
+                      {own !== null && (
+                        <button
+                          type="button"
+                          onClick={() => patch('requiresEquipment', null)}
+                          style={{ alignSelf: 'flex-start', background: 'none', border: 'none', padding: 0, fontSize: '12px', fontWeight: 600, color: 'var(--color-info)', cursor: 'pointer', fontFamily: 'var(--font-primary)' }}
+                        >
+                          Use class default
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {original.brand === 'farmerj' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', alignItems: 'start' }}>
+                  <div>
+                    <FieldLabel help="Sets which days this recipe is made on. Daily is made on the day; the make-ahead groups run on the make-on days set for every shop on Setup, or the shop's own under Settings > Make-on days.">
+                      Shelf-life group
+                    </FieldLabel>
+                    <PillSingle
+                      options={FJ_SHELF_LIFE_GROUP_OPTIONS}
+                      selected={FJ_SHELF_LIFE_GROUPS[draft.shelfLifeGroup as keyof typeof FJ_SHELF_LIFE_GROUPS]?.label ?? ''}
+                      onChange={(label) => {
+                        const id = FJ_GROUP_ID_BY_LABEL[label];
+                        const g = id ? FJ_SHELF_LIFE_GROUPS[id] : undefined;
+                        setDraft((d) => ({ ...d, shelfLifeGroup: id ?? '', shelfLifeValue: g ? g.days : d.shelfLifeValue, shelfLifeUnit: g ? 'days' : d.shelfLifeUnit }));
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel help="What one batch is portioned into, and how many it fills.">
+                      Output container
+                    </FieldLabel>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      <select
+                        value={draft.outputContainer}
+                        onChange={(e) => patch('outputContainer', e.target.value)}
+                        style={{ ...inputStyle, width: '220px' }}
+                      >
+                        <option value="">None</option>
+                        {Object.values(FJ_CONTAINERS).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      {draft.outputContainer && (
+                        <>
+                          <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>×</span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={draft.containersPerBatch}
+                            onChange={(e) => patch('containersPerBatch', e.target.value === '' ? '' : Math.max(1, Number(e.target.value)))}
+                            style={{ ...inputStyle, width: '80px' }}
+                            aria-label="Containers per batch"
+                          />
+                          <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>per batch</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {original.brand === 'farmerj' && (
+                <MethodGroup
+                  classId={draft.productClass}
+                  value={draft.method}
+                  onChange={(m) => patch('method', m)}
+                />
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', alignItems: 'start' }}>
+                <div>
                   <FieldLabel>Shelf life</FieldLabel>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                     <input
@@ -1349,23 +1478,33 @@ function EditRecipeForm({
         </CollapsibleSidebar>
       </div>
 
-      {/* Sticky bottom bar */}
+      {/* Sticky bottom bar. Sticky inside the content column, like the
+          header above, so it stops at the sidebar instead of running
+          underneath it. */}
       <div
         style={{
-          position: 'fixed',
-          left: 0, right: 0, bottom: 0,
+          position: 'sticky',
+          bottom: 0,
+          margin: '24px -24px 0',
           padding: '14px 24px',
           background: 'rgba(255,255,255,0.96)',
           borderTop: '1px solid var(--color-border-subtle)',
           backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-          display: 'flex', justifyContent: 'center', zIndex: 150,
+          display: 'flex', justifyContent: 'center', zIndex: 50,
         }}
       >
-        <div style={{ maxWidth: '1260px', width: '100%', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ flex: 1, fontSize: '13.5px', color: 'var(--color-text-muted)' }}>
-            {canPublish
-              ? <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>Ready to save</span>
-              : 'Add a name, category, and at least one ingredient.'}
+        <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13.5px', color: 'var(--color-text-muted)' }}>
+            <span style={{ fontWeight: 700, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {draft.name || <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>Untitled recipe</span>}
+            </span>
+            <KindPill kind={draftKind} isPrep={original.isPrep} />
+            <span style={{ color: 'var(--color-border)' }}>·</span>
+            {!canPublish
+              ? 'Add a name, category, and at least one ingredient.'
+              : isDirty
+                ? <span style={{ color: 'var(--color-warning)', fontWeight: 600 }}>Unsaved changes</span>
+                : <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>Ready to save</span>}
           </div>
           <button onClick={handleCancel} style={secondaryBtnStyle}>Cancel</button>
           <button
@@ -2133,6 +2272,115 @@ function PreviewLine({
       }}>
         {label}
       </span>
+    </div>
+  );
+}
+
+
+// ─── Method group ────────────────────────────────────────────────────────────
+
+const PROGRAMME_SUGGESTIONS = ['Lunch Program', 'Chicken Program', 'Rice cooker', 'Hob, simmer', 'Grill'];
+
+/**
+ * The settings behind the stepper's chips. Every field starts on the recipe
+ * class's default (Setup, Recipes, Method defaults); a field typed here is
+ * the recipe's own. Empty means inherit; 0 on a number switches the default
+ * off for this recipe.
+ */
+function MethodGroup({ classId, value, onChange }: { classId: string; value: Partial<RecipeMethod>; onChange: (m: Partial<RecipeMethod>) => void }) {
+  const cls = recipeClassFrom(classId);
+  const dflt: RecipeMethod = cls ? METHOD_DEFAULTS[cls.id] : resolveMethod(undefined, undefined);
+  const resolved = resolveMethod(classId, value);
+  const own = (k: keyof RecipeMethod) => value[k] !== undefined;
+  const setNum = (k: 'minutesFrom' | 'minutesTo' | 'coreTempC' | 'restMinutes' | 'holdMinutes', raw: string) => {
+    const next = { ...value };
+    if (raw.trim() === '') delete next[k]; else next[k] = Math.max(0, Number(raw));
+    onChange(next);
+  };
+  const clear = (k: keyof RecipeMethod) => { const next = { ...value }; delete next[k]; onChange(next); };
+  const numText = (v: number | '') => (v === '' ? 'none' : v === 0 ? 'off' : String(v));
+  const numField = (k: 'minutesFrom' | 'minutesTo' | 'coreTempC' | 'restMinutes' | 'holdMinutes', label: string, unit: string, width = 72) => (
+    <div>
+      <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <input
+          type="number"
+          min={0}
+          value={value[k] ?? ''}
+          placeholder={numText(dflt[k])}
+          onChange={(e) => setNum(k, e.target.value)}
+          aria-label={label}
+          style={{ ...inputStyle, width, fontStyle: own(k) ? 'normal' : 'italic' }}
+        />
+        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{unit}</span>
+      </div>
+      <Inherit own={own(k)} onClear={() => clear(k)} />
+    </div>
+  );
+  return (
+    <div>
+      <FieldLabel help="What the stepper and the Sections method panel show for this recipe: the programme, cook time, core temperature to probe to, rest, how long it may hold on the line, and the hand tools to get out. Every field starts on the class default set on Setup. Type a value to set it for this recipe; clear it to inherit again; 0 switches a default off.">
+        Method
+      </FieldLabel>
+      <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: 10 }}>
+        {cls ? `${cls.label} default: ${describeMethod(dflt)}.` : 'No recipe class set, so nothing is inherited. Pick a class above or set the method here.'}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr repeat(5, 1fr)', gap: '14px', alignItems: 'start' }}>
+        <div>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Programme</div>
+          <input
+            type="text"
+            list="fj-programmes"
+            value={value.programme ?? ''}
+            placeholder={dflt.programme || 'none'}
+            onChange={(e) => { const next = { ...value }; if (e.target.value === '') delete next.programme; else next.programme = e.target.value; onChange(next); }}
+            aria-label="Programme"
+            style={{ ...inputStyle, fontStyle: own('programme') ? 'normal' : 'italic' }}
+          />
+          <datalist id="fj-programmes">{PROGRAMME_SUGGESTIONS.map((p) => <option key={p} value={p} />)}</datalist>
+          <Inherit own={own('programme')} onClear={() => clear('programme')} />
+        </div>
+        {numField('minutesFrom', 'Time', 'min')}
+        {numField('minutesTo', 'Time, up to', 'min')}
+        {numField('coreTempC', 'Core temperature', '°C')}
+        {numField('restMinutes', 'Rest', 'min')}
+        {numField('holdMinutes', 'Hold on the line', 'min')}
+      </div>
+      <div style={{ marginTop: 14 }}>
+        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Hand tools</div>
+        {own('handTools') ? (
+          <>
+            <TagInput value={value.handTools ?? []} onChange={(v) => onChange({ ...value, handTools: v })} placeholder="Add a tool and press Enter" />
+            <Inherit own onClear={() => clear('handTools')} />
+          </>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {dflt.handTools.length ? dflt.handTools.map((t) => (
+              <span key={t} style={{ fontSize: '11px', padding: '4px 10px', borderRadius: 999, border: '1px dashed var(--color-border)', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>{t}</span>
+            )) : <span style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>none</span>}
+            <button
+              type="button"
+              onClick={() => onChange({ ...value, handTools: [...dflt.handTools] })}
+              style={{ background: 'none', border: 'none', padding: 0, fontSize: '12px', fontWeight: 600, color: 'var(--color-info)', cursor: 'pointer', fontFamily: 'var(--font-primary)' }}
+            >
+              Set tools for this recipe
+            </button>
+          </div>
+        )}
+      </div>
+      <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 8, background: 'var(--color-bg-surface)', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+        <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>Stepper shows: </span>{describeMethod(resolved)}.
+      </div>
+    </div>
+  );
+}
+
+function Inherit({ own, onClear }: { own: boolean; onClear: () => void }) {
+  return (
+    <div style={{ fontSize: '10.5px', color: 'var(--color-text-muted)', marginTop: 3, minHeight: 14 }}>
+      {own ? (
+        <>Set here · <button type="button" onClick={onClear} style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--color-info)', cursor: 'pointer', fontWeight: 600 }}>use class default</button></>
+      ) : 'Class default'}
     </div>
   );
 }

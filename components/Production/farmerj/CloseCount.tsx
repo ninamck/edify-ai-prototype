@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { ArrowDown, CheckCircle2, ClipboardCheck, Lock, LockOpen, Trash2, Undo2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, CheckCircle2, ClipboardCheck, Lock, LockOpen, Trash2, Undo2 } from 'lucide-react';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import QtyStepper from '@/components/Production/QtyStepper';
@@ -23,7 +23,7 @@ import {
 } from './close';
 import { FjDayStrip, Notice } from './DayPlan';
 import { useFjPlanStore } from './FjPlanStore';
-import { teamFor } from './sections';
+import { plural, teamFor } from './sections';
 import { FJ_ALL_SHOPS_ID, getShop } from './shops';
 
 /**
@@ -136,10 +136,12 @@ function CloseForShop({ shopId, date, onDateChange }: { shopId: string; date: st
                 </span>
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 22, flexShrink: 0 }}>
-              <Stat label="Carried" value={fmtUnits(totals.carriedUnits)} sub="containers" />
-              <Stat label="To waste" value={totals.binnedUnits > 0 ? gbp(totals.wastePounds) : '£0'} sub={totals.binnedUnits > 0 ? `${fmtUnits(totals.binnedUnits)} containers` : undefined} />
-              <Stat label={`${weekdayLabel(effect.tomorrow)} main line`} value={totals.tomorrowDelta === 0 ? '0' : `${totals.tomorrowDelta > 0 ? '+' : '−'}${fmtUnits(Math.abs(totals.tomorrowDelta))}`} sub="containers" tone={totals.tomorrowDelta < 0 ? 'success' : undefined} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+              <div style={statRow}>
+                <Stat label="Carried" value={fmtUnits(totals.carriedUnits)} sub="containers" />
+                <Stat label="To waste" value={totals.binnedUnits > 0 ? gbp(totals.wastePounds) : '£0'} sub={totals.binnedUnits > 0 ? `${fmtUnits(totals.binnedUnits)} containers` : 'nothing binned'} />
+                <Stat label={`${weekdayLabel(effect.tomorrow)} main line`} value={totals.tomorrowDelta === 0 ? '0' : `${totals.tomorrowDelta > 0 ? '+' : '−'}${fmtUnits(Math.abs(totals.tomorrowDelta))}`} sub="containers" tone={totals.tomorrowDelta < 0 ? 'success' : undefined} />
+              </div>
               <button type="button" onClick={confirm} style={primaryButton}>
                 <ClipboardCheck size={14} /> Confirm count
               </button>
@@ -151,7 +153,7 @@ function CloseForShop({ shopId, date, onDateChange }: { shopId: string; date: st
           <div style={rowHead}>
             <span style={colHead}>Item</span>
             <span style={{ ...colHead, textAlign: 'center' }}>In the fridge</span>
-            <span style={{ ...colHead, textAlign: 'center' }}>{weekdayLabel(effect.tomorrow)}</span>
+            <span style={{ ...colHead, textAlign: 'center' }}>{weekdayLabel(effect.tomorrow)}&rsquo;s plan</span>
             <span style={{ ...colHead, textAlign: 'right' }}>Waste</span>
           </div>
           {day.lines.map(line => (
@@ -252,16 +254,23 @@ function CloseRow({
           <span style={cellSub}>{unitsLabel(counted, line.unitName).replace(/^[\d½.]+ /, '')} · {Math.round(counted * line.portionsPerUnit)} portions</span>
         </div>
 
+        {/* What the count does to tomorrow: lead with the action (make
+            fewer), then the number it lands on. */}
         <div style={{ textAlign: 'center' }}>
-          {delta !== 0 && effect ? (
+          {effect && delta !== 0 ? (
             <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, fontWeight: 700, color: 'var(--color-success)', fontVariantNumeric: 'tabular-nums' }}>
-                <ArrowDown size={13} /> {effect.before} → {effect.after}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, fontWeight: 700, color: delta < 0 ? 'var(--color-success)' : 'var(--color-warning)', fontVariantNumeric: 'tabular-nums' }}>
+                {delta < 0 ? <ArrowDown size={13} /> : <ArrowUp size={13} />} Make {fmtUnits(Math.abs(delta))} {delta < 0 ? 'fewer' : 'more'}
               </span>
-              <span style={cellSub}>{effect.unitName.toLowerCase()}s on the main line</span>
+              <span style={cellSub}>Main line {effect.after} {plural(effect.after, effect.unitName.toLowerCase())}, was {effect.before}</span>
+            </div>
+          ) : effect && counted > 0 ? (
+            <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-secondary)' }}>Same plan</span>
+              <span style={cellSub}>Main line stays {effect.after}, carry is under one</span>
             </div>
           ) : (
-            <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{counted > 0 && effect ? `${effect.after} ${effect.unitName.toLowerCase()}s, unchanged` : 'No plan change'}</span>
+            <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Nothing carried</span>
           )}
         </div>
 
@@ -308,12 +317,14 @@ function CloseRow({
   );
 }
 
+/** Three fixed rows (label, value, sub) so the stats sit on one baseline
+ *  whatever their content; the sub always renders, blank if there is none. */
 function Stat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: 'success' }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
-      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>{label}</span>
-      <span style={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: tone === 'success' ? 'var(--color-success)' : 'var(--color-text-primary)' }}>{value}</span>
-      {sub && <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{sub}</span>}
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1, minWidth: 92, padding: '0 16px', borderLeft: '1px solid var(--color-border-subtle)' }}>
+      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)', whiteSpace: 'nowrap', lineHeight: '12px' }}>{label}</span>
+      <span style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: '20px', color: tone === 'success' ? 'var(--color-success)' : 'var(--color-text-primary)' }}>{value}</span>
+      <span style={{ fontSize: 10, color: 'var(--color-text-muted)', whiteSpace: 'nowrap', lineHeight: '12px' }}>{sub ?? '\u00a0'}</span>
     </div>
   );
 }
@@ -339,6 +350,7 @@ function hash(s: string): number {
 // ─── Styles (from DayPlan / PlanConfirmBar so Run reads as one product) ──────
 
 const captionStrip: CSSProperties = { padding: '8px 30px', background: 'var(--color-bg-surface)', borderBottom: '1px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--color-text-muted)', flexWrap: 'wrap' };
+const statRow: CSSProperties = { display: 'flex', alignItems: 'stretch' };
 const bannerTitle: CSSProperties = { fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)' };
 const bannerSub: CSSProperties = { fontSize: 11, color: 'var(--color-text-secondary)' };
 const confirmedBanner: CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--color-bg-hover)', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-card)' };

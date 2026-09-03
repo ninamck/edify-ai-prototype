@@ -59,7 +59,13 @@ export function unitCostGBP(ref: IngredientRef): number | null {
   const resolved = resolveIngredientRef(ref);
   if (!resolved) return null;
   if (resolved.subRecipe) {
-    return resolved.subRecipe.ingredientCost > 0 ? resolved.subRecipe.ingredientCost : null;
+    const r = resolved.subRecipe;
+    if (r.ingredientCost <= 0) return null;
+    // A sub-recipe that yields in kg or L quotes its cost per kg / L;
+    // rows consume it in g / ml.
+    const yieldUom = (r.formExtras?.yieldUom ?? '').toLowerCase();
+    const perBase = yieldUom === 'kg' || yieldUom === 'l' ? 1000 : 1;
+    return r.ingredientCost / perBase;
   }
   if (resolved.master) {
     const fromMaster = masterUnitCost(resolved.master);

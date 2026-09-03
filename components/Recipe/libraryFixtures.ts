@@ -396,6 +396,24 @@ export type RecipeFormExtras = {
     minBatch?: number | '';
     maxBatch?: number | '' | 'unlimited';
     batchMultiple?: number | '';
+    /** Trim and cook loss between what goes in and what comes out, as a
+     *  percentage of input. 40 means 2 kg in gives 1.2 kg out. Drives
+     *  buying and weigh-up; the made quantity does not change. */
+    yieldLossPct?: number | '';
+    /** Company shelf-life group id (Farmer J's black / green / blue
+     *  calendar). Sets the make-on days for the recipe. */
+    shelfLifeGroup?: string;
+    /** The kitchen may make half of this recipe's batch. */
+    halfBatch?: boolean;
+    /** Container id one batch is portioned into, and how many it fills. */
+    outputContainer?: string;
+    containersPerBatch?: number | '';
+    /** Kit this recipe needs (`Equipment` ids). Unset means the recipe
+     *  class's default applies; an empty list means none. */
+    requiresEquipment?: string[];
+    /** Method settings set on this recipe (`RecipeMethod` keys). A key
+     *  that is absent inherits the recipe class's default. */
+    method?: Record<string, unknown>;
   };
   advanced?: {
     productClass?: string;
@@ -1195,6 +1213,7 @@ export function formatCost(n: number): string {
 // and a workflow id intact for the drawer DAG.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { buildFarmerJRecipes } from '@/components/Production/farmerj/recipeBridge';
 import { PRET_RECIPES } from '@/components/Production/fixtures';
 
 const PRET_CONSUMED_IDS: Set<string> = new Set(
@@ -1532,6 +1551,7 @@ export const ALL_LIBRARY_RECIPES: Recipe[] = [
   })),
   ...PRET_LIBRARY_RECIPES,
   ...BK_LIBRARY_RECIPES,
+  ...buildFarmerJRecipes(),
 ];
 
 /** Inverse of subRecipes: which recipes consume this one. */

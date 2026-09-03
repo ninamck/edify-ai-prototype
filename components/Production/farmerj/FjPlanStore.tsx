@@ -2,12 +2,22 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { batchesToNumber, explode, fullBatchGrams, planProduct, type PlanOptions, type ProductPlan } from './cascade';
+import { batchesToNumber, explode, fullBatchGrams, fullLineUnits, halfLineUnits, planProduct, type LineOverride, type PlanOptions, type ProductPlan } from './cascade';
 import { cateringFor, cateringGrams, type CateringOrder } from './catering';
-import { addDays, planningWindowFor, referenceDaysFor, type ReferenceDay } from './calendar';
+import { addDays, demoNowISO, planningWindowFor, referenceDaysFor, type ReferenceDay } from './calendar';
 import { PRODUCT_BY_ID, PRODUCTS, type FinishedProduct } from './recipes';
 import { averageDemand, type DayDemand } from './sales';
 import { applySettings, defaultSettings, normaliseSettings, type FjSettings } from './fjSettings';
+import { applyFarmerJRecipes, applyOverridesToRecipes, loadFarmerJOverrides, saveFarmerJOverrides } from './recipeBridge';
+import { setRecipes, snapshotRecipes, useRecipes } from '@/components/Recipe/recipeStore';
+import type { Recipe } from '@/components/Recipe/libraryFixtures';
+import { useSiteSettingsStore } from '@/components/Settings/siteSettingsStore';
+import { FJ_MAIN_LINE_ID, FJ_SECOND_LINE_ID } from './fjFixtures';
+import { linesFor, linesFromBenches, setShopLines, type PlanLine } from './lines';
+import { setShopStations, stationsFromBenches, type Station } from './stations';
+import { kitFromBenches, setShopKit, type ShopKit } from './kit';
+import { scheduleFromWindows, scheduleKey, setShopSchedules, type MakeOnSchedule } from './makeOn';
+import { FJ_ALL_SHOPS_ID, FJ_SHOPS } from './shops';
 
 /**
  * Everything a manager changes on a Farmer J plan, per shop and day, kept
@@ -16,7 +26,7 @@ import { applySettings, defaultSettings, normaliseSettings, type FjSettings } fr
  * rules in `cascade.ts` on every render.
  */
 
-export type LineOverride = { main?: number; second?: number };
+export type { LineOverride };
 
 export type CloseCount = {
   /** Grams counted at close per product, carried to tomorrow. */
@@ -34,16 +44,41 @@ export type DayRecord = {
   excludedReferenceDays: string[];
   approvedAtISO?: string;
   approvedBy?: string;
+  /**
+   * Set when Jana publishes Setup after this day was approved. The plan
+   * below already runs on the new rules; `pinned` holds the units the GM
+   * approved, so they can keep their numbers instead.
+   */
+  settingsChanged?: SettingsChangedFlag;
   close?: CloseCount;
   /** Prep list quantities typed over Edify's suggestion, in the component's own unit. */
   prepOverrides?: Record<string, number>;
   /** Section task ticks (task id → ISO time), tasks moved to another
    *  section (task id → section id) and people set per section. */
   ticks?: Record<string, string>;
+  /**
+   * What was actually made when a task was ticked (task id → batches,
+   * who, when). Defaults to the task's planned batches; the person on the
+   * section corrects it on the method card when they made more or less.
+   * The Production record reads this against the plan and the till.
+   */
+  made?: Record<string, MadeEntry>;
   reassigned?: Record<string, string>;
   people?: Record<string, string>;
   /** Manager's drag order per list, keyed `${sectionId}::${slot}`. */
   taskOrder?: Record<string, string[]>;
+};
+
+export type MadeEntry = { batches: number; by: string; atISO: string };
+
+export type SettingsChangedFlag = {
+  publishId: string;
+  atISO: string;
+  by: string;
+  /** Field names that changed for this shop. */
+  fields: string[];
+  /** Units per product per line as approved, before the publish. */
+  pinned: Record<string, LineOverride>;
 };
 
 type StoreState = Record<string, DayRecord>;
@@ -65,6 +100,10 @@ type Ctx = {
   /** Jana's central settings (draft, published, publish log). */
   settings: FjSettings;
   updateSettings: (fn: (s: FjSettings) => FjSettings) => void;
+  /** The recipe library, so anything derived from the book re-runs when a recipe is saved. */
+  recipes: Recipe[];
+  /** Changes whenever any shop's lines change in site settings, so plans re-derive. */
+  linesKey: string;
 };
 
 const FjPlanContext = createContext<Ctx | null>(null);
@@ -73,6 +112,28 @@ export function FjPlanProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<StoreState>({});
   const [settings, setSettings] = useState<FjSettings>(defaultSettings);
   const [hydrated, setHydrated] = useState(false);
+  const recipes = useRecipes();
+  const siteStore = useSiteSettingsStore();
+
+  // Each shop's lines and kit are its benches in the site settings store,
+  // and its make-on days are its production windows. Resolve them here once
+  // per store change and register them for the engines. The key changes
+  // when any does, so plans re-derive.
+  const linesKey = useMemo(() => {
+    const lines: Record<string, PlanLine[]> = {};
+    const kit: Record<string, ShopKit> = {};
+    const stations: Record<string, Station[]> = {};
+    const schedules: Record<string, MakeOnSchedule> = {};
+    for (const id of [FJ_ALL_SHOPS_ID, ...FJ_SHOPS.map(s => s.id)]) {
+      const eff = siteStore.effectiveFor(id);
+      lines[id] = linesFromBenches(eff.benches);
+      kit[id] = kitFromBenches(eff.benches);
+      stations[id] = stationsFromBenches(eff.benches);
+      schedules[id] = scheduleFromWindows(eff.windows);
+    }
+    setShopSchedules(schedules, schedules[FJ_ALL_SHOPS_ID]);
+    return setShopLines(lines) + setShopKit(kit) + setShopStations(stations) + scheduleKey();
+  }, [siteStore]);
 
   // Hydrate once on mount. Reading localStorage in the initialiser would
   // run on the server and mismatch the first client render, so the store
@@ -82,9 +143,11 @@ export function FjPlanProvider({ children }: { children: ReactNode }) {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (raw) setState(JSON.parse(raw));
+      if (raw) setState(migrateOverrides(JSON.parse(raw)));
       const rawSettings = window.localStorage.getItem(SETTINGS_KEY);
       if (rawSettings) setSettings(normaliseSettings(JSON.parse(rawSettings)));
+      const overrides = loadFarmerJOverrides();
+      if (Object.keys(overrides).length) setRecipes(applyOverridesToRecipes(snapshotRecipes(), overrides));
     } catch {
       // ignore
     }
@@ -96,14 +159,17 @@ export function FjPlanProvider({ children }: { children: ReactNode }) {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      saveFarmerJOverrides(recipes);
     } catch {
       // ignore
     }
-  }, [state, settings, hydrated]);
+  }, [state, settings, recipes, hydrated]);
 
   // The engines read the recipe book's constants, so the published
-  // settings are written into them here, before any child derives a plan.
+  // settings and the library's recipe fields are written into them here,
+  // before any child derives a plan.
   applySettings(settings.published);
+  applyFarmerJRecipes(recipes);
 
   const get = useCallback((shopId: string, date: string) => state[keyFor(shopId, date)] ?? emptyRecord(), [state]);
   const update = useCallback((shopId: string, date: string, fn: (r: DayRecord) => DayRecord) => {
@@ -119,10 +185,25 @@ export function FjPlanProvider({ children }: { children: ReactNode }) {
   const updateSettings = useCallback((fn: (s: FjSettings) => FjSettings) => setSettings(s => fn(s)), []);
 
   const value = useMemo(
-    () => ({ state, get, update, reset, settings, updateSettings }),
-    [state, get, update, reset, settings, updateSettings],
+    () => ({ state, get, update, reset, settings, updateSettings, recipes, linesKey }),
+    [state, get, update, reset, settings, updateSettings, recipes, linesKey],
   );
   return <FjPlanContext.Provider value={value}>{children}</FjPlanContext.Provider>;
+}
+
+/** Older demos stored overrides as `{ main, second }`; they are keyed by line id now. */
+function migrateOverrides(state: StoreState): StoreState {
+  const legacy: Record<string, string> = { main: FJ_MAIN_LINE_ID, second: FJ_SECOND_LINE_ID };
+  for (const rec of Object.values(state)) {
+    for (const [pid, o] of Object.entries(rec.overrides ?? {})) {
+      const next: LineOverride = {};
+      for (const [k, v] of Object.entries(o as Record<string, number | undefined>)) {
+        if (typeof v === 'number') next[legacy[k] ?? k] = v;
+      }
+      rec.overrides[pid] = next;
+    }
+  }
+  return state;
 }
 
 export function useFjPlanStore(): Ctx {
@@ -158,7 +239,17 @@ export type DayPlan = {
   explosion: ReturnType<typeof explode>;
   approved: boolean;
   overriddenCount: number;
-  totals: { mainUnits: number; secondUnits: number; batches: number; gramsMade: number };
+  /** The shop's service lines, in column order. */
+  lines: PlanLine[];
+  totals: {
+    /** Planned units per line id. */
+    byLine: Record<string, number>;
+    /** Units on lines plating the recipe's container, and on small-container lines. */
+    fullUnits: number;
+    halfUnits: number;
+    batches: number;
+    gramsMade: number;
+  };
 };
 
 export function computeDayPlan(shopId: string, date: string, record: DayRecord, yesterdayClose?: CloseCount): DayPlan {
@@ -172,11 +263,13 @@ export function computeDayPlan(shopId: string, date: string, record: DayRecord, 
   const orders = cateringFor(shopId, date);
   const activeOrders = orders.filter(o => !record.cancelledOrders.includes(o.id));
   const carried = yesterdayClose?.carried ?? {};
+  const lines = linesFor(shopId);
   const opts: PlanOptions = {
     flexPct: record.flexPct,
     catering: cateringGrams(activeOrders),
     carried,
     overrides: record.overrides,
+    lines,
   };
   const products = PRODUCTS.filter(p => {
     const hasDemand = (demand.products[p.id]?.grams ?? 0) > 0;
@@ -186,15 +279,15 @@ export function computeDayPlan(shopId: string, date: string, record: DayRecord, 
   });
   const plans = products.map(p => planProduct(p.id, demand, opts));
   const explosion = explode(plans, demand.components);
-  const totals = plans.reduce(
-    (t, p) => ({
-      mainUnits: t.mainUnits + p.main.plannedUnits,
-      secondUnits: t.secondUnits + p.second.plannedUnits,
-      batches: t.batches + batchesToNumber(p.batches),
-      gramsMade: t.gramsMade + p.gramsMade,
-    }),
-    { mainUnits: 0, secondUnits: 0, batches: 0, gramsMade: 0 },
-  );
+  const byLine: Record<string, number> = Object.fromEntries(lines.map(l => [l.id, 0]));
+  for (const p of plans) for (const l of p.lines) byLine[l.lineId] = (byLine[l.lineId] ?? 0) + l.plannedUnits;
+  const totals = {
+    byLine,
+    fullUnits: plans.reduce((n, p) => n + fullLineUnits(p), 0),
+    halfUnits: plans.reduce((n, p) => n + halfLineUnits(p), 0),
+    batches: plans.reduce((n, p) => n + batchesToNumber(p.batches), 0),
+    gramsMade: plans.reduce((n, p) => n + p.gramsMade, 0),
+  };
   return {
     shopId,
     date,
@@ -211,6 +304,7 @@ export function computeDayPlan(shopId: string, date: string, record: DayRecord, 
     explosion,
     approved: Boolean(record.approvedAtISO),
     overriddenCount: plans.filter(p => p.overridden).length,
+    lines,
     totals,
   };
 }
@@ -221,17 +315,19 @@ export function useFjDayPlan(shopId: string, date: string) {
   const record = store.get(shopId, date);
   const yesterday = store.get(shopId, addDays(date, -1));
   const published = store.settings.published;
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- published settings change the recipe book the plan derives from
-  const plan = useMemo(() => computeDayPlan(shopId, date, record, yesterday.close), [shopId, date, record, yesterday.close, published]);
+  const recipes = store.recipes;
+  const linesKey = store.linesKey;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- published settings, recipe edits and line changes alter what the plan derives from
+  const plan = useMemo(() => computeDayPlan(shopId, date, record, yesterday.close), [shopId, date, record, yesterday.close, published, recipes, linesKey]);
 
   const setOverride = useCallback(
-    (productId: string, line: 'main' | 'second', units: number | undefined) =>
+    (productId: string, lineId: string, units: number | undefined) =>
       store.update(shopId, date, r => {
-        const cur = { ...(r.overrides[productId] ?? {}) };
-        if (units === undefined) delete cur[line];
-        else cur[line] = Math.max(0, units);
+        const cur: LineOverride = { ...(r.overrides[productId] ?? {}) };
+        if (units === undefined) delete cur[lineId];
+        else cur[lineId] = Math.max(0, units);
         const overrides = { ...r.overrides };
-        if (cur.main === undefined && cur.second === undefined) delete overrides[productId];
+        if (Object.keys(cur).length === 0) delete overrides[productId];
         else overrides[productId] = cur;
         return { ...r, overrides };
       }),
@@ -272,20 +368,38 @@ export function useFjDayPlan(shopId: string, date: string) {
 
   const approve = useCallback(
     (by: string, dates: string[] = [date]) => {
-      const at = new Date().toISOString();
-      for (const d of dates) store.update(shopId, d, r => ({ ...r, approvedAtISO: at, approvedBy: by }));
+      const at = demoNowISO();
+      for (const d of dates) store.update(shopId, d, r => ({ ...r, approvedAtISO: at, approvedBy: by, settingsChanged: undefined }));
     },
     [store, shopId, date],
   );
 
   const reopen = useCallback(
-    () => store.update(shopId, date, r => ({ ...r, approvedAtISO: undefined, approvedBy: undefined })),
+    () => store.update(shopId, date, r => ({ ...r, approvedAtISO: undefined, approvedBy: undefined, settingsChanged: undefined })),
+    [store, shopId, date],
+  );
+
+  /** After a publish: take the re-derived numbers and re-approve. */
+  const acceptNewNumbers = useCallback(
+    (by: string) => store.update(shopId, date, r => ({ ...r, approvedAtISO: demoNowISO(), approvedBy: by, settingsChanged: undefined })),
+    [store, shopId, date],
+  );
+
+  /** After a publish: pin the approved units as overrides so the day runs as approved. */
+  const keepApprovedNumbers = useCallback(
+    (by: string) =>
+      store.update(shopId, date, r => {
+        const pinned = r.settingsChanged?.pinned ?? {};
+        const overrides = { ...r.overrides };
+        for (const [productId, units] of Object.entries(pinned)) overrides[productId] = { ...(overrides[productId] ?? {}), ...units };
+        return { ...r, overrides, approvedAtISO: demoNowISO(), approvedBy: by, settingsChanged: undefined };
+      }),
     [store, shopId, date],
   );
 
   const setClose = useCallback((close: CloseCount | undefined) => store.update(shopId, date, r => ({ ...r, close })), [store, shopId, date]);
 
-  return { plan, setOverride, clearOverride, setFlex, toggleOrder, toggleReferenceDay, approve, reopen, setClose, record };
+  return { plan, setOverride, clearOverride, setFlex, toggleOrder, toggleReferenceDay, approve, reopen, acceptNewNumbers, keepApprovedNumbers, setClose, record };
 }
 
 /** Approval state across a planning window, for the header pill. */

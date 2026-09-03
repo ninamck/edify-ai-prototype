@@ -22,18 +22,7 @@ import {
 } from 'recharts';
 import { AlertTriangle, ChevronRight, Trash2 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
-import {
-  DAILY_ANOMALIES,
-  DAILY_DATE_LABEL,
-  DAILY_EXCEPTIONS,
-  DAILY_SALES_14D,
-  DAILY_SITE,
-  DAILY_THEO_GP,
-  DAILY_WASTE,
-  DAILY_WASTE_ITEMS,
-  DAILY_YESTERDAY,
-  type DailyWasteItem,
-} from './templateData';
+import { ESPRESSO_DAILY, type DailyData, type DailyWasteItem } from './templateData';
 import TileActions from '@/components/ScheduledReports/TileActions';
 import {
   DeltaText,
@@ -57,37 +46,36 @@ const DAILY_INSIGHTS = [
   'Anomaly flags',
 ];
 
-function dailyActions(insightTitle: string) {
+function dailyActions(insightTitle: string, site: string) {
   return (
     <TileActions
       insightTitle={insightTitle}
-      siteLabel={DAILY_SITE}
+      siteLabel={site}
       siblingInsights={DAILY_INSIGHTS}
       dataWindowLabel="Yesterday, as of send date"
     />
   );
 }
 
-const vsForecastPct =
-  ((DAILY_YESTERDAY.sales - DAILY_YESTERDAY.forecast) / DAILY_YESTERDAY.forecast) * 100;
-const vsLastWeekPct =
-  ((DAILY_YESTERDAY.sales - DAILY_YESTERDAY.sameDayLastWeek) / DAILY_YESTERDAY.sameDayLastWeek) * 100;
+export default function DailyTemplate({ data = ESPRESSO_DAILY }: { data?: DailyData }) {
+  const { site, yesterday, theoGp, sales14d, exceptions, anomalies } = data;
+  const vsForecastPct = ((yesterday.sales - yesterday.forecast) / yesterday.forecast) * 100;
+  const vsLastWeekPct = ((yesterday.sales - yesterday.sameDayLastWeek) / yesterday.sameDayLastWeek) * 100;
 
-export default function DailyTemplate() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1400, margin: '0 auto', width: '100%' }}>
-      <TemplateIntro title={`${DAILY_SITE} · yesterday (${DAILY_DATE_LABEL})`} />
+      <TemplateIntro title={`${site} · yesterday (${data.dateLabel})`} />
 
       <Grid>
         {/* 1 · Sales anchor — one number, one sparkline */}
         <div style={HALF}>
           <TileCard
             title="Sales · yesterday"
-            actions={dailyActions('Sales · yesterday')}>
+            actions={dailyActions('Sales · yesterday', site)}>
             <div style={{ padding: '0 16px 12px' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 36, fontWeight: 700, color: VALUE_INK }}>
-                  £{DAILY_YESTERDAY.sales.toLocaleString('en-GB')}
+                  £{Math.round(yesterday.sales).toLocaleString('en-GB')}
                 </span>
                 <span style={{ fontSize: 12.5, fontWeight: 600 }}>
                   <DeltaText pct={vsForecastPct} />{' '}
@@ -100,7 +88,7 @@ export default function DailyTemplate() {
               </div>
               <div style={{ width: '100%', height: 88, marginTop: 10 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={DAILY_SALES_14D} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+                  <AreaChart data={sales14d} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="dailySpark" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor={MID} stopOpacity={0.35} />
@@ -125,16 +113,16 @@ export default function DailyTemplate() {
           <TileCard
             title="GP% flash · yesterday"
             badge={<FigureBadge kind="theoretical" />}
-            actions={dailyActions('GP% flash · yesterday')}
-            footer={`${DAILY_THEO_GP.posMappedPct}% of yesterday's POS sales are recipe-mapped. Unmapped items are excluded, not guessed.`}
+            actions={dailyActions('GP% flash · yesterday', site)}
+            footer={`${theoGp.posMappedPct}% of yesterday's POS sales are recipe-mapped. Unmapped items are excluded, not guessed.`}
           >
             <div style={{ padding: '0 16px 12px' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 36, fontWeight: 700, color: VALUE_INK }}>
-                  {DAILY_THEO_GP.pct.toFixed(1)}%
+                  {theoGp.pct.toFixed(1)}%
                 </span>
                 <span style={{ fontSize: 12.5, fontWeight: 600 }}>
-                  <DeltaText pct={DAILY_THEO_GP.vsLastWeekPp} suffix="pp" />{' '}
+                  <DeltaText pct={theoGp.vsLastWeekPp} suffix="pp" />{' '}
                   <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>vs same day LW</span>
                 </span>
               </div>
@@ -144,16 +132,16 @@ export default function DailyTemplate() {
 
         {/* 3 · Waste logged yesterday — Waste watch style, as built in the product */}
         <div style={HALF}>
-          <DailyWasteWatch />
+          <DailyWasteWatch data={data} />
         </div>
 
         {/* 4 · Exceptions queue */}
         <div style={HALF}>
           <TileCard
             title="Exceptions queue"
-            actions={dailyActions('Exceptions queue')}>
+            actions={dailyActions('Exceptions queue', site)}>
             <div style={{ padding: '0 8px 10px', display: 'flex', flexDirection: 'column' }}>
-              {DAILY_EXCEPTIONS.map((ex) => (
+              {exceptions.map((ex) => (
                 <Link
                   key={ex.label}
                   href={ex.href}
@@ -200,9 +188,9 @@ export default function DailyTemplate() {
           <TileCard
             title="Anomaly flags"
             badge={<FigureBadge kind="ai" />}
-            actions={dailyActions('Anomaly flags')}>
+            actions={dailyActions('Anomaly flags', site)}>
             <div style={{ padding: '0 16px 14px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
-              {DAILY_ANOMALIES.map((a) => (
+              {anomalies.map((a) => (
                 <div
                   key={a.headline}
                   style={{
@@ -252,14 +240,15 @@ function wasteColour(sev: WasteSeverity): string {
   return OK_TEXT;
 }
 
-function DailyWasteWatch() {
-  const totalYesterday = DAILY_WASTE_ITEMS.reduce((s, r) => s + r.spendYesterday, 0);
-  const totalTypical = DAILY_WASTE_ITEMS.reduce((s, r) => s + r.spendTypical, 0);
+function DailyWasteWatch({ data }: { data: DailyData }) {
+  const { site, waste, wasteItems } = data;
+  const totalYesterday = wasteItems.reduce((s, r) => s + r.spendYesterday, 0);
+  const totalTypical = wasteItems.reduce((s, r) => s + r.spendTypical, 0);
   const delta = totalYesterday - totalTypical;
   const deltaPct = totalTypical > 0 ? Math.round((delta / totalTypical) * 100) : 0;
   const overall: WasteSeverity = delta <= 0 ? 'ok' : deltaPct >= 50 ? 'flag' : 'watch';
 
-  const chartData = [...DAILY_WASTE_ITEMS]
+  const chartData = [...wasteItems]
     .sort((a, b) => b.spendYesterday - a.spendYesterday)
     .map((r) => ({
       product: r.product,
@@ -268,7 +257,7 @@ function DailyWasteWatch() {
       sev: wasteSeverity(r),
     }));
 
-  const flagged = DAILY_WASTE_ITEMS.filter((r) => r.flag && wasteSeverity(r) === 'flag');
+  const flagged = wasteItems.filter((r) => r.flag && wasteSeverity(r) === 'flag');
 
   return (
     <div
@@ -302,10 +291,10 @@ function DailyWasteWatch() {
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>Waste logged · yesterday</div>
           <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-muted)' }}>
-            {DAILY_WASTE.pctOfSales.toFixed(1)}% of sales · target ≤ {DAILY_WASTE.targetPct.toFixed(1)}%
+            {waste.pctOfSales.toFixed(1)}% of sales · target ≤ {waste.targetPct.toFixed(1)}%
           </div>
         </div>
-        {dailyActions('Waste logged · yesterday')}
+        {dailyActions('Waste logged · yesterday', site)}
         <div
           style={{
             display: 'flex',

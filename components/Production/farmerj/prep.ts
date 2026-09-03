@@ -20,13 +20,13 @@
 
 import { batchesLabel, batchesToNumber, explode, inputScale, roundComponent, type Consumer } from './cascade';
 import { addDays, daysCoveredFrom, isProductionDay, weekdayOf } from './calendar';
+import { deepCleanDaysFor, productionDaysFor } from './makeOn';
 import { computeDayPlan, type DayRecord } from './FjPlanStore';
 import {
   COMPONENTS,
   CONTAINERS,
   INGREDIENTS,
   SHELF_LIFE_GROUPS,
-  productionDaysFor,
   type Component,
   type ShelfLifeGroup,
   type ShelfLifeGroupId,
@@ -109,7 +109,9 @@ function unitFor(c: Component): PrepUnit {
       return { kind: 'kg', noun: 'kg', plural: 'kg', gramsEach: 1000, step: 0.5, min: 0 };
     case 'batch':
     default: {
-      const noun = label && !/tray|pot|per /.test(label) ? label : 'batch';
+      // Labels that describe the output ("one tray", "about 28 toasts")
+      // are not a unit the person counts in; those round in batches.
+      const noun = label && !/tray|pot|per |about|toast/.test(label) ? label : 'batch';
       return { kind: 'batch', noun, plural: noun === 'batch' ? 'batches' : `${noun}s`, gramsEach: c.batch.fullG, step: c.batch.halfG ? 0.5 : 1, min: 0 };
     }
   }
@@ -229,7 +231,7 @@ export function computePrepDay(shopId: string, date: string, getRecord: GetRecor
   const aheadGroups = aheadOrder.map(g => ({
     group: SHELF_LIFE_GROUPS[g],
     makeOn: isProductionDay(shopId, g, date),
-    days: productionDaysFor(shopId, g).filter(d => d !== 3 || g === 'daily'),
+    days: productionDaysFor(shopId, g).filter(d => !deepCleanDaysFor(shopId).includes(d) || g === 'daily'),
   }));
 
   return {
@@ -239,6 +241,6 @@ export function computePrepDay(shopId: string, date: string, getRecord: GetRecor
   };
 }
 
-export function isDeepClean(date: string): boolean {
-  return weekdayOf(date) === 3;
+export function isDeepClean(shopId: string, date: string): boolean {
+  return deepCleanDaysFor(shopId).includes(weekdayOf(date));
 }

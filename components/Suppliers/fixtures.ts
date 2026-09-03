@@ -11,6 +11,7 @@
  * across 12 sites, Apple Fizz, Aluminium Foil Roll, etc.).
  */
 import { isMultiCurrencyDemo } from '@/lib/demoConfig';
+import { buildFarmerJMasterProducts } from '@/components/Production/farmerj/recipeBridge';
 import type { CurrencyCode } from '@/lib/currency';
 
 export type SupplierStatus = 'Available' | 'Unavailable' | 'Pending';
@@ -532,6 +533,7 @@ export const SEED_MASTER_PRODUCTS: MasterProduct[] = [
         { id: 'mp-sc-hot-cup-12', name: 'Branded hot cup + lid (12oz)',         category: 'Packaging', unit: 'pack of 1000', slug: 'sc-hot-cup-12', productClass: 'Non-food', status: 'Available', defaultProductId: 'prd-sc-hot-cup-12', siteCosts: wacAt(55.10, 5) },
       ] satisfies MasterProduct[])
     : []),
+  ...buildFarmerJMasterProducts(),
 ];
 
 const blankNutrition: Nutrition = {};

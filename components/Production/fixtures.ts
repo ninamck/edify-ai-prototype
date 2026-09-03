@@ -38,6 +38,7 @@ import {
   BK_WORKFLOWS,
 } from './bkFixtures';
 import type { Brand } from './bkFixtures';
+import { FJ_BENCHES, FJ_SITES } from './farmerj/fjFixtures';
 
 export type { Brand };
 
@@ -133,6 +134,7 @@ export type WorkType =
 export type Equipment =
   | 'oven'
   | 'combi-oven'
+  | 'rice-cooker'
   | 'proofer'
   | 'mixer-planetary'
   | 'mixer-spiral'
@@ -250,6 +252,7 @@ export function equipmentFromCapability(cap: BenchCapability): Equipment | undef
 export const EQUIPMENT_LABELS: Record<Equipment, string> = {
   'oven':            'Oven',
   'combi-oven':      'Combi oven',
+  'rice-cooker':     'Rice cooker',
   'proofer':         'Proofer',
   'mixer-planetary': 'Planetary mixer',
   'mixer-spiral':    'Spiral mixer',
@@ -272,7 +275,7 @@ export const EQUIPMENT_LABELS: Record<Equipment, string> = {
 /** Canonical ordering for equipment chips — same flow as work types
  *  (cold/cool first, hot middle, then chill/cool, then space). */
 export const EQUIPMENT_ORDER: Equipment[] = [
-  'oven', 'combi-oven', 'proofer',
+  'oven', 'combi-oven', 'rice-cooker', 'proofer',
   'mixer-planetary', 'mixer-spiral',
   'slicer', 'mandoline', 'blender', 'food-processor',
   'hob', 'griddle', 'panini-press', 'microwave',
@@ -280,6 +283,40 @@ export const EQUIPMENT_ORDER: Equipment[] = [
   'sanitise-sink',
   'prep-table', 'counter',
 ];
+
+/**
+ * Equipment whose throughput is a number of things it holds at once, not
+ * just how many units the bench owns. An oven holds trays; a recipe that
+ * fills four trays a batch fits floor(ovens × trays / 4) batches a load.
+ * Equipment not listed here takes one batch per unit (a rice cooker cooks
+ * one rice kit at a time).
+ */
+export const EQUIPMENT_CAPACITY_UNIT: Partial<Record<Equipment, string>> = {
+  'oven': 'trays',
+  'combi-oven': 'trays',
+  'blast-chiller': 'trays',
+};
+
+/**
+ * A piece of kit a bench owns, in a quantity. `capacity` is how many of
+ * `EQUIPMENT_CAPACITY_UNIT` each unit holds, for equipment that has one.
+ * Site-level: the same bench at two sites can own two ovens or three.
+ */
+export type BenchKitItem = {
+  equipment: Equipment;
+  count: number;
+  capacity?: number;
+};
+
+/** Total units of a piece of equipment across a set of benches. */
+export function kitCount(benches: Pick<Bench, 'kit'>[], equipment: Equipment): number {
+  return benches.reduce((n, b) => n + (b.kit ?? []).filter(k => k.equipment === equipment).reduce((m, k) => m + k.count, 0), 0);
+}
+
+/** Total capacity (trays, say) of a piece of equipment across benches. */
+export function kitCapacity(benches: Pick<Bench, 'kit'>[], equipment: Equipment): number {
+  return benches.reduce((n, b) => n + (b.kit ?? []).filter(k => k.equipment === equipment).reduce((m, k) => m + k.count * (k.capacity ?? 1), 0), 0);
+}
 
 /** Resolve the effective work types for a bench — explicit `workTypes` if
  *  authored, else derived from `capabilities`. Always deduped. */
@@ -290,12 +327,13 @@ export function benchWorkTypes(b: Pick<Bench, 'workTypes' | 'capabilities'>): Wo
 
 /** Resolve the effective equipment for a bench — explicit `equipment` if
  *  authored, else derived from `capabilities`. */
-export function benchEquipment(b: Pick<Bench, 'equipment' | 'capabilities'>): Equipment[] {
-  if (b.equipment && b.equipment.length > 0) return Array.from(new Set(b.equipment));
+export function benchEquipment(b: Pick<Bench, 'equipment' | 'capabilities' | 'kit'>): Equipment[] {
+  const fromKit = (b.kit ?? []).filter(k => k.count > 0).map(k => k.equipment);
+  if (b.equipment && b.equipment.length > 0) return Array.from(new Set([...b.equipment, ...fromKit]));
   const derived = b.capabilities
     .map(equipmentFromCapability)
     .filter((e): e is Equipment => !!e);
-  return Array.from(new Set(derived));
+  return Array.from(new Set([...derived, ...fromKit]));
 }
 
 /** Resolve the effective work type for a workflow stage — explicit if
@@ -619,6 +657,13 @@ export type Bench = {
    * to route stages with `requiresEquipment` set.
    */
   equipment?: Equipment[];
+  /**
+   * How many of each piece of kit this bench owns, and what each holds.
+   * `equipment` says an oven is here; `kit` says there are two and each
+   * takes six trays. Engines size cook loads from it. Edited per site in
+   * Settings > Production > Benches.
+   */
+  kit?: BenchKitItem[];
   /** Bench-level batch rules (hardware limits). Recipe rules win if set. */
   batchRules?: BatchRules;
   /** Whether bench is currently online (false = out of service). */
@@ -637,6 +682,28 @@ export type Bench = {
    * header.
    */
   runs?: RunSchedule[];
+  /**
+   * This bench plates in half batches: small containers rather than the
+   * recipe's full container. Farmer J's second make line. A recipe also has
+   * to allow halves for the half to be made.
+   */
+  halfBatches?: boolean;
+  /**
+   * Sales channels whose demand is plated on this bench (`instore`,
+   * `kiosk`, `deliveroo`, `clickcollect`). Splits the day's forecast
+   * between lines. Unset means the bench takes no till demand directly.
+   */
+  channels?: string[];
+  /**
+   * Work from the Farmer J planner that lands on this bench, by role:
+   * `hot` (oven and cooker loads), `breakfast`, `salads` (kits, dressing,
+   * plating), `prep` (today's, tomorrow's and make-ahead prep), `second`
+   * (small-container plating and catering packing). A bench with any role
+   * is a card on the Sections board, named as here, with its kit. Unset
+   * means the bench is not on the board (the main line: nothing is made
+   * there).
+   */
+  sections?: string[];
 };
 
 export const PRET_BENCHES: Bench[] = [
@@ -5560,7 +5627,7 @@ export const DEMO_CURRENT_USER_ID: UserId = 'user-manager-central';
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function getSite(id: SiteId): Site | undefined {
-  return PRET_SITES.find(s => s.id === id) ?? BK_SITES.find(s => s.id === id);
+  return PRET_SITES.find(s => s.id === id) ?? BK_SITES.find(s => s.id === id) ?? FJ_SITES.find(s => s.id === id);
 }
 
 /** Brand of a site, defaulting to Pret when the field is unset. */
@@ -5569,7 +5636,7 @@ export function siteBrand(siteId: SiteId): Brand {
 }
 
 export function getBench(id: BenchId): Bench | undefined {
-  return PRET_BENCHES.find(b => b.id === id) ?? BK_BENCHES.find(b => b.id === id);
+  return PRET_BENCHES.find(b => b.id === id) ?? BK_BENCHES.find(b => b.id === id) ?? FJ_BENCHES.find(b => b.id === id);
 }
 
 export function getRecipe(id: RecipeId): ProductionRecipe | undefined {
@@ -5768,7 +5835,7 @@ export function getUser(id: UserId): User | undefined {
 }
 
 export function benchesAt(siteId: SiteId): Bench[] {
-  const benches = [...PRET_BENCHES, ...BK_BENCHES].filter(b => b.siteId === siteId);
+  const benches = [...PRET_BENCHES, ...BK_BENCHES, ...FJ_BENCHES].filter(b => b.siteId === siteId);
   // Surface the prep bench last so every bench board reads "Bench 1..N" then
   // "Prep bench". Stable partition — keeps the relative order of all other
   // benches untouched.

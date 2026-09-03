@@ -1,4 +1,4 @@
-import { costPerKgOf, gramsPerMainUnit, portionsPerMainUnit, type ProductPlan } from './cascade';
+import { costPerKgOf, fullLineUnits, gramsPerMainUnit, portionsPerMainUnit, type ProductPlan } from './cascade';
 import { addDays, weekdayLabel } from './calendar';
 import { computeDayPlan, type CloseCount, type DayRecord } from './FjPlanStore';
 import { COMPONENTS, CONTAINERS, SHELF_LIFE_GROUPS, type Component, type FinishedProduct } from './recipes';
@@ -167,7 +167,7 @@ export function tomorrowEffect(shopId: string, date: string, getRecord: GetRecor
   const byProduct: Record<string, { before: number; after: number; unitName: string }> = {};
   for (const p of before.plans) {
     const a = after.plans.find(x => x.productId === p.productId);
-    byProduct[p.productId] = { before: p.main.plannedUnits, after: a?.main.plannedUnits ?? p.main.plannedUnits, unitName: p.main.unitName };
+    byProduct[p.productId] = { before: fullLineUnits(p), after: a ? fullLineUnits(a) : fullLineUnits(p), unitName: CONTAINERS[p.product.unit].name };
   }
   return { tomorrow, before, after, byProduct };
 }
@@ -196,4 +196,24 @@ export function unitsLabel(units: number, unitName: string): string {
   const whole = Math.floor(units);
   const n = units % 1 === 0 ? String(units) : whole === 0 ? '½' : `${whole}½`;
   return `${n} ${units === 1 ? noun : `${noun}s`}`;
+}
+
+/**
+ * Waste from a saved count, for boards and reports that only need the
+ * headline. Skips the tomorrow-effect pass, which is the expensive part.
+ */
+export function wasteFromClose(shopId: string, date: string, getRecord: GetRecord): { binnedUnits: number; wastePounds: number } | undefined {
+  const close = getRecord(shopId, date).close;
+  if (!close) return undefined;
+  const { lines } = computeCloseDay(shopId, date, getRecord);
+  const draft = draftFromClose(lines, close);
+  let binnedUnits = 0;
+  let wastePounds = 0;
+  for (const l of lines) {
+    const b = draft.binned[l.productId];
+    if (!b) continue;
+    binnedUnits += b.units;
+    wastePounds += (b.units * l.gramsPerUnit / 1000) * costPerKgOf(l.component.id);
+  }
+  return { binnedUnits, wastePounds };
 }

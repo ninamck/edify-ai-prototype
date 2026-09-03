@@ -33,6 +33,8 @@ export type ShelfLifeGroupId = 'daily' | 'green3' | 'blue4' | 'coconut2' | 'week
 export type ShelfLifeGroup = {
   id: ShelfLifeGroupId;
   label: string;
+  /** Two-word name for strips and chips: "3-day", "Coconut". */
+  short: string;
   /** Days covered including the make-on day. */
   days: number;
   colour: string;
@@ -43,6 +45,7 @@ export const SHELF_LIFE_GROUPS: Record<ShelfLifeGroupId, ShelfLifeGroup> = {
   daily: {
     id: 'daily',
     label: 'Daily',
+    short: 'Daily',
     days: 1,
     colour: '#1f2937',
     description: 'Made on the day it is used, or the day before when the recipe says so.',
@@ -50,6 +53,7 @@ export const SHELF_LIFE_GROUPS: Record<ShelfLifeGroupId, ShelfLifeGroup> = {
   green3: {
     id: 'green3',
     label: 'Make ahead, 3 days',
+    short: '3-day',
     days: 4,
     colour: '#2f855a',
     description: 'Today plus three. Most dressings and Loose Miso.',
@@ -57,6 +61,7 @@ export const SHELF_LIFE_GROUPS: Record<ShelfLifeGroupId, ShelfLifeGroup> = {
   blue4: {
     id: 'blue4',
     label: 'Make ahead, 4 days',
+    short: '4-day',
     days: 5,
     colour: '#2b6cb0',
     description: 'Today plus four. Tahini dressings and pickled preps.',
@@ -64,6 +69,7 @@ export const SHELF_LIFE_GROUPS: Record<ShelfLifeGroupId, ShelfLifeGroup> = {
   coconut2: {
     id: 'coconut2',
     label: 'Coconut, 2 days',
+    short: 'Coconut',
     days: 3,
     colour: '#c05621',
     description: 'Today plus two. Anything with coconut milk.',
@@ -71,6 +77,7 @@ export const SHELF_LIFE_GROUPS: Record<ShelfLifeGroupId, ShelfLifeGroup> = {
   weekly: {
     id: 'weekly',
     label: 'Weekly',
+    short: 'Weekly',
     days: 7,
     colour: '#6b7280',
     description: 'Dry mixes made once a week for the whole week.',
@@ -99,13 +106,14 @@ export const DEEP_CLEAN_DAY: Weekday = 3;
 
 /** Per-shop overrides. Marylebone runs its green dressings Tuesday and
  *  Friday so the demo shows a site difference the moment you switch shop. */
+/**
+ * Shop-level exceptions the book knows about. These seed the shop's own
+ * production windows in the site settings store (see fjFixtures.ts); the
+ * engine reads make-on days from there via makeOn.ts, never from here.
+ */
 export const SHOP_PRODUCTION_DAY_OVERRIDES: Record<string, Partial<Record<ShelfLifeGroupId, Weekday[]>>> = {
   'fj-marylebone': { green3: [1, 4] },
 };
-
-export function productionDaysFor(shopId: string, group: ShelfLifeGroupId): Weekday[] {
-  return SHOP_PRODUCTION_DAY_OVERRIDES[shopId]?.[group] ?? DEFAULT_PRODUCTION_DAYS[group];
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Containers and production units
@@ -121,7 +129,9 @@ export type ContainerId =
   | 'gn-1-6-10'
   | 'squeezy-bottle'
   | 'breakfast-pot'
-  | 'oven-tray';
+  | 'oven-tray'
+  | 'portion'
+  | 'dressing-bottle';
 
 export type Container = {
   id: ContainerId;
@@ -145,16 +155,15 @@ export const CONTAINERS: Record<ContainerId, Container> = {
   'squeezy-bottle': { id: 'squeezy-bottle', name: 'Squeezy bottle', fillG: 500, note: 'Lemon juice and oil for seasoning cast irons. Bottle size is a setting.' },
   'breakfast-pot': { id: 'breakfast-pot', name: 'Breakfast pot', fillG: 150, note: 'Coconut chia and overnight oats.' },
   'oven-tray': { id: 'oven-tray', name: 'Oven tray', fillG: 2000, note: 'Gastronorm oven tray. One bag of chicken per tray. Oven holds six trays.' },
+  'portion': { id: 'portion', name: 'Portion', fillG: 180, note: 'Breakfast items built to order (toast, rolls). One portion is the unit; the prep behind it is what gets made.' },
+  'dressing-bottle': { id: 'dressing-bottle', name: 'Bottle', fillG: 1000, note: 'One litre dressing bottle. Dressings are made by the kilo and bottled; ProMap counts them in bottles.' },
 };
 
-/** Equipment limits that shape timing. Stated as facts about kit, never
- *  as batch multiples. */
+/** Working limits from the HTCs that shape a method, never batch
+ *  multiples. How many ovens and rice cookers a shop owns, and the trays
+ *  an oven holds, are kit on the shop's kitchen benches
+ *  (`fjFixtures.ts`, edited in Settings > Production > Benches). */
 export const EQUIPMENT_LIMITS = {
-  /** Trays one oven holds (Chicken HTC: maximum six trays at once). */
-  ovenTrays: 6,
-  /** Per shop, for the demo. Both are Setup settings. */
-  ovens: 2,
-  riceCookers: 2,
   riceCookerKitsAtOnce: 1,
   foodProcessorFillFraction: 0.5,
   chickpeaTinsMixedAtOnce: 4,
@@ -246,6 +255,19 @@ export const INGREDIENTS: Record<string, Ingredient> = {
   'mayonnaise': { id: 'mayonnaise', name: 'Mayonnaise', supplier: 'Dry goods', pack: { size: 5000, unit: 'g', label: '5 kg' }, costPerKg: 3.5 },
   'spinach': { id: 'spinach', name: 'Baby spinach, washed', supplier: 'Fresh produce', pack: { size: 1000, unit: 'g', label: '1 kg bag' }, costPerKg: 7 },
   'water': { id: 'water', name: 'Water', supplier: 'Tap', pack: { size: 1000, unit: 'ml', label: 'tap' }, costPerKg: 0 },
+  // ── Breakfast (breakfast shops only; sizes from the ProMap BREAKFAST sheet) ──
+  'eggs': { id: 'eggs', name: 'Free range eggs', supplier: 'Chilled', pack: { size: 9000, unit: 'g', label: 'tray of 180' }, daily: true, costPerKg: 4.2, note: 'About 50 g an egg. One tray poaches three loads.' },
+  'avocado': { id: 'avocado', name: 'Avocado, ripe', supplier: 'Fresh produce', pack: { size: 4000, unit: 'g', label: 'box of 20' }, daily: true, costPerKg: 5.5 },
+  'streaky-bacon': { id: 'streaky-bacon', name: 'Streaky bacon', supplier: 'Butcher', pack: { size: 2000, unit: 'g', label: '2 kg pack' }, costPerKg: 9 },
+  'sourdough': { id: 'sourdough', name: 'Sourdough, sliced', supplier: 'Chilled', pack: { size: 800, unit: 'g', label: '800 g loaf' }, daily: true, costPerKg: 5 },
+  'brioche-bun': { id: 'brioche-bun', name: 'Brioche bun', supplier: 'Chilled', pack: { size: 2040, unit: 'g', label: 'tray of 24' }, daily: true, costPerKg: 6.5 },
+  'passata': { id: 'passata', name: 'Passata', supplier: 'Dry goods', pack: { size: 2500, unit: 'g', label: '2.5 kg tin' }, costPerKg: 1.8 },
+  'onion': { id: 'onion', name: 'Onion, diced', supplier: 'Fresh produce', pack: { size: 2000, unit: 'g', label: '2 kg bag' }, costPerKg: 1.9 },
+  'red-pepper': { id: 'red-pepper', name: 'Red pepper, sliced', supplier: 'Fresh produce', pack: { size: 2000, unit: 'g', label: '2 kg bag' }, costPerKg: 3.6 },
+  'rolled-oats': { id: 'rolled-oats', name: 'Rolled oats', supplier: 'Dry goods', pack: { size: 3000, unit: 'g', label: '3 kg bag' }, costPerKg: 1.6 },
+  'oat-milk': { id: 'oat-milk', name: 'Oat milk', supplier: 'Chilled', pack: { size: 1000, unit: 'ml', label: '1 L carton' }, costPerKg: 1.7 },
+  'greek-yoghurt': { id: 'greek-yoghurt', name: 'Greek yoghurt', supplier: 'Chilled', pack: { size: 1000, unit: 'g', label: '1 kg tub' }, costPerKg: 3.8 },
+  'preserved-lemon': { id: 'preserved-lemon', name: 'Preserved lemon, chopped', supplier: 'Med Cuisine', pack: { size: 1000, unit: 'g', label: '1 kg tub' }, costPerKg: 8 },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -254,7 +276,13 @@ export const INGREDIENTS: Record<string, Ingredient> = {
 
 export type Provenance = 'pdf' | 'calls' | 'invented';
 
-export type Section = 'hot' | 'salads' | 'prep' | 'second';
+/**
+ * Where a thing is made. Components sit on hot, salads or prep. Finished
+ * products on the breakfast section are cooked by the breakfast person at
+ * shops that open for breakfast; their components still say hot or prep so
+ * the prep list and the order sheet treat them like everything else.
+ */
+export type Section = 'hot' | 'salads' | 'prep' | 'second' | 'breakfast';
 
 export type ComponentKind = 'kit' | 'cooked' | 'dressing' | 'prep' | 'mix';
 
@@ -287,7 +315,15 @@ export type Component = {
   container?: ContainerId;
   /** How many of `container` one full batch fills. */
   containersPerBatch?: number;
+  /** Kit list as the HTC prints it, for the method card. */
   equipment?: string[];
+  /**
+   * The kit the engine sizes loads against (`Equipment` ids: 'oven',
+   * 'rice-cooker', 'food-processor'). Set by `applyFarmerJRecipes` from
+   * the recipe's class default or its own override; the book leaves it
+   * unset and `authoredEquipment` derives the starting value.
+   */
+  requiresEquipment?: string[];
   cook?: { programme: string; minutes: number | [number, number]; coreTempC?: number };
   restMinutes?: number;
   /**
@@ -362,7 +398,7 @@ export const COMPONENTS: Record<string, Component> = {
     id: 'cauli-grains-dressing', name: 'Cauliflower & grains dressing', kind: 'dressing', shelfLife: 'green3', yieldLossPct: 0,
     batch: { fullG: 1000 },
     inputs: [{ ref: 'cauliflower-sauce', grams: 492 }, { ref: 'veg-oil', grams: 197 }, { ref: 'sea-salt', grams: 15 }, { ref: 'water', grams: 296 }],
-    when: 'scheduled', section: 'prep', container: 'gn-1-1-20', roundTo: 'kilo', carryable: true, provenance: 'pdf',
+    when: 'scheduled', section: 'prep', container: 'dressing-bottle', containersPerBatch: 1, roundTo: 'kilo', carryable: true, provenance: 'pdf',
   },
 
   // ── Chicken ─────────────────────────────────────────────────────────────
@@ -392,7 +428,7 @@ export const COMPONENTS: Record<string, Component> = {
     id: 'amba-dressing', name: 'Amba dressing', kind: 'dressing', shelfLife: 'green3', yieldLossPct: 0,
     batch: { fullG: 1000 },
     inputs: [{ ref: 'amba-marinade', grams: 667 }, { ref: 'oil-blend', grams: 167 }, { ref: 'lemon-juice', grams: 100 }, { ref: 'date-syrup', grams: 33 }, { ref: 'amba-spice', grams: 33 }],
-    when: 'scheduled', section: 'prep', container: 'gn-1-1-20', roundTo: 'kilo', carryable: true, provenance: 'pdf',
+    when: 'scheduled', section: 'prep', container: 'dressing-bottle', containersPerBatch: 1, roundTo: 'kilo', carryable: true, provenance: 'pdf',
     note: 'Lemon juice comes frozen: thaw the night before.',
   },
   'green-shifka-tahini': {
@@ -402,7 +438,7 @@ export const COMPONENTS: Record<string, Component> = {
       { ref: 'sea-salt', grams: 4 }, { ref: 'garlic', grams: 5 }, { ref: 'shifka-prep', grams: 45 }, { ref: 'parsley-prep', grams: 45 },
       { ref: 'lemon-juice', grams: 45 }, { ref: 'olive-oil', grams: 45 }, { ref: 'shifka-water', grams: 135 }, { ref: 'water', grams: 225 }, { ref: 'tahini', grams: 451 },
     ],
-    when: 'scheduled', section: 'prep', container: 'gn-1-1-20',
+    when: 'scheduled', section: 'prep', container: 'dressing-bottle', containersPerBatch: 1,
     equipment: ['Food processor (fill no more than halfway)', 'Scale', 'GN 1:1, 20 cm'],
     roundTo: 'kilo', carryable: true, htcCode: 'SPRML-18032025v1',
     steps: ['Blend everything except the tahini', 'Add the raw tahini after the first blend', 'Blend smooth, container, label'],
@@ -413,7 +449,7 @@ export const COMPONENTS: Record<string, Component> = {
     id: 'harissa-dressing', name: 'Harissa dressing', kind: 'dressing', shelfLife: 'blue4', yieldLossPct: 0,
     batch: { fullG: 1000 },
     inputs: [{ ref: 'veg-oil', grams: 306 }, { ref: 'harissa-paste', grams: 542 }, { ref: 'lemon-juice', grams: 127 }, { ref: 'sea-salt', grams: 25 }],
-    when: 'scheduled', section: 'prep', container: 'gn-1-1-20', roundTo: 'kilo', carryable: true, provenance: 'pdf',
+    when: 'scheduled', section: 'prep', container: 'dressing-bottle', containersPerBatch: 1, roundTo: 'kilo', carryable: true, provenance: 'pdf',
   },
   'shifka-prep': {
     id: 'shifka-prep', name: 'Shifka hot pepper prep', kind: 'prep', shelfLife: 'blue4', yieldLossPct: 68,
@@ -454,7 +490,7 @@ export const COMPONENTS: Record<string, Component> = {
     id: 'sesame-garlic-oil', name: 'Sesame garlic oil dressing', kind: 'dressing', shelfLife: 'blue4', yieldLossPct: 0,
     batch: { fullG: 1000 },
     inputs: [{ ref: 'oil-blend', grams: 901 }, { ref: 'sesame-oil', grams: 90 }, { ref: 'garlic', grams: 9 }],
-    when: 'scheduled', section: 'prep', roundTo: 'kilo', carryable: true, provenance: 'pdf',
+    when: 'scheduled', section: 'prep', container: 'dressing-bottle', containersPerBatch: 1, roundTo: 'kilo', carryable: true, provenance: 'pdf',
   },
   'broccoli-roasted': {
     id: 'broccoli-roasted', name: 'Broccoli, roasted', kind: 'cooked', shelfLife: 'daily', yieldLossPct: 20,
@@ -468,7 +504,7 @@ export const COMPONENTS: Record<string, Component> = {
     id: 'ponzu-dressing', name: 'Lemon soy ponzu dressing', kind: 'dressing', shelfLife: 'blue4', yieldLossPct: 0,
     batch: { fullG: 1000 },
     inputs: [{ ref: 'lemon-juice', grams: 363 }, { ref: 'soy-sauce', grams: 546 }, { ref: 'maple-syrup', grams: 91 }],
-    when: 'scheduled', section: 'prep', roundTo: 'kilo', carryable: true, provenance: 'pdf',
+    when: 'scheduled', section: 'prep', container: 'dressing-bottle', containersPerBatch: 1, roundTo: 'kilo', carryable: true, provenance: 'pdf',
   },
 
   // ── Chickpea + Pickles ──────────────────────────────────────────────────
@@ -526,7 +562,7 @@ export const COMPONENTS: Record<string, Component> = {
     id: 'lemon-tahini', name: 'Lemon tahini dressing', kind: 'dressing', shelfLife: 'blue4', yieldLossPct: 0,
     batch: { fullG: 1000 },
     inputs: [{ ref: 'cumin', grams: 5 }, { ref: 'sea-salt', grams: 24 }, { ref: 'garlic', grams: 2 }, { ref: 'lemon-juice', grams: 174 }, { ref: 'water', grams: 262 }, { ref: 'olive-oil', grams: 291 }, { ref: 'tahini', grams: 242 }],
-    when: 'scheduled', section: 'prep', container: 'gn-1-1-20', roundTo: 'kilo', carryable: true, htcCode: 'SPRML-18032025v1', provenance: 'pdf',
+    when: 'scheduled', section: 'prep', container: 'dressing-bottle', containersPerBatch: 1, roundTo: 'kilo', carryable: true, htcCode: 'SPRML-18032025v1', provenance: 'pdf',
   },
 
   // ── Smoked Chilli Miso Tofu bowl ────────────────────────────────────────
@@ -534,7 +570,7 @@ export const COMPONENTS: Record<string, Component> = {
     id: 'loose-miso-dressing', name: 'Loose Miso dressing', kind: 'dressing', shelfLife: 'green3', yieldLossPct: 0,
     batch: { fullG: 1000 },
     inputs: [{ ref: 'miso', grams: 400 }, { ref: 'mirin', grams: 200 }, { ref: 'rice-vinegar', grams: 100 }, { ref: 'sesame-oil', grams: 100 }, { ref: 'water', grams: 200 }],
-    when: 'scheduled', section: 'prep', container: 'gn-1-1-20', roundTo: 'kilo', carryable: true, provenance: 'invented',
+    when: 'scheduled', section: 'prep', container: 'dressing-bottle', containersPerBatch: 1, roundTo: 'kilo', carryable: true, provenance: 'invented',
     note: 'Recipe card was image-only. Quantities invented for the demo.',
   },
   'loose-miso-hispi': {
@@ -563,7 +599,7 @@ export const COMPONENTS: Record<string, Component> = {
     id: 'coconut-chilli-dressing', name: 'Smoked chilli coconut dressing', kind: 'dressing', shelfLife: 'coconut2', yieldLossPct: 0,
     batch: { fullG: 1000 },
     inputs: [{ ref: 'coconut-milk', grams: 600 }, { ref: 'smoked-chilli-paste', grams: 150 }, { ref: 'lime-juice', grams: 100 }, { ref: 'sugar', grams: 50 }, { ref: 'sea-salt', grams: 10 }, { ref: 'water', grams: 90 }],
-    when: 'scheduled', section: 'prep', container: 'gn-1-1-20', roundTo: 'kilo', carryable: true, provenance: 'invented',
+    when: 'scheduled', section: 'prep', container: 'dressing-bottle', containersPerBatch: 1, roundTo: 'kilo', carryable: true, provenance: 'invented',
     note: 'Coconut milk puts it on the two-day calendar.',
   },
   'tofu-baked': {
@@ -587,7 +623,7 @@ export const COMPONENTS: Record<string, Component> = {
     id: 'cashew-miso-dressing', name: 'Cashew miso dressing', kind: 'dressing', shelfLife: 'green3', yieldLossPct: 0,
     batch: { fullG: 1000 },
     inputs: [{ ref: 'cashew-butter', grams: 300 }, { ref: 'miso', grams: 150 }, { ref: 'rice-vinegar', grams: 150 }, { ref: 'maple-syrup', grams: 100 }, { ref: 'water', grams: 250 }, { ref: 'veg-oil', grams: 50 }],
-    when: 'scheduled', section: 'prep', container: 'gn-1-1-20', roundTo: 'kilo', carryable: true, provenance: 'invented',
+    when: 'scheduled', section: 'prep', container: 'dressing-bottle', containersPerBatch: 1, roundTo: 'kilo', carryable: true, provenance: 'invented',
   },
   'kale-slaw-kit': {
     id: 'kale-slaw-kit', name: 'Kale slaw kit', kind: 'kit', shelfLife: 'daily', yieldLossPct: 0,
@@ -596,7 +632,72 @@ export const COMPONENTS: Record<string, Component> = {
     when: 'on-day', section: 'salads', container: 'gn-1-1-20', roundTo: 'batch', carryable: true, holdMinutes: 720, provenance: 'invented',
   },
 
-  // ── Breakfast (invented) ────────────────────────────────────────────────
+  // ── Breakfast (menu from the ProMap BREAKFAST sheet; recipes invented) ──
+  'shakshuka-base': {
+    id: 'shakshuka-base', name: 'Shakshuka base', kind: 'cooked', shelfLife: 'daily', yieldLossPct: 15,
+    yieldNote: 'Reduces on the hob. Invented; Jana to confirm.',
+    batch: { fullG: 2550, halfG: 1275, label: 'one pan, about 15 pots' },
+    inputs: [{ ref: 'passata', grams: 1800 }, { ref: 'onion', grams: 400 }, { ref: 'red-pepper', grams: 500 }, { ref: 'garlic', grams: 40 }, { ref: 'cumin', grams: 20 }, { ref: 'harissa-paste', grams: 120 }, { ref: 'olive-oil', grams: 100 }, { ref: 'sea-salt', grams: 20 }],
+    when: 'on-day', section: 'hot', container: 'gn-1-2', containersPerBatch: 4,
+    equipment: ['Large pan', 'Scale', 'Spatula'],
+    cook: { programme: 'Hob, simmer', minutes: 35 }, roundTo: 'batch', carryable: true, holdMinutes: 240, provenance: 'invented',
+    note: 'Pot Shak is 170 g of base, two poached eggs and whipped feta.',
+  },
+  'green-eggs-base': {
+    id: 'green-eggs-base', name: 'Spinach and parmesan base', kind: 'cooked', shelfLife: 'daily', yieldLossPct: 30,
+    yieldNote: 'Spinach wilts to about two thirds.',
+    batch: { fullG: 1800, halfG: 900, label: 'one pan, about 12 pots' },
+    inputs: [{ ref: 'spinach', grams: 2200 }, { ref: 'parmesan', grams: 250 }, { ref: 'garlic', grams: 30 }, { ref: 'olive-oil', grams: 80 }, { ref: 'sea-salt', grams: 20 }],
+    when: 'on-day', section: 'hot', container: 'gn-1-2', containersPerBatch: 3,
+    cook: { programme: 'Hob, wilt', minutes: 12 }, roundTo: 'batch', carryable: false, holdMinutes: 240, provenance: 'invented',
+  },
+  'poached-eggs': {
+    id: 'poached-eggs', name: 'Poached eggs', kind: 'cooked', shelfLife: 'daily', yieldLossPct: 0,
+    batch: { fullG: 3000, halfG: 1500, label: 'one tray of 60 eggs' },
+    inputs: [{ ref: 'eggs', grams: 3000 }],
+    when: 'on-day', section: 'hot', container: 'gn-1-2', containersPerBatch: 2,
+    equipment: ['Combi oven', 'Egg poaching tray', 'Iced water bath'],
+    cook: { programme: 'Combi steam', minutes: 7, coreTempC: 63 }, roundTo: 'batch', carryable: false, holdMinutes: 240, provenance: 'invented',
+    note: 'Poached ahead, chilled in iced water, reheated to order. About 50 g an egg.',
+  },
+  'whipped-feta': {
+    id: 'whipped-feta', name: 'Whipped feta', kind: 'prep', shelfLife: 'green3', yieldLossPct: 0,
+    batch: { fullG: 1000 },
+    inputs: [{ ref: 'feta', grams: 650 }, { ref: 'greek-yoghurt', grams: 280 }, { ref: 'lemon-juice', grams: 30 }, { ref: 'olive-oil', grams: 40 }],
+    when: 'scheduled', section: 'prep', container: 'gn-1-2', equipment: ['Food processor', 'Scale'],
+    roundTo: 'kilo', carryable: true, provenance: 'invented',
+  },
+  'smashed-avo': {
+    id: 'smashed-avo', name: 'Smashed avo, preserved lemon', kind: 'prep', shelfLife: 'daily', yieldLossPct: 28,
+    yieldNote: 'Skin and stone. Ripeness moves this a lot.',
+    batch: { fullG: 1950, halfG: 975, label: 'about 28 toasts' },
+    inputs: [{ ref: 'avocado', grams: 2500 }, { ref: 'lime-juice', grams: 60 }, { ref: 'preserved-lemon', grams: 80 }, { ref: 'olive-oil', grams: 60 }, { ref: 'sea-salt', grams: 15 }],
+    when: 'on-day', section: 'prep', container: 'gn-1-2', containersPerBatch: 3,
+    roundTo: 'batch', carryable: false, holdMinutes: 480, provenance: 'invented',
+    note: 'Browns by the afternoon. Never carried.',
+  },
+  'bacon-cooked': {
+    id: 'bacon-cooked', name: 'Streaky bacon, grilled', kind: 'cooked', shelfLife: 'daily', yieldLossPct: 30,
+    batch: { fullG: 1400, halfG: 700, label: 'one tray' },
+    inputs: [{ ref: 'streaky-bacon', grams: 2000 }],
+    when: 'on-day', section: 'hot', container: 'oven-tray', containersPerBatch: 1,
+    cook: { programme: 'Grill', minutes: 12 }, roundTo: 'batch', carryable: false, holdMinutes: 120, provenance: 'invented',
+  },
+  'porridge-cooked': {
+    id: 'porridge-cooked', name: 'Porridge', kind: 'cooked', shelfLife: 'daily', yieldLossPct: 3,
+    batch: { fullG: 3600, halfG: 1800, label: 'one pan, about 12 pots' },
+    inputs: [{ ref: 'rolled-oats', grams: 800 }, { ref: 'oat-milk', grams: 2800 }, { ref: 'sea-salt', grams: 8 }, { ref: 'maple-syrup', grams: 100 }],
+    when: 'on-day', section: 'hot', container: 'gn-1-2', containersPerBatch: 3,
+    cook: { programme: 'Hob, simmer', minutes: 20 }, roundTo: 'batch', carryable: false, holdMinutes: 180, provenance: 'invented',
+  },
+  'overnight-oats': {
+    id: 'overnight-oats', name: 'Overnight oats', kind: 'prep', shelfLife: 'daily', yieldLossPct: 0,
+    batch: { fullG: 2160, halfG: 1080, label: 'about 12 pots' },
+    inputs: [{ ref: 'rolled-oats', grams: 800 }, { ref: 'oat-milk', grams: 1000 }, { ref: 'greek-yoghurt', grams: 300 }, { ref: 'maple-syrup', grams: 60 }],
+    when: 'day-before', section: 'prep', container: 'breakfast-pot', containersPerBatch: 12,
+    roundTo: 'batch', carryable: true, provenance: 'invented',
+    note: 'Potted the afternoon before. Soaks overnight.',
+  },
   'coconut-chia': {
     id: 'coconut-chia', name: 'Coconut chia', kind: 'cooked', shelfLife: 'coconut2', yieldLossPct: 0,
     batch: { fullG: 2030, label: 'about 13 pots' },
@@ -647,7 +748,7 @@ export const COMPONENTS: Record<string, Component> = {
     id: 'caesar-dressing', name: 'Caesar dressing', kind: 'dressing', shelfLife: 'green3', yieldLossPct: 0,
     batch: { fullG: 1000 },
     inputs: [{ ref: 'sea-salt', grams: 35 }, { ref: 'black-pepper', grams: 5 }, { ref: 'garlic', grams: 15 }, { ref: 'dijon', grams: 70 }, { ref: 'parmesan', grams: 100 }, { ref: 'mayonnaise', grams: 175 }, { ref: 'lemon-juice', grams: 150 }, { ref: 'olive-oil', grams: 250 }, { ref: 'veg-oil', grams: 200 }],
-    when: 'scheduled', section: 'prep', container: 'gn-1-1-20', roundTo: 'kilo', carryable: true, htcCode: 'SPRML-18032025v1', provenance: 'pdf',
+    when: 'scheduled', section: 'prep', container: 'dressing-bottle', containersPerBatch: 1, roundTo: 'kilo', carryable: true, htcCode: 'SPRML-18032025v1', provenance: 'pdf',
   },
   'feta-caesar-kit': {
     id: 'feta-caesar-kit', name: 'Spring feta Caesar kit', kind: 'kit', shelfLife: 'daily', yieldLossPct: 0,
@@ -733,12 +834,59 @@ export type FinishedProduct = {
 };
 
 export const PRODUCTS: FinishedProduct[] = [
-  // Breakfast
+  // Breakfast. Only shops with `breakfast: true` sell these (shops.ts).
+  // A "batch" here is one pan or tray of the main component, and
+  // `unitsPerBatch` is the portions it serves, so one unit on the day
+  // plan is one pot or one portion.
+  {
+    id: 'pot-shak', name: 'Pot Shak', group: 'breakfast', unit: 'breakfast-pot',
+    unitsPerBatch: 15, secondLineFraction: 1,
+    batch: { fullG: 4425, halfG: 2212 },
+    recipe: [{ ref: 'shakshuka-base', grams: 2550 }, { ref: 'poached-eggs', grams: 1500 }, { ref: 'whipped-feta', grams: 375 }],
+    yieldLossPct: 0, holdMinutes: 240, halfBatch: true, countedAs: 'shakshuka-base', section: 'breakfast', provenance: 'invented',
+    note: 'Shakshuka pot with two poached eggs and whipped feta. Top seller on the ProMap breakfast sheet.',
+  },
+  {
+    id: 'pot-green-eggs', name: 'Pot Green Eggs', group: 'breakfast', unit: 'breakfast-pot',
+    unitsPerBatch: 12, secondLineFraction: 1,
+    batch: { fullG: 3240, halfG: 1620 },
+    recipe: [{ ref: 'green-eggs-base', grams: 1800 }, { ref: 'poached-eggs', grams: 1200 }, { ref: 'whipped-feta', grams: 240 }],
+    yieldLossPct: 0, holdMinutes: 240, halfBatch: true, countedAs: 'green-eggs-base', section: 'breakfast', provenance: 'invented',
+  },
+  {
+    id: 'toast-avo', name: 'Toast Avo, preserved lemon', group: 'breakfast', unit: 'portion',
+    unitsPerBatch: 20, secondLineFraction: 1,
+    batch: { fullG: 3000, halfG: 1500 },
+    recipe: [{ ref: 'smashed-avo', grams: 1400 }, { ref: 'sourdough', grams: 1600 }],
+    yieldLossPct: 0, holdMinutes: 480, halfBatch: true, countedAs: 'smashed-avo', section: 'breakfast', provenance: 'invented',
+    note: 'Built to order. The plan sizes the smashed avo; toast is per order.',
+  },
+  {
+    id: 'bacon-egg-roll', name: 'Bacon and Egg Roll', group: 'breakfast', unit: 'portion',
+    unitsPerBatch: 20, secondLineFraction: 1,
+    batch: { fullG: 3600, halfG: 1800 },
+    recipe: [{ ref: 'bacon-cooked', grams: 900 }, { ref: 'poached-eggs', grams: 1000 }, { ref: 'brioche-bun', grams: 1700 }],
+    yieldLossPct: 0, holdMinutes: 120, halfBatch: true, countedAs: 'bacon-cooked', section: 'breakfast', provenance: 'invented',
+    note: 'Built to order. Bacon grilled ahead in trays, egg poached ahead.',
+  },
+  {
+    id: 'porridge', name: 'Porridge', group: 'breakfast', unit: 'breakfast-pot',
+    unitsPerBatch: 12, secondLineFraction: 1,
+    batch: { fullG: 3600, halfG: 1800 }, recipe: [{ ref: 'porridge-cooked', grams: 3600 }],
+    yieldLossPct: 0, holdMinutes: 180, halfBatch: true, countedAs: 'porridge-cooked', section: 'breakfast', provenance: 'invented',
+  },
+  {
+    id: 'overnight-oats', name: 'Overnight oats', group: 'breakfast', unit: 'breakfast-pot',
+    unitsPerBatch: 12, secondLineFraction: 1,
+    batch: { fullG: 2160, halfG: 1080 }, recipe: [{ ref: 'overnight-oats', grams: 2160 }],
+    yieldLossPct: 0, holdMinutes: 1440, halfBatch: true, countedAs: 'overnight-oats', section: 'breakfast', provenance: 'invented',
+    note: 'Potted the afternoon before.',
+  },
   {
     id: 'coconut-chia', name: 'Coconut chia', group: 'breakfast', unit: 'breakfast-pot',
     unitsPerBatch: 13, secondLineFraction: 1,
     batch: { fullG: 2030 }, recipe: [{ ref: 'coconut-chia', grams: 2030 }], yieldLossPct: 0,
-    holdMinutes: 2880, halfBatch: false, countedAs: 'coconut-chia', section: 'prep', provenance: 'invented',
+    holdMinutes: 2880, halfBatch: false, countedAs: 'coconut-chia', section: 'breakfast', provenance: 'invented',
     note: 'Breakfast shops only. Made Monday for Tuesday and Wednesday.',
   },
   // Bases
@@ -874,6 +1022,23 @@ export const PRODUCTS: FinishedProduct[] = [
 export const PRODUCT_BY_ID: Record<string, FinishedProduct> = Object.fromEntries(
   PRODUCTS.map(p => [p.id, p]),
 );
+
+/**
+ * How a breakfast shop's breakfast bill splits across the menu, and the
+ * menu price of each item. Shares are our read of the ProMap BREAKFAST
+ * sheet (Bacon and Egg Roll, Pot Shak and Toast Avo lead at 18 to 19 a
+ * day at Orchard Place); the rest of the bill is coffee and pastries the
+ * kitchen does not make. Prices are the menu's. Editable.
+ */
+export const BREAKFAST_MIX: { productId: string; share: number; price: number }[] = [
+  { productId: 'bacon-egg-roll', share: 0.19, price: 6.5 },
+  { productId: 'pot-shak', share: 0.2, price: 6.95 },
+  { productId: 'toast-avo', share: 0.17, price: 6.5 },
+  { productId: 'pot-green-eggs', share: 0.1, price: 6.95 },
+  { productId: 'porridge', share: 0.06, price: 4.5 },
+  { productId: 'overnight-oats', share: 0.05, price: 4.5 },
+  { productId: 'coconut-chia', share: 0.06, price: 4.2 },
+];
 
 export function getProduct(id: string): FinishedProduct | undefined {
   return PRODUCT_BY_ID[id];

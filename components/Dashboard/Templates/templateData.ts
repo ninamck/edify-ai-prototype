@@ -386,3 +386,124 @@ export const BRIDGE_DRILL_UNEXPLAINED_LIVE: BridgeDrillItem[] = [
   { item: 'Oat milk', value: 0.8, note: 'over-portioning only — the price element now sits in price variance' },
   { item: 'All other items', value: 1.7, note: 'no single item over £0.6k' },
 ];
+
+// ─── Bundles ─────────────────────────────────────────────────────────────────
+//
+// Each template renders from one bundle. The constants above are the
+// Fitzroy Espresso estate, bundled here as the default. Another brand
+// (Farmer J) builds the same shapes from its own model and passes them in,
+// so the template components carry no brand of their own.
+
+export type DailyData = {
+  site: string;
+  dateLabel: string;
+  sales14d: DailySparkPoint[];
+  yesterday: typeof DAILY_YESTERDAY;
+  theoGp: typeof DAILY_THEO_GP;
+  waste: typeof DAILY_WASTE;
+  wasteItems: DailyWasteItem[];
+  exceptions: DailyException[];
+  anomalies: DailyAnomaly[];
+};
+
+export const ESPRESSO_DAILY: DailyData = {
+  site: DAILY_SITE,
+  dateLabel: DAILY_DATE_LABEL,
+  sales14d: DAILY_SALES_14D,
+  yesterday: DAILY_YESTERDAY,
+  theoGp: DAILY_THEO_GP,
+  waste: DAILY_WASTE,
+  wasteItems: DAILY_WASTE_ITEMS,
+  exceptions: DAILY_EXCEPTIONS,
+  anomalies: DAILY_ANOMALIES,
+};
+
+export type WeeklyData = {
+  weekLabel: string;
+  /** "All sites (estate view)" or "All 19 shops": the scope on tile actions. */
+  scopeLabel: string;
+  /** Column header and axis noun: the brand's word for a location. */
+  siteNoun: string;
+  sites: WeeklySiteRow[];
+  compliance: typeof WEEKLY_COMPLIANCE;
+  priceMovers: PriceMoverRow[];
+  copy: {
+    leagueFooter: string;
+    driftFooter: string;
+    priceMoversFooter: string;
+    stocktakeDetail: string;
+  };
+};
+
+export const ESPRESSO_WEEKLY: WeeklyData = {
+  weekLabel: WEEK_LABEL,
+  scopeLabel: 'All sites (estate view)',
+  siteNoun: 'Site',
+  sites: WEEKLY_SITES,
+  compliance: WEEKLY_COMPLIANCE,
+  priceMovers: PRICE_MOVERS,
+  copy: {
+    leagueFooter: "Shoreditch didn't count this week, so no actual-GP claim is made for it — the flag stays until the count is done.",
+    driftFooter: "Canary and Shoreditch are both >5% above their own baseline. That's the drift signal, before any budget exists.",
+    priceMoversFooter: 'Net £130/week of price creep across the five. The oat milk rise alone is ~£1,120 annualised across the estate — worth a supplier conversation.',
+    stocktakeDetail: 'Shoreditch outstanding — its actual GP is blank above',
+  },
+};
+
+export type PeriodData = {
+  periodLabel: string;
+  /** Intro line scope: "Estate" or "All 19 shops". */
+  scopeTitle: string;
+  scopeLabel: string;
+  siteNoun: string;
+  gpBridge: typeof GP_BRIDGE;
+  bridgeDrill: typeof BRIDGE_DRILL;
+  bridgeDrillPrice: BridgeDrillItem[];
+  bridgeDrillUnexplainedLive: BridgeDrillItem[];
+  priceVarianceK: number;
+  cogsVariance: CogsVarianceRow[];
+  dataConfidence: typeof DATA_CONFIDENCE;
+  menuProfitability: MenuItemPoint[];
+  /** Noun for the menu scatter's x axis: "Units" or "Portions". */
+  unitNoun: string;
+  stockHolding: StockHoldingRow[];
+  deadStock: DeadStockRow[];
+  /** Null when the brand has no central production unit: the tile is dropped. */
+  cpuTransfers: CpuTransferRow[] | null;
+  supplierInflation: SupplierInflationRow[];
+  periodTrend: PeriodTrendPoint[];
+  copy: {
+    deadStockFooter: string;
+    supplierFooter: string;
+    cpuFooter: string;
+    trendNote: string;
+  };
+};
+
+export const ESPRESSO_PERIOD: PeriodData = {
+  periodLabel: PERIOD_LABEL,
+  scopeTitle: 'Estate',
+  scopeLabel: 'All sites (estate view)',
+  siteNoun: 'Site',
+  gpBridge: GP_BRIDGE,
+  bridgeDrill: BRIDGE_DRILL,
+  bridgeDrillPrice: BRIDGE_DRILL_PRICE,
+  bridgeDrillUnexplainedLive: BRIDGE_DRILL_UNEXPLAINED_LIVE,
+  priceVarianceK: GP_BRIDGE_PRICE_VARIANCE_K,
+  cogsVariance: COGS_VARIANCE,
+  dataConfidence: DATA_CONFIDENCE,
+  menuProfitability: MENU_PROFITABILITY,
+  unitNoun: 'Units',
+  stockHolding: STOCK_HOLDING,
+  deadStock: DEAD_STOCK,
+  cpuTransfers: CPU_TRANSFERS,
+  supplierInflation: SUPPLIER_INFLATION,
+  periodTrend: PERIOD_TREND,
+  copy: {
+    deadStockFooter: `£${DEAD_STOCK_TOTAL} at risk. Seasonal lines dominate — transfer or promote before the value is written off.`,
+    // The template prefixes "Total price effect £Xk this period" from the rows.
+    supplierFooter: "Brakes carries nearly half of it; La Boulangerie's tier discount is the only deflation.",
+    cpuFooter: "Two routes don't reconcile: £0.8k left the CPU that Kings X and Shoreditch never booked in. Until receipted, that value inflates CPU costs and flatters those sites' GP.",
+    trendNote: 'down 1.1pp in three periods',
+  },
+};

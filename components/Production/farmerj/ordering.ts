@@ -215,7 +215,7 @@ export function computeOrderSheet(shopId: string, window: PlanningWindow, getRec
 function hotLabel(c: Component, b: Batches): string {
   const label = (c.batch.label ?? '').replace(/^(from )?one /, '').replace(/,.*$/, '').trim();
   const n = batchesToNumber(b);
-  if (label && !/tray|pot|per /.test(label)) {
+  if (label && !/tray|pot|per |about/.test(label)) {
     const shown = n % 1 === 0 ? String(n) : n.toFixed(1).replace('.5', '½');
     return `${shown} ${n === 1 ? label : `${label}s`}`;
   }

@@ -69,6 +69,9 @@ export type ScheduleReportDrawerProps = {
   siblingInsights?: string[];
   /** Site the report locks to (v1: the site it was created from). */
   siteLabel: string;
+  /** Sites offered in the scope picker. Defaults to the roles-demo estate;
+   *  Farmer J passes its own shops. */
+  siteOptions?: string[];
   siteTimezone?: string;
   /** Relative window resolved at send time, e.g. "Last complete week as of send date". */
   dataWindowLabel?: string;
@@ -85,6 +88,7 @@ export default function ScheduleReportDrawer({
   initialSelection,
   siblingInsights = [],
   siteLabel,
+  siteOptions = SITE_OPTIONS,
   siteTimezone = 'Europe/London',
   dataWindowLabel = 'Last complete week as of send date',
   editingReport = null,
@@ -556,7 +560,7 @@ export default function ScheduleReportDrawer({
             <div style={{ flex: 1, minWidth: 170 }}>
               <Field label="Sites">
                 <select value={siteScope} onChange={(e) => setSiteScope(e.target.value)} style={selectStyle}>
-                  {(SITE_OPTIONS.includes(siteScope) ? SITE_OPTIONS : [siteScope, ...SITE_OPTIONS]).map((s) => (
+                  {(siteOptions.includes(siteScope) ? siteOptions : [siteScope, ...siteOptions]).map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>

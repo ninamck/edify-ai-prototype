@@ -25,6 +25,7 @@ import {
 import { CheckCircle2, ChevronRight, X, AlertTriangle } from 'lucide-react';
 import {
   PRET_SETTINGS_HEALTH,
+  siteBrand,
   type SettingsHealthItem,
   type SiteId,
 } from '@/components/Production/fixtures';
@@ -38,6 +39,7 @@ import CutoffsTab from './tabs/CutoffsTab';
 import BenchesTab from './tabs/BenchesTab';
 import TeamTab from './tabs/TeamTab';
 import ProductionWindowsTab from './tabs/ProductionWindowsTab';
+import MakeOnDaysTab from './tabs/MakeOnDaysTab';
 import RangeTiersTab from './tabs/RangeTiersTab';
 import NightShiftTab from './tabs/NightShiftTab';
 import {
@@ -107,9 +109,10 @@ export default function SiteSettingsEditor({
   // When the user switches sites or someone else commits an overlay
   // (rare for a single-user demo, but defend anyway), pull the new
   // baseline into the staged state so we don't accidentally clobber.
+  // The saved banner is left alone: a save changes `overlay`, and clearing
+  // the summary here hid the banner the moment it appeared.
   useEffect(() => {
     setStaged(overlay ?? {});
-    setSavedSummary(null);
   }, [siteId, overlay]);
 
   // Tab → URL mirroring happens in the tab click handler (`selectTab`),
@@ -282,7 +285,7 @@ export default function SiteSettingsEditor({
                 gap: 6,
               }}
             >
-              {t.label}
+              {t.id === 'windows' && siteBrand(siteId) === 'farmerj' ? 'Make-on days' : t.label}
               {overrides > 0 && (
                 <span
                   style={{
@@ -377,7 +380,8 @@ function renderTab(
     case 'team':
       return <TeamTab {...ctx} />;
     case 'windows':
-      return <ProductionWindowsTab {...ctx} />;
+      // Farmer J's production windows are make-on days, not P1/P2/VP times.
+      return siteBrand(ctx.siteId) === 'farmerj' ? <MakeOnDaysTab {...ctx} /> : <ProductionWindowsTab {...ctx} />;
     case 'range-tiers':
       return <RangeTiersTab {...ctx} />;
     case 'night-shift':
@@ -553,6 +557,9 @@ function computeStagedDiff(
   if (staged.benchOrder && JSON.stringify(staged.benchOrder) !== JSON.stringify(b.benchOrder)) {
     count += 1;
   }
+  if (JSON.stringify(staged.addedBenches ?? {}) !== JSON.stringify(b.addedBenches ?? {})) {
+    count += 1;
+  }
 
   // Team
   if (staged.team) {
@@ -610,12 +617,30 @@ function describeStagedDiff(
   if (staged.benches && Object.keys(staged.benches).length > 0) {
     out.push(`${Object.keys(staged.benches).length} bench update${Object.keys(staged.benches).length === 1 ? '' : 's'}`);
   }
+  if (JSON.stringify(staged.addedBenches ?? {}) !== JSON.stringify(b.addedBenches ?? {}) || JSON.stringify(staged.benchOrder) !== JSON.stringify(b.benchOrder)) {
+    out.push('Benches added or removed');
+  }
   if (staged.team) {
     if (staged.team.users && JSON.stringify(staged.team.users) !== JSON.stringify(b.team?.users)) out.push(`Team users updated`);
     if (staged.team.duties && JSON.stringify(staged.team.duties) !== JSON.stringify(b.team?.duties)) out.push(`Site duties updated`);
   }
   if (staged.windows && Object.keys(staged.windows).length > 0) {
-    out.push(`Production windows for ${Object.keys(staged.windows).length} day${Object.keys(staged.windows).length === 1 ? '' : 's'} updated`);
+    const days = Object.values(staged.windows);
+    const makeOnOnly = days.every(d => d && Object.keys(d).every(k => k === 'makeOn' || k === 'deepClean'));
+    if (makeOnOnly) {
+      // Which groups moved against what was saved, not how many days carry them.
+      const groups = new Set<string>();
+      for (const day of Object.keys(staged.windows)) {
+        const a = (staged.windows as Record<string, { makeOn?: Record<string, boolean> }>)[day]?.makeOn ?? {};
+        const baseDay = (b.windows as Record<string, { makeOn?: Record<string, boolean> }> | undefined)?.[day]?.makeOn ?? {};
+        for (const g of new Set([...Object.keys(a), ...Object.keys(baseDay)])) if (a[g] !== baseDay[g]) groups.add(g);
+      }
+      const n = groups.size;
+      if (n) out.push(`Make-on days updated for ${n} group${n === 1 ? '' : 's'}`);
+    } else {
+      const n = days.length;
+      out.push(`Production windows for ${n} day${n === 1 ? '' : 's'} updated`);
+    }
   }
   return out;
 }
@@ -631,6 +656,8 @@ function mergeOverlay(prev: SiteSettingsOverlay, patch: SiteSettingsOverlay): Si
     }
   }
   if (patch.benchOrder) next.benchOrder = patch.benchOrder;
+  // Additions replace wholesale so a removed bench really goes.
+  if (patch.addedBenches) next.addedBenches = patch.addedBenches;
   if (patch.team) next.team = { ...(prev.team ?? {}), ...patch.team };
   if (patch.windows) {
     next.windows = { ...(prev.windows ?? {}) };
@@ -657,6 +684,7 @@ function prune(o: SiteSettingsOverlay): SiteSettingsOverlay | undefined {
     if (Object.keys(cleaned).length > 0) out.benches = cleaned;
   }
   if (o.benchOrder) out.benchOrder = o.benchOrder;
+  if (o.addedBenches && Object.keys(o.addedBenches).length > 0) out.addedBenches = o.addedBenches;
   if (o.team && (o.team.users || o.team.duties)) out.team = o.team;
   if (o.windows && Object.keys(o.windows).length > 0) out.windows = o.windows;
   return Object.keys(out).length > 0 ? out : undefined;

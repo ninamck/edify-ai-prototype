@@ -5,10 +5,10 @@
  * Rules (from the calls and Jana's workbook):
  *  - Suggested quantity = reference-day average × flex, plus catering,
  *    minus what was counted in the fridge tonight and is still in date.
- *  - Main line rounds up to full batches, with the last one dropped to a
- *    half when the remainder is under half a batch and the recipe has a
- *    half. Second make line plates into gastronorms, which only hold a
- *    half, so it rounds to halves.
+ *  - Demand splits across the shop's lines by sales channel (the lines are
+ *    the shop's benches; see `lines.ts`). A full-batch line plates the
+ *    recipe's container, a half-batch line plates small containers.
+ *    Batches are rounded once, on the total across lines.
  *  - Override wins. Flex never touches an overridden row.
  *  - Every component below the plan is derived. Shared components (parsley,
  *    Loose Miso hispi, Shifka prep) aggregate across every consumer and
@@ -29,6 +29,7 @@ import {
   type LineItem,
 } from './recipes';
 import type { DayDemand } from './sales';
+import { carryLine, cateringLine, defaultLines, type PlanLine } from './lines';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Rounding
@@ -48,7 +49,7 @@ export function batchesLabel(b: Batches): string {
   return parts.join(' + ');
 }
 
-/** Main line: whole batches, last one a half when the remainder is small. */
+/** Component batches: whole batches, last one a half when the remainder is small. */
 export function roundMainLine(batchesNeeded: number, halfAllowed: boolean): Batches {
   if (batchesNeeded <= 0) return { full: 0, half: 0 };
   const full = Math.floor(batchesNeeded);
@@ -58,21 +59,21 @@ export function roundMainLine(batchesNeeded: number, halfAllowed: boolean): Batc
   return { full: full + 1, half: 0 };
 }
 
-/** Second make line: gastronorms hold a half, so halves only. */
-export function roundSecondLine(batchesNeeded: number): Batches {
-  if (batchesNeeded <= 0) return { full: 0, half: 0 };
-  return { full: 0, half: Math.ceil(batchesNeeded * 2 - 0.001) };
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Product plan
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * One service line of a product's plan. Units are what the manager sets:
- * cast irons on the main line, gastronorms on the second make line.
+ * the recipe's container on a full-batch line, small containers on a
+ * half-batch line.
  */
 export type LinePlan = {
+  lineId: string;
+  lineName: string;
+  halfBatches: boolean;
+  /** Share of the reference-day grams this line's channels sold. */
+  share: number;
   /** Grams the line needs after flex, catering and carryover. */
   demandGrams: number;
   /** Units Edify suggests. */
@@ -83,6 +84,9 @@ export type LinePlan = {
   /** Grams of finished product one unit holds on this line. */
   gramsPerUnit: number;
   gramsPlanned: number;
+  /** Carry-over lands here; catering is plated here. */
+  takesCarry: boolean;
+  takesCatering: boolean;
 };
 
 export type ProductPlan = {
@@ -96,10 +100,10 @@ export type ProductPlan = {
   flexPct: number;
   cateringGrams: number;
   carriedGrams: number;
-  main: LinePlan;
-  second: LinePlan;
+  /** One entry per line, in the shop's line order. */
+  lines: LinePlan[];
   /**
-   * Batches to cook or assemble for both lines together. Rice is cooked
+   * Batches to cook or assemble for every line together. Rice is cooked
    * once and plated to cast irons and gastronorms from the same blue box,
    * so rounding happens once, on the total.
    */
@@ -111,6 +115,9 @@ export type ProductPlan = {
   notes: string[];
 };
 
+/** Units per product per line, as the manager typed them. */
+export type LineOverride = Record<string, number>;
+
 export type PlanOptions = {
   /** Whole-day percentage, e.g. -20. Skips overridden rows. */
   flexPct?: number;
@@ -118,9 +125,31 @@ export type PlanOptions = {
   catering?: Record<string, number>;
   /** Grams counted at close last night that are still in date. */
   carried?: Record<string, number>;
-  /** Manager overrides in units, per product and line. */
-  overrides?: Record<string, { main?: number; second?: number }>;
+  /** Manager overrides in units, per product and line id. */
+  overrides?: Record<string, LineOverride>;
+  /** The shop's service lines. Defaults to the company's two. */
+  lines?: PlanLine[];
 };
+
+/** Planned units on lines that plate the recipe's full container. */
+export function fullLineUnits(p: ProductPlan): number {
+  return p.lines.filter(l => !l.halfBatches).reduce((n, l) => n + l.plannedUnits, 0);
+}
+
+/** Planned units on lines that plate small containers. */
+export function halfLineUnits(p: ProductPlan): number {
+  return p.lines.filter(l => l.halfBatches).reduce((n, l) => n + l.plannedUnits, 0);
+}
+
+/** The line catering is plated on for this product. */
+export function cateringLineOf(p: ProductPlan): LinePlan {
+  return p.lines.find(l => l.takesCatering) ?? p.lines[p.lines.length - 1];
+}
+
+/** Name of the recipe's own container, lower case, for captions. */
+export function mainUnitName(p: FinishedProduct): string {
+  return CONTAINERS[p.unit].name.toLowerCase();
+}
 
 /**
  * How much more (or less) raw input a component needs than the recipe
@@ -152,7 +181,8 @@ export function portionGrams(p: FinishedProduct): number {
   switch (p.group) {
     case 'proteins': return PORTION_GRAMS.trayProtein;
     case 'bases': return PORTION_GRAMS.trayBase;
-    case 'breakfast': return 150;
+    // Breakfast batches are sized in portions, so one unit is one portion.
+    case 'breakfast': return gramsPerMainUnit(p);
     default: return PORTION_GRAMS.side;
   }
 }
@@ -177,7 +207,7 @@ export function mainUnitsOf(p: FinishedProduct, grams: number): number {
 }
 
 export function secondLineUnitName(p: FinishedProduct): string {
-  return p.unit === 'salad-gn' ? CONTAINERS['salad-gn'].name : p.unit === 'breakfast-pot' ? CONTAINERS['breakfast-pot'].name : CONTAINERS['gn-1-2'].name;
+  return p.unit === 'salad-gn' || p.unit === 'breakfast-pot' || p.unit === 'portion' ? CONTAINERS[p.unit].name : CONTAINERS['gn-1-2'].name;
 }
 
 /**
@@ -199,50 +229,73 @@ export function roundProductBatches(p: FinishedProduct, batchesNeeded: number): 
 export function planProduct(productId: string, demand: DayDemand, opts: PlanOptions = {}): ProductPlan {
   const product = PRODUCT_BY_ID[productId];
   const d = demand.products[productId];
+  const lines = opts.lines?.length ? opts.lines : defaultLines();
   const referenceGrams = d?.grams ?? 0;
   const referencePortions = d?.portions ?? 0;
-  const mainShare = referenceGrams > 0 ? (d?.mainGrams ?? 0) / referenceGrams : 1;
-  const override = opts.overrides?.[productId];
-  const overridden = override?.main !== undefined || override?.second !== undefined;
+  const override = opts.overrides?.[productId] ?? {};
+  const overridden = lines.some(l => override[l.id] !== undefined);
   const flexPct = overridden ? 0 : opts.flexPct ?? 0;
   const flexed = referenceGrams * (1 + flexPct / 100);
   const cateringGrams = opts.catering?.[productId] ?? 0;
   const carriedGrams = Math.min(opts.carried?.[productId] ?? 0, flexed);
   const batchG = fullBatchGrams(product);
   const mainUnitG = gramsPerMainUnit(product);
-  const secondUnitG = mainUnitG * product.secondLineFraction;
+  const carry = carryLine(lines);
+  const catering = cateringLine(lines);
 
-  // Carryover comes off the main line (it is served from the fridge onto
-  // the main line). Catering is second make line work.
-  const mainDemand = Math.max(0, flexed * mainShare - carriedGrams);
-  const secondDemand = flexed * (1 - mainShare) + cateringGrams;
+  // Each line's share of the day is what its channels sold on the reference
+  // days. With no sales history everything lands on the carry line.
+  const shareOf = (line: PlanLine): number => {
+    if (referenceGrams <= 0) return line.id === carry.id ? 1 : 0;
+    return line.channels.reduce((n, ch) => n + (d?.byChannel[ch] ?? 0), 0) / referenceGrams;
+  };
 
-  const mainSuggested = ceilUnits(mainDemand / mainUnitG);
-  const secondSuggested = ceilUnits(secondDemand / secondUnitG);
-  const mainPlanned = override?.main ?? mainSuggested;
-  const secondPlanned = override?.second ?? secondSuggested;
+  const linePlans: LinePlan[] = lines.map(line => {
+    const share = shareOf(line);
+    const unitG = line.halfBatches ? mainUnitG * product.secondLineFraction : mainUnitG;
+    // Carry-over comes off the line it is served from. Catering is plated
+    // on the small-container line.
+    const demandGrams = Math.max(0, flexed * share - (line.id === carry.id ? carriedGrams : 0)) + (line.id === catering.id ? cateringGrams : 0);
+    const suggestedUnits = ceilUnits(demandGrams / unitG);
+    const plannedUnits = override[line.id] ?? suggestedUnits;
+    return {
+      lineId: line.id,
+      lineName: line.name,
+      halfBatches: line.halfBatches,
+      share,
+      demandGrams,
+      suggestedUnits,
+      plannedUnits,
+      unitName: line.halfBatches ? secondLineUnitName(product) : CONTAINERS[product.unit].name,
+      gramsPerUnit: unitG,
+      gramsPlanned: plannedUnits * unitG,
+      takesCarry: line.id === carry.id,
+      takesCatering: line.id === catering.id,
+    };
+  });
 
-  const mainGrams = mainPlanned * mainUnitG;
-  const secondGrams = secondPlanned * secondUnitG;
   // Batches cover what gets plated: 12 cast irons and 2 gastronorms of Amba
   // is 13 bags in the oven. Rice rounds to the nearest half cooker, so a
   // 22nd cast-iron equivalent on top of 21 does not trigger a half batch.
-  const suggestedBatchGrams = mainSuggested * mainUnitG + secondSuggested * secondUnitG;
-  const plannedBatchGrams = mainGrams + secondGrams;
+  const suggestedBatchGrams = linePlans.reduce((n, l) => n + l.suggestedUnits * l.gramsPerUnit, 0);
+  const plannedBatchGrams = linePlans.reduce((n, l) => n + l.gramsPlanned, 0);
   const batchesSuggested = roundProductBatches(product, suggestedBatchGrams / batchG);
   const batches = roundProductBatches(product, plannedBatchGrams / batchG);
   const gramsMade = batchesToNumber(batches) * batchG;
 
-  const mainUnitName = CONTAINERS[product.unit].name;
-  const secondUnitName = secondLineUnitName(product);
+  const unitName = CONTAINERS[product.unit].name;
   const notes: string[] = [];
   notes.push(`${Math.round(referencePortions)} portions, about ${kg(referenceGrams)}, sold on average across the reference days.`);
   if (flexPct) notes.push(`Whole-day flex ${flexPct > 0 ? '+' : ''}${flexPct}%: ${kg(flexed)}.`);
-  if (cateringGrams) notes.push(`Catering adds ${kg(cateringGrams)} on the second make line.`);
-  if (carriedGrams) notes.push(`${kg(carriedGrams)} counted in the fridge last night comes off the main line.`);
-  notes.push(`Main line ${Math.round(mainShare * 100)}% (in store and kiosk) → ${kg(mainDemand)} → ${mainSuggested} ${plural(mainSuggested, mainUnitName)} at about ${kg(mainUnitG)} each.`);
-  if (secondDemand > 0) notes.push(`Second make line ${Math.round((1 - mainShare) * 100)}% (Deliveroo, Click & Collect) → ${kg(secondDemand)} → ${secondSuggested} ${plural(secondSuggested, secondUnitName)} at about ${kg(secondUnitG)} each.`);
-  notes.push(`One full batch makes ${kg(batchG)}, about ${product.unitsPerBatch} ${plural(product.unitsPerBatch, mainUnitName)}${product.halfBatch ? '; half batches allowed, so batches round to the nearest half' : '; no half batch, so batches round up'}. Both lines together need ${(plannedBatchGrams / batchG).toFixed(2)} batches → ${batchesLabel(batches)}.`);
+  if (cateringGrams) notes.push(`Catering adds ${kg(cateringGrams)} on ${catering.name}.`);
+  if (carriedGrams) notes.push(`${kg(carriedGrams)} counted in the fridge last night comes off ${carry.name}.`);
+  for (const l of linePlans) {
+    if (l.demandGrams <= 0 && l.share <= 0) continue;
+    const line = lines.find(x => x.id === l.lineId)!;
+    const channels = line.channels.map(c => CHANNEL_WORDS[c]).join(', ');
+    notes.push(`${l.lineName} ${Math.round(l.share * 100)}%${channels ? ` (${channels})` : ''} → ${kg(l.demandGrams)} → ${l.suggestedUnits} ${plural(l.suggestedUnits, l.unitName)} at about ${kg(l.gramsPerUnit)} each.`);
+  }
+  notes.push(`One full batch makes ${kg(batchG)}, about ${product.unitsPerBatch} ${plural(product.unitsPerBatch, unitName)}${product.halfBatch ? '; half batches allowed, so batches round to the nearest half' : '; no half batch, so batches round up'}. ${lines.length === 1 ? 'The line needs' : 'All lines together need'} ${(plannedBatchGrams / batchG).toFixed(2)} batches → ${batchesLabel(batches)}.`);
   if (overridden) notes.push('You set this line by hand. Flex and re-drafts leave it alone.');
 
   return {
@@ -255,14 +308,15 @@ export function planProduct(productId: string, demand: DayDemand, opts: PlanOpti
     cateringGrams,
     carriedGrams,
     overridden,
-    main: { demandGrams: mainDemand, suggestedUnits: mainSuggested, plannedUnits: mainPlanned, unitName: mainUnitName, gramsPerUnit: mainUnitG, gramsPlanned: mainGrams },
-    second: { demandGrams: secondDemand, suggestedUnits: secondSuggested, plannedUnits: secondPlanned, unitName: secondUnitName, gramsPerUnit: secondUnitG, gramsPlanned: secondGrams },
+    lines: linePlans,
     batches,
     batchesSuggested,
     gramsMade,
     notes,
   };
 }
+
+const CHANNEL_WORDS: Record<string, string> = { instore: 'in store', kiosk: 'kiosk', deliveroo: 'Deliveroo', clickcollect: 'Click & Collect', corporate: 'Corporate', citypantry: 'CityPantry', ordit: 'Ordit' };
 
 function ceilUnits(n: number): number {
   return n <= 0 ? 0 : Math.ceil(n - 0.02);

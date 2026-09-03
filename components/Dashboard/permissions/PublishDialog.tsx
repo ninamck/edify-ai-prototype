@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Radio, X } from 'lucide-react';
 import type { Audience, DemoDashboard } from './model';
-import { ALL_SITES, siteListPhrase, type DemoRole, type SiteId, type Viewer } from './sites';
+import { ALL_SITES, siteListPhrase, type DemoRole, type Site, type SiteId, type Viewer } from './sites';
 
 const AUDIENCE_ROLES: { id: Exclude<DemoRole, 'admin'>; label: string; hint: string }[] = [
   { id: 'manager', label: 'Managers', hint: 'Can view, each limited to their own sites' },
@@ -25,6 +25,7 @@ export default function PublishDialog({
   onClose,
   onPublish,
   onUnpublish,
+  sites = ALL_SITES,
 }: {
   open: boolean;
   dashboard: DemoDashboard | null;
@@ -32,14 +33,17 @@ export default function PublishDialog({
   onClose: () => void;
   onPublish: (audience: Audience) => void;
   onUnpublish: () => void;
+  /** The estate to pick from. Defaults to the roles-demo estate; Farmer J
+   *  passes its own shops. */
+  sites?: Site[];
 }) {
   const [roles, setRoles] = useState<Exclude<DemoRole, 'admin'>[]>([]);
   const [siteIds, setSiteIds] = useState<SiteId[]>([]);
 
   // Managers only see their own sites as options — the self-enforcing ceiling.
   const availableSites = useMemo(
-    () => ALL_SITES.filter((s) => viewer.siteIds.includes(s.id)),
-    [viewer.siteIds],
+    () => sites.filter((s) => viewer.siteIds.includes(s.id)),
+    [viewer.siteIds, sites],
   );
 
   useEffect(() => {
@@ -64,13 +68,13 @@ export default function PublishDialog({
   const canSubmit = roles.length > 0 && siteIds.length > 0;
 
   const fullSelection =
-    roles.length === AUDIENCE_ROLES.length && siteIds.length === ALL_SITES.length;
+    roles.length === AUDIENCE_ROLES.length && siteIds.length === sites.length;
 
   const previewSummary =
     roles.length > 0 && siteIds.length > 0
       ? isCompany && fullSelection
         ? 'Everyone at the company — each person sees their own sites\u2019 data.'
-        : `All ${roles.map((r) => (r === 'manager' ? 'managers' : 'employees')).join(' and ')} at ${siteListPhrase(siteIds)}.`
+        : `All ${roles.map((r) => (r === 'manager' ? 'managers' : 'employees')).join(' and ')} at ${siteListPhrase(siteIds, sites)}.`
       : 'Pick at least one role and one site.';
 
   function toggleRole(role: Exclude<DemoRole, 'admin'>) {

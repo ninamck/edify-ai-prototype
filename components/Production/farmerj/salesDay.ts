@@ -25,7 +25,13 @@
  * export changes; do not hand-edit.
  */
 
-export type SalesChannel = 'instore' | 'kiosk' | 'deliveroo' | 'clickcollect';
+/**
+ * Sales channels. The first four are in the till export (PayTypeGroup).
+ * Corporate, CityPantry and Ordit are the catering platforms the ProMap
+ * workbook tracks as their own takings lines; Marylebone's real day has
+ * none, so they only appear in modelled shop-days.
+ */
+export type SalesChannel = 'instore' | 'kiosk' | 'deliveroo' | 'clickcollect' | 'corporate' | 'citypantry' | 'ordit';
 
 export type SalesRow = {
   category: string;

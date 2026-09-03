@@ -8,7 +8,7 @@ import { Boxes, Calendar, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock,
 import { longDate } from './calendar';
 import { clearTimer, hhmm, startTimer, timerRemaining, useFjClock, type FjTimer } from './fjClock';
 import { inputsForTask, plural, stepsForTask, type Nudge, type SectionCard, type SectionTask, type SectionsDay } from './sections';
-import { COMPONENTS, CONTAINERS, SHELF_LIFE_GROUPS, type Section as SectionId } from './recipes';
+import { COMPONENTS, CONTAINERS, SHELF_LIFE_GROUPS } from './recipes';
 
 /**
  * The stepper for the person on the section. Same frame as the Pret
@@ -19,7 +19,7 @@ import { COMPONENTS, CONTAINERS, SHELF_LIFE_GROUPS, type Section as SectionId } 
 
 type Slot = 'am' | 'pm';
 
-export type StepperTarget = { sectionId: SectionId; slot: Slot; taskId?: string };
+export type StepperTarget = { sectionId: string; slot: Slot; taskId?: string };
 
 export default function FjStepper({ open, onClose, day, date, ticks, onTick, initial, live }: {
   open: boolean;
@@ -172,7 +172,7 @@ function TopBar({ subtitle, date, nowMins, onClose, onChange }: { subtitle: stri
 // ─── Picker ───────────────────────────────────────────────────────────────────
 
 function Picker({ day, ticks, onPick }: { day: SectionsDay; ticks: Record<string, string>; onPick: (t: StepperTarget) => void }) {
-  const [sectionId, setSectionId] = useState<SectionId | null>(null);
+  const [sectionId, setSectionId] = useState<string | null>(null);
   const card = sectionId ? day.cards.find(c => c.section.id === sectionId) : undefined;
   return (
     <div style={{ flex: 1, background: '#ffffff', borderRadius: 14, padding: '20px 24px 24px', overflow: 'auto', minHeight: 0 }}>

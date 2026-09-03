@@ -34,7 +34,6 @@ export default function RecipesLayout({ children }: { children: React.ReactNode 
       >
         <AreaTopBar
           title="Manage Recipes"
-          siteName="Fitzroy Espresso"
           rightSlot={<DemoControls variant="inline" />}
           backTo="/"
         />

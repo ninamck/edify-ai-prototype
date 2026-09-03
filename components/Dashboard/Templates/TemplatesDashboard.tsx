@@ -10,12 +10,15 @@
  * The switcher is still there — the calendar only picks the default.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { CalendarDays, CalendarRange, BookOpenCheck } from 'lucide-react';
+import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+import { FJ_ALL_SHOPS_ID, isFarmerJShopId } from '@/components/Production/farmerj/shops';
 import DailyTemplate from './DailyTemplate';
 import WeeklyFlashTemplate from './WeeklyFlashTemplate';
 import PeriodEndTemplate from './PeriodEndTemplate';
+import { farmerJDaily, farmerJPeriod, farmerJWeekly } from './farmerJTemplateData';
 import { NAVY } from './templateParts';
 
 type TemplateId = 'daily' | 'weekly' | 'period';
@@ -48,6 +51,19 @@ export default function TemplatesDashboard({
   controls?: ReactNode;
 }) {
   const [active, setActive] = useState<TemplateId>(() => defaultTemplateForDate(new Date()));
+
+  // Farmer J renders the same three templates from its own estate. Daily
+  // follows the shop picked in the site switcher, like the Sales tab does;
+  // weekly and period end are always every shop.
+  const { isFarmerJ, productionSiteId } = useActiveSite();
+  const fjScope = isFarmerJ
+    ? productionSiteId && isFarmerJShopId(productionSiteId) ? productionSiteId : FJ_ALL_SHOPS_ID
+    : null;
+  const fjDaily = useMemo(() => (fjScope ? farmerJDaily(fjScope) : undefined), [fjScope]);
+  const fjWeekly = useMemo(() => (fjScope ? farmerJWeekly() : undefined), [fjScope]);
+  const fjPeriod = useMemo(() => (fjScope ? farmerJPeriod() : undefined), [fjScope]);
+  const question = (id: TemplateId) =>
+    id === 'weekly' && isFarmerJ ? 'Which shops are drifting?' : TEMPLATE_META[id].question;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -111,13 +127,13 @@ export default function TemplatesDashboard({
         }}
       >
         <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-muted)' }}>
-          {TEMPLATE_META[active].question}
+          {question(active)}
         </span>
       </div>
 
-      {active === 'daily' && <DailyTemplate />}
-      {active === 'weekly' && <WeeklyFlashTemplate invoiceMatchingLive />}
-      {active === 'period' && <PeriodEndTemplate invoiceMatchingLive />}
+      {active === 'daily' && <DailyTemplate data={fjDaily} />}
+      {active === 'weekly' && <WeeklyFlashTemplate invoiceMatchingLive data={fjWeekly} />}
+      {active === 'period' && <PeriodEndTemplate invoiceMatchingLive data={fjPeriod} />}
     </div>
   );
 }

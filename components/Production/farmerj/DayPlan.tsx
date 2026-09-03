@@ -4,17 +4,17 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
-import { Calculator, CheckCircle2, ChevronRight, ClipboardCheck, GitBranch, Lock, LockOpen, Package, RotateCcw, Store, TrendingUp, X } from 'lucide-react';
+import { AlertTriangle, Calculator, CheckCircle2, ChevronRight, ClipboardCheck, GitBranch, Lock, LockOpen, Package, RotateCcw, TrendingUp, X } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import QtyStepper from '@/components/Production/QtyStepper';
 import StatusPill from '@/components/Production/StatusPill';
-import { batchesLabel, batchesToNumber, gbp, kg, mainUnitsOf, portionsOf, portionsPerMainUnit, portionsPerSecondUnit, type ProductPlan } from './cascade';
-import { boxesLabel, lineGrams, lineLabel, orderBoxesLabel, orderGramsFor, type CateringOrder } from './catering';
+import { batchesLabel, batchesToNumber, cateringLineOf, gbp, kg, mainUnitName, mainUnitsOf, portionsOf, portionsPerMainUnit, portionsPerSecondUnit, type LinePlan, type ProductPlan } from './cascade';
+import { boxesLabel, CATERING_CHANNEL_LABELS, feastLabel, lineGrams, lineLabel, orderBoxesLabel, orderGramsFor, orderLines, type CateringOrder } from './catering';
 import { addDays, FJ_DAY_STRIP_DATES, FJ_DEMO_TODAY, longDate, shortDate, weekdayLabel } from './calendar';
 import { computeDayPlan, useFjDayPlan, useFjPlanStore, useWindowApproval, type DayPlan as DayPlanModel } from './FjPlanStore';
 import { COMPONENTS, INGREDIENTS, PRODUCT_BY_ID, PRODUCT_GROUP_LABELS, type ProductGroup } from './recipes';
-import { daySales, fohReminders } from './sales';
+import { daySales } from './sales';
 import { FJ_ALL_SHOPS_ID, getShop } from './shops';
 
 export const GROUP_ORDER: ProductGroup[] = ['breakfast', 'bases', 'proteins', 'hot-sides', 'salads'];
@@ -27,9 +27,10 @@ type GroupFilter = 'all' | ProductGroup;
  * and a focus panel per row.
  *
  * What changes for Farmer J is what the numbers mean. Rows are finished
- * sellable products only. The two editable columns are the main line (cast
- * irons) and the second make line (gastronorms), catering orders get a
- * column each, and the row total is batches.
+ * sellable products only. There is one editable column per service line
+ * (the shop's benches: cast irons on a full-batch line, small containers
+ * on a half-batch line), catering gets a column, and the row total is
+ * batches.
  */
 export default function DayPlan() {
   const searchParams = useSearchParams();
@@ -47,7 +48,7 @@ export default function DayPlan() {
 
 function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: string; onDateChange: (d: string) => void }) {
   const shop = getShop(shopId);
-  const { plan, setOverride, clearOverride, setFlex, toggleOrder, toggleReferenceDay, approve, reopen } = useFjDayPlan(shopId, date);
+  const { plan, setOverride, clearOverride, setFlex, toggleOrder, toggleReferenceDay, approve, reopen, acceptNewNumbers, keepApprovedNumbers } = useFjDayPlan(shopId, date);
   const approval = useWindowApproval(shopId, date);
   const [focused, setFocused] = useState<string | null>(null);
   const [groupFilter, setGroupFilter] = useState<GroupFilter>('all');
@@ -85,7 +86,6 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
   const closed = plan.demand.net === 0 && plan.activeOrders.length === 0;
   const isToday = date === FJ_DEMO_TODAY;
   const isPast = date < FJ_DEMO_TODAY;
-  const dayName = longDate(date).split(' ')[0];
   const locked = plan.approved;
   const cancelledOrder = plan.orders.find(o => o.id === justCancelled);
   const focusedPlan = focused ? plan.plans.find(p => p.productId === focused) : undefined;
@@ -93,17 +93,13 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
     <div style={{ display: 'flex', flexDirection: 'column', fontFamily: 'var(--font-primary)' }}>
       <FjDayStrip shopId={shopId} dates={FJ_DAY_STRIP_DATES} selectedDate={date} onSelect={d => { onDateChange(d); setFocused(null); }} />
 
-      {/* Selected day caption, with the reference days on the right so the
-          GM sees what the draft was averaged from without leaving the row. */}
+      {/* Selected day caption, with the reference-day chips on the right so
+          the GM can leave an odd day out of the average without leaving the row. */}
       <div style={captionStrip}>
         <span style={{ fontWeight: 700, color: 'var(--color-text-secondary)' }}>{isToday ? 'Planning today' : `Planning ${weekdayLabel(date)} ${date}`}</span>
-        <span>· {plan.window.label.replace(/\.$/, '')}</span>
         {isPast && <span>· historical view</span>}
         {!closed && (
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <EdifyMark size={10} color="var(--color-text-muted)" /> Drafted from the last four {dayName}s
-            </span>
             {plan.referenceDays.map(r => (
               <button
                 key={r.date}
@@ -140,6 +136,8 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
             onApproveWindow={() => approve(`${shop?.name} GM`, approval.window.days)}
             onApproveDay={() => approve(`${shop?.name} GM`)}
             onReopen={reopen}
+            onAcceptNew={() => acceptNewNumbers(`${shop?.name} GM`)}
+            onKeepApproved={() => keepApprovedNumbers(`${shop?.name} GM`)}
           />
 
           <div style={{ padding: '16px 30px 32px' }}>
@@ -180,16 +178,14 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
                       </th>
                       <th style={headStyle({ minWidth: 72 })}>
                         Carry-over
-                        <HeadSub>main-line containers</HeadSub>
-                      </th>
-                      <th style={headStyle({ minWidth: 128 })}>
-                        Main line
                         <HeadSub>containers</HeadSub>
                       </th>
-                      <th style={headStyle({ minWidth: 118 })}>
-                        Second make line
-                        <HeadSub>small containers</HeadSub>
-                      </th>
+                      {plan.lines.map(line => (
+                        <th key={line.id} style={headStyle({ minWidth: line.halfBatches ? 118 : 128 })}>
+                          {line.name}
+                          <HeadSub>{line.halfBatches ? 'small containers' : 'containers'}</HeadSub>
+                        </th>
+                      ))}
                       {plan.orders.length > 0 && (
                         <th style={headStyle({ minWidth: 124 })}>
                           Catering
@@ -217,7 +213,7 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
                         rows={rows}
                         orders={plan.activeOrders}
                         showCatering={plan.orders.length > 0}
-                        colCount={6 + (plan.orders.length > 0 ? 1 : 0)}
+                        colCount={4 + plan.lines.length + (plan.orders.length > 0 ? 1 : 0)}
                         focused={focused}
                         locked={locked}
                         onSelect={setFocused}
@@ -233,11 +229,12 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
                       <td style={footStyle()}>
                         {plan.plans.some(p => p.carriedGrams > 0) ? <span style={numStyle}>−{plan.plans.reduce((n, p) => n + mainUnitsOf(p.product, p.carriedGrams), 0)}</span> : <span style={{ color: 'var(--color-text-muted)' }}>0</span>}
                       </td>
-                      <td style={footStyle()}><span style={numStyle}>{plan.totals.mainUnits}</span></td>
-                      <td style={footStyle()}><span style={numStyle}>{plan.totals.secondUnits}</span></td>
+                      {plan.lines.map(line => (
+                        <td key={line.id} style={footStyle()}><span style={numStyle}>{plan.totals.byLine[line.id] ?? 0}</span></td>
+                      ))}
                       {plan.orders.length > 0 && (
                         <td style={footStyle()}>
-                          <span style={numStyle}>{plan.activeOrders.length ? plan.plans.reduce((n, p) => n + Math.ceil(p.cateringGrams / p.second.gramsPerUnit), 0) : '—'}</span>
+                          <span style={numStyle}>{plan.activeOrders.length ? cateringUnits(plan) : '—'}</span>
                         </td>
                       )}
                       <td style={footStyle({ totalCol: true })}><span style={numStyle}>{Math.round(plan.totals.batches * 2) / 2}</span></td>
@@ -246,8 +243,9 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
                       <td style={footSubStyle({ left: true, sticky: true })}>Sales · ref days</td>
                       <td style={footSubStyle()}><span style={moneyStyle}>{gbp(plan.demand.net)}</span></td>
                       <td style={footSubStyle()}>—</td>
-                      <td style={footSubStyle()}><span style={moneyStyle}>{gbp(plan.demand.net * (1 - secondShare(plan)))}</span></td>
-                      <td style={footSubStyle()}><span style={moneyStyle}>{gbp(plan.demand.net * secondShare(plan))}</span></td>
+                      {plan.lines.map(line => (
+                        <td key={line.id} style={footSubStyle()}><span style={moneyStyle}>{gbp(line.channels.reduce((n, ch) => n + plan.demand.netByChannel[ch], 0))}</span></td>
+                      ))}
                       {plan.orders.length > 0 && <td style={footSubStyle()}>—</td>}
                       <td style={footSubStyle({ totalCol: true })}>—</td>
                     </tr>
@@ -255,8 +253,6 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
                 </table>
               </div>
             </div>
-
-            <FohCard shopId={shopId} date={date} isToday={isToday} />
           </div>
         </>
       )}
@@ -274,9 +270,14 @@ function DayPlanForShop({ shopId, date, onDateChange }: { shopId: string; date: 
   );
 }
 
-function secondShare(plan: DayPlanModel): number {
-  const d = plan.demand;
-  return d.net > 0 ? (d.netByChannel.deliveroo + d.netByChannel.clickcollect) / d.net : 0;
+/** Small containers the day's catering fills, across every product. */
+function cateringUnits(plan: DayPlanModel): number {
+  return plan.plans.reduce((n, p) => n + Math.ceil(p.cateringGrams / cateringLineOf(p).gramsPerUnit), 0);
+}
+
+/** "12 containers on Main line, 3 small containers on Second make line". */
+function lineTotalsLabel(plan: DayPlanModel): string {
+  return plan.lines.map(l => `${plan.totals.byLine[l.id] ?? 0} ${l.halfBatches ? 'small containers' : 'containers'} on ${l.name}`).join(', ');
 }
 
 // ─── Day strip ────────────────────────────────────────────────────────────────
@@ -295,7 +296,9 @@ function FjDayCard({ shopId, date, selected, onSelect }: { shopId: string; date:
   const store = useFjPlanStore();
   const record = store.get(shopId, date);
   const yesterday = store.get(shopId, addDays(date, -1));
-  const plan = useMemo(() => computeDayPlan(shopId, date, record, yesterday.close), [shopId, date, record, yesterday.close]);
+  const linesKey = store.linesKey;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- line changes alter the plan
+  const plan = useMemo(() => computeDayPlan(shopId, date, record, yesterday.close), [shopId, date, record, yesterday.close, linesKey]);
   const isToday = date === FJ_DEMO_TODAY;
   const isPast = date < FJ_DEMO_TODAY;
   const closed = plan.demand.net === 0 && plan.activeOrders.length === 0;
@@ -347,6 +350,8 @@ function FjApproveBar({
   onApproveWindow,
   onApproveDay,
   onReopen,
+  onAcceptNew,
+  onKeepApproved,
 }: {
   plan: DayPlanModel;
   approval: ReturnType<typeof useWindowApproval>;
@@ -355,12 +360,41 @@ function FjApproveBar({
   onApproveWindow: () => void;
   onApproveDay: () => void;
   onReopen: () => void;
+  onAcceptNew: () => void;
+  onKeepApproved: () => void;
 }) {
   const w = approval.window;
   const from = weekdayLabel(w.from);
   const to = weekdayLabel(w.to);
   const dayWord = isToday ? "today's" : `${weekdayLabel(plan.date)}'s`;
   if (isPast) return null;
+
+  const changed = plan.record.settingsChanged;
+  if (plan.approved && changed) {
+    const at = new Date(changed.atISO).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const fields = changed.fields.length > 3 ? `${changed.fields.slice(0, 3).join(', ')} and ${changed.fields.length - 3} more` : changed.fields.join(', ');
+    return (
+      <div role="status" style={{ ...draftBar, background: 'var(--color-warning-light)', border: '1px solid var(--color-warning-border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <div style={{ ...draftIcon, background: 'var(--color-warning)', color: '#fff' }}>
+            <AlertTriangle size={16} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+            <span style={bannerTitle}>Setup changed since you approved {dayWord} plan.</span>
+            <span style={bannerSub}>
+              {changed.by} published at {at}: {fields}. The numbers below are the new ones. Keep the ones you approved, or take these and approve again.
+            </span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <button type="button" onClick={onKeepApproved} style={secondaryButton}>Keep my numbers</button>
+          <button type="button" onClick={onAcceptNew} style={primaryButton}>
+            <ClipboardCheck size={14} /> Take the new numbers
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (plan.approved) {
     const at = plan.record.approvedAtISO ? new Date(plan.record.approvedAtISO).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -459,13 +493,7 @@ function FlexPill({ pct, onChange, locked, handCount }: { pct: number; onChange:
 }
 
 function TotalCard({ plan }: { plan: DayPlanModel }) {
-  const d = plan.demand;
   const products = plan.plans.length;
-  const parts = [
-    d.netByDayPart.breakfast > 0 ? `${gbp(d.netByDayPart.breakfast)} breakfast` : null,
-    `${gbp(d.netByDayPart.lunch)} lunch`,
-    d.netByDayPart.dinner > 0 ? `${gbp(d.netByDayPart.dinner)} dinner` : null,
-  ].filter(Boolean);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', marginBottom: 10, background: '#ffffff', border: '1px solid var(--color-border-subtle)', borderLeft: '3px solid var(--color-info)', borderRadius: 'var(--radius-card)' }}>
       <div style={{ width: 36, height: 36, borderRadius: 9, background: 'var(--color-info-light)', color: 'var(--color-info)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -479,7 +507,7 @@ function TotalCard({ plan }: { plan: DayPlanModel }) {
           <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
           <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{products} products</span>
           <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
-          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{plan.totals.mainUnits} containers on the main line, {plan.totals.secondUnits} small containers on the second make line</span>
+          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{lineTotalsLabel(plan)}</span>
           {plan.activeOrders.length > 0 && (
             <>
               <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>·</span>
@@ -487,9 +515,6 @@ function TotalCard({ plan }: { plan: DayPlanModel }) {
             </>
           )}
         </div>
-        <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
-          Reference days: {parts.join(', ')} · {Math.round(d.trays).toLocaleString('en-GB')} trays · {Math.round(secondShare(plan) * 100)}% through Deliveroo and Click &amp; Collect.
-        </span>
       </div>
     </div>
   );
@@ -517,7 +542,7 @@ function GroupRows({
   focused: string | null;
   locked: boolean;
   onSelect: (id: string) => void;
-  onOverride: (productId: string, line: 'main' | 'second', units: number | undefined) => void;
+  onOverride: (productId: string, lineId: string, units: number | undefined) => void;
   onClear: (productId: string) => void;
 }) {
   return (
@@ -551,7 +576,7 @@ function ProductRow({
   focused: boolean;
   locked: boolean;
   onSelect: () => void;
-  onOverride: (productId: string, line: 'main' | 'second', units: number | undefined) => void;
+  onOverride: (productId: string, lineId: string, units: number | undefined) => void;
   onClear: (productId: string) => void;
 }) {
   const refUnits = mainUnitsOf(p.product, p.referenceGrams);
@@ -570,7 +595,7 @@ function ProductRow({
       </td>
       <td style={bodyStyle({ focused })}>
         <span style={numStyle}>{Math.round(p.referencePortions)}</span>
-        <div style={cellSub}>≈ {refUnits} {p.main.unitName.toLowerCase()}{refUnits === 1 ? '' : 's'}</div>
+        <div style={cellSub}>≈ {refUnits} {mainUnitName(p.product)}{refUnits === 1 ? '' : 's'}</div>
       </td>
       <td style={bodyStyle({ focused })}>
         {p.carriedGrams > 0 ? (
@@ -580,17 +605,16 @@ function ProductRow({
           </>
         ) : <span style={{ color: 'var(--color-text-muted)' }}>0</span>}
       </td>
-      <td style={bodyStyle({ focused })}>
-        <LineStepper p={p} line="main" locked={locked} onOverride={onOverride} />
-      </td>
-      <td style={bodyStyle({ focused })}>
-        <LineStepper p={p} line="second" locked={locked} onOverride={onOverride} />
-      </td>
+      {p.lines.map(l => (
+        <td key={l.lineId} style={bodyStyle({ focused })}>
+          <LineStepper p={p} line={l} locked={locked} onOverride={onOverride} />
+        </td>
+      ))}
       {showCatering && (
         <td style={bodyStyle({ focused })}>
           {p.cateringGrams > 0 ? (
             <>
-              <span style={numStyle}>{Math.ceil(p.cateringGrams / p.second.gramsPerUnit)}</span>
+              <span style={numStyle}>{Math.ceil(p.cateringGrams / cateringLineOf(p).gramsPerUnit)}</span>
               <div style={cellSub}>{boxesLabel(orders, p.productId)}</div>
             </>
           ) : (
@@ -615,14 +639,15 @@ function ProductRow({
   );
 }
 
-function LineStepper({ p, line, locked, onOverride }: { p: ProductPlan; line: 'main' | 'second'; locked: boolean; onOverride: (productId: string, line: 'main' | 'second', units: number | undefined) => void }) {
-  const l = line === 'main' ? p.main : p.second;
+function LineStepper({ p, line: l, locked, onOverride }: { p: ProductPlan; line: LinePlan; locked: boolean; onOverride: (productId: string, lineId: string, units: number | undefined) => void }) {
   const changed = l.plannedUnits !== l.suggestedUnits;
+  const unitSuffix = l.halfBatches ? '' : ` ${l.unitName.toLowerCase()}s`;
+  const perUnit = l.halfBatches ? portionsPerSecondUnit(p.product) : portionsPerMainUnit(p.product);
   if (locked) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
         <span style={{ ...numStyle, color: changed ? 'var(--color-info)' : 'var(--color-text-primary)' }}>{l.plannedUnits}</span>
-        <span style={fcStyle} title="Edify's suggestion from the reference days">fc {l.suggestedUnits}{line === 'main' ? ` ${l.unitName.toLowerCase()}s` : ''}</span>
+        <span style={fcStyle} title="Edify's suggestion from the reference days">fc {l.suggestedUnits}{unitSuffix}</span>
       </div>
     );
   }
@@ -631,8 +656,8 @@ function LineStepper({ p, line, locked, onOverride }: { p: ProductPlan; line: 'm
       <QtyStepper
         size="compact"
         canDecrement={l.plannedUnits > 0}
-        onDecrement={() => onOverride(p.productId, line, l.plannedUnits - 1)}
-        onIncrement={() => onOverride(p.productId, line, l.plannedUnits + 1)}
+        onDecrement={() => onOverride(p.productId, l.lineId, l.plannedUnits - 1)}
+        onIncrement={() => onOverride(p.productId, l.lineId, l.plannedUnits + 1)}
         decrementLabel={`One fewer ${l.unitName.toLowerCase()}`}
         incrementLabel={`One more ${l.unitName.toLowerCase()}`}
       >
@@ -641,16 +666,16 @@ function LineStepper({ p, line, locked, onOverride }: { p: ProductPlan; line: 'm
           value={l.plannedUnits}
           onChange={e => {
             const next = Number(e.target.value);
-            if (Number.isFinite(next)) onOverride(p.productId, line, Math.max(0, Math.round(next)));
+            if (Number.isFinite(next)) onOverride(p.productId, l.lineId, Math.max(0, Math.round(next)));
           }}
           min={0}
           step={1}
-          aria-label={`${p.product.name}, ${line === 'main' ? 'main line' : 'second make line'}`}
+          aria-label={`${p.product.name}, ${l.lineName}`}
           style={{ width: 36, border: 'none', background: 'transparent', fontSize: 13, fontWeight: 700, textAlign: 'center', color: changed ? 'var(--color-info)' : 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-primary)', outline: 'none', padding: 0, MozAppearance: 'textfield' }}
         />
       </QtyStepper>
-      <span style={fcStyle} title={`Edify's suggestion from the reference days: ${l.suggestedUnits} ${l.unitName.toLowerCase()}${l.suggestedUnits === 1 ? '' : 's'}, about ${line === 'main' ? portionsPerMainUnit(p.product) : portionsPerSecondUnit(p.product)} portions each`}>
-        fc {l.suggestedUnits}{line === 'main' ? ` ${l.unitName.toLowerCase()}s` : ''}
+      <span style={fcStyle} title={`Edify's suggestion from the reference days: ${l.suggestedUnits} ${l.unitName.toLowerCase()}${l.suggestedUnits === 1 ? '' : 's'}, about ${perUnit} portions each`}>
+        fc {l.suggestedUnits}{unitSuffix}
       </span>
     </div>
   );
@@ -658,37 +683,16 @@ function LineStepper({ p, line, locked, onOverride }: { p: ProductPlan; line: 'm
 
 // ─── Front of house ───────────────────────────────────────────────────────────
 
-function FohCard({ shopId, date, isToday }: { shopId: string; date: string; isToday: boolean }) {
-  const target = isToday ? addDays(date, 1) : date;
-  const reminders = fohReminders(shopId, target);
-  if (reminders.length === 0) return null;
-  return (
-    <div style={{ marginTop: 14, background: '#ffffff', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-card)', padding: '12px 14px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-        <Store size={13} style={{ color: 'var(--color-text-secondary)' }} />
-        <span style={{ fontSize: 12, fontWeight: 700 }}>Front of house, {isToday ? 'tomorrow' : shortDate(target)}</span>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-        {reminders.map(r => (
-          <div key={r.id} style={{ fontSize: 12 }}>
-            <div style={{ fontWeight: 600 }}>{r.label}</div>
-            <div style={{ fontSize: 11, color: 'var(--color-text-muted)', lineHeight: 1.4 }}>{r.detail}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ─── Focus panel (mirrors RecipeFocusPanel) ───────────────────────────────────
 
 function FjFocusPanel({ plan, day, onClose }: { plan: ProductPlan; day: DayPlanModel; onClose: () => void }) {
   if (typeof window === 'undefined') return null;
   const perDay = day.referenceDays.map(r => ({ ...r, demand: daySales(day.shopId, r.date).products[plan.productId] }));
   const batches = batchesToNumber(plan.batches);
-  const mainUnit = plan.main.unitName.toLowerCase();
+  const mainUnit = mainUnitName(plan.product);
   const perMain = portionsPerMainUnit(plan.product);
   const perSecond = portionsPerSecondUnit(plan.product);
+  const catering = cateringLineOf(plan);
   const cascade = plan.product.recipe.map(l => {
     const c = COMPONENTS[l.ref];
     const ing = INGREDIENTS[l.ref];
@@ -707,7 +711,7 @@ function FjFocusPanel({ plan, day, onClose }: { plan: ProductPlan; day: DayPlanM
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>Focus · {PRODUCT_GROUP_LABELS[plan.product.group]}</span>
             <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--color-text-primary)' }}>{plan.product.name}</h2>
             <div style={{ display: 'flex', gap: 6, marginTop: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-              <StatusPill tone="info" label={`${plan.product.unitsPerBatch} ${plan.main.unitName.toLowerCase()}${plan.product.unitsPerBatch === 1 ? '' : 's'} per batch`} size="xs" />
+              <StatusPill tone="info" label={`${plan.product.unitsPerBatch} ${mainUnit}${plan.product.unitsPerBatch === 1 ? '' : 's'} per batch`} size="xs" />
               <StatusPill tone="neutral" label={plan.product.halfBatch ? 'half batches' : 'whole batches'} size="xs" />
               <StatusPill tone="neutral" label={`${Math.round(plan.product.holdMinutes / 60)}h hold`} size="xs" />
             </div>
@@ -734,23 +738,24 @@ function FjFocusPanel({ plan, day, onClose }: { plan: ProductPlan; day: DayPlanM
                 value={`${plan.flexPct > 0 ? '+' : '−'}${portionsOf(plan.product, Math.abs(plan.referenceGrams * (plan.flexPct / 100)))} portions`}
               />
             )}
-            {plan.cateringGrams > 0 && <Ledger label="Catering, second make line" value={`${portionsOf(plan.product, plan.cateringGrams)} portions`} signed />}
+            {plan.cateringGrams > 0 && <Ledger label={`Catering, ${catering.lineName}`} value={`${portionsOf(plan.product, plan.cateringGrams)} portions`} signed />}
             {day.activeOrders
               .filter(o => orderGramsFor(o, plan.productId) > 0)
               .map(o => (
                 <Pair
                   key={o.id}
                   label={`　${o.customer}, ${o.time}`}
-                  value={o.lines.filter(l => l.productId === plan.productId).map(lineLabel).join(' + ')}
+                  value={orderLines(o).filter(l => l.productId === plan.productId).map(lineLabel).join(' + ')}
                   muted
                 />
               ))}
             {plan.carriedGrams > 0 && <Ledger label="Carried from last night's count" value={`−${portionsOf(plan.product, plan.carriedGrams)} portions`} />}
             <Divider />
-            <Ledger label={`Main line · ${mainUnit}s, ${perMain} portions each`} value={`${plan.main.plannedUnits}${plan.main.plannedUnits !== plan.main.suggestedUnits ? ` (fc ${plan.main.suggestedUnits})` : ''}`} edify />
-            <Ledger label={`Second make line · ${plan.second.unitName.toLowerCase()}s, ${perSecond} portions each`} value={`${plan.second.plannedUnits}${plan.second.plannedUnits !== plan.second.suggestedUnits ? ` (fc ${plan.second.suggestedUnits})` : ''}`} edify />
+            {plan.lines.map(l => (
+              <Ledger key={l.lineId} label={`${l.lineName} · ${l.unitName.toLowerCase()}s, ${l.halfBatches ? perSecond : perMain} portions each`} value={`${l.plannedUnits}${l.plannedUnits !== l.suggestedUnits ? ` (fc ${l.suggestedUnits})` : ''}`} edify />
+            ))}
             <Divider />
-            <Ledger label={`Both lines, in ${mainUnit}s`} value={(plan.main.plannedUnits + plan.second.plannedUnits * plan.product.secondLineFraction).toFixed(1)} />
+            <Ledger label={`${plan.lines.length === 1 ? 'The line' : 'All lines'}, in ${mainUnit}s`} value={plan.lines.reduce((n, l) => n + l.plannedUnits * (l.halfBatches ? plan.product.secondLineFraction : 1), 0).toFixed(1)} />
             <Ledger label={`${mainUnit[0].toUpperCase()}${mainUnit.slice(1)}s per batch`} value={String(plan.product.unitsPerBatch)} />
             <Ledger label="Rounding" value={plan.product.batch.halfG ? 'half batches' : 'whole batches'} />
             <Divider />
@@ -786,7 +791,8 @@ function CateringPanel({ plan, locked, onToggle, onClose }: { plan: DayPlanModel
   if (typeof window === 'undefined') return null;
   const cancelled = new Set(plan.record.cancelledOrders);
   const active = plan.orders.filter(o => !cancelled.has(o.id));
-  const smallContainers = plan.plans.reduce((n, p) => n + Math.ceil(p.cateringGrams / p.second.gramsPerUnit), 0);
+  const smallContainers = cateringUnits(plan);
+  const cateringLineName = plan.plans[0] ? cateringLineOf(plan.plans[0]).lineName : 'the second make line';
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', justifyContent: 'flex-end', background: 'rgba(15, 23, 32, 0.18)' }} onClick={onClose}>
       <aside
@@ -802,7 +808,7 @@ function CateringPanel({ plan, locked, onToggle, onClose }: { plan: DayPlanModel
               {active.length} {active.length === 1 ? 'order' : 'orders'}
             </h2>
             <div style={{ display: 'flex', gap: 6, marginTop: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-              <StatusPill tone="neutral" label={`${smallContainers} small containers on the second make line`} size="xs" />
+              <StatusPill tone="neutral" label={`${smallContainers} small containers on ${cateringLineName}`} size="xs" />
               {cancelled.size > 0 && <StatusPill tone="warning" label={`${cancelled.size} cancelled`} size="xs" />}
             </div>
           </div>
@@ -825,10 +831,16 @@ function CateringPanel({ plan, locked, onToggle, onClose }: { plan: DayPlanModel
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 13, fontWeight: 700, textDecoration: isCancelled ? 'line-through' : 'none' }}>{o.customer}</span>
                         <StatusPill tone={isCancelled ? 'neutral' : 'info'} size="xs" label={isCancelled ? 'Cancelled' : o.time} />
+                        <StatusPill tone="neutral" size="xs" label={CATERING_CHANNEL_LABELS[o.channel]} />
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
                         {o.reference} · {orderBoxesLabel(o)}{o.note ? ` · ${o.note}` : ''}
                       </div>
+                      {(o.feasts?.length ?? 0) > 0 && (
+                        <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                          {o.feasts!.map(feastLabel).join(' · ')}
+                        </div>
+                      )}
                     </div>
                     {!locked && (
                       <button type="button" onClick={() => onToggle(o.id)} style={isCancelled ? secondaryButtonSmall : cancelPill} title={isCancelled ? `Restore ${o.customer}` : `Cancel ${o.customer}`}>
@@ -837,11 +849,13 @@ function CateringPanel({ plan, locked, onToggle, onClose }: { plan: DayPlanModel
                     )}
                   </div>
                   <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column' }}>
-                    {o.lines.map(l => {
-                      const perGn = plan.plans.find(p => p.productId === l.productId)?.second.gramsPerUnit;
+                    {orderLines(o).map(l => {
+                      const forProduct = plan.plans.find(p => p.productId === l.productId);
+                      const perGn = forProduct ? cateringLineOf(forProduct).gramsPerUnit : undefined;
                       const small = perGn ? Math.ceil(lineGrams(l) / perGn) : 0;
-                      return <Pair key={l.productId} label={PRODUCT_NAME(l.productId)} value={`${lineLabel(l)}${small > 0 ? ` · ${small} small` : ''}`} muted={isCancelled} />;
+                      return <Pair key={`${l.productId}|${l.format}`} label={PRODUCT_NAME(l.productId)} value={`${lineLabel(l)}${small > 0 ? ` · ${small} small` : ''}`} muted={isCancelled} />;
                     })}
+                    {(o.extras?.length ?? 0) > 0 && <Pair label="Front of house packs" value={o.extras!.join(', ')} muted />}
                   </div>
                 </div>
               );

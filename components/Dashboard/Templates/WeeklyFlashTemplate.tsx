@@ -25,13 +25,7 @@ import {
   YAxis,
 } from 'recharts';
 import { Lock } from 'lucide-react';
-import {
-  PRICE_MOVERS,
-  PRICE_MOVERS_DEPENDENCY,
-  WEEKLY_COMPLIANCE,
-  WEEKLY_SITES,
-  WEEK_LABEL,
-} from './templateData';
+import { ESPRESSO_WEEKLY, PRICE_MOVERS_DEPENDENCY, type WeeklyData } from './templateData';
 import TileActions from '@/components/ScheduledReports/TileActions';
 import { TemplateIntro } from './DailyTemplate';
 import {
@@ -54,9 +48,6 @@ import {
   tipStyle,
 } from './templateParts';
 
-const WASTE_BY_SITE = [...WEEKLY_SITES].sort((a, b) => a.wastePctOfSales - b.wastePctOfSales);
-const SPEND_BY_SITE = [...WEEKLY_SITES].sort((a, b) => a.spendPctOfSales - b.spendPctOfSales);
-
 const WEEKLY_INSIGHTS = [
   'Site league · sales and GP',
   'Waste as % of sales · by site',
@@ -66,39 +57,63 @@ const WEEKLY_INSIGHTS = [
   'Compliance strip',
 ];
 
-function weeklyActions(insightTitle: string) {
+function weeklyActions(insightTitle: string, scopeLabel: string) {
   return (
     <TileActions
       insightTitle={insightTitle}
-      siteLabel="All sites (estate view)"
+      siteLabel={scopeLabel}
       siblingInsights={WEEKLY_INSIGHTS}
       dataWindowLabel="Last complete week as of send date"
     />
   );
 }
 
+/** Horizontal bar charts need a row of space per site; six sites fit in 230px, nineteen do not. */
+function barChartHeight(rows: number): number {
+  return Math.max(230, rows * 22 + 40);
+}
+
+/** Room for the longest site name on a horizontal bar chart's category axis. */
+function labelWidth(names: string[]): number {
+  const longest = names.reduce((n, s) => Math.max(n, s.length), 0);
+  return Math.min(150, Math.max(82, longest * 6.4 + 12));
+}
+
 export default function WeeklyFlashTemplate({
   invoiceMatchingLive = false,
+  data = ESPRESSO_WEEKLY,
 }: {
   /** Line-level invoice prices captured — unlocks the price-movers tile. */
   invoiceMatchingLive?: boolean;
+  data?: WeeklyData;
 }) {
+  const { sites, compliance, priceMovers, copy, scopeLabel, siteNoun } = data;
+  const wasteBySite = [...sites].sort((a, b) => a.wastePctOfSales - b.wastePctOfSales);
+  const spendBySite = [...sites].sort((a, b) => a.spendPctOfSales - b.spendPctOfSales);
+  const barHeight = barChartHeight(sites.length);
+  const axisWidth = labelWidth(sites.map((s) => s.site));
+  const wasteMax = Math.max(3.2, Math.ceil(Math.max(...sites.map((s) => s.wastePctOfSales)) * 2) / 2 + 0.2);
+  const spendMax = Math.max(36, Math.ceil(Math.max(...sites.map((s) => s.spendPctOfSales)) / 2) * 2 + 2);
+  const scopePlural = siteNoun.toLowerCase() + 's';
+  const manySites = sites.length > 8;
+  const driftBySite = [...sites].sort((a, b) => b.spendVsTrailing4wkPct - a.spendVsTrailing4wkPct);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1400, margin: '0 auto', width: '100%' }}>
-      <TemplateIntro title={`All sites · last week (${WEEK_LABEL})`} />
+      <TemplateIntro title={`All ${scopePlural} · last week (${data.weekLabel})`} />
 
       <Grid>
         {/* 1+2 · Sales & GP league, with gated actual-vs-theoretical variance */}
         <div style={FULL}>
           <TileCard
             title="Site league · sales and GP"
-            actions={weeklyActions('Site league · sales and GP')}
-            footer="Shoreditch didn't count this week, so no actual-GP claim is made for it — the flag stays until the count is done."
+            actions={weeklyActions('Site league · sales and GP', scopeLabel)}
+            footer={copy.leagueFooter}
           >
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <th style={{ ...TH, textAlign: 'left' }}>Site</th>
+                  <th style={{ ...TH, textAlign: 'left' }}>{siteNoun}</th>
                   <th style={TH}>Sales</th>
                   <th style={TH}>vs LW</th>
                   <th style={TH}>vs forecast</th>
@@ -108,13 +123,13 @@ export default function WeeklyFlashTemplate({
                 </tr>
               </thead>
               <tbody>
-                {WEEKLY_SITES.map((s, i) => (
+                {sites.map((s, i) => (
                   <tr key={s.site}>
                     <td style={{ ...TD, textAlign: 'left', fontWeight: 600 }}>
                       <span style={{ color: 'var(--color-text-muted)', fontWeight: 700, marginRight: 8 }}>{i + 1}</span>
                       {s.site}
                     </td>
-                    <td style={{ ...TD, fontWeight: 600 }}>£{s.sales.toLocaleString('en-GB')}</td>
+                    <td style={{ ...TD, fontWeight: 600 }}>£{Math.round(s.sales).toLocaleString('en-GB')}</td>
                     <td style={TD}><DeltaText pct={s.vsLwPct} /></td>
                     <td style={TD}><DeltaText pct={s.vsForecastPct} /></td>
                     <td style={TD}>{s.theoGpPct.toFixed(1)}%</td>
@@ -141,17 +156,17 @@ export default function WeeklyFlashTemplate({
         <div style={HALF}>
           <TileCard
             title="Waste as % of sales · by site"
-            actions={weeklyActions('Waste as % of sales · by site')}>
-            <div style={{ padding: '0 12px 12px', width: '100%', height: 230 }}>
+            actions={weeklyActions('Waste as % of sales · by site', scopeLabel)}>
+            <div style={{ padding: '0 12px 12px', width: '100%', height: barHeight }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={WASTE_BY_SITE} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 0 }}>
+                <BarChart data={wasteBySite} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 0 }}>
                   <CartesianGrid stroke="rgba(0, 28, 53,0.08)" horizontal={false} />
-                  <XAxis type="number" domain={[0, 3.2]} tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
-                  <YAxis type="category" dataKey="site" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} width={82} />
+                  <XAxis type="number" domain={[0, wasteMax]} tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
+                  <YAxis type="category" dataKey="site" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} width={axisWidth} interval={0} />
                   <Tooltip contentStyle={tipStyle} formatter={(v) => `${Number(v ?? 0).toFixed(1)}% of sales`} />
                   <ReferenceLine x={1.5} stroke={NAVY} strokeDasharray="4 3" />
                   <Bar dataKey="wastePctOfSales" name="Waste % of sales" radius={[0, 4, 4, 0]} maxBarSize={20}>
-                    {WASTE_BY_SITE.map((s) => (
+                    {wasteBySite.map((s) => (
                       <Cell key={s.site} fill={s.wastePctOfSales <= 1.5 ? OK : WARN} />
                     ))}
                   </Bar>
@@ -165,15 +180,15 @@ export default function WeeklyFlashTemplate({
         <div style={HALF}>
           <TileCard
             title="Purchasing spend as % of sales · by site"
-            actions={weeklyActions('Purchasing spend as % of sales · by site')}
+            actions={weeklyActions('Purchasing spend as % of sales · by site', scopeLabel)}
             footer="Gains a &ldquo;vs plan&rdquo; comparator when the budget CSV importer ships; the tile itself doesn't change."
           >
-            <div style={{ padding: '0 12px 12px', width: '100%', height: 230 }}>
+            <div style={{ padding: '0 12px 12px', width: '100%', height: barHeight }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={SPEND_BY_SITE} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 0 }}>
+                <BarChart data={spendBySite} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 0 }}>
                   <CartesianGrid stroke="rgba(0, 28, 53,0.08)" horizontal={false} />
-                  <XAxis type="number" domain={[0, 36]} tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
-                  <YAxis type="category" dataKey="site" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} width={82} />
+                  <XAxis type="number" domain={[0, spendMax]} tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
+                  <YAxis type="category" dataKey="site" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} width={axisWidth} interval={0} />
                   <Tooltip contentStyle={tipStyle} formatter={(v) => `${Number(v ?? 0).toFixed(1)}% of sales`} />
                   <Bar dataKey="spendPctOfSales" name="Spend % of sales" fill={MID} radius={[0, 4, 4, 0]} maxBarSize={20} />
                 </BarChart>
@@ -186,23 +201,39 @@ export default function WeeklyFlashTemplate({
         <div style={HALF}>
           <TileCard
             title="Spend vs trailing 4-week average"
-            actions={weeklyActions('Spend vs trailing 4-week average')}
-            footer="Canary and Shoreditch are both >5% above their own baseline. That's the drift signal, before any budget exists."
+            actions={weeklyActions('Spend vs trailing 4-week average', scopeLabel)}
+            footer={copy.driftFooter}
           >
-            <div style={{ padding: '0 12px 12px', width: '100%', height: 230 }}>
+            <div style={{ padding: '0 12px 12px', width: '100%', height: manySites ? barHeight : 230 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={WEEKLY_SITES} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke="rgba(0, 28, 53,0.08)" vertical={false} />
-                  <XAxis dataKey="site" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={{ stroke: 'rgba(0, 28, 53,0.15)' }} />
-                  <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v > 0 ? '+' : ''}${v}%`} width={44} />
-                  <Tooltip contentStyle={tipStyle} formatter={(v) => `${Number(v ?? 0) >= 0 ? '+' : ''}${Number(v ?? 0).toFixed(1)}% vs own 4-wk avg`} />
-                  <ReferenceLine y={0} stroke={NAVY} />
-                  <Bar dataKey="spendVsTrailing4wkPct" name="vs trailing 4-wk avg" radius={[4, 4, 0, 0]} maxBarSize={40}>
-                    {WEEKLY_SITES.map((s) => (
-                      <Cell key={s.site} fill={s.spendVsTrailing4wkPct > 4 ? WARN : OK} />
-                    ))}
-                  </Bar>
-                </BarChart>
+                {manySites ? (
+                  // Nineteen names do not fit along the bottom of a column chart, so wide estates read as rows.
+                  <BarChart data={driftBySite} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 0 }}>
+                    <CartesianGrid stroke="rgba(0, 28, 53,0.08)" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v > 0 ? '+' : ''}${v}%`} />
+                    <YAxis type="category" dataKey="site" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} width={axisWidth} interval={0} />
+                    <Tooltip contentStyle={tipStyle} formatter={(v) => `${Number(v ?? 0) >= 0 ? '+' : ''}${Number(v ?? 0).toFixed(1)}% vs own 4-wk avg`} />
+                    <ReferenceLine x={0} stroke={NAVY} />
+                    <Bar dataKey="spendVsTrailing4wkPct" name="vs trailing 4-wk avg" radius={[0, 4, 4, 0]} maxBarSize={20}>
+                      {driftBySite.map((s) => (
+                        <Cell key={s.site} fill={s.spendVsTrailing4wkPct > 4 ? WARN : OK} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                ) : (
+                  <BarChart data={sites} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke="rgba(0, 28, 53,0.08)" vertical={false} />
+                    <XAxis dataKey="site" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={{ stroke: 'rgba(0, 28, 53,0.15)' }} />
+                    <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v > 0 ? '+' : ''}${v}%`} width={44} />
+                    <Tooltip contentStyle={tipStyle} formatter={(v) => `${Number(v ?? 0) >= 0 ? '+' : ''}${Number(v ?? 0).toFixed(1)}% vs own 4-wk avg`} />
+                    <ReferenceLine y={0} stroke={NAVY} />
+                    <Bar dataKey="spendVsTrailing4wkPct" name="vs trailing 4-wk avg" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                      {sites.map((s) => (
+                        <Cell key={s.site} fill={s.spendVsTrailing4wkPct > 4 ? WARN : OK} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                )}
               </ResponsiveContainer>
             </div>
           </TileCard>
@@ -214,8 +245,8 @@ export default function WeeklyFlashTemplate({
             <TileCard
               title="Top 5 price movers"
               badge={<FigureBadge kind="measured" />}
-              actions={weeklyActions('Top 5 price movers')}
-              footer="Net £130/week of price creep across the five. The oat milk rise alone is ~£1,120 annualised across the estate — worth a supplier conversation."
+              actions={weeklyActions('Top 5 price movers', scopeLabel)}
+              footer={copy.priceMoversFooter}
             >
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
@@ -228,7 +259,7 @@ export default function WeeklyFlashTemplate({
                   </tr>
                 </thead>
                 <tbody>
-                  {PRICE_MOVERS.map((m) => (
+                  {priceMovers.map((m) => (
                     <tr key={m.item}>
                       <td style={{ ...TD, textAlign: 'left', fontWeight: 600 }}>{m.item}</td>
                       <td style={{ ...TD, textAlign: 'left', color: 'var(--color-text-secondary)' }}>{m.supplier}</td>
@@ -281,31 +312,31 @@ export default function WeeklyFlashTemplate({
         <div style={FULL}>
           <TileCard
             title="Compliance strip"
-            actions={weeklyActions('Compliance strip')}>
+            actions={weeklyActions('Compliance strip', scopeLabel)}>
             <div style={{ padding: '0 16px 14px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
               <ComplianceStat
                 label="Invoices matched"
-                value={`${WEEKLY_COMPLIANCE.invoicesMatchedPct}%`}
-                good={WEEKLY_COMPLIANCE.invoicesMatchedPct >= 90}
+                value={`${compliance.invoicesMatchedPct}%`}
+                good={compliance.invoicesMatchedPct >= 90}
                 detail="of last week's invoices matched to a PO or GRN"
               />
               <ComplianceStat
                 label="Off-catalogue POs"
-                value={`${WEEKLY_COMPLIANCE.offCataloguePos}`}
-                good={WEEKLY_COMPLIANCE.offCataloguePos <= 3}
+                value={`${compliance.offCataloguePos}`}
+                good={compliance.offCataloguePos <= 3}
                 detail="orders placed outside the agreed catalogue"
               />
               <ComplianceStat
                 label="Stocktakes completed"
-                value={`${WEEKLY_COMPLIANCE.stocktakesDone} of ${WEEKLY_COMPLIANCE.stocktakesDue}`}
-                good={WEEKLY_COMPLIANCE.stocktakesDone === WEEKLY_COMPLIANCE.stocktakesDue}
-                detail="Shoreditch outstanding — its actual GP is blank above"
+                value={`${compliance.stocktakesDone} of ${compliance.stocktakesDue}`}
+                good={compliance.stocktakesDone === compliance.stocktakesDue}
+                detail={copy.stocktakeDetail}
               />
               <ComplianceStat
                 label="Waste-logging days"
-                value={`${WEEKLY_COMPLIANCE.wasteLoggingDays} of ${WEEKLY_COMPLIANCE.wasteLoggingDaysDue}`}
-                good={WEEKLY_COMPLIANCE.wasteLoggingDays >= WEEKLY_COMPLIANCE.wasteLoggingDaysDue - 2}
-                detail="site-days with at least one waste log"
+                value={`${compliance.wasteLoggingDays} of ${compliance.wasteLoggingDaysDue}`}
+                good={compliance.wasteLoggingDays >= compliance.wasteLoggingDaysDue - 2}
+                detail={`${siteNoun.toLowerCase()}-days with at least one waste log`}
               />
             </div>
           </TileCard>

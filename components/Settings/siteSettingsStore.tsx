@@ -42,8 +42,12 @@ import {
   type Site,
   type SiteId,
 } from '@/components/Production/fixtures';
+import { FJ_ALL_SHOPS_ID, isFarmerJShopId } from '@/components/Production/farmerj/shops';
+import { FJ_DEFAULT_WINDOWS, FJ_SEED_WINDOWS } from '@/components/Production/farmerj/fjFixtures';
 
 const STORAGE_KEY = 'edify.siteSettings.v1';
+const SEED_KEY = 'edify.siteSettings.seeds';
+const SEED_VERSION = 'fj-windows-v1';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -56,6 +60,15 @@ export type WindowsForDay = {
   p1Forecast?: TimeRange;
   p2Forecast?: TimeRange;
   vpForecast?: TimeRange;
+  /**
+   * Which production groups are made on this day, by group id (Farmer J's
+   * shelf-life groups: `daily`, `green3`, `blue4`, `coconut2`, `weekly`).
+   * Merged key by key down the cascade, so a shop can move one group to
+   * Tuesday without restating the rest. `false` switches a company day off.
+   */
+  makeOn?: Record<string, boolean>;
+  /** Deep-clean day: nothing made ahead, whatever `makeOn` says. */
+  deepClean?: boolean;
 };
 
 export type TeamUser = { id: string; name: string; label?: string };
@@ -85,8 +98,11 @@ export type CutoffsOverlay = {
 };
 
 export type BenchOverlay = Partial<
-  Pick<Bench, 'name' | 'capabilities' | 'online' | 'primaryMode' | 'batchRules' | 'runs'>
+  Pick<Bench, 'name' | 'capabilities' | 'online' | 'primaryMode' | 'batchRules' | 'runs' | 'halfBatches' | 'channels' | 'equipment' | 'kit' | 'sections'>
 >;
+
+/** Most benches a site can run. Farmer J asked for five lines for now. */
+export const MAX_BENCHES = 5;
 
 export type TeamOverlay = {
   users?: TeamUser[];
@@ -99,7 +115,10 @@ export type SiteSettingsOverlay = {
   core?: CoreOverlay;
   cutoffs?: CutoffsOverlay;
   benches?: Record<BenchId, BenchOverlay>;
+  /** Which benches the site runs, in order. Leaving a fixture bench out removes it. */
   benchOrder?: BenchId[];
+  /** Benches the user added beyond the fixtures. Listed in `benchOrder` like any other. */
+  addedBenches?: Record<BenchId, Bench>;
   team?: TeamOverlay;
   windows?: WindowsOverlay;
 };
@@ -213,9 +232,56 @@ function defaultTeamForSite(site: Site): { users: TeamUser[]; duties: SiteDuty[]
 
 // ─── Resolver — merges overlay onto fixture cascade ──────────────────────────
 
+/**
+ * The site whose overlay acts as the company default for `siteId`, if any.
+ * Farmer J shops inherit their lines from the `fj-all-shops` overlay, which
+ * is what Jana edits on Setup > Lines. Pret and BK have no such layer.
+ */
+export function companySiteFor(siteId: SiteId): SiteId | null {
+  return siteId !== FJ_ALL_SHOPS_ID && isFarmerJShopId(siteId) ? FJ_ALL_SHOPS_ID : null;
+}
+
+/** Apply one overlay's bench edits (order, additions, per-bench patches) to a base list. */
+function applyBenchOverlay(base: Bench[], overlay: SiteSettingsOverlay | undefined): EffectiveBench[] {
+  const benchOrder = overlay?.benchOrder ?? base.map(b => b.id);
+  const benchById = new Map<BenchId, Bench>(base.map(b => [b.id, b]));
+  for (const [id, added] of Object.entries(overlay?.addedBenches ?? {})) benchById.set(id, added);
+  return benchOrder
+    .map(id => {
+      const b = benchById.get(id);
+      if (!b) return null;
+      const ov = overlay?.benches?.[id];
+      const merged: EffectiveBench = {
+        ...b,
+        ...(ov ?? {}),
+        hasOverride: (!!ov && Object.keys(ov).length > 0) || Boolean(overlay?.addedBenches?.[id]),
+      };
+      return merged;
+    })
+    .filter(Boolean) as EffectiveBench[];
+}
+
+/** Effective benches for a site: fixture rows, then the company overlay, then the site's own. */
+function resolveBenches(
+  siteId: SiteId,
+  overlay: SiteSettingsOverlay | undefined,
+  companyOverlay: SiteSettingsOverlay | undefined,
+): EffectiveBench[] {
+  const companyId = companySiteFor(siteId);
+  const base: Bench[] = companyId
+    ? applyBenchOverlay(benchesAt(companyId), companyOverlay).map(b => {
+        const { hasOverride: _drop, ...bench } = b;
+        void _drop;
+        return { ...bench, siteId };
+      })
+    : benchesAt(siteId);
+  return applyBenchOverlay(base, overlay);
+}
+
 function resolveEffective(
   siteId: SiteId,
   overlay: SiteSettingsOverlay | undefined,
+  companyOverlay?: SiteSettingsOverlay,
 ): EffectiveSiteSettings {
   const site = getSite(siteId);
   if (!site) {
@@ -263,26 +329,7 @@ function resolveEffective(
     cascadeNotes: { cutoffTime: cutoffSource },
   };
 
-  const fixtureBenches = benchesAt(siteId);
-  const benchOrder =
-    overlay?.benchOrder ??
-    fixtureBenches.map(b => b.id);
-  const benchById = new Map<BenchId, Bench>(
-    fixtureBenches.map(b => [b.id, b]),
-  );
-  const benches: EffectiveBench[] = benchOrder
-    .map(id => {
-      const base = benchById.get(id);
-      if (!base) return null;
-      const ov = overlay?.benches?.[id];
-      const merged: EffectiveBench = {
-        ...base,
-        ...(ov ?? {}),
-        hasOverride: !!ov && Object.keys(ov).length > 0,
-      };
-      return merged;
-    })
-    .filter(Boolean) as EffectiveBench[];
+  const benches = resolveBenches(siteId, overlay, companyOverlay);
 
   const teamDefaults = defaultTeamForSite(site);
   const team = {
@@ -290,15 +337,35 @@ function resolveEffective(
     duties: overlay?.team?.duties ?? teamDefaults.duties,
   };
 
-  const windowsOverlay = overlay?.windows ?? {};
-  const windows = (Object.fromEntries(
-    (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as DayOfWeek[]).map(d => [
-      d,
-      windowsOverlay[d] ?? {},
-    ]),
-  ) as unknown) as Record<DayOfWeek, WindowsForDay>;
+  const windows = resolveWindows(siteId, overlay, companyOverlay);
 
   return { siteId, core, cutoffs, benches, team, windows };
+}
+
+/**
+ * Windows for a site: brand defaults, then the company overlay (Farmer J
+ * shops sit under `fj-all-shops`), then the site's own. Time ranges
+ * replace whole; `makeOn` merges group by group so a shop override of one
+ * group leaves the company's other groups in place.
+ */
+function resolveWindows(
+  siteId: SiteId,
+  overlay: SiteSettingsOverlay | undefined,
+  companyOverlay: SiteSettingsOverlay | undefined,
+): Record<DayOfWeek, WindowsForDay> {
+  const fj = siteId === FJ_ALL_SHOPS_ID || isFarmerJShopId(siteId);
+  const base: Partial<Record<DayOfWeek, WindowsForDay>> = fj ? FJ_DEFAULT_WINDOWS : {};
+  const company = companySiteFor(siteId) ? companyOverlay?.windows ?? {} : {};
+  const own = overlay?.windows ?? {};
+  const out = emptyWindows();
+  for (const d of Object.keys(out) as DayOfWeek[]) {
+    const layers = [base[d], company[d], own[d]].filter(Boolean) as WindowsForDay[];
+    const merged: WindowsForDay = Object.assign({}, ...layers);
+    const makeOn = Object.assign({}, ...layers.map(l => l.makeOn ?? {})) as Record<string, boolean>;
+    if (Object.keys(makeOn).length) merged.makeOn = makeOn; else delete merged.makeOn;
+    out[d] = merged;
+  }
+  return out;
 }
 
 const STUB_EFFECTIVE: EffectiveSiteSettings = {
@@ -352,23 +419,32 @@ export function countOverrides(overlay: SiteSettingsOverlay | undefined): {
   if (overlay.cutoffs) {
     r.cutoffs = Object.keys(overlay.cutoffs).length;
   }
-  if (overlay.benches) {
+  if (overlay.benches || overlay.benchOrder || overlay.addedBenches) {
     let n = 0;
-    for (const k of Object.keys(overlay.benches)) {
-      n += Object.keys(overlay.benches[k] ?? {}).length;
+    for (const k of Object.keys(overlay.benches ?? {})) {
+      n += Object.keys(overlay.benches?.[k] ?? {}).length;
     }
-    r.benches = n + (overlay.benchOrder ? 1 : 0);
+    r.benches = n + (overlay.benchOrder ? 1 : 0) + Object.keys(overlay.addedBenches ?? {}).length;
   }
   if (overlay.team) {
     if (overlay.team.users) r.team += 1;
     if (overlay.team.duties) r.team += 1;
   }
   if (overlay.windows) {
+    // Time slots count per day; a make-on group counts once however many
+    // days it is written for, since the shop overrode "the group", not days.
     let n = 0;
+    const groups = new Set<string>();
+    let deepClean = false;
     for (const d of Object.keys(overlay.windows) as DayOfWeek[]) {
-      n += Object.keys(overlay.windows[d] ?? {}).length;
+      const day = overlay.windows[d] ?? {};
+      for (const k of Object.keys(day)) {
+        if (k === 'makeOn') for (const g of Object.keys(day.makeOn ?? {})) groups.add(g);
+        else if (k === 'deepClean') deepClean = true;
+        else n += 1;
+      }
     }
-    r.windows = n;
+    r.windows = n + groups.size + (deepClean ? 1 : 0);
   }
   return {
     total: r.general + r.cutoffs + r.benches + r.team + r.windows,
@@ -393,6 +469,42 @@ type SiteSettingsValue = {
 
 const Ctx = createContext<SiteSettingsValue | null>(null);
 
+/**
+ * Bring stored overlays up to the current fixtures. Farmer J's kitchen
+ * benches (hot section, basement prep) arrived after its lines; a bench
+ * order saved before then would silently drop them, and with them the
+ * shop's ovens and rice cookers.
+ */
+function migrateOverlays(overlays: Record<SiteId, SiteSettingsOverlay>): Record<SiteId, SiteSettingsOverlay> {
+  const out: Record<SiteId, SiteSettingsOverlay> = {};
+  for (const [siteId, o] of Object.entries(overlays)) {
+    const fj = siteId === FJ_ALL_SHOPS_ID || isFarmerJShopId(siteId);
+    if (fj && o.benchOrder) {
+      const kitchenIds = benchesAt(FJ_ALL_SHOPS_ID).filter(b => !Array.isArray(b.channels)).map(b => b.id);
+      const missing = kitchenIds.filter(id => !o.benchOrder!.includes(id));
+      out[siteId] = missing.length ? { ...o, benchOrder: [...o.benchOrder, ...missing] } : o;
+    } else {
+      out[siteId] = o;
+    }
+  }
+  return out;
+}
+
+/**
+ * Shop overrides the demo ships with (Marylebone's Tuesday and Friday
+ * dressings). Written once as real overlays so they show as overrides and
+ * can be reset; a shop that already has windows of its own is left alone.
+ */
+function seedOverlays(overlays: Record<SiteId, SiteSettingsOverlay>): Record<SiteId, SiteSettingsOverlay> {
+  const out = { ...overlays };
+  for (const [shopId, days] of Object.entries(FJ_SEED_WINDOWS)) {
+    const existing = out[shopId] ?? {};
+    if (existing.windows) continue;
+    out[shopId] = { ...existing, windows: days as WindowsOverlay };
+  }
+  return out;
+}
+
 export function SiteSettingsStoreProvider({ children }: { children: React.ReactNode }) {
   const [overlays, setOverlays] = useState<Record<SiteId, SiteSettingsOverlay>>({});
 
@@ -400,11 +512,11 @@ export function SiteSettingsStoreProvider({ children }: { children: React.ReactN
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        setOverlays(parsed as Record<SiteId, SiteSettingsOverlay>);
-      }
+      const parsed = raw ? JSON.parse(raw) : {};
+      const stored = parsed && typeof parsed === 'object' ? migrateOverlays(parsed as Record<SiteId, SiteSettingsOverlay>) : {};
+      const seeded = window.localStorage.getItem(SEED_KEY) === SEED_VERSION;
+      setOverlays(seeded ? stored : seedOverlays(stored));
+      if (!seeded) window.localStorage.setItem(SEED_KEY, SEED_VERSION);
     } catch {
       // ignore — corrupt entry just means we start clean
     }
@@ -425,7 +537,10 @@ export function SiteSettingsStoreProvider({ children }: { children: React.ReactN
   );
 
   const effectiveFor = useCallback(
-    (siteId: SiteId) => resolveEffective(siteId, overlays[siteId]),
+    (siteId: SiteId) => {
+      const companyId = companySiteFor(siteId);
+      return resolveEffective(siteId, overlays[siteId], companyId ? overlays[companyId] : undefined);
+    },
     [overlays],
   );
 
@@ -442,6 +557,7 @@ export function SiteSettingsStoreProvider({ children }: { children: React.ReactN
         }
       }
       if (p.benchOrder) next.benchOrder = p.benchOrder;
+      if (p.addedBenches) next.addedBenches = { ...(current.addedBenches ?? {}), ...p.addedBenches };
       if (p.team) next.team = { ...(current.team ?? {}), ...p.team };
       if (p.windows) {
         next.windows = { ...(current.windows ?? {}) };

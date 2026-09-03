@@ -23,9 +23,10 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { IngredientsV2Section } from './IngredientsV2Section';
 import { VariantsSection } from './VariantsSection';
+import { MethodStepsEditor } from './MethodStepsEditor';
 import {
   SectionHeader, FieldLabel, Soft, PillMulti,
-  ALLERGENS, SITES, textareaStyle,
+  ALLERGENS, SITES,
 } from './RecipeFormParts';
 import type { RecipeIngredient, RecipeVariant } from './libraryFixtures';
 import { useModifierGroups } from '@/components/Modifiers/store';
@@ -194,17 +195,14 @@ export function RecipeCompositionSection({
         />
       </SubSection>
 
-      <SubSection title="Instructions & photo">
+      <SubSection
+        title="Method & photo"
+        help="Numbered steps the kitchen follows. On the production stepper each step shows one at a time and gets ticked off, so keep one action a step: weigh, load, cook, probe, container, label."
+      >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <FieldLabel>Instructions <Soft>(optional)</Soft></FieldLabel>
-            <textarea
-              value={instructions}
-              onChange={(e) => onInstructionsChange(e.target.value)}
-              placeholder="How the team should make this — prep, build, finish."
-              rows={3}
-              style={textareaStyle}
-            />
+            <FieldLabel>Method <Soft>(optional)</Soft></FieldLabel>
+            <MethodStepsEditor value={instructions} onChange={onInstructionsChange} />
           </div>
           <div>
             <FieldLabel>Photo <Soft>(optional)</Soft></FieldLabel>
