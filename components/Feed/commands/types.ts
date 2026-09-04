@@ -19,6 +19,7 @@ export type CommandId =
   | 'waste'
   /** Farmer J: flex a whole day's plan up or down by a percentage. */
   | 'fj-flex'
+  | 'fj-setup'
   | 'stock'
   | 'recipe-edit'
   | 'production'

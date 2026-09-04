@@ -59,7 +59,10 @@ import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import { computeDayPlan, useFjPlanStoreOptional } from '@/components/Production/farmerj/FjPlanStore';
 import { FJ_DEMO_TODAY, longDay, shortDate } from '@/components/Production/farmerj/calendar';
 import { batchesToNumber } from '@/components/Production/farmerj/cascade';
-import { FJ_ALL_SHOPS_ID } from '@/components/Production/farmerj/shops';
+import { FJ_ALL_SHOPS_ID, getShop } from '@/components/Production/farmerj/shops';
+import { publishFjSetup, resolveFjSetup, type FjSetupArgs } from '@/components/Production/farmerj/setupCommand';
+import { describeImpact, snapshotImpact } from '@/components/Production/farmerj/publishImpact';
+import { useSiteSettingsStore } from '@/components/Settings/siteSettingsStore';
 import type {
   RecipeEditKind,
   ProductionField,
@@ -1492,6 +1495,39 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     [fjStore, fjSiteId, pushReceipt],
   );
 
+  // Farmer J Setup change from plain language. Same publish as the Setup
+  // screen: approved days flagged, snapshot for revert, Publish log entry
+  // carrying what Jana typed. The downstream line is filled in once the
+  // engines have re-run on the new rules (a tick after the stores update).
+  const siteStore = useSiteSettingsStore();
+  const confirmFjSetup = useCallback(
+    (msgId: string, final: FjSetupArgs) => {
+      if (!fjStore) return;
+      const resolved = resolveFjSetup(final, { recipes: fjStore.recipes, effectiveFor: siteStore.effectiveFor, overlayFor: siteStore.overlayFor });
+      if (resolved.missing || !resolved.changes.length) return;
+      const { id, revert, impactBefore } = publishFjSetup(resolved, final.text, {
+        get: fjStore.get, update: fjStore.update, updateSettings: fjStore.updateSettings, recipes: fjStore.recipes,
+        replace: siteStore.replace, updateRecipe,
+      }, fjStore.settings);
+      window.setTimeout(() => {
+        const after = snapshotImpact(resolved.shops, FJ_DEMO_TODAY, fjStore.get);
+        const downstream = describeImpact(impactBefore, after);
+        fjStore.updateSettings(s => ({ ...s, log: s.log.map(e => (e.id === id ? { ...e, downstream } : e)) }));
+      }, 120);
+      const shopsText = resolved.shops.length === 1 ? (getShop(resolved.shops[0])?.name ?? '1 shop') : `${resolved.shops.length} shops`;
+      const receipt: CommandReceipt = {
+        headline: `Published · ${resolved.title}`,
+        detail: `${shopsText}${resolved.kept.length ? `, ${resolved.kept.length} keep their own` : ''} · ${resolved.changes.length} change${resolved.changes.length === 1 ? '' : 's'}. In the Setup publish log.`,
+        href: '/production/setup?tab=log',
+        hrefLabel: 'Open publish log',
+        undo: revert,
+      };
+      writeCmdState(msgId, 'confirmed');
+      pushReceipt(receipt, msgId);
+    },
+    [fjStore, siteStore, pushReceipt],
+  );
+
   const confirmWaste = useCallback(
     (
       msgId: string,
@@ -2760,6 +2796,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     runCommand,
     cancelCard,
     confirmFjFlex,
+    confirmFjSetup,
     confirmWaste,
     confirmStock,
     confirmRecipeEdit,

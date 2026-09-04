@@ -30,6 +30,8 @@ export type TaskKind =
   | 'waste'
   /** Farmer J: whole-day plan flex from the chat. */
   | 'fj-flex'
+  /** Farmer J: a Setup change asked for in plain language. */
+  | 'fj-setup'
   | 'stock'
   | 'recipe-edit'
   | 'production'

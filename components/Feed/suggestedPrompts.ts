@@ -9,7 +9,7 @@
  * brand by adding a case to `CHIPS_BY_CUSTOMER`.
  */
 
-import { ChefHat, Truck, ClipboardList, ShieldCheck, Building2, type LucideIcon } from 'lucide-react';
+import { ChefHat, Truck, ClipboardList, ShieldCheck, Building2, SlidersHorizontal, Percent, type LucideIcon } from 'lucide-react';
 import { demoCustomer } from '@/lib/demoConfig';
 
 export type PromptChip = {
@@ -82,6 +82,20 @@ const DEFAULT_CHIPS: PromptChip[] = [
     action: 'integrity',
     count: 6,
   },
+];
+
+/**
+ * Farmer J (chosen at runtime by the Brand pill, not the build). Each chip
+ * is a sentence Jana would say, sent to the chat as typed, so the list
+ * doubles as a demonstration of what plain language the Setup command
+ * understands. The card that opens is prefilled from the sentence.
+ */
+export const FARMERJ_CHIPS: PromptChip[] = [
+  { label: 'Move salads onto basement prep', icon: SlidersHorizontal, text: 'Move salads onto basement prep' },
+  { label: 'Sweet potato can be half batches', icon: SlidersHorizontal, text: 'Sweet potato can be made in half batches' },
+  { label: 'Hot section has 3 ovens', icon: SlidersHorizontal, text: 'The hot section has 3 ovens' },
+  { label: 'Make 3-day items Monday and Thursday', icon: SlidersHorizontal, text: 'Make the 3-day items on Monday and Thursday' },
+  { label: 'Drop Saturday 20%', icon: Percent, text: 'Drop Saturday 20%' },
 ];
 
 // Per-brand chip overrides. Currently empty on purpose — every build

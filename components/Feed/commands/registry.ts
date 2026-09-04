@@ -12,16 +12,34 @@
  * setCmdStates). The registry is purely descriptive.
  */
 
-import { Trash2, Boxes, ChefHat, Settings2, Utensils, Truck, ArrowLeftRight, Building2, Percent } from 'lucide-react';
+import { Trash2, Boxes, ChefHat, Settings2, Utensils, Truck, ArrowLeftRight, Building2, Percent, SlidersHorizontal } from 'lucide-react';
 import type { ChatCommand } from './types';
 import { parseWaste, parseStock, parseRecipeEdit, parseProduction, parseMenu, parseSupplier, parseProductSwap, parseSiteSetup } from './parsers';
 import { parseFjFlex } from './farmerjCommands';
+import { parseFjSetupWithContext } from './farmerjSetup';
 
 /** Commands that only make sense for one brand. The slash menu and the
  *  `+` popover hide these unless the active brand matches. */
-export const BRAND_COMMANDS: Record<string, 'farmerj'> = { 'fj-flex': 'farmerj' };
+export const BRAND_COMMANDS: Record<string, 'farmerj'> = { 'fj-flex': 'farmerj', 'fj-setup': 'farmerj' };
 
 export const COMMAND_REGISTRY: ChatCommand[] = [
+  {
+    id: 'fj-setup',
+    slash: '/setup',
+    chipLabel: 'Change setup',
+    chipIcon: SlidersHorizontal,
+    description: 'Change a Setup rule in plain language: a recipe, a bench, a line or make-on days. Prefilled, then published to the shops.',
+    examples: [
+      'move salads onto basement prep',
+      'sweet potato half batches',
+      'hot section has 3 ovens',
+      'make 3-day items on Monday and Thursday',
+    ],
+    parse: parseFjSetupWithContext,
+    cardMsgType: 'cmd-fj-setup-card',
+    requiredArgs: [],
+    promptFor: () => 'Which setting, and to what?',
+  },
   {
     id: 'fj-flex',
     slash: '/flex',

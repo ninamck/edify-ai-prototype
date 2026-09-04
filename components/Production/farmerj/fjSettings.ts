@@ -58,6 +58,8 @@ export type PublishEntry = {
   /** Approved shop-days flagged for the GM to re-approve. */
   flagged: { shopId: string; date: string }[];
   before?: PublishSnapshot;
+  /** Set when the change was asked for in the Command Centre: what Jana typed. */
+  said?: string;
   revertedAtISO?: string;
   /** Set when this entry is itself a revert. */
   revertOf?: string;
@@ -117,6 +119,7 @@ function normaliseEntry(e: Partial<PublishEntry> & { shops?: number | string[]; 
     downstream: e.downstream ?? [],
     flagged: e.flagged ?? [],
     before: e.before,
+    said: e.said,
     revertedAtISO: e.revertedAtISO,
     revertOf: e.revertOf,
   };

@@ -26,6 +26,7 @@ import {
   ChevronRight,
   Trash2,
   Percent,
+  SlidersHorizontal,
   Boxes,
   ChefHat,
   Settings2,
@@ -66,6 +67,7 @@ import { formatTimestamp } from './format';
 const KIND_VISUALS: Record<TaskKind, { icon: LucideIcon; label: string }> = {
   'waste':        { icon: Trash2,         label: 'Waste' },
   'fj-flex':      { icon: Percent,        label: 'Flex' },
+  'fj-setup':     { icon: SlidersHorizontal, label: 'Setup' },
   'stock':        { icon: Boxes,          label: 'Stock' },
   'recipe-edit':  { icon: ChefHat,        label: 'Recipe' },
   'production':   { icon: Settings2,      label: 'Production' },

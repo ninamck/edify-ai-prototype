@@ -56,6 +56,10 @@ import { parseCommand } from '@/components/Feed/commands/parsers';
 import { COMMAND_REGISTRY, BRAND_COMMANDS, getCommand } from '@/components/Feed/commands/registry';
 import { parseFjFlex } from '@/components/Feed/commands/farmerjCommands';
 import FjFlexCard from '@/components/Feed/commands/cards/FjFlexCard';
+import FjSetupCard from '@/components/Feed/commands/cards/FjSetupCard';
+import { parseFjSetupWithContext, setFjSetupParseContext } from '@/components/Feed/commands/farmerjSetup';
+import { useSiteSettingsStore } from '@/components/Settings/siteSettingsStore';
+import { isFjLine } from '@/components/Production/farmerj/fjFixtures';
 import FjNudgeCard, { type FjNudgePayload } from '@/components/Feed/commands/cards/FjNudgeCard';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import { useFjPlanStoreOptional } from '@/components/Production/farmerj/FjPlanStore';
@@ -66,7 +70,7 @@ import { dismissNudge, startTimer, useFjClock } from '@/components/Production/fa
 import { useCommandRunner } from '@/components/Feed/commands/useCommandRunner';
 import SlashMenu from '@/components/Feed/commands/SlashMenu';
 import TaskHistoryList from '@/components/Feed/TaskHistoryList';
-import { PROMPT_CHIPS } from '@/components/Feed/suggestedPrompts';
+import { FARMERJ_CHIPS, PROMPT_CHIPS } from '@/components/Feed/suggestedPrompts';
 import TaskHistoryDrawer from '@/components/Feed/TaskHistoryDrawer';
 import { logEntry as logHistoryEntry, getTasks as getHistoryTasks, updateTask as updateHistoryTask } from '@/components/Feed/taskHistoryStore';
 import { ACTIVITY_REPLAY_KEY, type ActivityReplayIntent } from '@/components/Activity/ActivityPage';
@@ -637,6 +641,8 @@ const WORKSPACE_MSG_TYPES = new Set<string>([
   'cmd-site-production',
   'cmd-site-benches-hot',
   'cmd-site-golive',
+  'cmd-fj-flex-card',
+  'cmd-fj-setup-card',
 ]);
 
 function isWorkspaceMsg(m: ChatMsg): boolean {
@@ -675,6 +681,8 @@ const WORKSPACE_POINTER_LABELS: Record<string, string> = {
   'cmd-site-production': 'Setting production times',
   'cmd-site-benches-hot': 'Setting hot production',
   'cmd-site-golive': 'Check and go live',
+  'cmd-fj-flex-card': 'Flexing the day',
+  'cmd-fj-setup-card': 'Changing setup',
 };
 
 /** Working-state row for the in-Feed wizard. Mirrors
@@ -7108,6 +7116,16 @@ export default function Feed({
   // the demo clock crosses them.
   const { isFarmerJ, productionSiteId: fjSiteId } = useActiveSite();
   const fjStore = useFjPlanStoreOptional();
+  const fjSiteStore = useSiteSettingsStore();
+  // The Setup command parses against the recipe and bench names as they
+  // are now, so a renamed bench or recipe is still understood.
+  useEffect(() => {
+    if (!isFarmerJ || !fjStore) return;
+    setFjSetupParseContext({
+      recipes: fjStore.recipes,
+      stations: fjSiteStore.effectiveFor(FJ_ALL_SHOPS_ID).benches.map((b) => ({ id: b.id, name: b.name, isLine: isFjLine(b) })),
+    });
+  }, [isFarmerJ, fjStore, fjSiteStore]);
   const fjClock = useFjClock();
   const fjShopId = fjSiteId && fjSiteId !== FJ_ALL_SHOPS_ID ? fjSiteId : 'fj-marylebone';
   const fjNudges = useMemo(() => {
@@ -9482,7 +9500,7 @@ export default function Feed({
     // Skip when an explicit chart / table query was forced by the caller
     // (auto-send / pinned chart re-runs).
     if (explicitChart === undefined && !tableOpts) {
-      const intent = (isFarmerJ ? parseFjFlex(text) : null) ?? parseCommand(text);
+      const intent = (isFarmerJ ? parseFjSetupWithContext(text) ?? parseFjFlex(text) : null) ?? parseCommand(text);
       if (intent) {
         commandRunner.runCommand(intent, { userText: text });
         return;
@@ -10277,6 +10295,14 @@ export default function Feed({
                             initialArgs={m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : {}}
                             state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                             onConfirm={(final) => commandRunner.confirmFjFlex(m.id, final)}
+                            onCancel={() => commandRunner.cancelCard(m.id)}
+                          />
+                        )}
+                        {m.msgType === 'cmd-fj-setup-card' && (
+                          <FjSetupCard
+                            initialArgs={m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : { text: '' }}
+                            state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                            onConfirm={(final) => commandRunner.confirmFjSetup(m.id, final)}
                             onCancel={() => commandRunner.cancelCard(m.id)}
                           />
                         )}
@@ -11122,7 +11148,7 @@ export default function Feed({
                     flexDirection: 'column',
                     gap: '2px',
                   }}>
-                    {PROMPT_CHIPS.map((chip, i) => {
+                    {(isFarmerJ ? FARMERJ_CHIPS : PROMPT_CHIPS).map((chip, i) => {
                       const Icon = chip.icon;
                       const hasCount = chip.count !== undefined && chip.count > 0;
                       return (
