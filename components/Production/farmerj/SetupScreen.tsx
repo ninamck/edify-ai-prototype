@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { CheckCircle2, ChevronRight, ExternalLink, RotateCcw, X } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, ExternalLink, RotateCcw, Search, X } from 'lucide-react';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import type { Recipe } from '@/components/Recipe/libraryFixtures';
 import { updateRecipe } from '@/components/Recipe/recipeStore';
@@ -35,7 +35,7 @@ import { CHANNEL_LABELS } from './sales';
 import type { SalesChannel } from './salesDay';
 import type { Section as WorkRole } from './recipes';
 import { FJ_ALL_SHOPS_ID, FJ_SHOPS, getShop } from './shops';
-import { FJ_BENCH_TEMPLATES, FJ_DAYS_OF_WEEK, FJ_DEFAULT_WINDOWS, FJ_KITCHEN_TEMPLATES, FJ_LINE_TEMPLATES, FJ_WORK_ROLES, FJ_WORK_ROLE_BY_ID, dayToWeekday, isFjLine } from './fjFixtures';
+import { FJ_BENCH_TEMPLATES, FJ_DAYS_OF_WEEK, FJ_DEFAULT_WINDOWS, FJ_WORK_ROLES, FJ_WORK_ROLE_BY_ID, dayToWeekday, isFjLine } from './fjFixtures';
 import { ALL_CHANNELS } from './lines';
 import { EQUIPMENT_CAPACITY_UNIT, EQUIPMENT_LABELS, type BenchKitItem, type Equipment } from '../fixtures';
 import { KitEditor } from '@/components/Settings/tabs/BenchesTab';
@@ -47,13 +47,11 @@ import { describeMethod, METHOD_FIELDS, RECIPE_CLASSES, RECIPE_CLASS_BY_ID, reso
  * bar, success banner) with a publish preview in front of the save.
  */
 
-type Tab = 'recipes' | 'days' | 'lines' | 'benches' | 'containers' | 'log';
+type Tab = 'recipes' | 'days' | 'kitchen' | 'log';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'recipes', label: 'Recipes' },
   { id: 'days', label: 'Make-on days' },
-  { id: 'lines', label: 'Lines' },
-  { id: 'benches', label: 'Benches' },
-  { id: 'containers', label: 'Containers' },
+  { id: 'kitchen', label: 'Kitchen' },
   { id: 'log', label: 'Publish log' },
 ];
 
@@ -76,33 +74,17 @@ export default function SetupScreen() {
   const fjRecipes = useMemo(() => store.recipes.filter(r => r.brand === 'farmerj'), [store.recipes]);
   const recipeChanges = useMemo(() => diffRecipes(fjRecipes, recipeDraft), [fjRecipes, recipeDraft]);
 
-  // Lines and kitchen kit are the company's benches in the site settings
-  // store. Drafts are held here until publish, like recipe edits.
+  // The kitchen (lines and benches) is the company's bench list in the
+  // site settings store. Drafts are held here until publish, like recipe edits.
   const siteStore = useSiteSettingsStore();
-  const companyBenches = useMemo(() => siteStore.effectiveFor(FJ_ALL_SHOPS_ID).benches, [siteStore]);
-  const companyLines = useMemo(() => companyBenches.filter(isFjLine).map(toLineDraft), [companyBenches]);
-  const companyKitchen = useMemo(() => companyBenches.filter(b => !isFjLine(b)), [companyBenches]);
-  const companyBenchDrafts = useMemo(() => companyKitchen.map(toBenchDraft), [companyKitchen]);
-  const [linesDraft, setLinesDraft] = useState<LineDraft[] | null>(null);
-  const [benchDraft, setBenchDraft] = useState<BenchDraft[] | null>(null);
-  const lines = linesDraft ?? companyLines;
-  const benches = benchDraft ?? companyBenchDrafts;
-  const shopsWithOwnLines = useMemo(
+  const companyStations = useMemo(() => siteStore.effectiveFor(FJ_ALL_SHOPS_ID).benches.map(toStationDraft), [siteStore]);
+  const [stationsDraft, setStationsDraft] = useState<StationDraft[] | null>(null);
+  const stations = stationsDraft ?? companyStations;
+  // A shop has its own kitchen when it changed, added or reordered any station.
+  const shopsWithOwnKitchen = useMemo(
     () => FJ_SHOPS.filter(s => {
       const o = siteStore.overlayFor(s.id);
-      const lineIds = new Set(siteStore.effectiveFor(s.id).benches.filter(isFjLine).map(b => b.id));
-      return Boolean(o?.benchOrder || o?.addedBenches || Object.keys(o?.benches ?? {}).some(id => lineIds.has(id)));
-    }).map(s => s.id),
-    [siteStore],
-  );
-  // A shop has its own benches when it renamed, re-kitted or re-roled a
-  // kitchen bench, or added one of its own.
-  const shopsWithOwnBenches = useMemo(
-    () => FJ_SHOPS.filter(s => {
-      const o = siteStore.overlayFor(s.id);
-      const kitchenIds = new Set(siteStore.effectiveFor(s.id).benches.filter(b => !isFjLine(b)).map(b => b.id));
-      return Object.entries(o?.benches ?? {}).some(([id, b]) => kitchenIds.has(id) && (b.kit !== undefined || b.name !== undefined || b.sections !== undefined))
-        || Object.values(o?.addedBenches ?? {}).some(b => !isFjLine(b));
+      return Boolean(o?.benchOrder || (o?.addedBenches && Object.keys(o.addedBenches).length) || Object.values(o?.benches ?? {}).some(b => Object.keys(b).length > 0));
     }).map(s => s.id),
     [siteStore],
   );
@@ -123,10 +105,9 @@ export default function SetupScreen() {
   const days: DaysDraft = daysDraft ?? { company: companySchedule, shops: shopDays };
   const dayChanges = useMemo(() => (daysDraft ? diffDays({ company: companySchedule, shops: shopDays }, daysDraft) : []), [companySchedule, shopDays, daysDraft]);
 
-  const lineChanges = useMemo(() => (linesDraft ? diffLines(companyLines, linesDraft, FJ_SHOPS.map(s => s.id).filter(id => !shopsWithOwnLines.includes(id))) : []), [companyLines, linesDraft, shopsWithOwnLines]);
-  const benchChanges = useMemo(() => (benchDraft ? diffBenches(companyBenchDrafts, benchDraft, FJ_SHOPS.map(s => s.id).filter(id => !shopsWithOwnBenches.includes(id))) : []), [companyBenchDrafts, benchDraft, shopsWithOwnBenches]);
+  const kitchenChanges = useMemo(() => (stationsDraft ? diffStations(companyStations, stationsDraft, FJ_SHOPS.map(s => s.id).filter(id => !shopsWithOwnKitchen.includes(id))) : []), [companyStations, stationsDraft, shopsWithOwnKitchen]);
 
-  const changes = useMemo(() => [...recipeChanges, ...dayChanges, ...lineChanges, ...benchChanges, ...diffSettings(published, draft)], [recipeChanges, dayChanges, lineChanges, benchChanges, published, draft]);
+  const changes = useMemo(() => [...recipeChanges, ...dayChanges, ...kitchenChanges, ...diffSettings(published, draft)], [recipeChanges, dayChanges, kitchenChanges, published, draft]);
 
   const setDraft = (fn: (d: SettingsValues) => SettingsValues) =>
     store.updateSettings(s => ({ ...s, draft: fn(s.draft) }));
@@ -165,8 +146,7 @@ export default function SetupScreen() {
         kept.push({ shopId: shop, what: parts.join('; ') });
       }
     }
-    if (lineChanges.length) for (const shop of shopsWithOwnLines) kept.push({ shopId: shop, what: 'its own lines' });
-    if (benchChanges.length) for (const shop of shopsWithOwnBenches) kept.push({ shopId: shop, what: 'its own benches' });
+    if (kitchenChanges.length) for (const shop of shopsWithOwnKitchen) kept.push({ shopId: shop, what: 'its own kitchen' });
 
     // Snapshot everything the publish will touch, for revert.
     const touchedSites = new Set<string>([FJ_ALL_SHOPS_ID]);
@@ -205,9 +185,9 @@ export default function SetupScreen() {
       if (patch && !sameFields({ ...productionFieldsOf(r), ...patch }, productionFieldsOf(r))) updateRecipe(withProductionFields(r, patch));
     }
     setRecipeDraft({});
-    if (linesDraft || benchDraft || daysDraft) {
+    if (stationsDraft || daysDraft) {
       let company = siteStore.overlayFor(FJ_ALL_SHOPS_ID);
-      if (linesDraft || benchDraft) company = benchesToOverlay(lines, benches, company);
+      if (stationsDraft) company = stationsToOverlay(stations, company);
       if (daysDraft) {
         company = withCompanyDays(company, daysDraft.company);
         for (const s of FJ_SHOPS) {
@@ -216,8 +196,7 @@ export default function SetupScreen() {
         }
       }
       siteStore.replace(FJ_ALL_SHOPS_ID, company);
-      setLinesDraft(null);
-      setBenchDraft(null);
+      setStationsDraft(null);
       setDaysDraft(null);
     }
     const entry: PublishEntry = { id, atISO: at, by: 'Jana', effectiveFrom: FJ_DEMO_TODAY, shops, kept, changes, downstream: [], flagged, before };
@@ -261,8 +240,7 @@ export default function SetupScreen() {
 
   const discard = () => {
     setRecipeDraft({});
-    setLinesDraft(null);
-    setBenchDraft(null);
+    setStationsDraft(null);
     setDaysDraft(null);
     store.updateSettings(s => ({ ...s, draft: JSON.parse(JSON.stringify(s.published)) }));
   };
@@ -302,9 +280,7 @@ export default function SetupScreen() {
 
           {tab === 'recipes' && <RecipesTab recipes={fjRecipes} draft={recipeDraft} setField={setRecipeField} reset={resetRecipe} settings={draft} setSettings={setDraft} />}
           {tab === 'days' && <DaysTab days={days} setDays={next => setDaysDraft(next)} recipes={fjRecipes} />}
-          {tab === 'lines' && <LinesTab lines={lines} setLines={next => setLinesDraft(next)} shopsWithOwnLines={shopsWithOwnLines} />}
-          {tab === 'benches' && <BenchesTab benches={benches} setBenches={next => setBenchDraft(next)} lines={lines} setLines={next => setLinesDraft(next)} shopsWithOwnBenches={shopsWithOwnBenches} />}
-          {tab === 'containers' && <ContainersTab draft={draft} setDraft={setDraft} />}
+          {tab === 'kitchen' && <KitchenTab stations={stations} setStations={next => setStationsDraft(next)} shopsWithOwnKitchen={shopsWithOwnKitchen} />}
           {tab === 'log' && <LogTab log={log} onRevert={revert} />}
         </div>
       </div>
@@ -369,15 +345,79 @@ const kitText = (f: FjProductionFields) => {
 const groupLabel = (g: ShelfLifeGroupId | '') => (g ? SHELF_LIFE_GROUPS[g].label : '—');
 const containerLabel = (c: ContainerId | '') => (c ? CONTAINERS[c].name : '—');
 
+/** What this recipe sets for itself rather than taking from its class. Method is left out: nearly every recipe carries its own, so the Method column shows it instead. */
+function ownSettings(f: FjProductionFields): string[] {
+  return f.equipment !== null ? ['kit'] : [];
+}
+
+/** The method without its hand tools, short enough for a table cell. */
+function methodShort(f: FjProductionFields): string {
+  const m = methodOf(f);
+  const s = describeMethod({ ...m, handTools: [] });
+  return s === 'nothing set' ? '' : s;
+}
+
+const CONTAINER_IDS = Object.keys(CONTAINERS) as ContainerId[];
+
+/**
+ * The recipe book's production settings in one table, so Jana can compare
+ * forty recipes at a glance. The table is read-only text; a row opens into
+ * an editor when clicked, one at a time. Defaults that rarely change
+ * (method by class, containers, portion sizes) fold away underneath.
+ */
 function RecipesTab({ recipes, draft, setField, reset, settings, setSettings }: { recipes: Recipe[]; draft: RecipeDraft; setField: (id: string, patch: Partial<FjProductionFields>) => void; reset: (id: string) => void; settings: SettingsValues; setSettings: TabProps['setDraft'] }) {
-  const components = recipes.filter(r => r.id.startsWith('fj:c:'));
-  const products = recipes.filter(r => r.id.startsWith('fj:p:'));
-  const containerIds = Object.keys(CONTAINERS) as ContainerId[];
+  const [open, setOpen] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'all' | 'own' | 'unpublished'>('all');
+  const [q, setQ] = useState('');
+
+  const components = recipes
+    .map(r => ({ r, ref: bookRef(r.id), f: fieldsWithDraft(r, draft) }))
+    .filter(x => x.ref?.kind === 'component')
+    .map(x => {
+      const authored = AUTHORED_FIELDS[x.r.id];
+      return { ...x, own: ownSettings(x.f), changed: authored ? !sameFields(x.f, authored) : false };
+    });
+  const products = recipes
+    .map(r => ({ r, ref: bookRef(r.id), f: fieldsWithDraft(r, draft) }))
+    .filter(x => x.ref?.kind === 'product')
+    .map(x => {
+      const authored = AUTHORED_FIELDS[x.r.id];
+      return { ...x, own: [] as string[], changed: authored ? !sameFields(x.f, authored) : false };
+    });
+  const all = [...components, ...products];
+  const ownCount = all.filter(x => x.own.length).length;
+  const changedCount = all.filter(x => x.changed).length;
+  const needle = q.trim().toLowerCase();
+  const show = (x: { r: Recipe; own: string[]; changed: boolean }) =>
+    (filter === 'all' || (filter === 'own' && x.own.length > 0) || (filter === 'unpublished' && x.changed)) && (!needle || x.r.name.toLowerCase().includes(needle));
+  const toggle = (id: string) => setOpen(o => (o === id ? null : id));
+
+  const marker = (x: { own: string[]; changed: boolean }) => (
+    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', marginLeft: 6, verticalAlign: 'middle' }}>
+      {x.changed && <span title="Changed here, not yet published" style={{ width: 7, height: 7, borderRadius: 999, background: 'var(--color-warning)', display: 'inline-block' }} />}
+      {x.own.length > 0 && <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>own kit</span>}
+    </span>
+  );
+  const cell = (isOpen: boolean, extra?: CSSProperties): CSSProperties => ({ ...td, ...(isOpen ? openTd : {}), ...(extra ?? {}) });
+
   return (
     <>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div role="group" aria-label="Show" style={{ display: 'flex', gap: 4 }}>
+          <button type="button" onClick={() => setFilter('all')} aria-pressed={filter === 'all'} style={pill(filter === 'all')}>All {all.length}</button>
+          <button type="button" onClick={() => setFilter('own')} aria-pressed={filter === 'own'} style={pill(filter === 'own')}>Own kit {ownCount}</button>
+          {changedCount > 0 && <button type="button" onClick={() => setFilter('unpublished')} aria-pressed={filter === 'unpublished'} style={pill(filter === 'unpublished')}>Unpublished {changedCount}</button>}
+        </div>
+        <div style={{ flex: 1 }} />
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 10px', border: '1px solid var(--color-border)', borderRadius: 999, background: '#fff', minHeight: 32 }}>
+          <Search size={12} color="var(--color-text-muted)" />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Find a recipe" aria-label="Find a recipe" style={{ border: 'none', outline: 'none', fontSize: 12, fontFamily: 'var(--font-primary)', width: 160, background: 'transparent' }} />
+        </label>
+      </div>
+
       <Section
         title="Components"
-        description="Grouped by recipe class. A class carries the kit its recipes normally need; a recipe inherits it unless its kit is set. Cook loads are sized from that kit against what each shop's kitchen owns."
+        description="Click a row to change it. Kit and method come from the recipe class unless a recipe sets its own; the class is what cook loads are sized from at each shop."
       >
         <table style={tableStyle}>
           <thead>
@@ -385,116 +425,105 @@ function RecipesTab({ recipes, draft, setField, reset, settings, setSettings }: 
               <th style={th}>Component</th>
               <th style={th}>Class</th>
               <th style={th}>Kit</th>
-              <th style={th}>Shelf life</th>
-              <th style={{ ...th, textAlign: 'center' }}>Yield loss</th>
-              <th style={{ ...th, textAlign: 'center' }}>Half batches</th>
               <th style={th}>Container</th>
+              <th style={th}>Shelf life</th>
+              <th style={{ ...th, textAlign: 'right' }}>Yield loss</th>
+              <th style={{ ...th, textAlign: 'center' }}>Half</th>
+              <th style={th}>Method</th>
               <th style={th} />
             </tr>
           </thead>
           <tbody>
             {CLASS_ORDER.map(cls => {
-              const rows = components
-                .map(r => ({ r, ref: bookRef(r.id), f: fieldsWithDraft(r, draft) }))
-                .filter(x => x.ref?.kind === 'component' && x.f.recipeClass === cls)
-                .sort((a, b) => a.r.name.localeCompare(b.r.name));
+              const rows = components.filter(x => x.f.recipeClass === cls && show(x)).sort((a, b) => a.r.name.localeCompare(b.r.name));
               if (!rows.length) return null;
               return [
-                <tr key={`h-${cls}`}><td colSpan={8} style={groupTd}>{CLASS_GROUP_LABELS[cls]}</td></tr>,
-                ...rows.map(({ r, ref, f }) => {
+                <tr key={`h-${cls}`}><td colSpan={9} style={groupTd}>{CLASS_GROUP_LABELS[cls]} · {rows.length}</td></tr>,
+                ...rows.map(({ r, ref, f, own, changed }) => {
                   const c = ref!.kind === 'component' ? ref!.component : null;
                   if (!c) return null;
-                  const authored = AUTHORED_FIELDS[r.id];
-                  const changed = authored ? !sameFields(f, authored) : false;
-                  const inherited = RECIPE_CLASS_BY_ID[cls].defaultEquipment;
+                  const isOpen = open === r.id;
+                  const kitEq = resolveEquipment(f.recipeClass, f.equipment);
                   const kitValue = f.equipment === null ? '' : f.equipment.length === 0 ? 'none' : f.equipment[0];
-                  return (
-                    <tr key={r.id}>
-                      <td style={td}>
-                        <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{r.name}</div>
-                        <div style={{ fontSize: 10.5, color: 'var(--color-text-muted)', marginTop: 2, maxWidth: 320 }}>
-                          {kg(c.batch.fullG)}{c.batch.label ? `, ${c.batch.label}` : ''}{f.halfBatch ? ` · half ${kg(c.batch.halfG ?? c.batch.fullG / 2)}` : ''}
-                          {c.yieldNote ? ` · ${c.yieldNote}` : ''}
-                        </div>
+                  const method = methodShort(f);
+                  return [
+                    <tr key={r.id} onClick={() => toggle(r.id)} style={{ cursor: 'pointer', background: isOpen ? 'var(--color-bg-hover)' : undefined }} aria-expanded={isOpen}>
+                      <td style={cell(isOpen)}>
+                        <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{r.name}</span>{marker({ own, changed })}
+                        <div style={{ fontSize: 10.5, color: 'var(--color-text-muted)', marginTop: 2 }}>{kg(c.batch.fullG)}{c.batch.label ? `, ${c.batch.label}` : ''}</div>
                       </td>
-                      <td style={td}>
-                        <select
-                          value={f.recipeClass}
-                          onChange={e => setField(r.id, { recipeClass: e.target.value as RecipeClassId })}
-                          aria-label={`${r.name} recipe class`}
-                          style={selectStyle}
-                        >
-                          {RECIPE_CLASSES.filter(k => k.id !== 'finished').map(k => <option key={k.id} value={k.id}>{k.label}</option>)}
-                        </select>
-                      </td>
-                      <td style={td}>
-                        <select
-                          value={kitValue}
-                          onChange={e => {
-                            const v = e.target.value;
-                            setField(r.id, { equipment: v === '' ? null : v === 'none' ? [] : [v as Equipment] });
-                          }}
-                          aria-label={`${r.name} kit`}
-                          style={{ ...selectStyle, fontStyle: kitValue === '' ? 'italic' : 'normal' }}
-                          title={f.equipment === null ? 'Inherited from the class' : 'Set on this recipe'}
-                        >
-                          <option value="">Class default{inherited.length ? ` (${inherited.map(e => EQUIPMENT_LABELS[e].toLowerCase()).join(', ')})` : ' (none)'}</option>
-                          <option value="none">None</option>
-                          {KIT_OPTIONS.map(e => <option key={e} value={e}>{EQUIPMENT_LABELS[e]}</option>)}
-                        </select>
-                      </td>
-                      <td style={td}>
-                        <select
-                          value={f.shelfLifeGroup}
-                          onChange={e => setField(r.id, { shelfLifeGroup: e.target.value as ShelfLifeGroupId })}
-                          aria-label={`${r.name} shelf life`}
-                          style={selectStyle}
-                        >
-                          {GROUPS.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
-                        </select>
-                      </td>
-                      <td style={{ ...td, textAlign: 'center' }}>
-                        <QtyStepper
-                          size="compact"
-                          canDecrement={f.yieldLossPct > 0}
-                          canIncrement={f.yieldLossPct < 90}
-                          onDecrement={() => setField(r.id, { yieldLossPct: Math.max(0, f.yieldLossPct - 1) })}
-                          onIncrement={() => setField(r.id, { yieldLossPct: Math.min(90, f.yieldLossPct + 1) })}
-                          decrementLabel={`${r.name} yield loss down`}
-                          incrementLabel={`${r.name} yield loss up`}
-                        >
-                          <span style={{ minWidth: 34, textAlign: 'center', fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{f.yieldLossPct}%</span>
-                        </QtyStepper>
-                      </td>
-                      <td style={{ ...td, textAlign: 'center' }}>
-                        <Switch checked={f.halfBatch} onChange={v => setField(r.id, { halfBatch: v })} label={`${r.name} half batches`} />
-                      </td>
-                      <td style={td}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                          <select value={f.outputContainer} onChange={e => setField(r.id, { outputContainer: e.target.value as ContainerId | '' })} aria-label={`${r.name} container`} style={selectStyle}>
-                            <option value="">None</option>
-                            {containerIds.map(id => <option key={id} value={id}>{CONTAINERS[id].name}</option>)}
-                          </select>
-                          {f.outputContainer && (
-                            <QtyStepper
-                              size="compact"
-                              canDecrement={Number(f.containersPerBatch || 0) > 1}
-                              onDecrement={() => setField(r.id, { containersPerBatch: Math.max(1, Number(f.containersPerBatch || 1) - 1) })}
-                              onIncrement={() => setField(r.id, { containersPerBatch: Number(f.containersPerBatch || 0) + 1 })}
-                              decrementLabel={`${r.name} containers per batch down`}
-                              incrementLabel={`${r.name} containers per batch up`}
-                            >
-                              <span style={{ minWidth: 26, textAlign: 'center', fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>× {f.containersPerBatch || 1}</span>
-                            </QtyStepper>
-                          )}
-                        </div>
-                      </td>
-                      <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      <td style={cell(isOpen)}>{classLabel(f.recipeClass)}</td>
+                      <td style={cell(isOpen, { color: f.equipment === null ? 'var(--color-text-muted)' : 'var(--color-text-primary)' })}>{kitEq.length ? kitEq.map(e => EQUIPMENT_LABELS[e]).join(', ') : 'None'}</td>
+                      <td style={cell(isOpen)}>{f.outputContainer ? `${CONTAINERS[f.outputContainer].name}${Number(f.containersPerBatch || 1) > 1 ? ` × ${f.containersPerBatch}` : ''}` : '—'}</td>
+                      <td style={cell(isOpen)}>{groupLabel(f.shelfLifeGroup)}</td>
+                      <td style={cell(isOpen, { textAlign: 'right', fontVariantNumeric: 'tabular-nums' })}>{f.yieldLossPct}%</td>
+                      <td style={cell(isOpen, { textAlign: 'center', color: f.halfBatch ? 'var(--color-text-primary)' : 'var(--color-text-muted)' })}>{f.halfBatch ? 'Yes' : '—'}</td>
+                      <td style={cell(isOpen, { color: Object.keys(f.method).length ? 'var(--color-text-primary)' : 'var(--color-text-muted)', maxWidth: 220 })}>{method || '—'}</td>
+                      <td style={cell(isOpen, { textAlign: 'right', whiteSpace: 'nowrap' })} onClick={e => e.stopPropagation()}>
                         {changed && <button type="button" onClick={() => reset(r.id)} title="Back to the recipe book" aria-label={`${r.name} back to the recipe book`} style={iconBtn}><RotateCcw size={12} /></button>}
                         <Link href={`/recipes/${encodeURIComponent(r.id)}/edit`} title="Open recipe" aria-label={`Open ${r.name}`} style={iconBtn}><ExternalLink size={12} /></Link>
+                        <button type="button" onClick={() => toggle(r.id)} aria-label={isOpen ? `Close ${r.name}` : `Edit ${r.name}`} style={iconBtn}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button>
                       </td>
-                    </tr>
-                  );
+                    </tr>,
+                    isOpen && (
+                      <tr key={`${r.id}-edit`}>
+                        <td colSpan={9} style={{ padding: '12px 12px 16px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14 }}>
+                            <Field label="Class">
+                              <select value={f.recipeClass} onChange={e => setField(r.id, { recipeClass: e.target.value as RecipeClassId })} aria-label={`${r.name} recipe class`} style={selectStyle}>
+                                {RECIPE_CLASSES.filter(k => k.id !== 'finished').map(k => <option key={k.id} value={k.id}>{k.label}</option>)}
+                              </select>
+                            </Field>
+                            <Field label="Kit" hint={f.equipment === null ? 'From the class' : 'Set on this recipe'}>
+                              <select value={kitValue} onChange={e => { const v = e.target.value; setField(r.id, { equipment: v === '' ? null : v === 'none' ? [] : [v as Equipment] }); }} aria-label={`${r.name} kit`} style={selectStyle}>
+                                <option value="">Class default{RECIPE_CLASS_BY_ID[cls].defaultEquipment.length ? ` (${RECIPE_CLASS_BY_ID[cls].defaultEquipment.map(e => EQUIPMENT_LABELS[e].toLowerCase()).join(', ')})` : ' (none)'}</option>
+                                <option value="none">None</option>
+                                {KIT_OPTIONS.map(e => <option key={e} value={e}>{EQUIPMENT_LABELS[e]}</option>)}
+                              </select>
+                            </Field>
+                            <Field label="Container" wide>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <select value={f.outputContainer} onChange={e => setField(r.id, { outputContainer: e.target.value as ContainerId | '' })} aria-label={`${r.name} container`} style={selectStyle}>
+                                  <option value="">None</option>
+                                  {CONTAINER_IDS.map(id => <option key={id} value={id}>{CONTAINERS[id].name}</option>)}
+                                </select>
+                                {f.outputContainer && (
+                                  <QtyStepper size="compact" canDecrement={Number(f.containersPerBatch || 0) > 1}
+                                    onDecrement={() => setField(r.id, { containersPerBatch: Math.max(1, Number(f.containersPerBatch || 1) - 1) })}
+                                    onIncrement={() => setField(r.id, { containersPerBatch: Number(f.containersPerBatch || 0) + 1 })}
+                                    decrementLabel={`${r.name} containers per batch down`} incrementLabel={`${r.name} containers per batch up`}>
+                                    <span style={{ minWidth: 26, textAlign: 'center', fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>× {f.containersPerBatch || 1}</span>
+                                  </QtyStepper>
+                                )}
+                              </div>
+                            </Field>
+                            <Field label="Shelf life">
+                              <select value={f.shelfLifeGroup} onChange={e => setField(r.id, { shelfLifeGroup: e.target.value as ShelfLifeGroupId })} aria-label={`${r.name} shelf life`} style={selectStyle}>
+                                {GROUPS.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+                              </select>
+                            </Field>
+                            <Field label="Yield loss" hint={c.yieldNote}>
+                              <QtyStepper size="compact" canDecrement={f.yieldLossPct > 0} canIncrement={f.yieldLossPct < 90}
+                                onDecrement={() => setField(r.id, { yieldLossPct: Math.max(0, f.yieldLossPct - 1) })}
+                                onIncrement={() => setField(r.id, { yieldLossPct: Math.min(90, f.yieldLossPct + 1) })}
+                                decrementLabel={`${r.name} yield loss down`} incrementLabel={`${r.name} yield loss up`}>
+                                <span style={{ minWidth: 34, textAlign: 'center', fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{f.yieldLossPct}%</span>
+                              </QtyStepper>
+                            </Field>
+                            <Field label="Half batches" hint={f.halfBatch ? `Half is ${kg(c.batch.halfG ?? c.batch.fullG / 2)}` : 'Full batches only'}>
+                              <Switch checked={f.halfBatch} onChange={v => setField(r.id, { halfBatch: v })} label={`${r.name} half batches`} />
+                            </Field>
+                            <Field label="Method" hint={Object.keys(f.method).length ? 'Set on this recipe' : `From the ${classLabel(f.recipeClass).toLowerCase()} default`}>
+                              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                <span>{method || 'Nothing set'}</span>
+                                <Link href={`/recipes/${encodeURIComponent(r.id)}/edit`} style={{ ...linkBtn, textDecoration: 'none' }}>Edit on the recipe</Link>
+                              </div>
+                            </Field>
+                          </div>
+                        </td>
+                      </tr>
+                    ),
+                  ];
                 }),
               ];
             })}
@@ -502,9 +531,7 @@ function RecipesTab({ recipes, draft, setField, reset, settings, setSettings }: 
         </table>
       </Section>
 
-      <MethodDefaultsSection recipes={components} draft={draft} settings={settings} setSettings={setSettings} />
-
-      <Section title="Finished products">
+      <Section title="Finished products" description="What the main line serves from. Click a row to change it.">
         <table style={tableStyle}>
           <thead>
             <tr>
@@ -512,66 +539,87 @@ function RecipesTab({ recipes, draft, setField, reset, settings, setSettings }: 
               <th style={th}>Group</th>
               <th style={th}>Main-line unit</th>
               <th style={{ ...th, textAlign: 'right' }}>Per unit</th>
-              <th style={{ ...th, textAlign: 'right' }}>Units per batch</th>
+              <th style={{ ...th, textAlign: 'right' }}>Units a batch</th>
               <th style={{ ...th, textAlign: 'right' }}>Batch</th>
-              <th style={{ ...th, textAlign: 'center' }}>Half batches</th>
+              <th style={{ ...th, textAlign: 'center' }}>Half</th>
               <th style={th} />
             </tr>
           </thead>
           <tbody>
-            {products.map(r => {
-              const ref = bookRef(r.id);
+            {products.filter(show).map(({ r, ref, f, own, changed }) => {
               if (ref?.kind !== 'product') return null;
               const p = ref.product;
-              const f = fieldsWithDraft(r, draft);
-              const authored = AUTHORED_FIELDS[r.id];
-              const changed = authored ? !sameFields(f, authored) : false;
+              const isOpen = open === r.id;
               const unitsPerBatch = Number(f.containersPerBatch || p.unitsPerBatch);
-              return (
-                <tr key={r.id}>
-                  <td style={{ ...td, fontWeight: 600, color: 'var(--color-text-primary)' }}>{r.name}</td>
-                  <td style={td}>{PRODUCT_GROUP_LABELS[p.group]}</td>
-                  <td style={td}>
-                    <select value={f.outputContainer} onChange={e => setField(r.id, { outputContainer: e.target.value as ContainerId })} aria-label={`${r.name} main-line unit`} style={selectStyle}>
-                      {containerIds.map(id => <option key={id} value={id}>{CONTAINERS[id].name}</option>)}
-                    </select>
-                  </td>
-                  <td style={{ ...td, textAlign: 'right' }}>{kg(Math.round((p.batch.fullG * (1 - f.yieldLossPct / 100)) / unitsPerBatch))}</td>
-                  <td style={{ ...td, textAlign: 'right' }}>
-                    <QtyStepper
-                      size="compact"
-                      canDecrement={unitsPerBatch > 1}
-                      onDecrement={() => setField(r.id, { containersPerBatch: Math.max(1, unitsPerBatch - 1) })}
-                      onIncrement={() => setField(r.id, { containersPerBatch: unitsPerBatch + 1 })}
-                      decrementLabel={`${r.name} units per batch down`}
-                      incrementLabel={`${r.name} units per batch up`}
-                    >
-                      <span style={{ minWidth: 26, textAlign: 'center', fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{unitsPerBatch}</span>
-                    </QtyStepper>
-                  </td>
-                  <td style={{ ...td, textAlign: 'right' }}>{kg(p.batch.fullG)}</td>
-                  <td style={{ ...td, textAlign: 'center' }}>
-                    <Switch checked={f.halfBatch} onChange={v => setField(r.id, { halfBatch: v })} label={`${r.name} half batches`} />
-                  </td>
-                  <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>
+              return [
+                <tr key={r.id} onClick={() => toggle(r.id)} style={{ cursor: 'pointer', background: isOpen ? 'var(--color-bg-hover)' : undefined }} aria-expanded={isOpen}>
+                  <td style={cell(isOpen)}><span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{r.name}</span>{marker({ own, changed })}</td>
+                  <td style={cell(isOpen)}>{PRODUCT_GROUP_LABELS[p.group]}</td>
+                  <td style={cell(isOpen)}>{f.outputContainer ? CONTAINERS[f.outputContainer].name : '—'}</td>
+                  <td style={cell(isOpen, { textAlign: 'right' })}>{kg(Math.round((p.batch.fullG * (1 - f.yieldLossPct / 100)) / unitsPerBatch))}</td>
+                  <td style={cell(isOpen, { textAlign: 'right', fontVariantNumeric: 'tabular-nums' })}>{unitsPerBatch}</td>
+                  <td style={cell(isOpen, { textAlign: 'right' })}>{kg(p.batch.fullG)}</td>
+                  <td style={cell(isOpen, { textAlign: 'center', color: f.halfBatch ? 'var(--color-text-primary)' : 'var(--color-text-muted)' })}>{f.halfBatch ? 'Yes' : '—'}</td>
+                  <td style={cell(isOpen, { textAlign: 'right', whiteSpace: 'nowrap' })} onClick={e => e.stopPropagation()}>
                     {changed && <button type="button" onClick={() => reset(r.id)} title="Back to the recipe book" aria-label={`${r.name} back to the recipe book`} style={iconBtn}><RotateCcw size={12} /></button>}
                     <Link href={`/recipes/${encodeURIComponent(r.id)}/edit`} title="Open recipe" aria-label={`Open ${r.name}`} style={iconBtn}><ExternalLink size={12} /></Link>
+                    <button type="button" onClick={() => toggle(r.id)} aria-label={isOpen ? `Close ${r.name}` : `Edit ${r.name}`} style={iconBtn}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button>
                   </td>
-                </tr>
-              );
+                </tr>,
+                isOpen && (
+                  <tr key={`${r.id}-edit`}>
+                    <td colSpan={8} style={{ padding: '12px 12px 16px', background: 'var(--color-bg-hover)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14 }}>
+                        <Field label="Main-line unit">
+                          <select value={f.outputContainer} onChange={e => setField(r.id, { outputContainer: e.target.value as ContainerId })} aria-label={`${r.name} main-line unit`} style={selectStyle}>
+                            {CONTAINER_IDS.map(id => <option key={id} value={id}>{CONTAINERS[id].name}</option>)}
+                          </select>
+                        </Field>
+                        <Field label="Units a batch" hint={`${kg(p.batch.fullG)} a batch`}>
+                          <QtyStepper size="compact" canDecrement={unitsPerBatch > 1}
+                            onDecrement={() => setField(r.id, { containersPerBatch: Math.max(1, unitsPerBatch - 1) })}
+                            onIncrement={() => setField(r.id, { containersPerBatch: unitsPerBatch + 1 })}
+                            decrementLabel={`${r.name} units per batch down`} incrementLabel={`${r.name} units per batch up`}>
+                            <span style={{ minWidth: 26, textAlign: 'center', fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{unitsPerBatch}</span>
+                          </QtyStepper>
+                        </Field>
+                        <Field label="Half batches">
+                          <Switch checked={f.halfBatch} onChange={v => setField(r.id, { halfBatch: v })} label={`${r.name} half batches`} />
+                        </Field>
+                      </div>
+                    </td>
+                  </tr>
+                ),
+              ];
             })}
           </tbody>
         </table>
       </Section>
 
-      <Section title="Portion sizes">
+      <Fold title="Method defaults by class" summary="What the stepper says unless a recipe sets its own">
+        <MethodDefaultsSection recipes={components.map(x => x.r)} draft={draft} settings={settings} setSettings={setSettings} />
+      </Fold>
+      <Fold title="Containers" summary={`${CONTAINER_IDS.length} containers a batch is portioned into`}>
+        <ContainersSection draft={settings} setDraft={setSettings} />
+      </Fold>
+      <Fold title="Portion sizes" summary="Grams a portion the demand model plans from">
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {Object.entries(PORTION_GRAMS).map(([k, g]) => (
             <span key={k} style={chip}>{PORTION_LABELS[k as keyof typeof PORTION_GRAMS]} <strong style={{ marginLeft: 4 }}>{g} g</strong></span>
           ))}
         </div>
-      </Section>
+      </Fold>
     </>
+  );
+}
+
+function Field({ label, hint, wide, children }: { label: string; hint?: string; wide?: boolean; children: ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0, gridColumn: wide ? 'span 2' : undefined }}>
+      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>{label}</span>
+      <div>{children}</div>
+      {hint && <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>{hint}</span>}
+    </div>
   );
 }
 
@@ -608,10 +656,10 @@ function MethodDefaultsSection({ recipes, draft, settings, setSettings }: { reci
     setSettings(d => ({ ...d, methodDefaults: { ...d.methodDefaults, [cls]: { ...d.methodDefaults[cls], ...patch } } }));
   const num = (v: string): number | '' => (v.trim() === '' ? '' : Math.max(0, Number(v)));
   return (
-    <Section
-      title="Method defaults"
-      description="What the stepper's chips say for a recipe of each class unless the recipe sets its own: the programme, cook time, core temperature to probe to, rest, how long it may hold on the line, and the hand tools to get out. Change a default here and every recipe still inheriting it follows. Rest, hold and core temperature set to 0 mean none."
-    >
+    <>
+      <p style={{ margin: 0, fontSize: 11, color: 'var(--color-text-muted)' }}>
+        The programme, cook time, core temperature to probe to, rest, how long it may hold on the line, and the hand tools to get out. Change a default and every recipe still inheriting it follows. 0 means none.
+      </p>
       <table style={tableStyle}>
         <thead>
           <tr>
@@ -660,7 +708,7 @@ function MethodDefaultsSection({ recipes, draft, settings, setSettings }: { reci
           })}
         </tbody>
       </table>
-    </Section>
+    </>
   );
 }
 
@@ -826,355 +874,277 @@ function DaysTab({ days, setDays, recipes }: { days: DaysDraft; setDays: (next: 
   );
 }
 
-// ─── Lines ───────────────────────────────────────────────────────────────────
+// ─── Kitchen ─────────────────────────────────────────────────────────────────
 
-/** A service line as edited on this screen: the bench fields the planner reads. */
-type LineDraft = { id: string; name: string; halfBatches: boolean; channels: SalesChannel[]; roles: WorkRole[] };
+/**
+ * A station is one entry in the shop's bench list: a line (plates for
+ * sales channels, may run half batches) or a bench (cooks or preps). Either
+ * can take kinds of work, which puts it on the Sections board, and either
+ * can own kit, which sizes cook loads.
+ */
+type StationDraft = { id: string; name: string; isLine: boolean; channels: SalesChannel[]; halfBatches: boolean; roles: WorkRole[]; kit: BenchKitItem[] };
 
 const isChannel = (c: string): c is SalesChannel => (ALL_CHANNELS as string[]).includes(c);
 const isRole = (r: string): r is WorkRole => r in FJ_WORK_ROLE_BY_ID;
 
-function toLineDraft(b: EffectiveBench): LineDraft {
-  return { id: b.id, name: b.name, halfBatches: Boolean(b.halfBatches), channels: (b.channels ?? []).filter(isChannel), roles: (b.sections ?? []).filter(isRole) };
-}
-
-/** A kitchen bench as edited on this screen: its name, the work it takes, and the kit it owns. */
-type BenchDraft = { id: string; name: string; roles: WorkRole[]; kit: BenchKitItem[] };
-
-function toBenchDraft(b: EffectiveBench): BenchDraft {
-  return { id: b.id, name: b.name, roles: (b.sections ?? []).filter(isRole), kit: (b.kit ?? []).map(k => ({ ...k })) };
+function toStationDraft(b: EffectiveBench): StationDraft {
+  return {
+    id: b.id, name: b.name, isLine: isFjLine(b),
+    channels: (b.channels ?? []).filter(isChannel), halfBatches: Boolean(b.halfBatches),
+    roles: (b.sections ?? []).filter(isRole), kit: (b.kit ?? []).map(k => ({ ...k })),
+  };
 }
 
 const sameKit = (a: BenchKitItem[] | undefined, b: BenchKitItem[] | undefined) => JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
-const sameRoles = (a: string[] | undefined, b: string[] | undefined) => [...(a ?? [])].sort().join() === [...(b ?? [])].sort().join();
+const sameList = (a: string[] | undefined, b: string[] | undefined) => [...(a ?? [])].sort().join() === [...(b ?? [])].sort().join();
 
 /**
- * Write the drafted lines and kitchen benches back as the company
- * (`fj-all-shops`) overlay, keeping its other settings. Everything is
- * diffed against its template so a shop's own overlay still wins where it
- * differs; a bench without a template is stored whole as an added bench.
+ * Write the drafted stations back as the company (`fj-all-shops`) overlay,
+ * keeping its other settings. Each is diffed against its template so a
+ * shop's own overlay still wins where it differs; one without a template
+ * is stored whole as an added bench.
  */
-function benchesToOverlay(lines: LineDraft[], kitchen: BenchDraft[], current: SiteSettingsOverlay | undefined): SiteSettingsOverlay {
+function stationsToOverlay(stations: StationDraft[], current: SiteSettingsOverlay | undefined): SiteSettingsOverlay {
   const benches: NonNullable<SiteSettingsOverlay['benches']> = {};
   const addedBenches: NonNullable<SiteSettingsOverlay['addedBenches']> = {};
-  for (const l of lines) {
-    const template = FJ_LINE_TEMPLATES.find(t => t.id === l.id);
+  for (const st of stations) {
+    const template = FJ_BENCH_TEMPLATES.find(t => t.id === st.id);
     if (template) {
-      const patch: BenchOverlay = {};
-      if (l.name !== template.name) patch.name = l.name;
-      if (l.halfBatches !== Boolean(template.halfBatches)) patch.halfBatches = l.halfBatches;
-      if (l.channels.join() !== (template.channels ?? []).join()) patch.channels = l.channels;
-      if (!sameRoles(l.roles, template.sections)) patch.sections = l.roles;
-      if (Object.keys(patch).length) benches[l.id] = patch;
+      const patch: BenchOverlay = { ...(current?.benches?.[st.id] ?? {}) };
+      if (st.name === template.name) delete patch.name; else patch.name = st.name;
+      if (sameList(st.roles, template.sections)) delete patch.sections; else patch.sections = st.roles;
+      if (sameKit(st.kit, template.kit)) delete patch.kit; else patch.kit = st.kit;
+      if (st.isLine) {
+        if (st.halfBatches === Boolean(template.halfBatches)) delete patch.halfBatches; else patch.halfBatches = st.halfBatches;
+        if (st.channels.join() === (template.channels ?? []).join()) delete patch.channels; else patch.channels = st.channels;
+      }
+      if (Object.keys(patch).length) benches[st.id] = patch;
     } else {
-      addedBenches[l.id] = {
-        id: l.id, siteId: FJ_ALL_SHOPS_ID, name: l.name,
-        capabilities: ['assemble'], workTypes: ['assemble', 'portion'], equipment: ['prep-table'],
-        online: true, primaryMode: 'variable', halfBatches: l.halfBatches, channels: l.channels,
-        ...(l.roles.length ? { sections: l.roles } : {}),
-      };
-    }
-  }
-  for (const b of kitchen) {
-    const template = FJ_KITCHEN_TEMPLATES.find(t => t.id === b.id);
-    if (template) {
-      const patch: BenchOverlay = { ...(current?.benches?.[b.id] ?? {}) };
-      if (sameKit(b.kit, template.kit)) delete patch.kit; else patch.kit = b.kit;
-      if (b.name === template.name) delete patch.name; else patch.name = b.name;
-      if (sameRoles(b.roles, template.sections)) delete patch.sections; else patch.sections = b.roles;
-      if (Object.keys(patch).length) benches[b.id] = patch;
-    } else {
-      const added = current?.addedBenches?.[b.id];
-      addedBenches[b.id] = {
-        id: b.id, siteId: FJ_ALL_SHOPS_ID, capabilities: ['prep'], workTypes: ['mix', 'portion'], online: true, primaryMode: 'variable',
-        ...(added ?? {}),
-        name: b.name, kit: b.kit, sections: b.roles,
-        equipment: Array.from(new Set([...(added?.equipment ?? ['prep-table']), ...b.kit.map(k => k.equipment)])),
-      };
+      const added = current?.addedBenches?.[st.id];
+      addedBenches[st.id] = st.isLine
+        ? {
+          id: st.id, siteId: FJ_ALL_SHOPS_ID, capabilities: ['assemble'], workTypes: ['assemble', 'portion'], equipment: ['prep-table'], online: true, primaryMode: 'variable',
+          ...(added ?? {}), name: st.name, halfBatches: st.halfBatches, channels: st.channels, sections: st.roles, kit: st.kit,
+        }
+        : {
+          id: st.id, siteId: FJ_ALL_SHOPS_ID, capabilities: ['prep'], workTypes: ['mix', 'portion'], online: true, primaryMode: 'variable',
+          ...(added ?? {}), name: st.name, sections: st.roles, kit: st.kit,
+          equipment: Array.from(new Set([...(added?.equipment ?? ['prep-table']), ...st.kit.map(k => k.equipment)])),
+        };
     }
   }
   const next: SiteSettingsOverlay = { ...(current ?? {}) };
   delete next.benches; delete next.benchOrder; delete next.addedBenches;
   if (Object.keys(benches).length) next.benches = benches;
   if (Object.keys(addedBenches).length) next.addedBenches = addedBenches;
-  const order = [...lines.map(l => l.id), ...kitchen.map(b => b.id)];
-  const defaultOrder = FJ_BENCH_TEMPLATES.map(t => t.id).join();
-  if (order.join() !== defaultOrder) next.benchOrder = order;
+  const order = stations.map(st => st.id);
+  if (order.join() !== FJ_BENCH_TEMPLATES.map(t => t.id).join()) next.benchOrder = order;
   return next;
 }
 
 function kitLabel(k: BenchKitItem): string {
   const unit = EQUIPMENT_CAPACITY_UNIT[k.equipment];
-  return `${k.count}${unit && k.capacity ? ` × ${k.capacity} ${unit}` : ''}`;
+  return `${k.count}${k.capacity && unit ? ` of ${k.capacity} ${unit}` : ''}`;
 }
-
+const kitSummary = (kit: BenchKitItem[]) => kit.map(k => `${k.count} ${EQUIPMENT_LABELS[k.equipment].toLowerCase()}${k.count === 1 ? '' : 's'}${k.capacity && EQUIPMENT_CAPACITY_UNIT[k.equipment] ? ` of ${k.capacity}` : ''}`).join(', ');
 const rolesText = (roles: WorkRole[]) => (roles.length ? roles.map(r => FJ_WORK_ROLE_BY_ID[r].label.toLowerCase()).join(', ') : 'nothing');
+const channelsText = (channels: SalesChannel[]) => (channels.length ? channels.map(c => CHANNEL_LABELS[c]).join(', ') : 'nothing');
 
-function diffBenches(from: BenchDraft[], to: BenchDraft[], shops: string[]): SettingsChange[] {
+function diffStations(from: StationDraft[], to: StationDraft[], shops: string[]): SettingsChange[] {
   const out: SettingsChange[] = [];
   const before = new Map(from.map(b => [b.id, b]));
   const after = new Map(to.map(b => [b.id, b]));
-  for (const b of to) {
-    const prev = before.get(b.id);
-    if (!prev) { out.push({ field: 'Bench added', from: '—', to: `${b.name} (${rolesText(b.roles)})`, shops }); continue; }
-    if (prev.name !== b.name) out.push({ field: 'Bench name', from: prev.name, to: b.name, shops });
-    if (!sameRoles(prev.roles, b.roles)) out.push({ field: `${b.name} takes`, from: rolesText(prev.roles), to: rolesText(b.roles), shops });
+  for (const st of to) {
+    const prev = before.get(st.id);
+    const kind = st.isLine ? 'Line' : 'Bench';
+    if (!prev) { out.push({ field: `${kind} added`, from: '—', to: st.name, shops }); continue; }
+    if (prev.name !== st.name) out.push({ field: `${kind} name`, from: prev.name, to: st.name, shops });
+    if (st.isLine && prev.channels.join() !== st.channels.join()) out.push({ field: `${st.name} plates for`, from: channelsText(prev.channels), to: channelsText(st.channels), shops });
+    if (st.isLine && prev.halfBatches !== st.halfBatches) out.push({ field: `${st.name} half batches`, from: prev.halfBatches ? 'on' : 'off', to: st.halfBatches ? 'on' : 'off', shops });
+    if (!sameList(prev.roles, st.roles)) out.push({ field: `${st.name} takes`, from: rolesText(prev.roles), to: rolesText(st.roles), shops });
     const a = new Map(prev.kit.map(k => [k.equipment, k]));
-    const z = new Map(b.kit.map(k => [k.equipment, k]));
+    const z = new Map(st.kit.map(k => [k.equipment, k]));
     for (const e of new Set([...a.keys(), ...z.keys()])) {
       const p = a.get(e);
       const n = z.get(e);
       if (p && n && kitLabel(p) === kitLabel(n)) continue;
-      out.push({ field: `${b.name} ${EQUIPMENT_LABELS[e].toLowerCase()}s`, from: p ? kitLabel(p) : 'none', to: n ? kitLabel(n) : 'none', shops });
+      out.push({ field: `${st.name} ${EQUIPMENT_LABELS[e].toLowerCase()}s`, from: p ? kitLabel(p) : 'none', to: n ? kitLabel(n) : 'none', shops });
     }
   }
-  for (const b of from) if (!after.has(b.id)) out.push({ field: 'Bench removed', from: b.name, to: '—', shops });
-  return out;
-}
-
-function diffLines(from: LineDraft[], to: LineDraft[], shops: string[]): SettingsChange[] {
-  const out: SettingsChange[] = [];
-  const byId = (xs: LineDraft[]) => new Map(xs.map(x => [x.id, x]));
-  const a = byId(from);
-  const b = byId(to);
-  for (const l of to) {
-    const prev = a.get(l.id);
-    if (!prev) { out.push({ field: 'Line added', from: '—', to: l.name, shops }); continue; }
-    if (prev.name !== l.name) out.push({ field: 'Line name', from: prev.name, to: l.name, shops });
-    if (prev.halfBatches !== l.halfBatches) out.push({ field: `${l.name} half batches`, from: prev.halfBatches ? 'on' : 'off', to: l.halfBatches ? 'on' : 'off', shops });
-    if (!sameRoles(prev.roles, l.roles)) out.push({ field: `${l.name} takes`, from: rolesText(prev.roles), to: rolesText(l.roles), shops });
-  }
-  for (const l of from) if (!b.has(l.id)) out.push({ field: 'Line removed', from: l.name, to: '—', shops });
-  const lineOf = (xs: LineDraft[], ch: SalesChannel) => xs.find(l => l.channels.includes(ch));
-  for (const ch of ALL_CHANNELS) {
-    const p = lineOf(from, ch);
-    const n = lineOf(to, ch);
-    if (p?.id !== n?.id) out.push({ field: `${CHANNEL_LABELS[ch]} plates on`, from: p?.name ?? '—', to: n?.name ?? '—', shops });
-  }
-  if (from.map(l => l.id).join() !== to.map(l => l.id).join() && from.length === to.length && from.every(l => b.has(l.id))) {
-    out.push({ field: 'Line order', from: from.map(l => l.name).join(' · '), to: to.map(l => l.name).join(' · '), shops });
+  for (const st of from) if (!after.has(st.id)) out.push({ field: `${st.isLine ? 'Line' : 'Bench'} removed`, from: st.name, to: '—', shops });
+  const sameMembers = from.length === to.length && from.every(s => after.has(s.id));
+  if (sameMembers && from.map(s => s.id).join() !== to.map(s => s.id).join()) {
+    out.push({ field: 'Kitchen order', from: from.map(s => s.name).join(', '), to: to.map(s => s.name).join(', '), shops });
   }
   return out;
 }
 
-function LinesTab({ lines, setLines, shopsWithOwnLines }: { lines: LineDraft[]; setLines: (next: LineDraft[]) => void; shopsWithOwnLines: string[] }) {
-  const patch = (id: string, p: Partial<LineDraft>) => setLines(lines.map(l => (l.id === id ? { ...l, ...p } : l)));
+/**
+ * Every shop's kitchen as it starts: lines and benches in one list. A
+ * sales channel plates on exactly one line; a kind of work lands on
+ * exactly one station. Picking either somewhere else moves it.
+ */
+function KitchenTab({ stations, setStations, shopsWithOwnKitchen }: { stations: StationDraft[]; setStations: (next: StationDraft[]) => void; shopsWithOwnKitchen: string[] }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const lines = stations.filter(s => s.isLine);
+  const patch = (id: string, p: Partial<StationDraft>) => setStations(stations.map(s => (s.id === id ? { ...s, ...p } : s)));
   const remove = (id: string) => {
-    if (lines.length <= 1) return;
-    const gone = lines.find(l => l.id === id);
-    const rest = lines.filter(l => l.id !== id);
-    // Its channels have to plate somewhere: the first remaining line.
-    rest[0] = { ...rest[0], channels: [...rest[0].channels, ...(gone?.channels ?? [])] };
-    setLines(rest);
+    const gone = stations.find(s => s.id === id);
+    if (!gone) return;
+    if (gone.isLine && lines.length <= 1) return;
+    let rest = stations.filter(s => s.id !== id);
+    if (gone.isLine && gone.channels.length) {
+      // Its channels have to plate somewhere: the first remaining line.
+      const first = rest.find(s => s.isLine)!;
+      rest = rest.map(s => (s.id === first.id ? { ...s, channels: [...s.channels, ...gone.channels] } : s));
+    }
+    setStations(rest);
   };
-  const add = () => {
-    if (lines.length >= MAX_BENCHES) return;
-    let n = lines.length + 1;
-    while (lines.some(l => l.id === `fj-line-${n}`)) n += 1;
-    setLines([...lines, { id: `fj-line-${n}`, name: `Line ${n}`, halfBatches: false, channels: [], roles: [] }]);
+  const add = (isLine: boolean) => {
+    if (isLine && lines.length >= MAX_BENCHES) return;
+    const prefix = isLine ? 'fj-line' : 'fj-kitchen';
+    let n = (isLine ? lines.length : stations.length - lines.length) + 1;
+    while (stations.some(s => s.id === `${prefix}-${n}`)) n += 1;
+    const fresh: StationDraft = { id: `${prefix}-${n}`, name: isLine ? `Line ${n}` : `Bench ${n}`, isLine, channels: [], halfBatches: false, roles: [], kit: [] };
+    // Lines sit together at the top, benches below.
+    const lastLine = stations.map(s => s.isLine).lastIndexOf(true);
+    const next = stations.slice();
+    next.splice(isLine ? lastLine + 1 : stations.length, 0, fresh);
+    setStations(next);
+    setOpenId(fresh.id);
+  };
+  const move = (id: string, dir: -1 | 1) => {
+    const i = stations.findIndex(s => s.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= stations.length) return;
+    const next = stations.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    setStations(next);
   };
   const plateOn = (ch: SalesChannel, id: string) =>
-    setLines(lines.map(l => ({ ...l, channels: l.id === id ? Array.from(new Set([...l.channels, ch])) : l.channels.filter(c => c !== ch) })));
-  const move = (id: string, dir: -1 | 1) => {
-    const i = lines.findIndex(l => l.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= lines.length) return;
-    const next = lines.slice();
-    [next[i], next[j]] = [next[j], next[i]];
-    setLines(next);
+    setStations(stations.map(s => ({ ...s, channels: s.id === id ? Array.from(new Set([...s.channels, ch])) : s.channels.filter(c => c !== ch) })));
+  const takeRole = (role: WorkRole, id: string) => {
+    const has = stations.find(s => s.id === id)?.roles.includes(role) ?? false;
+    setStations(stations.map(s => ({ ...s, roles: s.id === id ? (has ? s.roles.filter(r => r !== role) : [...s.roles, role]) : s.roles.filter(r => r !== role) })));
   };
+
+  const unplated = ALL_CHANNELS.filter(ch => !stations.some(s => s.channels.includes(ch)));
+  const untaken = FJ_WORK_ROLES.filter(r => !stations.some(s => s.roles.includes(r.id)));
+  const whoHas = (pred: (s: StationDraft) => boolean, notId: string) => stations.find(s => s.id !== notId && pred(s))?.name;
 
   return (
     <>
-      {lines.map((line, i) => (
-        <Section
-          key={line.id}
-          title={line.name || 'Unnamed line'}
-          rightSlot={
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <StatusPill tone="neutral" size="xs" label={`Line ${i + 1} of ${lines.length}`} />
-              <button type="button" onClick={() => move(line.id, -1)} disabled={i === 0} aria-label={`Move ${line.name} up`} style={{ ...iconBtn, opacity: i === 0 ? 0.4 : 1 }}><ChevronRight size={12} style={{ transform: 'rotate(-90deg)' }} /></button>
-              <button type="button" onClick={() => move(line.id, 1)} disabled={i === lines.length - 1} aria-label={`Move ${line.name} down`} style={{ ...iconBtn, opacity: i === lines.length - 1 ? 0.4 : 1 }}><ChevronRight size={12} style={{ transform: 'rotate(90deg)' }} /></button>
-              {lines.length > 1 && (
-                <button type="button" onClick={() => remove(line.id)} style={linkBtn} aria-label={`Remove ${line.name}`}>Remove line</button>
-              )}
-            </div>
-          }
-        >
-          <Row label="Name">
-            <TextInput value={line.name} onChange={v => patch(line.id, { name: v })} width={260} />
-          </Row>
-          <Row label="Half batches">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Switch checked={line.halfBatches} onChange={v => patch(line.id, { halfBatches: v })} label={`${line.name} half batches`} />
-              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{line.halfBatches ? 'Small containers' : 'Recipe\'s own container'}</span>
-            </div>
-          </Row>
-          <Row label="Plates for">
-            <span style={{ fontSize: 12, color: line.channels.length ? 'var(--color-text-secondary)' : 'var(--color-text-muted)' }}>
-              {line.channels.length ? line.channels.map(c => CHANNEL_LABELS[c]).join(', ') : 'No channels yet. Pick them below.'}
-            </span>
-          </Row>
-        </Section>
-      ))}
-
-      {lines.length < MAX_BENCHES && (
-        <button type="button" onClick={add} style={{ ...ghostBtn, alignSelf: 'flex-start', borderStyle: 'dashed', color: 'var(--color-info)' }}>
-          + Add a line
-        </button>
+      {(unplated.length > 0 || untaken.length > 0) ? (
+        <div role="status" style={{ padding: '10px 14px', borderRadius: 'var(--radius-card)', background: 'var(--color-error-light)', border: '1px solid var(--color-error-border)', color: 'var(--color-error)', fontSize: 12, fontWeight: 600 }}>
+          {unplated.length > 0 && <div>{unplated.map(c => CHANNEL_LABELS[c]).join(', ')} {unplated.length === 1 ? 'has' : 'have'} no line to plate on. Sales there will not be planned.</div>}
+          {untaken.length > 0 && <div>No station takes {untaken.map(r => r.label.toLowerCase()).join(' or ')} work. The board shows it on a card of its own until one does.</div>}
+        </div>
+      ) : (
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-muted)' }}>
+          Every sales channel plates on a line and every kind of work has a station. A station that takes work is a card on the Sections board under its name; its kit sizes the loads.
+        </p>
       )}
 
-      <Section title="Where each channel plates">
-        {ALL_CHANNELS.map(ch => (
-          <Row key={ch} label={CHANNEL_LABELS[ch]}>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {lines.map(line => (
-                <button key={line.id} type="button" onClick={() => plateOn(ch, line.id)} aria-pressed={line.channels.includes(ch)} style={pill(line.channels.includes(ch))}>
-                  {line.name || 'Unnamed line'}
-                </button>
-              ))}
-            </div>
-          </Row>
-        ))}
-      </Section>
-
-      <Section title="Shops with their own lines">
-        {shopsWithOwnLines.length === 0 ? (
-          <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>None. Every shop runs the lines above. A GM changes theirs under Settings, Benches.</span>
-        ) : (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {shopsWithOwnLines.map(id => <span key={id} style={chip}>{getShop(id)?.name ?? id}</span>)}
-            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', alignSelf: 'center' }}>Publishing leaves these shops on their own lines.</span>
-          </div>
-        )}
-      </Section>
-    </>
-  );
-}
-
-// ─── Benches ─────────────────────────────────────────────────────────────────
-
-/**
- * The kitchen benches every shop starts with: what each is called, the
- * work that lands on it, and the kit it owns. A bench with work is a card
- * on the Sections board under this name; the kit sizes its cook loads.
- * Lines live on their own tab (channels, half batches) but can take work
- * too, so their roles are set here as well.
- */
-function BenchesTab({ benches, setBenches, lines, setLines, shopsWithOwnBenches }: {
-  benches: BenchDraft[]; setBenches: (next: BenchDraft[]) => void;
-  lines: LineDraft[]; setLines: (next: LineDraft[]) => void;
-  shopsWithOwnBenches: string[];
-}) {
-  const patch = (id: string, p: Partial<BenchDraft>) => setBenches(benches.map(b => (b.id === id ? { ...b, ...p } : b)));
-  const remove = (id: string) => setBenches(benches.filter(b => b.id !== id));
-  const add = () => {
-    let n = benches.length + 1;
-    while (benches.some(b => b.id === `fj-kitchen-${n}`)) n += 1;
-    setBenches([...benches, { id: `fj-kitchen-${n}`, name: `Bench ${n}`, roles: [], kit: [] }]);
-  };
-  const move = (id: string, dir: -1 | 1) => {
-    const i = benches.findIndex(b => b.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= benches.length) return;
-    const next = benches.slice();
-    [next[i], next[j]] = [next[j], next[i]];
-    setBenches(next);
-  };
-  // Who takes each role today, across kitchen benches and lines.
-  const takers = (role: WorkRole) => [
-    ...benches.filter(b => b.roles.includes(role)).map(b => b.name),
-    ...lines.filter(l => l.roles.includes(role)).map(l => l.name),
-  ];
-  // Each kind of work lands on exactly one bench: switching it on here
-  // takes it off wherever it was.
-  const toggleRole = (id: string, role: WorkRole, isLine: boolean) => {
-    const has = (isLine ? lines.find(l => l.id === id)?.roles : benches.find(b => b.id === id)?.roles)?.includes(role) ?? false;
-    const next = (roles: WorkRole[], mine: boolean) => (mine ? (has ? roles.filter(r => r !== role) : [...roles, role]) : has ? roles : roles.filter(r => r !== role));
-    const nextBenches = benches.map(b => ({ ...b, roles: next(b.roles, !isLine && b.id === id) }));
-    const nextLines = lines.map(l => ({ ...l, roles: next(l.roles, isLine && l.id === id) }));
-    if (JSON.stringify(nextBenches) !== JSON.stringify(benches)) setBenches(nextBenches);
-    if (JSON.stringify(nextLines) !== JSON.stringify(lines)) setLines(nextLines);
-  };
-  const untaken = FJ_WORK_ROLES.filter(r => takers(r.id).length === 0);
-
-  const rolePills = (id: string, roles: WorkRole[], name: string, isLine: boolean) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {FJ_WORK_ROLES.map(r => {
-          const on = roles.includes(r.id);
-          const elsewhere = takers(r.id).filter(n => n !== name);
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {stations.map((st, i) => {
+          const isOpen = openId === st.id;
+          const summary = st.isLine
+            ? [`Plates ${channelsText(st.channels)}`, st.halfBatches ? 'half batches' : null, st.roles.length ? `takes ${rolesText(st.roles)}` : null, st.kit.length ? kitSummary(st.kit) : null]
+            : [st.roles.length ? `Takes ${rolesText(st.roles)}` : 'Takes no work', st.kit.length ? kitSummary(st.kit) : 'no kit counted'];
+          const canRemove = !(st.isLine && lines.length <= 1);
           return (
-            <button key={r.id} type="button" onClick={() => toggleRole(id, r.id, isLine)} aria-pressed={on} style={pill(on)} title={`${r.what}${elsewhere.length ? ` Now on ${elsewhere.join(', ')}; click to move it here.` : ''}`}>
-              {r.label}{!on && elsewhere.length > 0 && elsewhere[0] !== r.label && <span style={{ opacity: 0.6, marginLeft: 4, fontSize: 10 }}>· on {elsewhere[0]}</span>}
-            </button>
+            <section key={st.id} style={{ background: '#fff', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
+                <button type="button" onClick={() => setOpenId(isOpen ? null : st.id)} aria-expanded={isOpen} style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-primary)', padding: 0 }}>
+                  {isOpen ? <ChevronDown size={14} color="var(--color-text-muted)" /> : <ChevronRight size={14} color="var(--color-text-muted)" />}
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>{st.name || (st.isLine ? 'Unnamed line' : 'Unnamed bench')}</span>
+                  <StatusPill tone={st.isLine ? 'brand' : 'neutral'} size="xs" label={st.isLine ? 'Line' : 'Bench'} />
+                  <span style={{ fontSize: 11, color: 'var(--color-text-muted)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summary.filter(Boolean).join(' · ')}</span>
+                </button>
+                <button type="button" onClick={() => move(st.id, -1)} disabled={i === 0} aria-label={`Move ${st.name} up`} style={{ ...iconBtn, opacity: i === 0 ? 0.35 : 1 }}><ChevronRight size={12} style={{ transform: 'rotate(-90deg)' }} /></button>
+                <button type="button" onClick={() => move(st.id, 1)} disabled={i === stations.length - 1} aria-label={`Move ${st.name} down`} style={{ ...iconBtn, opacity: i === stations.length - 1 ? 0.35 : 1 }}><ChevronRight size={12} style={{ transform: 'rotate(90deg)' }} /></button>
+                {canRemove && <button type="button" onClick={() => remove(st.id)} style={linkBtn} aria-label={`Remove ${st.name}`}>Remove</button>}
+              </div>
+              {isOpen && (
+                <div style={{ padding: '14px 16px 16px', borderTop: '1px solid var(--color-border-subtle)', background: 'var(--color-bg-hover)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <Row label="Name">
+                    <TextInput value={st.name} onChange={v => patch(st.id, { name: v })} width={260} />
+                  </Row>
+                  {st.isLine && (
+                    <Row label="Plates for">
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {ALL_CHANNELS.map(ch => {
+                            const on = st.channels.includes(ch);
+                            const elsewhere = whoHas(s => s.channels.includes(ch), st.id);
+                            return (
+                              <button key={ch} type="button" onClick={() => plateOn(ch, st.id)} aria-pressed={on} style={pill(on)} title={elsewhere ? `Now on ${elsewhere}; click to move it here.` : undefined}>
+                                {CHANNEL_LABELS[ch]}{!on && elsewhere && <span style={{ opacity: 0.6, marginLeft: 4, fontSize: 10 }}>· {elsewhere}</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Each channel plates on one line. Picking one here moves it.</span>
+                      </div>
+                    </Row>
+                  )}
+                  {st.isLine && (
+                    <Row label="Half batches">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <Switch checked={st.halfBatches} onChange={v => patch(st.id, { halfBatches: v })} label={`${st.name} half batches`} />
+                        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{st.halfBatches ? 'Plates small containers; recipes that allow halves round to halves here.' : 'Plates each recipe\u2019s own container.'}</span>
+                      </div>
+                    </Row>
+                  )}
+                  <Row label="Work that lands here">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {FJ_WORK_ROLES.map(r => {
+                          const on = st.roles.includes(r.id);
+                          const elsewhere = whoHas(s => s.roles.includes(r.id), st.id);
+                          return (
+                            <button key={r.id} type="button" onClick={() => takeRole(r.id, st.id)} aria-pressed={on} style={pill(on)} title={`${r.what}${elsewhere ? ` Now on ${elsewhere}; click to move it here.` : ''}`}>
+                              {r.label}{!on && elsewhere && elsewhere !== r.label && <span style={{ opacity: 0.6, marginLeft: 4, fontSize: 10 }}>· {elsewhere}</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                        {st.roles.length
+                          ? `On the Sections board as \u201c${st.name || 'Unnamed'}\u201d: ${st.roles.map(r => FJ_WORK_ROLE_BY_ID[r].what.replace(/\.$/, '').toLowerCase()).join('; ')}.`
+                          : 'Takes no work, so it has no card on the Sections board.'}
+                      </span>
+                    </div>
+                  </Row>
+                  <Row label="Kit">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <KitEditor kit={st.kit} editing onChange={next => patch(st.id, { kit: next })} />
+                      <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                        {st.roles.includes('hot')
+                          ? 'Ovens hold trays: two ovens of six and a recipe that fills two trays a batch is six batches a load. One rice kit fits a cooker.'
+                          : 'Counted so the board can size loads. A GM counts their own under Settings, Benches.'}
+                      </span>
+                    </div>
+                  </Row>
+                </div>
+              )}
+            </section>
           );
         })}
       </div>
-      <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-        {roles.length ? `On the Sections board as “${name || 'Unnamed'}”: ${roles.map(r => FJ_WORK_ROLE_BY_ID[r].what.replace(/\.$/, '').toLowerCase()).join('; ')}.` : 'Takes no work, so it is not on the Sections board.'}
-      </span>
-    </div>
-  );
 
-  return (
-    <>
-      {untaken.length > 0 && (
-        <div role="status" style={{ padding: '10px 14px', borderRadius: 'var(--radius-card)', background: 'var(--color-error-light)', border: '1px solid var(--color-error-border)', color: 'var(--color-error)', fontSize: 12, fontWeight: 600 }}>
-          No bench takes {untaken.map(r => r.label.toLowerCase()).join(' or ')} work. The board shows it on a card of its own until a bench takes it.
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: 8 }}>
+        {lines.length < MAX_BENCHES && <button type="button" onClick={() => add(true)} style={{ ...ghostBtn, borderStyle: 'dashed', color: 'var(--color-info)' }}>+ Add a line</button>}
+        <button type="button" onClick={() => add(false)} style={{ ...ghostBtn, borderStyle: 'dashed', color: 'var(--color-info)' }}>+ Add a bench</button>
+      </div>
 
-      {benches.map((b, i) => (
-        <Section
-          key={b.id}
-          title={b.name || 'Unnamed bench'}
-          rightSlot={
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <StatusPill tone="neutral" size="xs" label={`Bench ${i + 1} of ${benches.length}`} />
-              <button type="button" onClick={() => move(b.id, -1)} disabled={i === 0} aria-label={`Move ${b.name} up`} style={{ ...iconBtn, opacity: i === 0 ? 0.4 : 1 }}><ChevronRight size={12} style={{ transform: 'rotate(-90deg)' }} /></button>
-              <button type="button" onClick={() => move(b.id, 1)} disabled={i === benches.length - 1} aria-label={`Move ${b.name} down`} style={{ ...iconBtn, opacity: i === benches.length - 1 ? 0.4 : 1 }}><ChevronRight size={12} style={{ transform: 'rotate(90deg)' }} /></button>
-              {benches.length > 1 && <button type="button" onClick={() => remove(b.id)} style={linkBtn} aria-label={`Remove ${b.name}`}>Remove bench</button>}
-            </div>
-          }
-        >
-          <Row label="Name">
-            <TextInput value={b.name} onChange={v => patch(b.id, { name: v })} width={260} />
-          </Row>
-          <Row label="Work that lands here">{rolePills(b.id, b.roles, b.name, false)}</Row>
-          <Row label="Kit">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <KitEditor kit={b.kit} editing onChange={next => patch(b.id, { kit: next })} />
-              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                {b.roles.includes('hot')
-                  ? 'Ovens hold trays: two ovens of six and a recipe that fills two trays a batch is six batches a load. One rice kit fits a cooker, so two cookers cook two batches at once.'
-                  : 'Counted so the board can size loads. A shop\'s GM can count theirs under Settings, Benches.'}
-              </span>
-            </div>
-          </Row>
-        </Section>
-      ))}
-
-      <button type="button" onClick={add} style={{ ...ghostBtn, alignSelf: 'flex-start', borderStyle: 'dashed', color: 'var(--color-info)' }}>
-        + Add a bench
-      </button>
-
-      <Section
-        title="Lines on the board"
-        description="A line plates for the counter or for delivery; it is set up on the Lines tab. A line that also does work (the second make line plates small containers and packs catering) takes that work here and gets a card."
-      >
-        {lines.map(l => (
-          <Row key={l.id} label={l.name || 'Unnamed line'}>{rolePills(l.id, l.roles, l.name, true)}</Row>
-        ))}
-      </Section>
-
-      <Section title="Shops with their own benches">
-        {shopsWithOwnBenches.length === 0 ? (
-          <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>None. Every shop has the benches above. A GM changes theirs under Settings, Benches.</span>
+      <Section title="Shops with their own kitchen">
+        {shopsWithOwnKitchen.length === 0 ? (
+          <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>None. Every shop runs the kitchen above. A GM changes theirs under Settings, Benches.</span>
         ) : (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {shopsWithOwnBenches.map(id => <span key={id} style={chip}>{getShop(id)?.name ?? id}</span>)}
-            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', alignSelf: 'center' }}>Publishing leaves these shops on their own benches.</span>
+            {shopsWithOwnKitchen.map(id => <span key={id} style={chip}>{getShop(id)?.name ?? id}</span>)}
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', alignSelf: 'center' }}>Publishing leaves these shops on their own kitchen.</span>
           </div>
         )}
       </Section>
@@ -1184,10 +1154,12 @@ function BenchesTab({ benches, setBenches, lines, setLines, shopsWithOwnBenches 
 
 // ─── Containers ──────────────────────────────────────────────────────────────
 
-function ContainersTab({ draft, setDraft }: TabProps) {
-  const ids = Object.keys(CONTAINERS) as ContainerId[];
+function ContainersSection({ draft, setDraft }: TabProps) {
   return (
-    <Section title="Containers" description="What one batch is portioned into on the lines and in the prep kitchen. Names are the kitchen's own; the fill sizes the containers a batch and the counts on the close sheet.">
+    <>
+      <p style={{ margin: 0, fontSize: 11, color: 'var(--color-text-muted)' }}>
+        What a batch is portioned into on the lines and in the prep kitchen. Names are the kitchen\u2019s own; the fill sizes the containers a batch and the counts on the close sheet.
+      </p>
       <table style={tableStyle}>
         <thead>
           <tr>
@@ -1197,7 +1169,7 @@ function ContainersTab({ draft, setDraft }: TabProps) {
           </tr>
         </thead>
         <tbody>
-          {ids.map(id => {
+          {CONTAINER_IDS.map(id => {
             const c = draft.containers[id];
             const base = BASELINE.containers[id];
             const unit = id === 'squeezy-bottle' ? 'ml' : 'g';
@@ -1228,7 +1200,7 @@ function ContainersTab({ draft, setDraft }: TabProps) {
           })}
         </tbody>
       </table>
-    </Section>
+    </>
   );
 }
 
@@ -1374,6 +1346,21 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/** A card that starts closed: for settings that are set once and rarely revisited. */
+function Fold({ title, summary, children }: { title: string; summary?: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section style={{ background: '#fff', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
+      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-primary)' }}>
+        {open ? <ChevronDown size={14} color="var(--color-text-muted)" /> : <ChevronRight size={14} color="var(--color-text-muted)" />}
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>{title}</span>
+        {summary && <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{summary}</span>}
+      </button>
+      {open && <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>{children}</div>}
+    </section>
+  );
+}
+
 function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <button
@@ -1401,6 +1388,7 @@ const pill = (active: boolean): CSSProperties => ({
 const tableStyle: CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'var(--font-primary)' };
 const th: CSSProperties = { textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--color-text-muted)', padding: '6px 8px', borderBottom: '1px solid var(--color-border-subtle)' };
 const td: CSSProperties = { padding: '8px', borderBottom: '1px solid var(--color-border-subtle)', color: 'var(--color-text-secondary)', verticalAlign: 'middle' };
+const openTd: CSSProperties = { borderBottom: 'none' };
 const groupTd: CSSProperties = { padding: '10px 8px 4px', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--color-text-muted)' };
 const chip: CSSProperties = { display: 'inline-flex', alignItems: 'center', padding: '5px 10px', borderRadius: 999, border: '1px solid var(--color-border)', fontSize: 11, color: 'var(--color-text-secondary)', background: '#fff' };
 const eyebrow: CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: 6 };
