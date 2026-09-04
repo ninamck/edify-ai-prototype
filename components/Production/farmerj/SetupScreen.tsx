@@ -23,7 +23,6 @@ import { BASELINE, diffSettings, methodFieldText, shopsTouched, type PublishEntr
 import { AUTHORED_FIELDS, bookRef, methodOf, productionFieldsOf, sameFields, withProductionFields, type FjProductionFields } from './recipeBridge';
 import {
   CONTAINERS,
-  PORTION_GRAMS,
   PRODUCT_GROUP_LABELS,
   SHELF_LIFE_GROUPS,
   WEEKDAY_LABELS,
@@ -602,13 +601,6 @@ function RecipesTab({ recipes, draft, setField, reset, settings, setSettings }: 
       <Fold title="Containers" summary={`${CONTAINER_IDS.length} containers a batch is portioned into`}>
         <ContainersSection draft={settings} setDraft={setSettings} />
       </Fold>
-      <Fold title="Portion sizes" summary="Grams a portion the demand model plans from">
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {Object.entries(PORTION_GRAMS).map(([k, g]) => (
-            <span key={k} style={chip}>{PORTION_LABELS[k as keyof typeof PORTION_GRAMS]} <strong style={{ marginLeft: 4 }}>{g} g</strong></span>
-          ))}
-        </div>
-      </Fold>
     </>
   );
 }
@@ -622,21 +614,6 @@ function Field({ label, hint, wide, children }: { label: string; hint?: string; 
     </div>
   );
 }
-
-const PORTION_LABELS: Record<keyof typeof PORTION_GRAMS, string> = {
-  trayProtein: 'Tray protein',
-  bowlProtein: 'Bowl protein',
-  trayBase: 'Tray base',
-  bowlBase: 'Bowl base',
-  side: 'Side',
-  extraMain: 'Extra main',
-  extraSide: 'Extra side',
-  hotSideAsMain: 'Hot side as main',
-  familyBase: 'Family base',
-  familySide: 'Family side',
-  sauce: 'Sauce',
-  topping: 'Topping',
-};
 
 // ─── Make-on days ────────────────────────────────────────────────────────────
 
