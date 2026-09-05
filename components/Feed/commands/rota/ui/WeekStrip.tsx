@@ -22,7 +22,10 @@ import { explainDay as explainForecastDay, hhmm } from '../engine';
 import { Chip, CoverStrip, DAY_NAME, chipsFor, dateLabel } from './chips';
 import ExplainForecast from './ExplainForecast';
 import StationView from './StationView';
+import RotaGrid, { RotaGridDialog, RotaGridToolbar } from './RotaGrid';
 import { label, segment, segmentedWrap, small, textButton } from './tokens';
+
+export type WeekMode = 'week' | 'grid' | 'station';
 
 function gbp(n: number): string {
   return `£${Math.round(n).toLocaleString('en-GB')}`;
@@ -63,14 +66,16 @@ export default function WeekStrip({
   shifts: Shift[];
   openDay: DayKey | null;
   onOpenDay: (day: DayKey | null) => void;
-  /** Open on the station view when the prompt asked for it. */
-  initialMode?: 'week' | 'station';
+  /** Open on the grid or station view when the prompt asked for it. */
+  initialMode?: WeekMode;
 }) {
-  const [mode, setMode] = useState<'week' | 'station'>(initialMode ?? 'week');
+  const [mode, setMode] = useState<WeekMode>(initialMode ?? 'week');
   const [why, setWhy] = useState(false);
+  const [fullScreen, setFullScreen] = useState(false);
 
   const open = openDay ? analysis.find((a) => a.day === openDay) : undefined;
   const openProposals = openDay ? proposals.filter((p) => p.day === openDay) : [];
+  const gridProps = { draft, proposals, selected, analysis, shifts };
 
   return (
     <section aria-label="The week" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -80,13 +85,22 @@ export default function WeekStrip({
           <button type="button" role="tab" aria-selected={mode === 'week'} style={segment(mode === 'week')} onClick={() => setMode('week')}>
             By day
           </button>
+          <button type="button" role="tab" aria-selected={mode === 'grid'} style={segment(mode === 'grid')} onClick={() => setMode('grid')}>
+            Rota
+          </button>
           <button type="button" role="tab" aria-selected={mode === 'station'} style={segment(mode === 'station')} onClick={() => setMode('station')}>
             By station
           </button>
         </div>
       </div>
 
-      {mode === 'station' ? (
+      {mode === 'grid' ? (
+        <>
+          <RotaGrid {...gridProps} size="sm" />
+          <RotaGridToolbar onFullScreen={() => setFullScreen(true)} />
+          <RotaGridDialog {...gridProps} open={fullScreen} onClose={() => setFullScreen(false)} />
+        </>
+      ) : mode === 'station' ? (
         <>
           <StationView site={site} analysis={analysis} shifts={shifts} draft={draft} />
           <span style={small}>Work by station, hour by hour. Machine load shows where the kit, not the people, is the limit.</span>
