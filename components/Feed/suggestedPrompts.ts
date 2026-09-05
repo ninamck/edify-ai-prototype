@@ -9,7 +9,7 @@
  * brand by adding a case to `CHIPS_BY_CUSTOMER`.
  */
 
-import { ChefHat, Truck, ClipboardList, ShieldCheck, Building2, CalendarClock, type LucideIcon } from 'lucide-react';
+import { ChefHat, Truck, ClipboardList, ShieldCheck, Building2, type LucideIcon } from 'lucide-react';
 import { demoCustomer } from '@/lib/demoConfig';
 
 export type PromptChip = {
@@ -43,12 +43,6 @@ export type PromptChip = {
  *  Labels follow one wording pattern — verb + object — so the list reads
  *  as a to-do list. Chips with pending data carry a count. */
 const DEFAULT_CHIPS: PromptChip[] = [
-  {
-    label: 'Rebalance the rota',
-    icon: CalendarClock,
-    text: '',
-    commandId: 'rota-rebalance',
-  },
   {
     label: 'Set up new sites',
     icon: Building2,
@@ -90,22 +84,11 @@ const DEFAULT_CHIPS: PromptChip[] = [
   },
 ];
 
-/** Chagee: the franchise HQ buyer sees the estate question first and
- *  the store-level rebalance one click down. Everything else is the
- *  default set. */
-const CHAGEE_CHIPS: PromptChip[] = [
-  {
-    label: 'Which stores ran under guide last week?',
-    icon: Building2,
-    text: 'Which stores ran under guide last week and what did it cost?',
-  },
-  ...DEFAULT_CHIPS,
-];
-
-// Per-brand chip overrides. Brands not listed here get DEFAULT_CHIPS.
-const CHIPS_BY_CUSTOMER: Record<string, PromptChip[]> = {
-  chagee: CHAGEE_CHIPS,
-};
+// Per-brand chip overrides. Empty on purpose: the rota skills live in
+// the composer's + menu (QUICK_ACTION_CHIPS in Feed.tsx), where Chagee
+// sees the HQ estate question first. Add an entry here, e.g.
+// `chagee: CHAGEE_CHIPS`, to brand the Suggested list for a customer.
+const CHIPS_BY_CUSTOMER: Record<string, PromptChip[]> = {};
 
 /** The suggested chips for the active build. Falls back to the default set. */
 export const PROMPT_CHIPS: PromptChip[] =

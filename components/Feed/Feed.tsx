@@ -28,6 +28,7 @@ import {
   Package,
   Check,
   Target,
+  Store,
   Box,
   Utensils,
   MapPin,
@@ -287,11 +288,15 @@ const QUICK_ACTION_CHIPS: {
 }[] = [
   ...COMMAND_REGISTRY
     .filter((c) => !HIDDEN_FROM_MENU_COMMAND_IDS.has(c.id))
-    .map((c) => ({
-      commandId: c.id,
-      label: c.chipLabel,
-      icon: c.chipIcon,
-    })),
+    .flatMap((c) => {
+      const row = { commandId: c.id, label: c.chipLabel, icon: c.chipIcon };
+      if (c.id !== 'rota-rebalance') return [row];
+      // The HQ question sits beside the store-level rebalance. Same
+      // command, `estate: true`; special-cased in `handleQuickAction`.
+      // Chagee's HQ buyer sees the estate question first.
+      const estate = { commandId: 'rota-estate', label: 'Which stores ran under guide?', icon: Store };
+      return demoCustomer.id === 'chagee' ? [estate, row] : [row, estate];
+    }),
   // Not a registry command — a guided flow. Special-cased in
   // `handleQuickAction`, which routes it to `startPosMatchCheck`.
   { commandId: 'pos-match-check', label: 'Check my POS matches', icon: Target },
@@ -7104,6 +7109,10 @@ export default function Feed({
   const handleQuickAction = (commandId: string) => {
     if (commandId === 'pos-match-check') {
       startPosMatchCheck();
+      return;
+    }
+    if (commandId === 'rota-estate') {
+      commandRunner.runCommand({ commandId: 'rota-rebalance', args: { estate: true }, confidence: 1 });
       return;
     }
     const cmd = getCommand(commandId);
