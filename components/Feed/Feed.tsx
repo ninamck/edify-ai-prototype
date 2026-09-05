@@ -5757,7 +5757,7 @@ export default function Feed({
   /** Charts already pinned to the dashboard — their "Add to dashboard" buttons render as already-pinned. */
   alreadyPinned?: Set<AnalyticsChartId>;
   /** If set, auto-start the named guided flow on mount (e.g. from an external "Ask Quinn" entry point). */
-  autoStartFlow?: 'recipe' | 'integrity';
+  autoStartFlow?: 'recipe' | 'integrity' | 'rota';
   /** Shows the "Note for Edify" quick action in the composer. Sending a
    *  message that starts with "Note:" logs it straight to the notebook. */
   enableNoteCapture?: boolean;
@@ -6051,6 +6051,7 @@ export default function Feed({
     didAutoStartRef.current = true;
     if (autoStartFlow === 'recipe') startRecipeFlow();
     else if (autoStartFlow === 'integrity') startIntegrityCheck();
+    else if (autoStartFlow === 'rota') commandRunner.runCommand({ commandId: 'rota-rebalance', args: {}, confidence: 1 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStartFlow]);
 

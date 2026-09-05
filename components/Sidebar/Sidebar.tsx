@@ -25,6 +25,7 @@ import {
   BarChart3,
   Boxes,
   Sparkles,
+  Users,
 } from 'lucide-react';
 
 import NavGroup from './NavGroup';
@@ -326,6 +327,17 @@ export default function Sidebar() {
             compact={compact}
             active={pathname === '/forecast'}
             onClick={() => router.push('/forecast')}
+          />
+          {/* Labour — the labour guide by day part, last week's hours
+              against guide beside what they cost, and the estate
+              ranking. The rota rebalance itself runs in the Command
+              Centre; this is where its output lives. */}
+          <NavItem
+            label="Labour"
+            icon={Users}
+            compact={compact}
+            active={is('/labour')}
+            onClick={() => router.push('/labour')}
           />
           <NavItem
             label="Notebook"

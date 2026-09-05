@@ -10,8 +10,10 @@
  */
 
 import type { SiteLabourData } from './types';
+import { labourGuide } from './engine';
 import { FITZROY_KINGS_CROSS_LABOUR } from './siteData/fitzroy-kings-cross';
 import { CHAGEE_FLAGSHIP_LABOUR } from './siteData/chagee-flagship';
+import { ESTATE_SUMMARY_ROWS, rowFromLastWeek, type EstateLabourRow } from './siteData/estate';
 
 const SITE_LABOUR: Record<string, () => SiteLabourData> = {
   'fitzroy-kings-cross': FITZROY_KINGS_CROSS_LABOUR,
@@ -24,4 +26,23 @@ export function siteLabourFor(siteId: string): SiteLabourData | undefined {
 
 export function sitesWithLabourData(): string[] {
   return Object.keys(SITE_LABOUR);
+}
+
+/** Last week across the estate for the given site ids, most under
+ *  guide first. Sites with a full labour view are rolled up from their
+ *  day parts; the rest come from the weekly summaries; anything else is
+ *  left out so the page can say "No data" for it. */
+export function estateLabourRows(siteIds: string[]): EstateLabourRow[] {
+  const rows: EstateLabourRow[] = [];
+  for (const id of siteIds) {
+    const full = siteLabourFor(id);
+    if (full) {
+      const guide = labourGuide(full, []).reduce((s, r) => s + r.guideHours, 0);
+      rows.push(rowFromLastWeek(id, full.lastWeek, guide));
+      continue;
+    }
+    const summary = ESTATE_SUMMARY_ROWS.find((r) => r.siteId === id);
+    if (summary) rows.push(summary);
+  }
+  return rows.sort((a, b) => a.hoursVsGuide - b.hoursVsGuide);
 }
