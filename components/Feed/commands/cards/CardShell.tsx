@@ -1,22 +1,24 @@
 'use client';
 
 /**
- * Shared chrome for in-chat command cards. Every command card sits
- * inside this shell so the visual language is consistent: a small
- * header (icon + title + optional context), a body slot, and a footer
- * row with Cancel + Confirm.
+ * Shared chrome for every work card in the chat / workspace panel.
+ * Each card sits inside this shell so the visual language is
+ * consistent: a small header (icon + title + optional context), a
+ * body slot, and a footer row with Cancel + Confirm.
  *
- * Cards also have three states: `pending` (initial), `confirmed`
- * (action committed, controls disabled), and `cancelled` (greyed
- * out). The shell owns the styling for those states; callers just
- * forward `state`.
+ * Cards have four states: `pending` (initial), `confirmed` (action
+ * committed, controls disabled), `cancelled` (greyed out), and
+ * `partial` (committed but some rows failed — amber badge). The
+ * shell owns the styling for those states; callers just forward
+ * `state`. Completed cards persist with their badge — they never
+ * disappear, so the panel doubles as the session's audit trail.
  */
 
 import type { ComponentType, ReactNode, SVGProps } from 'react';
-import { Check, X } from 'lucide-react';
+import { AlertTriangle, Check, Pencil, X } from 'lucide-react';
 import type React from 'react';
 
-export type CardState = 'pending' | 'confirmed' | 'cancelled';
+export type CardState = 'pending' | 'confirmed' | 'cancelled' | 'partial';
 
 /**
  * Common shape between lucide icons and our own `EdifyMark` glyph —
@@ -38,12 +40,17 @@ interface CardShellProps {
   subtitle?: string;
   state: CardState;
   confirmLabel?: string;
+  cancelLabel?: string;
   onConfirm?: () => void;
   onCancel?: () => void;
   confirmDisabled?: boolean;
   /** Optional inline warning line, rendered between body and footer
    *  (e.g. "Variance −2 vs expected — Quinn will flag this"). */
   warning?: string;
+  /** When provided, a confirmed card shows an Edit button beside the
+   *  Done badge — used by wizard flows where any step stays editable
+   *  until the final confirm. */
+  onEdit?: () => void;
   children: ReactNode;
 }
 
@@ -53,10 +60,12 @@ export default function CardShell({
   subtitle,
   state,
   confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
   onConfirm,
   onCancel,
   confirmDisabled,
   warning,
+  onEdit,
   children,
 }: CardShellProps) {
   const disabled = state !== 'pending';
@@ -109,6 +118,31 @@ export default function CardShell({
             </div>
           )}
         </div>
+        {state === 'confirmed' && onEdit && (
+          <button
+            type="button"
+            onClick={onEdit}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '3px 10px',
+              borderRadius: '100px',
+              border: '1.5px solid var(--color-border, rgba(0,28,53,0.18))',
+              background: '#fff',
+              color: 'var(--color-text-secondary)',
+              fontSize: '11px',
+              fontWeight: 700,
+              fontFamily: 'var(--font-primary)',
+              letterSpacing: '0.03em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              marginRight: '2px',
+            }}
+          >
+            <Pencil size={11} strokeWidth={2.2} /> Edit
+          </button>
+        )}
         {state === 'confirmed' && (
           <span
             style={{
@@ -145,6 +179,25 @@ export default function CardShell({
             }}
           >
             <X size={11} strokeWidth={2.5} /> Cancelled
+          </span>
+        )}
+        {state === 'partial' && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '3px 8px',
+              borderRadius: '100px',
+              background: '#FEF3E2',
+              color: '#7A3800',
+              fontSize: '11px',
+              fontWeight: 700,
+              letterSpacing: '0.03em',
+              textTransform: 'uppercase',
+            }}
+          >
+            <AlertTriangle size={11} strokeWidth={2.5} /> Partial
           </span>
         )}
       </div>
@@ -194,7 +247,7 @@ export default function CardShell({
                 cursor: 'pointer',
               }}
             >
-              Cancel
+              {cancelLabel}
             </button>
           )}
           {onConfirm && (
