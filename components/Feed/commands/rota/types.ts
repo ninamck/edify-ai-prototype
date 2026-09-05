@@ -242,6 +242,30 @@ export interface Proposal {
   ruleId?: string;
   /** Present when ticking this line leaves a rule in warning. */
   warning?: string;
+  /** Other ways to close the same gap or cut the same idle, for the GM
+   *  who knows something the data does not. The first is the engine's
+   *  pick; these are the runners-up, in order. */
+  alternatives?: Alternative[];
+}
+
+/** A different edit that solves the same problem as its proposal.
+ *  Choosing one replaces the proposal's edit, not its reason. */
+export interface Alternative {
+  id: string;
+  kind: ProposalKind;
+  personId: string;
+  personName: string;
+  day: DayKey;
+  area: string;
+  stationId?: string;
+  before?: { start: number; end: number };
+  after?: { start: number; end: number };
+  /** One line in the receipt ("Add Freya, Thu 07:00 to 11:00"). */
+  title: string;
+  /** Why this is second, or what it trades ("Freya is 4h under contract"). */
+  evidence: string;
+  hoursDelta: number;
+  warning?: string;
 }
 
 export type RuleStatus = 'pass' | 'warn' | 'fail';

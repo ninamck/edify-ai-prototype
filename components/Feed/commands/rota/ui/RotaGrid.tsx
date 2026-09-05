@@ -12,7 +12,7 @@
  * through RotaGridDialog for the GM who wants to read the whole week.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Maximize2, X } from 'lucide-react';
 import { DAY_KEYS, type DayAnalysis, type DayKey, type DeputyDraft, type Person, type Proposal, type Shift } from '../types';
@@ -20,10 +20,11 @@ import { hhmm, shiftHours } from '../engine';
 import { type ChipModel, CoverStrip, chipsForPerson, dateLabel, spokenChip } from './chips';
 import { KIND_STYLE, label, small, textButton } from './tokens';
 
-type Size = 'sm' | 'lg';
+type Size = 'sm' | 'md' | 'lg';
 
 const SIZES: Record<Size, { name: string; time: string; nameCol: string; hoursCol: string; pad: string; gap: string }> = {
   sm: { name: '12px', time: '11.5px', nameCol: '112px', hoursCol: '56px', pad: '4px 6px', gap: '3px' },
+  md: { name: '13px', time: '12.5px', nameCol: '150px', hoursCol: '72px', pad: '6px 8px', gap: '4px' },
   lg: { name: '13.5px', time: '13px', nameCol: '180px', hoursCol: '84px', pad: '8px 10px', gap: '4px' },
 };
 
@@ -129,7 +130,7 @@ export default function RotaGrid({ draft, proposals, selected, analysis, shifts,
                 <span style={{ fontSize: s.name, fontWeight: 700, color: 'var(--color-text-primary)' }}>{d}</span>
                 <span style={small}>{dateLabel(draft.weekStart, d)}</span>
               </div>
-              <CoverStrip a={a} height={size === 'lg' ? 7 : 6} />
+              <CoverStrip a={a} height={size !== 'sm' ? 7 : 6} />
             </div>
           );
         })}
@@ -141,7 +142,7 @@ export default function RotaGrid({ draft, proposals, selected, analysis, shifts,
       {groups.map((g) => (
         <div key={g.area} role="rowgroup" style={{ display: 'contents' }}>
           <div role="row" style={{ display: 'contents' }}>
-            <div role="rowheader" style={{ ...label, gridColumn: '1 / -1', padding: size === 'lg' ? '14px 0 6px' : '10px 0 4px', borderBottom: rule }}>
+            <div role="rowheader" style={{ ...label, gridColumn: '1 / -1', padding: size !== 'sm' ? '14px 0 6px' : '10px 0 4px', borderBottom: rule }}>
               {g.area}
             </div>
           </div>
@@ -149,15 +150,15 @@ export default function RotaGrid({ draft, proposals, selected, analysis, shifts,
             const h = hoursFor(p.id);
             return (
               <div key={p.id} role="row" style={{ display: 'contents' }}>
-                <div role="rowheader" style={{ padding: size === 'lg' ? '8px 0' : '6px 0', borderBottom: rule, minWidth: 0 }}>
+                <div role="rowheader" style={{ padding: size !== 'sm' ? '8px 0' : '6px 0', borderBottom: rule, minWidth: 0 }}>
                   <div style={{ fontSize: s.name, fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: 1.3 }}>{p.name}</div>
-                  {size === 'lg' && <div style={small}>{p.role}{p.age !== undefined && p.age < 18 ? ', under 18' : ''}</div>}
+                  {size !== 'sm' && <div style={small}>{p.role}{p.age !== undefined && p.age < 18 ? ', under 18' : ''}</div>}
                 </div>
                 {DAY_KEYS.map((d: DayKey) => {
                   const cells = chipsForPerson(draft, proposals, selected, p.id, d);
                   const off = p.leave?.includes(d);
                   return (
-                    <div key={d} role="cell" style={{ display: 'flex', flexDirection: 'column', gap: s.gap, padding: size === 'lg' ? '6px 0' : '4px 0', borderBottom: rule, minWidth: 0, justifyContent: 'center' }}>
+                    <div key={d} role="cell" style={{ display: 'flex', flexDirection: 'column', gap: s.gap, padding: size !== 'sm' ? '6px 0' : '4px 0', borderBottom: rule, minWidth: 0, justifyContent: 'center' }}>
                       {cells.map((c) => (
                         <Cell key={c.key} c={c} size={size} />
                       ))}
@@ -165,9 +166,9 @@ export default function RotaGrid({ draft, proposals, selected, analysis, shifts,
                     </div>
                   );
                 })}
-                <div role="cell" style={{ padding: size === 'lg' ? '8px 0' : '6px 0', borderBottom: rule, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                <div role="cell" style={{ padding: size !== 'sm' ? '8px 0' : '6px 0', borderBottom: rule, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                   <div style={{ fontSize: s.name, fontWeight: 600, color: 'var(--color-text-primary)' }}>{h}h</div>
-                  <div style={{ ...small, fontSize: size === 'lg' ? '11.5px' : '11px' }}>{p.contractedHours > 0 ? `of ${p.contractedHours}` : 'casual'}</div>
+                  <div style={{ ...small, fontSize: size !== 'sm' ? '11.5px' : '11px' }}>{p.contractedHours > 0 ? `of ${p.contractedHours}` : 'casual'}</div>
                 </div>
               </div>
             );
@@ -178,10 +179,11 @@ export default function RotaGrid({ draft, proposals, selected, analysis, shifts,
   );
 }
 
-/** The grid at full screen. Escape or the close button returns to the
- *  card; focus goes to the close button on open and back where it was
- *  on close. Nothing here is editable: ticks stay on the card. */
-export function RotaGridDialog({ open, onClose, ...grid }: RotaGridProps & { open: boolean; onClose: () => void }) {
+/** The grid at full screen with the checklist beside it, so a tick or
+ *  a pill redraws the rota in view. Escape or the close button returns
+ *  to the card; focus goes to the close button on open and back where
+ *  it was on close. */
+export function RotaGridDialog({ open, onClose, panel, ...grid }: RotaGridProps & { open: boolean; onClose: () => void; panel?: ReactNode }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const returnTo = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
@@ -221,24 +223,31 @@ export function RotaGridDialog({ open, onClose, ...grid }: RotaGridProps & { ope
             {grid.draft.siteName}, {grid.draft.weekLabel}
           </div>
           <div style={small}>
-            {grid.draft.tool} draft with the ticked changes drawn on. Read only: tick and untick on the card.
+            {grid.draft.tool} draft with the ticked changes drawn on.{panel ? ' Tick, untick or pick an alternative on the right and the rota redraws.' : ''}
           </div>
         </div>
-        <button
-          ref={closeRef}
-          type="button"
-          onClick={onClose}
-          aria-label="Close full screen"
-          style={{ ...textButton, display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '8px 12px', border: '1.5px solid var(--color-border)', color: 'var(--color-text-primary)' }}
-        >
-          <X size={15} aria-hidden="true" /> Close
-        </button>
-      </div>
-      <div style={{ flex: 1, overflow: 'auto', padding: '16px 24px 24px' }}>
-        <RotaGrid {...grid} size="lg" />
-        <div style={{ marginTop: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
           <Legend />
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={onClose}
+            aria-label="Close full screen"
+            style={{ ...textButton, display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '8px 12px', border: '1.5px solid var(--color-border)', color: 'var(--color-text-primary)', flexShrink: 0 }}
+          >
+            <X size={15} aria-hidden="true" /> Close
+          </button>
         </div>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+        <div style={{ flex: 1, minWidth: 0, overflow: 'auto', padding: '16px 24px 24px' }}>
+          <RotaGrid {...grid} size={panel ? 'md' : 'lg'} />
+        </div>
+        {panel && (
+          <aside aria-label="Changes" style={{ width: '470px', flexShrink: 0, overflow: 'auto', padding: '16px 18px 24px', borderLeft: '1px solid var(--color-border-subtle)', background: 'rgba(0,28,53,0.015)' }}>
+            {panel}
+          </aside>
+        )}
       </div>
     </div>,
     document.body,
