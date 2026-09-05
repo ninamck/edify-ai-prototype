@@ -1478,7 +1478,11 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           parts.push(`Every site with data ran on or over guide last week. Nothing to chase.`);
         } else {
           const list = under.map((r) => `${nameOf(r.siteId)} ${Math.abs(r.hoursVsGuide)}h under`).join(', ');
-          parts.push(`${under.length} of ${rows.length} sites ran under guide last week: ${list}.`);
+          parts.push(
+            rows.length === 1
+              ? `${nameOf(under[0].siteId)} ran ${Math.abs(under[0].hoursVsGuide)}h under guide last week; it is the only site with labour data in this build.`
+              : `${under.length} of ${rows.length} sites ran under guide last week: ${list}.`,
+          );
           const avg = (f: (r: (typeof under)[number]) => number) => under.reduce((s, r) => s + f(r), 0) / under.length;
           const worst = under[0];
           parts.push(
