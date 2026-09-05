@@ -4,14 +4,17 @@
  * Rota rebalance workspace card.
  *
  * Reads the site's draft from the workforce tool (Deputy), runs the
- * pure engine against the workload Edify knows about, and shows:
+ * pure engine against the workload Edify knows about, and lays the
+ * result out in the order the GM decides:
+ *   the verdict, one sentence
  *   tiles (hours, labour %, peak cover gaps, rules)
- *   the week grid with ticked changes drawn on
- *   the tickable list of proposals
- *   the rules panel
+ *   the week in one row; click a day to see its shifts
+ *   rule fixes, applied
+ *   the tickable changes, grouped by day, with hours and pounds
+ *   the rules in one line
  *   Write to Deputy draft, Re-check, Discard
  *
- * Every tick and untick re-runs the tiles, the grid and the rules, so
+ * Every tick and untick re-runs the tiles, the strip and the rules, so
  * the GM sees the cost of each line before writing anything. Edify
  * writes the draft. Deputy still publishes and notifies staff.
  */
@@ -22,16 +25,15 @@ import CardShell, { type CardState } from './CardShell';
 import { useActiveSite, ACTIVE_SITES } from '@/components/ActiveSite/ActiveSiteContext';
 import { deputyDraftFor, sitesWithDrafts } from '@/components/Feed/commands/rota/deputy';
 import { siteLabourFor } from '@/components/Feed/commands/rota/sources';
-import { rebalance, computeTiles, explainDay as explainForecastDay } from '@/components/Feed/commands/rota/engine';
+import { rebalance, computeTiles } from '@/components/Feed/commands/rota/engine';
 import type { DayKey, Proposal, RuleResult, Shift, Tiles } from '@/components/Feed/commands/rota/types';
 import RotaTiles from '@/components/Feed/commands/rota/ui/Tiles';
-import WeekGrid from '@/components/Feed/commands/rota/ui/WeekGrid';
-import ExplainForecast from '@/components/Feed/commands/rota/ui/ExplainForecast';
-import StationView from '@/components/Feed/commands/rota/ui/StationView';
+import WeekStrip from '@/components/Feed/commands/rota/ui/WeekStrip';
 import CapacityNotes from '@/components/Feed/commands/rota/ui/CapacityNotes';
-import ProposalList from '@/components/Feed/commands/rota/ui/ProposalList';
-import RulesPanel from '@/components/Feed/commands/rota/ui/RulesPanel';
-import { ghostButton, primaryButton, segment, segmentedWrap, small, textButton } from '@/components/Feed/commands/rota/ui/tokens';
+import RuleFixes from '@/components/Feed/commands/rota/ui/RuleFixes';
+import ChangeList from '@/components/Feed/commands/rota/ui/ChangeList';
+import RulesLine from '@/components/Feed/commands/rota/ui/RulesLine';
+import { body, ghostButton, primaryButton, small, textButton } from '@/components/Feed/commands/rota/ui/tokens';
 
 export interface RotaRebalanceArgs {
   siteId?: string;
@@ -65,6 +67,23 @@ export function resolveRotaSite(requested: string | undefined, activeSiteId: str
   return { siteId: drafts[0] ?? null, fallback: true };
 }
 
+/** The first thing the GM reads. What is wrong with the draft, in
+ *  numbers, then where the week lands with the current ticks. Most
+ *  weeks this should be one short sentence. */
+function verdictFor(breachesBefore: number, tiles: Tiles, proposals: number, ticked: number): string {
+  if (proposals === 0) return 'The draft matches the workload and passes every rule. Nothing to write.';
+  const problems: string[] = [];
+  if (breachesBefore > 0) problems.push(`${breachesBefore} rule breach${breachesBefore === 1 ? '' : 'es'}`);
+  if (tiles.peakGapsBefore > 0) problems.push(`${tiles.peakGapsBefore} peak${tiles.peakGapsBefore === 1 ? '' : 's'} short of cover`);
+  const first = problems.length > 0 ? `The draft has ${problems.join(' and ')}.` : 'The draft passes the rules but has hours where the work is not.';
+  const landing = `${tiles.scheduledHours}h and ${tiles.labourPct}% labour against a ${tiles.targetPct}% target`;
+  const second =
+    ticked === 0
+      ? `${proposals} change${proposals === 1 ? '' : 's'} below, none in, so the week stays at ${landing}.`
+      : `${proposals} change${proposals === 1 ? '' : 's'} below. With ${ticked === proposals ? `all ${proposals}` : `${ticked} of the ${proposals}`} in, the week lands at ${landing}.`;
+  return `${first} ${second}`;
+}
+
 export default function RotaRebalanceCard({
   initialArgs,
   state,
@@ -82,10 +101,9 @@ export default function RotaRebalanceCard({
 }) {
   const { activeSiteId } = useActiveSite();
   const { siteId } = resolveRotaSite(initialArgs.siteId, activeSiteId);
-  const [view, setView] = useState<'area' | 'station'>(initialArgs.view ?? 'area');
   const [recheckNonce, setRecheckNonce] = useState(0);
   const [recheckedAt, setRecheckedAt] = useState<string | null>(null);
-  const [explainDay, setExplainDay] = useState<DayKey | null>(null);
+  const [openDay, setOpenDay] = useState<DayKey | null>(null);
 
   // recheckNonce is a deliberate input: a re-check pulls the draft again.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,6 +155,9 @@ export default function RotaRebalanceCard({
   const accepted = result.proposals.filter((p) => selected.has(p.id));
   const declined = result.proposals.filter((p) => !selected.has(p.id));
   const fails = computed.rules.filter((r) => r.status === 'fail');
+  const fixes = result.proposals.filter((p) => p.tag === 'rule-fix');
+  const changes = result.proposals.filter((p) => p.tag !== 'rule-fix');
+  const verdict = verdictFor(result.rulesBefore.filter((r) => r.status === 'fail').length, computed.tiles, result.proposals.length, accepted.length);
 
   const recheck = () => {
     setRecheckNonce((n) => n + 1);
@@ -148,47 +169,45 @@ export default function RotaRebalanceCard({
 
   return (
     <CardShell icon={CalendarClock} title={`Rota rebalance: ${draft.siteName}`} subtitle={subtitle} state={state}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <p role="status" style={{ ...body, fontSize: '13.5px', lineHeight: 1.5, margin: 0 }}>
+          {verdict}
+        </p>
+
         <RotaTiles tiles={computed.tiles} rules={computed.rules} />
 
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '8px', flexWrap: 'wrap' }}>
-            <div style={segmentedWrap} role="tablist" aria-label="Week view">
-              <button type="button" role="tab" aria-selected={view === 'area'} style={segment(view === 'area')} onClick={() => setView('area')}>
-                Week by area
-              </button>
-              <button type="button" role="tab" aria-selected={view === 'station'} style={segment(view === 'station')} onClick={() => setView('station')}>
-                Week by station
-              </button>
-            </div>
-            <span style={small}>
-              {view === 'area'
-                ? 'Ticked changes are drawn on. Red under a day: short of the workload. Grey: a head idle. Click a forecast to see why.'
-                : 'Work by station, hour by hour. Machine load shows where the kit, not the people, is the limit.'}
-            </span>
-          </div>
-          {view === 'area' ? (
-            <WeekGrid
-              draft={draft}
-              proposals={result.proposals}
-              selected={selected}
-              analysis={computed.analysis}
-              explainDay={explainDay}
-              onExplain={(d) => setExplainDay((cur) => (cur === d ? null : d))}
-            />
-          ) : (
-            <StationView site={site} analysis={computed.analysis} shifts={computed.shifts} draft={draft} />
-          )}
-        </div>
+        <WeekStrip
+          draft={draft}
+          site={site}
+          proposals={result.proposals}
+          selected={selected}
+          analysis={computed.analysis}
+          shifts={computed.shifts}
+          openDay={openDay}
+          onOpenDay={setOpenDay}
+        />
 
-        {explainDay && view === 'area' && <ExplainForecast x={explainForecastDay(site, explainDay)} onClose={() => setExplainDay(null)} />}
+        <RuleFixes fixes={fixes} selected={selected} onToggle={toggle} disabled={disabled} weekStart={draft.weekStart} onShowDay={(d) => setOpenDay(d)} />
+
+        <ChangeList
+          proposals={changes}
+          selected={selected}
+          onToggle={toggle}
+          disabled={disabled}
+          weekStart={draft.weekStart}
+          hourlyCostGBP={draft.hourlyCostGBP}
+          onShowDay={(d) => setOpenDay(d)}
+        />
+
+        {result.proposals.length === 0 && (
+          <div style={{ padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', ...small, color: 'var(--color-text-primary)' }}>
+            Nothing to change. Publish in {draft.tool} when you are ready.
+          </div>
+        )}
+
+        <RulesLine rules={computed.rules} toolName={draft.tool} />
 
         <CapacityNotes notes={result.capacity} />
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(200px, 2fr)', gap: '14px', alignItems: 'start' }}>
-          <ProposalList proposals={result.proposals} selected={selected} onToggle={toggle} disabled={disabled} />
-          <RulesPanel rules={computed.rules} toolName={draft.tool} />
-        </div>
 
         <div style={{ ...small, lineHeight: 1.45 }}>
           Edify writes the draft. {draft.tool} still publishes, notifies staff and runs payroll. Nobody is told until the GM publishes in {draft.tool}.
