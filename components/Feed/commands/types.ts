@@ -31,7 +31,12 @@ export type CommandId =
    *  an existing shop's setup, load the people, set ranges & tiers per
    *  day, production times, then go live. Multi-step wizard — see
    *  useCommandRunner's startSiteSetupWizard. */
-  | 'site-setup';
+  | 'site-setup'
+  /** Read a site's draft rota from the workforce tool, compare it with
+   *  the workload Edify knows is coming, propose tickable shift edits,
+   *  check labour rules, write an amended draft back. Single card; see
+   *  components/Feed/commands/rota. */
+  | 'rota-rebalance';
 
 /** A single resolved invocation of a command. Args are command-specific
  *  — each command exports its own arg shape. We use `unknown` here to

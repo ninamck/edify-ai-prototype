@@ -103,6 +103,12 @@ import {
   type SiteProductionSchedules,
 } from '@/components/Feed/commands/siteSetupFixtures';
 import { addSites as addRegisterSites, removeSites as removeRegisterSites } from '@/components/Settings/sitesRegisterStore';
+import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+import { deputyDraftFor } from '@/components/Feed/commands/rota/deputy';
+import { siteLabourFor } from '@/components/Feed/commands/rota/sources';
+import { rebalance as rotaRebalance, computeTiles as rotaComputeTiles, hhmm as rotaHhmm } from '@/components/Feed/commands/rota/engine';
+import { saveWrittenDraft, clearWrittenDraft } from '@/components/Feed/commands/rota/rotaStore';
+import { resolveRotaSite, type RotaRebalanceFinal } from '@/components/Feed/commands/cards/RotaRebalanceCard';
 
 // We import the parent's ChatMsg shape indirectly — Feed.tsx defines
 // it locally. The runner only needs a structural subset, so we duck-
@@ -160,6 +166,9 @@ interface RunCommandOpts {
 
 export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized, onFreshTask }: UseCommandRunnerArgs) {
   const [cmdStates, setCmdStates] = useState<Record<string, CardState>>({});
+  const { activeSiteId } = useActiveSite();
+  const activeSiteIdRef = useRef(activeSiteId);
+  activeSiteIdRef.current = activeSiteId;
   const [cmdUndone, setCmdUndone] = useState<Record<string, boolean>>({});
 
   // We keep receipts in a ref since they hold non-serialisable
@@ -594,6 +603,12 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       // shop → load the people → ranges & tiers → production → go live.
       if (intent.commandId === 'site-setup') {
         startSiteSetupWizard(intent.args);
+        return;
+      }
+      // Rota rebalance: one workspace card, preceded by a line that
+      // says what was read and how many changes came out.
+      if (intent.commandId === 'rota-rebalance') {
+        startRotaRebalance(intent.args);
         return;
       }
 
@@ -1433,6 +1448,145 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
   );
 
   // ── Cancel ───────────────────────────────────────────────────────
+
+  // ── Rota rebalance ──────────────────────────────────────────────
+  //
+  // The engine is pure, so the runner can run it once here to write
+  // the intro line and again inside the card on every tick. Same
+  // inputs, same answer.
+  const startRotaRebalance = useCallback(
+    (args: Record<string, unknown>) => {
+      const requested = args.siteId as string | undefined;
+      const requestedName = args.siteName as string | undefined;
+      const targetPct = args.targetPct as number | undefined;
+
+      // A named site with no draft gets the empty state, not a silent
+      // switch to another site.
+      if (requested && !deputyDraftFor(requested)) {
+        pushResponseFlow({
+          text: `${requestedName ?? 'That site'} has no draft in Deputy for next week yet, so there is nothing to check. Ask the GM to start the draft, or I can check another site.`,
+          commandId: 'rota-rebalance',
+          cardMsgType: 'cmd-rota-rebalance',
+          cardArgs: { ...args },
+          thinkingMs: 1200,
+        });
+        return;
+      }
+
+      const { siteId, fallback } = resolveRotaSite(requested, activeSiteIdRef.current);
+      const draft = siteId ? deputyDraftFor(siteId) : undefined;
+      const site = siteId ? siteLabourFor(siteId) : undefined;
+      if (!siteId || !draft || !site) {
+        pushResponseFlow({
+          text: 'No site in this build has a draft rota in Deputy for next week, so there is nothing to check yet.',
+          commandId: 'rota-rebalance',
+          cardMsgType: 'cmd-rota-rebalance',
+          cardArgs: { ...args },
+          thinkingMs: 900,
+        });
+        return;
+      }
+
+      const result = rotaRebalance(draft, site, targetPct);
+      const defaults = new Set(result.proposals.filter((p) => p.defaultSelected).map((p) => p.id));
+      const { tiles, rules } = rotaComputeTiles(result, defaults);
+      const ruleFixes = result.proposals.filter((p) => p.tag === 'rule-fix').length;
+      const n = result.proposals.length;
+      const fixedWork = site.fixedTasks
+        .filter((t) => t.day !== 'daily' && t.source !== 'clean')
+        .map((t) => t.label.toLowerCase());
+      const fixedLine = fixedWork.length > 0 ? ` and the fixed work (${fixedWork.slice(0, 3).join(', ')})` : '';
+
+      const parts: string[] = [];
+      parts.push(
+        `${fallback ? `${draft.siteName} is the only site with a ${draft.tool} draft for next week, so I've used that. ` : ''}I've read the ${draft.siteName} draft from ${draft.tool} and checked it against next week's forecast, the production plan${fixedLine}.`,
+      );
+      if (n === 0) {
+        parts.push('It already matches the workload and passes every rule. Nothing to change.');
+      } else {
+        parts.push(
+          `${n} change${n === 1 ? '' : 's'} below${ruleFixes > 0 ? `, ${ruleFixes} of them rule fix${ruleFixes === 1 ? '' : 'es'}` : ''}. With the default ticks the week lands at ${tiles.scheduledHours}h and ${tiles.labourPct}% labour${
+            tiles.labourPct > tiles.targetPct ? `, over the ${tiles.targetPct}% target. The line under the tiles says what it would take to get under.` : `, inside the ${tiles.targetPct}% target.`
+          }`,
+        );
+        const warn = rules.find((r) => r.status === 'warn');
+        if (warn?.detail) parts.push(`One thing to know: ${warn.detail} after these ticks.`);
+        parts.push(`Tick what you want and I'll write the draft back to ${draft.tool}. ${draft.tool} still publishes.`);
+      }
+
+      pushResponseFlow({
+        text: parts.join(' '),
+        commandId: 'rota-rebalance',
+        cardMsgType: 'cmd-rota-rebalance',
+        cardArgs: { ...args, siteId, siteName: draft.siteName },
+        thinkingMs: 2600,
+      });
+    },
+    [pushResponseFlow],
+  );
+
+  const confirmRotaRebalance = useCallback(
+    (msgId: string, final: RotaRebalanceFinal) => {
+      const now = new Date();
+      const writtenAt = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      saveWrittenDraft({
+        siteId: final.siteId,
+        siteName: final.siteName,
+        weekLabel: final.weekLabel,
+        writtenAt,
+        accepted: final.accepted,
+        declined: final.declined,
+        shifts: final.shifts,
+        tiles: final.tiles,
+        rules: final.rules,
+        basedOnSync: final.basedOnSync,
+      });
+
+      const n = final.accepted.length;
+      const receipt: CommandReceipt = {
+        headline: `Draft written to ${final.toolName}: ${n} change${n === 1 ? '' : 's'}, ${final.tiles.scheduledHours}h, ${final.tiles.labourPct}% labour`,
+        detail: `${final.siteName}, ${final.weekLabel}. ${final.toolName} still publishes. Nobody has been notified.${
+          final.declined.length > 0 ? ` ${final.declined.length} suggestion${final.declined.length === 1 ? '' : 's'} left unticked.` : ''
+        }`,
+        href: '/labour',
+        hrefLabel: 'Open labour',
+        undo: () => {
+          clearWrittenDraft(final.siteId);
+        },
+      };
+      writeCmdState(msgId, 'confirmed');
+      const fmt = (r?: { start: number; end: number }) => (r ? `${rotaHhmm(r.start)} to ${rotaHhmm(r.end)}` : 'no shift');
+      recordTaskChanges({
+        changes: final.accepted.map((p) => ({
+          entityType: 'rota-shift' as const,
+          entityId: `${final.siteId}:${p.personId}:${p.day}`,
+          entityLabel: `${p.personName} · ${p.day}`,
+          fieldPath: 'shift',
+          fieldLabel: p.kind === 'add' ? 'Added shift' : p.kind === 'remove' ? 'Removed shift' : 'Shift time',
+          before: fmt(p.before),
+          after: fmt(p.after),
+          valueKind: 'text' as const,
+        })),
+        commandIntent: {
+          commandId: 'rota-rebalance',
+          cardMsgType: 'cmd-rota-rebalance',
+          args: { siteId: final.siteId, siteName: final.siteName },
+        },
+      });
+      pushReceipt(receipt, msgId);
+    },
+    [pushReceipt, recordTaskChanges, writeCmdState],
+  );
+
+  /** From the empty state: close this card and run the skill for a
+   *  site that does have a draft. */
+  const switchRotaSite = useCallback(
+    (msgId: string, siteId: string) => {
+      writeCmdState(msgId, 'cancelled');
+      startRotaRebalance({ siteId });
+    },
+    [startRotaRebalance, writeCmdState],
+  );
 
   const cancelCard = useCallback((msgId: string) => {
     writeCmdState(msgId, 'cancelled');
@@ -2758,6 +2912,9 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     confirmSiteSetup,
     reopenSiteSetupCard,
     siteSetupDone,
+    // Rota rebalance
+    confirmRotaRebalance,
+    switchRotaSite,
     undoReceipt,
     restoreMessages,
     snapshotTask,
