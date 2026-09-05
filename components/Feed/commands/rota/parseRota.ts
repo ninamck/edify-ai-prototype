@@ -9,6 +9,7 @@
  *   "Rebalance King's Cross rota, keep labour under 27%"
  *   "Is the Kings Cross rota right for Saturday?"
  *   "/rota"
+ *   "Which stores ran under guide last week and what did it cost?"
  */
 
 import type { CommandIntent } from '../types';
@@ -43,10 +44,20 @@ export function siteFromText(text: string): { id: string; name: string } | null 
  *  whether to move a break or a start today, not next week's rota. */
 const NUDGE = /\b(group order|pre-?order|bulk order|big order|large order)\b.*\b(landed|came in|just|confirmed|arrived|for (today|this afternoon|\d{1,2}(:\d{2})?))\b|\b(landed|came in|just confirmed)\b.*\b(group order|pre-?order|bulk order)\b|^\/rota\s+nudge\b|\bintraday\b/i;
 
+/** HQ question: which sites ran under the labour guide last week and
+ *  what it cost. Answered from last week's outcomes across the estate,
+ *  with the rebalance one click down. */
+const ESTATE =
+  /^\/rota\s+estate\b|\b(which|what|how many)\b.*\b(stores?|sites?|shops?|branches)\b.*\b(under|below|short|over|above)\b.*\b(guide|hours|labour|staffed)\b|\b(estate|across (the )?(stores|sites|estate|group))\b.*\b(guide|labour|hours|under|rota)\b|\bran under (the )?guide\b/i;
+
 export function parseRotaRebalance(text: string): CommandIntent | null {
   const t = text.trim();
   const slash = /^\/(rota|roster|labour)\b/i.test(t);
   const lower = t.toLowerCase();
+
+  if (ESTATE.test(t)) {
+    return { commandId: 'rota-rebalance', args: { estate: true }, confidence: 0.9 };
+  }
 
   if (NUDGE.test(t)) {
     const args: Record<string, unknown> = { nudge: true };

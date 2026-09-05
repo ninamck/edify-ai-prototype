@@ -28,6 +28,7 @@ import RotaTiles from '@/components/Feed/commands/rota/ui/Tiles';
 import WeekGrid from '@/components/Feed/commands/rota/ui/WeekGrid';
 import ExplainForecast from '@/components/Feed/commands/rota/ui/ExplainForecast';
 import StationView from '@/components/Feed/commands/rota/ui/StationView';
+import CapacityNotes from '@/components/Feed/commands/rota/ui/CapacityNotes';
 import ProposalList from '@/components/Feed/commands/rota/ui/ProposalList';
 import RulesPanel from '@/components/Feed/commands/rota/ui/RulesPanel';
 import { ghostButton, primaryButton, segment, segmentedWrap, small, textButton } from '@/components/Feed/commands/rota/ui/tokens';
@@ -181,6 +182,8 @@ export default function RotaRebalanceCard({
         </div>
 
         {explainDay && view === 'area' && <ExplainForecast x={explainForecastDay(site, explainDay)} onClose={() => setExplainDay(null)} />}
+
+        <CapacityNotes notes={result.capacity} />
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(200px, 2fr)', gap: '14px', alignItems: 'start' }}>
           <ProposalList proposals={result.proposals} selected={selected} onToggle={toggle} disabled={disabled} />

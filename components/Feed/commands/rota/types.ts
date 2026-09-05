@@ -330,6 +330,21 @@ export interface ForecastExplanation {
   peak: { start: number; end: number; heads: number };
 }
 
+/** A window where a machine, not the people, is the limit. Not a shift
+ *  edit: another head would stand in the same queue. */
+export interface CapacityNote {
+  day: DayKey;
+  start: number;
+  end: number;
+  stationNames: string[];
+  /** Peak machine load in the window, 1 is capacity. */
+  peakLoad: number;
+  /** What is driving it, if a fixed task or signal sits in the window. */
+  driver?: string;
+  /** What to do about it, in one line. */
+  advice: string;
+}
+
 export interface RebalanceResult {
   draft: DeputyDraft;
   site: SiteLabourData;
@@ -341,4 +356,6 @@ export interface RebalanceResult {
   /** Rules on the draft as it stands. */
   rulesBefore: RuleResult[];
   guide: LabourGuideRow[];
+  /** Windows where a machine, not the rota, is the limit. */
+  capacity: CapacityNote[];
 }
