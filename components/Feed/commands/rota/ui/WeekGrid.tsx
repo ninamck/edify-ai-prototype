@@ -68,8 +68,23 @@ function Chip({ c }: { c: ChipModel }) {
   const style = applied ? KIND_STYLE[c.kind] : KIND_STYLE.unchanged;
   const ghostAdd = c.kind === 'add' && !c.applied;
   const struck = applied && c.kind === 'remove';
+  // Screen readers get the change in words; the strike-through and
+  // colour carry it visually.
+  const range = (r?: { start: number; end: number }) => (r ? `${hhmm(r.start)} to ${hhmm(r.end)}` : '');
+  const spoken =
+    c.kind === 'unchanged'
+      ? `${c.personName}, ${range(c.before)}`
+      : !c.applied
+        ? `${c.personName}, ${range(c.before ?? c.after)}. Suggested ${KIND_STYLE[c.kind].label.toLowerCase()}, not ticked`
+        : c.kind === 'add'
+          ? `${c.personName}, added ${range(c.after)}: ${c.reason}`
+          : c.kind === 'remove'
+            ? `${c.personName}, ${range(c.before)} removed: ${c.reason}`
+            : `${c.personName}, was ${range(c.before)}, now ${range(c.after)}: ${c.reason}`;
   return (
     <div
+      role="group"
+      aria-label={spoken}
       style={{
         padding: '5px 7px',
         borderRadius: '7px',
@@ -151,7 +166,9 @@ function CoverStrip({ a }: { a: DayAnalysis }) {
       style={{ display: 'flex', gap: '1px', height: '6px', marginTop: '4px' }}
     >
       {[...hours.entries()].map(([h, v]) => {
-        const color = v.gap > 0 ? 'var(--color-error)' : v.idle > 0 ? 'var(--color-border)' : 'var(--color-success-border)';
+        // Quiet where the hour is right; colour only where it is not.
+        // Grey and red both clear 3:1 against the quiet segment.
+        const color = v.gap > 0 ? 'var(--color-error)' : v.idle > 0 ? 'var(--color-text-secondary)' : 'var(--color-border-subtle)';
         return <div key={h} style={{ flex: 1, background: color, borderRadius: '1px' }} />;
       })}
     </div>

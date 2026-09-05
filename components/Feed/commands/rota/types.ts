@@ -8,11 +8,11 @@
  * publishes, never notifies staff, never touches payroll.
  *
  * Two kinds of input feed the engine:
- *   • `DeputyDraft`    — what the workforce tool holds: people, shifts,
+ *   • `DeputyDraft`: what the workforce tool holds: people, shifts,
  *                        contracted hours, age, leave, and the site's
  *                        labour rules (rules are configuration, they
  *                        differ by country).
- *   • `SiteLabourData` — what Edify knows about the site: forecast,
+ *   • `SiteLabourData`: what Edify knows about the site: forecast,
  *                        labour standards per product type, fixed tasks
  *                        (deliveries, prep, stocktakes, cleaning, group
  *                        orders), stations, last week's outcomes.
