@@ -26,6 +26,7 @@ import {
   FileText,
   Package,
   Check,
+  Store,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import EdifyMarkThinking from '@/components/EdifyMark/EdifyMarkThinking';
@@ -49,6 +50,7 @@ import { useCommandRunner } from '@/components/Feed/commands/useCommandRunner';
 import SlashMenu from '@/components/Feed/commands/SlashMenu';
 import TaskHistoryList from '@/components/Feed/TaskHistoryList';
 import { PROMPT_CHIPS } from '@/components/Feed/suggestedPrompts';
+import { demoCustomer } from '@/lib/demoConfig';
 import TaskHistoryDrawer from '@/components/Feed/TaskHistoryDrawer';
 import { logEntry as logHistoryEntry, getTasks as getHistoryTasks, updateTask as updateHistoryTask } from '@/components/Feed/taskHistoryStore';
 import { ACTIVITY_REPLAY_KEY, type ActivityReplayIntent } from '@/components/Activity/ActivityPage';
@@ -259,13 +261,19 @@ const QUICK_ACTION_CHIPS: {
   commandId: string;
   label: string;
   icon: typeof ChefHat;
-}[] = COMMAND_REGISTRY
-  .filter((c) => !HIDDEN_FROM_MENU_COMMAND_IDS.has(c.id))
-  .map((c) => ({
-    commandId: c.id,
-    label: c.chipLabel,
-    icon: c.chipIcon,
-  }));
+}[] = [
+  ...COMMAND_REGISTRY
+    .filter((c) => !HIDDEN_FROM_MENU_COMMAND_IDS.has(c.id))
+    .flatMap((c) => {
+      const row = { commandId: c.id, label: c.chipLabel, icon: c.chipIcon };
+      if (c.id !== 'rota-rebalance') return [row];
+      // The HQ question sits beside the store-level rebalance. Same
+      // command, `estate: true`; special-cased in `handleQuickAction`.
+      // Chagee's HQ buyer sees the estate question first.
+      const estate = { commandId: 'rota-estate', label: 'Which stores ran under guide?', icon: Store };
+      return demoCustomer.id === 'chagee' ? [estate, row] : [row, estate];
+    }),
+];
 
 // ─── Data integrity checks ────────────────────────────────────────────────────
 
@@ -5969,6 +5977,10 @@ export default function Feed({
 
   // Shared handler for the composer's `+` popover.
   const handleQuickAction = (commandId: string) => {
+    if (commandId === 'rota-estate') {
+      commandRunner.runCommand({ commandId: 'rota-rebalance', args: { estate: true }, confidence: 1 });
+      return;
+    }
     const cmd = getCommand(commandId);
     if (!cmd) return;
     commandRunner.runCommand({ commandId: cmd.id, args: {}, confidence: 1 });
