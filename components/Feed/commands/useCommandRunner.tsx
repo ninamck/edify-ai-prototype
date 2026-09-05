@@ -1548,7 +1548,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         detail: `${final.siteName}, ${final.weekLabel}. ${final.toolName} still publishes. Nobody has been notified.${
           final.declined.length > 0 ? ` ${final.declined.length} suggestion${final.declined.length === 1 ? '' : 's'} left unticked.` : ''
         }`,
-        href: '/labour',
+        href: `/labour?site=${encodeURIComponent(final.siteId)}`,
         hrefLabel: 'Open labour',
         undo: () => {
           clearWrittenDraft(final.siteId);
