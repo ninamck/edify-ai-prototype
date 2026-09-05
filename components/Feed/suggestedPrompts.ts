@@ -9,7 +9,7 @@
  * brand by adding a case to `CHIPS_BY_CUSTOMER`.
  */
 
-import { ChefHat, Truck, ClipboardList, ShieldCheck, CalendarClock, type LucideIcon } from 'lucide-react';
+import { ChefHat, Truck, ClipboardList, ShieldCheck, Building2, CalendarClock, type LucideIcon } from 'lucide-react';
 import { demoCustomer } from '@/lib/demoConfig';
 
 export type PromptChip = {
