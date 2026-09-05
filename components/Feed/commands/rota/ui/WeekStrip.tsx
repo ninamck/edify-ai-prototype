@@ -104,10 +104,7 @@ export default function WeekStrip({
           <RotaGridDialog {...gridProps} open={fullScreen} onClose={() => setFullScreen(false)} panel={fullScreenPanel} />
         </>
       ) : mode === 'station' ? (
-        <>
-          <StationView site={site} analysis={analysis} shifts={shifts} draft={draft} />
-          <span style={small}>Work by station, hour by hour. Machine load shows where the kit, not the people, is the limit.</span>
-        </>
+        <StationView site={site} analysis={analysis} shifts={shifts} draft={draft} />
       ) : (
         <>
           <div role="tablist" aria-label="Days" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '4px' }}>
