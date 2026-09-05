@@ -57,7 +57,13 @@ export default function RotaEstateCard({
     <CardShell
       icon={Building2}
       title={`Hours against guide, ${weekLabel}`}
-      subtitle={under.length === 0 ? 'Every site on or over guide' : `${under.length} of ${rows.length} sites ran under guide`}
+      subtitle={
+        under.length === 0
+          ? 'Every site on or over guide'
+          : rows.length === 1
+            ? 'The one site with labour data ran under guide'
+            : `${under.length} of ${rows.length} sites ran under guide`
+      }
       state={state}
       confirmLabel={rebalanceSite ? `Rebalance ${rebalanceSite.siteName} for next week` : 'Done'}
       cancelLabel="Not now"

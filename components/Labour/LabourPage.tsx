@@ -282,7 +282,9 @@ function Estate({ onOpenSite }: { onOpenSite: (siteId: string) => void }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <div style={card}>
         <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-          Last week, {rows.length} sites: {Math.abs(totalUnder)}h under guide across {rows.filter((r) => r.hoursVsGuide < 0).length}
+          {rows.length === 1
+            ? `Last week, one site: ${Math.abs(totalUnder)}h ${totalUnder < 0 ? 'under' : 'on or over'} guide`
+            : `Last week, ${rows.length} sites: ${Math.abs(totalUnder)}h under guide across ${rows.filter((r) => r.hoursVsGuide < 0).length}`}
         </div>
         {worst && worst.hoursVsGuide < 0 && (
           <div style={{ ...small, marginTop: '3px', fontSize: '12.5px' }}>
