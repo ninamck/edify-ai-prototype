@@ -35,6 +35,9 @@ export type TaskKind =
   | 'supplier'
   /** Add a new product + replace an existing one across recipes. */
   | 'product-swap'
+  /** Rota rebalance: draft rota checked against workload, written back
+   *  to the workforce tool. */
+  | 'rota-rebalance'
   /** Data questions the operator asked Edify (analytics, table
    *  queries — anything that produced an answer rather than a
    *  mutation). */
@@ -73,7 +76,9 @@ export interface ChangeRecord {
     | 'par'
     | 'production-setting'
     | 'waste-entry'
-    | 'stock-count';
+    | 'stock-count'
+    /** A shift in the workforce tool's draft rota. */
+    | 'rota-shift';
   entityId: string;
   /** Human label used in the diff renderer. e.g. "Egg mayo sandwich · Large". */
   entityLabel: string;

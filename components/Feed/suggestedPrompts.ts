@@ -9,7 +9,7 @@
  * brand by adding a case to `CHIPS_BY_CUSTOMER`.
  */
 
-import { ChefHat, Truck, ClipboardList, ShieldCheck, type LucideIcon } from 'lucide-react';
+import { ChefHat, Truck, ClipboardList, ShieldCheck, CalendarClock, type LucideIcon } from 'lucide-react';
 import { demoCustomer } from '@/lib/demoConfig';
 
 export type PromptChip = {
@@ -32,6 +32,12 @@ export type PromptChip = {
 
 /** Internal / default build (Fitzroy Espresso café scenario). */
 const DEFAULT_CHIPS: PromptChip[] = [
+  {
+    label: 'Rebalance the rota',
+    icon: CalendarClock,
+    text: '',
+    commandId: 'rota-rebalance',
+  },
   {
     label: 'New recipe',
     icon: ChefHat,

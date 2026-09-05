@@ -33,6 +33,7 @@ import {
   MessageSquare,
   BarChart3,
   ArrowLeftRight,
+  CalendarClock,
   RotateCcw,
   Pencil,
   Pin,
@@ -69,6 +70,7 @@ const KIND_VISUALS: Record<TaskKind, { icon: LucideIcon; label: string }> = {
   'menu':         { icon: Utensils,       label: 'Menu' },
   'supplier':     { icon: Truck,          label: 'Supplier' },
   'product-swap': { icon: ArrowLeftRight, label: 'Product' },
+  'rota-rebalance': { icon: CalendarClock, label: 'Rota' },
   'question':     { icon: BarChart3,      label: 'Question' },
   'chat':         { icon: MessageSquare,  label: 'Chat' },
 };

@@ -26,7 +26,12 @@ export type CommandId =
    *  an existing product with it across a selected set of recipes.
    *  Implemented as a multi-step wizard — see useCommandRunner's
    *  startProductSwapWizard for the flow. */
-  | 'product-swap';
+  | 'product-swap'
+  /** Read a site's draft rota from the workforce tool, compare it with
+   *  the workload Edify knows is coming, propose tickable shift edits,
+   *  check labour rules, write an amended draft back. Single card; see
+   *  components/Feed/commands/rota. */
+  | 'rota-rebalance';
 
 /** A single resolved invocation of a command. Args are command-specific
  *  — each command exports its own arg shape. We use `unknown` here to

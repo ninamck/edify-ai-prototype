@@ -21,6 +21,7 @@ import { snapshotRecipes } from '@/components/Recipe/recipeStore';
 import { snapshot as snapshotSuppliers } from '@/components/Suppliers/store';
 import type { Recipe } from '@/components/Recipe/libraryFixtures';
 import type { CommandIntent, AmbiguityChoice } from './types';
+import { parseRotaRebalance } from './rota/parseRota';
 
 // ─── Shared helpers ─────────────────────────────────────────────────────────
 
@@ -888,6 +889,7 @@ export function parseCommand(text: string): CommandIntent | null {
     if (/^\/menu\b/i.test(trimmed))         return parseMenu(trimmed) ?? { commandId: 'menu', args: {}, confidence: 1 };
     if (/^\/supplier\b/i.test(trimmed))     return parseSupplier(trimmed) ?? { commandId: 'supplier', args: {}, confidence: 1 };
     if (/^\/(swap|replace|add)-product\b/i.test(trimmed)) return parseProductSwap(trimmed) ?? { commandId: 'product-swap', args: {}, confidence: 1 };
+    if (/^\/(rota|roster|labour)\b/i.test(trimmed)) return parseRotaRebalance(trimmed) ?? { commandId: 'rota-rebalance', args: {}, confidence: 1 };
   }
 
   // Natural-language path: normalise gerund verbs ("swapping" →
@@ -903,6 +905,7 @@ export function parseCommand(text: string): CommandIntent | null {
     parseMenu(nl),
     parseSupplier(nl),
     parseProductSwap(nl),
+    parseRotaRebalance(nl),
   ];
   const hits = candidates.filter((c): c is CommandIntent => c !== null);
   if (hits.length === 0) return null;

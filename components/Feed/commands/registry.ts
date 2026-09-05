@@ -12,9 +12,10 @@
  * setCmdStates). The registry is purely descriptive.
  */
 
-import { Trash2, Boxes, ChefHat, Settings2, Utensils, Truck, ArrowLeftRight } from 'lucide-react';
+import { Trash2, Boxes, ChefHat, Settings2, Utensils, Truck, ArrowLeftRight, CalendarClock } from 'lucide-react';
 import type { ChatCommand } from './types';
 import { parseWaste, parseStock, parseRecipeEdit, parseProduction, parseMenu, parseSupplier, parseProductSwap } from './parsers';
+import { parseRotaRebalance } from './rota/parseRota';
 
 export const COMMAND_REGISTRY: ChatCommand[] = [
   {
@@ -177,6 +178,23 @@ export const COMMAND_REGISTRY: ChatCommand[] = [
       if (arg === 'value')      return 'And the new value?';
       return 'I need a bit more info.';
     },
+  },
+  {
+    id: 'rota-rebalance',
+    slash: '/rota',
+    slashAliases: ['/roster', '/labour'],
+    chipLabel: 'Rebalance the rota',
+    chipIcon: CalendarClock,
+    description: "Check next week's draft rota against the forecast and the work, fix rule breaches, write the draft back to Deputy.",
+    examples: [
+      "check next week's rota against the forecast",
+      "rebalance King's Cross rota, keep labour under 27%",
+      'is the rota right for Saturday?',
+    ],
+    parse: parseRotaRebalance,
+    cardMsgType: 'cmd-rota-rebalance',
+    requiredArgs: [],
+    promptFor: () => 'Which site?',
   },
 ];
 

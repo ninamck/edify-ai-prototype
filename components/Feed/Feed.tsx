@@ -70,6 +70,7 @@ import ProductPackDetailsCard from '@/components/Feed/commands/cards/ProductPack
 import ProductPickRecipesCard from '@/components/Feed/commands/cards/ProductPickRecipesCard';
 import ProductSwapSummaryCard from '@/components/Feed/commands/cards/ProductSwapSummaryCard';
 import ProductSheetDetailsCard from '@/components/Feed/commands/cards/ProductSheetDetailsCard';
+import RotaRebalanceCard from '@/components/Feed/commands/cards/RotaRebalanceCard';
 import AmbiguityPicker from '@/components/Feed/commands/cards/AmbiguityPicker';
 import ReceiptCard from '@/components/Feed/commands/cards/ReceiptCard';
 import MarginExplorerCard from '@/components/Feed/commands/cards/MarginExplorerCard';
@@ -372,7 +373,12 @@ const WORKSPACE_MSG_TYPES = new Set<string>([
   'cmd-product-sheet-details',
   'cmd-product-pick-recipes',
   'cmd-product-swap-summary',
+  'cmd-rota-rebalance',
 ]);
+
+/** Cards that need the full workspace width: the rota grid lays seven
+ *  days across and does not read at 640px. */
+const WIDE_WORKSPACE_MSG_TYPES = new Set<string>(['cmd-rota-rebalance']);
 
 function isWorkspaceMsg(m: ChatMsg): boolean {
   return !!m.msgType && WORKSPACE_MSG_TYPES.has(m.msgType);
@@ -7937,6 +7943,7 @@ export default function Feed({
   );
   const splitView =
     chatStarted && !chatMinimized && workspaceMessages.length > 0 && feedWidth >= 960;
+  const wideWorkspace = workspaceMessages.some((m) => !!m.msgType && WIDE_WORKSPACE_MSG_TYPES.has(m.msgType));
 
   // Keep the workspace panel pinned to the newest card.
   const workspaceEndRef = useRef<HTMLDivElement | null>(null);
@@ -8520,6 +8527,15 @@ export default function Feed({
                             state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                             onConfirm={(final) => commandRunner.confirmSupplier(m.id, final)}
                             onCancel={() => commandRunner.cancelCard(m.id)}
+                          />
+                        )}
+                        {m.msgType === 'cmd-rota-rebalance' && (
+                          <RotaRebalanceCard
+                            initialArgs={m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : {}}
+                            state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                            onConfirm={(final) => commandRunner.confirmRotaRebalance(m.id, final)}
+                            onCancel={() => commandRunner.cancelCard(m.id)}
+                            onSwitchSite={(siteId) => commandRunner.switchRotaSite(m.id, siteId)}
                           />
                         )}
                         {/* ── Product wizard (add or replace) ─────────── */}
@@ -9300,9 +9316,9 @@ export default function Feed({
                 right so the conversation stays readable on the left. */}
             {splitView && (
               <div style={{
-                width: '52%',
+                width: wideWorkspace ? '64%' : '52%',
                 minWidth: '420px',
-                maxWidth: '780px',
+                maxWidth: wideWorkspace ? '1040px' : '780px',
                 minHeight: 0,
                 borderLeft: '1px solid var(--color-border-subtle)',
                 // Warm cream — the workspace canvas behind every card.
@@ -9328,7 +9344,7 @@ export default function Feed({
                   </span>
                 </div>
                 <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 24px 32px' }}>
-                  <div style={{ maxWidth: '640px', margin: '0 auto' }}>
+                  <div style={{ maxWidth: wideWorkspace ? '960px' : '640px', margin: '0 auto' }}>
                     {workspaceMessages.map((wm) => (
                       <motion.div
                         key={wm.id}
