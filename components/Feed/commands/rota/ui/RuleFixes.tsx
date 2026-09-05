@@ -6,24 +6,33 @@
  * reason Edify cannot see. A fix left off leaves the breach on the
  * draft, and the write stays blocked until it is dealt with, here or in
  * Deputy. That is the one thing this card should make hard.
+ *
+ * Where there is another way to satisfy the rule (finish earlier the
+ * night before rather than start later), it is offered as a pill.
  */
 
 import { AlertTriangle, Check } from 'lucide-react';
 import { DAY_KEYS, type DayKey, type Proposal } from '../types';
-import { DayLabel, shortTitle, signedHours } from './ChangeList';
+import { effectiveProposal } from '../engine';
+import { DayLabel } from './ChangeList';
+import ChangeRow from './ChangeRow';
 import { KIND_STYLE, label, small, textButton } from './tokens';
 
 export default function RuleFixes({
   fixes,
   selected,
+  chosen,
   onToggle,
+  onChoose,
   disabled,
   weekStart,
   onShowDay,
 }: {
   fixes: Proposal[];
   selected: Set<string>;
+  chosen: Map<string, string>;
   onToggle: (id: string) => void;
+  onChoose: (proposalId: string, altId: string | null) => void;
   disabled?: boolean;
   weekStart: string;
   onShowDay?: (day: DayKey) => void;
@@ -48,37 +57,28 @@ export default function RuleFixes({
               <ul style={{ listStyle: 'none', margin: 0, padding: 0, borderRadius: '8px', border: `1px solid ${rows.some((p) => !selected.has(p.id)) ? 'var(--color-error)' : KIND_STYLE.amend.border}`, overflow: 'hidden' }}>
                 {rows.map((p, i) => {
                   const applied = selected.has(p.id);
+                  const eff = effectiveProposal(p, chosen);
                   return (
-                    <li
+                    <ChangeRow
                       key={p.id}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '18px 1fr auto',
-                        gap: '8px',
-                        alignItems: 'start',
-                        padding: '8px 10px',
-                        borderTop: i === 0 ? 'none' : '1px solid var(--color-border-subtle)',
-                        background: applied ? KIND_STYLE.amend.bg : '#fff',
-                      }}
-                    >
-                      <span style={{ marginTop: '1px', display: 'inline-flex', justifyContent: 'center' }} aria-hidden="true">
-                        {applied ? <Check size={14} strokeWidth={2.5} color="var(--color-success)" /> : <AlertTriangle size={14} strokeWidth={2.4} color="var(--color-error)" />}
-                      </span>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: 1.35 }}>{shortTitle(p)}</div>
-                        <div style={{ fontSize: '11.5px', fontWeight: 500, color: applied ? 'var(--color-text-secondary)' : 'var(--color-error)', marginTop: '2px', lineHeight: 1.4 }}>
-                          {applied ? p.evidence : `${p.evidence}. Left as drafted, so the breach stands.`}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1px', whiteSpace: 'nowrap' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary)' }}>{signedHours(p.hoursDelta)}</span>
-                        {!disabled && (
+                      p={p}
+                      effective={applied ? eff : { ...eff, evidence: `${eff.evidence}. Left as drafted, so the breach stands.` }}
+                      groupDay={d}
+                      first={i === 0}
+                      control={applied ? <Check size={14} strokeWidth={2.5} color="var(--color-success)" aria-label="Applied" /> : <AlertTriangle size={14} strokeWidth={2.4} color="var(--color-error)" aria-label="In breach" />}
+                      chosenId={chosen.get(p.id)}
+                      onChoose={onChoose}
+                      showAlternatives={applied}
+                      disabled={disabled}
+                      background={applied ? KIND_STYLE.amend.bg : '#fff'}
+                      aside={
+                        !disabled ? (
                           <button type="button" style={{ ...textButton, padding: '1px 0', fontSize: '11.5px', textDecoration: 'underline dotted', textUnderlineOffset: '2px' }} onClick={() => onToggle(p.id)}>
                             {applied ? 'Leave as is' : 'Apply the fix'}
                           </button>
-                        )}
-                      </div>
-                    </li>
+                        ) : undefined
+                      }
+                    />
                   );
                 })}
               </ul>

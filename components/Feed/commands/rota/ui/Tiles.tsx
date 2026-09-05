@@ -23,6 +23,27 @@ function Tile({ heading, value, note, tone }: { heading: string; value: string; 
   );
 }
 
+/** The four tiles as one line, for a narrow panel beside the grid. */
+export function StatsLine({ tiles, rules }: { tiles: Tiles; rules: RuleResult[] }) {
+  const fails = rules.filter((r) => r.status === 'fail').length;
+  const warns = rules.filter((r) => r.status === 'warn').length;
+  const overTarget = tiles.labourPct > tiles.targetPct;
+  const item = (value: string, note: string, tone?: 'ok' | 'bad') => (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: '15px', fontWeight: 700, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums', color: tone === 'bad' ? 'var(--color-error)' : tone === 'ok' ? 'var(--color-success)' : 'var(--color-text-primary)' }}>{value}</div>
+      <div style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '2px' }}>{note}</div>
+    </div>
+  );
+  return (
+    <div role="status" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '10px', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', background: '#fff' }}>
+      {item(`${tiles.scheduledHours}h`, tiles.hoursDelta === 0 ? 'no change' : `${tiles.hoursDelta > 0 ? '+' : ''}${tiles.hoursDelta}h`)}
+      {item(`${tiles.labourPct}%`, `target ${tiles.targetPct}%`, overTarget ? 'bad' : 'ok')}
+      {item(String(tiles.peakGaps), tiles.peakGaps === 1 ? 'peak gap' : 'peak gaps', tiles.peakGaps === 0 ? 'ok' : tiles.peakGaps < tiles.peakGapsBefore ? undefined : 'bad')}
+      {item(fails > 0 ? String(fails) : warns > 0 ? String(warns) : 'Pass', fails > 0 ? (fails === 1 ? 'breach' : 'breaches') : warns > 0 ? (warns === 1 ? 'warning' : 'warnings') : `${rules.length} rules`, fails > 0 ? 'bad' : warns > 0 ? undefined : 'ok')}
+    </div>
+  );
+}
+
 export default function RotaTiles({ tiles, rules }: { tiles: Tiles; rules: RuleResult[] }) {
   const fails = rules.filter((r) => r.status === 'fail').length;
   const warns = rules.filter((r) => r.status === 'warn').length;

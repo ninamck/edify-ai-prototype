@@ -15,7 +15,7 @@
  * the week and the detail of the days she is changing.
  */
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { DAY_KEYS, type DayAnalysis, type DayKey, type DeputyDraft, type Proposal, type Shift, type SiteLabourData } from '../types';
 import { explainDay as explainForecastDay, hhmm } from '../engine';
@@ -55,6 +55,7 @@ export default function WeekStrip({
   openDay,
   onOpenDay,
   initialMode,
+  fullScreenPanel,
 }: {
   draft: DeputyDraft;
   site: SiteLabourData;
@@ -68,6 +69,8 @@ export default function WeekStrip({
   onOpenDay: (day: DayKey | null) => void;
   /** Open on the grid or station view when the prompt asked for it. */
   initialMode?: WeekMode;
+  /** The checklist, shown beside the grid at full screen. */
+  fullScreenPanel?: ReactNode;
 }) {
   const [mode, setMode] = useState<WeekMode>(initialMode ?? 'week');
   const [why, setWhy] = useState(false);
@@ -98,7 +101,7 @@ export default function WeekStrip({
         <>
           <RotaGrid {...gridProps} size="sm" />
           <RotaGridToolbar onFullScreen={() => setFullScreen(true)} />
-          <RotaGridDialog {...gridProps} open={fullScreen} onClose={() => setFullScreen(false)} />
+          <RotaGridDialog {...gridProps} open={fullScreen} onClose={() => setFullScreen(false)} panel={fullScreenPanel} />
         </>
       ) : mode === 'station' ? (
         <>

@@ -31,6 +31,7 @@ import {
   type ForecastExplanation,
   type LabourGuideRow,
   type Person,
+  type Alternative,
   type Proposal,
   type ProposalTag,
   type RebalanceResult,
@@ -385,10 +386,34 @@ function withBreak(s: Shift): Shift {
   return { ...s, breakMin: dur > 6 * 60 ? Math.max(s.breakMin ?? 0, 30) : (s.breakMin ?? 0) };
 }
 
-export function applyProposals(shifts: Shift[], proposals: Proposal[], selected: Set<string>): Shift[] {
+/** The proposal as the GM has it: the engine's pick, or the alternative
+ *  she chose in its place. Keeps the id and the reason; swaps the edit. */
+export function effectiveProposal(p: Proposal, chosen?: Map<string, string>): Proposal {
+  const altId = chosen?.get(p.id);
+  const alt = altId ? p.alternatives?.find((a) => a.id === altId) : undefined;
+  if (!alt) return p;
+  return {
+    ...p,
+    kind: alt.kind,
+    personId: alt.personId,
+    personName: alt.personName,
+    day: alt.day,
+    area: alt.area,
+    stationId: alt.stationId,
+    before: alt.before,
+    after: alt.after,
+    title: alt.title,
+    evidence: alt.evidence,
+    hoursDelta: alt.hoursDelta,
+    warning: alt.warning,
+  };
+}
+
+export function applyProposals(shifts: Shift[], proposals: Proposal[], selected: Set<string>, chosen?: Map<string, string>): Shift[] {
   let out = shifts.map((s) => ({ ...s }));
-  for (const p of proposals) {
-    if (!selected.has(p.id)) continue;
+  for (const raw of proposals) {
+    if (!selected.has(raw.id)) continue;
+    const p = effectiveProposal(raw, chosen);
     if (p.kind === 'remove') {
       out = out.filter((s) => !(s.personId === p.personId && s.day === p.day && s.start === p.before?.start && s.end === p.before?.end));
     } else if (p.kind === 'amend' && p.after) {
@@ -480,6 +505,53 @@ export function propose(draft: DeputyDraft, site: SiteLabourData): Proposal[] {
 
   const underAfter = (p: Person, hoursAfter: number) => Math.round((p.contractedHours - hoursAfter) * 10) / 10;
 
+  /** Where a person stands against contract, for an alternative's
+   *  evidence line. */
+  const standing = (p: Person, extraHours = 0): string => {
+    if (p.contractedHours === 0) return `${p.name} is casual`;
+    const slack = Math.round((p.contractedHours - weeklyHours(working, p.id) - extraHours) * 10) / 10;
+    if (slack > 0) return `${p.name} is ${slack}h under contract`;
+    if (slack === 0) return `${p.name} is on contract`;
+    return `${p.name} is ${-slack}h over contract`;
+  };
+
+  /** A shift sized to a gap: never under four hours, inside opening hours. */
+  const addWindow = (day: DayKey, start: number, end: number) => {
+    const { open, close } = hoursFor(site, day);
+    let addEnd = Math.min(close, Math.max(end, start + MIN_ADD_MIN));
+    const addStart = Math.max(open, Math.min(start, addEnd - MIN_ADD_MIN));
+    addEnd = Math.min(close, Math.max(addEnd, addStart + MIN_ADD_MIN));
+    return { addStart, addEnd };
+  };
+
+  /** Who could take a new shift, best first: furthest under contract,
+   *  then casuals, then least over. Rest and under-18 rules respected. */
+  const addCandidates = (day: DayKey, addStart: number, addEnd: number) =>
+    draft.people
+      .filter((p) => personAvailable(p, day, working))
+      .filter((p) => !(p.age !== undefined && p.age < 18 && u18Rule && addEnd > u18Rule.value))
+      .filter((p) => restOk(working, restHours, p.id, day, addStart, addEnd))
+      .map((p) => {
+        const slack = p.contractedHours - weeklyHours(working, p.id);
+        const tier = slack > 0 ? 0 : p.contractedHours === 0 ? 1 : 2;
+        return { p, slack, tier };
+      })
+      .sort((a, b) => a.tier - b.tier || b.slack - a.slack);
+
+  const addAlt = (id: string, p: Person, day: DayKey, addStart: number, addEnd: number, area: string, stationId: string | undefined, instead: boolean): Alternative => ({
+    id,
+    kind: 'add',
+    personId: p.id,
+    personName: p.name,
+    day,
+    area,
+    stationId,
+    after: { start: addStart, end: addEnd },
+    title: `Add ${p.name}, ${day} ${hhmm(addStart)} to ${hhmm(addEnd)}`,
+    evidence: instead ? `${standing(p)}. A new shift rather than a longer one` : standing(p),
+    hoursDelta: shiftHours(withBreak({ id: '', personId: '', day, start: addStart, end: addEnd, area })),
+  });
+
   // 1. Rule fixes on the draft.
   for (const p of draft.people) {
     const mine = working.filter((s) => s.personId === p.id).sort((a, b) => dayIndex(a.day) - dayIndex(b.day) || a.start - b.start);
@@ -490,8 +562,32 @@ export function propose(draft: DeputyDraft, site: SiteLabourData): Proposal[] {
       const rest = 24 * 60 - prev.end + next.start;
       if (rest >= restRule.value * 60) continue;
       const newStart = roundUpHour(prev.end + restRule.value * 60 - 24 * 60);
+      // The other way round: finish earlier the night before and keep
+      // the morning start.
+      const prevNewEnd = roundDownHour(next.start + 24 * 60 - restRule.value * 60);
+      const id = nextId();
+      const alternatives: Alternative[] =
+        prevNewEnd - prev.start >= MIN_ADD_MIN
+          ? [
+              {
+                id: `${id}-a1`,
+                kind: 'amend',
+                personId: p.id,
+                personName: p.name,
+                day: prev.day,
+                area: prev.area,
+                stationId: prev.stationId,
+                before: { start: prev.start, end: prev.end },
+                after: { start: prev.start, end: prevNewEnd },
+                title: `${p.name} finishes ${hhmm(prevNewEnd)} on ${prev.day}, not ${hhmm(prev.end)}`,
+                evidence: `Keeps ${next.day}'s ${hhmm(next.start)} start. ${prev.day}'s close then needs cover from ${hhmm(prevNewEnd)}`,
+                hoursDelta: -(prev.end - prevNewEnd) / 60,
+              },
+            ]
+          : [];
       proposals.push({
-        id: nextId(),
+        alternatives,
+        id,
         kind: 'amend',
         tag: 'rule-fix',
         personId: p.id,
@@ -597,6 +693,16 @@ export function propose(draft: DeputyDraft, site: SiteLabourData): Proposal[] {
         })
         .sort((a, b) => a.start - b.start)[0];
 
+      // Someone new for the same window, offered beside any extension.
+      const win = addWindow(day, start, end);
+      const area0 = win.addStart < 12 * 60 ? draft.areas[0] : draft.areas[draft.areas.length - 1];
+      const station0 = task?.stationId ?? site.stations[0]?.id;
+      const insteadOfExtend = (id: string, exclude: string) =>
+        addCandidates(day, win.addStart, win.addEnd)
+          .filter((c) => c.p.id !== exclude)
+          .slice(0, 1)
+          .map((c) => addAlt(`${id}-a1`, c.p, day, win.addStart, win.addEnd, area0, station0, true));
+
       if (endsBefore) {
         const p = byPerson.get(endsBefore.personId)!;
         // Extending a shift this pass added is one proposal, not two.
@@ -610,12 +716,22 @@ export function propose(draft: DeputyDraft, site: SiteLabourData): Proposal[] {
           endsBefore.end = end;
           Object.assign(endsBefore, withBreak(endsBefore));
           ownAdd.hoursDelta = shiftHours(endsBefore);
+          // The runners-up take the longer shift too.
+          for (const a of ownAdd.alternatives ?? []) {
+            if (a.kind === 'add' && a.after) {
+              a.after = { start: a.after.start, end };
+              a.title = `Add ${a.personName}, ${day} ${hhmm(a.after.start)} to ${hhmm(end)}`;
+              a.hoursDelta = shiftHours(withBreak({ id: '', personId: '', day, start: a.after.start, end, area: a.area }));
+            }
+          }
           const a = addedToday.find((x) => x.start === endsBefore.start);
           if (a) a.end = end;
           continue;
         }
+        const id = nextId();
         proposals.push({
-          id: nextId(),
+          id,
+          alternatives: insteadOfExtend(id, p.id),
           kind: 'amend',
           tag: why.tag,
           personId: p.id,
@@ -637,8 +753,10 @@ export function propose(draft: DeputyDraft, site: SiteLabourData): Proposal[] {
       }
       if (startsAfter) {
         const p = byPerson.get(startsAfter.personId)!;
+        const id = nextId();
         proposals.push({
-          id: nextId(),
+          id,
+          alternatives: insteadOfExtend(id, p.id),
           kind: 'amend',
           tag: why.tag,
           personId: p.id,
@@ -663,26 +781,16 @@ export function propose(draft: DeputyDraft, site: SiteLabourData): Proposal[] {
       // then casuals (no contracted hours to protect), then whoever is
       // least over. Rest and under-18 rules respected, never a shift
       // under four hours.
-      const { open, close } = hoursFor(site, day);
-      let addEnd = Math.min(close, Math.max(end, start + MIN_ADD_MIN));
-      const addStart = Math.max(open, Math.min(start, addEnd - MIN_ADD_MIN));
-      addEnd = Math.min(close, Math.max(addEnd, addStart + MIN_ADD_MIN));
-      const candidates = draft.people
-        .filter((p) => personAvailable(p, day, working))
-        .filter((p) => !(p.age !== undefined && p.age < 18 && u18Rule && addEnd > u18Rule.value))
-        .filter((p) => restOk(working, restHours, p.id, day, addStart, addEnd))
-        .map((p) => {
-          const slack = p.contractedHours - weeklyHours(working, p.id);
-          const tier = slack > 0 ? 0 : p.contractedHours === 0 ? 1 : 2;
-          return { p, slack, tier };
-        })
-        .sort((a, b) => a.tier - b.tier || b.slack - a.slack);
+      const { addStart, addEnd } = win;
+      const candidates = addCandidates(day, addStart, addEnd);
       const pick = candidates[0];
       if (!pick) continue;
-      const area = addStart < 12 * 60 ? draft.areas[0] : draft.areas[draft.areas.length - 1];
-      const stationId = task?.stationId ?? site.stations[0]?.id;
+      const area = area0;
+      const stationId = station0;
+      const id = nextId();
       proposals.push({
-        id: nextId(),
+        id,
+        alternatives: candidates.slice(1, 3).map((c, i) => addAlt(`${id}-a${i + 1}`, c.p, day, addStart, addEnd, area, stationId, false)),
         kind: 'add',
         tag: why.tag,
         personId: pick.p.id,
@@ -716,17 +824,61 @@ export function propose(draft: DeputyDraft, site: SiteLabourData): Proposal[] {
       const heads = headsAt(after, run.start);
       const sig = signalFor(site, day, run.start, run.end);
 
-      const wholly = dayShifts
+      const whollyAll = dayShifts
         .filter((s) => s.start >= run.start - SLOT_MIN && s.end <= run.end + SLOT_MIN)
         .map((s) => ({ s, p: byPerson.get(s.personId)! }))
         .filter(({ p }) => !p.keyholder)
-        .sort((a, b) => shiftHours(b.s) - shiftHours(a.s))[0];
+        .sort((a, b) => shiftHours(b.s) - shiftHours(a.s));
+      const wholly = whollyAll[0];
       if (wholly) {
         const { s, p } = wholly;
         const under = underAfter(p, weeklyHours(working, p.id) - shiftHours(s));
         const strains = !!contractRule && under > UNTICK_UNDER_CONTRACT_HOURS;
+        const id = nextId();
+        const alternatives: Alternative[] = [];
+        // Keep the busiest part of the shift rather than all of it.
+        if (s.end - s.start >= 6 * 60) {
+          const keepEnd = s.start + MIN_ADD_MIN;
+          const cut = (s.end - keepEnd) / 60;
+          const underKeep = underAfter(p, weeklyHours(working, p.id) - cut);
+          alternatives.push({
+            id: `${id}-a1`,
+            kind: 'amend',
+            personId: p.id,
+            personName: p.name,
+            day,
+            area: s.area,
+            stationId: s.stationId,
+            before: { start: s.start, end: s.end },
+            after: { start: s.start, end: keepEnd },
+            title: `${p.name} finishes ${hhmm(keepEnd)} on ${day}, not ${hhmm(s.end)}`,
+            evidence: `Cuts ${cut}h, not ${shiftHours(s)}h. ${ordinalWord(heads)} head stays ${hhmm(s.start)} to ${hhmm(keepEnd)}`,
+            hoursDelta: -cut,
+            warning: underKeep > 0 ? `Leaves ${p.name} ${underKeep}h under contract` : undefined,
+          });
+        }
+        // Or drop someone else's shift in the same run.
+        const other = whollyAll[1];
+        if (other) {
+          const underOther = underAfter(other.p, weeklyHours(working, other.p.id) - shiftHours(other.s));
+          alternatives.push({
+            id: `${id}-a2`,
+            kind: 'remove',
+            personId: other.p.id,
+            personName: other.p.name,
+            day,
+            area: other.s.area,
+            stationId: other.s.stationId,
+            before: { start: other.s.start, end: other.s.end },
+            title: `Drop ${other.p.name}'s ${day} ${hhmm(other.s.start)} to ${hhmm(other.s.end)}`,
+            evidence: underOther > 0 ? `Leaves ${other.p.name} ${underOther}h under contract` : standing(other.p),
+            hoursDelta: -shiftHours(other.s),
+            warning: underOther > 0 ? `Leaves ${other.p.name} ${underOther}h under contract` : undefined,
+          });
+        }
         proposals.push({
-          id: nextId(),
+          id,
+          alternatives,
           kind: 'remove',
           tag: 'demand',
           personId: p.id,
@@ -751,20 +903,72 @@ export function propose(draft: DeputyDraft, site: SiteLabourData): Proposal[] {
 
       // Tail trim: the shift ends with the run, the run sits in the
       // shift's second half, the cut is three hours or less.
-      const trim = dayShifts
+      const trimAll = dayShifts
         .filter((s) => Math.abs(s.end - run.end) <= SLOT_MIN && run.start > s.start + (s.end - s.start) / 2)
         .filter((s) => roundUpHour(run.start) < s.end && s.end - roundUpHour(run.start) <= 3 * 60)
         .map((s) => ({ s, p: byPerson.get(s.personId)! }))
         .filter(({ p }) => !p.keyholder)
-        .sort((a, b) => (b.s.end - run.start) - (a.s.end - run.start))[0];
+        .sort((a, b) => (b.s.end - run.start) - (a.s.end - run.start));
+      const trim = trimAll[0];
       if (trim) {
         const { s, p } = trim;
         const newEnd = roundUpHour(run.start);
         const cut = (s.end - newEnd) / 60;
         const under = underAfter(p, weeklyHours(working, p.id) - cut);
         const strains = !!contractRule && under > UNTICK_UNDER_CONTRACT_HOURS;
+        const id = nextId();
+        const alternatives: Alternative[] = [];
+        // Somebody else who is also on to the end of the run.
+        const other = dayShifts
+          .filter((o) => o.id !== s.id && o.end >= s.end - SLOT_MIN && o.start < newEnd)
+          .map((o) => ({ s: o, p: byPerson.get(o.personId)! }))
+          .filter(({ p: q }) => !q.keyholder && !(q.age !== undefined && q.age < 18))
+          .sort((a, b) => weeklyHours(working, b.p.id) - b.p.contractedHours - (weeklyHours(working, a.p.id) - a.p.contractedHours))[0];
+        if (other) {
+          const oEnd = Math.min(newEnd, other.s.end);
+          const oCut = (other.s.end - oEnd) / 60;
+          const underOther = underAfter(other.p, weeklyHours(working, other.p.id) - oCut);
+          if (oCut > 0 && oEnd - other.s.start >= MIN_ADD_MIN) {
+            alternatives.push({
+              id: `${id}-a1`,
+              kind: 'amend',
+              personId: other.p.id,
+              personName: other.p.name,
+              day,
+              area: other.s.area,
+              stationId: other.s.stationId,
+              before: { start: other.s.start, end: other.s.end },
+              after: { start: other.s.start, end: oEnd },
+              title: `${other.p.name} finishes ${hhmm(oEnd)} on ${day}, not ${hhmm(other.s.end)}`,
+              evidence: underOther > 0 ? `Leaves ${other.p.name} ${underOther}h under contract` : standing(other.p),
+              hoursDelta: -oCut,
+              warning: underOther > 0 ? `Leaves ${other.p.name} ${underOther}h under contract` : undefined,
+            });
+          }
+        }
+        // A smaller cut.
+        if (cut >= 2) {
+          const softEnd = s.end - 60;
+          const underSoft = underAfter(p, weeklyHours(working, p.id) - 1);
+          alternatives.push({
+            id: `${id}-a2`,
+            kind: 'amend',
+            personId: p.id,
+            personName: p.name,
+            day,
+            area: s.area,
+            stationId: s.stationId,
+            before: { start: s.start, end: s.end },
+            after: { start: s.start, end: softEnd },
+            title: `${p.name} finishes ${hhmm(softEnd)} on ${day}, not ${hhmm(s.end)}`,
+            evidence: `Cuts 1h, not ${cut}h. ${heads} still on until ${hhmm(softEnd)}`,
+            hoursDelta: -1,
+            warning: underSoft > 0 ? `Leaves ${p.name} ${underSoft}h under contract` : undefined,
+          });
+        }
         proposals.push({
-          id: nextId(),
+          id,
+          alternatives,
           kind: 'amend',
           tag: 'demand',
           personId: p.id,
@@ -818,8 +1022,10 @@ export function labourPct(draft: DeputyDraft, site: SiteLabourData, shifts: Shif
 export function computeTiles(
   result: RebalanceResult,
   selected: Set<string>,
+  chosen?: Map<string, string>,
 ): { tiles: Tiles; shifts: Shift[]; analysis: DayAnalysis[]; rules: RuleResult[] } {
-  const { draft, site, proposals } = result;
+  const { draft, site } = result;
+  const proposals = result.proposals.map((p) => effectiveProposal(p, chosen));
   const shifts = applyProposals(draft.shifts, proposals, selected);
   const analysis = analyseWeek(site, shifts);
   const rules = checkRules(draft, shifts);

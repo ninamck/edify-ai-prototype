@@ -25,9 +25,9 @@ import CardShell, { type CardState } from './CardShell';
 import { useActiveSite, ACTIVE_SITES } from '@/components/ActiveSite/ActiveSiteContext';
 import { deputyDraftFor, sitesWithDrafts } from '@/components/Feed/commands/rota/deputy';
 import { siteLabourFor } from '@/components/Feed/commands/rota/sources';
-import { rebalance, computeTiles } from '@/components/Feed/commands/rota/engine';
+import { rebalance, computeTiles, effectiveProposal } from '@/components/Feed/commands/rota/engine';
 import type { DayKey, Proposal, RuleResult, Shift, Tiles } from '@/components/Feed/commands/rota/types';
-import RotaTiles from '@/components/Feed/commands/rota/ui/Tiles';
+import RotaTiles, { StatsLine } from '@/components/Feed/commands/rota/ui/Tiles';
 import WeekStrip from '@/components/Feed/commands/rota/ui/WeekStrip';
 import CapacityNotes from '@/components/Feed/commands/rota/ui/CapacityNotes';
 import RuleFixes from '@/components/Feed/commands/rota/ui/RuleFixes';
@@ -117,7 +117,11 @@ export default function RotaRebalanceCard({
     () => new Set((result?.proposals ?? []).filter((p) => p.defaultSelected).map((p) => p.id)),
   );
 
-  const computed = useMemo(() => (result ? computeTiles(result, selected) : undefined), [result, selected]);
+  // Alternatives the GM chose in place of the engine's pick, by proposal.
+  const [chosen, setChosen] = useState<Map<string, string>>(() => new Map());
+
+  const computed = useMemo(() => (result ? computeTiles(result, selected, chosen) : undefined), [result, selected, chosen]);
+  const effProposals = useMemo(() => (result?.proposals ?? []).map((p) => effectiveProposal(p, chosen)), [result, chosen]);
 
   const disabled = state !== 'pending';
   const requestedName = initialArgs.siteName ?? ACTIVE_SITES.find((s) => s.id === initialArgs.siteId)?.name;
@@ -152,12 +156,50 @@ export default function RotaRebalanceCard({
     });
   };
 
-  const accepted = result.proposals.filter((p) => selected.has(p.id));
-  const declined = result.proposals.filter((p) => !selected.has(p.id));
+  const choose = (proposalId: string, altId: string | null) => {
+    if (disabled) return;
+    setChosen((prev) => {
+      const next = new Map(prev);
+      if (altId) next.set(proposalId, altId);
+      else next.delete(proposalId);
+      return next;
+    });
+  };
+
+  const accepted = effProposals.filter((p) => selected.has(p.id));
+  const declined = effProposals.filter((p) => !selected.has(p.id));
   const fails = computed.rules.filter((r) => r.status === 'fail');
   const fixes = result.proposals.filter((p) => p.tag === 'rule-fix');
   const changes = result.proposals.filter((p) => p.tag !== 'rule-fix');
   const verdict = verdictFor(result.rulesBefore.filter((r) => r.status === 'fail').length, computed.tiles, result.proposals.length, accepted.length);
+
+  // The checklist, once for the card and once beside the full-screen
+  // grid, so a tick or a pill redraws the rota while the GM watches.
+  const checklist = (inDialog: boolean) => (
+    <>
+      <RuleFixes
+        fixes={fixes}
+        selected={selected}
+        chosen={chosen}
+        onToggle={toggle}
+        onChoose={choose}
+        disabled={disabled}
+        weekStart={draft.weekStart}
+        onShowDay={inDialog ? undefined : (d) => setOpenDay(d)}
+      />
+      <ChangeList
+        proposals={changes}
+        selected={selected}
+        chosen={chosen}
+        onToggle={toggle}
+        onChoose={choose}
+        disabled={disabled}
+        weekStart={draft.weekStart}
+        hourlyCostGBP={draft.hourlyCostGBP}
+        onShowDay={inDialog ? undefined : (d) => setOpenDay(d)}
+      />
+    </>
+  );
 
   const recheck = () => {
     setRecheckNonce((n) => n + 1);
@@ -179,26 +221,22 @@ export default function RotaRebalanceCard({
         <WeekStrip
           draft={draft}
           site={site}
-          proposals={result.proposals}
+          proposals={effProposals}
           selected={selected}
           analysis={computed.analysis}
           shifts={computed.shifts}
           openDay={openDay}
           onOpenDay={setOpenDay}
           initialMode={initialArgs.view === 'station' ? 'station' : initialArgs.view === 'grid' ? 'grid' : 'week'}
+          fullScreenPanel={
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <StatsLine tiles={computed.tiles} rules={computed.rules} />
+              {checklist(true)}
+            </div>
+          }
         />
 
-        <RuleFixes fixes={fixes} selected={selected} onToggle={toggle} disabled={disabled} weekStart={draft.weekStart} onShowDay={(d) => setOpenDay(d)} />
-
-        <ChangeList
-          proposals={changes}
-          selected={selected}
-          onToggle={toggle}
-          disabled={disabled}
-          weekStart={draft.weekStart}
-          hourlyCostGBP={draft.hourlyCostGBP}
-          onShowDay={(d) => setOpenDay(d)}
-        />
+        {checklist(false)}
 
         {result.proposals.length === 0 && (
           <div style={{ padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--color-border-subtle)', ...small, color: 'var(--color-text-primary)' }}>
