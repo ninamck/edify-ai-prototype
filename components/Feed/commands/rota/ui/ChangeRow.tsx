@@ -63,13 +63,14 @@ export function altLabel(p: Proposal, a: Alternative): string {
   return a.title;
 }
 
-function Pill({ on, children, onClick, disabled }: { on: boolean; children: ReactNode; onClick: () => void; disabled?: boolean }) {
+function Pill({ on, children, onClick, disabled, title }: { on: boolean; children: ReactNode; onClick: () => void; disabled?: boolean; title?: string }) {
   return (
     <button
       type="button"
       role="radio"
       aria-checked={on}
       disabled={disabled}
+      title={title}
       onClick={onClick}
       style={{
         padding: '2px 9px',
@@ -158,10 +159,10 @@ export default function ChangeRow({
           </div>
         )}
         {showAlternatives && alts.length > 0 && onChoose && (
-          <div role="radiogroup" aria-label="Instead" style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', marginTop: '6px' }}>
-            <span style={{ ...small, marginRight: '2px' }}>Instead</span>
-            <Pill on={!chosenId} disabled={disabled} onClick={() => onChoose(p.id, null)}>
-              Proposed
+          <div role="radiogroup" aria-label="Ways to do this" style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', marginTop: '6px' }}>
+            <span style={{ ...small, marginRight: '2px' }}>Options</span>
+            <Pill on={!chosenId} disabled={disabled} onClick={() => onChoose(p.id, null)} title="Edify's pick">
+              {altLabel(p, { ...p, id: p.id, evidence: p.evidence })}
             </Pill>
             {alts.map((a) => (
               <Pill key={a.id} on={chosenId === a.id} disabled={disabled} onClick={() => onChoose(p.id, a.id)}>
