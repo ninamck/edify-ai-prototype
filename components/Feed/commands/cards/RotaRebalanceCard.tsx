@@ -185,6 +185,7 @@ export default function RotaRebalanceCard({
           shifts={computed.shifts}
           openDay={openDay}
           onOpenDay={setOpenDay}
+          initialMode={initialArgs.view === 'station' ? 'station' : 'week'}
         />
 
         <RuleFixes fixes={fixes} selected={selected} onToggle={toggle} disabled={disabled} weekStart={draft.weekStart} onShowDay={(d) => setOpenDay(d)} />

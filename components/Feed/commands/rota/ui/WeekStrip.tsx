@@ -51,6 +51,7 @@ export default function WeekStrip({
   shifts,
   openDay,
   onOpenDay,
+  initialMode,
 }: {
   draft: DeputyDraft;
   site: SiteLabourData;
@@ -62,8 +63,10 @@ export default function WeekStrip({
   shifts: Shift[];
   openDay: DayKey | null;
   onOpenDay: (day: DayKey | null) => void;
+  /** Open on the station view when the prompt asked for it. */
+  initialMode?: 'week' | 'station';
 }) {
-  const [mode, setMode] = useState<'week' | 'station'>('week');
+  const [mode, setMode] = useState<'week' | 'station'>(initialMode ?? 'week');
   const [why, setWhy] = useState(false);
 
   const open = openDay ? analysis.find((a) => a.day === openDay) : undefined;
