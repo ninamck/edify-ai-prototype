@@ -91,7 +91,7 @@ import {
 import { useActiveSite, ACTIVE_SITES } from '@/components/ActiveSite/ActiveSiteContext';
 import { deputyDraftFor } from '@/components/Feed/commands/rota/deputy';
 import { nudgeFor, sitesWithNudges } from '@/components/Feed/commands/rota/nudge';
-import { siteLabourFor } from '@/components/Feed/commands/rota/sources';
+import { siteLabourFor, estateLabourRows } from '@/components/Feed/commands/rota/sources';
 import { rebalance as rotaRebalance, computeTiles as rotaComputeTiles, hhmm as rotaHhmm } from '@/components/Feed/commands/rota/engine';
 import { saveWrittenDraft, clearWrittenDraft } from '@/components/Feed/commands/rota/rotaStore';
 import { resolveRotaSite, type RotaRebalanceFinal } from '@/components/Feed/commands/cards/RotaRebalanceCard';
@@ -1188,6 +1188,41 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       const requestedName = args.siteName as string | undefined;
       const targetPct = args.targetPct as number | undefined;
 
+      // HQ question: the estate ranked by hours against guide last
+      // week, with what the under-guide day parts cost. The rebalance
+      // for the worst site sits behind the confirm button.
+      if (args.estate) {
+        const sites = ACTIVE_SITES.filter((s) => s.type !== 'ALL');
+        const rows = estateLabourRows(sites.map((s) => s.id));
+        const under = rows.filter((r) => r.hoursVsGuide < 0);
+        const worstWithDraft = under.find((r) => deputyDraftFor(r.siteId));
+        const nameOf = (id: string) => sites.find((s) => s.id === id)?.name ?? id;
+        const weekLabel = rows.map((r) => siteLabourFor(r.siteId)?.lastWeek.weekLabel).find(Boolean) ?? 'last week';
+        const parts: string[] = [];
+        if (rows.length === 0) {
+          parts.push('No site in this build has last week\'s labour outcomes yet, so there is nothing to rank.');
+        } else if (under.length === 0) {
+          parts.push(`Every site with data ran on or over guide last week. Nothing to chase.`);
+        } else {
+          const list = under.map((r) => `${nameOf(r.siteId)} ${Math.abs(r.hoursVsGuide)}h under`).join(', ');
+          parts.push(`${under.length} of ${rows.length} sites ran under guide last week: ${list}.`);
+          const avg = (f: (r: (typeof under)[number]) => number) => under.reduce((s, r) => s + f(r), 0) / under.length;
+          const worst = under[0];
+          parts.push(
+            `What it cost, in the day parts that ran short: waste ${avg((r) => r.wasteVsWeekday).toFixed(1)}x the weekday average and checklists ${Math.round(avg((r) => r.checklistCompletion) * 100)}% complete. ${nameOf(worst.siteId)} was furthest under${worst.note ? `. ${worst.note.replace(/\.$/, '')}` : ''}.`,
+          );
+          if (worstWithDraft) parts.push(`${nameOf(worstWithDraft.siteId)} has next week's draft in ${deputyDraftFor(worstWithDraft.siteId)?.tool ?? 'Deputy'} already, so I can check that one now if you want.`);
+        }
+        pushResponseFlow({
+          text: parts.join(' '),
+          commandId: 'rota-rebalance',
+          cardMsgType: 'cmd-rota-estate',
+          cardArgs: { ...args, weekLabel, rebalanceSiteId: worstWithDraft?.siteId },
+          thinkingMs: 1800,
+        });
+        return;
+      }
+
       // Intraday nudge: a question card in the stream, not the
       // workspace. Static content per site; the ask is the point.
       if (args.nudge) {
@@ -1265,6 +1300,12 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         );
         const warn = rules.find((r) => r.status === 'warn');
         if (warn?.detail) parts.push(`One thing to know: ${warn.detail} after these ticks.`);
+        const cap = result.capacity[0];
+        if (cap) {
+          parts.push(
+            `One thing the rota cannot fix: ${cap.stationNames.length > 1 ? 'the machines' : cap.stationNames[0] ?? 'the machine'} run${cap.stationNames.length > 1 ? '' : 's'} at ${Math.round(cap.peakLoad * 100)}% of capacity on ${cap.day} from ${rotaHhmm(cap.start)} to ${rotaHhmm(cap.end)}. ${cap.advice}`,
+          );
+        }
         parts.push(`Tick what you want and I'll write the draft back to ${draft.tool}. ${draft.tool} still publishes.`);
       }
 
@@ -1371,6 +1412,16 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
   const switchRotaSite = useCallback(
     (msgId: string, siteId: string) => {
       writeCmdState(msgId, 'cancelled');
+      startRotaRebalance({ siteId });
+    },
+    [startRotaRebalance, writeCmdState],
+  );
+
+  /** From the estate answer: mark it done and open the rebalance for
+   *  the site that ran furthest under guide. */
+  const rebalanceFromEstate = useCallback(
+    (msgId: string, siteId: string) => {
+      writeCmdState(msgId, 'confirmed');
       startRotaRebalance({ siteId });
     },
     [startRotaRebalance, writeCmdState],
@@ -2656,6 +2707,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     confirmRotaRebalance,
     confirmRotaNudge,
     switchRotaSite,
+    rebalanceFromEstate,
     undoReceipt,
     restoreMessages,
     snapshotTask,

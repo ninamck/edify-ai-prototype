@@ -191,6 +191,7 @@ export const COMMAND_REGISTRY: ChatCommand[] = [
       "rebalance King's Cross rota, keep labour under 27%",
       'is the rota right for Saturday?',
       'a group order just landed for 14:30',
+      'which stores ran under guide last week and what did it cost?',
     ],
     parse: parseRotaRebalance,
     cardMsgType: 'cmd-rota-rebalance',

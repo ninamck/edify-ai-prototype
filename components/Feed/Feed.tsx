@@ -72,7 +72,11 @@ import ProductSwapSummaryCard from '@/components/Feed/commands/cards/ProductSwap
 import ProductSheetDetailsCard from '@/components/Feed/commands/cards/ProductSheetDetailsCard';
 import RotaRebalanceCard from '@/components/Feed/commands/cards/RotaRebalanceCard';
 import RotaNudgeCard from '@/components/Feed/commands/cards/RotaNudgeCard';
+import RotaEstateCard from '@/components/Feed/commands/cards/RotaEstateCard';
 import { nudgeFor } from '@/components/Feed/commands/rota/nudge';
+import { estateLabourRows } from '@/components/Feed/commands/rota/sources';
+import { deputyDraftFor } from '@/components/Feed/commands/rota/deputy';
+import { ACTIVE_SITES } from '@/components/ActiveSite/ActiveSiteContext';
 import AmbiguityPicker from '@/components/Feed/commands/cards/AmbiguityPicker';
 import ReceiptCard from '@/components/Feed/commands/cards/ReceiptCard';
 import MarginExplorerCard from '@/components/Feed/commands/cards/MarginExplorerCard';
@@ -8550,6 +8554,26 @@ export default function Feed({
                               nudge={nudge}
                               state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                               onYes={() => commandRunner.confirmRotaNudge(m.id, nudge.siteId)}
+                              onNotNow={() => commandRunner.cancelCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-rota-estate' && (() => {
+                          const args = m.cmdArgsJson ? (JSON.parse(m.cmdArgsJson) as { weekLabel?: string; rebalanceSiteId?: string }) : {};
+                          const sites = ACTIVE_SITES.filter((s) => s.type !== 'ALL');
+                          const rows = estateLabourRows(sites.map((s) => s.id)).map((r) => ({
+                            ...r,
+                            siteName: sites.find((s) => s.id === r.siteId)?.name ?? r.siteId,
+                            hasDraft: !!deputyDraftFor(r.siteId),
+                          }));
+                          const target = args.rebalanceSiteId ? sites.find((s) => s.id === args.rebalanceSiteId) : undefined;
+                          return (
+                            <RotaEstateCard
+                              rows={rows}
+                              weekLabel={args.weekLabel ?? 'last week'}
+                              rebalanceSite={target ? { siteId: target.id, siteName: target.name } : undefined}
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              onRebalance={() => target && commandRunner.rebalanceFromEstate(m.id, target.id)}
                               onNotNow={() => commandRunner.cancelCard(m.id)}
                             />
                           );

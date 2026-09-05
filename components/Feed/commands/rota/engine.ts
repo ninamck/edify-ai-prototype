@@ -22,6 +22,7 @@
 import {
   DAY_KEYS,
   SLOT_MIN,
+  type CapacityNote,
   type DayAnalysis,
   type DayKey,
   type DeputyDraft,
@@ -542,14 +543,15 @@ export function propose(draft: DeputyDraft, site: SiteLabourData): Proposal[] {
     const addedToday: { start: number; end: number }[] = [];
     // Re-analyse after every edit so a shift added for one gap can be
     // extended into the next rather than a second person added.
-    const attempted = new Set<number>();
+    // A gap two deep takes two edits, so a run may be attempted twice.
+    const attempted = new Map<number, number>();
     for (let guard = 0; guard < 12; guard++) {
       const analysis = analyseDay(site, working, day);
       const run = runs(analysis.points, (p) => p.required > p.rostered)
         .filter((r) => r.slots >= MIN_GAP_SLOTS)
-        .find((r) => !attempted.has(r.start));
+        .find((r) => (attempted.get(r.start) ?? 0) < 2);
       if (!run) break;
-      attempted.add(run.start);
+      attempted.set(run.start, (attempted.get(run.start) ?? 0) + 1);
       const start = roundDownHour(run.start);
       const end = roundUpHour(run.end);
       const task = fixedTaskFor(site, day, run.start, run.end);
@@ -557,8 +559,14 @@ export function propose(draft: DeputyDraft, site: SiteLabourData): Proposal[] {
       const openedByFix = proposals.find(
         (p) => p.tag === 'rule-fix' && p.day === day && p.before && p.after && p.before.end > run.start && p.after.end <= run.start,
       );
-      const why = task
-        ? { reason: task.label.toLowerCase(), evidence: task.evidence, tag: tagForTask(task.source) }
+      // The reason given is the most specific thing that explains the
+      // gap: an event-sized task (a delivery, a group order), then a
+      // named forecast signal, then the bare workload. A long background
+      // task such as hopper refills is never the headline; it is part
+      // of the workload figure.
+      const eventTask = task && task.end - task.start <= 4 * 60 ? task : undefined;
+      const why = eventTask
+        ? { reason: eventTask.label.toLowerCase(), evidence: eventTask.evidence, tag: tagForTask(eventTask.source) }
         : openedByFix
           ? { reason: 'cover the close', evidence: `${openedByFix.personName} finishing ${hhmm(openedByFix.after!.end)} leaves ${headsAt(analysis, run.start)} on from ${hhmm(run.start)} to ${hhmm(run.end)}`, tag: 'demand' as ProposalTag }
           : sig
@@ -598,7 +606,7 @@ export function propose(draft: DeputyDraft, site: SiteLabourData): Proposal[] {
         if (ownAdd && ownAdd.after) {
           ownAdd.after = { start: ownAdd.after.start, end };
           ownAdd.title = `Add ${p.name}, ${day} ${hhmm(ownAdd.after.start)} to ${hhmm(end)}`;
-          ownAdd.evidence = `${ownAdd.evidence}. Then ${why.evidence.charAt(0).toLowerCase()}${why.evidence.slice(1)}`;
+          if (why.evidence !== ownAdd.evidence) ownAdd.evidence = `${ownAdd.evidence}. Then ${why.evidence.charAt(0).toLowerCase()}${why.evidence.slice(1)}`;
           endsBefore.end = end;
           Object.assign(endsBefore, withBreak(endsBefore));
           ownAdd.hoursDelta = shiftHours(endsBefore);
@@ -651,8 +659,10 @@ export function propose(draft: DeputyDraft, site: SiteLabourData): Proposal[] {
         continue;
       }
 
-      // Otherwise add someone: most hours under contract first, rest
-      // and under-18 rules respected, never a shift under four hours.
+      // Otherwise add someone. Order: whoever is furthest under contract,
+      // then casuals (no contracted hours to protect), then whoever is
+      // least over. Rest and under-18 rules respected, never a shift
+      // under four hours.
       const { open, close } = hoursFor(site, day);
       let addEnd = Math.min(close, Math.max(end, start + MIN_ADD_MIN));
       const addStart = Math.max(open, Math.min(start, addEnd - MIN_ADD_MIN));
@@ -661,8 +671,12 @@ export function propose(draft: DeputyDraft, site: SiteLabourData): Proposal[] {
         .filter((p) => personAvailable(p, day, working))
         .filter((p) => !(p.age !== undefined && p.age < 18 && u18Rule && addEnd > u18Rule.value))
         .filter((p) => restOk(working, restHours, p.id, day, addStart, addEnd))
-        .map((p) => ({ p, slack: p.contractedHours - weeklyHours(working, p.id) }))
-        .sort((a, b) => b.slack - a.slack);
+        .map((p) => {
+          const slack = p.contractedHours - weeklyHours(working, p.id);
+          const tier = slack > 0 ? 0 : p.contractedHours === 0 ? 1 : 2;
+          return { p, slack, tier };
+        })
+        .sort((a, b) => a.tier - b.tier || b.slack - a.slack);
       const pick = candidates[0];
       if (!pick) continue;
       const area = addStart < 12 * 60 ? draft.areas[0] : draft.areas[draft.areas.length - 1];
@@ -905,6 +919,42 @@ export function explainDay(site: SiteLabourData, day: DayKey): ForecastExplanati
   };
 }
 
+// ─── Capacity ───────────────────────────────────────────────────────────────
+
+/** Machine load over capacity means a queue no extra head clears. */
+const CAPACITY_LIMIT = 1;
+
+/**
+ * Windows where a machine station runs over capacity. Machine load
+ * depends on sales and fixed tasks, not on who is rostered, so these
+ * notes do not move when proposals are ticked. They sit beside the
+ * proposals so the GM does not add a body to a queue the kit created.
+ */
+export function capacityNotes(site: SiteLabourData, analysis: DayAnalysis[]): CapacityNote[] {
+  const notes: CapacityNote[] = [];
+  for (const a of analysis) {
+    const machines = a.stations.filter((s) => s.hasMachine);
+    if (machines.length === 0) continue;
+    // Over capacity on any machine, slot by slot.
+    const points: SlotPoint[] = machines[0].points.map((p, i) => {
+      const load = Math.max(...machines.map((m) => m.points[i]?.machineLoad ?? 0));
+      return { min: p.min, required: load, rostered: CAPACITY_LIMIT };
+    });
+    for (const run of runs(points, (p) => p.required > p.rostered).filter((r) => r.slots >= MIN_GAP_SLOTS)) {
+      const peak = Math.max(...points.filter((p) => p.min >= run.start && p.min < run.end).map((p) => p.required));
+      const hot = machines.filter((m) => m.points.some((p) => p.min >= run.start && p.min < run.end && (p.machineLoad ?? 0) > CAPACITY_LIMIT));
+      const order = tasksOn(site, a.day).find((t) => t.source === 'order' && t.start < run.end + 60 && t.end > run.start - 60);
+      const sig = signalFor(site, a.day, run.start, run.end);
+      const driver = order ? order.evidence : sig ? sig.evidence : undefined;
+      const advice = order
+        ? `Another head will not clear it. Brew the ${order.label.split(',')[0].toLowerCase()} ahead, before ${hhmm(order.start)}, and the machines drop back under capacity.`
+        : 'Another head will not clear it. This is a machine limit: pre-brew into the window or accept the queue.';
+      notes.push({ day: a.day, start: run.start, end: run.end, stationNames: hot.map((m) => m.stationName), peakLoad: peak, driver, advice });
+    }
+  }
+  return notes;
+}
+
 // ─── Entry ──────────────────────────────────────────────────────────────────
 
 export function rebalance(draft: DeputyDraft, site: SiteLabourData, requestedTargetPct?: number): RebalanceResult {
@@ -912,5 +962,6 @@ export function rebalance(draft: DeputyDraft, site: SiteLabourData, requestedTar
   const rulesBefore = checkRules(draft, draft.shifts);
   const proposals = propose(draft, site);
   const guide = labourGuide(site, draft.shifts);
-  return { draft, site, requestedTargetPct, proposals, before, rulesBefore, guide };
+  const capacity = capacityNotes(site, before);
+  return { draft, site, requestedTargetPct, proposals, before, rulesBefore, guide, capacity };
 }

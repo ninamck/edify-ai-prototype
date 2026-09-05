@@ -69,11 +69,22 @@ const DEFAULT_CHIPS: PromptChip[] = [
   },
 ];
 
-// Per-brand chip overrides. Currently empty on purpose — every build
-// (internal and the Chagee demo) uses the default recipe/food-cost
-// wording. To brand the chips for a customer again, add an entry, e.g.
-// `chagee: CHAGEE_CHIPS`, and PROMPT_CHIPS will pick it up at runtime.
-const CHIPS_BY_CUSTOMER: Record<string, PromptChip[]> = {};
+/** Chagee: the franchise HQ buyer sees the estate question first and
+ *  the store-level rebalance one click down. Everything else is the
+ *  default set. */
+const CHAGEE_CHIPS: PromptChip[] = [
+  {
+    label: 'Which stores ran under guide last week?',
+    icon: Building2,
+    text: 'Which stores ran under guide last week and what did it cost?',
+  },
+  ...DEFAULT_CHIPS,
+];
+
+// Per-brand chip overrides. Brands not listed here get DEFAULT_CHIPS.
+const CHIPS_BY_CUSTOMER: Record<string, PromptChip[]> = {
+  chagee: CHAGEE_CHIPS,
+};
 
 /** The suggested chips for the active build. Falls back to the default set. */
 export const PROMPT_CHIPS: PromptChip[] =
