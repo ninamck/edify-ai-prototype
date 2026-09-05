@@ -88,8 +88,9 @@ import {
   diffWaste,
   diffStock,
 } from '@/components/Feed/commands/diffs';
-import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+import { useActiveSite, ACTIVE_SITES } from '@/components/ActiveSite/ActiveSiteContext';
 import { deputyDraftFor } from '@/components/Feed/commands/rota/deputy';
+import { nudgeFor, sitesWithNudges } from '@/components/Feed/commands/rota/nudge';
 import { siteLabourFor } from '@/components/Feed/commands/rota/sources';
 import { rebalance as rotaRebalance, computeTiles as rotaComputeTiles, hhmm as rotaHhmm } from '@/components/Feed/commands/rota/engine';
 import { saveWrittenDraft, clearWrittenDraft } from '@/components/Feed/commands/rota/rotaStore';
@@ -1187,6 +1188,32 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       const requestedName = args.siteName as string | undefined;
       const targetPct = args.targetPct as number | undefined;
 
+      // Intraday nudge: a question card in the stream, not the
+      // workspace. Static content per site; the ask is the point.
+      if (args.nudge) {
+        const known = new Set(ACTIVE_SITES.map((s) => s.id));
+        const nudgeSite = requested && nudgeFor(requested) ? requested : nudgeFor(activeSiteIdRef.current) ? activeSiteIdRef.current : sitesWithNudges().find((id) => known.has(id));
+        const nudge = nudgeSite ? nudgeFor(nudgeSite) : undefined;
+        if (!nudge) {
+          pushResponseFlow({
+            text: 'No order has landed against a site with a rota connected in this build, so there is nothing to move.',
+            commandId: 'rota-rebalance',
+            cardMsgType: 'cmd-rota-nudge',
+            cardArgs: { ...args },
+            thinkingMs: 800,
+          });
+          return;
+        }
+        pushResponseFlow({
+          text: `Something just landed at ${nudge.siteName} that changes the next hour. One move would cover it. Your call, and nothing moves until you say.`,
+          commandId: 'rota-rebalance',
+          cardMsgType: 'cmd-rota-nudge',
+          cardArgs: { ...args, siteId: nudge.siteId, siteName: nudge.siteName },
+          thinkingMs: 1400,
+        });
+        return;
+      }
+
       // A named site with no draft gets the empty state, not a silent
       // switch to another site.
       if (requested && !deputyDraftFor(requested)) {
@@ -1301,6 +1328,40 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         },
       });
       pushReceipt(receipt, msgId);
+    },
+    [pushReceipt, recordTaskChanges, writeCmdState],
+  );
+
+  /** Intraday nudge answered Yes: one break moved in the day's rota in
+   *  the workforce tool, as a draft edit. Nobody is told by Edify. */
+  const confirmRotaNudge = useCallback(
+    (msgId: string, siteId: string) => {
+      const nudge = nudgeFor(siteId);
+      if (!nudge) return;
+      const first = nudge.personName.split(' ')[0];
+      writeCmdState(msgId, 'confirmed');
+      recordTaskChanges({
+        changes: [
+          {
+            entityType: 'rota-shift' as const,
+            entityId: `${siteId}:${nudge.personName}:today`,
+            entityLabel: `${nudge.personName} · today`,
+            fieldPath: 'break',
+            fieldLabel: nudge.change.label,
+            before: nudge.change.before,
+            after: nudge.change.after,
+            valueKind: 'text' as const,
+          },
+        ],
+        commandIntent: { commandId: 'rota-rebalance', cardMsgType: 'cmd-rota-nudge', args: { siteId, nudge: true } },
+      });
+      pushReceipt(
+        {
+          headline: `${first}'s break moved to ${nudge.change.after} in ${nudge.tool}`,
+          detail: `Written to today's rota in ${nudge.tool} as a draft edit. Tell ${first} on the floor; ${nudge.tool} shows the change when you confirm it there.`,
+        },
+        msgId,
+      );
     },
     [pushReceipt, recordTaskChanges, writeCmdState],
   );
@@ -2593,6 +2654,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     confirmProductSwapFromSheetRecipes,
     // Rota rebalance
     confirmRotaRebalance,
+    confirmRotaNudge,
     switchRotaSite,
     undoReceipt,
     restoreMessages,

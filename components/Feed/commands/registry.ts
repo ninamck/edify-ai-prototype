@@ -190,6 +190,7 @@ export const COMMAND_REGISTRY: ChatCommand[] = [
       "check next week's rota against the forecast",
       "rebalance King's Cross rota, keep labour under 27%",
       'is the rota right for Saturday?',
+      'a group order just landed for 14:30',
     ],
     parse: parseRotaRebalance,
     cardMsgType: 'cmd-rota-rebalance',
