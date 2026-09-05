@@ -128,7 +128,10 @@ export type FixedTaskSource = 'grn' | 'prep' | 'stocktake' | 'clean' | 'checklis
 export interface FixedTask {
   id: string;
   label: string;
-  day: DayKey | 'daily';
+  /** A day, every day, or Monday to Friday. Daily and weekday windows
+   *  are written against the weekday hours and move with a day's open
+   *  or close where it trades different hours. */
+  day: DayKey | 'daily' | 'weekdays';
   start: number;
   end: number;
   /** Human minutes of work inside the window. */
@@ -297,6 +300,34 @@ export interface LabourGuideRow {
   byDayPart: { dayPart: string; guideHours: number; rosteredHours: number }[];
   guideHours: number;
   rosteredHours: number;
+}
+
+/** Why a day's forecast is what it is, and how it becomes hours. */
+export interface ForecastExplanation {
+  day: DayKey;
+  open: number;
+  close: number;
+  /** Forecast for the day after named adjustments. */
+  salesGBP: number;
+  /** The day-of-week pattern alone, before adjustments. */
+  baseGBP: number;
+  /** Signed percentage the adjustments move the day. */
+  adjustPct: number;
+  transactions: number;
+  signals: ForecastSignal[];
+  tasks: FixedTask[];
+  standards: LabourStandard[];
+  /** Blended human seconds per transaction across the product mix. */
+  humanSecondsPerTransaction: number;
+  /** Hours of work the sales alone create. */
+  salesHours: number;
+  /** Hours of work the fixed tasks create. */
+  taskHours: number;
+  /** Hours the floor minimum holds regardless of sales. */
+  floorHours: number;
+  /** Hours the guide says the day needs, after the floor. */
+  guideHours: number;
+  peak: { start: number; end: number; heads: number };
 }
 
 export interface RebalanceResult {

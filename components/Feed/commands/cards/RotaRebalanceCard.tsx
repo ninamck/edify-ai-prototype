@@ -22,10 +22,11 @@ import CardShell, { type CardState } from './CardShell';
 import { useActiveSite, ACTIVE_SITES } from '@/components/ActiveSite/ActiveSiteContext';
 import { deputyDraftFor, sitesWithDrafts } from '@/components/Feed/commands/rota/deputy';
 import { siteLabourFor } from '@/components/Feed/commands/rota/sources';
-import { rebalance, computeTiles } from '@/components/Feed/commands/rota/engine';
-import type { Proposal, RuleResult, Shift, Tiles } from '@/components/Feed/commands/rota/types';
+import { rebalance, computeTiles, explainDay as explainForecastDay } from '@/components/Feed/commands/rota/engine';
+import type { DayKey, Proposal, RuleResult, Shift, Tiles } from '@/components/Feed/commands/rota/types';
 import RotaTiles from '@/components/Feed/commands/rota/ui/Tiles';
 import WeekGrid from '@/components/Feed/commands/rota/ui/WeekGrid';
+import ExplainForecast from '@/components/Feed/commands/rota/ui/ExplainForecast';
 import StationView from '@/components/Feed/commands/rota/ui/StationView';
 import ProposalList from '@/components/Feed/commands/rota/ui/ProposalList';
 import RulesPanel from '@/components/Feed/commands/rota/ui/RulesPanel';
@@ -83,6 +84,7 @@ export default function RotaRebalanceCard({
   const [view, setView] = useState<'area' | 'station'>(initialArgs.view ?? 'area');
   const [recheckNonce, setRecheckNonce] = useState(0);
   const [recheckedAt, setRecheckedAt] = useState<string | null>(null);
+  const [explainDay, setExplainDay] = useState<DayKey | null>(null);
 
   // recheckNonce is a deliberate input: a re-check pulls the draft again.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -159,15 +161,26 @@ export default function RotaRebalanceCard({
               </button>
             </div>
             <span style={small}>
-              Ticked changes are drawn on. Red under a day: short of the workload. Grey: a head idle.
+              {view === 'area'
+                ? 'Ticked changes are drawn on. Red under a day: short of the workload. Grey: a head idle. Click a forecast to see why.'
+                : 'Work by station, hour by hour. Machine load shows where the kit, not the people, is the limit.'}
             </span>
           </div>
           {view === 'area' ? (
-            <WeekGrid draft={draft} proposals={result.proposals} selected={selected} analysis={computed.analysis} />
+            <WeekGrid
+              draft={draft}
+              proposals={result.proposals}
+              selected={selected}
+              analysis={computed.analysis}
+              explainDay={explainDay}
+              onExplain={(d) => setExplainDay((cur) => (cur === d ? null : d))}
+            />
           ) : (
             <StationView site={site} analysis={computed.analysis} shifts={computed.shifts} draft={draft} />
           )}
         </div>
+
+        {explainDay && view === 'area' && <ExplainForecast x={explainForecastDay(site, explainDay)} onClose={() => setExplainDay(null)} />}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(200px, 2fr)', gap: '14px', alignItems: 'start' }}>
           <ProposalList proposals={result.proposals} selected={selected} onToggle={toggle} disabled={disabled} />

@@ -25,7 +25,9 @@ import {
   type DayAnalysis,
   type DayKey,
   type DeputyDraft,
+  type FixedTask,
   type FixedTaskSource,
+  type ForecastExplanation,
   type LabourGuideRow,
   type Person,
   type Proposal,
@@ -40,7 +42,7 @@ import {
 } from './types';
 
 /** People are not busy every second of a slot. */
-const UTILISATION = 0.8;
+export const UTILISATION = 0.8;
 /** A gap run shorter than this is noise, not a cover gap. */
 const MIN_GAP_SLOTS = 2;
 /** Idle runs shorter than this (2 hours) are left alone. */
@@ -85,6 +87,32 @@ function slotsFor(site: SiteLabourData, day: DayKey): number[] {
   const out: number[] = [];
   for (let m = open; m < close; m += SLOT_MIN) out.push(m);
   return out;
+}
+
+/** A fixed task's window on a given day. Daily tasks are written
+ *  against the weekday hours; on a day that trades different hours,
+ *  opening tasks move with the open and closing tasks with the close,
+ *  so Saturday's prep still happens at Saturday's open. */
+export function taskWindow(site: SiteLabourData, task: FixedTask, day: DayKey): { start: number; end: number } {
+  if (task.day !== 'daily' && task.day !== 'weekdays') return { start: task.start, end: task.end };
+  const { open, close } = hoursFor(site, day);
+  const midday = (site.openMin + site.closeMin) / 2;
+  const shift = task.start < midday ? open - site.openMin : close - site.closeMin;
+  return { start: task.start + shift, end: task.end + shift };
+}
+
+/** Fixed tasks that fall inside the day's trading hours, with their
+ *  windows for that day. */
+export function tasksOn(site: SiteLabourData, day: DayKey): (FixedTask & { start: number; end: number })[] {
+  const { open, close } = hoursFor(site, day);
+  const weekday = day !== 'Sat' && day !== 'Sun';
+  return site.fixedTasks
+    .filter((t) => t.day === day || t.day === 'daily' || (t.day === 'weekdays' && weekday))
+    .map((t) => ({ ...t, ...taskWindow(site, t, day) }))
+    .filter((t) => t.start < close && t.end > open)
+    // Specific days first so a Thursday GRN, not the daily prep, is
+    // the reason given for a Thursday gap.
+    .sort((a, b) => (a.day === day ? 0 : 1) - (b.day === day ? 0 : 1));
 }
 
 /** A line that leaves someone more than this far under contract starts
@@ -171,8 +199,7 @@ function workloadFor(site: SiteLabourData, day: DayKey): Workload {
     }
   }
 
-  for (const task of site.fixedTasks) {
-    if (task.day !== 'daily' && task.day !== day) continue;
+  for (const task of tasksOn(site, day)) {
     const taskSlots = slots.filter((m) => m >= task.start && m < task.end);
     if (taskSlots.length === 0) continue;
     const perSlotHuman = (task.humanMinutes * 60) / taskSlots.length;
@@ -400,9 +427,7 @@ function signalFor(site: SiteLabourData, day: DayKey, start: number, end: number
 }
 
 function fixedTaskFor(site: SiteLabourData, day: DayKey, start: number, end: number) {
-  return site.fixedTasks.find(
-    (t) => t.day === day && t.start < end && t.end > start && t.source !== 'clean' && t.source !== 'checklist',
-  );
+  return tasksOn(site, day).find((t) => t.start < end && t.end > start && t.source !== 'clean' && t.source !== 'checklist');
 }
 
 function tagForTask(source: FixedTaskSource): ProposalTag {
@@ -514,11 +539,17 @@ export function propose(draft: DeputyDraft, site: SiteLabourData): Proposal[] {
 
   // 2. Demand and workload: close gaps, then trim idle, day by day.
   for (const day of DAY_KEYS) {
-    const analysis = analyseDay(site, working, day);
     const addedToday: { start: number; end: number }[] = [];
-    const gapRuns = runs(analysis.points, (p) => p.required > p.rostered).filter((r) => r.slots >= MIN_GAP_SLOTS);
-
-    for (const run of gapRuns) {
+    // Re-analyse after every edit so a shift added for one gap can be
+    // extended into the next rather than a second person added.
+    const attempted = new Set<number>();
+    for (let guard = 0; guard < 12; guard++) {
+      const analysis = analyseDay(site, working, day);
+      const run = runs(analysis.points, (p) => p.required > p.rostered)
+        .filter((r) => r.slots >= MIN_GAP_SLOTS)
+        .find((r) => !attempted.has(r.start));
+      if (!run) break;
+      attempted.add(run.start);
       const start = roundDownHour(run.start);
       const end = roundUpHour(run.end);
       const task = fixedTaskFor(site, day, run.start, run.end);
@@ -560,6 +591,21 @@ export function propose(draft: DeputyDraft, site: SiteLabourData): Proposal[] {
 
       if (endsBefore) {
         const p = byPerson.get(endsBefore.personId)!;
+        // Extending a shift this pass added is one proposal, not two.
+        const ownAdd = endsBefore.id.startsWith('w-add-')
+          ? proposals.find((x) => x.kind === 'add' && x.personId === p.id && x.day === day && x.after?.start === endsBefore.start)
+          : undefined;
+        if (ownAdd && ownAdd.after) {
+          ownAdd.after = { start: ownAdd.after.start, end };
+          ownAdd.title = `Add ${p.name}, ${day} ${hhmm(ownAdd.after.start)} to ${hhmm(end)}`;
+          ownAdd.evidence = `${ownAdd.evidence}. Then ${why.evidence.charAt(0).toLowerCase()}${why.evidence.slice(1)}`;
+          endsBefore.end = end;
+          Object.assign(endsBefore, withBreak(endsBefore));
+          ownAdd.hoursDelta = shiftHours(endsBefore);
+          const a = addedToday.find((x) => x.start === endsBefore.start);
+          if (a) a.end = end;
+          continue;
+        }
         proposals.push({
           id: nextId(),
           kind: 'amend',
@@ -820,6 +866,43 @@ export function labourGuide(site: SiteLabourData, shifts: Shift[]): LabourGuideR
       rosteredHours: byDayPart.reduce((s, r) => s + r.rosteredHours, 0),
     };
   });
+}
+
+// ─── Explain the forecast ───────────────────────────────────────────────────
+
+/** Why the day's forecast is what it is, and how it turns into hours.
+ *  Everything here is read from the site data, so the card can show the
+ *  provenance of each number rather than assert precision it lacks. */
+export function explainDay(site: SiteLabourData, day: DayKey): ForecastExplanation {
+  const a = analyseDay(site, [], day);
+  const base = daySalesGBP(site, day);
+  const { open, close } = hoursFor(site, day);
+  const transactions = a.salesGBP / site.avgTicketGBP;
+  const hsu = humanSecondsPerUnit(site);
+  const salesHours = (transactions * hsu) / 3600 / UTILISATION;
+  const tasks = tasksOn(site, day);
+  const taskHours = tasks.reduce((s, t) => s + t.humanMinutes, 0) / 60 / UTILISATION;
+  const guideHours = Math.round(a.points.reduce((s, p) => s + p.required, 0) * (SLOT_MIN / 60) * 2) / 2;
+  const peak = a.points.reduce((best, p) => (p.required > best.required ? p : best), a.points[0]);
+  const peakHour = Math.floor(peak.min / 60) * 60;
+  return {
+    day,
+    open,
+    close,
+    salesGBP: a.salesGBP,
+    baseGBP: base,
+    adjustPct: base > 0 ? Math.round(((a.salesGBP - base) / base) * 100) : 0,
+    transactions: Math.round(transactions),
+    signals: site.signals[day] ?? [],
+    tasks,
+    standards: site.standards,
+    humanSecondsPerTransaction: Math.round(hsu),
+    salesHours: Math.round(salesHours * 2) / 2,
+    taskHours: Math.round(taskHours * 2) / 2,
+    floorHours: Math.round(((close - open) / 60) * site.floorMinimum * 2) / 2,
+    guideHours,
+    peak: { start: peakHour, end: peakHour + 60, heads: peak.required },
+  };
 }
 
 // ─── Entry ──────────────────────────────────────────────────────────────────
