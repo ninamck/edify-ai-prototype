@@ -39,7 +39,7 @@ export interface RotaRebalanceArgs {
   siteId?: string;
   siteName?: string;
   targetPct?: number;
-  view?: 'area' | 'station';
+  view?: 'area' | 'grid' | 'station';
 }
 
 export interface RotaRebalanceFinal {
@@ -185,7 +185,7 @@ export default function RotaRebalanceCard({
           shifts={computed.shifts}
           openDay={openDay}
           onOpenDay={setOpenDay}
-          initialMode={initialArgs.view === 'station' ? 'station' : 'week'}
+          initialMode={initialArgs.view === 'station' ? 'station' : initialArgs.view === 'grid' ? 'grid' : 'week'}
         />
 
         <RuleFixes fixes={fixes} selected={selected} onToggle={toggle} disabled={disabled} weekStart={draft.weekStart} onShowDay={(d) => setOpenDay(d)} />

@@ -43,11 +43,32 @@ export const DAY_NAME: Record<DayKey, string> = {
 };
 
 export function chipsFor(draft: DeputyDraft, proposals: Proposal[], selected: Set<string>, area: string, day: DayKey): ChipModel[] {
+  return modelsFor(
+    draft,
+    proposals,
+    selected,
+    (s) => s.area === area && s.day === day,
+    (p) => p.area === area && p.day === day,
+  );
+}
+
+/** One person's cell in a people-down, days-across grid. */
+export function chipsForPerson(draft: DeputyDraft, proposals: Proposal[], selected: Set<string>, personId: string, day: DayKey): ChipModel[] {
+  return modelsFor(
+    draft,
+    proposals,
+    selected,
+    (s) => s.personId === personId && s.day === day,
+    (p) => p.personId === personId && p.day === day,
+  );
+}
+
+function modelsFor(draft: DeputyDraft, proposals: Proposal[], selected: Set<string>, keepShift: (s: Shift) => boolean, keepAdd: (p: Proposal) => boolean): ChipModel[] {
   const byPerson = new Map(draft.people.map((p) => [p.id, p.name]));
   const out: ChipModel[] = [];
   const matches = (s: Shift, p: Proposal) => p.personId === s.personId && p.day === s.day && p.before?.start === s.start && p.before?.end === s.end;
 
-  for (const s of draft.shifts.filter((x) => x.area === area && x.day === day)) {
+  for (const s of draft.shifts.filter(keepShift)) {
     const p = proposals.find((x) => x.kind !== 'add' && matches(s, x));
     if (!p) {
       out.push({ key: s.id, personName: byPerson.get(s.personId) ?? s.personId, kind: 'unchanged', applied: true, before: { start: s.start, end: s.end }, start: s.start });
@@ -64,7 +85,7 @@ export function chipsFor(draft: DeputyDraft, proposals: Proposal[], selected: Se
       start: s.start,
     });
   }
-  for (const p of proposals.filter((x) => x.kind === 'add' && x.area === area && x.day === day)) {
+  for (const p of proposals.filter((x) => x.kind === 'add' && keepAdd(x))) {
     out.push({ key: p.id, personName: p.personName, kind: 'add', applied: selected.has(p.id), after: p.after, reason: p.reason, start: p.after?.start ?? 0 });
   }
   return out.sort((a, b) => a.start - b.start);
