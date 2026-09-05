@@ -39,10 +39,24 @@ export function siteFromText(text: string): { id: string; name: string } | null 
   return null;
 }
 
+/** Intraday: an order has landed with lead time and the question is
+ *  whether to move a break or a start today, not next week's rota. */
+const NUDGE = /\b(group order|pre-?order|bulk order|big order|large order)\b.*\b(landed|came in|just|confirmed|arrived|for (today|this afternoon|\d{1,2}(:\d{2})?))\b|\b(landed|came in|just confirmed)\b.*\b(group order|pre-?order|bulk order)\b|^\/rota\s+nudge\b|\bintraday\b/i;
+
 export function parseRotaRebalance(text: string): CommandIntent | null {
   const t = text.trim();
   const slash = /^\/(rota|roster|labour)\b/i.test(t);
   const lower = t.toLowerCase();
+
+  if (NUDGE.test(t)) {
+    const args: Record<string, unknown> = { nudge: true };
+    const site = siteFromText(t);
+    if (site) {
+      args.siteId = site.id;
+      args.siteName = site.name;
+    }
+    return { commandId: 'rota-rebalance', args, confidence: 0.9 };
+  }
 
   if (!slash) {
     if (!NOUN.test(lower)) return null;

@@ -87,6 +87,8 @@ import SiteSetupProductionCard from '@/components/Feed/commands/cards/SiteSetupP
 import SiteSetupBenchesHotCard from '@/components/Feed/commands/cards/SiteSetupBenchesHotCard';
 import SiteSetupGoLiveCard from '@/components/Feed/commands/cards/SiteSetupGoLiveCard';
 import RotaRebalanceCard from '@/components/Feed/commands/cards/RotaRebalanceCard';
+import RotaNudgeCard from '@/components/Feed/commands/cards/RotaNudgeCard';
+import { nudgeFor } from '@/components/Feed/commands/rota/nudge';
 import AmbiguityPicker from '@/components/Feed/commands/cards/AmbiguityPicker';
 import ReceiptCard from '@/components/Feed/commands/cards/ReceiptCard';
 import MarginExplorerCard from '@/components/Feed/commands/cards/MarginExplorerCard';
@@ -10364,6 +10366,19 @@ export default function Feed({
                             onSwitchSite={(siteId) => commandRunner.switchRotaSite(m.id, siteId)}
                           />
                         )}
+                        {m.msgType === 'cmd-rota-nudge' && (() => {
+                          const args = m.cmdArgsJson ? (JSON.parse(m.cmdArgsJson) as { siteId?: string }) : {};
+                          const nudge = args.siteId ? nudgeFor(args.siteId) : undefined;
+                          if (!nudge) return null;
+                          return (
+                            <RotaNudgeCard
+                              nudge={nudge}
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              onYes={() => commandRunner.confirmRotaNudge(m.id, nudge.siteId)}
+                              onNotNow={() => commandRunner.cancelCard(m.id)}
+                            />
+                          );
+                        })()}
                         {/* ── Product wizard (add or replace) ─────────── */}
                         {m.msgType === 'cmd-product-purpose' && (() => {
                           const args = m.cmdArgsJson ? (JSON.parse(m.cmdArgsJson) as {
