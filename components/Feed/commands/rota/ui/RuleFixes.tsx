@@ -11,7 +11,7 @@
 import { AlertTriangle, Check } from 'lucide-react';
 import { DAY_KEYS, type DayKey, type Proposal } from '../types';
 import { DayLabel, shortTitle, signedHours } from './ChangeList';
-import { label, small, textButton } from './tokens';
+import { KIND_STYLE, label, small, textButton } from './tokens';
 
 export default function RuleFixes({
   fixes,
@@ -45,7 +45,7 @@ export default function RuleFixes({
           return (
             <div key={d} style={{ display: 'grid', gridTemplateColumns: '56px minmax(0, 1fr)', gap: '8px', alignItems: 'start' }}>
               <DayLabel day={d} weekStart={weekStart} onShowDay={onShowDay} />
-              <ul style={{ listStyle: 'none', margin: 0, padding: 0, borderRadius: '8px', border: `1px solid ${rows.some((p) => !selected.has(p.id)) ? 'var(--color-error)' : 'var(--color-review-border)'}`, overflow: 'hidden' }}>
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0, borderRadius: '8px', border: `1px solid ${rows.some((p) => !selected.has(p.id)) ? 'var(--color-error)' : KIND_STYLE.amend.border}`, overflow: 'hidden' }}>
                 {rows.map((p, i) => {
                   const applied = selected.has(p.id);
                   return (
@@ -58,7 +58,7 @@ export default function RuleFixes({
                         alignItems: 'start',
                         padding: '8px 10px',
                         borderTop: i === 0 ? 'none' : '1px solid var(--color-border-subtle)',
-                        background: applied ? 'var(--color-review-light)' : '#fff',
+                        background: applied ? KIND_STYLE.amend.bg : '#fff',
                       }}
                     >
                       <span style={{ marginTop: '1px', display: 'inline-flex', justifyContent: 'center' }} aria-hidden="true">

@@ -7,7 +7,8 @@ import type { ProposalKind, ProposalTag } from '../types';
 export const KIND_STYLE: Record<ProposalKind | 'unchanged', { bg: string; border: string; label: string }> = {
   unchanged: { bg: '#fff', border: 'var(--color-border-subtle)', label: '' },
   add: { bg: 'var(--color-success-light)', border: 'var(--color-success-border)', label: 'Add' },
-  amend: { bg: 'var(--color-review-light)', border: 'var(--color-review-border)', label: 'Amend' },
+  // Fallbacks: the review tokens are newer than some demo branches.
+  amend: { bg: 'var(--color-review-light, #E4EDFB)', border: 'var(--color-review-border, #AFC8EF)', label: 'Amend' },
   remove: { bg: 'var(--color-bg-hover)', border: 'var(--color-border)', label: 'Remove' },
 };
 
