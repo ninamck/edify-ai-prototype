@@ -163,11 +163,17 @@ export default function WeekGrid({
   proposals,
   selected,
   analysis,
+  explainDay,
+  onExplain,
 }: {
   draft: DeputyDraft;
   proposals: Proposal[];
   selected: Set<string>;
   analysis: DayAnalysis[];
+  /** Day whose forecast explanation is open, if any. */
+  explainDay?: DayKey | null;
+  /** Clicking a day's forecast figure opens the explanation. */
+  onExplain?: (day: DayKey) => void;
 }) {
   const cols = `92px repeat(7, minmax(0, 1fr))`;
   return (
@@ -185,7 +191,32 @@ export default function WeekGrid({
               <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{d}</span>
               <span style={small}>{dateLabel(draft.weekStart, i)}</span>
             </div>
-            <div style={{ ...small, fontSize: '10.5px' }}>£{Math.round(a.salesGBP).toLocaleString('en-GB')} forecast</div>
+            {onExplain ? (
+              <button
+                type="button"
+                onClick={() => onExplain(d)}
+                aria-expanded={explainDay === d}
+                aria-label={`Why £${Math.round(a.salesGBP).toLocaleString('en-GB')} on ${d}`}
+                title="Why this forecast"
+                style={{
+                  ...small,
+                  fontSize: '10.5px',
+                  padding: 0,
+                  border: 'none',
+                  background: 'transparent',
+                  fontFamily: 'var(--font-primary)',
+                  cursor: 'pointer',
+                  textDecoration: 'underline dotted',
+                  textUnderlineOffset: '2px',
+                  color: explainDay === d ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                  fontWeight: explainDay === d ? 700 : 500,
+                }}
+              >
+                £{Math.round(a.salesGBP).toLocaleString('en-GB')} forecast
+              </button>
+            ) : (
+              <div style={{ ...small, fontSize: '10.5px' }}>£{Math.round(a.salesGBP).toLocaleString('en-GB')} forecast</div>
+            )}
             <CoverStrip a={a} />
           </div>
         );

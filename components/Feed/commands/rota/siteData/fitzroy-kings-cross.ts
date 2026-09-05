@@ -76,7 +76,7 @@ export function FITZROY_KINGS_CROSS_LABOUR(): SiteLabourData {
       { id: 'restock', name: 'Restock and clean', demandShare: 0 },
     ],
     fixedTasks: [
-      { id: 'prep-daily', label: 'Opening prep and checks', day: 'daily', start: H(6), end: H(8), humanMinutes: 60, stationId: 'kitchen', source: 'prep', evidence: 'Prep list from the production plan plus the 12-step opening checklist' },
+      { id: 'prep-weekday', label: 'Opening prep and checks', day: 'weekdays', start: H(6), end: H(8), humanMinutes: 60, stationId: 'kitchen', source: 'prep', evidence: 'Weekday prep list from the production plan plus the 12-step opening checklist. Weekend prep is on Friday\'s plan.' },
       { id: 'prep-fri', label: 'Prep plan up 22%', day: 'Fri', start: H(6), end: H(9), humanMinutes: 120, stationId: 'kitchen', source: 'prep', evidence: 'Production plan up 22% on Friday: 14 more trays for the weekend' },
       { id: 'grn-thu', label: 'GRN due 07:00', day: 'Thu', start: H(7), end: H(8), humanMinutes: 30, stationId: 'restock', source: 'grn', evidence: 'Bidvest delivery due 07:00 Thursday, 18 lines to check in' },
       { id: 'preorders-sat', label: 'Market-day pre-orders', day: 'Sat', start: H(11), end: H(14), humanMinutes: 90, stationId: 'counter', source: 'order', evidence: '40 lunch boxes pre-ordered for collection 12:00 to 14:00, Granary Square market' },
