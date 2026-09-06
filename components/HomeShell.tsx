@@ -41,6 +41,7 @@ import {
   FranchiseNetworkDashboard,
 } from '@/components/Dashboard/SecondCup/SecondCupViews';
 import TemplatesDashboard from '@/components/Dashboard/Templates/TemplatesDashboard';
+import AllSitesDashboard from '@/components/Dashboard/AllSitesDashboard';
 import { isMultiCurrencyDemo } from '@/lib/demoConfig';
 import RolesDashboardTab from '@/components/Dashboard/permissions/RolesDashboardTab';
 import PublishedOverviewDialog from '@/components/Dashboard/permissions/PublishedOverviewDialog';
@@ -106,6 +107,14 @@ function persistTemplatesAudience(audience: Audience | null) {
   }
 }
 
+// Cross-estate charts tab. Only in the strip while the sidebar site switcher
+// is on "All sites": every tile compares sites, suppliers or recipes across
+// the estate, so a single site has nothing to show. Pinned (kind:
+// 'dashboard') so it can't be renamed or removed.
+const ALL_SITES_TABS: Mvp1Tab[] = [
+  { id: 'all-sites-insights', name: 'All sites', kind: 'dashboard' },
+];
+
 // Extra dashboard tabs for the Second Cup (multi-currency) build only.
 // Typed as `kind: 'dashboard'` so the shared tab strip treats them as
 // pinned (no rename, no remove); HomeShell resolves them by id.
@@ -126,7 +135,7 @@ const MOBILE_SHELL_BREAKPOINT = '(max-width: 500px)';
 export default function HomeShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { activeSite } = useActiveSite();
+  const { activeSite, isAllSites } = useActiveSite();
   const flowParam = searchParams?.get('flow');
   const autoStartFlow =
     flowParam === 'recipe' || flowParam === 'integrity' || flowParam === 'pos-match' || flowParam === 'rota' || flowParam === 'sweep'
@@ -289,20 +298,25 @@ export default function HomeShell() {
 
   const visibleMvp1Tabs = mvp1Tabs.filter((t) => !HIDDEN_MVP1_TAB_IDS.has(t.id));
   const templateTabs = canSeeTemplates ? TEMPLATE_TABS : [];
+  // The All sites tab sits directly after Dashboard, and only on All sites.
+  const allSitesTabs = isAllSites ? ALL_SITES_TABS : [];
+  const dashboardTab = visibleMvp1Tabs.filter((t) => t.id === 'dashboard');
+  const otherMvp1Tabs = visibleMvp1Tabs.filter((t) => t.id !== 'dashboard');
   const baseTabs: Mvp1Tab[] = isMultiCurrencyDemo
-    ? [...visibleMvp1Tabs, ...templateTabs, ...SECOND_CUP_TABS]
-    : [...visibleMvp1Tabs, ...templateTabs];
+    ? [...dashboardTab, ...allSitesTabs, ...otherMvp1Tabs, ...templateTabs, ...SECOND_CUP_TABS]
+    : [...dashboardTab, ...allSitesTabs, ...otherMvp1Tabs, ...templateTabs];
   // Roles personas: the roles-model dashboards slot in right after the
-  // original Dashboard tab. During a "View as" preview only the previewed
-  // viewer's dashboards show — that's exactly what they'd see.
+  // Dashboard and All sites tabs. During a "View as" preview only the
+  // previewed viewer's dashboards show — that's exactly what they'd see.
+  const leadTabIds = new Set(['dashboard', ...ALL_SITES_TABS.map((t) => t.id)]);
   const allTabs: Mvp1Tab[] = !rolesPersona
     ? baseTabs
     : rolesViewer?.previewing
       ? rolesTabs
       : [
-          ...baseTabs.filter((t) => t.id === 'dashboard'),
+          ...baseTabs.filter((t) => leadTabIds.has(t.id)),
           ...rolesTabs,
-          ...baseTabs.filter((t) => t.id !== 'dashboard'),
+          ...baseTabs.filter((t) => !leadTabIds.has(t.id)),
         ];
   // Guard against a stale stored id (e.g. a Second Cup tab id persisted, then
   // the brand switched away) — fall back to the main dashboard, or the first
@@ -453,6 +467,9 @@ export default function HomeShell() {
           tabToolbar
         );
       return <TemplatesDashboard controls={templatesToolbar} />;
+    }
+    if (effectiveTabId === 'all-sites-insights') {
+      return <AllSitesDashboard editing={editingDashboard} controls={tabToolbar} />;
     }
     if (effectiveTabId === 'sc-performance') {
       return (

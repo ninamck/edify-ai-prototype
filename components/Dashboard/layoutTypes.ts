@@ -76,6 +76,40 @@ export function defaultWidthForChart(chartId: AnalyticsChartId): WidgetWidth {
   return HALF_WIDTH_CHART_IDS.has(chartId) ? 'half' : 'full';
 }
 
+/**
+ * Cross-estate widgets on the "All sites" home tab (AllSitesDashboard). The
+ * tab only exists while the sidebar site switcher is on All sites: every one
+ * of these compares sites, suppliers or recipes across the estate, so a
+ * single site has nothing to show. Prefixed so ManagerDashboard can drop any
+ * that an earlier build merged into a saved in-shift layout.
+ */
+export const ALL_SITES_PREFIX = 'all-sites:';
+
+export type AllSitesWidgetId =
+  | 'all-sites:supplier-spend'
+  | 'all-sites:price-rises'
+  | 'all-sites:recipe-drift'
+  | 'all-sites:stocktake-hygiene'
+  | 'all-sites:waste-by-site'
+  | 'all-sites:forecast-vs-actual'
+  | 'all-sites:usage-gap'
+  | 'all-sites:menu-contribution';
+
+export function isAllSitesWidgetId(id: string): id is AllSitesWidgetId {
+  return id.startsWith(ALL_SITES_PREFIX);
+}
+
+export const ALL_SITES_DEFAULT_LAYOUT: DashboardLayoutEntry[] = [
+  { id: 'all-sites:supplier-spend', visible: true, width: 'half' },
+  { id: 'all-sites:price-rises', visible: true, width: 'half' },
+  { id: 'all-sites:recipe-drift', visible: true, width: 'half' },
+  { id: 'all-sites:stocktake-hygiene', visible: true, width: 'half' },
+  { id: 'all-sites:waste-by-site', visible: true, width: 'full' },
+  { id: 'all-sites:forecast-vs-actual', visible: true, width: 'full' },
+  { id: 'all-sites:usage-gap', visible: true, width: 'half' },
+  { id: 'all-sites:menu-contribution', visible: true, width: 'half' },
+];
+
 export const MANAGER_DEFAULT_LAYOUT: DashboardLayoutEntry[] = [
   { id: 'shift-kpi', visible: true, width: 'full' },
   { id: 'hourly-combo', visible: true, width: 'full' },

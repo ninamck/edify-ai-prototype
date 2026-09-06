@@ -25,6 +25,7 @@ import DashboardEditToolbar from '@/components/Dashboard/DashboardEditToolbar';
 import QuinnInsightButton from '@/components/Dashboard/parts/QuinnInsightButton';
 import TileActions from '@/components/ScheduledReports/TileActions';
 import {
+  isAllSitesWidgetId,
   isHalfOnlyChart,
   pinnedChartIdOf,
   widthOf,
@@ -34,13 +35,11 @@ import {
 
 function ChartCard({
   title,
-  subtitle,
   actions,
   children,
   height = 260,
 }: {
   title: string;
-  subtitle?: string;
   /** Chat/Email chips — pinned to the right of the title. */
   actions?: ReactNode;
   children: ReactNode;
@@ -57,14 +56,9 @@ function ChartCard({
         minHeight: 0,
       }}
     >
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', flex: 1, minWidth: 0 }}>{title}</div>
-          {actions}
-        </div>
-        {subtitle && (
-          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)', marginTop: 2 }}>{subtitle}</div>
-        )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', flex: 1, minWidth: 0 }}>{title}</div>
+        {actions}
       </div>
       <div style={{ width: '100%', height }}>{children}</div>
     </div>
@@ -189,7 +183,6 @@ export default function ManagerDashboard({
           <ChartCard
             title="Sales v staff v forecast · hour by hour"
             actions={shiftActions('Sales v staff v forecast · hour by hour')}
-            subtitle="Bars: actual £ (cyan = ahead of forecast, pink = behind, sand = not yet). Line: forecast £. Right axis: staff headcount — solid for hours worked, dashed for the rest of the roster."
             height={280}
           >
             <HourlyCombo data={hourlyTrading} />
@@ -200,7 +193,6 @@ export default function ManagerDashboard({
           <ChartCard
             title="Weather · now vs forecast"
             actions={shiftActions('Weather · now vs forecast')}
-            subtitle="Morning & afternoon pattern. Tap either to see the hourly breakdown."
             height={96}
           >
             <WeatherStrip data={weatherHourly} />
@@ -262,6 +254,65 @@ export default function ManagerDashboard({
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
     onLayoutChange(next);
+  }
+
+  // The estate charts now live on the "All sites" tab (AllSitesDashboard).
+  // An earlier build merged their ids into saved in-shift layouts, so drop
+  // any that are still in localStorage rather than render empty grid cells.
+  const shiftLayout = layout.filter((e) => !isAllSitesWidgetId(e.id));
+
+  function renderGrid(entries: DashboardLayoutEntry[]) {
+    return (
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: 14,
+          gridAutoFlow: 'dense',
+        }}
+      >
+        {(editing ? entries : entries.filter((e) => e.visible)).map((entry) => {
+          const pinned = pinnedChartIdOf(entry.id);
+          return (
+            <div
+              key={entry.id}
+              ref={(el) => {
+                if (el) widgetRefs.current.set(entry.id, el);
+                else widgetRefs.current.delete(entry.id);
+              }}
+              style={{
+                gridColumn: `span ${widthOf(entry) === 'full' ? 2 : 1} / span ${widthOf(entry) === 'full' ? 2 : 1}`,
+                minWidth: 0,
+              }}
+            >
+              <DashboardWidget
+                id={entry.id}
+                editing={editing}
+                visible={entry.visible}
+                width={widthOf(entry)}
+                onToggleVisible={() => toggleVisible(entry.id)}
+                onToggleWidth={
+                  pinned && isHalfOnlyChart(pinned)
+                    ? undefined
+                    : () => toggleWidth(entry.id)
+                }
+                onDragEnd={(point) => handleDragEnd(entry.id, point)}
+                onRemove={
+                  pinned
+                    ? () => {
+                        onRemovePinned(pinned);
+                        removeEntry(entry.id);
+                      }
+                    : undefined
+                }
+              >
+                {renderWidget(entry.id)}
+              </DashboardWidget>
+            </div>
+          );
+        })}
+      </div>
+    );
   }
 
   return (
@@ -335,55 +386,7 @@ export default function ManagerDashboard({
 
       {belowHeader}
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-          gap: 14,
-          gridAutoFlow: 'dense',
-        }}
-      >
-        {(editing ? layout : layout.filter((e) => e.visible)).map((entry) => {
-          const pinned = pinnedChartIdOf(entry.id);
-          return (
-            <div
-              key={entry.id}
-              ref={(el) => {
-                if (el) widgetRefs.current.set(entry.id, el);
-                else widgetRefs.current.delete(entry.id);
-              }}
-              style={{
-                gridColumn: `span ${widthOf(entry) === 'full' ? 2 : 1} / span ${widthOf(entry) === 'full' ? 2 : 1}`,
-                minWidth: 0,
-              }}
-            >
-              <DashboardWidget
-                id={entry.id}
-                editing={editing}
-                visible={entry.visible}
-                width={widthOf(entry)}
-                onToggleVisible={() => toggleVisible(entry.id)}
-                onToggleWidth={
-                  pinned && isHalfOnlyChart(pinned)
-                    ? undefined
-                    : () => toggleWidth(entry.id)
-                }
-                onDragEnd={(point) => handleDragEnd(entry.id, point)}
-                onRemove={
-                  pinned
-                    ? () => {
-                        onRemovePinned(pinned);
-                        removeEntry(entry.id);
-                      }
-                    : undefined
-                }
-              >
-                {renderWidget(entry.id)}
-              </DashboardWidget>
-            </div>
-          );
-        })}
-      </div>
+      {renderGrid(shiftLayout)}
     </div>
   );
 }
