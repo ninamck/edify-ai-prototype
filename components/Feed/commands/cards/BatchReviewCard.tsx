@@ -138,7 +138,10 @@ const CONFIDENCE_STYLE: Record<RowConfidence, { label: string; color: string; bg
   low: { label: 'Low', color: '#B01038', bg: 'rgba(220,38,38,0.08)' },
 };
 
+/** Only medium and low confidence are flagged. "High" on every row told
+ *  the reader nothing and was the first thing her eye landed on. */
 function ConfidenceFlag({ level }: { level: RowConfidence }) {
+  if (level === 'high') return null;
   const s = CONFIDENCE_STYLE[level];
   return (
     <span style={{
@@ -316,7 +319,7 @@ export default function BatchReviewCard({
             <div
               key={r.id}
               style={{
-                padding: '8px 10px',
+                padding: '10px 12px',
                 borderRadius: '10px',
                 border: result && !result.ok
                   ? '1.5px solid #E8A03D'
@@ -365,12 +368,12 @@ export default function BatchReviewCard({
 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                    <span style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: 1.35 }}>
                       {r.entity}
                     </span>
                     {r.confidence && <ConfidenceFlag level={r.confidence} />}
                     {r.entityMeta && (
-                      <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', lineHeight: 1.4 }}>
                         {r.entityMeta}
                       </span>
                     )}
@@ -408,9 +411,9 @@ export default function BatchReviewCard({
                           return (
                             <div key={i} style={{
                               display: 'flex', alignItems: 'center', gap: '8px',
-                              padding: '4px 9px',
+                              padding: '5px 9px',
                               borderTop: '1px solid var(--color-border-subtle, rgba(0,28,53,0.06))',
-                              fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)',
+                              fontSize: '12.5px', fontWeight: 500, color: 'var(--color-text-muted)',
                             }}>
                               <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</span>
                               <span style={{ flexShrink: 0 }}>{l.qty} {l.unit}</span>
@@ -429,7 +432,7 @@ export default function BatchReviewCard({
                         };
                         return (
                           <div key={i} style={{
-                            padding: '7px 9px',
+                            padding: '8px 9px',
                             background: '#FFF9F0',
                             borderTop: '1px solid var(--color-border-subtle, rgba(0,28,53,0.06))',
                           }}>
@@ -461,16 +464,18 @@ export default function BatchReviewCard({
                                 </span>
                               )}
                             </div>
-                            {/* The line as it reads today, struck through, so
-                                the change reads as a diff. */}
+                            {/* The line as it reads today. Only the old cost is
+                                struck through: striking the product name made
+                                it unreadable, and the "Was" label already says
+                                this is the before. */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>
                               <span style={{ fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', flexShrink: 0 }}>
                                 Was
                               </span>
-                              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'line-through' }}>
+                              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {l.flagged.was.name}
                               </span>
-                              <span style={{ flexShrink: 0, textDecoration: 'line-through' }}>
+                              <span style={{ flexShrink: 0 }}>
                                 {l.flagged.was.qty} {l.flagged.was.unit}
                               </span>
                               {l.flagged.was.cost && (
@@ -508,9 +513,9 @@ export default function BatchReviewCard({
                           return (
                             <div key={f.label} style={{
                               display: 'flex', alignItems: 'center', gap: '8px',
-                              padding: '4px 9px',
+                              padding: '5px 9px',
                               borderTop: '1px solid var(--color-border-subtle, rgba(0,28,53,0.06))',
-                              fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)',
+                              fontSize: '12.5px', fontWeight: 500, color: 'var(--color-text-muted)',
                             }}>
                               <span style={{ width: '110px', flexShrink: 0, fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase' }}>{f.label}</span>
                               <span style={{ flex: 1, minWidth: 0 }}>{f.value}</span>
@@ -551,7 +556,7 @@ export default function BatchReviewCard({
                               <span style={{ width: '110px', flexShrink: 0, fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                                 Was
                               </span>
-                              <span style={{ textDecoration: 'line-through', color: '#B01038', fontWeight: 600 }}>
+                              <span style={{ color: '#B01038', fontWeight: 600 }}>
                                 {f.flagged.was}
                               </span>
                             </div>

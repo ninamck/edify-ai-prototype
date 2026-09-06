@@ -316,14 +316,17 @@ type IntegrityFinding = {
   id: string;
   /** 1-based priority — the list is worked top to bottom. */
   priority: number;
+  /** The problem, stated plainly, with the number that matters. */
   title: string;
   severity: IntegritySeverity;
-  /** One short line — the cost impact or the gist. Shown always. */
+  /** What it does to the cost. One sentence, shown always. */
   summary: string;
-  /** Longer plain-English explanation, behind the Details toggle. */
-  detail?: string;
-  /** Named recipes / lines affected, behind the Details toggle. */
-  affected?: string;
+  /** Why it happened. Behind the toggle. */
+  why?: string;
+  /** What to do about it. Behind the toggle. */
+  fix?: string;
+  /** Named recipes / lines affected, rendered as chips. */
+  affected?: string[];
   /** Label for the inline fix button. Absent = no batch rows to seed
    *  (tidy-ups handled at the next menu review). */
   fixLabel?: string;
@@ -340,148 +343,123 @@ const INTEGRITY_FINDINGS: IntegrityFinding[] = [
   {
     id: 'wrong-cup',
     priority: 1,
-    title: 'Four iced drinks on the wrong cup',
+    title: 'Four iced drinks are costed with a £3.42 cup',
     severity: 'fix',
-    summary: '£3.42 a cup instead of about 7p: the whole sleeve is charged to every drink.',
-    detail:
-      'All four point at Disp SOHO 16oz Smoothie Cups, priced as a single cup rather than the sleeve of 50. That product is no longer active, so it shouldn\u2019t be in a live recipe at all. Relink to 16oz Smoothie Cups New, the pack of 50.',
-    affected: 'Iced Brown Sugar Latte · Iced Latte · Iced Long Black · Strawberry & Blueberry Smoothie',
-    fixLabel: 'Fix 4 cups',
+    summary: 'The real cup costs 7p. Each of these drinks looks £3.35 dearer than it is.',
+    why:
+      'They use Disp SOHO 16oz Smoothie Cups, which is priced at £3.42 for a sleeve of 50 but set up as a pack of 1. So every drink is charged the whole sleeve.',
+    fix: 'Set the cup\u2019s pack quantity to 50. All four drinks recalculate on their own.',
+    affected: ['Iced Brown Sugar Latte', 'Iced Latte', 'Iced Long Black', 'Strawberry & Blueberry Smoothie'],
+    fixLabel: 'Fix the cup',
   },
   {
     id: 'wrong-units',
     priority: 2,
-    title: 'Eight ingredients in the wrong kind of unit',
+    title: 'Eight ingredients are measured in the wrong unit',
     severity: 'fix',
-    summary: 'Grams on counted items and liquids: these recipes look cheaper than they are.',
-    detail:
-      'Use \u201ceach\u201d for the counted items, \u201cml\u201d for the liquids, and set grams on the honey line, which has no unit at all and so costs nothing today. Six lines are named; the other two sit in the full 112-row audit list.',
-    affected: 'Cucumber Diced · Add Mushrooms · Ketchup · Knorr Cheese Sauce · Whipped Cream · Honey',
+    summary: 'Grams on things you count or pour. These recipes read cheaper than they are.',
+    why:
+      'Cucumber and mushrooms are priced per item, not by weight. Ketchup, cheese sauce and cream are priced by volume. Honey has no unit at all, so it costs nothing today.',
+    fix: 'Switch the counted items to \u201ceach\u201d, the liquids to \u201cml\u201d, and give honey grams. Six are fixed here; the other two are in the full audit list.',
+    affected: ['Cucumber Diced', 'Add Mushrooms', 'Ketchup', 'Knorr Cheese Sauce', 'Whipped Cream', 'Honey'],
     fixLabel: 'Fix 6 units',
   },
   {
     id: 'brown-sauce',
     priority: 3,
-    title: 'Brown sauce set to 15 sachets on four recipes',
+    title: 'Brown sauce is set to 15 sachets a portion on four recipes',
     severity: 'check',
-    summary: '£1.37 a portion instead of 9p. The norm everywhere else is 1.',
-    detail:
-      'Ask the kitchen whether 15 is real before editing: a single jacket potato almost certainly wants 1, but a sharing platter might genuinely want a few.',
+    summary: '£1.37 a portion instead of 9p. Every other recipe uses 1.',
+    why: '15 may be a typo, or a sharing platter that genuinely needs a few.',
+    fix: 'Ask the kitchen first. If it should be 1, apply the change here.',
     fixLabel: 'Review',
   },
   {
     id: 'archived-minis',
     priority: 4,
-    title: 'Five live recipes rely on archived mini-recipes',
+    title: 'Five live recipes are built on archived mini-recipes',
     severity: 'tidy',
-    summary: 'Their cost is built on sub-recipes nobody is maintaining any more.',
-    detail: 'Either un-archive the mini-recipes or rebuild these five on current components.',
-    affected: 'Strawberries & Cream Syrup · Biscoff Filling · Ultimate Blueberry Muffin · Strawberry Jelly · Almond Croissant',
+    summary: 'Nobody maintains those sub-recipes, so these five costs will drift.',
+    fix: 'Un-archive the mini-recipes, or rebuild the five on current ones.',
+    affected: ['Strawberries & Cream Syrup', 'Biscoff Filling', 'Ultimate Blueberry Muffin', 'Strawberry Jelly', 'Almond Croissant'],
   },
   {
     id: 'cold-foam',
     priority: 5,
-    title: 'Vanilla Cold Foam pulled in as \u201c30 items\u201d',
+    title: 'Vanilla Cold Foam is added as \u201c30 items\u201d',
     severity: 'check',
-    summary: 'Could mean 30 ml or 30 whole batches, and we can\u2019t tell which.',
-    detail: 'Confirm it means 30 ml with whoever built the recipe, then set the unit to ml on each drink that uses it.',
+    summary: 'That could mean 30 ml or 30 whole batches. The cost swings with it.',
+    fix: 'Confirm 30 ml with whoever built the recipe, then set the unit to ml on each drink that uses it.',
   },
   {
     id: 'unit-families',
     priority: 6,
-    title: '52 mini-recipe lines mix unit families',
+    title: '52 mini-recipe lines mix weight, volume and count',
     severity: 'tidy',
-    summary: 'Almost all cosmetic and cost nothing. Clean up at the next menu review.',
-    detail: 'Weight against volume, or volume against count. Nothing this week; tidying them stops the flag list crying wolf.',
+    summary: 'Cosmetic. They cost nothing, but they keep the flag list noisy.',
+    fix: 'Tidy them at the next menu review.',
   },
 ];
 
 /** Batch-review rows per finding — each inline fix button seeds only its
  *  own finding's rows, so the review stays small and scannable. The
  *  brown-sauce row starts unticked because the kitchen has to confirm
- *  15 sachets isn't real first. Two rows are rigged to fail on apply so
+ *  15 sachets isn't real first. One row is rigged to fail on apply so
  *  the partial-failure path is visible. */
-const WRONG_CUP_WAS = {
-  was: { name: 'Disp SOHO - 16oz Smoothie Cups', qty: '1', unit: 'each', cost: '£3.42' },
-  note: 'No longer active and priced as a single cup, so the whole sleeve is charged to every drink',
-};
-
 const INTEGRITY_FIX_GROUPS: Record<string, BatchReviewRow[]> = {
+  // One change at the source: the cup product is set up as a pack of 1
+  // when the £3.42 price is for a sleeve of 50. Correcting the pack
+  // quantity recalculates all four drinks, so there's nothing to do on
+  // the recipes themselves.
   'wrong-cup': [
-    // The root cause is the PRODUCT's setup, not any recipe — surfaced
-    // first so the operator sees why, but unticked: the product is
-    // suspended, so the audit's recommendation is the relinks below.
-    { id: 'fix-cup-product', entity: 'Disp SOHO - 16oz Smoothie Cups', entityMeta: 'The root cause. It\u2019s no longer active, so relinking below is the better fix', confidence: 'low', impact: 'root cause', field: 'Pack quantity', before: '1', after: '50', product: { section: 'Product setup', fields: [
+    { id: 'fix-cup-product', entity: 'Disp SOHO - 16oz Smoothie Cups', entityMeta: 'Used in 4 drinks', confidence: 'high', impact: '−£3.35/drink', field: 'Pack quantity', before: '1', after: '50', product: { section: 'Product setup', fields: [
       { label: 'Supplier', value: 'Disposables Direct' },
-      { label: 'Pack quantity', value: '50', flagged: { was: '1', note: 'A pack of 1 means the whole £3.42 sleeve is charged to every single drink' } },
       { label: 'Pack price', value: '£3.42' },
-      { label: 'Status', value: 'Suspended' },
-    ] } },
-    { id: 'fix-cup-bsl', entity: 'Iced Brown Sugar Latte', confidence: 'high', impact: '−£3.35/drink', field: 'Relink to', before: 'Disp SOHO - 16oz Smoothie Cups', after: '16oz Smoothie Cups New', recipe: { section: 'Packaging', lines: [
-      { name: 'Espresso — double shot', qty: '1', unit: 'each', cost: '£0.28' },
-      { name: 'Oat Milk', qty: '200', unit: 'ml', cost: '£0.22' },
-      { name: 'Brown Sugar Syrup', qty: '20', unit: 'ml', cost: '£0.11' },
-      { name: '16oz Smoothie Cups New', qty: '1', unit: 'each', cost: '£0.07', flagged: WRONG_CUP_WAS },
-      { name: 'Paper Straw', qty: '1', unit: 'each', cost: '£0.02' },
-    ] } },
-    { id: 'fix-cup-latte', entity: 'Iced Latte', confidence: 'high', impact: '−£3.35/drink', field: 'Relink to', before: 'Disp SOHO - 16oz Smoothie Cups', after: '16oz Smoothie Cups New', recipe: { section: 'Packaging', lines: [
-      { name: 'Espresso — double shot', qty: '1', unit: 'each', cost: '£0.28' },
-      { name: 'Whole Milk', qty: '200', unit: 'ml', cost: '£0.14' },
-      { name: '16oz Smoothie Cups New', qty: '1', unit: 'each', cost: '£0.07', flagged: WRONG_CUP_WAS },
-      { name: 'Sip Lid — clear', qty: '1', unit: 'each', cost: '£0.03' },
-    ] } },
-    { id: 'fix-cup-black', entity: 'Iced Long Black', confidence: 'high', impact: '−£3.35/drink', field: 'Relink to', before: 'Disp SOHO - 16oz Smoothie Cups', after: '16oz Smoothie Cups New', recipe: { section: 'Packaging', lines: [
-      { name: 'Espresso — double shot', qty: '2', unit: 'each', cost: '£0.56' },
-      { name: 'Filtered Water', qty: '150', unit: 'ml', cost: '—' },
-      { name: '16oz Smoothie Cups New', qty: '1', unit: 'each', cost: '£0.07', flagged: WRONG_CUP_WAS },
-    ] } },
-    { id: 'fix-cup-smoothie', entity: 'Strawberry & Blueberry Smoothie', confidence: 'high', impact: '−£3.35/drink', field: 'Relink to', before: 'Disp SOHO - 16oz Smoothie Cups', after: '16oz Smoothie Cups New', recipe: { section: 'Packaging', lines: [
-      { name: 'Strawberries — frozen', qty: '80', unit: 'gram', cost: '£0.44' },
-      { name: 'Blueberries — frozen', qty: '60', unit: 'gram', cost: '£0.52' },
-      { name: 'Banana', qty: '1', unit: 'each', cost: '£0.18' },
-      { name: '16oz Smoothie Cups New', qty: '1', unit: 'each', cost: '£0.07', flagged: WRONG_CUP_WAS },
+      { label: 'Pack quantity', value: '50', flagged: { was: '1', note: 'A pack of 1 charges the whole £3.42 sleeve to every drink. At 50, each cup costs 7p' } },
+      { label: 'Status', value: 'Active' },
+      { label: 'Used in', value: 'Iced Brown Sugar Latte · Iced Latte · Iced Long Black · Strawberry & Blueberry Smoothie' },
     ] } },
   ],
   'wrong-units': [
     { id: 'fix-unit-cucumber', entity: 'Club Sandwich', entityMeta: 'Cucumber line', confidence: 'high', impact: 'understated', field: 'Unit', before: '60 gram', after: '60 each', recipe: { section: 'Ingredients', lines: [
       { name: 'Toasted Bloomer', qty: '3', unit: 'slice', cost: '£0.24' },
       { name: 'Chicken Mayo', qty: '80', unit: 'gram', cost: '£0.62' },
-      { name: 'Cucumber Diced', qty: '60', unit: 'each', flagged: { was: { name: 'Cucumber Diced', qty: '60', unit: 'gram' }, note: 'The product is priced per item — counted, not weighed' } },
+      { name: 'Cucumber Diced', qty: '60', unit: 'each', flagged: { was: { name: 'Cucumber Diced', qty: '60', unit: 'gram' }, note: 'Priced per item, so it is counted, not weighed' } },
       { name: 'Butter — unsalted', qty: '10', unit: 'gram', cost: '£0.08' },
     ] } },
     { id: 'fix-unit-mushrooms', entity: 'Big Breakfast', entityMeta: 'Mushroom line', confidence: 'high', impact: 'understated', field: 'Unit', before: '75 gram', after: '75 each', recipe: { section: 'Ingredients', lines: [
       { name: 'Free-Range Eggs', qty: '2', unit: 'each', cost: '£0.36' },
       { name: 'Cumberland Sausage', qty: '2', unit: 'each', cost: '£0.58' },
-      { name: 'Add Mushrooms', qty: '75', unit: 'each', flagged: { was: { name: 'Add Mushrooms', qty: '75', unit: 'gram' }, note: 'The product is priced per item — counted, not weighed' } },
+      { name: 'Add Mushrooms', qty: '75', unit: 'each', flagged: { was: { name: 'Add Mushrooms', qty: '75', unit: 'gram' }, note: 'Priced per item, so it is counted, not weighed' } },
       { name: 'Baked Beans', qty: '120', unit: 'gram', cost: '£0.22' },
     ] } },
     { id: 'fix-unit-ketchup', entity: 'Bacon Roll', entityMeta: 'Ketchup line', confidence: 'high', impact: 'understated', field: 'Unit', before: '15 gram', after: '15 ml', recipe: { section: 'Ingredients', lines: [
       { name: 'Soft White Roll', qty: '1', unit: 'each', cost: '£0.32' },
       { name: 'Back Bacon', qty: '3', unit: 'rasher', cost: '£0.66' },
-      { name: 'Ketchup', qty: '15', unit: 'ml', flagged: { was: { name: 'Ketchup', qty: '15', unit: 'gram' }, note: 'A liquid, priced by volume — gram lines are dropped or scaled wrongly' } },
+      { name: 'Ketchup', qty: '15', unit: 'ml', flagged: { was: { name: 'Ketchup', qty: '15', unit: 'gram' }, note: 'A liquid, priced by volume. Grams get dropped or scaled wrongly' } },
     ] } },
     { id: 'fix-unit-cheese', entity: 'Jacket Potato — Cheese', entityMeta: 'Sauce line', confidence: 'high', impact: 'understated', field: 'Unit', before: '150 gram', after: '150 ml', recipe: { section: 'Ingredients', lines: [
       { name: 'Jacket Potato', qty: '1', unit: 'each', cost: '£0.35' },
-      { name: 'Knorr Cheese Sauce', qty: '150', unit: 'ml', flagged: { was: { name: 'Knorr Cheese Sauce', qty: '150', unit: 'gram' }, note: 'A liquid, priced by volume — gram lines are dropped or scaled wrongly' } },
+      { name: 'Knorr Cheese Sauce', qty: '150', unit: 'ml', flagged: { was: { name: 'Knorr Cheese Sauce', qty: '150', unit: 'gram' }, note: 'A liquid, priced by volume. Grams get dropped or scaled wrongly' } },
       { name: 'Chives — fresh', qty: '5', unit: 'gram', cost: '£0.04' },
     ] } },
     { id: 'fix-unit-cream', entity: 'Hot Chocolate', entityMeta: 'Cream line', confidence: 'high', impact: 'understated', field: 'Unit', before: '30 g', after: '30 ml', recipe: { section: 'Ingredients', lines: [
       { name: 'Whole Milk', qty: '250', unit: 'ml', cost: '£0.18' },
       { name: 'Chocolate Powder', qty: '28', unit: 'gram', cost: '£0.30' },
-      { name: 'Whipped Cream', qty: '30', unit: 'ml', flagged: { was: { name: 'Whipped Cream', qty: '30', unit: 'g' }, note: 'A liquid, priced by volume — gram lines are dropped or scaled wrongly' } },
+      { name: 'Whipped Cream', qty: '30', unit: 'ml', flagged: { was: { name: 'Whipped Cream', qty: '30', unit: 'g' }, note: 'A liquid, priced by volume. Grams get dropped or scaled wrongly' } },
       { name: 'Mini Marshmallows', qty: '10', unit: 'gram', cost: '£0.09' },
     ] } },
     { id: 'fix-unit-honey', entity: 'Porridge', entityMeta: 'Honey line', confidence: 'medium', impact: 'line ignored', field: 'Unit', before: '—', after: 'gram', recipe: { section: 'Ingredients', lines: [
       { name: 'Rolled Oats', qty: '60', unit: 'gram', cost: '£0.14' },
       { name: 'Whole Milk', qty: '200', unit: 'ml', cost: '£0.14' },
-      { name: 'Honey', qty: '15', unit: 'gram', flagged: { was: { name: 'Honey', qty: '15', unit: '(no unit)', cost: '£0.00' }, note: 'No unit set — the line is ignored and costs nothing today' } },
+      { name: 'Honey', qty: '15', unit: 'gram', flagged: { was: { name: 'Honey', qty: '15', unit: '(no unit)', cost: '£0.00' }, note: 'No unit set, so the line is ignored and costs nothing today' } },
     ] } },
   ],
   'brown-sauce': [
     { id: 'fix-brown-sauce', entity: 'Jacket Potato & Beans', entityMeta: 'Same change on 3 more recipes', confidence: 'low', impact: '−£1.28/portion', field: 'Qty per portion', before: '15 sachets', after: '1 sachet', recipe: { section: 'Ingredients', lines: [
       { name: 'Jacket Potato', qty: '1', unit: 'each', cost: '£0.35' },
       { name: 'Baked Beans', qty: '120', unit: 'gram', cost: '£0.22' },
-      { name: 'Brown Sauce', qty: '1', unit: 'sachet', cost: '£0.09', flagged: { was: { name: 'Brown Sauce', qty: '15', unit: 'sachets', cost: '£1.37' }, note: 'Norm everywhere else is 1 — confirm with the kitchen before applying' } },
+      { name: 'Brown Sauce', qty: '1', unit: 'sachet', cost: '£0.09', flagged: { was: { name: 'Brown Sauce', qty: '15', unit: 'sachets', cost: '£1.37' }, note: 'Every other recipe uses 1. Confirm with the kitchen before applying' } },
     ] } },
   ],
 };
@@ -500,30 +478,30 @@ const INTEGRITY_BATCH_META: Record<string, {
   impact: Array<{ value: string; label: string }>;
 }> = {
   'wrong-cup': {
-    echo: 'Fix the cups',
-    intro: 'The root cause is the **product\u2019s setup**: the cup is priced as a pack of 1, so the whole £3.42 sleeve is charged to every drink. That product is no longer active, so the better fix is relinking the four recipes. The product row is **unticked** in case you\u2019d rather correct it instead, and every value is editable.',
-    title: 'Relink four iced drinks',
-    subtitle: 'Off the old single-cup price, onto the pack of 50',
+    echo: 'Fix the cup',
+    intro: 'One change fixes all four drinks. The cup is set up as a pack of **1** when the £3.42 price is for a sleeve of **50**. Set it to 50 and each drink drops from £3.42 to 7p for its cup. Change the value before you apply if the sleeve size is different.',
+    title: 'Correct the cup\u2019s pack quantity',
+    subtitle: 'One product change. Four drinks recalculate.',
     impact: [
-      { value: '4', label: 'recipes affected' },
-      { value: '−£3.35', label: 'per drink, per sale' },
-      { value: '7p', label: 'true cup cost (was £3.42)' },
+      { value: '1', label: 'product corrected' },
+      { value: '4', label: 'drinks recalculate' },
+      { value: '−£3.35', label: 'per drink, every sale' },
     ],
   },
   'wrong-units': {
     echo: 'Fix the units',
-    intro: 'Each line below shows the recipe it sits in and how it\u2019s measured today. **\u201cEach\u201d** for the counted items, **\u201cml\u201d** for the liquids, grams on the honey line. All editable before you apply.',
+    intro: 'Six lines, each shown inside its recipe. Counted items go to **each**, liquids to **ml**, and honey gets grams. Change any value before you apply.',
     title: 'Correct six units',
     subtitle: 'Counted items to \u201ceach\u201d, liquids to \u201cml\u201d, honey gets a unit',
     impact: [
       { value: '6', label: 'lines corrected here' },
-      { value: '2', label: 'more in the 112-row audit' },
-      { value: 'Low', label: 'these recipes read cheaper than real' },
+      { value: '2', label: 'more in the full audit' },
+      { value: 'Up', label: 'recipe costs will rise to their real level' },
     ],
   },
   'brown-sauce': {
     echo: 'Review the brown sauce',
-    intro: 'Here\u2019s the line as it stands: **15 sachets a portion** against a norm of 1. It\u2019s unticked until the kitchen confirms; tick and apply once they do.',
+    intro: 'Here\u2019s the line as it stands: **15 sachets a portion** where every other recipe uses 1. It stays unticked until the kitchen confirms. Tick and apply once they do.',
     title: 'Brown sauce quantity',
     subtitle: 'Needs the kitchen\u2019s confirmation before applying',
     impact: [
@@ -534,12 +512,12 @@ const INTEGRITY_BATCH_META: Record<string, {
   },
   all: {
     echo: 'Fix everything for me',
-    intro: 'Everything that moves your numbers in one list. Each row shows the recipe line as it reads today and the change we suggest, and every value is editable. The brown-sauce row is **unticked** until the kitchen confirms.',
+    intro: 'Every change that moves your numbers, in one list. Each row shows the line as it reads today and what it becomes. Brown sauce stays **unticked** until the kitchen confirms.',
     title: 'Soho recipe fixes',
-    subtitle: 'Cup relinks and unit corrections. Brown sauce waits on the kitchen.',
+    subtitle: 'The cup fix and unit corrections. Brown sauce waits on the kitchen.',
     impact: [
-      { value: '12', label: 'changes prepared' },
-      { value: '9+', label: 'recipes touched' },
+      { value: '8', label: 'changes prepared' },
+      { value: '14', label: 'recipes affected' },
       { value: '−£3.35', label: 'biggest per-drink correction' },
     ],
   },
@@ -6087,22 +6065,32 @@ function FindingRow({
 }) {
   const badge = SEVERITY_BADGE[finding.severity];
   const [expanded, setExpanded] = useState(false);
-  const hasDetails = !!(finding.detail || finding.affected);
+  const hasDetails = !!(finding.why || finding.fix || finding.affected?.length);
+  const detailsId = `finding-details-${finding.id}`;
+  const toggleLabel = expanded ? 'Hide' : finding.why ? 'Why this happened' : 'What to do';
+
+  // Details render as a two-column list: a short label (Why / Fix /
+  // Recipes) beside one plain sentence, so the GM can jump straight to
+  // the bit she wants instead of reading a paragraph.
+  const labelStyle: React.CSSProperties = {
+    fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
+    color: 'var(--color-text-muted)', paddingTop: '3px', lineHeight: 1.4,
+  };
+  const textStyle: React.CSSProperties = {
+    fontSize: '13px', fontWeight: 500, color: 'var(--color-text-secondary)', lineHeight: 1.5,
+  };
 
   return (
-    <div style={{ padding: '9px 14px', borderTop: '1px solid var(--color-border-subtle)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+    <div style={{ padding: '14px 16px', borderTop: '1px solid var(--color-border-subtle)' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
         <span style={{
           fontSize: '12px', fontWeight: 700, color: 'var(--color-text-muted)',
-          width: '14px', flexShrink: 0, textAlign: 'right',
+          width: '14px', flexShrink: 0, textAlign: 'right', lineHeight: 1.4, paddingTop: '2px',
         }}>
           {finding.priority}
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: 1.3 }}>
-              {finding.title}
-            </span>
             <span style={{
               padding: '1px 7px', borderRadius: '999px', background: badge.bg,
               fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em',
@@ -6110,16 +6098,78 @@ function FindingRow({
             }}>
               {badge.label}
             </span>
+            <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: 1.35 }}>
+              {finding.title}
+            </span>
           </div>
-          <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '2px', lineHeight: 1.4 }}>
+          <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: '4px', lineHeight: 1.5 }}>
             {finding.summary}
           </div>
+          {hasDetails && (
+            <>
+              <button
+                type="button"
+                onClick={() => setExpanded((e) => !e)}
+                aria-expanded={expanded}
+                aria-controls={detailsId}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '3px',
+                  marginTop: '6px', padding: 0, border: 'none', background: 'none',
+                  fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)',
+                  color: 'var(--color-text-muted)', cursor: 'pointer',
+                }}
+              >
+                {toggleLabel}
+                <ChevronDown size={12} strokeWidth={2.4} style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+              </button>
+              {expanded && (
+                <div
+                  id={detailsId}
+                  style={{
+                    display: 'grid', gridTemplateColumns: '56px minmax(0, 1fr)',
+                    columnGap: '10px', rowGap: '8px', marginTop: '10px',
+                    padding: '10px 12px', borderRadius: '8px', background: 'rgba(0,28,53,0.03)',
+                  }}
+                >
+                  {finding.why && (
+                    <>
+                      <span style={labelStyle}>Why</span>
+                      <span style={textStyle}>{finding.why}</span>
+                    </>
+                  )}
+                  {finding.fix && (
+                    <>
+                      <span style={labelStyle}>Fix</span>
+                      <span style={textStyle}>{finding.fix}</span>
+                    </>
+                  )}
+                  {finding.affected && finding.affected.length > 0 && (
+                    <>
+                      <span style={labelStyle}>Recipes</span>
+                      <span style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                        {finding.affected.map((name) => (
+                          <span key={name} style={{
+                            padding: '2px 8px', borderRadius: '999px', background: '#fff',
+                            border: '1px solid var(--color-border-subtle)',
+                            fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-secondary)',
+                            lineHeight: 1.4,
+                          }}>
+                            {name}
+                          </span>
+                        ))}
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
         {finding.fixLabel && (
           started ? (
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: '4px', flexShrink: 0,
-              fontSize: '11.5px', fontWeight: 600, color: '#2D6A4F',
+              fontSize: '12px', fontWeight: 600, color: '#2D6A4F', paddingTop: '4px',
             }}>
               <Check size={12} strokeWidth={2.6} /> In review
             </span>
@@ -6129,10 +6179,10 @@ function FindingRow({
               disabled={!live}
               onClick={onFix}
               style={{
-                padding: '4px 12px', borderRadius: '999px', flexShrink: 0,
+                padding: '6px 14px', borderRadius: '999px', flexShrink: 0,
                 border: 'none',
                 background: live ? 'var(--color-accent-active, #001C35)' : 'rgba(0,28,53,0.08)',
-                fontSize: '11.5px', fontWeight: 600, fontFamily: 'var(--font-primary)',
+                fontSize: '12px', fontWeight: 600, fontFamily: 'var(--font-primary)',
                 color: live ? '#fff' : 'var(--color-text-muted)',
                 cursor: live ? 'pointer' : 'default',
                 whiteSpace: 'nowrap',
@@ -6143,37 +6193,6 @@ function FindingRow({
           )
         )}
       </div>
-      {hasDetails && (
-        <div style={{ marginLeft: '24px' }}>
-          <button
-            type="button"
-            onClick={() => setExpanded((e) => !e)}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: '3px',
-              marginTop: '4px', padding: 0, border: 'none', background: 'none',
-              fontSize: '11px', fontWeight: 600, fontFamily: 'var(--font-primary)',
-              color: 'var(--color-text-muted)', cursor: 'pointer',
-            }}
-          >
-            {expanded ? 'Hide details' : 'Details'}
-            <ChevronDown size={11} strokeWidth={2.4} style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
-          </button>
-          {expanded && (
-            <div style={{ marginTop: '4px' }}>
-              {finding.detail && (
-                <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
-                  {finding.detail}
-                </div>
-              )}
-              {finding.affected && (
-                <div style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--color-text-muted)', marginTop: '3px', lineHeight: 1.4 }}>
-                  {finding.affected}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -8952,16 +8971,16 @@ export default function Feed({
     }, 1600);
   }
 
-  /** Apply the ticked fixes. Two rows are rigged to fail so the
-   *  partial-failure path renders: failed rows stay listed with a
-   *  reason, everything else commits, and the receipt reports both
-   *  numbers. */
+  /** Apply the ticked fixes. The honey row is rigged to fail so the
+   *  partial-failure path renders (in the units flow and in Fix all):
+   *  the failed row stays listed with a reason, everything else
+   *  commits, and the receipt reports both numbers. The cup fix is a
+   *  single product change and always succeeds. */
   function confirmIntegrityBatch(cardId: string, submitted: BatchReviewSubmission[]) {
     const cur = batchReviewStates[cardId];
     if (cur && cur.state !== 'pending') return;
 
     const FAILURES: Record<string, string> = {
-      'fix-cup-smoothie': 'This recipe is locked by an open menu review. Retry once it\u2019s published.',
       'fix-unit-honey': 'Two live honey products match this line, so it needs a manual pick.',
     };
     const results: BatchRowResult[] = submitted.map((row) => (
