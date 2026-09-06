@@ -75,6 +75,8 @@ import ProductSheetDetailsCard from '@/components/Feed/commands/cards/ProductShe
 import RotaRebalanceCard from '@/components/Feed/commands/cards/RotaRebalanceCard';
 import RotaNudgeCard from '@/components/Feed/commands/cards/RotaNudgeCard';
 import RotaEstateCard from '@/components/Feed/commands/cards/RotaEstateCard';
+import VarianceSweepCard from '@/components/Feed/commands/cards/VarianceSweepCard';
+import { sweepEstate } from '@/components/Feed/commands/rota/sweep';
 import { nudgeFor } from '@/components/Feed/commands/rota/nudge';
 import { estateLabourRows } from '@/components/Feed/commands/rota/sources';
 import { deputyDraftFor } from '@/components/Feed/commands/rota/deputy';
@@ -388,6 +390,7 @@ const WORKSPACE_MSG_TYPES = new Set<string>([
   'cmd-product-pick-recipes',
   'cmd-product-swap-summary',
   'cmd-rota-rebalance',
+  'cmd-variance-sweep',
 ]);
 
 /** Cards that need the full workspace width: the rota grid lays seven
@@ -5771,7 +5774,7 @@ export default function Feed({
   /** Charts already pinned to the dashboard — their "Add to dashboard" buttons render as already-pinned. */
   alreadyPinned?: Set<AnalyticsChartId>;
   /** If set, auto-start the named guided flow on mount (e.g. from an external "Ask Quinn" entry point). */
-  autoStartFlow?: 'recipe' | 'integrity' | 'rota';
+  autoStartFlow?: 'recipe' | 'integrity' | 'rota' | 'sweep';
   /** Shows the "Note for Edify" quick action in the composer. Sending a
    *  message that starts with "Note:" logs it straight to the notebook. */
   enableNoteCapture?: boolean;
@@ -6070,6 +6073,7 @@ export default function Feed({
     if (autoStartFlow === 'recipe') startRecipeFlow();
     else if (autoStartFlow === 'integrity') startIntegrityCheck();
     else if (autoStartFlow === 'rota') commandRunner.runCommand({ commandId: 'rota-rebalance', args: {}, confidence: 1 });
+    else if (autoStartFlow === 'sweep') commandRunner.runCommand({ commandId: 'variance-sweep', args: {}, confidence: 1 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStartFlow]);
 
@@ -8587,6 +8591,23 @@ export default function Feed({
                               state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                               onRebalance={() => target && commandRunner.rebalanceFromEstate(m.id, target.id)}
                               onNotNow={() => commandRunner.cancelCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-variance-sweep' && (() => {
+                          const args = m.cmdArgsJson ? (JSON.parse(m.cmdArgsJson) as { siteIds?: string[] }) : {};
+                          const sites = ACTIVE_SITES.filter((s) => s.type !== 'ALL' && (!args.siteIds || args.siteIds.includes(s.id)));
+                          const result = sweepEstate(
+                            sites.map((s) => s.id),
+                            (id) => sites.find((s) => s.id === id)?.name ?? id,
+                            (id) => !!deputyDraftFor(id),
+                          );
+                          return (
+                            <VarianceSweepCard
+                              result={result}
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              onRebalance={(siteId) => commandRunner.rebalanceFromSweep(m.id, siteId)}
+                              onDone={(summary) => commandRunner.finishSweep(m.id, summary)}
                             />
                           );
                         })()}

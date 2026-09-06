@@ -93,6 +93,7 @@ import { deputyDraftFor } from '@/components/Feed/commands/rota/deputy';
 import { nudgeFor, sitesWithNudges } from '@/components/Feed/commands/rota/nudge';
 import { siteLabourFor, estateLabourRows } from '@/components/Feed/commands/rota/sources';
 import { rebalance as rotaRebalance, computeTiles as rotaComputeTiles, hhmm as rotaHhmm } from '@/components/Feed/commands/rota/engine';
+import { sweepEstate, sweepVerdict, signedGBP as sweepSignedGBP, CAUSE_LABEL as SWEEP_CAUSE_LABEL } from '@/components/Feed/commands/rota/sweep';
 import { saveWrittenDraft, clearWrittenDraft } from '@/components/Feed/commands/rota/rotaStore';
 import { resolveRotaSite, type RotaRebalanceFinal } from '@/components/Feed/commands/cards/RotaRebalanceCard';
 
@@ -589,6 +590,12 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       // says what was read and how many changes came out.
       if (intent.commandId === 'rota-rebalance') {
         startRotaRebalance(intent.args);
+        return;
+      }
+      // Morning variance sweep: one read-only brief in the stream,
+      // preceded by a line with the verdict and where the money went.
+      if (intent.commandId === 'variance-sweep') {
+        startVarianceSweep(intent.args);
         return;
       }
 
@@ -1435,6 +1442,79 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       startRotaRebalance({ siteId });
     },
     [startRotaRebalance, writeCmdState],
+  );
+
+  // ── Morning variance sweep ──────────────────────────────────────
+  //
+  // Read only. The engine is pure, so the runner runs it once here for
+  // the chat line and the card runs it again for the table. A named
+  // site narrows the sweep to that site; otherwise the whole estate.
+  const startVarianceSweep = useCallback(
+    (args: Record<string, unknown>) => {
+      const requested = args.siteId as string | undefined;
+      const sites = ACTIVE_SITES.filter((s) => s.type !== 'ALL' && (!requested || s.id === requested));
+      const result = sweepEstate(
+        sites.map((s) => s.id),
+        (id) => sites.find((s) => s.id === id)?.name ?? id,
+        (id) => !!deputyDraftFor(id),
+      );
+      const parts: string[] = [];
+      if (result.sites.length === 0) {
+        parts.push(
+          requested
+            ? `${(args.siteName as string | undefined) ?? 'That site'} has no clock data from Workforce.com for ${result.dateLabel}, so there is nothing to sweep there.`
+            : `No site in this build has yesterday's clock data from Workforce.com, so there is nothing to sweep.`,
+        );
+      } else {
+        parts.push(
+          `Swept ${result.dateLabel} at ${result.pulledAt}: ${result.sites.length === 1 ? `${result.sites[0].siteName}'s` : `${result.sites.length} sites'`} shifts and pay from ${result.tool} against the rota and the day's sales. ${sweepVerdict(result)}`,
+        );
+        const top = result.byCause.filter((c) => c.gbp > 0).slice(0, 2);
+        if (top.length > 0) {
+          parts.push(
+            `Where the money went: ${top.map((c) => `${SWEEP_CAUSE_LABEL[c.kind].toLowerCase()} ${sweepSignedGBP(c.gbp)}`).join(', ')}.`,
+          );
+        }
+        const openable = result.sites.find((s) => s.materiality !== 'explained' && s.hasDraft);
+        if (openable) parts.push(`${openable.siteName} has next week's draft in ${result.tool}, so I can check that against the forecast now if you want. Nothing has been written anywhere.`);
+        else parts.push('Nothing has been written anywhere.');
+      }
+      pushResponseFlow({
+        text: parts.join(' '),
+        commandId: 'variance-sweep',
+        cardMsgType: 'cmd-variance-sweep',
+        cardArgs: { ...args, siteIds: sites.map((s) => s.id) },
+        thinkingMs: 2200,
+      });
+    },
+    [pushResponseFlow],
+  );
+
+  /** From the sweep: mark it done and open the rebalance for the site
+   *  that mattered most and has a draft. */
+  const rebalanceFromSweep = useCallback(
+    (msgId: string, siteId: string) => {
+      writeCmdState(msgId, 'confirmed');
+      startRotaRebalance({ siteId });
+    },
+    [startRotaRebalance, writeCmdState],
+  );
+
+  /** The sweep is a brief, not a mutation: Done closes it as read, with
+   *  nothing to undo. */
+  const finishSweep = useCallback(
+    (msgId: string, summary: { title: string; subtitle: string }) => {
+      writeCmdState(msgId, 'confirmed');
+      const taskId = activeTaskIdRef.current;
+      if (taskId) {
+        setMessages((prev) => {
+          snapshotIntoTask(taskId, prev);
+          return prev;
+        });
+        completeTask(taskId, summary);
+      }
+    },
+    [setMessages, snapshotIntoTask, writeCmdState],
   );
 
   const cancelCard = useCallback((msgId: string) => {
@@ -2718,6 +2798,8 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     confirmRotaNudge,
     switchRotaSite,
     rebalanceFromEstate,
+    rebalanceFromSweep,
+    finishSweep,
     undoReceipt,
     restoreMessages,
     snapshotTask,

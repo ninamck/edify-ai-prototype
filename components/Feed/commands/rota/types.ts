@@ -407,3 +407,107 @@ export interface PlanResult extends RebalanceResult {
    *  or close with no keyholder on. */
   notes: string[];
 }
+
+// ── Morning variance sweep ──────────────────────────────────────────
+//
+// Yesterday, one site at a time: what the rota planned to spend, what
+// the clock data says was spent, and where every pound of the gap went.
+// Read from the workforce tool after the overnight pay run; nothing is
+// ever written back.
+
+export type VarianceCauseKind =
+  /** Hours past the weekly contract, paid at the overtime band. */
+  | 'overtime'
+  /** A statutory break not taken or not recorded, so paid. */
+  | 'missed-break'
+  | 'late-clock-out'
+  | 'early-clock-in'
+  /** A rostered shift nobody worked and nobody covered. */
+  | 'unfilled-shift'
+  /** A shift added on the day that was not on the rota. */
+  | 'extra-shift'
+  /** Sent home or clocked out early. */
+  | 'early-finish';
+
+export interface VarianceCause {
+  kind: VarianceCauseKind;
+  /** Cost against plan in pounds. Positive is over, negative under. */
+  gbp: number;
+  /** Minutes against plan, signed the same way. */
+  minutes: number;
+  personName?: string;
+  /** One line, the fact: "clocked out 20:50, rostered 20:15". */
+  detail: string;
+  /** Set when this is a pattern, not a one-off: "third Saturday running". */
+  repeat?: string;
+  /** Legal exposure, not just cost: a missed statutory break, an
+   *  under-18 past 22:00. These rank above money. */
+  compliance?: boolean;
+}
+
+export interface SiteDayVariance {
+  siteId: string;
+  /** Where the clock data came from. */
+  tool: string;
+  plannedHours: number;
+  plannedCostGBP: number;
+  actualHours: number;
+  actualCostGBP: number;
+  /** Edify's sales for the same day. */
+  salesGBP: number;
+  forecastGBP: number;
+  causes: VarianceCause[];
+  /** What the floor felt, from Edify's own data: speed of service, a
+   *  queue, waste. Adds to the ranking line when set. */
+  context?: string;
+  /** Where the clock data is incomplete: a shift still open at the pull. */
+  dataNote?: string;
+}
+
+/** How much a site's variance matters, which is not the same as how big
+ *  it is. Hours that served sales the forecast missed are the trade;
+ *  the same pounds with flat sales are a rota problem; a missed break
+ *  is a legal problem at any price. */
+export type Materiality = 'matters' | 'watch' | 'explained';
+
+export interface SweptSite extends SiteDayVariance {
+  siteName: string;
+  /** Actual minus planned cost. */
+  varianceGBP: number;
+  plannedLabourPct: number;
+  actualLabourPct: number;
+  /** Actual labour % minus planned labour %. Hours that rose with the
+   *  sales leave this near zero; the same hours on flat sales do not.
+   *  The part of the variance the trade does not explain. */
+  unexplainedPts: number;
+  salesVsForecastPct: number;
+  materiality: Materiality;
+  /** Why it sits where it does in the ranking, one line. */
+  why: string;
+  /** Pounds no cause accounts for, after rounding and pay rules. */
+  unattributedGBP: number;
+  /** True when the site has a draft for next week the rebalance can open. */
+  hasDraft: boolean;
+}
+
+export interface SweepResult {
+  /** "Saturday 5 Sep" */
+  dateLabel: string;
+  /** "06:00" */
+  pulledAt: string;
+  tool: string;
+  /** Ranked: matters first, then watch, then explained; biggest
+   *  unexplained variance first within a band. */
+  sites: SweptSite[];
+  totals: {
+    plannedCostGBP: number;
+    actualCostGBP: number;
+    varianceGBP: number;
+    salesGBP: number;
+    forecastGBP: number;
+    plannedLabourPct: number;
+    actualLabourPct: number;
+  };
+  /** Pounds by cause across the estate, biggest first. */
+  byCause: { kind: VarianceCauseKind; gbp: number; count: number }[];
+}

@@ -31,7 +31,12 @@ export type CommandId =
    *  the workload Edify knows is coming, propose tickable shift edits,
    *  check labour rules, write an amended draft back. Single card; see
    *  components/Feed/commands/rota. */
-  | 'rota-rebalance';
+  | 'rota-rebalance'
+  /** Morning variance sweep: yesterday's shifts and pay from the
+   *  workforce tool against the rota and Edify's sales, every pound
+   *  attributed to a cause, sites ranked by what matters. Read only.
+   *  See components/Feed/commands/rota/sweep.ts. */
+  | 'variance-sweep';
 
 /** A single resolved invocation of a command. Args are command-specific
  *  — each command exports its own arg shape. We use `unknown` here to

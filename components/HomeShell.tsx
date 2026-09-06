@@ -41,7 +41,7 @@ export default function HomeShell() {
   const searchParams = useSearchParams();
   const { activeSite } = useActiveSite();
   const flowParam = searchParams?.get('flow');
-  const autoStartFlow = flowParam === 'recipe' || flowParam === 'integrity' || flowParam === 'rota' ? flowParam : undefined;
+  const autoStartFlow = flowParam === 'recipe' || flowParam === 'integrity' || flowParam === 'rota' || flowParam === 'sweep' ? flowParam : undefined;
 
   // Strip the ?flow=… param after it's been read so a reload doesn't re-trigger the flow.
   useEffect(() => {
