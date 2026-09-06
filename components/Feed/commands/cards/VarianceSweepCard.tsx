@@ -75,22 +75,58 @@ function Tile({ heading, value, note, tone }: { heading: string; value: string; 
   );
 }
 
-function CauseRow({ c }: { c: VarianceCause }) {
-  const who = c.personName ? `${c.personName}: ` : '';
+function KindTag({ c }: { c: VarianceCause }) {
+  const breach = !!c.compliance;
   return (
-    <div role="row" style={{ display: 'contents' }}>
-      <span role="cell" style={{ ...small, fontWeight: 700, color: c.compliance ? 'var(--color-error)' : 'var(--color-text-secondary)', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
-        {c.compliance && <AlertTriangle size={11} aria-hidden="true" />}
-        {CAUSE_LABEL[c.kind]}
-      </span>
-      <span role="cell" style={{ ...body, fontWeight: 500, minWidth: 0, lineHeight: 1.35 }}>
-        {who}
-        {c.detail}
-        {c.repeat && <span style={{ fontWeight: 700 }}>, {c.repeat}</span>}
-      </span>
-      <span role="cell" style={{ ...body, fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: c.gbp > 0 ? 'var(--color-text-primary)' : 'var(--color-success)' }}>
-        {signedGBP(c.gbp)}
-      </span>
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '4px',
+        padding: '2px 7px',
+        borderRadius: '5px',
+        fontSize: '10px',
+        fontWeight: 700,
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+        whiteSpace: 'nowrap',
+        color: breach ? 'var(--color-error)' : 'var(--color-text-secondary)',
+        background: breach ? 'var(--color-error-light)' : 'var(--color-bg-hover)',
+        border: `1px solid ${breach ? 'var(--color-error-border)' : 'var(--color-border-subtle)'}`,
+      }}
+    >
+      {breach && <AlertTriangle size={10} aria-hidden="true" />}
+      {CAUSE_LABEL[c.kind]}
+    </span>
+  );
+}
+
+/** One cause: who (or what) in bold, the fact underneath, the pounds
+ *  on the right. A repeat is the one thing worth colour on the line. */
+function CauseRow({ c }: { c: VarianceCause }) {
+  const subject = c.personName ?? c.who;
+  const headline = subject ?? c.detail;
+  const sub = subject ? c.detail : undefined;
+  return (
+    <li style={{ listStyle: 'none', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', columnGap: '12px', alignItems: 'start', padding: '7px 0', borderTop: '1px solid var(--color-border-subtle)' }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <KindTag c={c} />
+          <span style={{ ...body, fontWeight: 700 }}>{headline}</span>
+          {c.repeat && <span style={{ ...small, fontWeight: 700, color: 'var(--color-error)' }}>{c.repeat}</span>}
+        </div>
+        {sub && <div style={{ ...small, marginTop: '3px', lineHeight: 1.4 }}>{sub}</div>}
+      </div>
+      <span style={{ ...body, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: c.gbp < 0 ? 'var(--color-success)' : 'var(--color-text-primary)', paddingTop: '1px' }}>{signedGBP(c.gbp)}</span>
+    </li>
+  );
+}
+
+function Stat({ value, note }: { value: string; note: string }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: '14px', fontWeight: 700, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-primary)' }}>{value}</div>
+      <div style={{ ...small, marginTop: '2px', whiteSpace: 'nowrap' }}>{note}</div>
     </div>
   );
 }
@@ -98,6 +134,7 @@ function CauseRow({ c }: { c: VarianceCause }) {
 function SiteRow({ s, open, onToggle }: { s: SweptSite; open: boolean; onToggle: () => void }) {
   const Chevron = open ? ChevronDown : ChevronRight;
   const varianceTone = s.materiality === 'matters' ? 'var(--color-error)' : s.varianceGBP < 0 ? 'var(--color-success)' : 'var(--color-text-primary)';
+  const hasSales = s.salesGBP > 0;
   return (
     <li style={{ listStyle: 'none', borderTop: '1px solid var(--color-border-subtle)' }}>
       <button
@@ -110,70 +147,50 @@ function SiteRow({ s, open, onToggle }: { s: SweptSite; open: boolean; onToggle:
           display: 'grid',
           gridTemplateColumns: '14px minmax(0, 1fr) auto',
           columnGap: '10px',
-          alignItems: 'start',
-          padding: '10px 4px',
+          alignItems: 'center',
+          padding: '10px 4px 10px 10px',
           background: 'transparent',
           border: 'none',
           textAlign: 'left',
           cursor: 'pointer',
           fontFamily: 'var(--font-primary)',
           borderLeft: `3px solid ${BAND[s.materiality].border}`,
-          paddingLeft: '10px',
         }}
       >
-        <Chevron size={14} aria-hidden="true" style={{ color: 'var(--color-text-secondary)', marginTop: '2px' }} />
+        <Chevron size={14} aria-hidden="true" style={{ color: 'var(--color-text-secondary)' }} />
         <span style={{ minWidth: 0 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <span style={{ ...body, fontWeight: 700, fontSize: '13px' }}>{s.siteName}</span>
             <BandPill m={s.materiality} />
           </span>
-          <span style={{ ...body, display: 'block', fontWeight: 500, lineHeight: 1.4, marginTop: '3px' }}>{s.why}</span>
+          <span style={{ ...body, display: 'block', fontWeight: 500, lineHeight: 1.4, marginTop: '2px', color: 'var(--color-text-secondary)' }}>{s.lead}</span>
         </span>
-        <span style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-          <span style={{ display: 'block', fontSize: '16px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: varianceTone, lineHeight: 1.1 }}>{signedGBP(s.varianceGBP)}</span>
-          <span style={{ ...small, display: 'block', marginTop: '3px' }}>
-            {s.salesGBP > 0 ? `${gbp(s.salesGBP)} sales, ${salesDelta(s.salesVsForecastPct)}` : `${gbp(s.actualCostGBP)} of ${gbp(s.plannedCostGBP)}`}
-          </span>
-        </span>
+        <span style={{ fontSize: '16px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: varianceTone, whiteSpace: 'nowrap' }}>{signedGBP(s.varianceGBP)}</span>
       </button>
       {open && (
-        <div id={`sweep-${s.siteId}-causes`} style={{ padding: '0 4px 12px 37px' }}>
+        <div id={`sweep-${s.siteId}-causes`} style={{ padding: '0 4px 12px 37px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div
-            role="table"
-            aria-label={`${s.siteName}: where the variance came from`}
-            style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto', gap: '6px 12px', alignItems: 'start' }}
+            role="group"
+            aria-label={`${s.siteName}: the day in numbers`}
+            style={{ display: 'grid', gridTemplateColumns: `repeat(${hasSales ? 4 : 2}, minmax(0, 1fr))`, gap: '10px', padding: '8px 10px', borderRadius: '8px', background: 'var(--color-bg-hover)' }}
           >
+            <Stat value={gbp(s.plannedCostGBP)} note={`rota, ${s.plannedHours}h`} />
+            <Stat value={gbp(s.actualCostGBP)} note={`worked, ${s.actualHours}h`} />
+            {hasSales && <Stat value={`${s.actualLabourPct}%`} note={`labour, planned ${s.plannedLabourPct}%`} />}
+            {hasSales && <Stat value={gbp(s.salesGBP)} note={`sales, ${salesDelta(s.salesVsForecastPct)}`} />}
+          </div>
+          <ul aria-label={`${s.siteName}: where the variance came from`} style={{ margin: 0, padding: 0 }}>
             {s.causes.map((c, i) => (
               <CauseRow key={`${c.kind}-${i}`} c={c} />
             ))}
             {Math.abs(s.unattributedGBP) >= 1 && (
-              <div role="row" style={{ display: 'contents' }}>
-                <span role="cell" style={{ ...small, fontWeight: 700 }}>
-                  Not attributed
-                </span>
-                <span role="cell" style={{ ...small, fontWeight: 500 }}>
-                  Pay rounding on the run; no shift accounts for it
-                </span>
-                <span role="cell" style={{ ...small, fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                  {signedGBP(s.unattributedGBP)}
-                </span>
-              </div>
+              <li style={{ listStyle: 'none', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', columnGap: '12px', padding: '7px 0', borderTop: '1px solid var(--color-border-subtle)' }}>
+                <span style={small}>Not attributed to a shift; pay rounding on the run</span>
+                <span style={{ ...small, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{signedGBP(s.unattributedGBP)}</span>
+              </li>
             )}
-          </div>
-          <div style={{ ...small, marginTop: '8px', display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
-            <span>
-              Rota {s.plannedHours}h, {gbp(s.plannedCostGBP)}
-            </span>
-            <span>
-              Worked {s.actualHours}h, {gbp(s.actualCostGBP)}
-            </span>
-            {s.salesGBP > 0 && (
-              <span>
-                Labour {s.actualLabourPct}%, planned {s.plannedLabourPct}%
-              </span>
-            )}
-            {s.dataNote && <span>{s.dataNote}</span>}
-          </div>
+          </ul>
+          {(s.context || s.dataNote) && <div style={{ ...small, lineHeight: 1.4 }}>{[s.context, s.dataNote].filter(Boolean).join(' ')}</div>}
         </div>
       )}
     </li>
