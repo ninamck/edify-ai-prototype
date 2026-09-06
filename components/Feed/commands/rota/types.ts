@@ -436,6 +436,9 @@ export interface VarianceCause {
   /** Minutes against plan, signed the same way. */
   minutes: number;
   personName?: string;
+  /** The subject when it is not one person: "Both closers", "Three
+   *  shifts". The row headline falls back to the detail without it. */
+  who?: string;
   /** One line, the fact: "clocked out 20:50, rostered 20:15". */
   detail: string;
   /** Set when this is a pattern, not a one-off: "third Saturday running". */
@@ -482,7 +485,11 @@ export interface SweptSite extends SiteDayVariance {
   unexplainedPts: number;
   salesVsForecastPct: number;
   materiality: Materiality;
-  /** Why it sits where it does in the ranking, one line. */
+  /** The reason in a few words, no numbers: "Breaks not taken, third
+   *  Saturday running." The row header. */
+  lead: string;
+  /** Why it sits where it does in the ranking, one line with the
+   *  numbers. The chat line. */
   why: string;
   /** Pounds no cause accounts for, after rounding and pay rules. */
   unattributedGBP: number;

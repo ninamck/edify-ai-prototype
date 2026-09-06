@@ -104,6 +104,32 @@ function complianceLine(c: VarianceCause): string {
   return c.repeat ? `${what}, ${c.repeat}.` : `${what}.`;
 }
 
+/** The header line: the reason, not the arithmetic. */
+function lead(v: SiteDayVariance, m: Materiality, varianceGBP: number, unexplainedPts: number, salesVsForecastPct: number): string {
+  const compliance = v.causes.filter((c) => c.compliance);
+  const repeat = compliance.find((c) => c.repeat);
+  const unfilled = v.causes.find((c) => c.kind === 'unfilled-shift');
+  const noSales = v.salesGBP <= 0;
+  const pts = Math.abs(unexplainedPts);
+  const ptsLine = `Labour ${unexplainedPts > 0 ? 'up' : 'down'} ${pts} point${pts === 1 ? '' : 's'}`;
+
+  if (m === 'matters') {
+    if (repeat) return complianceLine(repeat);
+    if (unfilled) return `Unfilled shift saved ${gbp(unfilled.gbp)} while sales fell ${Math.round(Math.abs(salesVsForecastPct))}%.`;
+    if (!noSales) return `${ptsLine} on ${Math.abs(salesVsForecastPct) < 1 ? 'flat sales' : salesLine(salesVsForecastPct)}.`;
+    return `${signedGBP(varianceGBP)} with no sales to set it against.`;
+  }
+  if (m === 'watch') {
+    if (compliance.length > 0) return complianceLine(compliance[0]);
+    if (!noSales) return `${ptsLine}.`;
+    return `${signedGBP(varianceGBP)} against plan.`;
+  }
+  if (noSales) return v.context ?? 'No sales to set it against.';
+  if (varianceGBP > 0 && salesVsForecastPct >= 3) return `Sales ${Math.round(salesVsForecastPct)}% over forecast covered the hours.`;
+  if (Math.abs(varianceGBP) < 15) return 'On plan.';
+  return `${ptsLine}; the trade covered it.`;
+}
+
 function why(v: SiteDayVariance, m: Materiality, varianceGBP: number, plannedPct: number, actualPct: number, salesVsForecastPct: number): string {
   const compliance = v.causes.filter((c) => c.compliance);
   const repeat = compliance.find((c) => c.repeat);
@@ -165,6 +191,7 @@ export function sweepSite(v: SiteDayVariance, siteName: string, hasDraft: boolea
     unexplainedPts,
     salesVsForecastPct,
     materiality,
+    lead: lead(v, materiality, varianceGBP, unexplainedPts, salesVsForecastPct),
     why: why(v, materiality, varianceGBP, plannedLabourPct, actualLabourPct, salesVsForecastPct),
     unattributedGBP: round2(varianceGBP - attributed),
     hasDraft,
@@ -233,7 +260,7 @@ export function sweepVerdict(r: SweepResult): string {
   const money = `${signedGBP(r.totals.varianceGBP)} against plan on ${gbp(r.totals.salesGBP)} sales`;
   if (n === 1) {
     const s = r.sites[0];
-    const first = s.why.split('. ')[0].replace(/\.$/, '');
+    const first = s.lead.replace(/\.$/, '');
     if (s.materiality === 'matters') return `${money}. ${first}. Fix today.`;
     if (s.materiality === 'watch') return `${money}. ${first}. Worth a mention.`;
     return `${money}. The trade explains it.`;
