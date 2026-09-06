@@ -33,8 +33,8 @@ const NUDGES: Record<string, RotaNudge> = {
     question: "Pull Alba's break forward to 10:45 so both of you are on the counter from 11:15?",
     personName: 'Alba',
     change: { label: 'Break', before: '11:30 to 11:50', after: '10:45 to 11:05' },
-    notes: ['Alba has been on since 06:00, so a 10:45 break still lands inside the six-hour rule.', 'Nothing else on the rota moves. Deputy shows the break change when you publish it.'],
-    tool: 'Deputy',
+    notes: ['Alba has been on since 06:00, so a 10:45 break still lands inside the six-hour rule.', 'Nothing else on the rota moves. Workforce.com shows the break change when you publish it.'],
+    tool: 'Workforce.com',
   },
   'chagee-flagship': {
     siteId: 'chagee-flagship',
@@ -45,7 +45,7 @@ const NUDGES: Record<string, RotaNudge> = {
     personName: 'Zara Hussain',
     change: { label: 'Break', before: '14:00 to 14:20', after: '13:30 to 13:50' },
     notes: ['Zara has been on since 10:00, so a 13:30 break still lands inside the six-hour rule.', 'The pre-brew is a brew schedule change, not a rota change. It goes to the bench screen.'],
-    tool: 'Deputy',
+    tool: 'Workforce.com',
   },
 };
 

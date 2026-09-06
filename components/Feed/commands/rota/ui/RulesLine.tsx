@@ -11,7 +11,7 @@ import { useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, ChevronUp, X } from 'lucide-react';
 import type { RuleResult } from '../types';
 import RulesPanel from './RulesPanel';
-import { body, small, textButton } from './tokens';
+import { body, textButton } from './tokens';
 
 export default function RulesLine({ rules, toolName }: { rules: RuleResult[]; toolName: string }) {
   const [open, setOpen] = useState(false);
@@ -39,9 +39,7 @@ export default function RulesLine({ rules, toolName }: { rules: RuleResult[]; to
     <section aria-label="Labour rules" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
         <span style={{ marginTop: '2px', flexShrink: 0 }}>{icon}</span>
-        <span style={{ ...body, lineHeight: 1.45, flex: 1, minWidth: 0 }}>
-          {text.replace(/\s+$/, '')} <span style={small}>From {toolName} settings.</span>
-        </span>
+        <span style={{ ...body, lineHeight: 1.45, flex: 1, minWidth: 0 }}>{text.replace(/\s+$/, '')}</span>
         <button
           type="button"
           aria-expanded={open}

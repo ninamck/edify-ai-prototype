@@ -18,7 +18,7 @@
 import { useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { DAY_KEYS, type DayAnalysis, type DayKey, type DeputyDraft, type Proposal, type Shift, type SiteLabourData } from '../types';
-import { explainDay as explainForecastDay, hhmm } from '../engine';
+import { dayTotals, explainDay as explainForecastDay } from '../engine';
 import { Chip, CoverStrip, DAY_NAME, chipsFor, dateLabel } from './chips';
 import ExplainForecast from './ExplainForecast';
 import StationView from './StationView';
@@ -43,6 +43,40 @@ function coverLine(a: DayAnalysis): string {
   const short = (a.gapSlots * 15) / 60;
   if (short === 0) return 'covered as ticked';
   return `${short % 1 === 0 ? short : short.toFixed(2).replace(/0$/, '')}h short as ticked`;
+}
+
+function hoursText(h: number): string {
+  return `${h % 1 === 0 ? h : h.toFixed(1)}h`;
+}
+
+/** Label left, figure right, in a day box. */
+function Figure({ name, value, strong }: { name: string; value: string; strong?: boolean }) {
+  return (
+    <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '4px', minWidth: 0 }}>
+      <span style={{ ...small, fontSize: '10.5px' }}>{name}</span>
+      <span style={{ fontSize: '11.5px', fontWeight: strong ? 700 : 600, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>{value}</span>
+    </span>
+  );
+}
+
+function Swatch({ color }: { color: string }) {
+  return <span aria-hidden="true" style={{ display: 'inline-block', width: '10px', height: '6px', borderRadius: '1px', background: color, marginRight: '4px', verticalAlign: '1px' }} />;
+}
+
+/** The cover strip's two colours, named once beside the tabs. */
+function CoverKey() {
+  return (
+    <span style={{ ...small, display: 'inline-flex', gap: '10px', alignItems: 'center', whiteSpace: 'nowrap' }}>
+      <span>
+        <Swatch color="var(--color-error)" />
+        short
+      </span>
+      <span>
+        <Swatch color="var(--color-text-secondary)" />
+        idle
+      </span>
+    </span>
+  );
 }
 
 export default function WeekStrip({
@@ -77,13 +111,15 @@ export default function WeekStrip({
   const [fullScreen, setFullScreen] = useState(false);
 
   const open = openDay ? analysis.find((a) => a.day === openDay) : undefined;
-  const openProposals = openDay ? proposals.filter((p) => p.day === openDay) : [];
   const gridProps = { draft, proposals, selected, analysis, shifts };
 
   return (
     <section aria-label="The week" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-        <span style={label}>The week</span>
+        <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: '12px' }}>
+          <span style={label}>The week</span>
+          {mode === 'week' && <CoverKey />}
+        </span>
         <div style={segmentedWrap} role="tablist" aria-label="Week view">
           <button type="button" role="tab" aria-selected={mode === 'week'} style={segment(mode === 'week')} onClick={() => setMode('week')}>
             By day
@@ -113,19 +149,20 @@ export default function WeekStrip({
               const n = proposals.filter((p) => p.day === d).length;
               const on = proposals.filter((p) => p.day === d && selected.has(p.id)).length;
               const active = openDay === d;
+              const t = dayTotals(shifts, d, draft.hourlyCostGBP);
               return (
                 <button
                   key={d}
                   type="button"
                   role="tab"
                   aria-selected={active}
-                  aria-label={`${DAY_NAME[d]} ${dateLabel(draft.weekStart, d)}, ${gbp(a.salesGBP)} forecast, ${n === 0 ? 'no changes' : `${on} of ${n} changes ticked`}, ${coverLine(a)}`}
+                  aria-label={`${DAY_NAME[d]} ${dateLabel(draft.weekStart, d)}, ${gbp(a.salesGBP)} sales, ${hoursText(t.hours)} scheduled, ${gbp(t.costGBP)} cost, ${n === 0 ? 'no changes' : `${on} of ${n} changes ticked`}, ${coverLine(a)}`}
                   onClick={() => onOpenDay(active ? null : d)}
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'stretch',
-                    gap: '2px',
+                    gap: '1px',
                     padding: '8px 8px 7px',
                     minWidth: 0,
                     borderRadius: '10px',
@@ -137,11 +174,13 @@ export default function WeekStrip({
                     fontFamily: 'var(--font-primary)',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '3px' }}>
                     <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{d}</span>
                     <span style={small}>{dateLabel(draft.weekStart, d)}</span>
                   </div>
-                  <span style={{ ...small, fontVariantNumeric: 'tabular-nums' }}>{gbp(a.salesGBP)}</span>
+                  <Figure name="Sales" value={gbp(a.salesGBP)} />
+                  <Figure name="Hours" value={hoursText(t.hours)} />
+                  <Figure name="Cost" value={gbp(t.costGBP)} />
                   <CoverStrip a={a} height={7} />
                   <span
                     style={{
@@ -177,9 +216,12 @@ export default function WeekStrip({
                   <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
                     {DAY_NAME[openDay]} {dateLabel(draft.weekStart, openDay)} {monthShort(draft.weekStart, openDay)}
                   </span>
-                  <span style={small}>
-                    {gbp(open.salesGBP)} forecast, {coverLine(open)}.{' '}
-                    {openProposals.length === 0 ? 'No changes.' : `${openProposals.filter((p) => selected.has(p.id)).length} of ${openProposals.length} change${openProposals.length === 1 ? '' : 's'} ticked.`}
+                  <span style={{ ...small, fontVariantNumeric: 'tabular-nums' }}>
+                    {(() => {
+                      const t = dayTotals(shifts, openDay, draft.hourlyCostGBP);
+                      return `${gbp(open.salesGBP)} sales, ${hoursText(t.hours)}, ${gbp(t.costGBP)}. `;
+                    })()}
+                    {coverLine(open).charAt(0).toUpperCase() + coverLine(open).slice(1)}.
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: '4px' }}>
@@ -213,15 +255,9 @@ export default function WeekStrip({
                 })}
               </div>
 
-              <span style={small}>
-                Open {hhmm(open.points[0]?.min ?? site.openMin)} to {hhmm((open.points[open.points.length - 1]?.min ?? site.closeMin - 15) + 15)}. Red under the day: short of the workload. Grey: a head idle.
-              </span>
-
               {why && <ExplainForecast x={explainForecastDay(site, openDay)} onClose={() => setWhy(false)} />}
             </div>
-          ) : (
-            <span style={small}>Click a day for its shifts. Red under a day: short of the workload. Grey: a head idle.</span>
-          )}
+          ) : null}
         </>
       )}
     </section>

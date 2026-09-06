@@ -96,7 +96,14 @@ function Legend() {
       <span>{sw(KIND_STYLE.amend.bg, KIND_STYLE.amend.border)}Changed</span>
       <span>{sw(KIND_STYLE.remove.bg, KIND_STYLE.remove.border)}Removed</span>
       <span>{sw('#fff', 'var(--color-border)', true)}Suggested, not ticked</span>
-      <span>Red under a day: short of cover. Grey: a head idle.</span>
+      <span style={{ marginLeft: '6px' }}>
+        <span aria-hidden="true" style={{ display: 'inline-block', width: '10px', height: '6px', borderRadius: '1px', background: 'var(--color-error)', verticalAlign: '1px', marginRight: '4px' }} />
+        short
+      </span>
+      <span>
+        <span aria-hidden="true" style={{ display: 'inline-block', width: '10px', height: '6px', borderRadius: '1px', background: 'var(--color-text-secondary)', verticalAlign: '1px', marginRight: '4px' }} />
+        idle
+      </span>
     </div>
   );
 }

@@ -12,8 +12,10 @@ import { hhmm } from '../engine';
 import { body, label, small } from './tokens';
 
 function joinNames(names: string[]): string {
-  if (names.length <= 1) return names[0] ?? 'The machine';
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  if (names.length === 0) return 'The machine';
+  if (names.length === 1) return names[0];
+  // "Machine 1 and Machine 2" reads as "both machines" when that is all there is.
+  return names.every((n) => /^machine\b/i.test(n)) ? `${names.length === 2 ? 'Both' : 'All'} machines` : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
 export default function CapacityNotes({ notes }: { notes: CapacityNote[] }) {
@@ -41,7 +43,7 @@ export default function CapacityNotes({ notes }: { notes: CapacityNote[] }) {
             <span style={{ fontWeight: 700 }}>
               {n.day} {hhmm(n.start)} to {hhmm(n.end)}:
             </span>{' '}
-            {joinNames(n.stationNames)} at {Math.round(n.peakLoad * 100)}% of capacity{n.driver ? `. ${n.driver.replace(/\.$/, '')}` : ''}.
+            {joinNames(n.stationNames)} at {Math.round(n.peakLoad * 100)}%{n.driver ? `. ${n.driver.replace(/\.$/, '')}` : ''}.
           </div>
           <div style={{ ...small, lineHeight: 1.45 }}>{n.advice}</div>
         </div>

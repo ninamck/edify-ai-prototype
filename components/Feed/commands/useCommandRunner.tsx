@@ -1488,7 +1488,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           parts.push(
             `What it cost, in the day parts that ran short: waste ${avg((r) => r.wasteVsWeekday).toFixed(1)}x the weekday average and checklists ${Math.round(avg((r) => r.checklistCompletion) * 100)}% complete. ${nameOf(worst.siteId)} was furthest under${worst.note ? `. ${worst.note.replace(/\.$/, '')}` : ''}.`,
           );
-          if (worstWithDraft) parts.push(`${nameOf(worstWithDraft.siteId)} has next week's draft in ${deputyDraftFor(worstWithDraft.siteId)?.tool ?? 'Deputy'} already, so I can check that one now if you want.`);
+          if (worstWithDraft) parts.push(`${nameOf(worstWithDraft.siteId)} has next week's draft in ${deputyDraftFor(worstWithDraft.siteId)?.tool ?? 'Workforce.com'} already, so I can check that one now if you want.`);
         }
         pushResponseFlow({
           text: parts.join(' '),
@@ -1530,7 +1530,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       // switch to another site.
       if (requested && !deputyDraftFor(requested)) {
         pushResponseFlow({
-          text: `${requestedName ?? 'That site'} has no draft in Deputy for next week yet, so there is nothing to check. Ask the GM to start the draft, or I can check another site.`,
+          text: `${requestedName ?? 'That site'} has no draft in Workforce.com for next week yet, so there is nothing to check. Ask the GM to start the draft, or I can check another site.`,
           commandId: 'rota-rebalance',
           cardMsgType: 'cmd-rota-rebalance',
           cardArgs: { ...args },
@@ -1544,7 +1544,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       const site = siteId ? siteLabourFor(siteId) : undefined;
       if (!siteId || !draft || !site) {
         pushResponseFlow({
-          text: 'No site in this build has a draft rota in Deputy for next week, so there is nothing to check yet.',
+          text: 'No site in this build has a draft rota in Workforce.com for next week, so there is nothing to check yet.',
           commandId: 'rota-rebalance',
           cardMsgType: 'cmd-rota-rebalance',
           cardArgs: { ...args },
@@ -1616,9 +1616,15 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
 
       const n = final.accepted.length;
       const receipt: CommandReceipt = {
-        headline: `Draft written to ${final.toolName}: ${n} change${n === 1 ? '' : 's'}, ${final.tiles.scheduledHours}h, ${final.tiles.labourPct}% labour`,
+        headline: final.planned
+          ? `Edify's plan written to ${final.toolName}: ${final.shifts.length} shifts, ${final.tiles.scheduledHours}h, ${final.tiles.labourPct}% labour`
+          : `Draft written to ${final.toolName}: ${n} change${n === 1 ? '' : 's'}, ${final.tiles.scheduledHours}h, ${final.tiles.labourPct}% labour`,
         detail: `${final.siteName}, ${final.weekLabel}. ${final.toolName} still publishes. Nobody has been notified.${
-          final.declined.length > 0 ? ` ${final.declined.length} suggestion${final.declined.length === 1 ? '' : 's'} left unticked.` : ''
+          final.planned
+            ? ` ${n} shift${n === 1 ? '' : 's'} differ from the GM's draft.`
+            : final.declined.length > 0
+              ? ` ${final.declined.length} suggestion${final.declined.length === 1 ? '' : 's'} left unticked.`
+              : ''
         }`,
         href: `/labour?site=${encodeURIComponent(final.siteId)}`,
         hrefLabel: 'Open labour',
