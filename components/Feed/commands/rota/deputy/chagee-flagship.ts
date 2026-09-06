@@ -1,5 +1,5 @@
 /**
- * Deputy draft for CHAGEE Flagship, week of Mon 7 Sep 2026. UK store,
+ * Workforce.com draft for CHAGEE Flagship, week of Mon 7 Sep 2026. UK store,
  * UK rules, GBP. The site is the existing `chagee-flagship` in the
  * CHAGEE fixture bundle.
  */
@@ -85,7 +85,7 @@ export function CHAGEE_FLAGSHIP_DEPUTY_DRAFT(): DeputyDraft {
     siteName: 'CHAGEE Flagship',
     weekStart: '2026-09-07',
     weekLabel: 'Mon 7 to Sun 13 Sep',
-    tool: 'Deputy',
+    tool: 'Workforce.com',
     lastSynced: '08:40 today',
     hourlyCostGBP: 15,
     areas: [OPEN, PEAK, CLOSE],

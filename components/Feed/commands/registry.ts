@@ -185,7 +185,7 @@ export const COMMAND_REGISTRY: ChatCommand[] = [
     slashAliases: ['/roster', '/labour'],
     chipLabel: 'Rebalance the rota',
     chipIcon: CalendarClock,
-    description: "Check next week's draft rota against the forecast and the work, fix rule breaches, write the draft back to Deputy.",
+    description: "Check next week's draft rota against the forecast and the work, fix rule breaches, write the draft back to Workforce.com.",
     examples: [
       "check next week's rota against the forecast",
       "rebalance King's Cross rota, keep labour under 27%",

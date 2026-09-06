@@ -84,7 +84,7 @@ function EmptyState({ siteName, alternatives, onSwitch }: { siteName: string; al
         <CalendarClock size={16} aria-hidden="true" /> No labour view for {siteName} yet
       </div>
       <div style={{ fontSize: '13px', lineHeight: 1.5, color: 'var(--color-text-primary)' }}>
-        Edify builds the labour guide from the site&apos;s forecast and its draft rota in Deputy. {siteName} has no Deputy draft connected in this build.
+        Edify builds the labour guide from the site&apos;s forecast and its draft rota in Workforce.com. {siteName} has no Workforce.com draft connected in this build.
         {alternatives.length > 0 ? ` ${alternatives.map((a) => a.name).join(' and ')} ${alternatives.length === 1 ? 'does' : 'do'}.` : ''}
       </div>
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -340,7 +340,7 @@ function Estate({ onOpenSite }: { onOpenSite: (siteId: string) => void }) {
               <tr key={s.id}>
                 <td style={{ ...cell, textAlign: 'left', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{s.name}</td>
                 <td colSpan={7} style={{ ...cell, textAlign: 'left', color: 'var(--color-text-secondary)' }}>
-                  No data. No labour standards or Deputy connection for this site yet.
+                  No data. No labour standards or Workforce.com connection for this site yet.
                 </td>
               </tr>
             ))}

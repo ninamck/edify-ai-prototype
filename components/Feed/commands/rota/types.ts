@@ -383,3 +383,27 @@ export interface RebalanceResult {
   /** Windows where a machine, not the rota, is the limit. */
   capacity: CapacityNote[];
 }
+
+/** A window the planner could not staff: nobody available who passes
+ *  the rules. The GM fixes these by hand. */
+export interface UnfilledWindow {
+  day: DayKey;
+  start: number;
+  end: number;
+  /** Heads short at the worst point. */
+  depth: number;
+}
+
+/** The agent's plan for the week, built from the forecast and the team
+ *  with the GM's shifts set aside. Shaped like a rebalance so the card
+ *  draws it with the same grid, tiles and rules: the proposals are the
+ *  difference between the plan and the GM's draft, all selected. */
+export interface PlanResult extends RebalanceResult {
+  planned: true;
+  /** The plan itself, every shift. */
+  plannedShifts: Shift[];
+  unfilled: UnfilledWindow[];
+  /** Things the plan could not honour that are not cover gaps: an open
+   *  or close with no keyholder on. */
+  notes: string[];
+}

@@ -32,6 +32,7 @@ import {
   type LabourGuideRow,
   type Person,
   type Alternative,
+  type PlanResult,
   type Proposal,
   type ProposalTag,
   type RebalanceResult,
@@ -41,6 +42,7 @@ import {
   type SlotPoint,
   type StationCurve,
   type Tiles,
+  type UnfilledWindow,
 } from './types';
 
 /** People are not busy every second of a slot. */
@@ -1009,6 +1011,12 @@ export function totalHours(shifts: Shift[]): number {
   return Math.round(shifts.reduce((a, s) => a + shiftHours(s), 0) * 10) / 10;
 }
 
+/** Hours and cost rostered on one day, from the shifts as ticked. */
+export function dayTotals(shifts: Shift[], day: DayKey, hourlyCostGBP: number): { hours: number; costGBP: number } {
+  const hours = totalHours(shifts.filter((s) => s.day === day));
+  return { hours, costGBP: Math.round(hours * hourlyCostGBP) };
+}
+
 export function weekSalesGBP(site: SiteLabourData): number {
   return DAY_KEYS.reduce((a, d) => a + analyseDay(site, [], d).salesGBP, 0);
 }
@@ -1026,7 +1034,8 @@ export function computeTiles(
 ): { tiles: Tiles; shifts: Shift[]; analysis: DayAnalysis[]; rules: RuleResult[] } {
   const { draft, site } = result;
   const proposals = result.proposals.map((p) => effectiveProposal(p, chosen));
-  const shifts = applyProposals(draft.shifts, proposals, selected);
+  // A plan is whole: its shifts are the truth, not the draft plus edits.
+  const shifts = 'planned' in result && result.planned ? (result as PlanResult).plannedShifts : applyProposals(draft.shifts, proposals, selected);
   const analysis = analyseWeek(site, shifts);
   const rules = checkRules(draft, shifts);
   const hours = totalHours(shifts);
@@ -1153,8 +1162,8 @@ export function capacityNotes(site: SiteLabourData, analysis: DayAnalysis[]): Ca
       const sig = signalFor(site, a.day, run.start, run.end);
       const driver = order ? order.evidence : sig ? sig.evidence : undefined;
       const advice = order
-        ? `Another head will not clear it. Brew the ${order.label.split(',')[0].toLowerCase()} ahead, before ${hhmm(order.start)}, and the machines drop back under capacity.`
-        : 'Another head will not clear it. This is a machine limit: pre-brew into the window or accept the queue.';
+        ? `A head will not clear it. Brew the ${order.label.split(',')[0].toLowerCase()} before ${hhmm(order.start)}.`
+        : 'A head will not clear it. Pre-brew into the window or accept the queue.';
       notes.push({ day: a.day, start: run.start, end: run.end, stationNames: hot.map((m) => m.stationName), peakLoad: peak, driver, advice });
     }
   }
@@ -1170,4 +1179,312 @@ export function rebalance(draft: DeputyDraft, site: SiteLabourData, requestedTar
   const guide = labourGuide(site, draft.shifts);
   const capacity = capacityNotes(site, before);
   return { draft, site, requestedTargetPct, proposals, before, rulesBefore, guide, capacity };
+}
+
+// ─── Plan from scratch ──────────────────────────────────────────────────────
+
+/** Longest shift the planner writes. */
+const MAX_PLAN_SHIFT_MIN = 9 * 60;
+
+const lower = (s: string) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : s);
+
+/**
+ * Build the week from the forecast and the team, with the GM's shifts
+ * set aside. Monday to Sunday, each day the same way: find the earliest
+ * cover gap, extend a shift that already ends or starts there if that
+ * closes it, otherwise add the person furthest under contract who passes
+ * the rules. Openers and closers are keyholders where the team has one.
+ * Repeat until the day has no gap or nobody can take it.
+ *
+ * Deterministic: the same draft and site give the same plan.
+ */
+export function planWeek(draft: DeputyDraft, site: SiteLabourData, requestedTargetPct?: number): PlanResult {
+  const byPerson = new Map<string, Person>(draft.people.map((p) => [p.id, p]));
+  const restHours = draft.rules.find((r) => r.kind === 'rest-between-shifts')?.value;
+  const u18Rule = draft.rules.find((r) => r.kind === 'under18-latest-finish');
+  const u18DailyRule = draft.rules.find((r) => r.kind === 'under18-max-daily-hours');
+  const weeklyCap = draft.rules.find((r) => r.kind === 'weekly-average')?.value;
+  const hasKeyholders = draft.people.some((p) => p.keyholder);
+
+  const planned: Shift[] = [];
+  const why = new Map<string, string>();
+  const unfilled: UnfilledWindow[] = [];
+  let n = 0;
+
+  /** Nobody on a contract is planned far past it: a fifth over, or a
+   *  day's worth, whichever is more. Lifted only when nobody else fits. */
+  const softCap = (p: Person) => (p.contractedHours > 0 ? Math.max(p.contractedHours * 1.2, p.contractedHours + 8) : Infinity);
+
+  const fits = (p: Person, day: DayKey, start: number, end: number, strict: boolean): boolean => {
+    if (!personAvailable(p, day, planned)) return false;
+    if (p.age !== undefined && p.age < 18) {
+      if (u18Rule && end > u18Rule.value) return false;
+      if (u18DailyRule && end - start > u18DailyRule.value * 60) return false;
+    }
+    if (!restOk(planned, restHours, p.id, day, start, end)) return false;
+    const hours = shiftHours(withBreak({ id: '', personId: p.id, day, start, end, area: '' }));
+    const after = weeklyHours(planned, p.id) + hours;
+    if (weeklyCap !== undefined && after > weeklyCap) return false;
+    if (strict && after > softCap(p)) return false;
+    return true;
+  };
+
+  /** Best person for a window: under contract first, then casual, then
+   *  least over. Keyholders first when the window opens or closes. */
+  const pickFor = (day: DayKey, start: number, end: number, needKeyholder: boolean): Person | undefined => {
+    const strictList = rank(day, start, end, true);
+    if (needKeyholder) {
+      // A keyholder a little over the soft cap beats no keyholder; one
+      // heading for the legal limit does not.
+      const kh =
+        strictList.find((c) => c.p.keyholder) ??
+        rank(day, start, end, false).find((c) => c.p.keyholder && weeklyHours(planned, c.p.id) + (end - start) / 60 <= c.p.contractedHours + 8);
+      if (kh) return kh.p;
+    }
+    return strictList[0]?.p ?? rank(day, start, end, false)[0]?.p;
+  };
+
+  const rank = (day: DayKey, start: number, end: number, strict: boolean) =>
+    draft.people
+      .filter((p) => fits(p, day, start, end, strict))
+      .map((p) => {
+        const slack = p.contractedHours - weeklyHours(planned, p.id);
+        const tier = slack > 0 ? 0 : p.contractedHours === 0 ? 1 : 2;
+        // Share of contract still to fill, so a 20h contract is not
+        // starved by a 38h one that always has more hours left.
+        const share = p.contractedHours > 0 ? slack / p.contractedHours : 0;
+        return { p, slack, share, tier };
+      })
+      .sort((a, b) => a.tier - b.tier || b.share - a.share || b.slack - a.slack || a.p.name.localeCompare(b.p.name));
+
+  /** Station with the biggest shortfall in the window. */
+  const stationFor = (a: DayAnalysis, start: number, end: number): string | undefined => {
+    let best: { id: string; short: number } | undefined;
+    for (const st of a.stations) {
+      const short = st.points.filter((p) => p.min >= start && p.min < end).reduce((acc, p) => acc + Math.max(0, p.required - p.rostered), 0);
+      if (!best || short > best.short) best = { id: st.stationId, short };
+    }
+    return best?.id;
+  };
+
+  const keyholderOn = (day: DayKey, at: number) => planned.some((s) => s.day === day && s.start <= at && at < s.end && byPerson.get(s.personId)?.keyholder);
+
+  for (const day of DAY_KEYS) {
+    const { open, close } = hoursFor(site, day);
+    const attempted = new Map<number, number>();
+    for (let guard = 0; guard < 40; guard++) {
+      const analysis = analyseDay(site, planned, day);
+      const run = runs(analysis.points, (p) => p.required > p.rostered)
+        .filter((r) => r.slots >= MIN_GAP_SLOTS)
+        .find((r) => (attempted.get(r.start) ?? 0) < 4);
+      if (!run) break;
+      attempted.set(run.start, (attempted.get(run.start) ?? 0) + 1);
+
+      const start = roundDownHour(run.start);
+      const end = roundUpHour(run.end);
+      const reason = `Workload needs ${Math.ceil(run.depth)} more from ${hhmm(run.start)} to ${hhmm(run.end)}`;
+      const dayShifts = planned.filter((s) => s.day === day);
+
+      // Extend a shift that ends at the gap, or starts at its end.
+      const endsBefore = dayShifts
+        .filter((s) => s.end <= start && start - s.end <= 60 && end - s.start <= MAX_PLAN_SHIFT_MIN)
+        .filter((s) => {
+          const p = byPerson.get(s.personId)!;
+          const others = planned.filter((x) => x !== s);
+          if (p.age !== undefined && p.age < 18 && ((u18Rule && end > u18Rule.value) || (u18DailyRule && end - s.start > u18DailyRule.value * 60))) return false;
+          if (!restOk(others, restHours, p.id, day, s.start, end)) return false;
+          const grown = shiftHours(withBreak({ ...s, end })) - shiftHours(s);
+          return weeklyCap === undefined || weeklyHours(planned, p.id) + grown <= weeklyCap;
+        })
+        .sort((a, b) => b.end - a.end)[0];
+      if (endsBefore) {
+        endsBefore.end = Math.min(end, close);
+        Object.assign(endsBefore, withBreak(endsBefore));
+        why.set(endsBefore.id, `${why.get(endsBefore.id) ?? ''}. Then ${lower(reason)}`);
+        continue;
+      }
+      const startsAfter = dayShifts
+        .filter((s) => s.start >= end && s.start - end <= 60 && s.end - start <= MAX_PLAN_SHIFT_MIN)
+        .filter((s) => {
+          const p = byPerson.get(s.personId)!;
+          const others = planned.filter((x) => x !== s);
+          if (p.age !== undefined && p.age < 18 && u18DailyRule && s.end - start > u18DailyRule.value * 60) return false;
+          if (!restOk(others, restHours, p.id, day, start, s.end)) return false;
+          const grown = shiftHours(withBreak({ ...s, start })) - shiftHours(s);
+          return weeklyCap === undefined || weeklyHours(planned, p.id) + grown <= weeklyCap;
+        })
+        .sort((a, b) => a.start - b.start)[0];
+      if (startsAfter) {
+        startsAfter.start = Math.max(start, open);
+        Object.assign(startsAfter, withBreak(startsAfter));
+        why.set(startsAfter.id, `${reason}. Then ${lower(why.get(startsAfter.id) ?? '')}`);
+        continue;
+      }
+
+      // Otherwise a new shift over the gap: at least four hours, at most
+      // nine, inside opening hours.
+      let addStart = Math.max(open, start);
+      let addEnd = Math.min(close, Math.max(end, addStart + MIN_ADD_MIN), addStart + MAX_PLAN_SHIFT_MIN);
+      if (addEnd - addStart < MIN_ADD_MIN) addStart = Math.max(open, addEnd - MIN_ADD_MIN);
+      if (addEnd - addStart < MIN_ADD_MIN) addEnd = Math.min(close, addStart + MIN_ADD_MIN);
+
+      const opensOrCloses = addStart <= open || addEnd >= close;
+      const needKeyholder = hasKeyholders && opensOrCloses && !((addStart <= open && keyholderOn(day, open)) || (addEnd >= close && keyholderOn(day, close - SLOT_MIN)));
+      let pick = pickFor(day, addStart, addEnd, needKeyholder);
+      // An under-18 cannot close; shorten to their latest finish if that
+      // still covers a real shift, else look past them.
+      if (pick && pick.age !== undefined && pick.age < 18 && u18Rule && addEnd > u18Rule.value) {
+        const adults = draft.people.filter((p) => !(p.age !== undefined && p.age < 18));
+        pick = adults.find((p) => fits(p, day, addStart, addEnd, true)) ?? adults.find((p) => fits(p, day, addStart, addEnd, false));
+      }
+      if (!pick) {
+        unfilled.push({ day, start: run.start, end: run.end, depth: Math.ceil(run.depth) });
+        continue;
+      }
+      const id = `plan-${++n}`;
+      const area = addStart < 12 * 60 ? draft.areas[0] : draft.areas[draft.areas.length - 1];
+      planned.push(withBreak({ id, personId: pick.id, day, start: addStart, end: addEnd, area, stationId: stationFor(analysis, addStart, addEnd) }));
+      why.set(id, reason);
+    }
+
+    // Trim: a four-hour minimum shift added for a short peak can leave a
+    // spare head either side of it. Take whole idle hours off the ends
+    // of the day's shifts, latest finish first, never under four hours.
+    for (let guard = 0; guard < 40; guard++) {
+      const analysis = analyseDay(site, planned, day);
+      const idleHour = (from: number) => {
+        const pts = analysis.points.filter((p) => p.min >= from && p.min < from + 60);
+        return pts.length === 4 && pts.every((p) => p.rostered - p.required >= 1);
+      };
+      // The only keyholder at open or close stays put.
+      const soleKeyholder = (s: Shift, at: number) =>
+        !!byPerson.get(s.personId)?.keyholder && !planned.some((x) => x !== s && x.day === day && x.start <= at && at < x.end && byPerson.get(x.personId)?.keyholder);
+      const dayShifts = planned.filter((s) => s.day === day && s.end - s.start > MIN_ADD_MIN);
+      const tail = dayShifts
+        .filter((s) => idleHour(s.end - 60) && !(s.end >= close && soleKeyholder(s, close - SLOT_MIN)))
+        .sort((a, b) => b.end - a.end)[0];
+      if (tail) {
+        tail.end -= 60;
+        Object.assign(tail, withBreak({ ...tail, breakMin: undefined }));
+        continue;
+      }
+      const head = dayShifts
+        .filter((s) => idleHour(s.start) && !(s.start <= open && soleKeyholder(s, open)))
+        .sort((a, b) => a.start - b.start)[0];
+      if (head) {
+        head.start += 60;
+        Object.assign(head, withBreak({ ...head, breakMin: undefined }));
+        continue;
+      }
+      break;
+    }
+  }
+
+  // A window recorded as unfilled may have been covered by a later
+  // extension; keep only the ones still short.
+  const finalAnalysis = analyseWeek(site, planned);
+  const notes: string[] = [];
+  if (hasKeyholders) {
+    for (const day of DAY_KEYS) {
+      const { open, close } = hoursFor(site, day);
+      const noOpen = !keyholderOn(day, open);
+      const noClose = !keyholderOn(day, close - SLOT_MIN);
+      if (noOpen && noClose) notes.push(`${day}: no keyholder on to open or close`);
+      else if (noOpen) notes.push(`${day}: no keyholder on at ${hhmm(open)} open`);
+      else if (noClose) notes.push(`${day}: no keyholder on at ${hhmm(close)} close`);
+    }
+  }
+  const stillShort = unfilled.filter((u) => {
+    const a = finalAnalysis.find((x) => x.day === u.day)!;
+    return a.points.some((p) => p.min >= u.start && p.min < u.end && p.required > p.rostered);
+  });
+  const dedup = new Map<string, UnfilledWindow>();
+  for (const u of stillShort) dedup.set(`${u.day}-${u.start}`, u);
+
+  // The plan as the difference from the GM's draft, so the grid, tiles
+  // and receipt read it the way they read a rebalance.
+  const proposals: Proposal[] = [];
+  let k = 0;
+  for (const p of draft.people) {
+    for (const day of DAY_KEYS) {
+      const was = draft.shifts.filter((s) => s.personId === p.id && s.day === day).sort((a, b) => a.start - b.start);
+      const now = planned.filter((s) => s.personId === p.id && s.day === day).sort((a, b) => a.start - b.start);
+      const m = Math.max(was.length, now.length);
+      for (let i = 0; i < m; i++) {
+        const b = was[i];
+        const a = now[i];
+        if (b && a && b.start === a.start && b.end === a.end) continue;
+        const id = `plan-diff-${++k}`;
+        if (b && a) {
+          proposals.push({
+            id,
+            kind: 'amend',
+            tag: 'demand',
+            personId: p.id,
+            personName: p.name,
+            day,
+            area: a.area,
+            stationId: a.stationId,
+            before: { start: b.start, end: b.end },
+            after: { start: a.start, end: a.end },
+            title: `${p.name} works ${hhmm(a.start)} to ${hhmm(a.end)} on ${day}, not ${hhmm(b.start)} to ${hhmm(b.end)}`,
+            reason: 'plan',
+            evidence: why.get(a.id) ?? 'Moved to where the work is',
+            defaultSelected: true,
+            hoursDelta: Math.round((shiftHours(a) - shiftHours(b)) * 10) / 10,
+          });
+        } else if (a) {
+          proposals.push({
+            id,
+            kind: 'add',
+            tag: 'demand',
+            personId: p.id,
+            personName: p.name,
+            day,
+            area: a.area,
+            stationId: a.stationId,
+            after: { start: a.start, end: a.end },
+            title: `Add ${p.name}, ${day} ${hhmm(a.start)} to ${hhmm(a.end)}`,
+            reason: 'plan',
+            evidence: why.get(a.id) ?? 'Covers the workload',
+            defaultSelected: true,
+            hoursDelta: shiftHours(a),
+          });
+        } else if (b) {
+          proposals.push({
+            id,
+            kind: 'remove',
+            tag: 'demand',
+            personId: p.id,
+            personName: p.name,
+            day,
+            area: b.area,
+            stationId: b.stationId,
+            before: { start: b.start, end: b.end },
+            title: `${p.name} off on ${day}`,
+            reason: 'plan',
+            evidence: 'The workload is covered without this shift',
+            defaultSelected: true,
+            hoursDelta: -shiftHours(b),
+          });
+        }
+      }
+    }
+  }
+
+  const before = analyseWeek(site, draft.shifts);
+  return {
+    planned: true,
+    plannedShifts: planned,
+    unfilled: [...dedup.values()],
+    notes,
+    draft,
+    site,
+    requestedTargetPct,
+    proposals,
+    before,
+    rulesBefore: checkRules(draft, draft.shifts),
+    guide: labourGuide(site, planned),
+    capacity: capacityNotes(site, finalAnalysis),
+  };
 }

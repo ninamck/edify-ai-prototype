@@ -1,5 +1,5 @@
 /**
- * Deputy draft for Fitzroy King's Cross, week of Mon 7 Sep 2026.
+ * Workforce.com draft for Fitzroy King's Cross, week of Mon 7 Sep 2026.
  *
  * This is what Edify pulls from the workforce tool: the GM's draft as
  * she left it, with people, contracted hours, age, leave and the
@@ -36,7 +36,7 @@ export function KINGS_CROSS_DEPUTY_DRAFT(): DeputyDraft {
     siteName: "Fitzroy King's Cross",
     weekStart: '2026-09-07',
     weekLabel: 'Mon 7 to Sun 13 Sep',
-    tool: 'Deputy',
+    tool: 'Workforce.com',
     lastSynced: '09:12 today',
     hourlyCostGBP: 15,
     areas: [OPENING, CLOSING],
