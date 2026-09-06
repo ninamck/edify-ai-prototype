@@ -70,6 +70,8 @@ export function parseRotaRebalance(text: string): CommandIntent | null {
   }
 
   if (!slash) {
+    // Yesterday belongs to the variance sweep, not next week's draft.
+    if (/\b(yesterday|last night|overnight)\b/.test(lower)) return null;
     if (!NOUN.test(lower)) return null;
     const bare = /^(the\s+)?(rota|roster)\b/i.test(lower) && lower.split(' ').length <= 3;
     if (!bare && !VERB.test(lower)) return null;

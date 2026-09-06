@@ -22,6 +22,7 @@ import { snapshot as snapshotSuppliers } from '@/components/Suppliers/store';
 import type { Recipe } from '@/components/Recipe/libraryFixtures';
 import type { CommandIntent, AmbiguityChoice } from './types';
 import { parseRotaRebalance } from './rota/parseRota';
+import { parseVarianceSweep } from './rota/parseSweep';
 
 // ─── Shared helpers ─────────────────────────────────────────────────────────
 
@@ -954,6 +955,7 @@ export function parseCommand(text: string): CommandIntent | null {
     if (/^\/(swap|replace|add)-product\b/i.test(trimmed)) return parseProductSwap(trimmed) ?? { commandId: 'product-swap', args: {}, confidence: 1 };
     if (/^\/sites?\b/i.test(trimmed))       return parseSiteSetup(trimmed) ?? { commandId: 'site-setup', args: {}, confidence: 1 };
     if (/^\/(rota|roster|labour)\b/i.test(trimmed)) return parseRotaRebalance(trimmed) ?? { commandId: 'rota-rebalance', args: {}, confidence: 1 };
+    if (/^\/sweep\b/i.test(trimmed))        return parseVarianceSweep(trimmed) ?? { commandId: 'variance-sweep', args: {}, confidence: 1 };
   }
 
   // Natural-language path: normalise gerund verbs ("swapping" →
@@ -970,6 +972,9 @@ export function parseCommand(text: string): CommandIntent | null {
     parseSupplier(nl),
     parseProductSwap(nl),
     parseSiteSetup(nl),
+    // Sweep before rota: "labour against plan yesterday" is yesterday's
+    // clock data, not next week's draft.
+    parseVarianceSweep(nl),
     parseRotaRebalance(nl),
   ];
   const hits = candidates.filter((c): c is CommandIntent => c !== null);

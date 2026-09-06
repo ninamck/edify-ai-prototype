@@ -40,6 +40,8 @@ export type TaskKind =
   /** Rota rebalance: draft rota checked against workload, written back
    *  to the workforce tool. */
   | 'rota-rebalance'
+  /** Morning variance sweep: yesterday's labour against plan, read only. */
+  | 'variance-sweep'
   /** Data questions the operator asked Edify (analytics, table
    *  queries — anything that produced an answer rather than a
    *  mutation). */

@@ -12,10 +12,11 @@
  * setCmdStates). The registry is purely descriptive.
  */
 
-import { Trash2, Boxes, ChefHat, Settings2, Utensils, Truck, ArrowLeftRight, Building2, CalendarClock } from 'lucide-react';
+import { Trash2, Boxes, ChefHat, Settings2, Utensils, Truck, ArrowLeftRight, Building2, CalendarClock, Sunrise } from 'lucide-react';
 import type { ChatCommand } from './types';
 import { parseWaste, parseStock, parseRecipeEdit, parseProduction, parseMenu, parseSupplier, parseProductSwap, parseSiteSetup } from './parsers';
 import { parseRotaRebalance } from './rota/parseRota';
+import { parseVarianceSweep } from './rota/parseSweep';
 
 export const COMMAND_REGISTRY: ChatCommand[] = [
   {
@@ -219,6 +220,22 @@ export const COMMAND_REGISTRY: ChatCommand[] = [
     cardMsgType: 'cmd-rota-rebalance',
     requiredArgs: [],
     promptFor: () => 'Which site?',
+  },
+  {
+    id: 'variance-sweep',
+    slash: '/sweep',
+    chipLabel: 'Morning variance sweep',
+    chipIcon: Sunrise,
+    description: "Yesterday's shifts and pay from Workforce.com against the rota and the sales, every pound attributed, sites ranked by what matters. Reads only.",
+    examples: [
+      'run the morning variance sweep',
+      'what did labour cost against plan yesterday?',
+      'why was Gatwick over plan yesterday?',
+    ],
+    parse: parseVarianceSweep,
+    cardMsgType: 'cmd-variance-sweep',
+    requiredArgs: [],
+    promptFor: () => 'Which day?',
   },
 ];
 
