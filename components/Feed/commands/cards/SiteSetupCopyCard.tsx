@@ -23,7 +23,7 @@ import {
   TEMPLATE_SHOPS,
   HUBS,
   STANDALONE,
-  getWorkdaySite,
+  getNewSite,
 } from '../siteSetupFixtures';
 
 interface SiteSetupCopyCardProps {
@@ -50,14 +50,14 @@ export default function SiteSetupCopyCard({
   const [templates, setTemplates] = useState<Record<string, string>>(() => {
     const map: Record<string, string> = {};
     for (const id of siteIds) {
-      map[id] = initialTemplates?.[id] ?? getWorkdaySite(id)?.suggestedTemplateId ?? TEMPLATE_SHOPS[0].id;
+      map[id] = initialTemplates?.[id] ?? getNewSite(id)?.suggestedTemplateId ?? TEMPLATE_SHOPS[0].id;
     }
     return map;
   });
   const [hubs, setHubs] = useState<Record<string, string>>(() => {
     const map: Record<string, string> = {};
     for (const id of siteIds) {
-      map[id] = initialHubs?.[id] ?? getWorkdaySite(id)?.suggestedHubId ?? STANDALONE;
+      map[id] = initialHubs?.[id] ?? getNewSite(id)?.suggestedHubId ?? STANDALONE;
     }
     return map;
   });
@@ -77,7 +77,7 @@ export default function SiteSetupCopyCard({
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         {siteIds.map((siteId) => {
-          const site = getWorkdaySite(siteId);
+          const site = getNewSite(siteId);
           if (!site) return null;
           return (
             <div

@@ -19,7 +19,7 @@ import {
   EDIFY_ROLES,
   defaultEdifyRole,
   describeRoleCounts,
-  getWorkdaySite,
+  getNewSite,
   roleCounts,
   type EdifyRole,
 } from '../siteSetupFixtures';
@@ -46,7 +46,7 @@ export default function SiteSetupTeamCard({
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const disabled = state !== 'pending';
-  const totalPeople = siteIds.reduce((n, id) => n + (getWorkdaySite(id)?.roster.length ?? 0), 0);
+  const totalPeople = siteIds.reduce((n, id) => n + (getNewSite(id)?.roster.length ?? 0), 0);
 
   return (
     <CardShell
@@ -61,7 +61,7 @@ export default function SiteSetupTeamCard({
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {siteIds.map((siteId) => {
-          const site = getWorkdaySite(siteId);
+          const site = getNewSite(siteId);
           if (!site) return null;
           const counts = roleCounts(site.roster, roles);
           const isOpen = !!expanded[siteId];

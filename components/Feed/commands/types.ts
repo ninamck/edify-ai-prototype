@@ -27,8 +27,9 @@ export type CommandId =
    *  Implemented as a multi-step wizard — see useCommandRunner's
    *  startProductSwapWizard for the flow. */
   | 'product-swap'
-  /** Set up one or more new sites end to end: pick from Workday, copy
-   *  an existing shop's setup, load the people, set ranges & tiers per
+  /** Set up one or more new sites end to end: read the site sheet the
+   *  operator attached (sites are not in Workday), copy an existing
+   *  shop's setup, load the people from Workday, set ranges & tiers per
    *  day, production times, then go live. Multi-step wizard — see
    *  useCommandRunner's startSiteSetupWizard. */
   | 'site-setup'

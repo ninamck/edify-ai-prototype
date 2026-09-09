@@ -25,7 +25,7 @@ import {
   RANGES,
   describeRecipeCounts,
   getRange,
-  getWorkdaySite,
+  getNewSite,
   recipesAtTier,
   type DayKey,
 } from '../siteSetupFixtures';
@@ -105,7 +105,7 @@ export default function SiteSetupRangeTiersCard({
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         {siteIds.map((siteId) => {
-          const site = getWorkdaySite(siteId);
+          const site = getNewSite(siteId);
           if (!site) return null;
           const rangeId = rangeIds[siteId];
           const range = getRange(rangeId);

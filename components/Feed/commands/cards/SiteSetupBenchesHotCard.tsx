@@ -29,7 +29,7 @@ import {
   ALL_HOT_RECIPES,
   defaultBenchesHot,
   getTemplateShop,
-  getWorkdaySite,
+  getNewSite,
 } from '../siteSetupFixtures';
 import type { BenchesHotSetup, HotStation, SiteBenchesHot } from '../siteSetupFixtures';
 
@@ -168,7 +168,7 @@ export default function SiteSetupBenchesHotCard({
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {siteIds.map((siteId) => {
-          const site = getWorkdaySite(siteId);
+          const site = getNewSite(siteId);
           if (!site) return null;
           const template = getTemplateShop(templates[siteId]);
           const setup = benchesHot[siteId];

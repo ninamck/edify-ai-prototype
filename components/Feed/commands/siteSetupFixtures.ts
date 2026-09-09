@@ -3,10 +3,14 @@
  * wizard (Pret UK rollout demo).
  *
  * Three data sets:
- *   • WORKDAY_NEW_SITES — shops that exist in Workday (the HR system)
- *     but not yet in Edify. The site-picker dropdown reads from here so
- *     names always match HR and are never typed twice. Each carries its
- *     location, opening date, opening hours and full staff roster.
+ *   • NEW_SITES — the shops on the spreadsheet the operator attaches
+ *     (SITE_SHEET_FILE_NAME). Sites are NOT held in Workday, so the
+ *     property/ops team sends a sheet with one row per shop: name,
+ *     site code, profit centre, address, opening date, delivery window,
+ *     delivery contact. Step 1 parses that sheet and shows every field
+ *     filled in and editable. Each entry also carries the staff roster,
+ *     which DOES come from Workday (the HR system) once the shop is
+ *     matched by name.
  *   • TEMPLATE_SHOPS — live Pret shops a new site can copy its setup
  *     from: range, tier-per-day pattern, production week, selection
  *     times, permissions.
@@ -496,24 +500,344 @@ export function getTemplateShop(id: string): TemplateShop | undefined {
   return TEMPLATE_SHOPS.find((t) => t.id === id);
 }
 
-// ─── Workday sites not yet in Edify ─────────────────────────────────────────
+// ─── Shop recipes (copied with the shop) ─────────────────────────────────────
+//
+// The production recipes a shop makes on site: what lands on the bench
+// and the hot stations, plus barista drinks. Distinct from the range /
+// tier ladder above, which sets which menu sells on which day. In Edify
+// main recipes are held per site, so a new shop copies its mirror
+// shop's library (~95 recipes) and the operator unticks anything the
+// new shop won't make. All copied unless unticked.
 
-export interface WorkdaySite {
+export type RecipeCategory =
+  | 'Croissants & bakery'
+  | 'Breakfast'
+  | 'Sandwiches & baguettes'
+  | 'Wraps & flatbreads'
+  | 'Hot food & soups'
+  | 'Salads & bowls'
+  | 'Sweet treats'
+  | 'Coffee & drinks';
+
+export const RECIPE_CATEGORIES: RecipeCategory[] = [
+  'Croissants & bakery',
+  'Breakfast',
+  'Sandwiches & baguettes',
+  'Wraps & flatbreads',
+  'Hot food & soups',
+  'Salads & bowls',
+  'Sweet treats',
+  'Coffee & drinks',
+];
+
+export interface ShopRecipe {
   id: string;
-  /** Full name as held in Workday. */
+  name: string;
+  category: RecipeCategory;
+  /** Only these template shops carry it (city / station extras). */
+  only?: string[];
+  /** These template shops don't carry it (small-shop core range). */
+  not?: string[];
+}
+
+const slug = (s: string) => s.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+function recipes(category: RecipeCategory, names: string[], flags?: { only?: string[]; not?: string[] }): ShopRecipe[] {
+  return names.map((name) => ({ id: slug(name), name, category, ...(flags ?? {}) }));
+}
+
+const SMALL = ['crown-passage'];
+const CITY = ['cheapside'];
+const STATION = ['st-pancras'];
+
+/** Every recipe any copied shop holds. `templateRecipes` narrows it. */
+export const RECIPE_LIBRARY: ShopRecipe[] = [
+  ...recipes('Croissants & bakery', HOT_RECIPE_POOL.bakery),
+  ...recipes('Breakfast', [
+    'Porridge',
+    'Bircher Muesli',
+    'Greek Yoghurt & Granola Pot',
+    'Egg Mayo Breakfast Baguette',
+    'Avocado & Egg Brioche',
+    'Bacon & Egg Brioche',
+    'Fruit Salad Pot',
+    'Berry & Yoghurt Pot',
+  ]),
+  ...recipes('Sandwiches & baguettes', [
+    'Chicken Caesar & Bacon Baguette',
+    'Tuna Mayo & Cucumber Baguette',
+    'Egg Mayo & Tomato Baguette',
+    'Ham & Greve Baguette',
+    'Brie, Tomato & Basil Baguette',
+    'Chicken & Avocado Sandwich',
+    'Classic Super Club',
+    'Posh Cheddar & Pickle Sandwich',
+    'Egg & Spinach Protein Pot Sandwich',
+    'Smoked Salmon & Egg Sandwich',
+    'Coronation Chicken Sandwich',
+    'Italian Prosciutto Baguette',
+    'Falafel & Red Pepper Tapenade Baguette',
+    'Roast Chicken & Slaw Sandwich',
+    'Chargrilled Chicken & Pesto Baguette',
+    'Hummus & Chipotle Veggie Sandwich',
+  ]),
+  ...recipes('Sandwiches & baguettes', ['Steak & Horseradish Baguette', 'Lobster & Prawn Brioche'], { only: CITY }),
+  ...recipes('Sandwiches & baguettes', ['Ham & Cheese Croissant Roll', 'Grab & Go Chicken Wrap Box'], { only: STATION }),
+  ...recipes('Wraps & flatbreads', [
+    'Chicken Caesar Wrap',
+    'Falafel & Halloumi Wrap',
+    'Tuna Nicoise Wrap',
+    'Hoisin Duck Wrap',
+    'Chipotle Chicken Flatbread',
+    'Halloumi & Red Pepper Flatbread',
+    'Veggie Rainbow Wrap',
+    'Egg & Avocado Wrap',
+  ]),
+  ...recipes('Hot food & soups', HOT_RECIPE_POOL.hotChef),
+  ...recipes('Salads & bowls', [
+    'Chicken Caesar Salad',
+    'Tuna Nicoise Salad',
+    'Falafel & Hummus Salad Bowl',
+    'Chef\u2019s Italian Chicken Salad',
+    'Greek Salad',
+    'Rainbow Veggie Bowl',
+    'Chicken & Quinoa Protein Bowl',
+    'Smoked Salmon Salad Bowl',
+  ]),
+  ...recipes('Salads & bowls', ['Miso Salmon Rice Bowl', 'Superfood Green Bowl'], { not: SMALL }),
+  ...recipes('Sweet treats', [
+    'Love Bar',
+    'Chocolate Brownie',
+    'Lemon Drizzle Slice',
+    'Carrot Cake Slice',
+    'Flapjack',
+    'Millionaire Shortbread',
+    'Raspberry & Almond Slice',
+    'Banana Bread',
+    'Popcorn Bar',
+    'Fruit Scone',
+  ]),
+  ...recipes('Coffee & drinks', [
+    'Espresso',
+    'Americano',
+    'Flat White',
+    'Latte',
+    'Cappuccino',
+    'Mocha',
+    'Hot Chocolate',
+    'Chai Latte',
+    'English Breakfast Tea',
+    'Fresh Mint Tea',
+    'Iced Latte',
+  ]),
+  ...recipes('Coffee & drinks', ['Matcha Latte', 'Iced Matcha', 'Cold Brew'], { not: SMALL }),
+];
+
+/** The recipes a copied shop actually holds, in category order. */
+export function templateRecipes(templateId: string): ShopRecipe[] {
+  return RECIPE_LIBRARY.filter(
+    (r) => (!r.only || r.only.includes(templateId)) && (!r.not || !r.not.includes(templateId)),
+  );
+}
+
+export function getRecipe(id: string): ShopRecipe | undefined {
+  return RECIPE_LIBRARY.find((r) => r.id === id);
+}
+
+/** Per site → recipe ids the operator unticked. Empty = copy them all. */
+export type RecipeExclusions = Record<string, string[]>;
+
+/** "93 of 95 recipes" for one site. */
+export function describeRecipeCopy(templateId: string, excluded: string[] | undefined): string {
+  const total = templateRecipes(templateId).length;
+  const kept = total - (excluded?.length ?? 0);
+  return kept === total ? `all ${total} recipes` : `${kept} of ${total} recipes`;
+}
+
+// ─── New sites from the operator's spreadsheet ──────────────────────────────
+
+/** The file the operator attaches. Used for the echo chip and the
+ *  card's provenance line when no real file was paperclipped. */
+export const SITE_SHEET_FILE_NAME = 'new-sites-september.xlsx';
+
+export interface DeliveryContact {
+  name: string;
+  position: string;
+  phone: string;
+}
+
+/**
+ * The fields on Edify main's Create site form (Settings → Sites), in
+ * the same order. Everything here is editable in step 1. Per-site
+ * values come off the sheet; the batch-wide settings a sheet wouldn't
+ * carry live in `SharedSiteSettings`.
+ */
+export interface SiteDetails {
+  name: string;
+  /** Central Production Unit. The sheet's "Type" column: Shop or CPU. */
+  isCpu: boolean;
+  siteIdentifier: string;
+  profitCentre: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  postcode: string;
+  country: string;
+  /** Display-ready ("22 September"). Seeds the go-live date. */
+  openingDate: string;
+  /** Per day: a window, or null when the shop takes no deliveries. */
+  deliveryWindows: Record<DayKey, TimeWindow | null>;
+  deliveryContact: DeliveryContact;
+  deliveryNotes: string;
+  /** PO attachment copies go here. */
+  forwardEmails: string[];
+}
+
+/** Fields the Create site form marks required. Continue stays off
+ *  until every ticked site has them. */
+export const REQUIRED_SITE_FIELDS: { key: keyof SiteDetails; label: string }[] = [
+  { key: 'name', label: 'Site name' },
+  { key: 'addressLine1', label: 'Address line 1' },
+  { key: 'city', label: 'City' },
+  { key: 'postcode', label: 'Postcode' },
+  { key: 'country', label: 'Country' },
+];
+
+export function missingRequired(details: SiteDetails): string[] {
+  return REQUIRED_SITE_FIELDS
+    .filter(({ key }) => String(details[key] ?? '').trim() === '')
+    .map(({ label }) => label);
+}
+
+/** Non-required fields the sheet left blank: worth a glance, not a
+ *  blocker. */
+export function sheetGaps(details: SiteDetails): string[] {
+  const gaps: string[] = [];
+  if (!details.deliveryContact.name.trim()) gaps.push('Delivery contact');
+  if (details.deliveryContact.name.trim() && !details.deliveryContact.phone.trim()) gaps.push('Contact phone');
+  if (details.forwardEmails.length === 0) gaps.push('Forward email');
+  return gaps;
+}
+
+/**
+ * Settings the Create site form asks for that no property sheet
+ * carries. Assumed once for the whole batch, shown with a one-line
+ * why, editable before continue.
+ */
+export interface SharedSiteSettings {
+  timezone: string;
+  deliveriesRequireReference: boolean;
+  showTheoreticalOnHand: boolean;
+  forceTraceabilityTags: boolean;
+}
+
+export const DEFAULT_SHARED_SITE_SETTINGS: SharedSiteSettings = {
+  timezone: 'Europe/London',
+  deliveriesRequireReference: false,
+  showTheoreticalOnHand: false,
+  forceTraceabilityTags: false,
+};
+
+/** "Mon–Sat 05:30–08:00 · Sun none". Same run-compression as tiers. */
+export function describeDeliveryWindows(windows: Record<DayKey, TimeWindow | null>): string {
+  const key = (w: TimeWindow | null) => (w ? `${w.start}–${w.end}` : 'none');
+  const runs: { from: DayKey; to: DayKey; text: string }[] = [];
+  for (const day of DAY_KEYS) {
+    const text = key(windows[day]);
+    const last = runs[runs.length - 1];
+    if (last && last.text === text) last.to = day;
+    else runs.push({ from: day, to: day, text });
+  }
+  return runs
+    .map((r) => `${r.from === r.to ? r.from : `${r.from}–${r.to}`} ${r.text}`)
+    .join(' · ');
+}
+
+/** Weekday / Saturday / Sunday delivery windows → the 7-day record.
+ *  null = no deliveries that day. */
+function deliveries(
+  weekday: TimeWindow | null,
+  saturday: TimeWindow | null,
+  sunday: TimeWindow | null,
+): Record<DayKey, TimeWindow | null> {
+  const copy = (w: TimeWindow | null) => (w ? { ...w } : null);
+  return {
+    Mon: copy(weekday), Tue: copy(weekday), Wed: copy(weekday), Thu: copy(weekday), Fri: copy(weekday),
+    Sat: copy(saturday), Sun: copy(sunday),
+  };
+}
+
+export interface NewSite {
+  id: string;
+  /** Full name as it appears on the sheet (and in Workday, so the
+   *  roster matches). */
   name: string;
   /** Short name for card copy ("Leeds Trinity"). */
   shortName: string;
   location: string;
   /** Planned opening, display-ready ("22 September"). */
   openingDate: string;
-  /** Opening hours from the property record — drives full selection defaults. */
+  /** Opening hours from the sheet — drives full selection defaults. */
   open: { weekday: string; saturday: string; sunday: string };
   /** Edify's suggested copy source + why. */
   suggestedTemplateId: string;
   suggestedReason: string;
   suggestedHubId: string;
+  /** The rest of the sheet row: what the Create site form needs. */
+  sheet: Omit<SiteDetails, 'name' | 'openingDate'>;
+  /** Staff, from Workday, matched to the shop by name. */
   roster: WorkdayPerson[];
+}
+
+/** The editable Create-site record for a sheet row. Deep-copied so
+ *  edits in one card never leak into the fixture. */
+export function sheetDetailsFor(site: NewSite): SiteDetails {
+  return {
+    name: site.name,
+    openingDate: site.openingDate,
+    ...site.sheet,
+    deliveryWindows: Object.fromEntries(
+      DAY_KEYS.map((d) => [d, site.sheet.deliveryWindows[d] ? { ...site.sheet.deliveryWindows[d]! } : null]),
+    ) as Record<DayKey, TimeWindow | null>,
+    deliveryContact: { ...site.sheet.deliveryContact },
+    forwardEmails: [...site.sheet.forwardEmails],
+  };
+}
+
+/** Address on one line for registers and read-backs. */
+export function oneLineAddress(d: SiteDetails): string {
+  return [d.addressLine1, d.addressLine2, `${d.city} ${d.postcode}`.trim()]
+    .filter((s) => s && s.trim())
+    .join(', ');
+}
+
+/** Compact sheet-row builder. */
+function sheetRow(input: {
+  code: string;
+  profitCentre: string;
+  address1: string;
+  address2?: string;
+  city: string;
+  postcode: string;
+  deliveries: Record<DayKey, TimeWindow | null>;
+  contact: DeliveryContact;
+  notes?: string;
+  emails?: string[];
+}): NewSite['sheet'] {
+  return {
+    isCpu: false,
+    siteIdentifier: input.code,
+    profitCentre: input.profitCentre,
+    addressLine1: input.address1,
+    addressLine2: input.address2 ?? '',
+    city: input.city,
+    postcode: input.postcode,
+    country: 'United Kingdom',
+    deliveryWindows: input.deliveries,
+    deliveryContact: input.contact,
+    deliveryNotes: input.notes ?? '',
+    forwardEmails: input.emails ?? [],
+  };
 }
 
 /** Compact roster builder — tuples of [name, workdayRole]. */
@@ -525,7 +849,7 @@ function roster(siteId: string, people: [string, WorkdayRole][]): WorkdayPerson[
   }));
 }
 
-export const WORKDAY_NEW_SITES: WorkdaySite[] = [
+export const NEW_SITES: NewSite[] = [
   {
     id: 'leeds-trinity',
     name: 'Pret Leeds Trinity',
@@ -536,6 +860,18 @@ export const WORKDAY_NEW_SITES: WorkdaySite[] = [
     suggestedTemplateId: 'manchester-market-st',
     suggestedReason: 'Regional high street, similar footprint',
     suggestedHubId: 'northern-cpu',
+    sheet: sheetRow({
+      code: '4127',
+      profitCentre: '4127-LEEDS-TRI',
+      address1: 'Unit 24, Trinity Leeds',
+      address2: 'Albion Street',
+      city: 'Leeds',
+      postcode: 'LS1 5AT',
+      deliveries: deliveries({ start: '05:30', end: '08:00' }, { start: '06:00', end: '08:30' }, null),
+      contact: { name: 'Hannah Osei', position: 'General Manager', phone: '07700 900412' },
+      notes: 'Service yard off Boar Lane. Ring the bell at the roller door.',
+      emails: ['leeds.trinity@pret.co.uk'],
+    }),
     roster: roster('leeds-trinity', [
       ['Hannah Osei', 'General Manager'],
       ['Marcus Webb', 'Assistant Manager'],
@@ -563,6 +899,17 @@ export const WORKDAY_NEW_SITES: WorkdaySite[] = [
     suggestedTemplateId: 'st-pancras',
     suggestedReason: 'Station shop, long trading hours',
     suggestedHubId: 'northern-cpu',
+    sheet: sheetRow({
+      code: '4128',
+      profitCentre: '4128-MCR-PICC',
+      address1: 'Unit 3, Piccadilly Station Approach',
+      city: 'Manchester',
+      postcode: 'M1 2PB',
+      deliveries: deliveries({ start: '04:30', end: '07:00' }, { start: '05:00', end: '07:30' }, { start: '05:00', end: '07:30' }),
+      contact: { name: 'Ryan Fletcher', position: 'General Manager', phone: '07700 900338' },
+      notes: 'Station loading bay. Drivers need a Network Rail vehicle pass.',
+      emails: ['manchester.piccadilly@pret.co.uk'],
+    }),
     roster: roster('manchester-piccadilly', [
       ['Ryan Fletcher', 'General Manager'],
       ['Chioma Eze', 'Assistant Manager'],
@@ -591,6 +938,18 @@ export const WORKDAY_NEW_SITES: WorkdaySite[] = [
     suggestedTemplateId: 'st-pancras',
     suggestedReason: 'Station shop, matching trade pattern',
     suggestedHubId: 'midlands-cpu',
+    sheet: sheetRow({
+      code: '4129',
+      profitCentre: '4129-BHM-GC',
+      address1: 'Unit 12, Grand Central',
+      address2: 'Stephenson Street',
+      city: 'Birmingham',
+      postcode: 'B2 4XJ',
+      deliveries: deliveries({ start: '05:00', end: '07:30' }, { start: '05:30', end: '08:00' }, { start: '06:00', end: '08:00' }),
+      contact: { name: 'Simone Clarke', position: 'General Manager', phone: '07700 900275' },
+      notes: 'Goods lift from the Navigation Street dock.',
+      emails: ['birmingham.grandcentral@pret.co.uk'],
+    }),
     roster: roster('birmingham-grand-central', [
       ['Simone Clarke', 'General Manager'],
       ['Harvey Dunn', 'Assistant Manager'],
@@ -616,6 +975,17 @@ export const WORKDAY_NEW_SITES: WorkdaySite[] = [
     suggestedTemplateId: 'manchester-market-st',
     suggestedReason: 'Regional high street',
     suggestedHubId: 'northern-cpu',
+    // Sheet gap: no site email on this row.
+    sheet: sheetRow({
+      code: '4130',
+      profitCentre: '4130-YORK-CON',
+      address1: '18 Coney Street',
+      city: 'York',
+      postcode: 'YO1 9NA',
+      deliveries: deliveries({ start: '06:00', end: '08:30' }, { start: '06:30', end: '09:00' }, null),
+      contact: { name: 'Freya Dalton', position: 'General Manager', phone: '07700 900519' },
+      notes: 'Pedestrian zone: vehicles allowed before 10:30 only.',
+    }),
     roster: roster('york-coney-st', [
       ['Freya Dalton', 'General Manager'],
       ['Milo Hart', 'Assistant Manager'],
@@ -639,6 +1009,18 @@ export const WORKDAY_NEW_SITES: WorkdaySite[] = [
     suggestedTemplateId: 'manchester-market-st',
     suggestedReason: 'Regional high street',
     suggestedHubId: 'northern-cpu',
+    sheet: sheetRow({
+      code: '4131',
+      profitCentre: '4131-LPL-ONE',
+      address1: 'Unit 8, Liverpool ONE',
+      address2: 'Paradise Street',
+      city: 'Liverpool',
+      postcode: 'L1 8JF',
+      deliveries: deliveries({ start: '05:30', end: '08:00' }, { start: '06:00', end: '08:30' }, { start: '07:00', end: '09:00' }),
+      contact: { name: 'Niamh Gallagher', position: 'General Manager', phone: '07700 900644' },
+      notes: 'Book a slot with Liverpool ONE logistics the day before.',
+      emails: ['liverpool.one@pret.co.uk'],
+    }),
     roster: roster('liverpool-one', [
       ['Niamh Gallagher', 'General Manager'],
       ['Kofi Antwi', 'Assistant Manager'],
@@ -664,6 +1046,17 @@ export const WORKDAY_NEW_SITES: WorkdaySite[] = [
     suggestedTemplateId: 'manchester-market-st',
     suggestedReason: 'Regional high street',
     suggestedHubId: 'northern-cpu',
+    // Sheet gap: GM named but no phone number on this row.
+    sheet: sheetRow({
+      code: '4132',
+      profitCentre: '4132-SHF-FAR',
+      address1: '32 Fargate',
+      city: 'Sheffield',
+      postcode: 'S1 2HE',
+      deliveries: deliveries({ start: '06:00', end: '08:30' }, { start: '06:30', end: '09:00' }, null),
+      contact: { name: 'Aaron Blythe', position: 'General Manager', phone: '' },
+      emails: ['sheffield.fargate@pret.co.uk'],
+    }),
     roster: roster('sheffield-fargate', [
       ['Aaron Blythe', 'General Manager'],
       ['Dina Rashid', 'Assistant Manager'],
@@ -687,6 +1080,17 @@ export const WORKDAY_NEW_SITES: WorkdaySite[] = [
     suggestedTemplateId: 'manchester-market-st',
     suggestedReason: 'Regional high street',
     suggestedHubId: 'northern-cpu',
+    sheet: sheetRow({
+      code: '4133',
+      profitCentre: '4133-NCL-GRA',
+      address1: '45 Grainger Street',
+      city: 'Newcastle upon Tyne',
+      postcode: 'NE1 5JE',
+      deliveries: deliveries({ start: '05:30', end: '08:00' }, { start: '06:00', end: '08:30' }, null),
+      contact: { name: 'Paige Redfern', position: 'General Manager', phone: '07700 900781' },
+      notes: 'Rear access via Nun Street. No parking on Grainger Street.',
+      emails: ['newcastle.grainger@pret.co.uk'],
+    }),
     roster: roster('newcastle-grainger', [
       ['Paige Redfern', 'General Manager'],
       ['Dominic Achebe', 'Assistant Manager'],
@@ -712,6 +1116,17 @@ export const WORKDAY_NEW_SITES: WorkdaySite[] = [
     suggestedTemplateId: 'manchester-market-st',
     suggestedReason: 'Regional high street',
     suggestedHubId: 'midlands-cpu',
+    sheet: sheetRow({
+      code: '4134',
+      profitCentre: '4134-NOT-CLU',
+      address1: '12 Clumber Street',
+      city: 'Nottingham',
+      postcode: 'NG1 3ED',
+      deliveries: deliveries({ start: '06:00', end: '08:30' }, { start: '06:30', end: '09:00' }, { start: '07:30', end: '09:00' }),
+      contact: { name: 'Imogen Vasey', position: 'General Manager', phone: '07700 900856' },
+      notes: 'Shared yard with the neighbouring units. Keep the gate clear.',
+      emails: ['nottingham.clumber@pret.co.uk'],
+    }),
     roster: roster('nottingham-clumber', [
       ['Imogen Vasey', 'General Manager'],
       ['Bilal Hussain', 'Assistant Manager'],
@@ -728,8 +1143,8 @@ export const WORKDAY_NEW_SITES: WorkdaySite[] = [
   },
 ];
 
-export function getWorkdaySite(id: string): WorkdaySite | undefined {
-  return WORKDAY_NEW_SITES.find((s) => s.id === id);
+export function getNewSite(id: string): NewSite | undefined {
+  return NEW_SITES.find((s) => s.id === id);
 }
 
 // ─── Derived helpers ─────────────────────────────────────────────────────────

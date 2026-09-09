@@ -5,8 +5,9 @@
  *
  * The read-back before the one confirm: names shops and numbers, not
  * config. Runs the completeness check (PRD 4.13) and shows the result
- * inline. Go-live dates arrive from Workday and stay editable — the
- * shop sees nothing on its planner until its date.
+ * inline. Go-live dates come off the operator's site sheet (edited in
+ * step 1) and stay editable here — the shop sees nothing on its
+ * planner until its date.
  */
 
 import { useState } from 'react';
@@ -14,17 +15,19 @@ import { AlertTriangle, CheckCircle2, Rocket } from 'lucide-react';
 import CardShell from './CardShell';
 import type { CardState } from './CardShell';
 import {
+  describeRecipeCopy,
   describeRecipeCounts,
   describeRoleCounts,
   describeTierPattern,
   getHub,
   getRange,
   getTemplateShop,
-  getWorkdaySite,
+  getNewSite,
   hubLinkSummary,
   roleCounts,
   type DayKey,
   type EdifyRole,
+  type RecipeExclusions,
   type SiteBenchesHot,
   type SiteProductionSchedules,
 } from '../siteSetupFixtures';
@@ -43,6 +46,8 @@ interface SiteSetupGoLiveCardProps {
   production?: SiteProductionSchedules;
   benches?: Record<string, number>;
   benchesHot?: SiteBenchesHot;
+  /** Per site: recipe ids unticked in the recipes step. */
+  recipeExclusions?: RecipeExclusions;
   initialDates?: GoLiveDates;
   onConfirm: (input: { goLiveDates: GoLiveDates }) => void;
   onCancel: () => void;
@@ -59,6 +64,7 @@ export default function SiteSetupGoLiveCard({
   production,
   benches,
   benchesHot,
+  recipeExclusions,
   initialDates,
   onConfirm,
   onCancel,
@@ -66,13 +72,13 @@ export default function SiteSetupGoLiveCard({
   const [dates, setDates] = useState<GoLiveDates>(() => {
     const map: GoLiveDates = {};
     for (const id of siteIds) {
-      map[id] = initialDates?.[id] ?? getWorkdaySite(id)?.openingDate ?? '';
+      map[id] = initialDates?.[id] ?? getNewSite(id)?.openingDate ?? '';
     }
     return map;
   });
 
   const disabled = state !== 'pending';
-  const totalPeople = siteIds.reduce((n, id) => n + (getWorkdaySite(id)?.roster.length ?? 0), 0);
+  const totalPeople = siteIds.reduce((n, id) => n + (getNewSite(id)?.roster.length ?? 0), 0);
   const n = siteIds.length;
 
   return (
@@ -98,13 +104,14 @@ export default function SiteSetupGoLiveCard({
             border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.08))',
           }}
         >
+          <CheckLine ok text={`Site details for all ${n} read from your sheet, required fields complete`} />
           <CheckLine ok text={`All ${totalPeople} people matched to Workday profiles`} />
           <CheckLine ok text="Suppliers, permissions and hub links copied" />
         </div>
 
         {/* Per-site read-back */}
         {siteIds.map((siteId) => {
-          const site = getWorkdaySite(siteId);
+          const site = getNewSite(siteId);
           if (!site) return null;
           const template = getTemplateShop(templates[siteId]);
           const hubName = getHub(hubs[siteId])?.name;
@@ -150,6 +157,14 @@ export default function SiteSetupGoLiveCard({
                 </label>
               </div>
               <ReadbackLine label="Setup" value={`Copied from ${template?.name ?? '—'} · ${hubLinkSummary(hubName)}`} />
+              {template && (
+                <ReadbackLine
+                  label="Recipes"
+                  value={`${describeRecipeCopy(template.id, recipeExclusions?.[siteId])} from ${template.name}${
+                    recipeExclusions?.[siteId]?.length ? ` · ${recipeExclusions[siteId].length} unticked` : ''
+                  }`}
+                />
+              )}
               <ReadbackLine label="People" value={`${site.roster.length} · ${describeRoleCounts(counts)}`} />
               {range && pattern && (
                 <ReadbackLine

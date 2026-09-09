@@ -91,15 +91,22 @@ import {
   diffStock,
 } from '@/components/Feed/commands/diffs';
 import {
-  WORKDAY_NEW_SITES,
+  NEW_SITES,
+  SITE_SHEET_FILE_NAME,
+  TEMPLATE_SHOPS,
   describeRoleCounts,
   describeTierPattern,
   getTemplateShop,
-  getWorkdaySite,
+  getNewSite,
+  oneLineAddress,
   roleCounts,
+  templateRecipes,
   type DayKey,
   type EdifyRole,
+  type RecipeExclusions,
+  type SharedSiteSettings,
   type SiteBenchesHot,
+  type SiteDetails,
   type SiteProductionSchedules,
 } from '@/components/Feed/commands/siteSetupFixtures';
 import { addSites as addRegisterSites, removeSites as removeRegisterSites } from '@/components/Settings/sitesRegisterStore';
@@ -142,6 +149,8 @@ interface RunnerChatMsg {
    *  on mount with a blinking caret — used for wizard bridge text so
    *  the AI feels like it's composing the response live. */
   streaming?: boolean;
+  /** Filename chip on a user echo — the sheet the operator attached. */
+  attachmentName?: string;
 }
 
 export type CardState = 'pending' | 'confirmed' | 'cancelled';
@@ -160,6 +169,9 @@ interface RunCommandOpts {
   /** Already-rendered user message text (so we don't echo it). When
    *  unset, we don't echo. */
   userText?: string;
+  /** File the operator paperclipped with the message. Rendered as a
+   *  chip on the echo and passed to flows that read a sheet. */
+  attachmentName?: string;
   /** When true (default), clears the existing chat thread before
    *  showing the new task's card. Set to false for continuations
    *  (e.g. when re-running after an ambiguity pick). */
@@ -524,8 +536,11 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
   );
 
   const pushUserEcho = useCallback(
-    (text: string) => {
-      setMessages((prev) => [...prev, { id: `u-cmd-${Date.now()}`, role: 'user', text }]);
+    (text: string, attachmentName?: string) => {
+      setMessages((prev) => [
+        ...prev,
+        { id: `u-cmd-${Date.now()}`, role: 'user', text, ...(attachmentName ? { attachmentName } : {}) },
+      ]);
     },
     [setMessages],
   );
@@ -562,7 +577,14 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         activeTaskIdRef.current = t.id;
       }
 
-      if (opts.userText) pushUserEcho(opts.userText);
+      // Site setup reads a spreadsheet. If the operator described it
+      // in words but didn't paperclip anything, mock the filename so
+      // the echo chip and the card's provenance line still tell the
+      // story.
+      const attachmentName =
+        opts.attachmentName ?? (intent.commandId === 'site-setup' ? SITE_SHEET_FILE_NAME : undefined);
+
+      if (opts.userText) pushUserEcho(opts.userText, attachmentName);
 
       // Ambiguity first.
       if (intent.ambiguous && intent.ambiguous.length > 1) {
@@ -601,10 +623,11 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         startProductSwapWizard(intent.args);
         return;
       }
-      // Site setup is a six-step wizard: pick from Workday → copy a
-      // shop → load the people → ranges & tiers → production → go live.
+      // Site setup is an eight-step wizard: read the site sheet → copy a
+      // shop → recipes that come with the copy → load the people from
+      // Workday → ranges & tiers → production → hot production → go live.
       if (intent.commandId === 'site-setup') {
-        startSiteSetupWizard(intent.args);
+        startSiteSetupWizard({ ...intent.args, fileName: attachmentName });
         return;
       }
       // Rota rebalance: one workspace card, preceded by a line that
@@ -1245,8 +1268,12 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
   // Seven steps, batch-first: every selected site moves through each
   // step together, mirroring "ten shops a week". Args accumulate
   // across steps in cmdArgsJson:
-  //   siteIds → templates + hubs → roles → rangeIds + tiers →
-  //   production → benchesHot → goLiveDates → confirm.
+  //   fileName → siteIds + sites (edited Create-site details) + shared
+  //   → templates + hubs → recipeExclusions → roles → rangeIds + tiers
+  //   → production → benchesHot → goLiveDates → confirm.
+  //
+  // Sites are not in Workday. Step 1 reads them off the spreadsheet
+  // the operator attached; people (step 3) do come from Workday.
 
   // Any confirmed wizard step stays editable until the final go-live
   // confirm. Reopening rewinds the thread to that card: everything
@@ -1270,30 +1297,51 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     (args: Record<string, unknown>) => {
       setSiteSetupDone(false);
       const count = args.count as number | undefined;
+      const fileName = (args.fileName as string | undefined) ?? SITE_SHEET_FILE_NAME;
+      const total = NEW_SITES.length;
       const COUNT_WORDS = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
       const countWord = count && count <= 10 ? COUNT_WORDS[count] : count ? String(count) : undefined;
+      const picked = count && count < total;
       pushResponseFlow({
-        text: `Workday shows ${WORKDAY_NEW_SITES.length} shops not yet in Edify. ${countWord ? `Which ${countWord} are we setting up?` : 'Which ones are we setting up?'}`,
+        text: picked
+          ? `I read ${total} shops from ${fileName}: names, site codes, addresses, opening dates, delivery windows and contacts. You said ${countWord}, so I\u2019ve ticked the ${countWord} opening soonest. Check the details and change anything before we continue.`
+          : `I read ${total} shops from ${fileName}: names, site codes, addresses, opening dates, delivery windows and contacts. Every field is filled in below and stays editable. Untick any shop that isn\u2019t going in yet.`,
         commandId: 'site-setup',
         cardMsgType: 'cmd-site-pick',
-        cardArgs: { ...(count ? { requestedCount: count } : {}) },
+        cardArgs: { fileName, ...(count ? { requestedCount: count } : {}) },
+        // Longer hold: the AI is "reading a spreadsheet", not a sentence.
+        thinkingMs: 1800,
       });
     },
     [pushResponseFlow],
   );
 
   const submitSiteSetupPick = useCallback(
-    (msgId: string, args: Record<string, unknown>, input: { siteIds: string[] }) => {
+    (
+      msgId: string,
+      args: Record<string, unknown>,
+      input: { siteIds: string[]; sites: Record<string, SiteDetails>; shared: SharedSiteSettings },
+    ) => {
       writeCmdState(msgId, 'confirmed');
-      const names = input.siteIds
-        .map((id) => getWorkdaySite(id)?.shortName)
-        .filter((s): s is string => Boolean(s));
+      // Echo the shop names. Use the sheet's short name unless the
+      // operator renamed the shop in the card.
+      const names = input.siteIds.map((id) => {
+        const fixture = getNewSite(id);
+        const edited = input.sites[id]?.name;
+        return fixture && edited === fixture.name ? fixture.shortName : (edited ?? fixture?.shortName ?? id);
+      });
       pushUserEcho(names.join(' · '));
+      // Opening dates off the sheet (as edited) seed the go-live step.
+      const goLiveDates: Record<string, string> = {};
+      for (const id of input.siteIds) {
+        const d = input.sites[id]?.openingDate?.trim();
+        if (d) goLiveDates[id] = d;
+      }
       pushResponseFlow({
         text: 'Each one copies a live shop: range and tiers, the production week with forecasts, selection times, permissions. Link each shop to the hub that makes for it, or leave it standalone.',
         commandId: 'site-setup',
         cardMsgType: 'cmd-site-copy',
-        cardArgs: { ...args, siteIds: input.siteIds },
+        cardArgs: { ...args, siteIds: input.siteIds, sites: input.sites, shared: input.shared, goLiveDates },
       });
     },
     [pushResponseFlow, pushUserEcho, writeCmdState],
@@ -1318,7 +1366,36 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           .map(([name, n]) => (n > 1 ? `${name} ×${n}` : name))
           .join(' · '),
       );
-      const totalPeople = siteIds.reduce((n, id) => n + (getWorkdaySite(id)?.roster.length ?? 0), 0);
+      // Recipes come with the copy. Say how many, per mirror shop.
+      const totalRecipes = siteIds.reduce((n, id) => n + templateRecipes(input.templates[id]).length, 0);
+      const perTemplate = Array.from(byTemplate.keys())
+        .map((name) => {
+          const t = TEMPLATE_SHOPS.find((s) => s.name === name);
+          return t ? `${templateRecipes(t.id).length} from ${t.name}` : null;
+        })
+        .filter((s): s is string => Boolean(s));
+      pushResponseFlow({
+        text:
+          siteIds.length === 1
+            ? `${totalRecipes} recipes come with the copy: everything the shop makes on site, with ingredients, yields, allergens and costs. All ticked. Untick anything the new shop won\u2019t make.`
+            : `${totalRecipes} recipes come with the copies (${perTemplate.join(', ')}): everything each shop makes on site, with ingredients, yields, allergens and costs. All ticked. Untick anything a new shop won\u2019t make.`,
+        commandId: 'site-setup',
+        cardMsgType: 'cmd-site-recipes',
+        cardArgs: { ...args, ...input },
+      });
+    },
+    [pushResponseFlow, pushUserEcho, writeCmdState],
+  );
+
+  const submitSiteSetupRecipes = useCallback(
+    (msgId: string, args: Record<string, unknown>, input: { recipeExclusions: RecipeExclusions }) => {
+      writeCmdState(msgId, 'confirmed');
+      const siteIds = (args.siteIds as string[]) ?? [];
+      const templates = (args.templates as Record<string, string>) ?? {};
+      const total = siteIds.reduce((n, id) => n + templateRecipes(templates[id]).length, 0);
+      const dropped = siteIds.reduce((n, id) => n + (input.recipeExclusions[id]?.length ?? 0), 0);
+      pushUserEcho(dropped === 0 ? `All ${total} recipes` : `${total - dropped} of ${total} recipes · ${dropped} unticked`);
+      const totalPeople = siteIds.reduce((n, id) => n + (getNewSite(id)?.roster.length ?? 0), 0);
       pushResponseFlow({
         text: `Workday lists ${totalPeople} people across the ${siteIds.length === 1 ? 'shop' : `${siteIds.length} shops`}, roles mapped from their jobs. Invites go out the week before each opening.`,
         commandId: 'site-setup',
@@ -1333,7 +1410,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     (msgId: string, args: Record<string, unknown>, input: { roles: Record<string, EdifyRole> }) => {
       writeCmdState(msgId, 'confirmed');
       const siteIds = (args.siteIds as string[]) ?? [];
-      const allPeople = siteIds.flatMap((id) => getWorkdaySite(id)?.roster ?? []);
+      const allPeople = siteIds.flatMap((id) => getNewSite(id)?.roster ?? []);
       pushUserEcho(`${allPeople.length} people · ${describeRoleCounts(roleCounts(allPeople, input.roles))}`);
       // Prefill range + tier pattern from each site's copied shop.
       const templates = (args.templates as Record<string, string>) ?? {};
@@ -1421,26 +1498,39 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         siteIds: string[];
         templates: Record<string, string>;
         goLiveDates: Record<string, string>;
+        /** Create-site details as read from the sheet and edited in step 1. */
+        sites?: Record<string, SiteDetails>;
+        /** Per site: recipe ids unticked in the recipes step. */
+        recipeExclusions?: RecipeExclusions;
       },
     ) => {
       const sites = final.siteIds
-        .map((id) => getWorkdaySite(id))
+        .map((id) => getNewSite(id))
         .filter((s): s is NonNullable<typeof s> => Boolean(s));
       const totalPeople = sites.reduce((n, s) => n + s.roster.length, 0);
+      const totalRecipes = sites.reduce(
+        (n, s) => n + templateRecipes(final.templates[s.id]).length - (final.recipeExclusions?.[s.id]?.length ?? 0),
+        0,
+      );
 
+      // The register gets the operator's edited values, not the raw
+      // fixture, so a fixed postcode or renamed shop lands as fixed.
       addRegisterSites(
-        sites.map((s) => ({
-          id: s.id,
-          name: s.name,
-          location: s.location,
-          status: 'active' as const,
-          statusLabel: `Opening ${final.goLiveDates[s.id] ?? s.openingDate}`,
-        })),
+        sites.map((s) => {
+          const d = final.sites?.[s.id];
+          return {
+            id: s.id,
+            name: d?.name?.trim() || s.name,
+            location: d ? oneLineAddress(d) : s.location,
+            status: 'active' as const,
+            statusLabel: `Opening ${final.goLiveDates[s.id] ?? d?.openingDate ?? s.openingDate}`,
+          };
+        }),
       );
 
       const n = sites.length;
       const receipt: CommandReceipt = {
-        headline: `${n} site${n === 1 ? '' : 's'} set up · ${totalPeople} people loaded`,
+        headline: `${n} site${n === 1 ? '' : 's'} set up · ${totalRecipes} recipes copied · ${totalPeople} people loaded`,
         detail: 'Nothing shows on a planner before its date. Every setting stays editable in Settings \u2192 Sites.',
         href: '/settings/sites',
         hrefLabel: 'Open Sites',
@@ -3107,6 +3197,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     // Site-setup wizard handlers
     submitSiteSetupPick,
     submitSiteSetupCopy,
+    submitSiteSetupRecipes,
     submitSiteSetupTeam,
     submitSiteSetupTiers,
     submitSiteSetupProduction,

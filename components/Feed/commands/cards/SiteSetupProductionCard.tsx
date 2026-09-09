@@ -28,14 +28,14 @@ import {
   defaultRunSchedules,
   getHub,
   getTemplateShop,
-  getWorkdaySite,
+  getNewSite,
 } from '../siteSetupFixtures';
 import type {
   DayKey,
   ProductionRun,
   SiteProductionSchedules,
   TimeWindow,
-  WorkdaySite,
+  NewSite,
 } from '../siteSetupFixtures';
 
 interface SiteSetupProductionCardProps {
@@ -54,7 +54,7 @@ interface SiteSetupProductionCardProps {
 
 const WEEKDAYS: DayKey[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
-function openFor(site: WorkdaySite, day: DayKey): string {
+function openFor(site: NewSite, day: DayKey): string {
   if (day === 'Sat') return site.open.saturday;
   if (day === 'Sun') return site.open.sunday;
   return site.open.weekday;
@@ -153,7 +153,7 @@ export default function SiteSetupProductionCard({
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {siteIds.map((siteId) => {
-          const site = getWorkdaySite(siteId);
+          const site = getNewSite(siteId);
           if (!site) return null;
           const template = getTemplateShop(templates[siteId]);
           const hubName = getHub(hubs?.[siteId] ?? '')?.name;

@@ -53,7 +53,7 @@ import {
 } from '@/components/Mvp1/Tables/query';
 import DataTable from '@/components/Mvp1/Tables/DataTable';
 import type { Column } from '@/components/Mvp1/Tables/dataSources';
-import { parseCommand } from '@/components/Feed/commands/parsers';
+import { parseCommand, parseSiteSetup } from '@/components/Feed/commands/parsers';
 import { COMMAND_REGISTRY, getCommand } from '@/components/Feed/commands/registry';
 import { useCommandRunner } from '@/components/Feed/commands/useCommandRunner';
 import SlashMenu from '@/components/Feed/commands/SlashMenu';
@@ -80,7 +80,8 @@ import ProductPackDetailsCard from '@/components/Feed/commands/cards/ProductPack
 import ProductPickRecipesCard from '@/components/Feed/commands/cards/ProductPickRecipesCard';
 import ProductSwapSummaryCard from '@/components/Feed/commands/cards/ProductSwapSummaryCard';
 import ProductSheetDetailsCard from '@/components/Feed/commands/cards/ProductSheetDetailsCard';
-import SiteSetupPickSitesCard from '@/components/Feed/commands/cards/SiteSetupPickSitesCard';
+import SiteSetupSheetSitesCard from '@/components/Feed/commands/cards/SiteSetupSheetSitesCard';
+import SiteSetupRecipesCard from '@/components/Feed/commands/cards/SiteSetupRecipesCard';
 import SiteSetupCopyCard from '@/components/Feed/commands/cards/SiteSetupCopyCard';
 import SiteSetupTeamCard from '@/components/Feed/commands/cards/SiteSetupTeamCard';
 import SiteSetupRangeTiersCard from '@/components/Feed/commands/cards/SiteSetupRangeTiersCard';
@@ -615,6 +616,7 @@ const WORKSPACE_MSG_TYPES = new Set<string>([
   'cmd-product-swap-summary',
   'cmd-site-pick',
   'cmd-site-copy',
+  'cmd-site-recipes',
   'cmd-site-team',
   'cmd-site-tiers',
   'cmd-site-production',
@@ -657,8 +659,9 @@ const WORKSPACE_POINTER_LABELS: Record<string, string> = {
   'chagee-tea-recipe': 'Updating the recipe',
   'analytics-chart': 'Charting your data',
   'table-result': 'Building the table',
-  'cmd-site-pick': 'Choosing the sites',
+  'cmd-site-pick': 'Reading the site sheet',
   'cmd-site-copy': 'Copying a shop setup',
+  'cmd-site-recipes': 'Copying the recipes',
   'cmd-site-team': 'Loading the people',
   'cmd-site-tiers': 'Setting ranges & tiers',
   'cmd-site-production': 'Setting production times',
@@ -9440,6 +9443,20 @@ export default function Feed({
       }
     }
 
+    // Site setup from a spreadsheet — runs BEFORE the product-sheet
+    // detectors below, which treat any paperclipped file as a product
+    // sheet. "Set up the sites in this spreadsheet" + an attached
+    // .xlsx must land on the site wizard, chip and all.
+    if (explicitChart === undefined && !tableOpts) {
+      const siteIntent = parseSiteSetup(text);
+      if (siteIntent) {
+        const attachmentName = attachedFileName ?? undefined;
+        setAttachedFileName(null);
+        commandRunner.runCommand(siteIntent, { userText: text, attachmentName });
+        return;
+      }
+    }
+
     if (explicitChart === undefined && !tableOpts) {
       if (detectNewSupplierImport(text)) {
         startNewSupplierImport({ primaryFileName: attachedFileName, userText: text });
@@ -10713,14 +10730,20 @@ export default function Feed({
                         {/* ── Site-setup wizard ────────────────────────── */}
                         {m.msgType === 'cmd-site-pick' && (() => {
                           const args = m.cmdArgsJson ? (JSON.parse(m.cmdArgsJson) as {
+                            fileName?: string;
                             requestedCount?: number;
                             siteIds?: string[];
+                            sites?: Record<string, import('@/components/Feed/commands/siteSetupFixtures').SiteDetails>;
+                            shared?: import('@/components/Feed/commands/siteSetupFixtures').SharedSiteSettings;
                           }) : {};
                           return (
-                            <SiteSetupPickSitesCard
+                            <SiteSetupSheetSitesCard
                               state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              fileName={args.fileName ?? 'new-sites-september.xlsx'}
                               requestedCount={args.requestedCount}
                               initialSiteIds={args.siteIds}
+                              initialSites={args.sites}
+                              initialShared={args.shared}
                               onSubmit={(input) => commandRunner.submitSiteSetupPick(m.id, args, input)}
                               onCancel={() => commandRunner.cancelCard(m.id)}
                               onEdit={commandRunner.siteSetupDone ? undefined : () => commandRunner.reopenSiteSetupCard(m.id)}
@@ -10740,6 +10763,24 @@ export default function Feed({
                               initialTemplates={args.templates}
                               initialHubs={args.hubs}
                               onSubmit={(input) => commandRunner.submitSiteSetupCopy(m.id, args, input)}
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                              onEdit={commandRunner.siteSetupDone ? undefined : () => commandRunner.reopenSiteSetupCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-site-recipes' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            siteIds: string[];
+                            templates: Record<string, string>;
+                            recipeExclusions?: import('@/components/Feed/commands/siteSetupFixtures').RecipeExclusions;
+                          };
+                          return (
+                            <SiteSetupRecipesCard
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              siteIds={args.siteIds}
+                              templates={args.templates}
+                              initialExclusions={args.recipeExclusions}
+                              onSubmit={(input) => commandRunner.submitSiteSetupRecipes(m.id, args, input)}
                               onCancel={() => commandRunner.cancelCard(m.id)}
                               onEdit={commandRunner.siteSetupDone ? undefined : () => commandRunner.reopenSiteSetupCard(m.id)}
                             />
@@ -10831,6 +10872,8 @@ export default function Feed({
                             benches?: Record<string, number>;
                             benchesHot?: import('@/components/Feed/commands/siteSetupFixtures').SiteBenchesHot;
                             goLiveDates?: Record<string, string>;
+                            sites?: Record<string, import('@/components/Feed/commands/siteSetupFixtures').SiteDetails>;
+                            recipeExclusions?: import('@/components/Feed/commands/siteSetupFixtures').RecipeExclusions;
                           };
                           return (
                             <SiteSetupGoLiveCard
@@ -10844,12 +10887,15 @@ export default function Feed({
                               production={args.production}
                               benches={args.benches}
                               benchesHot={args.benchesHot}
+                              recipeExclusions={args.recipeExclusions}
                               initialDates={args.goLiveDates}
                               onConfirm={(input) =>
                                 commandRunner.confirmSiteSetup(m.id, {
                                   siteIds: args.siteIds,
                                   templates: args.templates,
                                   goLiveDates: input.goLiveDates,
+                                  sites: args.sites,
+                                  recipeExclusions: args.recipeExclusions,
                                 })
                               }
                               onCancel={() => commandRunner.cancelCard(m.id)}

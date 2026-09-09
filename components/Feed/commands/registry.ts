@@ -165,11 +165,11 @@ export const COMMAND_REGISTRY: ChatCommand[] = [
     slashAliases: ['/site'],
     chipLabel: 'Set up new sites',
     chipIcon: Building2,
-    description: 'Set up one or many new sites: people, food and production in one pass.',
+    description: 'Set up one or many new sites from your site sheet: details, people, food and production in one pass.',
     examples: [
+      'Set up the sites in this spreadsheet',
       'I want to set up three new Pret sites',
       'set up 2 new shops',
-      'open a new site',
     ],
     parse: parseSiteSetup,
     // Multi-step wizard. The runner emits step-specific msgTypes

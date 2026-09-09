@@ -914,8 +914,9 @@ export function parseSiteSetup(text: string): CommandIntent | null {
   if (!verb) return null;
 
   // Guard against production-settings phrasing ("change the site's
-  // cutoff") — require "new" or an explicit count to be confident.
-  const isNew = /\bnew\b/.test(lower);
+  // cutoff") — require "new", an explicit count, or a pointer at the
+  // site sheet ("the sites in this spreadsheet") to be confident.
+  const isNew = /\bnew\b/.test(lower) || /\b(spreadsheet|sheet|attached|xlsx|csv)\b/.test(lower);
   let count: number | undefined;
   const digit = lower.match(/\b(\d{1,2})\s+(?:new\s+)?(?:pret\s+)?(?:sites?|shops?|stores?|locations?)\b/);
   if (digit) count = Number(digit[1]);
