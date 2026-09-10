@@ -110,9 +110,10 @@ export function computeProductionRecord(shopId: string, date: string, getRecord:
     const plannedBatches = batchesToNumber(p.batches);
     let madeBatches: number | undefined;
     if (tickedTasks.length) {
-      // Ticked tasks say what they made; untouched tasks count as their plan
-      // once the first tick is in, so a half-finished day still reads.
-      madeBatches = mine.reduce((n, t) => n + (ticks[t.id] ? (made[t.id]?.batches ?? t.batches ?? 0) : (t.batches ?? 0)), 0);
+      // Ticked tasks say what they made. A load still in the oven is not
+      // made yet, so the row grows through the day as the loads come out;
+      // the sub-line shows how many of the loads are in.
+      madeBatches = tickedTasks.reduce((n, t) => n + (made[t.id]?.batches ?? t.batches ?? 0), 0);
       if (mine.every(t => t.batches === undefined)) madeBatches = plannedBatches;
     }
     const madeGrams = (madeBatches ?? 0) * batchG;

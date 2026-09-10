@@ -9,6 +9,7 @@ import StatusPill from '@/components/Production/StatusPill';
 import { FJ_DAY_STRIP_DATES, FJ_DEMO_TODAY, longDate, weekdayLabel } from './calendar';
 import { FjDayStrip, Notice } from './DayPlan';
 import { useFjPlanStore } from './FjPlanStore';
+import { useModelledCrew } from './crew';
 import { clearTimer, clockNudge, clockPlay, clockReset, clockSet, dismissNudge, hhmm, startTimer, timerRemaining, useFjClock, type FjTimer } from './fjClock';
 import { computeSectionsDay, listKey, plural, stepsForTask, type Nudge, type SectionCard, type SectionTask, type SectionsDay } from './sections';
 import { COMPONENTS, CONTAINERS, SHELF_LIFE_GROUPS } from './recipes';
@@ -41,6 +42,9 @@ function useSectionsDay(shopId: string, date: string) {
   const isToday = date === FJ_DEMO_TODAY;
   const day = useMemo(() => computeSectionsDay(shopId, date, store.get, isToday), [shopId, date, store, isToday]);
   const record = store.get(shopId, date);
+  // The modelled crew ticks what the day has finished so far; a person's
+  // own ticks on top of that are written below.
+  useModelledCrew(shopId, date, day);
   // Ticking a task also records what was made: the planned batches unless
   // the person typed a different figure on the method card.
   const tick = useCallback(

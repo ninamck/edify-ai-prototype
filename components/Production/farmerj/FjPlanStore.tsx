@@ -67,9 +67,21 @@ export type DayRecord = {
   people?: Record<string, string>;
   /** Manager's drag order per list, keyed `${sectionId}::${slot}`. */
   taskOrder?: Record<string, string[]>;
+  /**
+   * Minutes into the day the modelled crew has ticked up to (see
+   * `crew.ts`). Tasks finishing before this were already offered to the
+   * crew, so a task someone un-ticks stays un-ticked.
+   */
+  crewMins?: number;
 };
 
-export type MadeEntry = { batches: number; by: string; atISO: string };
+export type MadeEntry = {
+  batches: number;
+  by: string;
+  atISO: string;
+  /** Ticked by the modelled crew rather than a person on the floor. */
+  modelled?: boolean;
+};
 
 export type SettingsChangedFlag = {
   publishId: string;
@@ -104,6 +116,8 @@ type Ctx = {
   recipes: Recipe[];
   /** Changes whenever any shop's lines change in site settings, so plans re-derive. */
   linesKey: string;
+  /** False until localStorage has been read, so nothing writes over a saved demo. */
+  hydrated: boolean;
 };
 
 const FjPlanContext = createContext<Ctx | null>(null);
@@ -185,8 +199,8 @@ export function FjPlanProvider({ children }: { children: ReactNode }) {
   const updateSettings = useCallback((fn: (s: FjSettings) => FjSettings) => setSettings(s => fn(s)), []);
 
   const value = useMemo(
-    () => ({ state, get, update, reset, settings, updateSettings, recipes, linesKey }),
-    [state, get, update, reset, settings, updateSettings, recipes, linesKey],
+    () => ({ state, get, update, reset, settings, updateSettings, recipes, linesKey, hydrated }),
+    [state, get, update, reset, settings, updateSettings, recipes, linesKey, hydrated],
   );
   return <FjPlanContext.Provider value={value}>{children}</FjPlanContext.Provider>;
 }

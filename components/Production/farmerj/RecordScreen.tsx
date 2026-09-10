@@ -9,8 +9,11 @@ import { gbp, portionsOf } from './cascade';
 import { FJ_DAY_STRIP_DATES, FJ_DEMO_TODAY, longDate, longDay, weekdayLabel } from './calendar';
 import { FjDayStrip, Notice } from './DayPlan';
 import { useFjPlanStore } from './FjPlanStore';
+import { useModelledCrew } from './crew';
+import { hhmm, useFjClock } from './fjClock';
 import { CHANNEL_LABELS } from './lines';
 import { batchesText, computeProductionRecord, type ProductionRecord as RecordModel, type RecordLine } from './productionRecord';
+import { computeSectionsDay } from './sections';
 import { FJ_ALL_SHOPS_ID, getShop } from './shops';
 import type { SalesChannel } from './salesDay';
 
@@ -35,7 +38,12 @@ function RecordForShop({ shopId, date, onDateChange }: { shopId: string; date: s
   const store = useFjPlanStore();
   const shop = getShop(shopId);
   const isToday = date === FJ_DEMO_TODAY;
+  // The crew fills in Made for what the day has finished so far, so the
+  // sheet reads the same here as on Sections.
+  const sections = useMemo(() => computeSectionsDay(shopId, date, store.get, isToday), [shopId, date, store, isToday]);
+  useModelledCrew(shopId, date, sections);
   const rec = useMemo(() => computeProductionRecord(shopId, date, store.get, isToday), [shopId, date, store, isToday]);
+  const clock = useFjClock();
   const t = rec.totals;
 
   return (
@@ -45,6 +53,7 @@ function RecordForShop({ shopId, date, onDateChange }: { shopId: string; date: s
       <div style={captionStrip}>
         <span style={{ fontWeight: 700, color: 'var(--color-text-secondary)' }}>{isToday ? 'Production record today' : `Production record ${weekdayLabel(date)} ${date}`}</span>
         <span>· {shop?.name ?? shopId}</span>
+        {isToday && <span>· kitchen clock {hhmm(clock.mins)}, set on Sections</span>}
         <span>· {rec.approved ? `plan approved by ${rec.approvedBy ?? 'the manager'}` : 'plan not yet approved'}</span>
         <span>· {rec.closed ? `close counted by ${rec.closedBy}` : 'close not yet counted'}</span>
         <div style={{ marginLeft: 'auto' }}>
@@ -110,7 +119,9 @@ function RecordRow({ line, closed }: { line: RecordLine; closed: boolean }) {
   const madeState = line.ticked === 0 ? 'none' : line.ticked < line.tasks ? 'partial' : 'done';
   const variance = line.varianceGrams === undefined ? undefined : por(line.varianceGrams);
   const varianceTone = variance === undefined ? 'neutral' : Math.abs(variance) <= Math.max(2, line.soldPortions * 0.05) ? 'success' : variance > 0 ? 'warning' : 'error';
-  const madeDiff = line.madeBatches !== undefined && line.madeBatches !== line.plannedBatches;
+  // Amber once every load is in and the total differs from the plan. A row
+  // still mid-day is short by design, not by variance.
+  const madeDiff = madeState === 'done' && line.madeBatches !== undefined && line.madeBatches !== line.plannedBatches;
   return (
     <div style={rowCard}>
       <div style={rowGrid}>
