@@ -13,7 +13,6 @@ import {
   Archive,
   X,
   ChevronDown,
-  AlertTriangle,
   Tags,
   RefreshCw,
   Undo2,
@@ -23,19 +22,13 @@ import {
   Recipe, RecipeCategory,
   buildUsedInIndex, formatCost,
 } from '@/components/Recipe/libraryFixtures';
-import {
-  type WorkflowId,
-  type WorkType,
-  workTypesFromWorkflows,
-  recipeWorkTypes,
-  getRecipe,
-} from '@/components/Production/fixtures';
-import { WorkTypeChips } from '@/components/Production/WorkTypeChip';
 import { useRecipes, setRecipes as storeSetRecipes } from '@/components/Recipe/recipeStore';
 import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import { SharedLibraryBanner, SharedBadge } from '@/components/Franchise/SharedLibrary';
 import { useModifierGroups } from '@/components/Modifiers/store';
 import type { ModifierGroup } from '@/components/Modifiers/types';
+import { StatusPill } from '@/components/ui/StatusPill';
+import { SITES } from '@/components/Recipe/RecipeFormParts';
 import {
   KindPill,
   formatShelfLife,
@@ -136,12 +129,8 @@ export default function RecipesLibraryPage() {
 
   return (
     <div style={{ padding: '24px 24px 120px', maxWidth: '1120px', margin: '0 auto', fontFamily: 'var(--font-primary)' }}>
-      {/* Toolbar row — title lives in the area top bar; the summary
-          line holds the left side so the CTA stays pinned right. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-        <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', margin: 0, flex: 1 }}>
-          {recipes.length} recipes · {componentsCount} components &amp; prep · 3 shared modifier groups
-        </p>
+      {/* Toolbar row — title lives in the area top bar; the CTA is pinned right. */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', marginBottom: '20px' }}>
         <button
           onClick={() => router.push('/recipes/intake')}
           style={{
@@ -280,7 +269,7 @@ export default function RecipesLibraryPage() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '32px 2fr 1fr 130px 80px 80px 1fr 1fr',
+            gridTemplateColumns: '32px 2fr 1fr 110px 90px 1fr 80px 80px 96px',
             gap: '14px',
             padding: '10px 14px',
             borderBottom: '1px solid var(--color-border-subtle)',
@@ -296,10 +285,11 @@ export default function RecipesLibraryPage() {
           <span>Name</span>
           <span>Category</span>
           <span>Type</span>
+          <span>Yield</span>
+          <span>Sites</span>
           <span>Cost</span>
           <span>Margin</span>
           <span>Status</span>
-          <span>Flag</span>
         </div>
 
         {filtered.length === 0 && (
@@ -313,7 +303,6 @@ export default function RecipesLibraryPage() {
             key={r.id}
             recipe={r}
             selected={selectedIds.has(r.id)}
-            usedInCount={usedInIndex.get(r.id)?.length ?? 0}
             onToggle={() => toggleOne(r.id)}
             onOpen={() => setOpenId(r.id)}
           />
@@ -501,11 +490,10 @@ export default function RecipesLibraryPage() {
 // ──────────────────────────────────────────────────────────────────────────────
 
 function RecipeRow({
-  recipe, selected, usedInCount, onToggle, onOpen,
+  recipe, selected, onToggle, onOpen,
 }: {
   recipe: Recipe;
   selected: boolean;
-  usedInCount: number;
   onToggle: () => void;
   onOpen: () => void;
 }) {
@@ -515,7 +503,7 @@ function RecipeRow({
       onClick={onOpen}
       style={{
         display: 'grid',
-        gridTemplateColumns: '32px 2fr 1fr 130px 80px 80px 1fr 1fr',
+        gridTemplateColumns: '32px 2fr 1fr 110px 90px 1fr 80px 80px 96px',
         gap: '14px',
         alignItems: 'center',
         padding: '12px 14px',
@@ -541,38 +529,18 @@ function RecipeRow({
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{recipe.name}</span>
         <SharedBadge />
       </span>
-      <span style={{ fontSize: '12.5px', color: 'var(--color-text-muted)' }}>{recipe.category}</span>
-      <TypeCell recipe={recipe} usedInCount={usedInCount} />
-      <span style={{ fontSize: '12.5px', color: 'var(--color-text-secondary)' }}>
+      <span style={cellMuted}>{recipe.category}</span>
+      <span style={cellMuted}>{kindLabel(recipe)}</span>
+      <span style={cellMuted}>{yieldLabel(recipe)}</span>
+      <SitesCell sites={recipe.formExtras?.sites ?? DEFAULT_SITES} />
+      <span style={cellSecondary}>
         {noPrice ? <Dash /> : formatCost(recipe.ingredientCost)}
       </span>
-      <span style={{ fontSize: '12.5px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+      <span style={{ ...cellSecondary, fontWeight: 600 }}>
         {noPrice ? <Dash /> : `${recipe.marginPct}%`}
       </span>
-      <StatusPill status={recipe.status} />
       <span>
-        {recipe.flag ? (
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-              padding: '3px 9px',
-              borderRadius: '100px',
-              background: '#ffffff',
-              color: 'var(--color-warning)',
-              border: '1.5px solid var(--color-warning)',
-              fontSize: '11.5px',
-              fontWeight: 600,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <AlertTriangle size={11} strokeWidth={2.4} />
-            {recipe.flag.label}
-          </span>
-        ) : (
-          <Dash />
-        )}
+        <RecipeStatusPill status={recipe.status} />
       </span>
     </div>
   );
@@ -582,71 +550,49 @@ function Dash() {
   return <span style={{ color: 'var(--color-border)', fontSize: '13px' }}>—</span>;
 }
 
-function TypeCell({ recipe, usedInCount }: { recipe: Recipe; usedInCount: number }) {
-  // Mirror production's `recipeWorkTypes` walk so library + production
-  // chips stay in lock-step. For Pret-derived library entries we go
-  // through the production helper so we get sub-recipe stages + every
-  // ingredient's effective prep work. For library-only entries (Fitzroy
-  // standalones) fall back to the lower-level primitive that just walks
-  // this recipe's own workflow.
-  const prodRecipe = getRecipe(recipe.id);
-  const workTypes: WorkType[] = prodRecipe
-    ? recipeWorkTypes(prodRecipe)
-    : workTypesFromWorkflows({
-        workflowIds: recipe.workflowId ? [recipe.workflowId as WorkflowId] : [],
-        hasIngredients: (recipe.ingredients?.length ?? 0) > 0,
-      });
+/** Yield and sites live on `formExtras`; the defaults mirror the recipe
+ *  editor's so the list and the form agree for recipes never saved there. */
+const DEFAULT_SITES = ['Fitzroy Espresso'];
+
+function kindLabel(recipe: Recipe): string {
+  if (recipe.isPrep) return 'Prep';
+  if (recipe.kind === 'component') return 'Component';
+  if (recipe.kind === 'assembly') return 'Assembly';
+  return 'Stand-alone';
+}
+
+function yieldLabel(recipe: Recipe): string {
+  const fx = recipe.formExtras;
+  const qty = fx?.yieldQty === '' || fx?.yieldQty === undefined ? 1 : fx.yieldQty;
+  const uom = fx?.yieldUom ?? 'serving';
+  return `${qty} ${uom}`;
+}
+
+function SitesCell({ sites }: { sites: string[] }) {
+  const all = SITES.every((site) => sites.includes(site));
+  const label = all
+    ? 'All sites'
+    : sites.length === 1
+      ? sites[0]
+      : `${sites.length} sites`;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-        <KindPill kind={recipe.kind} isPrep={recipe.isPrep} />
-      </div>
-      {workTypes.length > 0 && <WorkTypeChips workTypes={workTypes} max={3} />}
-      {recipe.kind === 'component' && usedInCount > 0 && (
-        <span style={{ fontSize: '10.5px', color: 'var(--color-text-muted)', fontWeight: 500, lineHeight: 1.3 }}>
-          Make first · used by {usedInCount}
-        </span>
-      )}
-      {recipe.kind === 'assembly' && recipe.subRecipes && recipe.subRecipes.length > 0 && (
-        <span style={{ fontSize: '10.5px', color: 'var(--color-text-muted)', fontWeight: 500, lineHeight: 1.3 }}>
-          {recipe.subRecipes.length} sub-recipe{recipe.subRecipes.length === 1 ? '' : 's'}
-        </span>
-      )}
-      {recipe.isPrep && (
-        <span style={{ fontSize: '10.5px', color: 'var(--color-text-muted)', fontWeight: 500, lineHeight: 1.3 }}>
-          Day-end prep
-        </span>
-      )}
-    </div>
+    <span
+      title={all ? SITES.join(', ') : sites.join(', ')}
+      style={{ ...cellMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
+    >
+      {sites.length === 0 ? <Dash /> : label}
+    </span>
   );
 }
 
-function StatusPill({ status }: { status: Recipe['status'] }) {
-  // Outline-only pills — see `.cursor/rules/status-pills.mdc`. White
-  // background, coloured text, 1.5px coloured border. Never solid fills.
-  const color =
-    status === 'Active' ? 'var(--color-success)' :
-    status === 'Draft' ? 'var(--color-text-secondary)' :
-    'var(--color-text-muted)';
-  const border =
-    status === 'Active' ? 'var(--color-success)' : 'var(--color-border)';
+const cellMuted: React.CSSProperties = { fontSize: '12.5px', color: 'var(--color-text-muted)' };
+const cellSecondary: React.CSSProperties = { fontSize: '12.5px', color: 'var(--color-text-secondary)' };
+
+function RecipeStatusPill({ status }: { status: Recipe['status'] }) {
   return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        padding: '3px 9px',
-        borderRadius: '100px',
-        background: '#ffffff',
-        color,
-        border: `1.5px solid ${border}`,
-        fontSize: '11.5px',
-        fontWeight: 600,
-        whiteSpace: 'nowrap',
-      }}
-    >
+    <StatusPill tone={status === 'Active' ? 'success' : 'neutral'}>
       {status}
-    </span>
+    </StatusPill>
   );
 }
 
@@ -725,7 +671,7 @@ function RecipeDrawer({
             <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, flex: 1, color: 'var(--color-text-primary)' }}>
               {view.name}
             </h2>
-            <StatusPill status={view.status} />
+            <RecipeStatusPill status={view.status} />
           </div>
           <div style={{ fontSize: '12.5px', color: 'var(--color-text-muted)', marginTop: '4px', paddingLeft: '38px', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
             <span>{view.category}</span>

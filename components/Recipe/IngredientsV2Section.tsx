@@ -54,7 +54,6 @@ export function IngredientsV2Section({
   itemLabel?: 'ingredient' | 'packaging';
 }) {
   const labelSingular = itemLabel === 'packaging' ? 'packaging item' : 'ingredient';
-  const labelPluralLower = itemLabel === 'packaging' ? 'packaging' : 'ingredients';
   const headerLabel = itemLabel === 'packaging' ? 'Packaging' : 'Ingredient';
   function update(id: string, patch: Partial<RecipeIngredient>) {
     onChange(rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -83,6 +82,31 @@ export function IngredientsV2Section({
     ]);
   }
 
+  const searchPlaceholder =
+    itemLabel === 'packaging'
+      ? 'Search packaging (cups, lids, bags, labels)…'
+      : 'Search ingredients (masters, supplier SKUs, sub-recipes)…';
+
+  // Empty: no column headers (they'd label nothing) and no separate
+  // "none yet" line. The add affordance is the whole state, styled like
+  // the photo drop zone further down the same card.
+  if (rows.length === 0) {
+    return (
+      <UnifiedAddIngredient
+        variant="panel"
+        onPick={add}
+        alreadyPickedRefs={[]}
+        buttonLabel={itemLabel === 'packaging' ? 'Add the first packaging item' : 'Add the first ingredient'}
+        panelHint={
+          itemLabel === 'packaging'
+            ? 'Cups, lids, bags, labels'
+            : 'Master products, supplier SKUs, sub-recipes'
+        }
+        placeholder={searchPlaceholder}
+      />
+    );
+  }
+
   return (
     <>
       <div style={tableHeaderStyle}>
@@ -95,12 +119,6 @@ export function IngredientsV2Section({
         <span style={{ textAlign: 'center' }}>Site qty</span>
         <span />
       </div>
-
-      {rows.length === 0 && (
-        <div style={{ padding: '16px 8px', textAlign: 'center', fontSize: 13.5, color: 'var(--color-text-muted)' }}>
-          No {labelPluralLower} yet. Search and add one below.
-        </div>
-      )}
 
       {rows.map((row, i) => (
         <IngredientV2Row
@@ -121,11 +139,7 @@ export function IngredientsV2Section({
           onPick={add}
           alreadyPickedRefs={rows.map((r) => r.ref)}
           buttonLabel={`Add ${labelSingular}`}
-          placeholder={
-            itemLabel === 'packaging'
-              ? 'Search packaging (cups, lids, bags, labels)…'
-              : 'Search ingredients (masters, supplier SKUs, sub-recipes)…'
-          }
+          placeholder={searchPlaceholder}
         />
       </div>
     </>
@@ -404,11 +418,18 @@ function SiteQtyPopover({
 
 function UnifiedAddIngredient({
   onPick, alreadyPickedRefs, buttonLabel = 'Add ingredient', placeholder = 'Search ingredients (master products + supplier SKUs)…',
+  variant = 'button', panelHint,
 }: {
   onPick: (ref: IngredientRef) => void;
   alreadyPickedRefs: IngredientRef[];
   buttonLabel?: string;
   placeholder?: string;
+  /** `button`: compact dashed chip under a populated table. `panel`: full-
+   *  width dashed drop-zone used as the empty state; the picker opens in
+   *  its place and fills the same width. */
+  variant?: 'button' | 'panel';
+  /** Muted right-hand hint shown in the panel variant only. */
+  panelHint?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -434,27 +455,52 @@ function UnifiedAddIngredient({
   const exactMatch = results.some((r) => r.label.toLowerCase() === q.trim().toLowerCase());
   const showCreate = !!q.trim() && !exactMatch;
 
+  const isPanel = variant === 'panel';
+
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       {!open ? (
-        <button
-          onClick={() => setOpen(true)}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 7,
-            padding: '9px 15px', borderRadius: 9,
-            border: '1px dashed var(--color-border)', background: '#fff',
-            color: 'var(--color-text-secondary)',
-            fontSize: 13.5, fontWeight: 600, fontFamily: 'var(--font-primary)', cursor: 'pointer',
-          }}
-        >
-          <Plus size={14} strokeWidth={2.2} /> {buttonLabel}
-        </button>
+        isPanel ? (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+              padding: '14px 16px', borderRadius: 10,
+              border: '1.5px dashed var(--color-border)',
+              background: 'var(--color-bg-hover)',
+              color: 'var(--color-text-secondary)', textAlign: 'left',
+              fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-primary)', cursor: 'pointer',
+            }}
+          >
+            <Plus size={18} strokeWidth={1.8} color="var(--color-text-muted)" />
+            <span style={{ flex: 1 }}>{buttonLabel}</span>
+            {panelHint && (
+              <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--color-text-muted)' }}>
+                {panelHint}
+              </span>
+            )}
+          </button>
+        ) : (
+          <button
+            onClick={() => setOpen(true)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7,
+              padding: '9px 15px', borderRadius: 9,
+              border: '1px dashed var(--color-border)', background: '#fff',
+              color: 'var(--color-text-secondary)',
+              fontSize: 13.5, fontWeight: 600, fontFamily: 'var(--font-primary)', cursor: 'pointer',
+            }}
+          >
+            <Plus size={14} strokeWidth={2.2} /> {buttonLabel}
+          </button>
+        )
       ) : (
         <div
           style={{
             background: '#fff', border: '1px solid var(--color-border)', borderRadius: 10,
             boxShadow: '0 12px 32px rgba(3,15,58,0.12)', overflow: 'hidden',
-            maxWidth: 560,
+            maxWidth: isPanel ? undefined : 560,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: '1px solid var(--color-border-subtle)' }}>

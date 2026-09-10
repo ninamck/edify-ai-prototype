@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IngredientsV2Section } from './IngredientsV2Section';
-import { VariantsSection } from './VariantsSection';
+import { VariantsSection, appendVariant } from './VariantsSection';
 import {
   SectionHeader, FieldLabel, Soft, PillMulti,
   ALLERGENS, SITES, textareaStyle,
@@ -43,13 +43,16 @@ function newVariantId(): string {
  * `hint` renders inline (use for conceptually loaded sub-sections where
  * users need context before they can act). `help` renders behind a "?"
  * tooltip next to the title (use for occasional clarification).
+ * `action` sits on the right of the title row: the one primary thing
+ * the user does in this sub-section (e.g. Add variant).
  */
 function SubSection({
-  title, hint, help, children, first = false,
+  title, hint, help, action, children, first = false,
 }: {
   title: string;
   hint?: string;
   help?: React.ReactNode;
+  action?: React.ReactNode;
   children: React.ReactNode;
   first?: boolean;
 }) {
@@ -61,7 +64,12 @@ function SubSection({
         marginTop: first ? 0 : 18,
       }}
     >
-      <SectionHeader title={title} hint={hint} help={help} />
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <SectionHeader title={title} hint={hint} help={help} />
+        </div>
+        {action}
+      </div>
       <div style={{ marginTop: 10 }}>{children}</div>
     </div>
   );
@@ -135,6 +143,15 @@ export function RecipeCompositionSection({
     onModeQuestionDismissed?.();
   }
 
+  function handleAddVariant() {
+    onVariantsChange(appendVariant(variants, {
+      baseIngredients: ingredients,
+      basePackaging: packaging,
+      baseModifierGroupIds: modifierGroupIds,
+      basePrices,
+    }));
+  }
+
   function handleRemoveVariants() {
     const first = variants[0];
     if (first) {
@@ -162,10 +179,10 @@ export function RecipeCompositionSection({
             which you attach to each variant later.
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-            <button type="button" onClick={() => onModeQuestionDismissed?.()} style={modeBtn(false)}>
+            <button type="button" onClick={() => onModeQuestionDismissed?.()} style={modeBtn}>
               No — single version
             </button>
-            <button type="button" onClick={handleAddFirstVariant} style={modeBtn(true)}>
+            <button type="button" onClick={handleAddFirstVariant} style={modeBtn}>
               <Layers size={15} strokeWidth={2} />
               Yes — add variants
             </button>
@@ -179,14 +196,7 @@ export function RecipeCompositionSection({
 
   const sharedBottom = (
     <>
-      <SubSection
-        title="Allergens"
-        help={
-          hasVariants
-            ? 'Base allergens present across all variants — the union of what this recipe can contain.'
-            : 'Select all allergens present in this recipe.'
-        }
-      >
+      <SubSection title="Allergens">
         <PillMulti
           options={ALLERGENS}
           selected={allergens}
@@ -304,7 +314,12 @@ export function RecipeCompositionSection({
             <SubSection
               first
               title="Variants"
-              hint="Size or format versions of this recipe (Small / Medium / Large, Hot / Iced). Each column has its own quantities, packaging, and price. Modifiers like alt milks attach to each variant — they're not variants themselves. Cells that differ across variants are highlighted."
+              action={
+                <button type="button" onClick={handleAddVariant} style={addVariantBtn}>
+                  <Plus size={14} strokeWidth={2.4} />
+                  Add variant
+                </button>
+              }
             >
               <VariantsSection
                 variants={variants}
@@ -592,6 +607,17 @@ const cardStyle: React.CSSProperties = {
   background: '#fff',
 };
 
+/** Primary action for the Variants sub-section; sits on the title row. */
+const addVariantBtn: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 6,
+  padding: '8px 14px', borderRadius: 8,
+  border: '1px solid var(--color-border)',
+  background: '#fff', color: 'var(--color-text-primary)',
+  fontSize: 13.5, fontWeight: 600, cursor: 'pointer',
+  fontFamily: 'var(--font-primary)',
+  flexShrink: 0,
+};
+
 const switchBtn: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 5,
   padding: '7px 13px', borderRadius: 8,
@@ -623,14 +649,14 @@ const subLabelStyle: React.CSSProperties = {
   textTransform: 'uppercase', color: 'var(--color-text-muted)',
 };
 
-function modeBtn(active: boolean): React.CSSProperties {
-  return {
-    display: 'inline-flex', alignItems: 'center', gap: 7,
-    padding: '11px 17px', borderRadius: 10,
-    border: active ? '1px solid transparent' : '1px solid var(--color-border-subtle)',
-    background: active ? 'var(--color-accent-active)' : '#fff',
-    color: active ? '#fff' : 'var(--color-text-secondary)',
-    fontSize: 14, fontWeight: 600, cursor: 'pointer',
-    fontFamily: 'var(--font-primary)',
-  };
-}
+/** Both answers to the mode question are equal choices, so both use the
+ *  secondary (white) style rather than steering the user to one. */
+const modeBtn: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 7,
+  padding: '11px 17px', borderRadius: 10,
+  border: '1px solid var(--color-border-subtle)',
+  background: '#fff',
+  color: 'var(--color-text-secondary)',
+  fontSize: 14, fontWeight: 600, cursor: 'pointer',
+  fontFamily: 'var(--font-primary)',
+};

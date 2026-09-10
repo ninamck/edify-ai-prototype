@@ -225,7 +225,7 @@ export function GroupEditorDrawer({
             disabled={!canSave}
             style={{ ...primaryBtn, opacity: canSave ? 1 : 0.5 }}
           >
-            <Check size={14} /> Save
+            <Check size={14} /> {mode === 'create' ? 'Save and attach' : 'Save'}
           </button>
           <button
             onClick={attemptClose}
@@ -244,20 +244,6 @@ export function GroupEditorDrawer({
 
         {/* Scrollable body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 80px' }}>
-          {mode === 'create' && (
-            <div
-              style={{
-                marginBottom: 14, padding: '10px 12px', borderRadius: 8,
-                background: 'rgba(0, 28, 53,0.05)',
-                color: 'var(--color-accent-active)',
-                fontSize: 12.5,
-              }}
-            >
-              This group will be saved to the modifier-groups catalogue and
-              attached to this recipe on Save. You can then attach it to
-              other recipes from their POS &amp; modifiers section.
-            </div>
-          )}
           <GroupEditor value={draft} onChange={setDraft} />
         </div>
       </div>

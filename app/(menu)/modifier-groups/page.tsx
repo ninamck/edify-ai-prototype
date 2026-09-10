@@ -2,20 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, ArrowRight, AlertTriangle, Lock } from 'lucide-react';
+import { Plus, Search, AlertTriangle, ChevronRight } from 'lucide-react';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { useModifierGroups, upsertGroup, genGroupId } from '@/components/Modifiers/store';
 import { useRecipes, recipesUsingGroup } from '@/components/Recipe/recipeStore';
 import type { ModifierGroup } from '@/components/Modifiers/types';
-
-function describeOption(opt: ModifierGroup['options'][number]): string {
-  if (opt.effects.length === 0) return 'No-op (default)';
-  const e = opt.effects[0];
-  if (e.kind === 'add') return `+ ${e.qty.value}${e.qty.unit}`;
-  if (e.kind === 'replace') return 'Swap';
-  if (e.kind === 'scale') return `× ${e.factor}`;
-  if (e.kind === 'set-slot') return e.qty ? `Slot ${e.qty.value}${e.qty.unit}` : 'Slot';
-  return '';
-}
 
 export default function ModifierGroupsPage() {
   const router = useRouter();
@@ -83,101 +74,61 @@ export default function ModifierGroupsPage() {
         />
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {filtered.map((g) => {
+      <div style={{ border: '1px solid var(--color-border-subtle)', borderRadius: 14, overflow: 'hidden', background: '#fff' }}>
+        {filtered.map((g, i) => {
           const usedBy = recipesUsingGroup(g.id);
+          const missingDefault = g.required && g.options.every((o) => !o.isDefault);
           return (
             <button
               key={g.id}
               onClick={() => router.push(`/modifier-groups/${g.id}/edit`)}
               style={{
+                width: '100%',
                 textAlign: 'left',
                 background: '#fff',
-                border: '1px solid var(--color-border-subtle)',
-                borderRadius: 12,
-                padding: '18px 20px',
+                border: 'none',
+                borderTop: i === 0 ? 'none' : '1px solid var(--color-border-subtle)',
+                padding: '14px 18px',
                 cursor: 'pointer',
                 fontFamily: 'var(--font-primary)',
                 color: 'var(--color-text-primary)',
                 display: 'grid',
-                gridTemplateColumns: '1fr auto',
-                rowGap: 10,
+                gridTemplateColumns: 'minmax(0, 1fr) auto 120px 20px',
+                alignItems: 'center',
                 columnGap: 16,
               }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
             >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700 }}>{g.name}</div>
-                  <Pill tone={g.required ? 'navy' : 'soft'}>{g.required ? 'Required' : 'Optional'}</Pill>
-                  <Pill tone="soft">{g.selection === 'one' ? 'Pick one' : 'Pick many'}</Pill>
-                  {g.posSourceId && <Pill tone="soft">POS: {g.posSourceId}</Pill>}
-                </div>
-                {g.notes && (
-                  <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-                    {g.notes}
-                  </div>
-                )}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {g.options.map((opt) => (
-                    <span
-                      key={opt.id}
-                      style={{
-                        padding: '3px 9px',
-                        borderRadius: 100,
-                        background: 'var(--color-bg-hover)',
-                        color: 'var(--color-text-secondary)',
-                        fontSize: 11.5,
-                        fontWeight: 600,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                      }}
-                    >
-                      {opt.isDefault && <Lock size={10} />}
-                      {opt.name}
-                      <span style={{ color: 'var(--color-text-muted)', fontWeight: 500, fontSize: 10.5 }}>
-                        {describeOption(opt)}
-                      </span>
-                    </span>
-                  ))}
-                  {g.options.length === 0 && (
-                    <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
-                      No options yet
-                    </span>
-                  )}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 3 }}>{g.name}</div>
+                <div
+                  style={{
+                    fontSize: 12.5, color: 'var(--color-text-muted)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {g.options.length === 0
+                    ? 'No options yet'
+                    : g.options.map((o) => o.name || 'Untitled').join(' · ')}
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                <span
-                  style={{
-                    fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
-                    textTransform: 'uppercase', color: 'var(--color-text-muted)',
-                  }}
-                >
-                  Used by
-                </span>
-                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                  {usedBy.length}
-                  <span style={{ fontWeight: 500, color: 'var(--color-text-muted)', marginLeft: 4 }}>
-                    recipe{usedBy.length === 1 ? '' : 's'}
-                  </span>
-                </span>
-                {usedBy.length > 0 && (
-                  <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)', textAlign: 'right', maxWidth: 220 }}>
-                    {usedBy.slice(0, 3).map((r) => r.name).join(', ')}
-                    {usedBy.length > 3 && `, +${usedBy.length - 3} more`}
-                  </span>
+              <span>
+                {missingDefault && (
+                  <StatusPill tone="warning" icon={<AlertTriangle size={10} strokeWidth={2.4} />}>
+                    No default
+                  </StatusPill>
                 )}
-                {g.required && g.options.every((o) => !o.isDefault) && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-warning)' }}>
-                    <AlertTriangle size={11} /> Required but no default
-                  </span>
-                )}
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-                  Edit <ArrowRight size={12} />
-                </span>
-              </div>
+              </span>
+
+              <span style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                {usedBy.length === 0
+                  ? <span style={{ color: 'var(--color-text-muted)' }}>Not in use</span>
+                  : `${usedBy.length} recipe${usedBy.length === 1 ? '' : 's'}`}
+              </span>
+
+              <ChevronRight size={16} style={{ color: 'var(--color-text-muted)' }} />
             </button>
           );
         })}
@@ -188,32 +139,5 @@ export default function ModifierGroupsPage() {
         )}
       </div>
     </div>
-  );
-}
-
-function Pill({ children, tone }: { children: React.ReactNode; tone: 'navy' | 'soft' }) {
-  if (tone === 'navy') {
-    return (
-      <span
-        style={{
-          padding: '2px 8px', borderRadius: 100,
-          background: 'rgba(0, 28, 53,0.08)', color: 'var(--color-accent-active)',
-          fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em',
-        }}
-      >
-        {children}
-      </span>
-    );
-  }
-  return (
-    <span
-      style={{
-        padding: '2px 8px', borderRadius: 100,
-        background: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)',
-        fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em',
-      }}
-    >
-      {children}
-    </span>
   );
 }
