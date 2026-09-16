@@ -12,17 +12,20 @@
  * so the consequence of every pick is visible.
  *
  * Range is a searchable dropdown: Pret runs many ranges, so a pill
- * row would not scale. A day always has one tier; a shop can sit on
- * different tiers on different days (Natalia, Pret).
+ * row would not scale. A day always has one range and one tier; a
+ * shop can sit on different tiers, and different ranges, on different
+ * days (Natalia, Pret): London Worker Tier 4 in the week, London Mix
+ * Tier 2 at the weekend. So the strip carries both per day, and the
+ * range dropdown and tier ladder both write to the selected days.
  *
  * Dated changes: a shop can move tier for a period and revert (Crown
  * Passage: Tier 2 Mon–Fri, Tier 1 for August). Each change is an
  * effective-from / effective-to window with its own day → tier
  * pattern, added per shop below the regular pattern.
  *
- * Interaction: select days (or a quick group), then tap a tier.
- * Patterns arrive prefilled from the copied shop; everything stays
- * editable.
+ * Interaction: select days (or a quick group), then pick a range
+ * and tap a tier. Patterns arrive prefilled from the copied shop;
+ * everything stays editable.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -33,19 +36,21 @@ import {
   DAY_KEYS,
   RANGES,
   addDays,
+  describeMenuPattern,
   describeRecipeCounts,
-  describeTierPattern,
   formatDateRange,
   getRange,
   getNewSite,
   recipesAtTier,
   type DayKey,
+  type RangeByDay,
   type TierSchedule,
   type TierSchedules,
 } from '../siteSetupFixtures';
 
 export type TierPatterns = Record<string, Record<DayKey, number>>;
-export type RangeChoices = Record<string, string>;
+/** Per site → range per day. */
+export type RangeChoices = Record<string, RangeByDay>;
 
 interface SiteSetupRangeTiersCardProps {
   state: CardState;
@@ -54,7 +59,7 @@ interface SiteSetupRangeTiersCardProps {
   initialRanges: RangeChoices;
   initialTiers: TierPatterns;
   initialSchedules?: TierSchedules;
-  onSubmit: (input: { rangeIds: RangeChoices; tiers: TierPatterns; tierSchedules: TierSchedules }) => void;
+  onSubmit: (input: { ranges: RangeChoices; tiers: TierPatterns; tierSchedules: TierSchedules }) => void;
   onCancel: () => void;
   /** Reopen for edits after confirm — available until final go-live. */
   onEdit?: () => void;
@@ -70,12 +75,20 @@ export default function SiteSetupRangeTiersCard({
   onCancel,
   onEdit,
 }: SiteSetupRangeTiersCardProps) {
-  const [rangeIds, setRangeIds] = useState<RangeChoices>(initialRanges);
-  const [tiers, setTiers] = useState<TierPatterns>(initialTiers);
+  const [ranges, setRanges] = useState<RangeChoices>(() => {
+    const map: RangeChoices = {};
+    for (const id of siteIds) map[id] = { ...initialRanges[id] };
+    return map;
+  });
+  const [tiers, setTiers] = useState<TierPatterns>(() => {
+    const map: TierPatterns = {};
+    for (const id of siteIds) map[id] = { ...initialTiers[id] };
+    return map;
+  });
   const [schedules, setSchedules] = useState<TierSchedules>(() => {
     const map: TierSchedules = {};
     for (const id of siteIds) {
-      map[id] = (initialSchedules?.[id] ?? []).map((s) => ({ ...s, tiers: { ...s.tiers } }));
+      map[id] = (initialSchedules?.[id] ?? []).map((s) => ({ ...s, ranges: { ...s.ranges }, tiers: { ...s.tiers } }));
     }
     return map;
   });
@@ -96,9 +109,10 @@ export default function SiteSetupRangeTiersCard({
     ) as Record<DayKey, number>;
     scheduleSeq.current += 1;
     const id = `sched-${siteId}-${scheduleSeq.current}`;
+    const sameRanges = { ...ranges[siteId] };
     setSchedules((prev) => ({
       ...prev,
-      [siteId]: [...(prev[siteId] ?? []), { id, from, to, tiers: dropped }],
+      [siteId]: [...(prev[siteId] ?? []), { id, from, to, ranges: sameRanges, tiers: dropped }],
     }));
   }
 
@@ -124,16 +138,15 @@ export default function SiteSetupRangeTiersCard({
       confirmLabel="Continue"
       onCancel={onCancel}
       onEdit={onEdit}
-      onConfirm={() => onSubmit({ rangeIds, tiers, tierSchedules: schedules })}
+      onConfirm={() => onSubmit({ ranges, tiers, tierSchedules: schedules })}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         {siteIds.map((siteId) => {
           const site = getNewSite(siteId);
           if (!site) return null;
-          const rangeId = rangeIds[siteId];
-          const range = getRange(rangeId);
+          const siteRanges = ranges[siteId];
           const pattern = tiers[siteId];
-          if (!range || !pattern) return null;
+          if (!siteRanges || !pattern) return null;
           const siteSchedules = schedules[siteId] ?? [];
 
           return (
@@ -153,22 +166,23 @@ export default function SiteSetupRangeTiersCard({
                 <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)', flex: 1 }}>
                   {site.shortName}
                 </span>
-                <RangeDropdown
-                  value={rangeId}
-                  disabled={disabled}
-                  onChange={(v) => setRangeIds((prev) => ({ ...prev, [siteId]: v }))}
-                />
+                <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                  {describeRecipeCounts(siteRanges, pattern)}
+                </span>
               </div>
 
-              <TierPatternEditor
-                rangeId={rangeId}
+              <MenuPatternEditor
+                ranges={siteRanges}
                 pattern={pattern}
                 disabled={disabled}
-                onChange={(next) => setTiers((prev) => ({ ...prev, [siteId]: next }))}
+                onChange={(nextRanges, nextTiers) => {
+                  setRanges((prev) => ({ ...prev, [siteId]: nextRanges }));
+                  setTiers((prev) => ({ ...prev, [siteId]: nextTiers }));
+                }}
               />
 
               <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-                {describeTierPattern(pattern)} · {describeRecipeCounts(rangeId, pattern)}
+                {describeMenuPattern(siteRanges, pattern)}
               </div>
 
               {/* Dated changes: a period on a different pattern, then back. */}
@@ -223,15 +237,15 @@ export default function SiteSetupRangeTiersCard({
                       </button>
                     )}
                   </div>
-                  <TierPatternEditor
-                    rangeId={rangeId}
+                  <MenuPatternEditor
+                    ranges={s.ranges}
                     pattern={s.tiers}
                     disabled={disabled}
                     compact
-                    onChange={(next) => patchSchedule(siteId, s.id, { tiers: next })}
+                    onChange={(nextRanges, nextTiers) => patchSchedule(siteId, s.id, { ranges: nextRanges, tiers: nextTiers })}
                   />
                   <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-                    {describeTierPattern(s.tiers)} · {formatDateRange(s.from, s.to)} · then back to {describeTierPattern(pattern).toLowerCase()}
+                    {describeMenuPattern(s.ranges, s.tiers)} · {formatDateRange(s.from, s.to)} · then back to the regular pattern
                   </div>
                 </div>
               ))}
@@ -271,23 +285,29 @@ export default function SiteSetupRangeTiersCard({
   );
 }
 
-// ─── Tier pattern editor ─────────────────────────────────────────────────────
+// ─── Menu pattern editor: range + tier per day ───────────────────────────────
 
-function TierPatternEditor({
-  rangeId,
+function MenuPatternEditor({
+  ranges,
   pattern,
   disabled,
   compact,
   onChange,
 }: {
-  rangeId: string;
+  ranges: RangeByDay;
   pattern: Record<DayKey, number>;
   disabled: boolean;
   compact?: boolean;
-  onChange: (next: Record<DayKey, number>) => void;
+  onChange: (nextRanges: RangeByDay, nextTiers: Record<DayKey, number>) => void;
 }) {
-  const range = getRange(rangeId);
   const [days, setDays] = useState<DayKey[]>([]);
+  // The ladder is drawn for the selected days' range. When they
+  // disagree the first selected day's range sets the counts and the
+  // dropdown reads "Mixed" until one is picked.
+  const anchorDay = days[0] ?? 'Mon';
+  const commonRangeId = days.length > 0 && days.every((d) => ranges[d] === ranges[anchorDay]) ? ranges[anchorDay] : null;
+  const ladderRangeId = commonRangeId ?? ranges[anchorDay];
+  const range = getRange(ladderRangeId);
   if (!range) return null;
   const tierCount = range.tierRecipes.length;
 
@@ -307,15 +327,26 @@ function TierPatternEditor({
     if (days.length === 0) return;
     const next = { ...pattern };
     for (const d of days) next[d] = tier;
-    onChange(next);
+    onChange(ranges, next);
+  }
+  function applyRange(rangeId: string) {
+    if (days.length === 0) return;
+    const next = { ...ranges };
+    for (const d of days) next[d] = rangeId;
+    // Clamp tiers to the new range's ladder.
+    const top = getRange(rangeId)?.tierRecipes.length ?? 6;
+    const nextTiers = { ...pattern };
+    for (const d of days) nextTiers[d] = Math.min(nextTiers[d], top);
+    onChange(next, nextTiers);
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      {/* Day strip — tap days, then tap a tier below. */}
+      {/* Day strip — tap days, then pick a range and a tier below. */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
         {DAY_KEYS.map((day) => {
           const selected = days.includes(day);
+          const dayRange = getRange(ranges[day]);
           return (
             <button
               key={day}
@@ -344,9 +375,15 @@ function TierPatternEditor({
               <span style={{ fontSize: compact ? '13px' : '14px', fontWeight: 800, color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
                 {pattern[day]}
               </span>
+              <span
+                title={dayRange?.name}
+                style={{ fontSize: '9px', fontWeight: 700, color: 'var(--color-text-secondary)', letterSpacing: '0.02em' }}
+              >
+                {dayRange?.short ?? '—'}
+              </span>
               {!compact && (
                 <span style={{ fontSize: '9px', color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                  {recipesAtTier(rangeId, pattern[day])}
+                  {recipesAtTier(ranges[day], pattern[day])}
                 </span>
               )}
             </button>
@@ -360,8 +397,20 @@ function TierPatternEditor({
           <GroupButton label="Fri–Sun" onClick={() => selectGroup(['Fri', 'Sat', 'Sun'])} />
           <GroupButton label="All week" onClick={() => selectGroup([...DAY_KEYS])} />
           <span style={{ fontSize: '10.5px', color: 'var(--color-text-muted)' }}>
-            {days.length === 0 ? 'Pick days, then a tier' : `Set ${days.length} day${days.length === 1 ? '' : 's'} to:`}
+            {days.length === 0 ? 'Pick days, then a range and a tier' : `Set ${days.length} day${days.length === 1 ? '' : 's'} to:`}
           </span>
+        </div>
+      )}
+
+      {/* Range for the selected days */}
+      {!disabled && days.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <RangeDropdown value={commonRangeId} disabled={disabled} onChange={applyRange} />
+          {!commonRangeId && (
+            <span style={{ fontSize: '10.5px', color: '#7A3800' }}>
+              Selected days sit on different ranges. Pick one to set them together.
+            </span>
+          )}
         </div>
       )}
 
@@ -371,8 +420,8 @@ function TierPatternEditor({
       {!disabled && (
         <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
           {Array.from({ length: tierCount }, (_, i) => i + 1).map((tier) => {
-            const count = recipesAtTier(rangeId, tier);
-            const delta = tier > 1 ? count - recipesAtTier(rangeId, tier - 1) : null;
+            const count = recipesAtTier(ladderRangeId, tier);
+            const delta = tier > 1 ? count - recipesAtTier(ladderRangeId, tier - 1) : null;
             const canApply = days.length > 0;
             const active = canApply && days.every((d) => pattern[d] === tier);
             return (
@@ -421,7 +470,8 @@ function RangeDropdown({
   disabled,
   onChange,
 }: {
-  value: string;
+  /** null when the selected days sit on different ranges. */
+  value: string | null;
   disabled: boolean;
   onChange: (rangeId: string) => void;
 }) {
@@ -429,7 +479,7 @@ function RangeDropdown({
   const [query, setQuery] = useState('');
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
-  const current = getRange(value);
+  const current = value ? getRange(value) : undefined;
 
   useEffect(() => {
     if (!open) return;
@@ -458,7 +508,7 @@ function RangeDropdown({
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={`Range: ${current?.name ?? 'none'}`}
+        aria-label={`Range: ${current?.name ?? 'mixed'}`}
         onClick={() => {
           setOpen((v) => !v);
           setQuery('');
@@ -480,7 +530,7 @@ function RangeDropdown({
       >
         <span style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
           <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            {current?.name ?? 'Choose a range'}
+            {current?.name ?? (value === null ? 'Mixed ranges' : 'Choose a range')}
           </span>
           {current && (
             <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
@@ -497,7 +547,7 @@ function RangeDropdown({
           aria-label="Ranges"
           style={{
             position: 'absolute',
-            right: 0,
+            left: 0,
             top: 'calc(100% + 6px)',
             zIndex: 20,
             width: '280px',

@@ -33,13 +33,14 @@ import {
   describeFood,
   describeFullSelectionCounts,
   describeRoleCounts,
-  describeTierPattern,
+  describeMenuPattern,
+  describeRanges,
   describeTierSchedule,
   daysBetween,
   forecastMismatches,
   formatDay,
   getHub,
-  getRange,
+  type RangeByDay,
   getTemplateShop,
   getNewSite,
   hubLinkSummary,
@@ -62,7 +63,7 @@ interface SiteSetupGoLiveCardProps {
   /** Per site: a hub id, or STANDALONE for no hub. */
   hubs: Record<string, string>;
   roles: Record<string, EdifyRole>;
-  rangeIds: Record<string, string>;
+  ranges: Record<string, RangeByDay>;
   tiers: Record<string, Record<DayKey, number>>;
   tierSchedules?: TierSchedules;
   production?: SiteProductionSchedules;
@@ -84,7 +85,7 @@ export default function SiteSetupGoLiveCard({
   templates,
   hubs,
   roles,
-  rangeIds,
+  ranges,
   tiers,
   tierSchedules,
   production,
@@ -123,7 +124,7 @@ export default function SiteSetupGoLiveCard({
   const totalPeople = siteIds.reduce((n, id) => n + (getNewSite(id)?.roster.length ?? 0), 0);
   const totalRecipes = siteIds.reduce((n, id) => {
     const pattern = tiers[id];
-    return pattern ? n + coreRecipeCount(rangeIds[id], pattern) - (recipeExclusions?.[id]?.length ?? 0) : n;
+    return pattern ? n + coreRecipeCount(ranges[id], pattern) - (recipeExclusions?.[id]?.length ?? 0) : n;
   }, 0);
   const n = siteIds.length;
 
@@ -202,7 +203,7 @@ export default function SiteSetupGoLiveCard({
                 key={m.id}
                 ok={false}
                 amber
-                text={`Forecast Manager sends ${m.skus.length} SKU${m.skus.length === 1 ? '' : 's'} to ${getNewSite(m.id)?.shortName ?? m.id} that ${m.skus.length === 1 ? 'isn\u2019t' : 'aren\u2019t'} in ${getRange(rangeIds[m.id])?.name ?? 'its range'} Tier ${Math.max(...Object.values(tiers[m.id]))}: ${m.skus.join(', ')}. Admins alerted to fix the forecast or the tier. Doesn\u2019t block go-live.`}
+                text={`Forecast Manager sends ${m.skus.length} SKU${m.skus.length === 1 ? '' : 's'} to ${getNewSite(m.id)?.shortName ?? m.id} that ${m.skus.length === 1 ? 'isn\u2019t' : 'aren\u2019t'} in ${describeRanges(ranges[m.id])} Tier ${Math.max(...Object.values(tiers[m.id]))}: ${m.skus.join(', ')}. Admins alerted to fix the forecast or the tier. Doesn\u2019t block go-live.`}
               />
             ))
           )}
@@ -214,7 +215,7 @@ export default function SiteSetupGoLiveCard({
           if (!site) return null;
           const template = getTemplateShop(templates[siteId]);
           const hubName = getHub(hubs[siteId])?.name;
-          const range = getRange(rangeIds[siteId]);
+          const siteRanges = ranges[siteId];
           const pattern = tiers[siteId];
           const counts = roleCounts(site.roster, roles);
           const hot = benchesHot?.[siteId];
@@ -268,13 +269,12 @@ export default function SiteSetupGoLiveCard({
               </div>
               <ReadbackLine label="Setup" value={`Copied from ${template?.name ?? '—'} · ${hubLinkSummary(hubName)}`} />
               <ReadbackLine label="People" value={`${site.roster.length} · ${describeRoleCounts(counts)} · Okta invites ${formatDay(addDays(dates[siteId], -7))}`} />
-              {range && pattern && (
+              {siteRanges && pattern && (
                 <ReadbackLine
                   label="Food"
                   value={[
-                    range.name,
-                    describeTierPattern(pattern),
-                    describeFood(range.id, pattern, recipeExclusions?.[siteId]),
+                    describeMenuPattern(siteRanges, pattern),
+                    describeFood(siteRanges, pattern, recipeExclusions?.[siteId]),
                     ...schedules.map((s) => describeTierSchedule(s)),
                   ].join(' · ')}
                 />

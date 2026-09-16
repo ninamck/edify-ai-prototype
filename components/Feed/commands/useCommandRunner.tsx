@@ -96,17 +96,18 @@ import {
   SHOPDB_SOURCE,
   addDays,
   coreRecipeCount,
+  describeMenuPattern,
   describeRoleCounts,
-  describeTierPattern,
   flexibleLines,
   formatDay,
-  getRange,
   getTemplateShop,
   getNewSite,
   oneLineAddress,
   roleCounts,
+  templateRanges,
   type DayKey,
   type EdifyRole,
+  type RangeByDay,
   type RecipeExclusions,
   type SharedSiteSettings,
   type SiteBenchesHot,
@@ -1269,7 +1270,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
   // step together, mirroring "ten shops a week". Args accumulate
   // across steps in cmdArgsJson:
   //   siteIds + sites (edited Create-site details) + shared + goLiveDates
-  //   → templates + hubs → rangeIds + tiers + tierSchedules
+  //   → templates + hubs → ranges (per day) + tiers (per day) + tierSchedules
   //   → recipeExclusions (flexible lines) → roles → production + benches
   //   → benchesHot → goLiveDates + goLiveOffsetDays → confirm.
   //
@@ -1380,21 +1381,21 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       // Prefill range + tier pattern from each site's copied shop. Keep
       // any values already chosen if the operator is re-running after
       // an edit.
-      const prevRanges = (args.rangeIds as Record<string, string> | undefined) ?? {};
+      const prevRanges = (args.ranges as Record<string, RangeByDay> | undefined) ?? {};
       const prevTiers = (args.tiers as Record<string, Record<DayKey, number>> | undefined) ?? {};
-      const rangeIds: Record<string, string> = {};
+      const ranges: Record<string, RangeByDay> = {};
       const tiers: Record<string, Record<DayKey, number>> = {};
       for (const id of siteIds) {
         const t = getTemplateShop(input.templates[id]);
         if (!t) continue;
-        rangeIds[id] = prevRanges[id] ?? t.rangeId;
+        ranges[id] = prevRanges[id] ? { ...prevRanges[id] } : templateRanges(t);
         tiers[id] = prevTiers[id] ? { ...prevTiers[id] } : { ...t.tierByDay };
       }
       pushResponseFlow({
-        text: 'Now the food. Range and tiers came with the copied shop. A tier is a floor: it includes every tier below it, so one number per day sets that day\u2019s whole menu. Add a dated change if a shop moves tier for a season.',
+        text: 'Now the food. Range and tiers came with the copied shop. Each day has a range and a tier, and both can differ by day. A tier is a floor: it includes every tier below it, so one number per day sets that day\u2019s whole menu. Add a dated change if a shop moves range or tier for a season.',
         commandId: 'site-setup',
         cardMsgType: 'cmd-site-tiers',
-        cardArgs: { ...args, ...input, rangeIds, tiers },
+        cardArgs: { ...args, ...input, ranges, tiers },
       });
     },
     [pushResponseFlow, pushUserEcho, writeCmdState],
@@ -1444,7 +1445,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       msgId: string,
       args: Record<string, unknown>,
       input: {
-        rangeIds: Record<string, string>;
+        ranges: Record<string, RangeByDay>;
         tiers: Record<string, Record<DayKey, number>>;
         tierSchedules: TierSchedules;
       },
@@ -1454,14 +1455,14 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       const scheduled = siteIds.filter((id) => (input.tierSchedules[id]?.length ?? 0) > 0).length;
       pushUserEcho(
         siteIds.length === 1
-          ? `${getRange(input.rangeIds[siteIds[0]])?.name ?? 'Range'} · ${describeTierPattern(input.tiers[siteIds[0]])}${
+          ? `${describeMenuPattern(input.ranges[siteIds[0]], input.tiers[siteIds[0]])}${
               scheduled ? ` · ${input.tierSchedules[siteIds[0]].length} dated change${input.tierSchedules[siteIds[0]].length === 1 ? '' : 's'}` : ''
             }`
           : `Tiers set · ${siteIds.length} sites${scheduled ? ` · dated changes on ${scheduled}` : ''}`,
       );
       // Recipes follow the tier, so the only food question left is the
       // flexible lines: tagged products a shop may opt out of.
-      const totalRecipes = siteIds.reduce((n, id) => n + coreRecipeCount(input.rangeIds[id], input.tiers[id]), 0);
+      const totalRecipes = siteIds.reduce((n, id) => n + coreRecipeCount(input.ranges[id], input.tiers[id]), 0);
       const totalFlex = siteIds.reduce((n, id) => n + flexibleLines(input.tiers[id]).length, 0);
       pushResponseFlow({
         text:
@@ -1521,7 +1522,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         goLiveDates: Record<string, string>;
         /** Create-site details as synced from ShopDB and edited in step 1. */
         sites?: Record<string, SiteDetails>;
-        rangeIds?: Record<string, string>;
+        ranges?: Record<string, RangeByDay>;
         tiers?: Record<string, Record<DayKey, number>>;
         /** Per site: flexible-line recipe ids unticked. */
         recipeExclusions?: RecipeExclusions;
@@ -1532,10 +1533,10 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         .filter((s): s is NonNullable<typeof s> => Boolean(s));
       const totalPeople = sites.reduce((n, s) => n + s.roster.length, 0);
       const recipesFor = (siteId: string): number => {
-        const rangeId = final.rangeIds?.[siteId];
+        const siteRanges = final.ranges?.[siteId];
         const tiers = final.tiers?.[siteId];
-        if (!rangeId || !tiers) return 0;
-        return coreRecipeCount(rangeId, tiers) - (final.recipeExclusions?.[siteId]?.length ?? 0);
+        if (!siteRanges || !tiers) return 0;
+        return coreRecipeCount(siteRanges, tiers) - (final.recipeExclusions?.[siteId]?.length ?? 0);
       };
       const totalRecipes = sites.reduce((n, s) => n + recipesFor(s.id), 0);
 

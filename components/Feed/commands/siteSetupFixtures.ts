@@ -136,6 +136,8 @@ export interface WorkdayPerson {
 export interface RangeLadder {
   id: string;
   name: string;
+  /** Fits a day cell in the tier strip ("LW"). */
+  short: string;
   /** One line under the name in the range picker. */
   descriptor: string;
   /** Cumulative recipe count per tier, index 0 = tier 1. Tier N is a
@@ -146,14 +148,14 @@ export interface RangeLadder {
 /** Pret runs many ranges, so the picker is a searchable dropdown, not
  *  a pill row. The first three are the ones the copied shops use. */
 export const RANGES: RangeLadder[] = [
-  { id: 'regional',      name: 'Regional',           descriptor: 'High streets outside London',       tierRecipes: [96, 148, 185, 212, 236, 251] },
-  { id: 'london-worker', name: 'London Worker',      descriptor: 'Central London, weekday office trade', tierRecipes: [104, 162, 199, 228, 249, 262] },
-  { id: 'transport-hub', name: 'Transport Hub',      descriptor: 'Stations and interchanges',          tierRecipes: [88, 132, 171, 198, 221, 240] },
-  { id: 'london-mix',    name: 'London Mix',         descriptor: 'London shops with weekend footfall',   tierRecipes: [102, 158, 194, 224, 246, 260] },
-  { id: 'airport',       name: 'Airport',            descriptor: 'Airside and landside, long hours',     tierRecipes: [84, 126, 164, 190, 214, 232] },
-  { id: 'motorway',      name: 'Motorway Services',  descriptor: 'Roadside, grab and go',                tierRecipes: [72, 110, 142, 168, 188, 204] },
-  { id: 'veggie',        name: 'Veggie Pret',        descriptor: 'Vegetarian and vegan only',            tierRecipes: [78, 118, 150, 176, 198, 212] },
-  { id: 'scotland',      name: 'Scotland',           descriptor: 'Scottish shops, regional lines',       tierRecipes: [92, 142, 180, 206, 230, 246] },
+  { id: 'regional',      name: 'Regional',           short: 'Reg',  descriptor: 'High streets outside London',          tierRecipes: [96, 148, 185, 212, 236, 251] },
+  { id: 'london-worker', name: 'London Worker',      short: 'LW',   descriptor: 'Central London, weekday office trade', tierRecipes: [104, 162, 199, 228, 249, 262] },
+  { id: 'transport-hub', name: 'Transport Hub',      short: 'TH',   descriptor: 'Stations and interchanges',            tierRecipes: [88, 132, 171, 198, 221, 240] },
+  { id: 'london-mix',    name: 'London Mix',         short: 'LMix', descriptor: 'London shops with weekend footfall',   tierRecipes: [102, 158, 194, 224, 246, 260] },
+  { id: 'airport',       name: 'Airport',            short: 'Air',  descriptor: 'Airside and landside, long hours',     tierRecipes: [84, 126, 164, 190, 214, 232] },
+  { id: 'motorway',      name: 'Motorway Services',  short: 'MSA',  descriptor: 'Roadside, grab and go',                tierRecipes: [72, 110, 142, 168, 188, 204] },
+  { id: 'veggie',        name: 'Veggie Pret',        short: 'Veg',  descriptor: 'Vegetarian and vegan only',            tierRecipes: [78, 118, 150, 176, 198, 212] },
+  { id: 'scotland',      name: 'Scotland',           short: 'Scot', descriptor: 'Scottish shops, regional lines',       tierRecipes: [92, 142, 180, 206, 230, 246] },
 ];
 
 export function getRange(id: string): RangeLadder | undefined {
@@ -163,6 +165,31 @@ export function getRange(id: string): RangeLadder | undefined {
 /** Highest tier a shop sits on in the week: the union of its menus. */
 export function maxTier(tiers: Record<DayKey, number>): number {
   return Math.max(...DAY_KEYS.map((d) => tiers[d] ?? 1));
+}
+
+/**
+ * A shop's menu for a day is a range and a tier, and both can change
+ * with the day: London Worker Tier 4 Monday to Friday, London Mix
+ * Tier 2 at the weekend. `RangeByDay` sits alongside the tier pattern
+ * with the same keys.
+ */
+export type RangeByDay = Record<DayKey, string>;
+
+/** A template shop's range per day, overrides applied. */
+export function templateRanges(t: Pick<TemplateShop, 'rangeId' | 'rangeOverrides'>): RangeByDay {
+  return { ...allDays(t.rangeId), ...(t.rangeOverrides ?? {}) } as RangeByDay;
+}
+
+/** Distinct ranges a shop uses across the week, in day order. */
+export function rangeIdsUsed(ranges: RangeByDay): string[] {
+  const out: string[] = [];
+  for (const d of DAY_KEYS) if (!out.includes(ranges[d])) out.push(ranges[d]);
+  return out;
+}
+
+/** "London Worker" or "London Worker + London Mix". */
+export function describeRanges(ranges: RangeByDay): string {
+  return rangeIdsUsed(ranges).map((id) => getRange(id)?.name ?? id).join(' + ');
 }
 
 // ─── Dated tier changes ──────────────────────────────────────────────────────
@@ -178,15 +205,16 @@ export interface TierSchedule {
   /** ISO days, inclusive. */
   from: string;
   to: string;
+  ranges: RangeByDay;
   tiers: Record<DayKey, number>;
 }
 
 /** Per site → dated changes, in date order. */
 export type TierSchedules = Record<string, TierSchedule[]>;
 
-/** "Tier 1 all week · 1 Aug – 31 Aug". */
+/** "Regional · Tier 1 all week · 1 Aug – 31 Aug". */
 export function describeTierSchedule(s: TierSchedule): string {
-  return `${describeTierPattern(s.tiers)} · ${formatDateRange(s.from, s.to)}`;
+  return `${describeMenuPattern(s.ranges, s.tiers)} · ${formatDateRange(s.from, s.to)}`;
 }
 
 /** Recipe count for a tier (1-based) in a range. */
@@ -214,22 +242,42 @@ export function describeTierPattern(tiers: Record<DayKey, number>): string {
     .join(' · ');
 }
 
-/** Same run-compression, but rendering recipe counts:
- *  "212 recipes Mon–Thu · 148 Fri–Sun". */
-export function describeRecipeCounts(rangeId: string, tiers: Record<DayKey, number>): string {
-  const runs: { from: DayKey; to: DayKey; tier: number }[] = [];
+/** Runs of identical (range, tier) across the week. */
+function menuRuns(ranges: RangeByDay, tiers: Record<DayKey, number>): { from: DayKey; to: DayKey; rangeId: string; tier: number }[] {
+  const runs: { from: DayKey; to: DayKey; rangeId: string; tier: number }[] = [];
   for (const day of DAY_KEYS) {
+    const rangeId = ranges[day];
     const tier = tiers[day];
     const last = runs[runs.length - 1];
-    if (last && last.tier === tier) last.to = day;
-    else runs.push({ from: day, to: day, tier });
+    if (last && last.tier === tier && last.rangeId === rangeId) last.to = day;
+    else runs.push({ from: day, to: day, rangeId, tier });
   }
+  return runs;
+}
+
+const dayspan = (r: { from: DayKey; to: DayKey }) => (r.from === r.to ? r.from : `${r.from}–${r.to}`);
+
+/**
+ * Range and tier pattern in one line. One range all week:
+ * "London Worker · Tier 4 Mon–Thu · Tier 2 Fri–Sun". Ranges that
+ * change with the day: "London Worker Tier 4 Mon–Fri · London Mix
+ * Tier 2 Sat–Sun".
+ */
+export function describeMenuPattern(ranges: RangeByDay, tiers: Record<DayKey, number>): string {
+  const used = rangeIdsUsed(ranges);
+  if (used.length === 1) return `${getRange(used[0])?.name ?? used[0]} · ${describeTierPattern(tiers)}`;
+  return menuRuns(ranges, tiers)
+    .map((r) => `${getRange(r.rangeId)?.name ?? r.rangeId} Tier ${r.tier} ${dayspan(r)}`)
+    .join(' · ');
+}
+
+/** Same run-compression, but rendering recipe counts:
+ *  "212 recipes Mon–Thu · 148 Fri–Sun". */
+export function describeRecipeCounts(ranges: RangeByDay, tiers: Record<DayKey, number>): string {
+  const runs = menuRuns(ranges, tiers);
+  if (runs.length === 1) return `${recipesAtTier(runs[0].rangeId, runs[0].tier)} recipes`;
   return runs
-    .map((r, i) => {
-      const count = recipesAtTier(rangeId, r.tier);
-      const days = r.from === r.to ? r.from : `${r.from}–${r.to}`;
-      return `${count}${i === 0 ? ' recipes' : ''} ${days}`;
-    })
+    .map((r, i) => `${recipesAtTier(r.rangeId, r.tier)}${i === 0 ? ' recipes' : ''} ${dayspan(r)}`)
     .join(' · ');
 }
 
@@ -497,7 +545,10 @@ export interface TemplateShop {
   name: string;
   /** Short human descriptor shown under the pick ("High street · full range"). */
   descriptor: string;
+  /** Range most days. */
   rangeId: string;
+  /** Days on a different range (Villiers: London Mix at the weekend). */
+  rangeOverrides?: Partial<Record<DayKey, string>>;
   hubId: string;
   tierByDay: Record<DayKey, number>;
   /** The production runs the copy brings, per day. */
@@ -538,10 +589,11 @@ export const TEMPLATE_SHOPS: TemplateShop[] = [
   {
     id: 'villiers',
     name: 'Villiers Street',
-    descriptor: 'London high street · full range weekdays',
+    descriptor: 'London high street · worker range weekdays, mix at weekends',
     rangeId: 'london-worker',
+    rangeOverrides: { Sat: 'london-mix', Sun: 'london-mix' },
     hubId: 'park-royal',
-    tierByDay: tiers7(4, 4, 4, 4, 2, 2, 2),
+    tierByDay: tiers7(4, 4, 4, 4, 4, 2, 2),
     productionRuns: [
       run('Production 1', '05:00', '07:00', '06:00', '11:00'),
       run('Production 2', '10:30', '12:00', '11:00', '15:00'),
@@ -840,10 +892,11 @@ export function flexibleLines(tiers: Record<DayKey, number>): ShopRecipe[] {
   return tierRecipes(tiers).filter((r) => r.flexible);
 }
 
-/** Recipes the shop gets from its range and highest tier (the ladder's
- *  count). Flexible lines are part of this number until unticked. */
-export function coreRecipeCount(rangeId: string, tiers: Record<DayKey, number>): number {
-  return recipesAtTier(rangeId, maxTier(tiers));
+/** Recipes the shop holds: its biggest day's menu (a tier includes
+ *  every tier below it, so the largest day covers the rest). Flexible
+ *  lines are part of this number until unticked. */
+export function coreRecipeCount(ranges: RangeByDay, tiers: Record<DayKey, number>): number {
+  return Math.max(...DAY_KEYS.map((d) => recipesAtTier(ranges[d], tiers[d])));
 }
 
 /** Per site → flexible-line recipe ids the operator unticked. Empty =
@@ -852,8 +905,8 @@ export type RecipeExclusions = Record<string, string[]>;
 
 /** "212 recipes · 4 flexible lines" or "210 of 212 recipes · 2 flexible
  *  lines unticked" for one site. */
-export function describeFood(rangeId: string, tiers: Record<DayKey, number>, excluded: string[] | undefined): string {
-  const total = coreRecipeCount(rangeId, tiers);
+export function describeFood(ranges: RangeByDay, tiers: Record<DayKey, number>, excluded: string[] | undefined): string {
+  const total = coreRecipeCount(ranges, tiers);
   const flex = flexibleLines(tiers).length;
   const dropped = excluded?.length ?? 0;
   if (dropped === 0) return `${total} recipes · ${flex} flexible line${flex === 1 ? '' : 's'}`;

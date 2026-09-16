@@ -27,10 +27,12 @@ import CardShell, { type CardState } from './CardShell';
 import {
   RECIPE_CATEGORIES,
   coreRecipeCount,
-  describeTierPattern,
+  describeMenuPattern,
+  describeRanges,
   flexibleLines,
   getNewSite,
-  getRange,
+  rangeIdsUsed,
+  type RangeByDay,
   maxTier,
   type DayKey,
   type RecipeExclusions,
@@ -40,7 +42,7 @@ import {
 interface SiteSetupFlexibleLinesCardProps {
   state: CardState;
   siteIds: string[];
-  rangeIds: Record<string, string>;
+  ranges: Record<string, RangeByDay>;
   tiers: Record<string, Record<DayKey, number>>;
   initialExclusions?: RecipeExclusions;
   onSubmit: (input: { recipeExclusions: RecipeExclusions }) => void;
@@ -51,7 +53,7 @@ interface SiteSetupFlexibleLinesCardProps {
 export default function SiteSetupFlexibleLinesCard({
   state,
   siteIds,
-  rangeIds,
+  ranges,
   tiers,
   initialExclusions,
   onSubmit,
@@ -82,11 +84,10 @@ export default function SiteSetupFlexibleLinesCard({
       return { ...prev, [siteId]: next };
     });
   }
-  /** Same range, same highest tier → same flexible lines on offer. */
+  /** Same ranges across the week, same highest tier → same flexible lines on offer. */
   function siblingsOf(siteId: string): string[] {
-    return siteIds.filter(
-      (id) => id !== siteId && rangeIds[id] === rangeIds[siteId] && maxTier(tiers[id]) === maxTier(tiers[siteId]),
-    );
+    const key = (id: string) => `${rangeIdsUsed(ranges[id]).sort().join('+')}@${maxTier(tiers[id])}`;
+    return siteIds.filter((id) => id !== siteId && key(id) === key(siteId));
   }
   function copyExclusions(fromSiteId: string) {
     setExcluded((prev) => {
@@ -117,10 +118,10 @@ export default function SiteSetupFlexibleLinesCard({
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {siteIds.map((siteId) => {
           const site = getNewSite(siteId);
-          const range = getRange(rangeIds[siteId]);
+          const siteRanges = ranges[siteId];
           const pattern = tiers[siteId];
-          if (!site || !range || !pattern) return null;
-          const core = coreRecipeCount(range.id, pattern);
+          if (!site || !siteRanges || !pattern) return null;
+          const core = coreRecipeCount(siteRanges, pattern);
           const flex = flexibleLines(pattern);
           const ex = excluded[siteId];
           const kept = flex.length - ex.size;
@@ -163,7 +164,7 @@ export default function SiteSetupFlexibleLinesCard({
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px', flexWrap: 'wrap' }}>
                     <Lock size={10} strokeWidth={2.4} />
-                    {core} recipes from {range.name} · {describeTierPattern(pattern)}, set by the tier
+                    {core} recipes · {describeMenuPattern(siteRanges, pattern)}, set by the tier
                   </span>
                   <span style={{ display: 'block', fontSize: '11px', color: ex.size > 0 ? '#7A3800' : 'var(--color-text-muted)', marginTop: '2px', fontWeight: ex.size > 0 ? 700 : 500 }}>
                     {kept === flex.length ? `All ${flex.length}` : `${kept} of ${flex.length}`} flexible lines
@@ -259,7 +260,7 @@ export default function SiteSetupFlexibleLinesCard({
                         cursor: 'pointer',
                       }}
                     >
-                      Untick the same {ex.size} for the other {siblings.length} shop{siblings.length === 1 ? '' : 's'} on {range.name} Tier {maxTier(pattern)}
+                      Untick the same {ex.size} for the other {siblings.length} shop{siblings.length === 1 ? '' : 's'} on {describeRanges(siteRanges)} Tier {maxTier(pattern)}
                     </button>
                   )}
                 </div>

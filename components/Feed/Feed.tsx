@@ -10772,7 +10772,7 @@ export default function Feed({
                         {m.msgType === 'cmd-site-flex' && m.cmdArgsJson && (() => {
                           const args = JSON.parse(m.cmdArgsJson) as {
                             siteIds: string[];
-                            rangeIds: Record<string, string>;
+                            ranges: Record<string, import('@/components/Feed/commands/siteSetupFixtures').RangeByDay>;
                             tiers: Record<string, Record<import('@/components/Feed/commands/siteSetupFixtures').DayKey, number>>;
                             recipeExclusions?: import('@/components/Feed/commands/siteSetupFixtures').RecipeExclusions;
                           };
@@ -10780,7 +10780,7 @@ export default function Feed({
                             <SiteSetupFlexibleLinesCard
                               state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                               siteIds={args.siteIds}
-                              rangeIds={args.rangeIds}
+                              ranges={args.ranges}
                               tiers={args.tiers}
                               initialExclusions={args.recipeExclusions}
                               onSubmit={(input) => commandRunner.submitSiteSetupFlex(m.id, args, input)}
@@ -10808,7 +10808,7 @@ export default function Feed({
                         {m.msgType === 'cmd-site-tiers' && m.cmdArgsJson && (() => {
                           const args = JSON.parse(m.cmdArgsJson) as {
                             siteIds: string[];
-                            rangeIds: Record<string, string>;
+                            ranges: Record<string, import('@/components/Feed/commands/siteSetupFixtures').RangeByDay>;
                             tiers: Record<string, Record<import('@/components/Feed/commands/siteSetupFixtures').DayKey, number>>;
                             tierSchedules?: import('@/components/Feed/commands/siteSetupFixtures').TierSchedules;
                           };
@@ -10816,7 +10816,7 @@ export default function Feed({
                             <SiteSetupRangeTiersCard
                               state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                               siteIds={args.siteIds}
-                              initialRanges={args.rangeIds}
+                              initialRanges={args.ranges}
                               initialTiers={args.tiers}
                               initialSchedules={args.tierSchedules}
                               onSubmit={(input) => commandRunner.submitSiteSetupTiers(m.id, args, input)}
@@ -10871,7 +10871,7 @@ export default function Feed({
                             templates: Record<string, string>;
                             hubs: Record<string, string>;
                             roles: Record<string, import('@/components/Feed/commands/siteSetupFixtures').EdifyRole>;
-                            rangeIds: Record<string, string>;
+                            ranges: Record<string, import('@/components/Feed/commands/siteSetupFixtures').RangeByDay>;
                             tiers: Record<string, Record<import('@/components/Feed/commands/siteSetupFixtures').DayKey, number>>;
                             production?: import('@/components/Feed/commands/siteSetupFixtures').SiteProductionSchedules;
                             benches?: Record<string, number>;
@@ -10889,7 +10889,7 @@ export default function Feed({
                               templates={args.templates}
                               hubs={args.hubs}
                               roles={args.roles ?? {}}
-                              rangeIds={args.rangeIds}
+                              ranges={args.ranges}
                               tiers={args.tiers}
                               tierSchedules={args.tierSchedules}
                               production={args.production}
@@ -10905,7 +10905,7 @@ export default function Feed({
                                   templates: args.templates,
                                   goLiveDates: input.goLiveDates,
                                   sites: args.sites,
-                                  rangeIds: args.rangeIds,
+                                  ranges: args.ranges,
                                   tiers: args.tiers,
                                   recipeExclusions: args.recipeExclusions,
                                 })
