@@ -82,7 +82,9 @@ export interface ChangeRecord {
     | 'waste-entry'
     | 'stock-count'
     /** A shift in the workforce tool's draft rota. */
-    | 'rota-shift';
+    | 'rota-shift'
+    /** A site created (or removed) by the site set-up wizard. */
+    | 'site';
   entityId: string;
   /** Human label used in the diff renderer. e.g. "Egg mayo sandwich · Large". */
   entityLabel: string;

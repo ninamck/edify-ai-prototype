@@ -91,16 +91,20 @@ import {
   diffStock,
 } from '@/components/Feed/commands/diffs';
 import {
+  DEFAULT_GO_LIVE_OFFSET_DAYS,
   NEW_SITES,
-  SITE_SHEET_FILE_NAME,
-  TEMPLATE_SHOPS,
+  SHOPDB_SOURCE,
+  addDays,
+  coreRecipeCount,
   describeRoleCounts,
   describeTierPattern,
+  flexibleLines,
+  formatDay,
+  getRange,
   getTemplateShop,
   getNewSite,
   oneLineAddress,
   roleCounts,
-  templateRecipes,
   type DayKey,
   type EdifyRole,
   type RecipeExclusions,
@@ -108,6 +112,7 @@ import {
   type SiteBenchesHot,
   type SiteDetails,
   type SiteProductionSchedules,
+  type TierSchedules,
 } from '@/components/Feed/commands/siteSetupFixtures';
 import { addSites as addRegisterSites, removeSites as removeRegisterSites } from '@/components/Settings/sitesRegisterStore';
 import { useActiveSite, ACTIVE_SITES } from '@/components/ActiveSite/ActiveSiteContext';
@@ -577,12 +582,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         activeTaskIdRef.current = t.id;
       }
 
-      // Site setup reads a spreadsheet. If the operator described it
-      // in words but didn't paperclip anything, mock the filename so
-      // the echo chip and the card's provenance line still tell the
-      // story.
-      const attachmentName =
-        opts.attachmentName ?? (intent.commandId === 'site-setup' ? SITE_SHEET_FILE_NAME : undefined);
+      const attachmentName = opts.attachmentName;
 
       if (opts.userText) pushUserEcho(opts.userText, attachmentName);
 
@@ -623,11 +623,11 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         startProductSwapWizard(intent.args);
         return;
       }
-      // Site setup is an eight-step wizard: read the site sheet → copy a
-      // shop → recipes that come with the copy → load the people from
-      // Workday → ranges & tiers → production → hot production → go live.
+      // Site setup is an eight-step wizard: sync the shops from ShopDB
+      // → copy a shop → ranges & tiers → flexible lines → load the
+      // people from Workday → production → hot production → go live.
       if (intent.commandId === 'site-setup') {
-        startSiteSetupWizard({ ...intent.args, fileName: attachmentName });
+        startSiteSetupWizard(intent.args);
         return;
       }
       // Rota rebalance: one workspace card, preceded by a line that
@@ -1265,15 +1265,18 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
 
   // ── Site-setup wizard ────────────────────────────────────────────
   //
-  // Seven steps, batch-first: every selected site moves through each
+  // Eight steps, batch-first: every selected site moves through each
   // step together, mirroring "ten shops a week". Args accumulate
   // across steps in cmdArgsJson:
-  //   fileName → siteIds + sites (edited Create-site details) + shared
-  //   → templates + hubs → recipeExclusions → roles → rangeIds + tiers
-  //   → production → benchesHot → goLiveDates → confirm.
+  //   siteIds + sites (edited Create-site details) + shared + goLiveDates
+  //   → templates + hubs → rangeIds + tiers + tierSchedules
+  //   → recipeExclusions (flexible lines) → roles → production + benches
+  //   → benchesHot → goLiveDates + goLiveOffsetDays → confirm.
   //
-  // Sites are not in Workday. Step 1 reads them off the spreadsheet
-  // the operator attached; people (step 3) do come from Workday.
+  // Sites are not in Workday. Step 1 syncs them from ShopDB (Pret's
+  // shop database); people (step 5) come from Workday. Tiers come
+  // before food because recipes follow the tier: the only food choice
+  // left to a shop is its flexible lines (Wojciech, Pret PRD review).
 
   // Any confirmed wizard step stays editable until the final go-live
   // confirm. Reopening rewinds the thread to that card: everything
@@ -1297,19 +1300,18 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     (args: Record<string, unknown>) => {
       setSiteSetupDone(false);
       const count = args.count as number | undefined;
-      const fileName = (args.fileName as string | undefined) ?? SITE_SHEET_FILE_NAME;
       const total = NEW_SITES.length;
       const COUNT_WORDS = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
       const countWord = count && count <= 10 ? COUNT_WORDS[count] : count ? String(count) : undefined;
       const picked = count && count < total;
       pushResponseFlow({
         text: picked
-          ? `I read ${total} shops from ${fileName}: names, site codes, addresses, opening dates, delivery windows and contacts. You said ${countWord}, so I\u2019ve ticked the ${countWord} opening soonest. Check the details and change anything before we continue.`
-          : `I read ${total} shops from ${fileName}: names, site codes, addresses, opening dates, delivery windows and contacts. Every field is filled in below and stays editable. Untick any shop that isn\u2019t going in yet.`,
+          ? `${SHOPDB_SOURCE} holds ${total} shops not yet in Edify: names, site codes, addresses, opening dates, delivery windows and contacts. You said ${countWord}, so I\u2019ve ticked the ${countWord} opening soonest. Every field is filled in and stays editable.`
+          : `${SHOPDB_SOURCE} holds ${total} shops not yet in Edify: names, site codes, addresses, opening dates, delivery windows and contacts. Every field is filled in below and stays editable. Untick any shop that isn\u2019t going in yet.`,
         commandId: 'site-setup',
         cardMsgType: 'cmd-site-pick',
-        cardArgs: { fileName, ...(count ? { requestedCount: count } : {}) },
-        // Longer hold: the AI is "reading a spreadsheet", not a sentence.
+        cardArgs: { ...(count ? { requestedCount: count } : {}) },
+        // Longer hold: the AI is syncing a database, not writing a sentence.
         thinkingMs: 1800,
       });
     },
@@ -1323,7 +1325,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       input: { siteIds: string[]; sites: Record<string, SiteDetails>; shared: SharedSiteSettings },
     ) => {
       writeCmdState(msgId, 'confirmed');
-      // Echo the shop names. Use the sheet's short name unless the
+      // Echo the shop names. Use ShopDB's short name unless the
       // operator renamed the shop in the card.
       const names = input.siteIds.map((id) => {
         const fixture = getNewSite(id);
@@ -1331,17 +1333,26 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         return fixture && edited === fixture.name ? fixture.shortName : (edited ?? fixture?.shortName ?? id);
       });
       pushUserEcho(names.join(' · '));
-      // Opening dates off the sheet (as edited) seed the go-live step.
+      // Opening dates from ShopDB (as edited) seed go-live: the shop is
+      // live in Edify a few days before it opens, so the team can set
+      // production and place first orders.
       const goLiveDates: Record<string, string> = {};
       for (const id of input.siteIds) {
         const d = input.sites[id]?.openingDate?.trim();
-        if (d) goLiveDates[id] = d;
+        if (d) goLiveDates[id] = addDays(d, -DEFAULT_GO_LIVE_OFFSET_DAYS);
       }
       pushResponseFlow({
         text: 'Each one copies a live shop: range and tiers, the production week with forecasts, selection times, permissions. Link each shop to the hub that makes for it, or leave it standalone.',
         commandId: 'site-setup',
         cardMsgType: 'cmd-site-copy',
-        cardArgs: { ...args, siteIds: input.siteIds, sites: input.sites, shared: input.shared, goLiveDates },
+        cardArgs: {
+          ...args,
+          siteIds: input.siteIds,
+          sites: input.sites,
+          shared: input.shared,
+          goLiveDates,
+          goLiveOffsetDays: DEFAULT_GO_LIVE_OFFSET_DAYS,
+        },
       });
     },
     [pushResponseFlow, pushUserEcho, writeCmdState],
@@ -1366,38 +1377,44 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
           .map(([name, n]) => (n > 1 ? `${name} ×${n}` : name))
           .join(' · '),
       );
-      // Recipes come with the copy. Say how many, per mirror shop.
-      const totalRecipes = siteIds.reduce((n, id) => n + templateRecipes(input.templates[id]).length, 0);
-      const perTemplate = Array.from(byTemplate.keys())
-        .map((name) => {
-          const t = TEMPLATE_SHOPS.find((s) => s.name === name);
-          return t ? `${templateRecipes(t.id).length} from ${t.name}` : null;
-        })
-        .filter((s): s is string => Boolean(s));
+      // Prefill range + tier pattern from each site's copied shop. Keep
+      // any values already chosen if the operator is re-running after
+      // an edit.
+      const prevRanges = (args.rangeIds as Record<string, string> | undefined) ?? {};
+      const prevTiers = (args.tiers as Record<string, Record<DayKey, number>> | undefined) ?? {};
+      const rangeIds: Record<string, string> = {};
+      const tiers: Record<string, Record<DayKey, number>> = {};
+      for (const id of siteIds) {
+        const t = getTemplateShop(input.templates[id]);
+        if (!t) continue;
+        rangeIds[id] = prevRanges[id] ?? t.rangeId;
+        tiers[id] = prevTiers[id] ? { ...prevTiers[id] } : { ...t.tierByDay };
+      }
       pushResponseFlow({
-        text:
-          siteIds.length === 1
-            ? `${totalRecipes} recipes come with the copy: everything the shop makes on site, with ingredients, yields, allergens and costs. All ticked. Untick anything the new shop won\u2019t make.`
-            : `${totalRecipes} recipes come with the copies (${perTemplate.join(', ')}): everything each shop makes on site, with ingredients, yields, allergens and costs. All ticked. Untick anything a new shop won\u2019t make.`,
+        text: 'Now the food. Range and tiers came with the copied shop. A tier is a floor: it includes every tier below it, so one number per day sets that day\u2019s whole menu. Add a dated change if a shop moves tier for a season.',
         commandId: 'site-setup',
-        cardMsgType: 'cmd-site-recipes',
-        cardArgs: { ...args, ...input },
+        cardMsgType: 'cmd-site-tiers',
+        cardArgs: { ...args, ...input, rangeIds, tiers },
       });
     },
     [pushResponseFlow, pushUserEcho, writeCmdState],
   );
 
-  const submitSiteSetupRecipes = useCallback(
+  const submitSiteSetupFlex = useCallback(
     (msgId: string, args: Record<string, unknown>, input: { recipeExclusions: RecipeExclusions }) => {
       writeCmdState(msgId, 'confirmed');
       const siteIds = (args.siteIds as string[]) ?? [];
-      const templates = (args.templates as Record<string, string>) ?? {};
-      const total = siteIds.reduce((n, id) => n + templateRecipes(templates[id]).length, 0);
+      const tiers = (args.tiers as Record<string, Record<DayKey, number>>) ?? {};
+      const totalFlex = siteIds.reduce((n, id) => n + (tiers[id] ? flexibleLines(tiers[id]).length : 0), 0);
       const dropped = siteIds.reduce((n, id) => n + (input.recipeExclusions[id]?.length ?? 0), 0);
-      pushUserEcho(dropped === 0 ? `All ${total} recipes` : `${total - dropped} of ${total} recipes · ${dropped} unticked`);
+      pushUserEcho(
+        dropped === 0
+          ? `All ${totalFlex} flexible lines`
+          : `${totalFlex - dropped} of ${totalFlex} flexible lines · ${dropped} unticked`,
+      );
       const totalPeople = siteIds.reduce((n, id) => n + (getNewSite(id)?.roster.length ?? 0), 0);
       pushResponseFlow({
-        text: `Workday lists ${totalPeople} people across the ${siteIds.length === 1 ? 'shop' : `${siteIds.length} shops`}, roles mapped from their jobs. Invites go out the week before each opening.`,
+        text: `Workday lists ${totalPeople} people across the ${siteIds.length === 1 ? 'shop' : `${siteIds.length} shops`}, roles mapped from their jobs. Access is through Okta single sign-on; invites go out a week before each shop\u2019s Edify go-live.`,
         commandId: 'site-setup',
         cardMsgType: 'cmd-site-team',
         cardArgs: { ...args, ...input },
@@ -1412,21 +1429,11 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       const siteIds = (args.siteIds as string[]) ?? [];
       const allPeople = siteIds.flatMap((id) => getNewSite(id)?.roster ?? []);
       pushUserEcho(`${allPeople.length} people · ${describeRoleCounts(roleCounts(allPeople, input.roles))}`);
-      // Prefill range + tier pattern from each site's copied shop.
-      const templates = (args.templates as Record<string, string>) ?? {};
-      const rangeIds: Record<string, string> = {};
-      const tiers: Record<string, Record<DayKey, number>> = {};
-      for (const id of siteIds) {
-        const t = getTemplateShop(templates[id]);
-        if (!t) continue;
-        rangeIds[id] = t.rangeId;
-        tiers[id] = { ...t.tierByDay };
-      }
       pushResponseFlow({
-        text: 'Now the food. Tiers came with the copied shop. A tier includes everything below it, so one number sets a day\u2019s whole menu.',
+        text: 'Production came with the copy: each run\u2019s bench and forecast windows, forecasts by category. Check the times against each shop\u2019s hours.',
         commandId: 'site-setup',
-        cardMsgType: 'cmd-site-tiers',
-        cardArgs: { ...args, ...input, rangeIds, tiers },
+        cardMsgType: 'cmd-site-production',
+        cardArgs: { ...args, ...input },
       });
     },
     [pushResponseFlow, pushUserEcho, writeCmdState],
@@ -1436,19 +1443,33 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     (
       msgId: string,
       args: Record<string, unknown>,
-      input: { rangeIds: Record<string, string>; tiers: Record<string, Record<DayKey, number>> },
+      input: {
+        rangeIds: Record<string, string>;
+        tiers: Record<string, Record<DayKey, number>>;
+        tierSchedules: TierSchedules;
+      },
     ) => {
       writeCmdState(msgId, 'confirmed');
       const siteIds = (args.siteIds as string[]) ?? [];
+      const scheduled = siteIds.filter((id) => (input.tierSchedules[id]?.length ?? 0) > 0).length;
       pushUserEcho(
         siteIds.length === 1
-          ? describeTierPattern(input.tiers[siteIds[0]])
-          : `Tiers set · ${siteIds.length} sites`,
+          ? `${getRange(input.rangeIds[siteIds[0]])?.name ?? 'Range'} · ${describeTierPattern(input.tiers[siteIds[0]])}${
+              scheduled ? ` · ${input.tierSchedules[siteIds[0]].length} dated change${input.tierSchedules[siteIds[0]].length === 1 ? '' : 's'}` : ''
+            }`
+          : `Tiers set · ${siteIds.length} sites${scheduled ? ` · dated changes on ${scheduled}` : ''}`,
       );
+      // Recipes follow the tier, so the only food question left is the
+      // flexible lines: tagged products a shop may opt out of.
+      const totalRecipes = siteIds.reduce((n, id) => n + coreRecipeCount(input.rangeIds[id], input.tiers[id]), 0);
+      const totalFlex = siteIds.reduce((n, id) => n + flexibleLines(input.tiers[id]).length, 0);
       pushResponseFlow({
-        text: 'Production came with the copy: each run\u2019s bench and forecast windows, forecasts by category. Check the times against each shop\u2019s hours.',
+        text:
+          siteIds.length === 1
+            ? `${totalRecipes} recipes come with the tier, with ingredients, yields, allergens and costs, and show on every production run. ${totalFlex} of them are flexible lines the shop can choose not to sell. All ticked. Untick any the shop won\u2019t make.`
+            : `${totalRecipes} recipes come with the tiers across the ${siteIds.length} shops, with ingredients, yields, allergens and costs, and show on every production run. ${totalFlex} are flexible lines a shop can choose not to sell. All ticked. Untick any a shop won\u2019t make.`,
         commandId: 'site-setup',
-        cardMsgType: 'cmd-site-production',
+        cardMsgType: 'cmd-site-flex',
         cardArgs: { ...args, ...input },
       });
     },
@@ -1498,9 +1519,11 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         siteIds: string[];
         templates: Record<string, string>;
         goLiveDates: Record<string, string>;
-        /** Create-site details as read from the sheet and edited in step 1. */
+        /** Create-site details as synced from ShopDB and edited in step 1. */
         sites?: Record<string, SiteDetails>;
-        /** Per site: recipe ids unticked in the recipes step. */
+        rangeIds?: Record<string, string>;
+        tiers?: Record<string, Record<DayKey, number>>;
+        /** Per site: flexible-line recipe ids unticked. */
         recipeExclusions?: RecipeExclusions;
       },
     ) => {
@@ -1508,30 +1531,44 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
         .map((id) => getNewSite(id))
         .filter((s): s is NonNullable<typeof s> => Boolean(s));
       const totalPeople = sites.reduce((n, s) => n + s.roster.length, 0);
-      const totalRecipes = sites.reduce(
-        (n, s) => n + templateRecipes(final.templates[s.id]).length - (final.recipeExclusions?.[s.id]?.length ?? 0),
-        0,
-      );
+      const recipesFor = (siteId: string): number => {
+        const rangeId = final.rangeIds?.[siteId];
+        const tiers = final.tiers?.[siteId];
+        if (!rangeId || !tiers) return 0;
+        return coreRecipeCount(rangeId, tiers) - (final.recipeExclusions?.[siteId]?.length ?? 0);
+      };
+      const totalRecipes = sites.reduce((n, s) => n + recipesFor(s.id), 0);
 
       // The register gets the operator's edited values, not the raw
       // fixture, so a fixed postcode or renamed shop lands as fixed.
       addRegisterSites(
         sites.map((s) => {
           const d = final.sites?.[s.id];
+          const opening = d?.openingDate ?? s.openingDate;
+          const live = final.goLiveDates[s.id] ?? opening;
           return {
             id: s.id,
             name: d?.name?.trim() || s.name,
             location: d ? oneLineAddress(d) : s.location,
             status: 'active' as const,
-            statusLabel: `Opening ${final.goLiveDates[s.id] ?? d?.openingDate ?? s.openingDate}`,
+            statusLabel: `Opens ${formatDay(opening)} · live ${formatDay(live)}`,
           };
         }),
       );
 
+      // One line per shop, so the operator (and Activity) can see what
+      // was created and roll it back if a shop was wrong.
+      const perShop = sites.map((s) => {
+        const d = final.sites?.[s.id];
+        const name = d?.name?.trim() || s.shortName;
+        const live = final.goLiveDates[s.id] ?? d?.openingDate ?? s.openingDate;
+        return `${name}: created, ${s.roster.length} people invited, ${recipesFor(s.id)} recipes, live ${formatDay(live)}`;
+      });
+
       const n = sites.length;
       const receipt: CommandReceipt = {
-        headline: `${n} site${n === 1 ? '' : 's'} set up · ${totalRecipes} recipes copied · ${totalPeople} people loaded`,
-        detail: 'Nothing shows on a planner before its date. Every setting stays editable in Settings \u2192 Sites.',
+        headline: `Site set-up · ${n} shop${n === 1 ? '' : 's'} · ${totalRecipes} recipes · ${totalPeople} people`,
+        detail: `${perShop.join('. ')}. Nothing shows on a planner before its live date. Roll back from Activity, or Undo here.`,
         href: '/settings/sites',
         hrefLabel: 'Open Sites',
         undo: () => {
@@ -1540,9 +1577,73 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       };
       writeCmdState(msgId, 'confirmed');
       setSiteSetupDone(true);
+      // Activity: one change line per shop created, and a revert
+      // intent that replays into the rollback card (Chel, Pret: "is
+      // there a rollback?"). Nothing was written before this confirm,
+      // so rolling back means removing exactly these shops.
+      const shopNames = sites.map((s) => final.sites?.[s.id]?.name?.trim() || s.name);
+      recordTaskChanges({
+        changes: sites.map((s, i) => ({
+          entityType: 'site' as const,
+          entityId: s.id,
+          entityLabel: shopNames[i],
+          fieldPath: '__created__',
+          fieldLabel: 'Site created',
+          before: null,
+          after: `Live ${formatDay(final.goLiveDates[s.id] ?? final.sites?.[s.id]?.openingDate ?? s.openingDate)} · ${recipesFor(s.id)} recipes · ${s.roster.length} people`,
+          valueKind: 'text' as const,
+        })),
+        blastRadius: [
+          { metric: 'sites_affected', entityLabel: 'New shops', before: 0, after: n, delta: n },
+          { metric: 'recipes_affected', entityLabel: 'Across new shops', before: 0, after: totalRecipes, delta: totalRecipes },
+        ],
+        commandIntent: {
+          commandId: 'site-setup',
+          cardMsgType: 'cmd-site-rollback',
+          args: {
+            siteIds: sites.map((s) => s.id),
+            shopNames,
+            goLiveDates: final.goLiveDates,
+          },
+        },
+      });
       pushReceipt(receipt, msgId);
     },
-    [pushReceipt, writeCmdState],
+    [pushReceipt, recordTaskChanges, writeCmdState],
+  );
+
+  /** Roll back a confirmed site set-up from Activity: removes the
+   *  shops the batch created. Nothing else was written, so this is the
+   *  whole inverse. */
+  const confirmSiteSetupRollback = useCallback(
+    (msgId: string, final: { siteIds: string[]; shopNames?: string[] }) => {
+      removeRegisterSites(final.siteIds);
+      const n = final.siteIds.length;
+      const names = final.shopNames ?? final.siteIds.map((id) => getNewSite(id)?.shortName ?? id);
+      writeCmdState(msgId, 'confirmed');
+      recordTaskChanges({
+        changes: final.siteIds.map((id, i) => ({
+          entityType: 'site' as const,
+          entityId: id,
+          entityLabel: names[i],
+          fieldPath: '__removed__',
+          fieldLabel: 'Site removed',
+          before: names[i],
+          after: null,
+          valueKind: 'text' as const,
+        })),
+      });
+      pushReceipt(
+        {
+          headline: `Rolled back · ${n} shop${n === 1 ? '' : 's'} removed`,
+          detail: `${names.join(', ')}. Invites cancelled, nothing left on any planner. Run set-up again when the details are right.`,
+          href: '/settings/sites',
+          hrefLabel: 'Open Sites',
+        },
+        msgId,
+      );
+    },
+    [pushReceipt, recordTaskChanges, writeCmdState],
   );
 
   // ── Cancel ───────────────────────────────────────────────────────
@@ -3094,6 +3195,11 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       }
       return null;
     }
+    // Site set-up: the inverse is "remove these shops". The intent
+    // already points at the rollback card, so the args pass through.
+    if (commandId === 'site-setup') {
+      return Array.isArray(args.siteIds) && args.siteIds.length > 0 ? { ...args } : null;
+    }
     // product-swap, waste, stock — not safely invertible from args
     // alone in the prototype. Caller surfaces a notice in the chat.
     return null;
@@ -3197,7 +3303,8 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     // Site-setup wizard handlers
     submitSiteSetupPick,
     submitSiteSetupCopy,
-    submitSiteSetupRecipes,
+    submitSiteSetupFlex,
+    confirmSiteSetupRollback,
     submitSiteSetupTeam,
     submitSiteSetupTiers,
     submitSiteSetupProduction,

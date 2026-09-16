@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Site setup · step 6 — hot production.
+ * Site setup · step 7 — hot production.
  *
  * Mirrors the Hot production tab on the Production settings page:
  * production stations (hot-food recipes made together on a timed
@@ -10,6 +10,14 @@
  * default planner window, Product Control Review, and the carry-over
  * setting. All copied from the chosen shop. Benches live on the
  * production step — they belong to the production runs.
+ *
+ * Times differ by day of week (Wojciech, Pret: one setting for the
+ * whole week is wrong for weekends). The same multi-select day strip
+ * as the production step sits at the top of each shop: pick days, and
+ * the planner window, full-selection times and each station's batch
+ * cycle below are read from and written to those days. Stations,
+ * their recipes and min / max / multiple stay week-wide, as do the
+ * two review switches.
  *
  * Each station carries the Edit-station settings from Edify main:
  * name, batch cycle, assigned recipes, and min / max / multiple
@@ -27,11 +35,14 @@ import type { CardState } from './CardShell';
 import { RangePill, Stepper, WindowEditor, labelStyle, timeInputStyle } from './timeControls';
 import {
   ALL_HOT_RECIPES,
+  DAY_KEYS,
+  WEEKDAY_KEYS,
+  WEEKEND_KEYS,
   defaultBenchesHot,
   getTemplateShop,
   getNewSite,
 } from '../siteSetupFixtures';
-import type { BenchesHotSetup, HotStation, SiteBenchesHot } from '../siteSetupFixtures';
+import type { BenchesHotSetup, DayKey, FullSelectionRow, HotDaySettings, HotStation, SiteBenchesHot } from '../siteSetupFixtures';
 
 interface SiteSetupBenchesHotCardProps {
   state: CardState;
@@ -78,6 +89,31 @@ function RecipeChip({ name, disabled, onRemove }: { name: string; disabled: bool
         </button>
       )}
     </span>
+  );
+}
+
+function GroupBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      style={{
+        padding: '3px 9px',
+        borderRadius: '999px',
+        border: active
+          ? '1.5px solid var(--color-brand, #001c35)'
+          : '1.5px dashed var(--color-border, rgba(0,28,53,0.22))',
+        background: '#fff',
+        fontSize: '10.5px',
+        fontWeight: 600,
+        fontFamily: 'var(--font-primary)',
+        color: active ? 'var(--color-brand, #001c35)' : 'var(--color-text-secondary)',
+        cursor: 'pointer',
+      }}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -130,8 +166,33 @@ export default function SiteSetupBenchesHotCard({
   const [openFstRow, setOpenFstRow] = useState<string | null>(null);
   /** Open planner-window editor, keyed by siteId. */
   const [openPlanner, setOpenPlanner] = useState<string | null>(null);
+  /** Which day pills are lit per site. Day-level edits apply to all of
+   *  them. Weekdays first: that's where most of the settings live. */
+  const [selectedDays, setSelectedDays] = useState<Record<string, DayKey[]>>(() =>
+    Object.fromEntries(siteIds.map((id) => [id, [...WEEKDAY_KEYS]])),
+  );
 
   const disabled = state !== 'pending';
+
+  const daysFor = (siteId: string): DayKey[] => selectedDays[siteId] ?? [...WEEKDAY_KEYS];
+
+  const toggleDay = (siteId: string, day: DayKey) => {
+    setSelectedDays((prev) => {
+      const current = prev[siteId] ?? [...WEEKDAY_KEYS];
+      const next = current.includes(day)
+        ? current.filter((d) => d !== day)
+        : DAY_KEYS.filter((d) => current.includes(d) || d === day);
+      if (next.length === 0) return prev; // keep at least one day lit
+      return { ...prev, [siteId]: next };
+    });
+    setOpenPlanner(null);
+    setOpenFstRow(null);
+  };
+  const selectGroup = (siteId: string, group: DayKey[]) => {
+    setSelectedDays((prev) => ({ ...prev, [siteId]: [...group] }));
+    setOpenPlanner(null);
+    setOpenFstRow(null);
+  };
 
   const patchSite = (siteId: string, patch: (s: BenchesHotSetup) => BenchesHotSetup) => {
     setBenchesHot((prev) => ({ ...prev, [siteId]: patch(prev[siteId]) }));
@@ -144,22 +205,64 @@ export default function SiteSetupBenchesHotCard({
     }));
   };
 
-  const patchFstRow = (
-    siteId: string,
-    rowIdx: number,
-    patch: (row: BenchesHotSetup['fullSelectionTimes'][number]) => BenchesHotSetup['fullSelectionTimes'][number],
-  ) => {
-    patchSite(siteId, (s) => ({
-      ...s,
-      fullSelectionTimes: s.fullSelectionTimes.map((r, i) => (i === rowIdx ? patch(r) : r)),
+  /** Set a station's batch cycle on every selected day. */
+  const setStationSlot = (siteId: string, stationIdx: number, mins: number) => {
+    const days = daysFor(siteId);
+    patchStation(siteId, stationIdx, (st) => {
+      const slotMins = { ...st.slotMins };
+      for (const d of days) slotMins[d] = mins;
+      return { ...st, slotMins };
+    });
+  };
+
+  /** Apply a day-settings patch to every selected day of a site. */
+  const patchDays = (siteId: string, patch: (d: HotDaySettings) => HotDaySettings) => {
+    const days = daysFor(siteId);
+    patchSite(siteId, (s) => {
+      const byDay = { ...s.byDay };
+      for (const d of days) byDay[d] = patch(byDay[d]);
+      return { ...s, byDay };
+    });
+  };
+
+  const patchFstRow = (siteId: string, rowIdx: number, patch: (row: FullSelectionRow) => FullSelectionRow) => {
+    patchDays(siteId, (d) => ({
+      ...d,
+      fullSelectionTimes: d.fullSelectionTimes.map((r, i) => (i === rowIdx ? patch(r) : r)),
     }));
+  };
+
+  /** Read a value across the selected days: the first day's value,
+   *  plus whether the days disagree. */
+  const readDays = <T,>(siteId: string, get: (d: HotDaySettings) => T, same: (a: T, b: T) => boolean) => {
+    const days = daysFor(siteId);
+    const first = get(benchesHot[siteId].byDay[days[0]]);
+    const mixed = days.some((d) => !same(get(benchesHot[siteId].byDay[d]), first));
+    return { value: first, mixed };
+  };
+
+  /** Copy the first selected day's settings onto the other selected
+   *  days, so the operator can edit them as one. */
+  const unifyDays = (siteId: string) => {
+    const days = daysFor(siteId);
+    patchSite(siteId, (s) => {
+      const src = s.byDay[days[0]];
+      const byDay = { ...s.byDay };
+      for (const d of days) {
+        byDay[d] = {
+          plannerWindow: { ...src.plannerWindow },
+          fullSelectionTimes: src.fullSelectionTimes.map((r) => ({ ...r, recipes: [...r.recipes] })),
+        };
+      }
+      return { ...s, byDay };
+    });
   };
 
   return (
     <CardShell
       icon={Flame}
       title="Hot production"
-      subtitle="Copied with each shop. Stations, recipes and full-selection times stay editable"
+      subtitle="Copied with each shop. Times can differ by day: pick days, then set the planner window, batch cycles and full-selection times"
       state={state}
       confirmLabel="Continue"
       onCancel={onCancel}
@@ -174,6 +277,16 @@ export default function SiteSetupBenchesHotCard({
           const setup = benchesHot[siteId];
           if (!setup) return null;
           const plannerOpen = openPlanner === siteId;
+          const days = daysFor(siteId);
+          const planner = readDays(siteId, (d) => d.plannerWindow, (a, b) => a.start === b.start && a.end === b.end);
+          const fst = readDays(
+            siteId,
+            (d) => d.fullSelectionTimes,
+            (a, b) => JSON.stringify(a) === JSON.stringify(b),
+          );
+          const isWeekend = days.every((d) => WEEKEND_KEYS.includes(d));
+          const isWeekdays = days.length === WEEKDAY_KEYS.length && WEEKDAY_KEYS.every((d) => days.includes(d));
+          const isAll = days.length === DAY_KEYS.length;
           return (
             <div
               key={siteId}
@@ -192,8 +305,48 @@ export default function SiteSetupBenchesHotCard({
                   {site.shortName}
                 </span>
                 <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginLeft: '8px' }}>
-                  Copied from {template?.name ?? 'the template'}
+                  Copied from {template?.name ?? 'the template'} · weekends from its weekend settings
                 </span>
+              </div>
+
+              {/* Multi-select day pills + quick groups */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {DAY_KEYS.map((day) => {
+                    const selected = days.includes(day);
+                    return (
+                      <button
+                        key={day}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => toggleDay(siteId, day)}
+                        aria-pressed={selected}
+                        style={{
+                          padding: '3px 9px',
+                          borderRadius: '999px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          fontFamily: 'var(--font-primary)',
+                          cursor: disabled ? 'default' : 'pointer',
+                          border: selected
+                            ? '1.5px solid var(--color-brand, #001c35)'
+                            : '1.5px solid var(--color-border, rgba(0,28,53,0.18))',
+                          background: selected ? 'var(--color-brand, #001c35)' : '#fff',
+                          color: selected ? '#fff' : 'var(--color-text-secondary)',
+                        }}
+                      >
+                        {day}
+                      </button>
+                    );
+                  })}
+                </div>
+                {!disabled && (
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <GroupBtn label="Mon–Fri" active={isWeekdays} onClick={() => selectGroup(siteId, WEEKDAY_KEYS)} />
+                    <GroupBtn label="Sat–Sun" active={isWeekend && days.length === 2} onClick={() => selectGroup(siteId, WEEKEND_KEYS)} />
+                    <GroupBtn label="All week" active={isAll} onClick={() => selectGroup(siteId, DAY_KEYS)} />
+                  </div>
+                )}
               </div>
 
               {/* Production stations */}
@@ -215,7 +368,12 @@ export default function SiteSetupBenchesHotCard({
                           {st.name}
                         </span>
                         <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                          {st.slotMins} min batches · {st.recipes.length} recipes
+                          {(() => {
+                            const first = st.slotMins[days[0]];
+                            const mixed = days.some((d) => st.slotMins[d] !== first);
+                            return mixed ? 'Mixed batch cycles' : `${first} min batches`;
+                          })()}
+                          {' · '}{st.recipes.length} recipes
                           {st.min > 0 || st.max > 0 ? ` · min ${st.min} · max ${st.max}` : ''}
                           {st.multiple > 0 ? ` · ×${st.multiple}` : ''}
                         </span>
@@ -255,13 +413,13 @@ export default function SiteSetupBenchesHotCard({
                               />
                             </span>
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={labelStyle}>Batch cycle</span>
+                              <span style={labelStyle}>Batch cycle {days.length === 7 ? 'all week' : days.join(' ')}</span>
                               <select
                                 disabled={disabled}
-                                value={st.slotMins}
-                                onChange={(e) =>
-                                  patchStation(siteId, stationIdx, (x) => ({ ...x, slotMins: Number(e.target.value) }))
-                                }
+                                value={days.every((d) => st.slotMins[d] === st.slotMins[days[0]]) ? st.slotMins[days[0]] : ''}
+                                onChange={(e) => {
+                                  if (e.target.value) setStationSlot(siteId, stationIdx, Number(e.target.value));
+                                }}
                                 style={{
                                   padding: '3px 6px',
                                   borderRadius: '8px',
@@ -273,6 +431,9 @@ export default function SiteSetupBenchesHotCard({
                                   background: '#fff',
                                 }}
                               >
+                                {!days.every((d) => st.slotMins[d] === st.slotMins[days[0]]) && (
+                                  <option value="">Mixed</option>
+                                )}
                                 {[30, 45, 60, 90].map((mins) => (
                                   <option key={mins} value={mins}>
                                     {mins} min
@@ -395,9 +556,24 @@ export default function SiteSetupBenchesHotCard({
                 }}
               >
                 <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                  Full-selection times · top up the forecast with a fixed extra quantity at a set time
+                  Full-selection times {days.length === 7 ? 'all week' : days.join(' ')} · top up the forecast with a fixed extra quantity at a set time
                 </span>
-                {setup.fullSelectionTimes.map((row, rowIdx) => {
+                {fst.mixed && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '11px', color: '#7A3800' }}>
+                    The selected days have different full-selection times. Pick one day to edit it, or
+                    {!disabled && (
+                      <button type="button" onClick={() => unifyDays(siteId)} style={disclosureBtnStyle(disabled)}>
+                        use {days[0]}&rsquo;s settings for all {days.length}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {!fst.mixed && fst.value.length === 0 && (
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+                    None on {days.length === 7 ? 'any day' : days.join(', ')}. The forecast runs on its own.
+                  </span>
+                )}
+                {!fst.mixed && fst.value.map((row, rowIdx) => {
                   const fstKey = `${siteId}:${rowIdx}`;
                   const listOpen = openFstRow === fstKey;
                   return (
@@ -433,9 +609,9 @@ export default function SiteSetupBenchesHotCard({
                             type="button"
                             aria-label="Remove full-selection time"
                             onClick={() =>
-                              patchSite(siteId, (s) => ({
-                                ...s,
-                                fullSelectionTimes: s.fullSelectionTimes.filter((_, i) => i !== rowIdx),
+                              patchDays(siteId, (d) => ({
+                                ...d,
+                                fullSelectionTimes: d.fullSelectionTimes.filter((_, i) => i !== rowIdx),
                               }))
                             }
                             style={{
@@ -490,19 +666,19 @@ export default function SiteSetupBenchesHotCard({
                     </div>
                   );
                 })}
-                {!disabled && (
+                {!disabled && !fst.mixed && (
                   <button
                     type="button"
                     onClick={() =>
-                      patchSite(siteId, (s) => ({
-                        ...s,
-                        fullSelectionTimes: [...s.fullSelectionTimes, { time: '06:00', recipes: [], qty: 1 }],
+                      patchDays(siteId, (d) => ({
+                        ...d,
+                        fullSelectionTimes: [...d.fullSelectionTimes, { time: isWeekend ? '07:30' : '06:00', recipes: [], qty: 1 }],
                       }))
                     }
                     style={{ ...disclosureBtnStyle(disabled), alignSelf: 'flex-start' }}
                   >
                     <Plus size={13} strokeWidth={2.2} />
-                    Add time
+                    Add time {days.length === 7 ? 'all week' : `for ${days.join(', ')}`}
                   </button>
                 )}
               </div>
@@ -522,18 +698,21 @@ export default function SiteSetupBenchesHotCard({
                     Planner
                   </span>
                   <RangePill
-                    text={`${setup.plannerWindow.start} – ${setup.plannerWindow.end}`}
+                    text={planner.mixed ? 'Mixed' : `${planner.value.start} – ${planner.value.end}`}
                     open={plannerOpen}
                     disabled={disabled}
                     onClick={() => setOpenPlanner(plannerOpen ? null : siteId)}
                   />
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                    {days.length === 7 ? 'all week' : days.join(' ')}
+                  </span>
                 </div>
                 {plannerOpen && (
                   <WindowEditor
-                    window={setup.plannerWindow}
+                    window={planner.value}
                     disabled={disabled}
                     onChange={(edge, value) =>
-                      patchSite(siteId, (s) => ({ ...s, plannerWindow: { ...s.plannerWindow, [edge]: value } }))
+                      patchDays(siteId, (d) => ({ ...d, plannerWindow: { ...d.plannerWindow, [edge]: value } }))
                     }
                     onDone={() => setOpenPlanner(null)}
                   />

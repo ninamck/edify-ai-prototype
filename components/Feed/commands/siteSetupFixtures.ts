@@ -3,14 +3,15 @@
  * wizard (Pret UK rollout demo).
  *
  * Three data sets:
- *   • NEW_SITES — the shops on the spreadsheet the operator attaches
- *     (SITE_SHEET_FILE_NAME). Sites are NOT held in Workday, so the
- *     property/ops team sends a sheet with one row per shop: name,
- *     site code, profit centre, address, opening date, delivery window,
- *     delivery contact. Step 1 parses that sheet and shows every field
- *     filled in and editable. Each entry also carries the staff roster,
- *     which DOES come from Workday (the HR system) once the shop is
- *     matched by name.
+ *   • NEW_SITES — shops held in ShopDB (Pret's shop database) that are
+ *     not yet in Edify. Sites are NOT held in Workday. ShopDB carries
+ *     the property record: name, site code, profit centre, address,
+ *     opening date, delivery windows, delivery contact. Step 1 syncs
+ *     that record and shows every field filled in and editable. Each
+ *     entry also carries the staff roster, which DOES come from
+ *     Workday (the HR system) once the shop is matched by name.
+ *     (Pret PRD review, 9 Sep 2026: "ShopDB is our database where we
+ *     hold information about shops.")
  *   • TEMPLATE_SHOPS — live Pret shops a new site can copy its setup
  *     from: range, tier-per-day pattern, production week, selection
  *     times, permissions.
@@ -18,9 +19,10 @@
  *     supersets (a "floor"): each tier's recipe count is cumulative,
  *     tier N contains everything in tier N−1 plus more. Picking a tier
  *     for a day gives the shop that whole menu — recipes are never
- *     assigned to a site by hand. This is the target model from the
- *     Site Setup at Scale PRD (4.6), not the folder-per-tier model in
- *     the current production codebase.
+ *     assigned to a site by hand. The only shop-level food choice is
+ *     flexible lines (tagged products a shop may opt out of). This is
+ *     the target model from the Site Setup at Scale PRD (4.6), not the
+ *     folder-per-tier model in the current production codebase.
  *
  * Pure data + tiny lookups. No React.
  */
@@ -29,6 +31,67 @@
 
 export type DayKey = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
 export const DAY_KEYS: DayKey[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+export const WEEKDAY_KEYS: DayKey[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+export const WEEKEND_KEYS: DayKey[] = ['Sat', 'Sun'];
+
+// ─── Dates ───────────────────────────────────────────────────────────────────
+//
+// Opening dates come from ShopDB as ISO days (YYYY-MM-DD). Go-live in
+// Edify is a separate date: the team needs access before opening to
+// set production and place first orders, so go-live defaults to a few
+// days earlier and stays editable.
+
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+function parseIso(iso: string): { y: number; m: number; d: number } | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  if (!m) return null;
+  return { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) };
+}
+
+/** "2026-09-22" → "22 Sep". Unparseable input is returned as typed. */
+export function formatDay(iso: string): string {
+  const p = parseIso(iso);
+  if (!p) return iso;
+  return `${p.d} ${MONTHS_SHORT[p.m - 1]}`;
+}
+
+/** "2026-09-22" → "22 September". */
+export function formatDayLong(iso: string): string {
+  const p = parseIso(iso);
+  if (!p) return iso;
+  return `${p.d} ${MONTHS_LONG[p.m - 1]}`;
+}
+
+/** Shift an ISO day by n days (negative = earlier). Uses UTC so the
+ *  result never drifts across a DST change. */
+export function addDays(iso: string, n: number): string {
+  const p = parseIso(iso);
+  if (!p) return iso;
+  const t = Date.UTC(p.y, p.m - 1, p.d) + n * 86_400_000;
+  const dt = new Date(t);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+}
+
+/** Whole days from a to b (b − a). 0 when either side is unparseable. */
+export function daysBetween(a: string, b: string): number {
+  const pa = parseIso(a);
+  const pb = parseIso(b);
+  if (!pa || !pb) return 0;
+  return Math.round((Date.UTC(pb.y, pb.m - 1, pb.d) - Date.UTC(pa.y, pa.m - 1, pa.d)) / 86_400_000);
+}
+
+/** "1 Aug – 31 Aug" for a dated range. */
+export function formatDateRange(fromIso: string, toIso: string): string {
+  return `${formatDay(fromIso)} – ${formatDay(toIso)}`;
+}
+
+/** How many days before ShopDB's opening date the shop goes live in
+ *  Edify by default. Natalia (Pret): production must be set the day
+ *  before opening at minimum, and first orders placed a couple of days
+ *  before that. */
+export const DEFAULT_GO_LIVE_OFFSET_DAYS = 3;
 
 // ─── Roles ───────────────────────────────────────────────────────────────────
 
@@ -73,19 +136,57 @@ export interface WorkdayPerson {
 export interface RangeLadder {
   id: string;
   name: string;
+  /** One line under the name in the range picker. */
+  descriptor: string;
   /** Cumulative recipe count per tier, index 0 = tier 1. Tier N is a
    *  superset of tier N−1, so counts only ever grow. */
   tierRecipes: number[];
 }
 
+/** Pret runs many ranges, so the picker is a searchable dropdown, not
+ *  a pill row. The first three are the ones the copied shops use. */
 export const RANGES: RangeLadder[] = [
-  { id: 'regional',      name: 'Regional',      tierRecipes: [96, 148, 185, 212, 236, 251] },
-  { id: 'london-worker', name: 'London Worker', tierRecipes: [104, 162, 199, 228, 249, 262] },
-  { id: 'transport-hub', name: 'Transport Hub', tierRecipes: [88, 132, 171, 198, 221, 240] },
+  { id: 'regional',      name: 'Regional',           descriptor: 'High streets outside London',       tierRecipes: [96, 148, 185, 212, 236, 251] },
+  { id: 'london-worker', name: 'London Worker',      descriptor: 'Central London, weekday office trade', tierRecipes: [104, 162, 199, 228, 249, 262] },
+  { id: 'transport-hub', name: 'Transport Hub',      descriptor: 'Stations and interchanges',          tierRecipes: [88, 132, 171, 198, 221, 240] },
+  { id: 'london-mix',    name: 'London Mix',         descriptor: 'London shops with weekend footfall',   tierRecipes: [102, 158, 194, 224, 246, 260] },
+  { id: 'airport',       name: 'Airport',            descriptor: 'Airside and landside, long hours',     tierRecipes: [84, 126, 164, 190, 214, 232] },
+  { id: 'motorway',      name: 'Motorway Services',  descriptor: 'Roadside, grab and go',                tierRecipes: [72, 110, 142, 168, 188, 204] },
+  { id: 'veggie',        name: 'Veggie Pret',        descriptor: 'Vegetarian and vegan only',            tierRecipes: [78, 118, 150, 176, 198, 212] },
+  { id: 'scotland',      name: 'Scotland',           descriptor: 'Scottish shops, regional lines',       tierRecipes: [92, 142, 180, 206, 230, 246] },
 ];
 
 export function getRange(id: string): RangeLadder | undefined {
   return RANGES.find((r) => r.id === id);
+}
+
+/** Highest tier a shop sits on in the week: the union of its menus. */
+export function maxTier(tiers: Record<DayKey, number>): number {
+  return Math.max(...DAY_KEYS.map((d) => tiers[d] ?? 1));
+}
+
+// ─── Dated tier changes ──────────────────────────────────────────────────────
+//
+// A shop's tier pattern can change for a period and revert: Crown
+// Passage sits on Tier 2 Mon–Fri but moved to Tier 1 for August
+// (Wojciech, Pret). Each schedule is an effective-from / effective-to
+// window with its own day → tier pattern; outside the window the
+// shop's regular pattern applies.
+
+export interface TierSchedule {
+  id: string;
+  /** ISO days, inclusive. */
+  from: string;
+  to: string;
+  tiers: Record<DayKey, number>;
+}
+
+/** Per site → dated changes, in date order. */
+export type TierSchedules = Record<string, TierSchedule[]>;
+
+/** "Tier 1 all week · 1 Aug – 31 Aug". */
+export function describeTierSchedule(s: TierSchedule): string {
+  return `${describeTierPattern(s.tiers)} · ${formatDateRange(s.from, s.to)}`;
 }
 
 /** Recipe count for a tier (1-based) in a range. */
@@ -107,6 +208,7 @@ export function describeTierPattern(tiers: Record<DayKey, number>): string {
     if (last && last.tier === tier) last.to = day;
     else runs.push({ from: day, to: day, tier });
   }
+  if (runs.length === 1) return `Tier ${runs[0].tier} all week`;
   return runs
     .map((r) => `Tier ${r.tier} ${r.from === r.to ? r.from : `${r.from}–${r.to}`}`)
     .join(' · ');
@@ -221,11 +323,18 @@ function deriveCategoryWindows(forecast: TimeWindow): Record<string, TimeWindow>
 // set time, top up the forecast with a fixed extra quantity of chosen
 // recipes), the default planner window, Product Control Review, and
 // the carry-over adjustment setting. All copied with the shop.
+//
+// Times differ by day of week. Wojciech (Pret): one setting currently
+// applies to the whole week, but weekends have different opening
+// hours and expectations. So the planner window, the full-selection
+// times and each station's batch cycle are held per day; the
+// stations themselves (name, recipes, min / max / multiple) and the
+// two review switches are week-wide.
 
 export interface HotStation {
   name: string;
-  /** Batch cycle: how often a new batch starts. */
-  slotMins: number;
+  /** Batch cycle per day: how often a new batch starts. */
+  slotMins: Record<DayKey, number>;
   /** Recipes assigned to the station's batch cycle. */
   recipes: string[];
   /** Min / max batch size and rounding multiple. 0 = none. */
@@ -240,13 +349,54 @@ export interface FullSelectionRow {
   qty: number;
 }
 
+/** The settings that change with the day. */
+export interface HotDaySettings {
+  plannerWindow: TimeWindow;
+  fullSelectionTimes: FullSelectionRow[];
+}
+
 export interface BenchesHotSetup {
   stations: HotStation[];
-  fullSelectionTimes: FullSelectionRow[];
-  plannerWindow: TimeWindow;
+  byDay: Record<DayKey, HotDaySettings>;
   productControlReview: boolean;
   /** Include bench-assigned productions in carry-over adjustments. */
   carryOverBenchAssigned: boolean;
+}
+
+/** Same value every day. */
+export function allDays<T>(value: T): Record<DayKey, T> {
+  return Object.fromEntries(DAY_KEYS.map((d) => [d, value])) as Record<DayKey, T>;
+}
+
+/** Weekday value Mon–Fri, weekend value Sat–Sun. */
+export function weekSplit<T>(weekday: T, weekend: T): Record<DayKey, T> {
+  return Object.fromEntries(DAY_KEYS.map((d) => [d, WEEKEND_KEYS.includes(d) ? weekend : weekday])) as Record<DayKey, T>;
+}
+
+/** Compress a per-day value into runs: "60 min Mon–Fri · 90 min Sat–Sun". */
+export function describeByDay<T>(byDay: Record<DayKey, T>, render: (v: T) => string): string {
+  const runs: { from: DayKey; to: DayKey; text: string }[] = [];
+  for (const day of DAY_KEYS) {
+    const text = render(byDay[day]);
+    const last = runs[runs.length - 1];
+    if (last && last.text === text) last.to = day;
+    else runs.push({ from: day, to: day, text });
+  }
+  if (runs.length === 1) return runs[0].text;
+  return runs
+    .map((r) => `${r.text} ${r.from === r.to ? r.from : `${r.from}–${r.to}`}`)
+    .join(' · ');
+}
+
+/** "2 full-selection times weekdays, 1 weekends" (or one figure when
+ *  the week is uniform). */
+export function describeFullSelectionCounts(byDay: Record<DayKey, HotDaySettings>): string {
+  const wk = byDay.Mon.fullSelectionTimes.length;
+  const we = byDay.Sat.fullSelectionTimes.length;
+  const uniform = DAY_KEYS.every((d) => byDay[d].fullSelectionTimes.length === (WEEKEND_KEYS.includes(d) ? we : wk));
+  if (uniform && wk === we) return `${wk} full-selection time${wk === 1 ? '' : 's'}`;
+  if (uniform) return `${wk} full-selection time${wk === 1 ? '' : 's'} weekdays, ${we} weekends`;
+  return describeByDay(byDay, (d) => `${d.fullSelectionTimes.length} full-selection`);
 }
 
 export type SiteBenchesHot = Record<string, BenchesHotSetup>;
@@ -291,32 +441,52 @@ export const HOT_RECIPE_POOL = {
 
 export const ALL_HOT_RECIPES = [...HOT_RECIPE_POOL.bakery, ...HOT_RECIPE_POOL.hotChef];
 
-const station = (name: string, slotMins: number, recipes: string[], min = 0, max = 0, multiple = 0): HotStation => ({
+/** Station builder. `weekendSlotMins` lets the weekend batch cycle
+ *  differ (slower trade, longer cycle). */
+const station = (
+  name: string,
+  slotMins: number,
+  recipes: string[],
+  min = 0,
+  max = 0,
+  multiple = 0,
+  weekendSlotMins = slotMins,
+): HotStation => ({
   name,
-  slotMins,
+  slotMins: weekSplit(slotMins, weekendSlotMins),
   recipes,
   min,
   max,
   multiple,
 });
 
+/** Per-day hot settings from a weekday and a weekend definition. */
+const hotDays = (weekday: HotDaySettings, weekend: HotDaySettings): Record<DayKey, HotDaySettings> =>
+  weekSplit(weekday, weekend);
+
+function cloneDay(d: HotDaySettings): HotDaySettings {
+  return {
+    plannerWindow: { ...d.plannerWindow },
+    fullSelectionTimes: d.fullSelectionTimes.map((r) => ({ ...r, recipes: [...r.recipes] })),
+  };
+}
+
 /** Hot production for a new site, deep-copied from its copied shop so
- *  edits don't leak between sites. */
+ *  edits don't leak between sites or between days. */
 export function defaultBenchesHot(templateId: string): BenchesHotSetup {
   const src = getTemplateShop(templateId)?.benchesHot;
   if (!src) {
+    const empty: HotDaySettings = { plannerWindow: { start: '05:00', end: '18:00' }, fullSelectionTimes: [] };
     return {
       stations: [],
-      fullSelectionTimes: [],
-      plannerWindow: { start: '05:00', end: '18:00' },
+      byDay: Object.fromEntries(DAY_KEYS.map((d) => [d, cloneDay(empty)])) as Record<DayKey, HotDaySettings>,
       productControlReview: true,
       carryOverBenchAssigned: true,
     };
   }
   return {
-    stations: src.stations.map((s) => ({ ...s, recipes: [...s.recipes] })),
-    fullSelectionTimes: src.fullSelectionTimes.map((r) => ({ ...r, recipes: [...r.recipes] })),
-    plannerWindow: { ...src.plannerWindow },
+    stations: src.stations.map((s) => ({ ...s, slotMins: { ...s.slotMins }, recipes: [...s.recipes] })),
+    byDay: Object.fromEntries(DAY_KEYS.map((d) => [d, cloneDay(src.byDay[d])])) as Record<DayKey, HotDaySettings>,
     productControlReview: src.productControlReview,
     carryOverBenchAssigned: src.carryOverBenchAssigned,
   };
@@ -379,14 +549,24 @@ export const TEMPLATE_SHOPS: TemplateShop[] = [
     benches: 3,
     benchesHot: {
       stations: [
-        station('Bakery', 60, HOT_RECIPE_POOL.bakery.slice(0, 10), 2, 12),
-        station('Hot Chef', 30, HOT_RECIPE_POOL.hotChef.slice(0, 14), 1, 6),
+        station('Bakery', 60, HOT_RECIPE_POOL.bakery.slice(0, 10), 2, 12, 0, 90),
+        station('Hot Chef', 30, HOT_RECIPE_POOL.hotChef.slice(0, 14), 1, 6, 0, 45),
       ],
-      fullSelectionTimes: [
-        { time: '05:00', recipes: ['All Butter Croissant', 'Pain au Chocolat'], qty: 2 },
-        { time: '07:30', recipes: ['Sausage Roll'], qty: 1 },
-      ],
-      plannerWindow: { start: '05:00', end: '18:00' },
+      byDay: hotDays(
+        {
+          plannerWindow: { start: '05:00', end: '18:00' },
+          fullSelectionTimes: [
+            { time: '05:00', recipes: ['All Butter Croissant', 'Pain au Chocolat'], qty: 2 },
+            { time: '07:30', recipes: ['Sausage Roll'], qty: 1 },
+          ],
+        },
+        {
+          plannerWindow: { start: '07:00', end: '17:00' },
+          fullSelectionTimes: [
+            { time: '07:00', recipes: ['All Butter Croissant', 'Pain au Chocolat'], qty: 1 },
+          ],
+        },
+      ),
       productControlReview: true,
       carryOverBenchAssigned: true,
     },
@@ -405,12 +585,18 @@ export const TEMPLATE_SHOPS: TemplateShop[] = [
     benchesHot: {
       stations: [
         station('Bakery', 60, HOT_RECIPE_POOL.bakery.slice(0, 8), 1, 8),
-        station('Hot Chef', 30, HOT_RECIPE_POOL.hotChef.slice(0, 10), 1, 4),
+        station('Hot Chef', 30, HOT_RECIPE_POOL.hotChef.slice(0, 10), 1, 4, 0, 45),
       ],
-      fullSelectionTimes: [
-        { time: '06:30', recipes: ['All Butter Croissant'], qty: 1 },
-      ],
-      plannerWindow: { start: '06:00', end: '16:00' },
+      byDay: hotDays(
+        {
+          plannerWindow: { start: '06:00', end: '16:00' },
+          fullSelectionTimes: [{ time: '06:30', recipes: ['All Butter Croissant'], qty: 1 }],
+        },
+        {
+          plannerWindow: { start: '08:00', end: '15:00' },
+          fullSelectionTimes: [],
+        },
+      ),
       productControlReview: false,
       carryOverBenchAssigned: true,
     },
@@ -430,14 +616,22 @@ export const TEMPLATE_SHOPS: TemplateShop[] = [
     benches: 4,
     benchesHot: {
       stations: [
-        station('Bakery', 60, HOT_RECIPE_POOL.bakery, 2, 12, 2),
-        station('Hot Chef', 30, HOT_RECIPE_POOL.hotChef.slice(0, 16), 2, 8),
+        station('Bakery', 60, HOT_RECIPE_POOL.bakery, 2, 12, 2, 90),
+        station('Hot Chef', 30, HOT_RECIPE_POOL.hotChef.slice(0, 16), 2, 8, 0, 60),
       ],
-      fullSelectionTimes: [
-        { time: '05:00', recipes: ['All Butter Croissant', 'Pain au Chocolat', 'Almond Croissant'], qty: 2 },
-        { time: '11:30', recipes: ['Mac & Cheese'], qty: 2 },
-      ],
-      plannerWindow: { start: '05:00', end: '18:00' },
+      byDay: hotDays(
+        {
+          plannerWindow: { start: '05:00', end: '18:00' },
+          fullSelectionTimes: [
+            { time: '05:00', recipes: ['All Butter Croissant', 'Pain au Chocolat', 'Almond Croissant'], qty: 2 },
+            { time: '11:30', recipes: ['Mac & Cheese'], qty: 2 },
+          ],
+        },
+        {
+          plannerWindow: { start: '07:30', end: '16:00' },
+          fullSelectionTimes: [{ time: '07:30', recipes: ['All Butter Croissant'], qty: 1 }],
+        },
+      ),
       productControlReview: true,
       carryOverBenchAssigned: true,
     },
@@ -456,13 +650,23 @@ export const TEMPLATE_SHOPS: TemplateShop[] = [
     benches: 3,
     benchesHot: {
       stations: [
-        station('Bakery', 60, HOT_RECIPE_POOL.bakery.slice(0, 9), 2, 10),
-        station('Hot Chef', 30, HOT_RECIPE_POOL.hotChef.slice(0, 12), 1, 6),
+        station('Bakery', 60, HOT_RECIPE_POOL.bakery.slice(0, 9), 2, 10, 0, 90),
+        station('Hot Chef', 30, HOT_RECIPE_POOL.hotChef.slice(0, 12), 1, 6, 0, 45),
       ],
-      fullSelectionTimes: [
-        { time: '06:00', recipes: ['All Butter Croissant', 'Bacon Roll'], qty: 2 },
-      ],
-      plannerWindow: { start: '05:30', end: '17:00' },
+      byDay: hotDays(
+        {
+          plannerWindow: { start: '05:30', end: '17:00' },
+          fullSelectionTimes: [
+            { time: '06:00', recipes: ['All Butter Croissant', 'Bacon Roll'], qty: 2 },
+            { time: '11:30', recipes: ['Tomato Soup', 'Mac & Cheese'], qty: 1 },
+          ],
+        },
+        {
+          // Quieter weekend: later start, one morning top-up only.
+          plannerWindow: { start: '07:00', end: '17:00' },
+          fullSelectionTimes: [{ time: '07:30', recipes: ['All Butter Croissant'], qty: 1 }],
+        },
+      ),
       productControlReview: true,
       carryOverBenchAssigned: false,
     },
@@ -485,11 +689,23 @@ export const TEMPLATE_SHOPS: TemplateShop[] = [
         station('Bakery', 45, HOT_RECIPE_POOL.bakery.slice(0, 11), 2, 12, 2),
         station('Hot Chef', 30, HOT_RECIPE_POOL.hotChef, 2, 10),
       ],
-      fullSelectionTimes: [
-        { time: '04:30', recipes: ['All Butter Croissant', 'Pain au Chocolat'], qty: 3 },
-        { time: '16:00', recipes: ['Cheese Toastie'], qty: 2 },
-      ],
-      plannerWindow: { start: '04:30', end: '20:00' },
+      // Station shop: seven-day trade, so weekends only start later.
+      byDay: hotDays(
+        {
+          plannerWindow: { start: '04:30', end: '20:00' },
+          fullSelectionTimes: [
+            { time: '04:30', recipes: ['All Butter Croissant', 'Pain au Chocolat'], qty: 3 },
+            { time: '16:00', recipes: ['Cheese Toastie'], qty: 2 },
+          ],
+        },
+        {
+          plannerWindow: { start: '05:30', end: '20:00' },
+          fullSelectionTimes: [
+            { time: '05:30', recipes: ['All Butter Croissant', 'Pain au Chocolat'], qty: 2 },
+            { time: '16:00', recipes: ['Cheese Toastie'], qty: 2 },
+          ],
+        },
+      ),
       productControlReview: true,
       carryOverBenchAssigned: true,
     },
@@ -500,14 +716,18 @@ export function getTemplateShop(id: string): TemplateShop | undefined {
   return TEMPLATE_SHOPS.find((t) => t.id === id);
 }
 
-// ─── Shop recipes (copied with the shop) ─────────────────────────────────────
+// ─── Shop recipes (set by range and tier) ────────────────────────────────────
 //
-// The production recipes a shop makes on site: what lands on the bench
-// and the hot stations, plus barista drinks. Distinct from the range /
-// tier ladder above, which sets which menu sells on which day. In Edify
-// main recipes are held per site, so a new shop copies its mirror
-// shop's library (~95 recipes) and the operator unticks anything the
-// new shop won't make. All copied unless unticked.
+// Recipes are not assigned to a shop by hand. Every product already
+// sits in a range at a tier, so giving a shop its range and a tier per
+// day gives it the whole menu: the core range is identical for every
+// shop on the same range and tier (Wojciech, Pret: "our goal is to
+// standardise and control centrally"). The one shop-level choice is
+// flexible lines: products carrying the Flexible tag that a shop may
+// opt out of after talking to ops. This library is a sample of the
+// ladder above (the ladder's counts are the truth for totals); it
+// supplies the flexible lines the card lists and the categories the
+// read-backs name.
 
 export type RecipeCategory =
   | 'Croissants & bakery'
@@ -534,36 +754,26 @@ export interface ShopRecipe {
   id: string;
   name: string;
   category: RecipeCategory;
-  /** Only these template shops carry it (city / station extras). */
-  only?: string[];
-  /** These template shops don't carry it (small-shop core range). */
-  not?: string[];
+  /** Lowest tier that carries it. Tier N includes every tier below. */
+  tier: number;
+  /** Carries the Flexible tag: a shop may choose not to sell it. */
+  flexible: boolean;
 }
 
 const slug = (s: string) => s.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
-function recipes(category: RecipeCategory, names: string[], flags?: { only?: string[]; not?: string[] }): ShopRecipe[] {
-  return names.map((name) => ({ id: slug(name), name, category, ...(flags ?? {}) }));
+function recipes(category: RecipeCategory, tier: number, names: string[], flexible = false): ShopRecipe[] {
+  return names.map((name) => ({ id: slug(name), name, category, tier, flexible }));
 }
 
-const SMALL = ['crown-passage'];
-const CITY = ['cheapside'];
-const STATION = ['st-pancras'];
-
-/** Every recipe any copied shop holds. `templateRecipes` narrows it. */
+/** Sample of the ladder. Core lines at tier 1–2; wider lines higher;
+ *  flexible lines spread across tiers 2–5. */
 export const RECIPE_LIBRARY: ShopRecipe[] = [
-  ...recipes('Croissants & bakery', HOT_RECIPE_POOL.bakery),
-  ...recipes('Breakfast', [
-    'Porridge',
-    'Bircher Muesli',
-    'Greek Yoghurt & Granola Pot',
-    'Egg Mayo Breakfast Baguette',
-    'Avocado & Egg Brioche',
-    'Bacon & Egg Brioche',
-    'Fruit Salad Pot',
-    'Berry & Yoghurt Pot',
-  ]),
-  ...recipes('Sandwiches & baguettes', [
+  ...recipes('Croissants & bakery', 1, HOT_RECIPE_POOL.bakery.slice(0, 8)),
+  ...recipes('Croissants & bakery', 3, HOT_RECIPE_POOL.bakery.slice(8)),
+  ...recipes('Breakfast', 1, ['Porridge', 'Bircher Muesli', 'Greek Yoghurt & Granola Pot', 'Egg Mayo Breakfast Baguette']),
+  ...recipes('Breakfast', 2, ['Avocado & Egg Brioche', 'Bacon & Egg Brioche', 'Fruit Salad Pot', 'Berry & Yoghurt Pot']),
+  ...recipes('Sandwiches & baguettes', 1, [
     'Chicken Caesar & Bacon Baguette',
     'Tuna Mayo & Cucumber Baguette',
     'Egg Mayo & Tomato Baguette',
@@ -572,6 +782,8 @@ export const RECIPE_LIBRARY: ShopRecipe[] = [
     'Chicken & Avocado Sandwich',
     'Classic Super Club',
     'Posh Cheddar & Pickle Sandwich',
+  ]),
+  ...recipes('Sandwiches & baguettes', 2, [
     'Egg & Spinach Protein Pot Sandwich',
     'Smoked Salmon & Egg Sandwich',
     'Coronation Chicken Sandwich',
@@ -581,43 +793,21 @@ export const RECIPE_LIBRARY: ShopRecipe[] = [
     'Chargrilled Chicken & Pesto Baguette',
     'Hummus & Chipotle Veggie Sandwich',
   ]),
-  ...recipes('Sandwiches & baguettes', ['Steak & Horseradish Baguette', 'Lobster & Prawn Brioche'], { only: CITY }),
-  ...recipes('Sandwiches & baguettes', ['Ham & Cheese Croissant Roll', 'Grab & Go Chicken Wrap Box'], { only: STATION }),
-  ...recipes('Wraps & flatbreads', [
-    'Chicken Caesar Wrap',
-    'Falafel & Halloumi Wrap',
-    'Tuna Nicoise Wrap',
-    'Hoisin Duck Wrap',
-    'Chipotle Chicken Flatbread',
-    'Halloumi & Red Pepper Flatbread',
-    'Veggie Rainbow Wrap',
-    'Egg & Avocado Wrap',
-  ]),
-  ...recipes('Hot food & soups', HOT_RECIPE_POOL.hotChef),
-  ...recipes('Salads & bowls', [
-    'Chicken Caesar Salad',
-    'Tuna Nicoise Salad',
-    'Falafel & Hummus Salad Bowl',
-    'Chef\u2019s Italian Chicken Salad',
-    'Greek Salad',
-    'Rainbow Veggie Bowl',
-    'Chicken & Quinoa Protein Bowl',
-    'Smoked Salmon Salad Bowl',
-  ]),
-  ...recipes('Salads & bowls', ['Miso Salmon Rice Bowl', 'Superfood Green Bowl'], { not: SMALL }),
-  ...recipes('Sweet treats', [
-    'Love Bar',
-    'Chocolate Brownie',
-    'Lemon Drizzle Slice',
-    'Carrot Cake Slice',
-    'Flapjack',
-    'Millionaire Shortbread',
-    'Raspberry & Almond Slice',
-    'Banana Bread',
-    'Popcorn Bar',
-    'Fruit Scone',
-  ]),
-  ...recipes('Coffee & drinks', [
+  ...recipes('Sandwiches & baguettes', 4, ['Steak & Horseradish Baguette', 'Lobster & Prawn Brioche'], true),
+  ...recipes('Sandwiches & baguettes', 3, ['Ham & Cheese Croissant Roll', 'Grab & Go Chicken Wrap Box'], true),
+  ...recipes('Wraps & flatbreads', 1, ['Chicken Caesar Wrap', 'Falafel & Halloumi Wrap', 'Tuna Nicoise Wrap', 'Egg & Avocado Wrap']),
+  ...recipes('Wraps & flatbreads', 2, ['Chipotle Chicken Flatbread', 'Halloumi & Red Pepper Flatbread', 'Veggie Rainbow Wrap']),
+  ...recipes('Wraps & flatbreads', 3, ['Hoisin Duck Wrap'], true),
+  ...recipes('Hot food & soups', 1, HOT_RECIPE_POOL.hotChef.slice(0, 10)),
+  ...recipes('Hot food & soups', 2, HOT_RECIPE_POOL.hotChef.slice(10, 12)),
+  ...recipes('Hot food & soups', 3, HOT_RECIPE_POOL.hotChef.slice(12), true),
+  ...recipes('Salads & bowls', 1, ['Chicken Caesar Salad', 'Tuna Nicoise Salad', 'Falafel & Hummus Salad Bowl', 'Greek Salad']),
+  ...recipes('Salads & bowls', 2, ['Chef\u2019s Italian Chicken Salad', 'Rainbow Veggie Bowl', 'Chicken & Quinoa Protein Bowl']),
+  ...recipes('Salads & bowls', 3, ['Smoked Salmon Salad Bowl', 'Miso Salmon Rice Bowl', 'Superfood Green Bowl'], true),
+  ...recipes('Sweet treats', 1, ['Love Bar', 'Chocolate Brownie', 'Lemon Drizzle Slice', 'Carrot Cake Slice', 'Flapjack', 'Millionaire Shortbread']),
+  ...recipes('Sweet treats', 2, ['Raspberry & Almond Slice', 'Banana Bread']),
+  ...recipes('Sweet treats', 2, ['Popcorn Bar', 'Fruit Scone'], true),
+  ...recipes('Coffee & drinks', 1, [
     'Espresso',
     'Americano',
     'Flat White',
@@ -630,35 +820,74 @@ export const RECIPE_LIBRARY: ShopRecipe[] = [
     'Fresh Mint Tea',
     'Iced Latte',
   ]),
-  ...recipes('Coffee & drinks', ['Matcha Latte', 'Iced Matcha', 'Cold Brew'], { not: SMALL }),
+  ...recipes('Coffee & drinks', 2, ['Matcha Latte', 'Iced Matcha', 'Cold Brew'], true),
 ];
-
-/** The recipes a copied shop actually holds, in category order. */
-export function templateRecipes(templateId: string): ShopRecipe[] {
-  return RECIPE_LIBRARY.filter(
-    (r) => (!r.only || r.only.includes(templateId)) && (!r.not || !r.not.includes(templateId)),
-  );
-}
 
 export function getRecipe(id: string): ShopRecipe | undefined {
   return RECIPE_LIBRARY.find((r) => r.id === id);
 }
 
-/** Per site → recipe ids the operator unticked. Empty = copy them all. */
-export type RecipeExclusions = Record<string, string[]>;
-
-/** "93 of 95 recipes" for one site. */
-export function describeRecipeCopy(templateId: string, excluded: string[] | undefined): string {
-  const total = templateRecipes(templateId).length;
-  const kept = total - (excluded?.length ?? 0);
-  return kept === total ? `all ${total} recipes` : `${kept} of ${total} recipes`;
+/** Recipes the shop's week reaches (its highest tier), in category
+ *  order. Sample only: totals should come from `coreRecipeCount`. */
+export function tierRecipes(tiers: Record<DayKey, number>): ShopRecipe[] {
+  const top = maxTier(tiers);
+  return RECIPE_LIBRARY.filter((r) => r.tier <= top);
 }
 
-// ─── New sites from the operator's spreadsheet ──────────────────────────────
+/** The flexible lines within the shop's tiers: the only recipes a shop
+ *  may untick. */
+export function flexibleLines(tiers: Record<DayKey, number>): ShopRecipe[] {
+  return tierRecipes(tiers).filter((r) => r.flexible);
+}
 
-/** The file the operator attaches. Used for the echo chip and the
- *  card's provenance line when no real file was paperclipped. */
-export const SITE_SHEET_FILE_NAME = 'new-sites-september.xlsx';
+/** Recipes the shop gets from its range and highest tier (the ladder's
+ *  count). Flexible lines are part of this number until unticked. */
+export function coreRecipeCount(rangeId: string, tiers: Record<DayKey, number>): number {
+  return recipesAtTier(rangeId, maxTier(tiers));
+}
+
+/** Per site → flexible-line recipe ids the operator unticked. Empty =
+ *  sell them all. */
+export type RecipeExclusions = Record<string, string[]>;
+
+/** "212 recipes · 4 flexible lines" or "210 of 212 recipes · 2 flexible
+ *  lines unticked" for one site. */
+export function describeFood(rangeId: string, tiers: Record<DayKey, number>, excluded: string[] | undefined): string {
+  const total = coreRecipeCount(rangeId, tiers);
+  const flex = flexibleLines(tiers).length;
+  const dropped = excluded?.length ?? 0;
+  if (dropped === 0) return `${total} recipes · ${flex} flexible line${flex === 1 ? '' : 's'}`;
+  return `${total - dropped} of ${total} recipes · ${dropped} flexible line${dropped === 1 ? '' : 's'} unticked`;
+}
+
+// ─── Forecast Manager check ──────────────────────────────────────────────────
+//
+// Pret's forecasts come from Forecast Manager (4th) as SKUs per shop,
+// not per tier, so the two can drift: a SKU forecast for a shop that
+// isn't in its tier would never reach the planner. Natalia (Pret): flag
+// it to admins, not GMs, so the office can fix its own set-up. The
+// check runs at go-live and is a warning, never a blocker.
+
+const FORECAST_SKUS_OUTSIDE_TIER: Record<string, { name: string; tier: number }[]> = {
+  'leeds-trinity': [
+    { name: 'Lobster & Prawn Brioche', tier: 5 },
+    { name: 'Steak & Horseradish Baguette', tier: 5 },
+  ],
+  'york-coney-st': [{ name: 'Hoisin Duck Wrap', tier: 4 }],
+};
+
+/** SKUs Forecast Manager holds for the shop that sit above the tier
+ *  the shop reaches. Empty when the shop's tiers cover them. */
+export function forecastMismatches(siteId: string, tiers: Record<DayKey, number>): string[] {
+  const top = maxTier(tiers);
+  return (FORECAST_SKUS_OUTSIDE_TIER[siteId] ?? []).filter((s) => s.tier > top).map((s) => s.name);
+}
+
+// ─── New sites from ShopDB ──────────────────────────────────────────────────
+
+/** Where the shop records come from. Shown as provenance on step 1 and
+ *  in the go-live check. */
+export const SHOPDB_SOURCE = 'ShopDB';
 
 export interface DeliveryContact {
   name: string;
@@ -669,12 +898,12 @@ export interface DeliveryContact {
 /**
  * The fields on Edify main's Create site form (Settings → Sites), in
  * the same order. Everything here is editable in step 1. Per-site
- * values come off the sheet; the batch-wide settings a sheet wouldn't
- * carry live in `SharedSiteSettings`.
+ * values come from the ShopDB record; the batch-wide settings ShopDB
+ * doesn't hold live in `SharedSiteSettings`.
  */
 export interface SiteDetails {
   name: string;
-  /** Central Production Unit. The sheet's "Type" column: Shop or CPU. */
+  /** Central Production Unit. ShopDB's shop type: Shop or CPU. */
   isCpu: boolean;
   siteIdentifier: string;
   profitCentre: string;
@@ -683,7 +912,8 @@ export interface SiteDetails {
   city: string;
   postcode: string;
   country: string;
-  /** Display-ready ("22 September"). Seeds the go-live date. */
+  /** ISO day (YYYY-MM-DD) from ShopDB. Go-live defaults to a few days
+   *  before it. */
   openingDate: string;
   /** Per day: a window, or null when the shop takes no deliveries. */
   deliveryWindows: Record<DayKey, TimeWindow | null>;
@@ -709,9 +939,9 @@ export function missingRequired(details: SiteDetails): string[] {
     .map(({ label }) => label);
 }
 
-/** Non-required fields the sheet left blank: worth a glance, not a
+/** Non-required fields ShopDB has blank: worth a glance, not a
  *  blocker. */
-export function sheetGaps(details: SiteDetails): string[] {
+export function recordGaps(details: SiteDetails): string[] {
   const gaps: string[] = [];
   if (!details.deliveryContact.name.trim()) gaps.push('Delivery contact');
   if (details.deliveryContact.name.trim() && !details.deliveryContact.phone.trim()) gaps.push('Contact phone');
@@ -720,9 +950,9 @@ export function sheetGaps(details: SiteDetails): string[] {
 }
 
 /**
- * Settings the Create site form asks for that no property sheet
- * carries. Assumed once for the whole batch, shown with a one-line
- * why, editable before continue.
+ * Settings the Create site form asks for that ShopDB doesn't hold.
+ * Assumed once for the whole batch, shown with a one-line why,
+ * editable before continue.
  */
 export interface SharedSiteSettings {
   timezone: string;
@@ -769,38 +999,40 @@ function deliveries(
 
 export interface NewSite {
   id: string;
-  /** Full name as it appears on the sheet (and in Workday, so the
-   *  roster matches). */
+  /** ShopDB's own key for the shop. */
+  shopDbId: string;
+  /** Full name as held in ShopDB (and in Workday, so the roster
+   *  matches). */
   name: string;
   /** Short name for card copy ("Leeds Trinity"). */
   shortName: string;
   location: string;
-  /** Planned opening, display-ready ("22 September"). */
+  /** Planned opening, ISO day (YYYY-MM-DD). */
   openingDate: string;
-  /** Opening hours from the sheet — drives full selection defaults. */
+  /** Opening hours from ShopDB — drives full selection defaults. */
   open: { weekday: string; saturday: string; sunday: string };
   /** Edify's suggested copy source + why. */
   suggestedTemplateId: string;
   suggestedReason: string;
   suggestedHubId: string;
-  /** The rest of the sheet row: what the Create site form needs. */
-  sheet: Omit<SiteDetails, 'name' | 'openingDate'>;
+  /** The rest of the ShopDB record: what the Create site form needs. */
+  record: Omit<SiteDetails, 'name' | 'openingDate'>;
   /** Staff, from Workday, matched to the shop by name. */
   roster: WorkdayPerson[];
 }
 
-/** The editable Create-site record for a sheet row. Deep-copied so
+/** The editable Create-site record for a ShopDB shop. Deep-copied so
  *  edits in one card never leak into the fixture. */
-export function sheetDetailsFor(site: NewSite): SiteDetails {
+export function detailsFor(site: NewSite): SiteDetails {
   return {
     name: site.name,
     openingDate: site.openingDate,
-    ...site.sheet,
+    ...site.record,
     deliveryWindows: Object.fromEntries(
-      DAY_KEYS.map((d) => [d, site.sheet.deliveryWindows[d] ? { ...site.sheet.deliveryWindows[d]! } : null]),
+      DAY_KEYS.map((d) => [d, site.record.deliveryWindows[d] ? { ...site.record.deliveryWindows[d]! } : null]),
     ) as Record<DayKey, TimeWindow | null>,
-    deliveryContact: { ...site.sheet.deliveryContact },
-    forwardEmails: [...site.sheet.forwardEmails],
+    deliveryContact: { ...site.record.deliveryContact },
+    forwardEmails: [...site.record.forwardEmails],
   };
 }
 
@@ -811,8 +1043,8 @@ export function oneLineAddress(d: SiteDetails): string {
     .join(', ');
 }
 
-/** Compact sheet-row builder. */
-function sheetRow(input: {
+/** Compact ShopDB-record builder. */
+function shopDbRecord(input: {
   code: string;
   profitCentre: string;
   address1: string;
@@ -823,7 +1055,7 @@ function sheetRow(input: {
   contact: DeliveryContact;
   notes?: string;
   emails?: string[];
-}): NewSite['sheet'] {
+}): NewSite['record'] {
   return {
     isCpu: false,
     siteIdentifier: input.code,
@@ -852,15 +1084,16 @@ function roster(siteId: string, people: [string, WorkdayRole][]): WorkdayPerson[
 export const NEW_SITES: NewSite[] = [
   {
     id: 'leeds-trinity',
+    shopDbId: 'SHP-4127',
     name: 'Pret Leeds Trinity',
     shortName: 'Leeds Trinity',
     location: 'Trinity Leeds, Albion Street, Leeds LS1',
-    openingDate: '22 September',
+    openingDate: '2026-09-22',
     open: { weekday: '06:30', saturday: '07:00', sunday: '08:00' },
     suggestedTemplateId: 'manchester-market-st',
     suggestedReason: 'Regional high street, similar footprint',
     suggestedHubId: 'northern-cpu',
-    sheet: sheetRow({
+    record: shopDbRecord({
       code: '4127',
       profitCentre: '4127-LEEDS-TRI',
       address1: 'Unit 24, Trinity Leeds',
@@ -891,15 +1124,16 @@ export const NEW_SITES: NewSite[] = [
   },
   {
     id: 'manchester-piccadilly',
+    shopDbId: 'SHP-4128',
     name: 'Pret Manchester Piccadilly',
     shortName: 'Manchester Piccadilly',
     location: 'Piccadilly Station Approach, Manchester M1',
-    openingDate: '22 September',
+    openingDate: '2026-09-22',
     open: { weekday: '05:30', saturday: '06:00', sunday: '07:00' },
     suggestedTemplateId: 'st-pancras',
     suggestedReason: 'Station shop, long trading hours',
     suggestedHubId: 'northern-cpu',
-    sheet: sheetRow({
+    record: shopDbRecord({
       code: '4128',
       profitCentre: '4128-MCR-PICC',
       address1: 'Unit 3, Piccadilly Station Approach',
@@ -930,15 +1164,16 @@ export const NEW_SITES: NewSite[] = [
   },
   {
     id: 'birmingham-grand-central',
+    shopDbId: 'SHP-4129',
     name: 'Pret Birmingham Grand Central',
     shortName: 'Birmingham Grand Central',
     location: 'Grand Central, Stephenson Street, Birmingham B2',
-    openingDate: '29 September',
+    openingDate: '2026-09-29',
     open: { weekday: '06:00', saturday: '06:30', sunday: '07:30' },
     suggestedTemplateId: 'st-pancras',
     suggestedReason: 'Station shop, matching trade pattern',
     suggestedHubId: 'midlands-cpu',
-    sheet: sheetRow({
+    record: shopDbRecord({
       code: '4129',
       profitCentre: '4129-BHM-GC',
       address1: 'Unit 12, Grand Central',
@@ -967,16 +1202,17 @@ export const NEW_SITES: NewSite[] = [
   },
   {
     id: 'york-coney-st',
+    shopDbId: 'SHP-4130',
     name: 'Pret York Coney Street',
     shortName: 'York Coney Street',
     location: '18 Coney Street, York YO1',
-    openingDate: '6 October',
+    openingDate: '2026-10-06',
     open: { weekday: '07:00', saturday: '07:00', sunday: '08:00' },
     suggestedTemplateId: 'manchester-market-st',
     suggestedReason: 'Regional high street',
     suggestedHubId: 'northern-cpu',
-    // Sheet gap: no site email on this row.
-    sheet: sheetRow({
+    // ShopDB gap: no site email on this record.
+    record: shopDbRecord({
       code: '4130',
       profitCentre: '4130-YORK-CON',
       address1: '18 Coney Street',
@@ -1001,15 +1237,16 @@ export const NEW_SITES: NewSite[] = [
   },
   {
     id: 'liverpool-one',
+    shopDbId: 'SHP-4131',
     name: 'Pret Liverpool One',
     shortName: 'Liverpool One',
     location: 'Liverpool ONE, Paradise Street, Liverpool L1',
-    openingDate: '6 October',
+    openingDate: '2026-10-06',
     open: { weekday: '06:30', saturday: '07:00', sunday: '08:00' },
     suggestedTemplateId: 'manchester-market-st',
     suggestedReason: 'Regional high street',
     suggestedHubId: 'northern-cpu',
-    sheet: sheetRow({
+    record: shopDbRecord({
       code: '4131',
       profitCentre: '4131-LPL-ONE',
       address1: 'Unit 8, Liverpool ONE',
@@ -1038,16 +1275,17 @@ export const NEW_SITES: NewSite[] = [
   },
   {
     id: 'sheffield-fargate',
+    shopDbId: 'SHP-4132',
     name: 'Pret Sheffield Fargate',
     shortName: 'Sheffield Fargate',
     location: '32 Fargate, Sheffield S1',
-    openingDate: '13 October',
+    openingDate: '2026-10-13',
     open: { weekday: '07:00', saturday: '07:30', sunday: '08:30' },
     suggestedTemplateId: 'manchester-market-st',
     suggestedReason: 'Regional high street',
     suggestedHubId: 'northern-cpu',
-    // Sheet gap: GM named but no phone number on this row.
-    sheet: sheetRow({
+    // ShopDB gap: GM named but no phone number on this record.
+    record: shopDbRecord({
       code: '4132',
       profitCentre: '4132-SHF-FAR',
       address1: '32 Fargate',
@@ -1072,15 +1310,16 @@ export const NEW_SITES: NewSite[] = [
   },
   {
     id: 'newcastle-grainger',
+    shopDbId: 'SHP-4133',
     name: 'Pret Newcastle Grainger Street',
     shortName: 'Newcastle Grainger Street',
     location: '45 Grainger Street, Newcastle NE1',
-    openingDate: '13 October',
+    openingDate: '2026-10-13',
     open: { weekday: '06:30', saturday: '07:00', sunday: '08:00' },
     suggestedTemplateId: 'manchester-market-st',
     suggestedReason: 'Regional high street',
     suggestedHubId: 'northern-cpu',
-    sheet: sheetRow({
+    record: shopDbRecord({
       code: '4133',
       profitCentre: '4133-NCL-GRA',
       address1: '45 Grainger Street',
@@ -1108,15 +1347,16 @@ export const NEW_SITES: NewSite[] = [
   },
   {
     id: 'nottingham-clumber',
+    shopDbId: 'SHP-4134',
     name: 'Pret Nottingham Clumber Street',
     shortName: 'Nottingham Clumber Street',
     location: '12 Clumber Street, Nottingham NG1',
-    openingDate: '20 October',
+    openingDate: '2026-10-20',
     open: { weekday: '07:00', saturday: '07:00', sunday: '08:00' },
     suggestedTemplateId: 'manchester-market-st',
     suggestedReason: 'Regional high street',
     suggestedHubId: 'midlands-cpu',
-    sheet: sheetRow({
+    record: shopDbRecord({
       code: '4134',
       profitCentre: '4134-NOT-CLU',
       address1: '12 Clumber Street',

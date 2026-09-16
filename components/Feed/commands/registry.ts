@@ -165,16 +165,17 @@ export const COMMAND_REGISTRY: ChatCommand[] = [
     slashAliases: ['/site'],
     chipLabel: 'Set up new sites',
     chipIcon: Building2,
-    description: 'Set up one or many new sites from your site sheet: details, people, food and production in one pass.',
+    description: 'Set up one or many new sites from ShopDB: details, food, people and production in one pass.',
     examples: [
-      'Set up the sites in this spreadsheet',
+      'Set up the new shops in ShopDB',
       'I want to set up three new Pret sites',
       'set up 2 new shops',
     ],
     parse: parseSiteSetup,
-    // Multi-step wizard. The runner emits step-specific msgTypes
-    // (`cmd-site-pick`, `cmd-site-copy`, `cmd-site-team`,
-    // `cmd-site-tiers`, `cmd-site-production`, `cmd-site-golive`);
+    // Multi-step wizard. The runner emits step-specific msgTypes in
+    // order: `cmd-site-pick` (ShopDB sync), `cmd-site-copy`,
+    // `cmd-site-tiers`, `cmd-site-flex`, `cmd-site-team`,
+    // `cmd-site-production`, `cmd-site-benches-hot`, `cmd-site-golive`;
     // this field is the final step for downstream code that inspects it.
     cardMsgType: 'cmd-site-golive',
     // The wizard launches with no args and walks the user through.

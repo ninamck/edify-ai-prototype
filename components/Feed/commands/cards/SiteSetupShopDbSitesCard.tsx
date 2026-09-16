@@ -1,61 +1,61 @@
 'use client';
 
 /**
- * Site setup · step 1 — the sites, read from the operator's sheet.
+ * Site setup · step 1 — the sites, synced from ShopDB.
  *
- * Sites are not held in Workday, so the property/ops team sends a
- * spreadsheet with one row per new shop. Edify parses it and shows
- * every Create-site field (Settings → Sites in Edify main) already
- * filled in: name, site code, profit centre, address, opening date,
- * delivery windows, delivery contact, notes, forward emails. All of it
- * stays editable here, so a wrong cell on the sheet is fixed in the
- * card, not abandoned.
+ * Sites are not held in Workday. ShopDB (Pret's shop database) holds
+ * the property record for every shop, so Edify syncs the shops that
+ * aren't in Edify yet and shows every Create-site field (Settings →
+ * Sites in Edify main) already filled in: name, site code, profit
+ * centre, address, opening date, delivery windows, delivery contact,
+ * notes, forward emails. All of it stays editable here, so a wrong or
+ * missing value in ShopDB is fixed in the card, not abandoned.
  *
  * Three layers, matching how sure we can be:
  *  - one row per shop, ticked to include it, with a one-line read-out;
- *  - tap a row to open the full form for that shop. Blank cells the
- *    sheet left are marked "Not on the sheet". Required fields (as the
- *    Create site form marks them) block Continue until filled;
- *  - "Settings the sheet doesn't carry": the handful of form fields no
- *    property sheet has (timezone, delivery reference, theoretical on
- *    hand, traceability tags). Assumed once for the batch, each with a
- *    one-line why, editable before continue.
+ *  - tap a row to open the full form for that shop. Fields ShopDB has
+ *    blank are marked "Not in ShopDB". Required fields (as the Create
+ *    site form marks them) block Continue until filled;
+ *  - "Settings ShopDB doesn't hold": the handful of form fields a shop
+ *    database never carries (timezone, delivery reference, theoretical
+ *    on hand, traceability tags). Assumed once for the batch, each with
+ *    a one-line why, editable before continue.
  */
 
 import { useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronRight, FileSpreadsheet, MapPin, CalendarDays, Phone } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, Database, MapPin, CalendarDays, Phone } from 'lucide-react';
 import CardShell, { type CardState } from './CardShell';
 import { RangePill, WindowEditor } from './timeControls';
 import {
   DAY_KEYS,
   DEFAULT_SHARED_SITE_SETTINGS,
   NEW_SITES,
+  SHOPDB_SOURCE,
   describeDeliveryWindows,
+  detailsFor,
+  formatDay,
   missingRequired,
-  sheetDetailsFor,
-  sheetGaps,
+  recordGaps,
   type DayKey,
   type SharedSiteSettings,
   type SiteDetails,
   type TimeWindow,
 } from '../siteSetupFixtures';
 
-export interface SiteSheetSubmit {
+export interface SiteShopDbSubmit {
   siteIds: string[];
   sites: Record<string, SiteDetails>;
   shared: SharedSiteSettings;
 }
 
-interface SiteSetupSheetSitesCardProps {
+interface SiteSetupShopDbSitesCardProps {
   state: CardState;
-  /** The sheet we read the rows from — shown as provenance. */
-  fileName: string;
-  /** From "three new sites": how many rows to tick by default. */
+  /** From "three new sites": how many shops to tick by default. */
   requestedCount?: number;
   initialSiteIds?: string[];
   initialSites?: Record<string, SiteDetails>;
   initialShared?: SharedSiteSettings;
-  onSubmit: (input: SiteSheetSubmit) => void;
+  onSubmit: (input: SiteShopDbSubmit) => void;
   onCancel: () => void;
   /** Reopen for edits after confirm — available until final go-live. */
   onEdit?: () => void;
@@ -63,9 +63,8 @@ interface SiteSetupSheetSitesCardProps {
 
 const DEFAULT_WINDOW: TimeWindow = { start: '06:00', end: '08:30' };
 
-export default function SiteSetupSheetSitesCard({
+export default function SiteSetupShopDbSitesCard({
   state,
-  fileName,
   requestedCount,
   initialSiteIds,
   initialSites,
@@ -73,11 +72,11 @@ export default function SiteSetupSheetSitesCard({
   onSubmit,
   onCancel,
   onEdit,
-}: SiteSetupSheetSitesCardProps) {
+}: SiteSetupShopDbSitesCardProps) {
   const disabled = state !== 'pending';
 
-  // Rows on the sheet are already in opening-date order, so "the
-  // three opening soonest" is the first three.
+  // ShopDB records come back in opening-date order, so "the three
+  // opening soonest" is the first three.
   const [included, setIncluded] = useState<Set<string>>(() => {
     if (initialSiteIds) return new Set(initialSiteIds);
     const ids = NEW_SITES.map((s) => s.id);
@@ -85,7 +84,7 @@ export default function SiteSetupSheetSitesCard({
   });
   const [details, setDetails] = useState<Record<string, SiteDetails>>(() => {
     const map: Record<string, SiteDetails> = {};
-    for (const s of NEW_SITES) map[s.id] = initialSites?.[s.id] ?? sheetDetailsFor(s);
+    for (const s of NEW_SITES) map[s.id] = initialSites?.[s.id] ?? detailsFor(s);
     return map;
   });
   const [shared, setShared] = useState<SharedSiteSettings>(() => ({
@@ -135,13 +134,13 @@ export default function SiteSetupSheetSitesCard({
   const total = NEW_SITES.length;
   const title = requestedCount && requestedCount < total
     ? `Which ${requestedCount} of the ${total} shops?`
-    : `${total} shops from your spreadsheet`;
+    : `${total} shops in ${SHOPDB_SOURCE} not yet in Edify`;
 
   return (
     <CardShell
-      icon={FileSpreadsheet}
+      icon={Database}
       title={title}
-      subtitle={`Read from ${fileName} · ${includedIds.length} ticked · tap a shop to check its details`}
+      subtitle={`Synced from ${SHOPDB_SOURCE} · ${includedIds.length} ticked · tap a shop to check its details`}
       state={state}
       confirmLabel="Continue"
       confirmDisabled={!canContinue}
@@ -161,7 +160,7 @@ export default function SiteSetupSheetSitesCard({
           const isIn = included.has(site.id);
           const isOpen = openId === site.id;
           const missing = missingRequired(d);
-          const gaps = sheetGaps(d);
+          const gaps = recordGaps(d);
           return (
             <div
               key={site.id}
@@ -210,7 +209,7 @@ export default function SiteSetupSheetSitesCard({
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                        {d.name || <em style={{ fontWeight: 500, color: '#B45309' }}>No name on the sheet</em>}
+                        {d.name || <em style={{ fontWeight: 500, color: '#B45309' }}>No name in ShopDB</em>}
                       </span>
                       {d.siteIdentifier && (
                         <span style={{ fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--color-text-muted)' }}>
@@ -236,7 +235,7 @@ export default function SiteSetupSheetSitesCard({
                           {missing.length > 0 && <AlertTriangle size={9} strokeWidth={2.5} />}
                           {missing.length > 0
                             ? `${missing.length} required missing`
-                            : `${gaps.length} blank on sheet`}
+                            : `${gaps.length} blank in ShopDB`}
                         </span>
                       )}
                     </span>
@@ -256,7 +255,7 @@ export default function SiteSetupSheetSitesCard({
                         {[d.addressLine1, d.city, d.postcode].filter(Boolean).join(', ') || 'No address'}
                       </span>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
-                        <CalendarDays size={10} /> Opens {d.openingDate || '—'}
+                        <CalendarDays size={10} /> Opens {d.openingDate ? formatDay(d.openingDate) : '—'}
                       </span>
                       {d.deliveryContact.name && (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
@@ -273,7 +272,7 @@ export default function SiteSetupSheetSitesCard({
                 </button>
               </div>
 
-              {/* The Create-site form for this shop, pre-filled from the row */}
+              {/* The Create-site form for this shop, pre-filled from ShopDB */}
               {isOpen && (
                 <div
                   style={{
@@ -293,7 +292,7 @@ export default function SiteSetupSheetSitesCard({
                   </div>
                   <ToggleRow
                     label="Central Production Unit (CPU)"
-                    hint={d.isCpu ? 'Makes for other shops. Other sites can order from it.' : 'A shop. Sheet says Type: Shop.'}
+                    hint={d.isCpu ? 'Makes for other shops. Other sites can order from it.' : 'A shop. ShopDB type: Shop.'}
                     checked={d.isCpu}
                     disabled={disabled}
                     onChange={(v) => patch(site.id, { isCpu: v })}
@@ -308,7 +307,7 @@ export default function SiteSetupSheetSitesCard({
                   </div>
                   <div style={twoCol}>
                     <Field label="Country" required value={d.country} disabled={disabled} onChange={(v) => patch(site.id, { country: v })} />
-                    <Field label="Opening date" value={d.openingDate} disabled={disabled} onChange={(v) => patch(site.id, { openingDate: v })} />
+                    <Field label="Opening date" type="date" value={d.openingDate} disabled={disabled} onChange={(v) => patch(site.id, { openingDate: v })} />
                   </div>
 
                   <Section>Delivery time windows</Section>
@@ -392,12 +391,12 @@ export default function SiteSetupSheetSitesCard({
           );
         })}
 
-        {/* ── Settings no property sheet carries. Assumed once for the
-            batch; editable. ─────────────────────────────────────────── */}
+        {/* ── Settings ShopDB doesn't hold. Assumed once for the batch;
+            editable. ─────────────────────────────────────────────────── */}
         <div style={{ marginTop: '4px' }}>
           <button type="button" onClick={() => setSharedOpen((v) => !v)} style={disclosureBtn}>
             {sharedOpen ? <ChevronDown size={12} strokeWidth={2.4} /> : <ChevronRight size={12} strokeWidth={2.4} />}
-            Settings the sheet doesn&rsquo;t carry · applied to all {includedIds.length}
+            Settings {SHOPDB_SOURCE} doesn&rsquo;t hold · applied to all {includedIds.length}
           </button>
           {sharedOpen && (
             <div
@@ -408,7 +407,7 @@ export default function SiteSetupSheetSitesCard({
                 overflow: 'hidden',
               }}
             >
-              <AssumedRow label="Timezone" why="Every shop on the sheet is in the UK.">
+              <AssumedRow label="Timezone" why="Every shop in ShopDB is in the UK.">
                 <input
                   type="text"
                   value={shared.timezone}
@@ -501,8 +500,8 @@ function Section({ children }: { children: React.ReactNode }) {
 
 /**
  * One form field. Blank required fields flag amber; blank optional
- * fields the sheet is expected to carry show "Not on the sheet"
- * unless `optionalBlank` says a blank is normal (address line 2).
+ * fields ShopDB is expected to hold show "Not in ShopDB" unless
+ * `optionalBlank` says a blank is normal (address line 2).
  */
 function Field({
   label,
@@ -512,6 +511,7 @@ function Field({
   required,
   optionalBlank,
   placeholder,
+  type = 'text',
 }: {
   label: string;
   value: string;
@@ -520,6 +520,7 @@ function Field({
   required?: boolean;
   optionalBlank?: boolean;
   placeholder?: string;
+  type?: 'text' | 'date';
 }) {
   const blank = value.trim() === '';
   const flagRequired = required && blank;
@@ -543,12 +544,12 @@ function Field({
               color: flagRequired ? '#7A3800' : 'var(--color-text-secondary)',
             }}
           >
-            {flagRequired ? 'Required' : 'Not on the sheet'}
+            {flagRequired ? 'Required' : 'Not in ShopDB'}
           </span>
         )}
       </span>
       <input
-        type="text"
+        type={type}
         value={value}
         disabled={disabled}
         placeholder={placeholder}

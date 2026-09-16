@@ -1,14 +1,20 @@
 'use client';
 
 /**
- * Site setup · step 3 — load the people.
+ * Site setup · step 5 — load the people.
  *
  * Rosters come straight from Workday (integration assumed live in this
- * demo). Roles are pre-mapped from each person's Workday job and stay
- * editable per person. Roles match Edify main (Employee / Manager /
- * Admin); Managers carry the standard shop permission set on top,
- * suppliers through to stocktakes. Bench lists default from each
- * shop's own roster (PRD 4.5).
+ * demo; Pret confirmed no Workday integration exists today, so without
+ * it people are added by hand). Roles are pre-mapped from each
+ * person's Workday job and stay editable per person. Roles match Edify
+ * main (Employee / Manager / Admin); Managers carry the standard shop
+ * permission set on top, suppliers through to stocktakes. Bench lists
+ * default from each shop's own roster (PRD 4.5).
+ *
+ * Access is Okta single sign-on: Pret provisions users in Okta (hot
+ * chefs on personal emails) and wants roles to come from there where
+ * possible. Invites go out a week before the shop's Edify go-live and
+ * stay valid for seven days, not the 48 hours Edify main uses today.
  */
 
 import { useState } from 'react';
@@ -52,7 +58,7 @@ export default function SiteSetupTeamCard({
     <CardShell
       icon={Users}
       title={`${totalPeople} people from Workday`}
-      subtitle="Roles mapped from job titles. Change any of them"
+      subtitle="Roles mapped from job titles. Change any of them · access through Okta single sign-on"
       state={state}
       confirmLabel={`Load ${totalPeople} people`}
       onCancel={onCancel}
@@ -146,7 +152,7 @@ export default function SiteSetupTeamCard({
           );
         })}
         <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-          Managers get the standard shop permissions, suppliers through to stocktakes. Invites go out the week before each opening.
+          Managers get the standard shop permissions, suppliers through to stocktakes. Everyone signs in through Okta; roles come from their Workday job. Invites go out a week before each shop&rsquo;s Edify go-live and stay valid for seven days.
         </div>
       </div>
     </CardShell>

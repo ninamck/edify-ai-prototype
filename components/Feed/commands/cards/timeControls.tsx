@@ -14,11 +14,14 @@ import type { TimeWindow } from '../siteSetupFixtures';
 export function Stepper({
   value,
   min,
+  max,
   disabled,
   onChange,
 }: {
   value: number;
   min: number;
+  /** Optional ceiling; omit for no upper bound. */
+  max?: number;
   disabled: boolean;
   onChange: (next: number) => void;
 }) {
@@ -43,7 +46,7 @@ export function Stepper({
       <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--color-text-primary)', minWidth: '14px', textAlign: 'center' }}>
         {value}
       </span>
-      <button type="button" disabled={disabled} onClick={() => onChange(value + 1)} style={btn}>
+      <button type="button" disabled={disabled || (max !== undefined && value >= max)} onClick={() => onChange(value + 1)} style={btn}>
         <Plus size={12} strokeWidth={2.4} />
       </button>
     </span>

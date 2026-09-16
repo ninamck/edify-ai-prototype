@@ -80,8 +80,9 @@ import ProductPackDetailsCard from '@/components/Feed/commands/cards/ProductPack
 import ProductPickRecipesCard from '@/components/Feed/commands/cards/ProductPickRecipesCard';
 import ProductSwapSummaryCard from '@/components/Feed/commands/cards/ProductSwapSummaryCard';
 import ProductSheetDetailsCard from '@/components/Feed/commands/cards/ProductSheetDetailsCard';
-import SiteSetupSheetSitesCard from '@/components/Feed/commands/cards/SiteSetupSheetSitesCard';
-import SiteSetupRecipesCard from '@/components/Feed/commands/cards/SiteSetupRecipesCard';
+import SiteSetupShopDbSitesCard from '@/components/Feed/commands/cards/SiteSetupShopDbSitesCard';
+import SiteSetupFlexibleLinesCard from '@/components/Feed/commands/cards/SiteSetupFlexibleLinesCard';
+import SiteSetupRollbackCard from '@/components/Feed/commands/cards/SiteSetupRollbackCard';
 import SiteSetupCopyCard from '@/components/Feed/commands/cards/SiteSetupCopyCard';
 import SiteSetupTeamCard from '@/components/Feed/commands/cards/SiteSetupTeamCard';
 import SiteSetupRangeTiersCard from '@/components/Feed/commands/cards/SiteSetupRangeTiersCard';
@@ -616,12 +617,13 @@ const WORKSPACE_MSG_TYPES = new Set<string>([
   'cmd-product-swap-summary',
   'cmd-site-pick',
   'cmd-site-copy',
-  'cmd-site-recipes',
-  'cmd-site-team',
   'cmd-site-tiers',
+  'cmd-site-flex',
+  'cmd-site-team',
   'cmd-site-production',
   'cmd-site-benches-hot',
   'cmd-site-golive',
+  'cmd-site-rollback',
   'cmd-rota-rebalance',
   'cmd-variance-sweep',
 ]);
@@ -659,14 +661,15 @@ const WORKSPACE_POINTER_LABELS: Record<string, string> = {
   'chagee-tea-recipe': 'Updating the recipe',
   'analytics-chart': 'Charting your data',
   'table-result': 'Building the table',
-  'cmd-site-pick': 'Reading the site sheet',
+  'cmd-site-pick': 'Syncing shops from ShopDB',
   'cmd-site-copy': 'Copying a shop setup',
-  'cmd-site-recipes': 'Copying the recipes',
-  'cmd-site-team': 'Loading the people',
   'cmd-site-tiers': 'Setting ranges & tiers',
+  'cmd-site-flex': 'Choosing flexible lines',
+  'cmd-site-team': 'Loading the people',
   'cmd-site-production': 'Setting production times',
   'cmd-site-benches-hot': 'Setting hot production',
   'cmd-site-golive': 'Check and go live',
+  'cmd-site-rollback': 'Rolling back a site set-up',
   'cmd-rota-rebalance': 'Rebalancing the rota',
   'cmd-variance-sweep': 'Morning variance sweep',
 };
@@ -9443,10 +9446,10 @@ export default function Feed({
       }
     }
 
-    // Site setup from a spreadsheet — runs BEFORE the product-sheet
-    // detectors below, which treat any paperclipped file as a product
-    // sheet. "Set up the sites in this spreadsheet" + an attached
-    // .xlsx must land on the site wizard, chip and all.
+    // Site setup — runs BEFORE the product-sheet detectors below,
+    // which treat any paperclipped file as a product sheet. "Set up
+    // the new shops" (with or without an attachment) must land on the
+    // site wizard, which syncs the shops from ShopDB.
     if (explicitChart === undefined && !tableOpts) {
       const siteIntent = parseSiteSetup(text);
       if (siteIntent) {
@@ -10730,16 +10733,14 @@ export default function Feed({
                         {/* ── Site-setup wizard ────────────────────────── */}
                         {m.msgType === 'cmd-site-pick' && (() => {
                           const args = m.cmdArgsJson ? (JSON.parse(m.cmdArgsJson) as {
-                            fileName?: string;
                             requestedCount?: number;
                             siteIds?: string[];
                             sites?: Record<string, import('@/components/Feed/commands/siteSetupFixtures').SiteDetails>;
                             shared?: import('@/components/Feed/commands/siteSetupFixtures').SharedSiteSettings;
                           }) : {};
                           return (
-                            <SiteSetupSheetSitesCard
+                            <SiteSetupShopDbSitesCard
                               state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
-                              fileName={args.fileName ?? 'new-sites-september.xlsx'}
                               requestedCount={args.requestedCount}
                               initialSiteIds={args.siteIds}
                               initialSites={args.sites}
@@ -10768,19 +10769,21 @@ export default function Feed({
                             />
                           );
                         })()}
-                        {m.msgType === 'cmd-site-recipes' && m.cmdArgsJson && (() => {
+                        {m.msgType === 'cmd-site-flex' && m.cmdArgsJson && (() => {
                           const args = JSON.parse(m.cmdArgsJson) as {
                             siteIds: string[];
-                            templates: Record<string, string>;
+                            rangeIds: Record<string, string>;
+                            tiers: Record<string, Record<import('@/components/Feed/commands/siteSetupFixtures').DayKey, number>>;
                             recipeExclusions?: import('@/components/Feed/commands/siteSetupFixtures').RecipeExclusions;
                           };
                           return (
-                            <SiteSetupRecipesCard
+                            <SiteSetupFlexibleLinesCard
                               state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                               siteIds={args.siteIds}
-                              templates={args.templates}
+                              rangeIds={args.rangeIds}
+                              tiers={args.tiers}
                               initialExclusions={args.recipeExclusions}
-                              onSubmit={(input) => commandRunner.submitSiteSetupRecipes(m.id, args, input)}
+                              onSubmit={(input) => commandRunner.submitSiteSetupFlex(m.id, args, input)}
                               onCancel={() => commandRunner.cancelCard(m.id)}
                               onEdit={commandRunner.siteSetupDone ? undefined : () => commandRunner.reopenSiteSetupCard(m.id)}
                             />
@@ -10807,6 +10810,7 @@ export default function Feed({
                             siteIds: string[];
                             rangeIds: Record<string, string>;
                             tiers: Record<string, Record<import('@/components/Feed/commands/siteSetupFixtures').DayKey, number>>;
+                            tierSchedules?: import('@/components/Feed/commands/siteSetupFixtures').TierSchedules;
                           };
                           return (
                             <SiteSetupRangeTiersCard
@@ -10814,6 +10818,7 @@ export default function Feed({
                               siteIds={args.siteIds}
                               initialRanges={args.rangeIds}
                               initialTiers={args.tiers}
+                              initialSchedules={args.tierSchedules}
                               onSubmit={(input) => commandRunner.submitSiteSetupTiers(m.id, args, input)}
                               onCancel={() => commandRunner.cancelCard(m.id)}
                               onEdit={commandRunner.siteSetupDone ? undefined : () => commandRunner.reopenSiteSetupCard(m.id)}
@@ -10872,8 +10877,10 @@ export default function Feed({
                             benches?: Record<string, number>;
                             benchesHot?: import('@/components/Feed/commands/siteSetupFixtures').SiteBenchesHot;
                             goLiveDates?: Record<string, string>;
+                            goLiveOffsetDays?: number;
                             sites?: Record<string, import('@/components/Feed/commands/siteSetupFixtures').SiteDetails>;
                             recipeExclusions?: import('@/components/Feed/commands/siteSetupFixtures').RecipeExclusions;
+                            tierSchedules?: import('@/components/Feed/commands/siteSetupFixtures').TierSchedules;
                           };
                           return (
                             <SiteSetupGoLiveCard
@@ -10884,20 +10891,42 @@ export default function Feed({
                               roles={args.roles ?? {}}
                               rangeIds={args.rangeIds}
                               tiers={args.tiers}
+                              tierSchedules={args.tierSchedules}
                               production={args.production}
                               benches={args.benches}
                               benchesHot={args.benchesHot}
                               recipeExclusions={args.recipeExclusions}
+                              sites={args.sites}
                               initialDates={args.goLiveDates}
+                              initialOffsetDays={args.goLiveOffsetDays}
                               onConfirm={(input) =>
                                 commandRunner.confirmSiteSetup(m.id, {
                                   siteIds: args.siteIds,
                                   templates: args.templates,
                                   goLiveDates: input.goLiveDates,
                                   sites: args.sites,
+                                  rangeIds: args.rangeIds,
+                                  tiers: args.tiers,
                                   recipeExclusions: args.recipeExclusions,
                                 })
                               }
+                              onCancel={() => commandRunner.cancelCard(m.id)}
+                            />
+                          );
+                        })()}
+                        {m.msgType === 'cmd-site-rollback' && m.cmdArgsJson && (() => {
+                          const args = JSON.parse(m.cmdArgsJson) as {
+                            siteIds: string[];
+                            shopNames?: string[];
+                            goLiveDates?: Record<string, string>;
+                          };
+                          return (
+                            <SiteSetupRollbackCard
+                              state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
+                              siteIds={args.siteIds}
+                              shopNames={args.shopNames}
+                              goLiveDates={args.goLiveDates}
+                              onConfirm={() => commandRunner.confirmSiteSetupRollback(m.id, args)}
                               onCancel={() => commandRunner.cancelCard(m.id)}
                             />
                           );
