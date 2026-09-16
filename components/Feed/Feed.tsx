@@ -9711,12 +9711,21 @@ export default function Feed({
     chatStarted && !chatMinimized && workspaceMessages.length > 0 && feedWidth >= 960;
   const wideWorkspace = workspaceMessages.some((m) => !!m.msgType && WIDE_WORKSPACE_MSG_TYPES.has(m.msgType));
 
-  // Keep the workspace panel pinned to the newest card.
-  const workspaceEndRef = useRef<HTMLDivElement | null>(null);
+  // When a new card lands in the workspace, scroll so its top sits
+  // at the top of the panel. Pinning to the bottom (the old behaviour)
+  // dropped the GM into the card's footer buttons with the question it
+  // was asking scrolled out of view above.
+  const workspaceScrollRef = useRef<HTMLDivElement | null>(null);
+  const newestWorkspaceCardRef = useRef<HTMLDivElement | null>(null);
+  const newestWorkspaceId = workspaceMessages[workspaceMessages.length - 1]?.id;
   useEffect(() => {
     if (!splitView) return;
-    workspaceEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [splitView, workspaceMessages.length]);
+    const panel = workspaceScrollRef.current;
+    const card = newestWorkspaceCardRef.current;
+    if (!panel || !card) return;
+    // Match the panel's top padding so the card doesn't kiss the edge.
+    panel.scrollTo({ top: Math.max(0, card.offsetTop - 16), behavior: 'smooth' });
+  }, [splitView, newestWorkspaceId]);
 
   /** Renders the interactive card for a message (or nothing if the
    *  message isn't a card / its wizard step has passed). Used by both
@@ -11590,11 +11599,12 @@ export default function Feed({
                     · what we&apos;re building in this chat
                   </span>
                 </div>
-                <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 24px 32px' }}>
+                <div ref={workspaceScrollRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 24px 32px', position: 'relative' }}>
                   <div style={{ maxWidth: wideWorkspace ? '960px' : '640px', margin: '0 auto' }}>
                     {workspaceMessages.map((wm) => (
                       <motion.div
                         key={wm.id}
+                        ref={wm.id === newestWorkspaceId ? newestWorkspaceCardRef : undefined}
                         initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.28, ease: [0.25, 0.1, 0.25, 1] }}
@@ -11603,7 +11613,6 @@ export default function Feed({
                         {renderWorkspaceCard(wm)}
                       </motion.div>
                     ))}
-                    <div ref={workspaceEndRef} style={{ height: '8px' }} />
                   </div>
                 </div>
               </div>
