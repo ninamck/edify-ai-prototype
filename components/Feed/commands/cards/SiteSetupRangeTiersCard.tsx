@@ -287,6 +287,15 @@ export default function SiteSetupRangeTiersCard({
 
 // ─── Menu pattern editor: range + tier per day ───────────────────────────────
 
+/** "Thu", "Sat and Sun", "Mon, Tue and Wed", "5 days". In week order. */
+function describeDays(days: DayKey[]): string {
+  const ordered = DAY_KEYS.filter((d) => days.includes(d));
+  if (ordered.length === 7) return 'all week';
+  if (ordered.length > 3) return `${ordered.length} days`;
+  if (ordered.length <= 1) return ordered.join('');
+  return `${ordered.slice(0, -1).join(', ')} and ${ordered[ordered.length - 1]}`;
+}
+
 function MenuPatternEditor({
   ranges,
   pattern,
@@ -342,7 +351,15 @@ function MenuPatternEditor({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      {/* Day strip — tap days, then pick a range and a tier below. */}
+      {/* Day strip — every day is its own cell. Tap one (Thursday on
+          its own is fine) or several, then set their range and tier. */}
+      {!disabled && (
+        <span style={{ fontSize: '10.5px', color: 'var(--color-text-muted)' }}>
+          {days.length === 0
+            ? 'Tap a day, or several, then set their range and tier. Each day holds its own.'
+            : `Setting ${describeDays(days)}:`}
+        </span>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
         {DAY_KEYS.map((day) => {
           const selected = days.includes(day);
@@ -363,13 +380,15 @@ function MenuPatternEditor({
                 borderRadius: '10px',
                 border: selected
                   ? '1.5px solid var(--color-accent-active, #001C35)'
-                  : '1.5px solid var(--color-border, rgba(0,28,53,0.14))',
+                  : '1.5px dashed var(--color-border, rgba(0,28,53,0.22))',
                 background: selected ? 'rgba(0,28,53,0.05)' : '#fff',
                 cursor: disabled ? 'not-allowed' : 'pointer',
                 fontFamily: 'var(--font-primary)',
+                boxShadow: selected ? '0 0 0 2px rgba(0,28,53,0.08)' : 'none',
               }}
+              title={disabled ? undefined : `${day}: ${dayRange?.name ?? ''} Tier ${pattern[day]}. Tap to ${selected ? 'deselect' : 'select'}.`}
             >
-              <span style={{ fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
+              <span style={{ fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: selected ? 'var(--color-accent-active, #001C35)' : 'var(--color-text-muted)' }}>
                 {day}
               </span>
               <span style={{ fontSize: compact ? '13px' : '14px', fontWeight: 800, color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
@@ -393,12 +412,11 @@ function MenuPatternEditor({
 
       {!disabled && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-          <GroupButton label="Mon–Thu" onClick={() => selectGroup(['Mon', 'Tue', 'Wed', 'Thu'])} />
-          <GroupButton label="Fri–Sun" onClick={() => selectGroup(['Fri', 'Sat', 'Sun'])} />
+          <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Quick select</span>
+          <GroupButton label="Mon–Fri" onClick={() => selectGroup(['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])} />
+          <GroupButton label="Sat–Sun" onClick={() => selectGroup(['Sat', 'Sun'])} />
           <GroupButton label="All week" onClick={() => selectGroup([...DAY_KEYS])} />
-          <span style={{ fontSize: '10.5px', color: 'var(--color-text-muted)' }}>
-            {days.length === 0 ? 'Pick days, then a range and a tier' : `Set ${days.length} day${days.length === 1 ? '' : 's'} to:`}
-          </span>
+          {days.length > 0 && <GroupButton label="Clear" onClick={() => setDays([])} />}
         </div>
       )}
 
