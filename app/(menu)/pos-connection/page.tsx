@@ -23,40 +23,18 @@ import {
   RefreshCw, Check, Plus, AlertTriangle, Link2, Settings as SettingsIcon, Power,
 } from 'lucide-react';
 import StyledSelect from '@/components/ui/StyledSelect';
-
-type ConnectionStatus = 'connected' | 'attention' | 'disconnected';
-
-type PosConnection = {
-  id: string;
-  name: string;
-  vendor: string;
-  site: string;
-  status: ConnectionStatus;
-  lastSyncedAt: string;
-  cadence: 'hourly' | '15-min' | 'manual';
-  pulled: {
-    menuItems: number;
-    modifierGroups: number;
-    salesDays: number;
-  };
-  notes?: string;
-};
-
-const SEED_CONNECTIONS: PosConnection[] = [
-  {
-    id: 'pos-1',
-    name: 'Lightspeed K Series',
-    vendor: 'Lightspeed',
-    site: 'Fitzroy Espresso',
-    status: 'connected',
-    lastSyncedAt: '2 min ago',
-    cadence: '15-min',
-    pulled: { menuItems: 124, modifierGroups: 11, salesDays: 30 },
-  },
-];
+// Connection state lives in a shared store so the Email orders tab can
+// show the same live/offline state this tab manages.
+import {
+  usePosConnections,
+  updatePosConnection,
+  removePosConnection,
+  type ConnectionStatus,
+  type PosConnection,
+} from '@/components/EmailOrders/posConnection';
 
 const AVAILABLE_INTEGRATIONS = [
-  { id: 'square',     name: 'Square',     status: 'available' },
+  { id: 'lightspeed', name: 'Lightspeed', status: 'available' },
   { id: 'toast',      name: 'Toast',      status: 'available' },
   { id: 'clover',     name: 'Clover',     status: 'available' },
   { id: 'epos-now',   name: 'Epos Now',   status: 'available' },
@@ -66,26 +44,24 @@ const AVAILABLE_INTEGRATIONS = [
 ];
 
 export default function PosConnectionPage() {
-  const [connections, setConnections] = useState<PosConnection[]>(SEED_CONNECTIONS);
+  const connections = usePosConnections();
   const [syncing, setSyncing] = useState<string | null>(null);
 
   function syncNow(id: string) {
     setSyncing(id);
     window.setTimeout(() => {
-      setConnections((cs) =>
-        cs.map((c) => (c.id === id ? { ...c, lastSyncedAt: 'just now' } : c)),
-      );
+      updatePosConnection(id, { lastSyncedAt: 'just now' });
       setSyncing(null);
     }, 900);
   }
 
   function setCadence(id: string, cadence: PosConnection['cadence']) {
-    setConnections((cs) => cs.map((c) => (c.id === id ? { ...c, cadence } : c)));
+    updatePosConnection(id, { cadence });
   }
 
   function disconnect(id: string) {
-    if (!confirm('Disconnect this POS? Item matching and sales rollup will stop until you reconnect.')) return;
-    setConnections((cs) => cs.filter((c) => c.id !== id));
+    if (!confirm('Disconnect this POS? Item matching, sales rollup and email orders will stop until you reconnect.')) return;
+    removePosConnection(id);
   }
 
   return (

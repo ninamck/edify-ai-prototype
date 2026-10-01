@@ -384,7 +384,7 @@ export default function Sidebar() {
             label="Manage menu"
             icon={Star}
             compact={compact}
-            active={is('/recipes') || is('/modifier-groups') || is('/pos-connection') || is('/item-matching')}
+            active={is('/recipes') || is('/modifier-groups') || is('/pos-connection') || is('/item-matching') || is('/email-orders')}
             onClick={() => router.push('/recipes')}
           />
           <NavItem label="Manage suppliers" icon={MapPin} compact={compact} active={is('/suppliers')} onClick={() => router.push('/suppliers')} />

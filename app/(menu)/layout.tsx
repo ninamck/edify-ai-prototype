@@ -8,6 +8,7 @@
  *   • Modifier groups  — variations the POS can apply
  *   • POS connection   — system-level link state (which POS, last sync)
  *   • Item matching    — ongoing reconciliation of POS items ↔ recipes
+ *   • Email orders     — orders Edify read from the inbox and sent to the till
  *
  * Uses the shared AreaTopBar (single bar: site switcher · title ·
  * compact tabs) so the managed areas of the app feel like one system.
@@ -32,6 +33,7 @@ const MENU_TABS: Tab[] = [
   { id: 'modifier-groups', label: 'Modifier groups', href: '/modifier-groups' },
   { id: 'pos-connection',  label: 'POS connection',  href: '/pos-connection' },
   { id: 'item-matching',   label: 'Item matching',   href: '/item-matching' },
+  { id: 'email-orders',    label: 'Email orders',    href: '/email-orders' },
 ];
 
 export default function MenuLayout({ children }: { children: React.ReactNode }) {
