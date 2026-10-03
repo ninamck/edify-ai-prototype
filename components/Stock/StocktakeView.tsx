@@ -36,6 +36,8 @@ import type {
   StocktakeRecord,
 } from './status';
 import {
+  STOCKTAKE_STATUS_LABEL,
+  STOCKTAKE_STATUS_TONE,
   STOCK_LOCATION_ORDER,
   countCellKeys,
   formatPackSize,
@@ -66,6 +68,11 @@ interface Props {
    *  (full / area / quick / group), so this is purely a presentation
    *  swap — no scope change. Optional: omit to hide the affordance. */
   onUseVoice?: () => void;
+  /** Counts already captured for this count (by voice or an earlier
+   *  grid visit), keyed `${itemId}::${cellSuffix}`. */
+  initialCounts?: Record<string, string>;
+  /** Every edit, so the page's shared session stays in step. */
+  onCountsChange?: (counts: Record<string, string>) => void;
 }
 
 // Per-cell key in `counts`. We keep counts at (itemId, cell) level so
@@ -110,8 +117,16 @@ export default function StocktakeView({
   scope,
   onBack,
   onUseVoice,
+  initialCounts,
+  onCountsChange,
 }: Props) {
   const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
+  // A completed count has already updated stock, so it opens view-only.
+  const readOnly = stocktake?.status === 'completed';
+  const statusLabel =
+    stocktake && stocktake.status !== 'in-progress' ? STOCKTAKE_STATUS_LABEL[stocktake.status] : 'Open';
+  const statusTone =
+    stocktake && stocktake.status !== 'in-progress' ? STOCKTAKE_STATUS_TONE[stocktake.status] : 'var(--color-warning)';
   // Quick / group counts span every location at the venue (the items
   // could be anywhere), so we just render a flat list. Area counts
   // are locked to one location — no tabs needed. Only Full / Continue
@@ -139,7 +154,7 @@ export default function StocktakeView({
   }, [items]);
 
   const [activeLocation, setActiveLocation] = useState<StockLocation>(
-    locationGroups[0]?.location ?? 'Front of House',
+    locationGroups[0]?.location ?? STOCK_LOCATION_ORDER[0],
   );
 
   // If the items array changes site (parent passes a new array) and
@@ -147,11 +162,13 @@ export default function StocktakeView({
   // available tab.
   useEffect(() => {
     if (!locationGroups.some(g => g.location === activeLocation)) {
-      setActiveLocation(locationGroups[0]?.location ?? 'Front of House');
+      setActiveLocation(locationGroups[0]?.location ?? STOCK_LOCATION_ORDER[0]);
     }
   }, [locationGroups, activeLocation]);
 
-  const [counts, setCounts] = useState<Record<CountKey, string>>({});
+  const [counts, setCounts] = useState<Record<CountKey, string>>(
+    () => (initialCounts ?? {}) as Record<CountKey, string>,
+  );
   const [saveState, setSaveState] = useState<SaveState>('saved');
   // Tracks the time of the last successful save so we can render
   // "Last saved 5s ago" style text. Defaults to "now" on mount so the
@@ -162,7 +179,9 @@ export default function StocktakeView({
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function setCount(itemId: string, suffix: string, value: string) {
-    setCounts(prev => ({ ...prev, [keyFor(itemId, suffix)]: value }));
+    const next = { ...counts, [keyFor(itemId, suffix)]: value };
+    setCounts(next);
+    onCountsChange?.(next);
     setSaveState('saving');
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
@@ -257,7 +276,7 @@ export default function StocktakeView({
   const subtitle = stocktake
     ? `${stocktake.scope}${
         stocktake.sectionName ? ` · ${stocktake.sectionName}` : ''
-      } · started ${formatRelativeDate(stocktake.date)} by ${stocktake.counterName}`
+      } · ${stocktake.status === 'in-progress' ? 'started' : 'counted'} ${formatRelativeDate(stocktake.date)} by ${stocktake.counterName}`
     : `${scopeLabel(scope)} · ${totalCounted} of ${items.length} items counted · ${formatPrice(countedValue)} counted`;
 
   return (
@@ -317,8 +336,8 @@ export default function StocktakeView({
                 padding: '2px 8px',
                 borderRadius: 'var(--radius-badge)',
                 background: 'transparent',
-                color: 'var(--color-warning)',
-                border: '1px solid var(--color-warning)',
+                color: statusTone,
+                border: `1px solid ${statusTone}`,
                 fontSize: 11,
                 fontWeight: 700,
                 letterSpacing: '0.04em',
@@ -330,10 +349,10 @@ export default function StocktakeView({
                   width: 6,
                   height: 6,
                   borderRadius: '50%',
-                  background: 'var(--color-warning)',
+                  background: statusTone,
                 }}
               />
-              Open
+              {statusLabel}
             </span>
           </div>
           <div
@@ -347,6 +366,7 @@ export default function StocktakeView({
           </div>
         </div>
 
+        {!readOnly && (
         <div
           style={{
             display: 'flex',
@@ -380,7 +400,7 @@ export default function StocktakeView({
               title={
                 items.length === 0
                   ? 'Nothing to count yet.'
-                  : 'Hand-free counting using the mic'
+                  : 'Hands-free counting with the mic'
               }
               style={{
                 display: 'inline-flex',
@@ -393,10 +413,10 @@ export default function StocktakeView({
                 background: '#fff',
                 color: items.length === 0
                   ? 'var(--color-text-secondary)'
-                  : '#f55a00',
+                  : 'var(--color-accent-active)',
                 border: items.length === 0
                   ? '1px solid var(--color-border)'
-                  : '1px solid #f55a00',
+                  : '1px solid var(--color-accent-active)',
                 fontSize: 13,
                 fontWeight: 600,
                 fontFamily: 'var(--font-primary)',
@@ -405,7 +425,7 @@ export default function StocktakeView({
                 whiteSpace: 'nowrap',
               }}
             >
-              <Mic size={14} /> Use voice
+              <Mic size={14} /> Count by voice
             </button>
           )}
           <button
@@ -427,6 +447,7 @@ export default function StocktakeView({
             Submit
           </button>
         </div>
+        )}
       </header>
 
       {/* Location filter — segmented control, same shape as the
@@ -509,7 +530,7 @@ export default function StocktakeView({
           })}
         </div>
 
-        <button
+        {!readOnly && <button
           type="button"
           title="Edit items in this location (prototype — disabled)"
           style={{
@@ -529,7 +550,7 @@ export default function StocktakeView({
           }}
         >
           <Plus size={14} strokeWidth={2.4} /> Edit items
-        </button>
+        </button>}
       </div>
       )}
 
@@ -584,6 +605,7 @@ export default function StocktakeView({
               item={item}
               counts={counts}
               isMobile={isMobile}
+              readOnly={readOnly}
               onChange={(suffix, value) => setCount(item.id, suffix, value)}
             />
           ))}
@@ -657,11 +679,13 @@ function CountRow({
   item,
   counts,
   isMobile,
+  readOnly,
   onChange,
 }: {
   item: StockItem;
   counts: Record<CountKey, string>;
   isMobile: boolean;
+  readOnly: boolean;
   onChange: (suffix: string, value: string) => void;
 }) {
   const alternates = item.alternateUnits ?? [];
@@ -761,6 +785,7 @@ function CountRow({
                 variant={variant}
                 counts={counts}
                 isMobile={isMobile}
+                readOnly={readOnly}
                 onChange={onChange}
               />
             ))}
@@ -784,6 +809,7 @@ function CountRow({
                   onChange={v => onChange(unit, v)}
                   packSize={formatPackSize(item, unit) ?? undefined}
                   grow={isMobile}
+                  readOnly={readOnly}
                 />
               ))}
             </div>
@@ -935,12 +961,14 @@ function VariantRow({
   variant,
   counts,
   isMobile,
+  readOnly,
   onChange,
 }: {
   item: StockItem;
   variant: StockSupplierVariant;
   counts: Record<CountKey, string>;
   isMobile: boolean;
+  readOnly: boolean;
   onChange: (suffix: string, value: string) => void;
 }) {
   const synthetic = variantAsItem(item, variant);
@@ -986,6 +1014,7 @@ function VariantRow({
                 undefined
               }
               grow={isMobile}
+              readOnly={readOnly}
             />
           ))}
         </div>

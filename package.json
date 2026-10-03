@@ -6,7 +6,8 @@
     "dev": "ulimit -n 8192; next dev -H 127.0.0.1",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check:voice": "node --no-warnings scripts/check-voice-parser.mjs"
   },
   "dependencies": {
     "@tanstack/react-table": "^8.21.3",

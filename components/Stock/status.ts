@@ -82,50 +82,74 @@ export const STOCK_CATEGORIES: StockCategory[] = [
   'Other',
 ];
 
-// ─── Storage locations ──────────────────────────────────────────────────────
-// Physical zones inside a venue (Front of House, Bar, Kitchen, Dry Store,
-// Back of House). Real sites configure these per venue; for the
-// prototype we derive a sensible default from each item's category so
-// we don't have to seed a `location` field on every fixture row. Powers
-// the location tabs in the Stocktake view.
+// ─── Storage areas ──────────────────────────────────────────────────────────
+// The physical places a GM walks during a stocktake. Real sites configure
+// these per venue; the prototype uses one café layout for every Fitzroy
+// site. The order is the walk order: it drives the voice stocktake's
+// area strip, the grid's area tabs and the "Count an area" pills, so all
+// three always agree.
 
 export type StockLocation =
-  | 'Front of House'
-  | 'Bar'
-  | 'Kitchen'
-  | 'Dry Store'
-  | 'Back of House';
+  | 'Front counter'
+  | 'Bar fridge'
+  | 'Walk-in'
+  | 'Freezer'
+  | 'Dry store'
+  | 'Cleaning cupboard';
 
-/** Canonical display order — keep tab strips stable regardless of which
- *  locations a site happens to have. */
+/** Walk order. Keep tab strips stable regardless of which areas a site
+ *  happens to have. */
 export const STOCK_LOCATION_ORDER: StockLocation[] = [
-  'Front of House',
-  'Bar',
-  'Kitchen',
-  'Dry Store',
-  'Back of House',
+  'Front counter',
+  'Bar fridge',
+  'Walk-in',
+  'Freezer',
+  'Dry store',
+  'Cleaning cupboard',
 ];
 
+// Items whose area doesn't follow their category. Keyed by the item id
+// with any site prefix stripped (`fe-almond-milk` → `almond-milk`).
+const LOCATION_OVERRIDES: Record<string, StockLocation> = {
+  'almond-milk': 'Walk-in',
+  'espresso-beans': 'Front counter',
+  'tea-eb': 'Front counter',
+  'cups-12': 'Front counter',
+  'lids-12': 'Front counter',
+  'mp-cup-lids': 'Front counter',
+  'ing-croissants': 'Freezer',
+  'ing-kx-doughnuts': 'Freezer',
+  'mp-vanilla-ice-cream': 'Freezer',
+  'bacon': 'Freezer',
+  'ing-flour': 'Dry store',
+  'ing-is-flour': 'Dry store',
+};
+
+const SITE_PREFIX = /^(fe|kx|hr|is)-/;
+
 export function locationForItem(item: StockItem): StockLocation {
+  const override =
+    LOCATION_OVERRIDES[item.id] ?? LOCATION_OVERRIDES[item.id.replace(SITE_PREFIX, '')];
+  if (override) return override;
   switch (item.category) {
     case 'Beverage':
-      return 'Bar';
+      return 'Bar fridge';
     case 'Bakery':
-      return 'Front of House';
+      return 'Front counter';
     case 'Dairy':
     case 'Produce':
     case 'Meat':
     case 'Seafood':
     case 'Prepared':
-      return 'Kitchen';
+      return 'Walk-in';
     case 'Pantry':
     case 'Packaging':
-      return 'Dry Store';
+      return 'Dry store';
     case 'Cleaning':
-      return 'Back of House';
+      return 'Cleaning cupboard';
     case 'Other':
     default:
-      return 'Front of House';
+      return 'Front counter';
   }
 }
 

@@ -1,6 +1,16 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -16,7 +26,17 @@ import ItemDetailDrawer from '@/components/Stock/ItemDetailDrawer';
 import StocktakeView from '@/components/Stock/StocktakeView';
 import StocktakeList from '@/components/Stock/StocktakeList';
 import StocktakeReviewView from '@/components/Stock/StocktakeReviewView';
-import VoiceCountView from '@/components/Stock/VoiceCountView';
+import VoiceStocktake from '@/components/Stock/voice/VoiceStocktake';
+import { emptySession, type Session } from '@/components/Stock/voice/engine';
+import {
+  buildAreas,
+  capturesFromCells,
+  cellsFromCaptures,
+  seedCompleted,
+  seedDemo,
+  seedResume,
+  sessionKey,
+} from '@/components/Stock/voice/session';
 import { ESTATE_SITES } from '@/components/Stock/fixtures';
 import WasteLogPicker from '@/components/Waste/WasteLogPicker';
 import WasteLogCard from '@/components/Waste/WasteLogCard';
@@ -73,6 +93,20 @@ type View = 'estate' | 'all' | 'stocktake' | 'waste' | 'transfers';
 type Tab = { id: View; label: string };
 
 const SITE_VIEWS: ReadonlySet<View> = new Set(['all', 'stocktake', 'waste', 'transfers']);
+
+// `?demo=1` opens a full count at Fitzroy Espresso part-way through,
+// with a scripted run of utterances (see components/Stock/voice/demo.ts).
+const DEMO_SITE_ID = 'fitzroy-espresso';
+const DEMO_TARGET: CountTarget = { kind: 'full' };
+
+type CountMode = 'voice' | 'grid';
+
+// False while rendering on the server and hydrating, true after. The
+// voice overlay portals into <body>, which only exists in the browser.
+const noopSubscribe = () => () => {};
+function useIsClient(): boolean {
+  return useSyncExternalStore(noopSubscribe, () => true, () => false);
+}
 
 // Local edit overrides — the prototype has no real backend, but the
 // user can still tweak "on hand" / "stock unit" from the table or
@@ -158,13 +192,17 @@ function StockPageInner() {
   //   • area     → fresh count of one storage location
   //   • quick    → fresh count of currently-flagged items only
   const [activeTarget, setActiveTarget] = useState<CountTarget | null>(null);
-  // Voice modality flag — orthogonal to scope. When true and a count
-  // is in flight (activeTarget !== null), the page renders
-  // VoiceCountView against the *same* item set the StocktakeView
-  // would have shown, so swapping in/out doesn't lose the operator's
-  // place. Cleared automatically when the site, view, or scope
-  // changes — voice is always a "within this specific count" action.
-  const [voiceMode, setVoiceMode] = useState(false);
+  // How a count opens. Voice is the default; the grid is the secondary
+  // option. Orthogonal to scope: both read and write the same session
+  // below, so swapping between them never loses a count.
+  const [countMode, setCountMode] = useState<CountMode>('voice');
+  // One session per count (site + scope), so leaving a count and coming
+  // back to the same scope picks up where the GM left off.
+  const [countSessions, setCountSessions] = useState<Record<string, Session>>({});
+  const demoRequested = searchParams.get('demo') === '1';
+  const [demoDone, setDemoDone] = useState(false);
+  const demoActive = demoRequested && !demoDone;
+  const isClient = useIsClient();
   // User-added item groups, keyed by site id. Merged with fixture
   // defaults at render time so the operator's additions appear next
   // to "High-value items" / "Perishables" without overwriting them.
@@ -196,7 +234,6 @@ function StockPageInner() {
   useEffect(() => {
     setSelectedItemId(null);
     setActiveTarget(null);
-    setVoiceMode(false);
   }, [activeSiteId]);
 
   // Leaving the Stocktake tab abandons any open drill-in so revisiting
@@ -204,15 +241,16 @@ function StockPageInner() {
   useEffect(() => {
     if (view !== 'stocktake') {
       setActiveTarget(null);
-      setVoiceMode(false);
     }
   }, [view]);
 
-  // Closing the count entirely (back to the list) also clears voice
-  // mode — it's never meaningful without an active scope.
+  // The demo always runs at Fitzroy Espresso, whichever site the
+  // persona switcher last remembered.
   useEffect(() => {
-    if (!activeTarget) setVoiceMode(false);
-  }, [activeTarget]);
+    if (demoActive && activeSiteId !== DEMO_SITE_ID) setActiveSiteId(DEMO_SITE_ID);
+  }, [demoActive, activeSiteId, setActiveSiteId]);
+  const demoReady = demoActive && activeSiteId === DEMO_SITE_ID;
+  const countTarget = demoReady ? DEMO_TARGET : activeTarget;
 
   // The active site's full snapshot. Falls back to the first snapshot
   // if the persona's site isn't in the fixture set so the prototype
@@ -409,20 +447,20 @@ function StockPageInner() {
     countItems: StockItem[];
     countRecord: StocktakeRecord | null;
   }>(() => {
-    if (!activeTarget) return { countItems: [], countRecord: null };
-    switch (activeTarget.kind) {
+    if (!countTarget) return { countItems: [], countRecord: null };
+    switch (countTarget.kind) {
       case 'continue':
         return {
           countItems: activeSiteItems,
           countRecord:
-            activeSiteHistory.find(r => r.id === activeTarget.recordId) ?? null,
+            activeSiteHistory.find(r => r.id === countTarget.recordId) ?? null,
         };
       case 'full':
         return { countItems: activeSiteItems, countRecord: null };
       case 'area':
         return {
           countItems: activeSiteItems.filter(
-            i => locationForItem(i) === activeTarget.location,
+            i => locationForItem(i) === countTarget.location,
           ),
           countRecord: null,
         };
@@ -431,7 +469,7 @@ function StockPageInner() {
         // count the operator lands in matches the number they clicked.
         return { countItems: attentionItems, countRecord: null };
       case 'group': {
-        const group = siteGroups.find(g => g.id === activeTarget.groupId);
+        const group = siteGroups.find(g => g.id === countTarget.groupId);
         const ids = new Set(group?.itemIds ?? []);
         return {
           countItems: activeSiteItems.filter(i => ids.has(i.id)),
@@ -439,7 +477,83 @@ function StockPageInner() {
         };
       }
     }
-  }, [activeTarget, activeSiteHistory, activeSiteItems, attentionItems, siteGroups]);
+  }, [countTarget, activeSiteHistory, activeSiteItems, attentionItems, siteGroups]);
+
+  // ── Count session ──────────────────────────────────────────────────
+  // Voice and the grid share one session per count. A count with no
+  // session yet starts from `freshSession`: the demo's seeded state, a
+  // resumed in-progress record, a completed record rebuilt for viewing,
+  // or nothing counted.
+  // Past records (completed or needing review) always open on the list,
+  // never voice. Only an in-progress count follows the voice/list switch.
+  const viewingPast =
+    countTarget?.kind === 'continue' &&
+    (countRecord?.status === 'completed' || countRecord?.status === 'needs-review');
+  const voiceAreas = useMemo(
+    () => (countTarget ? buildAreas(countItems, countTarget) : []),
+    [countItems, countTarget],
+  );
+  const stockById = useMemo(
+    () => new Map(activeSiteItems.map(i => [i.id, i])),
+    [activeSiteItems],
+  );
+  const countKey = countTarget ? sessionKey(activeSite.siteId, countTarget) : '';
+  const freshSession = useMemo<Session>(() => {
+    if (!countTarget) return emptySession();
+    if (demoReady) return seedDemo(voiceAreas, stockById);
+    if (viewingPast && countRecord) return seedCompleted(voiceAreas, stockById, countRecord);
+    if (countTarget.kind === 'continue') return seedResume(voiceAreas, stockById, countRecord);
+    return { ...emptySession(), currentAreaId: voiceAreas[0]?.id };
+  }, [countTarget, demoReady, viewingPast, voiceAreas, stockById, countRecord]);
+  const countSession = countSessions[countKey] ?? freshSession;
+  const setCountSession = useCallback<Dispatch<SetStateAction<Session>>>(
+    update => {
+      setCountSessions(prev => {
+        const current = prev[countKey] ?? freshSession;
+        return { ...prev, [countKey]: typeof update === 'function' ? update(current) : update };
+      });
+    },
+    [countKey, freshSession],
+  );
+
+  // Leaving the demo keeps its count as the site's open full count, so
+  // "Count on a list" mid-demo shows the same numbers.
+  const leaveDemo = useCallback(() => {
+    if (!demoReady) return;
+    setCountSessions(prev => (prev[countKey] ? prev : { ...prev, [countKey]: countSession }));
+    setDemoDone(true);
+  }, [demoReady, countKey, countSession]);
+
+  const closeCount = useCallback(() => {
+    leaveDemo();
+    setActiveTarget(null);
+  }, [leaveDemo]);
+
+  const switchToGrid = useCallback(() => {
+    leaveDemo();
+    setActiveTarget(countTarget);
+    setCountMode('grid');
+  }, [leaveDemo, countTarget]);
+
+  // Submitting closes the count and clears its session. Uncounted items
+  // were listed on the summary as blank, never as zero. A record that
+  // becomes completed keeps its session, so reopening it shows what
+  // was actually counted.
+  const handleVoiceSubmitted = useCallback(() => {
+    leaveDemo();
+    if (countTarget?.kind === 'continue') {
+      const recordId = countTarget.recordId;
+      setStocktakeStatusOverrides(prev => ({ ...prev, [recordId]: 'completed' }));
+      setActiveTarget(null);
+      return;
+    }
+    setCountSessions(prev => {
+      const next = { ...prev };
+      delete next[countKey];
+      return next;
+    });
+    setActiveTarget(null);
+  }, [leaveDemo, countTarget, countKey]);
 
   // Variance-review submit handlers. The review view emits one event
   // per stock-affecting resolution (accept-count / log-waste) and a
@@ -484,7 +598,7 @@ function StockPageInner() {
   // per-line data. Anything else (no record, fresh count, in-progress
   // continue) keeps using the existing StocktakeView.
   const showReviewView =
-    activeTarget?.kind === 'continue' &&
+    countTarget?.kind === 'continue' &&
     countRecord?.status === 'needs-review' &&
     (countRecord.lines?.length ?? 0) > 0;
 
@@ -595,18 +709,16 @@ function StockPageInner() {
             aggregated
           />
         ) : view === 'stocktake' ? (
-          activeTarget ? (
+          countTarget ? (
             // Three count surfaces share this slot:
             //   • Variance review when continuing a needs-review
             //     record (focused list of just the variance lines
             //     with per-line resolutions).
-            //   • Voice when the operator toggled it on inside the
-            //     manual surface.
-            //   • Manual count for everything else (fresh count or
-            //     resuming an in-progress one).
-            // Closing review / voice returns to the manual surface so
-            // the operator can keep working; only `onBack` from the
-            // manual view exits the count entirely.
+            //   • Voice, the default for every other count. A full-
+            //     screen overlay, portaled to <body> because the page
+            //     body's container query would otherwise clip it.
+            //   • The list, when the operator chose it, and always for
+            //     past records (completed, or review without line data).
             showReviewView && countRecord ? (
               <StocktakeReviewView
                 record={countRecord}
@@ -615,21 +727,39 @@ function StockPageInner() {
                 onLineResolved={handleReviewLineResolved}
                 onSubmit={handleReviewSubmit}
               />
-            ) : voiceMode ? (
-              <VoiceCountView
-                items={countItems}
-                siteName={activeSite.siteName}
-                scope={activeTarget}
-                onClose={() => setVoiceMode(false)}
-              />
+            ) : (countMode === 'voice' || demoReady) && !viewingPast ? (
+              !isClient
+                ? null
+                : createPortal(
+                    <VoiceStocktake
+                      key={countKey}
+                      siteName={activeSite.siteName}
+                      areas={voiceAreas}
+                      session={countSession}
+                      setSession={setCountSession}
+                      demo={demoReady}
+                      demoSeed={demoReady ? freshSession : undefined}
+                      onExit={closeCount}
+                      onUseGrid={switchToGrid}
+                      onSubmitted={handleVoiceSubmitted}
+                    />,
+                    document.body,
+                  )
             ) : (
               <StocktakeView
+                key={countKey}
                 items={countItems}
                 siteName={activeSite.siteName}
                 stocktake={countRecord}
-                scope={activeTarget}
-                onBack={() => setActiveTarget(null)}
-                onUseVoice={() => setVoiceMode(true)}
+                scope={countTarget}
+                onBack={closeCount}
+                onUseVoice={viewingPast ? undefined : () => setCountMode('voice')}
+                initialCounts={cellsFromCaptures(countSession.captures)}
+                onCountsChange={cells =>
+                  setCountSession(s =>
+                    capturesFromCells(s, cells, countItems, new Date().toISOString()),
+                  )
+                }
               />
             )
           ) : (
@@ -645,6 +775,8 @@ function StockPageInner() {
               allItems={activeSiteItems}
               onStart={target => setActiveTarget(target)}
               onCreateGroup={handleCreateGroup}
+              countMode={countMode}
+              onCountModeChange={setCountMode}
             />
           )
         ) : view === 'all' ? (

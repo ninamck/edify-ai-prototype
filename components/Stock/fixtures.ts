@@ -278,6 +278,23 @@ function expandTemplates(
   );
 }
 
+// "Avocados" and "Avocado" are the same thing on a shelf.
+function sameItemName(name: string): string {
+  return name.toLowerCase().replace(/\(.*?\)/g, '').trim().replace(/s$/, '');
+}
+
+const TEMPLATE_ID = /^(fe|kx|hr|is)-/;
+
+/** Drops any shared-catalogue item that duplicates a curated item at the
+ *  same site by name. Two "Chicken Breast" rows at one site would make
+ *  every spoken count ambiguous. */
+function withoutDuplicateTemplates(items: StockItem[]): StockItem[] {
+  const curated = new Set(
+    items.filter(i => !TEMPLATE_ID.test(i.id)).map(i => sameItemName(i.name)),
+  );
+  return items.filter(i => !TEMPLATE_ID.test(i.id) || !curated.has(sameItemName(i.name)));
+}
+
 // ─── Active site stock ────────────────────────────────────────────────────────
 // Curated set covering every status in the taxonomy + every item type
 // so the demo shows the full UI matrix on one screen. Reuses ingredient
@@ -913,12 +930,12 @@ export const STOCK_ITEMS: StockItem[] = [
 //   • King's Cross (commuter)    — slimmer stock, regular cadence
 //   • Heathrow (airport)         — higher volume, fresh counts
 //   • Islington (standalone)     — modest stock, counts going stale
-const ESPRESSO_ITEMS: StockItem[] = [
+const ESPRESSO_ITEMS: StockItem[] = withoutDuplicateTemplates([
   ...STOCK_ITEMS,
   ...expandTemplates('fe', 1.0, 1, 'high'),
-];
+]);
 
-const KINGS_CROSS_ITEMS: StockItem[] = [
+const KINGS_CROSS_ITEMS: StockItem[] = withoutDuplicateTemplates([
   // High-volume commuter spoke — short on a couple of fast movers,
   // healthy on most things.
   {
@@ -1040,9 +1057,9 @@ const KINGS_CROSS_ITEMS: StockItem[] = [
     ],
   },
   ...expandTemplates('kx', 0.7, 2, 'high'),
-];
+]);
 
-const HEATHROW_ITEMS: StockItem[] = [
+const HEATHROW_ITEMS: StockItem[] = withoutDuplicateTemplates([
   // Airport hybrid — long-haul flight closures left them sitting on
   // sandwich ingredients past peak. Spoilage + variance story.
   {
@@ -1136,9 +1153,9 @@ const HEATHROW_ITEMS: StockItem[] = [
     ],
   },
   ...expandTemplates('hr', 1.4, 1, 'high'),
-];
+]);
 
-const ISLINGTON_ITEMS: StockItem[] = [
+const ISLINGTON_ITEMS: StockItem[] = withoutDuplicateTemplates([
   // Standalone — well-run, only thing showing is a stale-stocktake
   // flag because the manager hasn't counted in a fortnight.
   {
@@ -1229,7 +1246,7 @@ const ISLINGTON_ITEMS: StockItem[] = [
     ],
   },
   ...expandTemplates('is', 0.8, 12, 'medium'),
-];
+]);
 
 // Stocktake history per site. Each site's story:
 //   • Fitzroy Espresso — hub kitchen on a weekly cadence, recent counts

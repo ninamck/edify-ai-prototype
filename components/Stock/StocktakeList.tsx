@@ -21,8 +21,10 @@ import {
   Check,
   ChevronRight,
   ClipboardCheck,
+  List,
   ListChecks,
   MapPin,
+  Mic,
   Play,
   Plus,
   Search,
@@ -84,6 +86,10 @@ interface Props {
    *  extra "Site" column. Records here come from every site in the
    *  estate, so each is expected to carry a denormalised `siteName`. */
   aggregated?: boolean;
+  /** How the next count opens. Voice is the default; the grid is the
+   *  secondary option for anyone who'd rather type. */
+  countMode?: 'voice' | 'grid';
+  onCountModeChange?: (mode: 'voice' | 'grid') => void;
 }
 
 type StatusFilter = StocktakeStatus | 'all';
@@ -101,6 +107,8 @@ export default function StocktakeList({
   onStart,
   onCreateGroup,
   aggregated = false,
+  countMode = 'voice',
+  onCountModeChange,
 }: Props) {
   // The "Count an area" button doesn't drill in directly — there's no
   // sensible default location to pick — so it acts as a toggle that
@@ -371,6 +379,68 @@ export default function StocktakeList({
           disabledHint="Continue the open stocktake first."
           onClick={() => setCreateOpen(v => !v)}
         />
+
+        {onCountModeChange && (
+          <div
+            role="group"
+            aria-label="Count with"
+            style={{
+              marginLeft: 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              fontFamily: 'var(--font-primary)',
+            }}
+          >
+            <span aria-hidden style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+              Count with
+            </span>
+            <div
+              style={{
+                display: 'inline-flex',
+                padding: 3,
+                borderRadius: 100,
+                border: '1px solid var(--color-border)',
+                background: '#fff',
+              }}
+            >
+              {(
+                [
+                  ['voice', 'Voice', <Mic key="i" size={14} aria-hidden />],
+                  ['grid', 'List', <List key="i" size={14} aria-hidden />],
+                ] as const
+              ).map(([mode, label, icon]) => {
+                const active = countMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => onCountModeChange(mode)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      minHeight: 36,
+                      padding: '0 14px',
+                      borderRadius: 100,
+                      border: 'none',
+                      fontFamily: 'var(--font-primary)',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      background: active ? 'var(--color-accent-active)' : 'transparent',
+                      color: active ? '#fff' : 'var(--color-text-secondary)',
+                    }}
+                  >
+                    {icon}
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Create-group surface lives in a right-anchored drawer

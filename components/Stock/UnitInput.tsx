@@ -80,6 +80,8 @@ export interface UnitInputProps {
    *  comfortable touch target. Used on mobile, where each pill flexes
    *  to share the row evenly instead of sitting at a fixed width. */
   grow?: boolean;
+  /** Show the value without letting anyone change it. */
+  readOnly?: boolean;
 }
 
 export default function UnitInput({
@@ -92,6 +94,7 @@ export default function UnitInput({
   ariaLabel,
   packSize,
   grow = false,
+  readOnly = false,
 }: UnitInputProps) {
   const { tone, tagBg } = UNIT_TONES[unitCategory(unit)];
   const hasValue = value.trim() !== '' && !Number.isNaN(parseFloat(value));
@@ -116,7 +119,8 @@ export default function UnitInput({
         step="0.1"
         value={value}
         onChange={e => onChange(e.target.value)}
-        placeholder="0"
+        readOnly={readOnly}
+        placeholder={readOnly ? '—' : '0'}
         aria-label={ariaLabel ?? `Count in ${unit}`}
         style={{
           width: grow ? 'auto' : inputWidth,
