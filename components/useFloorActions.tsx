@@ -38,6 +38,7 @@ import {
   MapPin,
   User,
   Settings,
+  Camera,
   type LucideIcon,
 } from 'lucide-react';
 import type { BriefingRole } from '@/components/briefing';
@@ -76,7 +77,47 @@ export const FLOOR_ACTION_ICON_MAP: Record<string, LucideIcon> = {
   MapPin,
   User,
   Settings,
+  Camera,
 };
+
+/**
+ * Actions added to the defaults after people had already saved a layout.
+ * Each is slotted in once, after the action named in `after`, so someone
+ * who later deletes it doesn't see it come back.
+ */
+const BACKFILL_ACTIONS: { id: string; after: string }[] = [
+  { id: 'photo-delivery', after: 'receive-delivery' },
+];
+const BACKFILL_KEY = 'edify:floorActionsBackfilled';
+
+function backfill(merged: Record<BriefingRole, FloorAction[]>): Record<BriefingRole, FloorAction[]> {
+  let done: string[] = [];
+  try {
+    done = JSON.parse(window.localStorage.getItem(BACKFILL_KEY) ?? '[]') as string[];
+  } catch {
+    done = [];
+  }
+  const pending = BACKFILL_ACTIONS.filter(b => !done.includes(b.id));
+  if (pending.length === 0) return merged;
+  const next = { ...merged };
+  for (const role of Object.keys(next) as BriefingRole[]) {
+    for (const b of pending) {
+      const def = DEFAULT_FLOOR_ACTIONS_BY_ROLE[role]?.find(a => a.id === b.id);
+      if (!def || next[role].some(a => a.id === b.id)) continue;
+      const list = [...next[role]];
+      const at = list.findIndex(a => a.id === b.after);
+      list.splice(at >= 0 ? at + 1 : list.length, 0, def);
+      next[role] = list;
+    }
+  }
+  try {
+    window.localStorage.setItem(BACKFILL_KEY, JSON.stringify([...done, ...pending.map(b => b.id)]));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    /* quota or private mode, ignore */
+  }
+  return next;
+}
 
 function loadStoredActions(): Record<BriefingRole, FloorAction[]> | null {
   if (typeof window === 'undefined') return null;
@@ -93,7 +134,7 @@ function loadStoredActions(): Record<BriefingRole, FloorAction[]> | null {
       const stored = parsed[key];
       if (stored) merged[key] = stored;
     }
-    return merged;
+    return backfill(merged);
   } catch {
     return null;
   }
@@ -151,6 +192,9 @@ export function useFloorActions(
         return;
       case 'receive-delivery':
         onReceiveDelivery?.();
+        return;
+      case 'photo-delivery':
+        router.push('/receive/photo');
         return;
       case 'log-waste':
         router.push('/log-waste');

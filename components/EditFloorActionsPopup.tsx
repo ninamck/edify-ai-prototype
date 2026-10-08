@@ -38,6 +38,7 @@ import {
   MapPin,
   User,
   Settings,
+  Camera,
   type LucideIcon,
 } from 'lucide-react';
 import { BRIEFING_ROLES, type BriefingRole } from '@/components/briefing';
@@ -48,6 +49,7 @@ const ICON_OPTIONS: { key: string; Icon: LucideIcon; label: string }[] = [
   { key: 'Utensils', Icon: Utensils, label: 'Utensils' },
   { key: 'Trash2', Icon: Trash2, label: 'Waste' },
   { key: 'Truck', Icon: Truck, label: 'Delivery' },
+  { key: 'Camera', Icon: Camera, label: 'Photo' },
   { key: 'ArrowLeftRight', Icon: ArrowLeftRight, label: 'Transfer' },
   { key: 'ClipboardList', Icon: ClipboardList, label: 'Clipboard' },
   { key: 'Package', Icon: Package, label: 'Package' },
@@ -92,6 +94,7 @@ export const SITE_DESTINATIONS: SiteDestination[] = [
   { id: 'dispatch', label: 'Dispatch to stores', iconKey: 'Send', href: '/dispatch', group: 'Make, plan & dispatch' },
   { id: 'review-orders', label: 'Review suggested orders', iconKey: 'ShoppingCart', href: '/assisted-ordering', group: 'Stock & ordering' },
   { id: 'count-stock', label: 'Stocktake', iconKey: 'PackageSearch', href: '/stock', group: 'Stock & ordering' },
+  { id: 'photo-delivery', label: 'Photo a delivery', iconKey: 'Camera', href: '/receive/photo', group: 'Stock & ordering' },
   { id: 'match-invoices', label: 'Match invoices', iconKey: 'FileCheck', href: '/invoices', group: 'Stock & ordering' },
   { id: 'order-history', label: 'View order history', iconKey: 'Clock', href: '/order-history', group: 'Stock & ordering' },
   { id: 'credit-notes', label: 'Manage credit notes', iconKey: 'FileX', href: '/credit-notes', group: 'Stock & ordering' },
@@ -120,6 +123,7 @@ export const DEFAULT_FLOOR_ACTIONS: FloorAction[] = [
   { id: 'review-orders', label: 'Review orders', iconKey: 'ShoppingCart', visible: true },
   { id: 'log-waste', label: 'Log waste', iconKey: 'Trash2', visible: true },
   { id: 'receive-delivery', label: 'Receive delivery', iconKey: 'Truck', visible: true },
+  { id: 'photo-delivery', label: 'Photo a delivery', iconKey: 'Camera', visible: true, href: '/receive/photo' },
   { id: 'transfer-stock', label: 'Transfer stock', iconKey: 'ArrowLeftRight', visible: true },
 ];
 
@@ -129,6 +133,7 @@ export const DEFAULT_FLOOR_ACTIONS_BY_ROLE: Record<BriefingRole, FloorAction[]> 
     { id: 'note-to-edify', label: 'Note to Edify', iconKey: 'NotebookPen', visible: true },
     { id: 'review-orders', label: 'Review orders', iconKey: 'ShoppingCart', visible: true },
     { id: 'receive-delivery', label: 'Receive delivery', iconKey: 'Truck', visible: true },
+    { id: 'photo-delivery', label: 'Photo a delivery', iconKey: 'Camera', visible: true, href: '/receive/photo' },
     { id: 'transfer-stock', label: 'Transfer stock', iconKey: 'ArrowLeftRight', visible: true },
     { id: 'match-invoices', label: 'Match invoices', iconKey: 'FileText', visible: true },
     { id: 'log-waste', label: 'Log waste', iconKey: 'Trash2', visible: true },
@@ -138,6 +143,7 @@ export const DEFAULT_FLOOR_ACTIONS_BY_ROLE: Record<BriefingRole, FloorAction[]> 
     { id: 'checklists', label: 'Checklists', iconKey: 'ListChecks', visible: true },
     { id: 'log-waste', label: 'Log waste', iconKey: 'Trash2', visible: true },
     { id: 'receive-delivery', label: 'Receive delivery', iconKey: 'Truck', visible: true },
+    { id: 'photo-delivery', label: 'Photo a delivery', iconKey: 'Camera', visible: true, href: '/receive/photo' },
   ],
   playtomic: DEFAULT_FLOOR_ACTIONS,
   dunkin: DEFAULT_FLOOR_ACTIONS,

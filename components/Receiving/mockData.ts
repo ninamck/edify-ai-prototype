@@ -58,6 +58,21 @@ export interface GRNLine {
   /** Set when an existing catalogue item was added at receiving without a
    *  PO line — e.g. phoned through to the supplier after the PO was sent. */
   addedAtReceiving?: { note: string };
+  /** Photo capture only: the text as printed on the paper, kept next to the
+   *  confirmed product so the read and the decision can both be audited. */
+  extractedText?: string;
+  /** Photo capture only: price on the paper differs from the PO by more than
+   *  the tolerance, so stock is received at the PO price until an admin decides. */
+  priceHeld?: { poPrice: number; paperPrice: number };
+}
+
+/** A photographed document attached to a GRN as its audit record. */
+export interface GRNPhoto {
+  /** Prototype sample the photo came from, rendered as paper on the GRN. */
+  sampleId?: string;
+  /** Object URL for a real photo taken this session. */
+  imageUrl?: string;
+  pages: number;
 }
 
 export interface GRN {
@@ -81,6 +96,11 @@ export interface GRN {
    * foreign-currency deliveries.
    */
   lockedFxRate?: number;
+  /** How the delivery was recorded. Absent = the standard receiving screen. */
+  source?: 'photo-invoice' | 'photo-receipt';
+  /** Bought outside the agreed supplier list, e.g. a shop run. */
+  offContract?: boolean;
+  photo?: GRNPhoto;
 }
 
 export interface DeliveryCommitLine {
@@ -272,6 +292,26 @@ export const MOCK_POS: PO[] = [
       { id: 'pl-34', name: 'Avocados', sku: 'AVO-EA', unit: 'EA', price: 2.00, expectedQty: 30 },
       { id: 'pl-35', name: 'Lemons', sku: 'LEM-EA', unit: 'EA', price: 0.60, expectedQty: 40 },
       { id: 'pl-36', name: 'Sourdough loaves', sku: 'SDL-WH', unit: 'EA', price: 6.00, expectedQty: 15 },
+    ],
+  },
+  // ── Photo capture demo: a Fresh Direct top-up raised after PO-2903. One
+  //    invoice covers both orders, so the photo flow has to split it. ──
+  {
+    id: 'po-12',
+    poNumber: 'PO-2931',
+    supplier: 'Fresh Direct',
+    site: 'Fitzroy Espresso',
+    status: 'Sent',
+    dateSent: '30 Mar 2026',
+    lines: [
+      { id: 'pl-40', name: 'Sourdough rolls 6pk', sku: 'SDR-6', unit: 'PACK', price: 4.50, expectedQty: 6 },
+      { id: 'pl-41', name: 'Wild rocket 250g', sku: 'WR-250', unit: 'BAG', price: 2.40, expectedQty: 5 },
+      { id: 'pl-42', name: 'Basil 30g', sku: 'BAS-30', unit: 'PKT', price: 1.10, expectedQty: 10 },
+      { id: 'pl-43', name: 'Mixed leaves 1kg', sku: 'ML-1KG', unit: 'BAG', price: 6.50, expectedQty: 3 },
+      { id: 'pl-44', name: 'Red onions 5kg', sku: 'RO-5KG', unit: 'SACK', price: 5.20, expectedQty: 2 },
+      { id: 'pl-45', name: 'Chestnut mushrooms 2.5kg', sku: 'CM-25', unit: 'BOX', price: 9.00, expectedQty: 2 },
+      { id: 'pl-46', name: 'Cucumbers', sku: 'CUC-EA', unit: 'EA', price: 0.70, expectedQty: 12 },
+      { id: 'pl-47', name: 'Flat parsley 100g', sku: 'FP-100', unit: 'PKT', price: 0.95, expectedQty: 6 },
     ],
   },
   // Second Cup build only: a CAD-denominated PO on the franchisor's Canadian
@@ -757,4 +797,73 @@ export function recordCompletedDeliveryFromReceiving(input: {
 
   MOCK_COMPLETED_DELIVERIES.push(grn);
   return grn;
+}
+
+export interface POSnapshot {
+  id: string;
+  lines: POLine[];
+  status: POStatus;
+}
+
+/**
+ * Photo capture writes one GRN for the whole document. Shop receipts have
+ * no PO, so this sits beside recordCompletedDeliveryFromReceiving rather
+ * than going through it. PO updates still go through applyReceiptToPOs.
+ * Returns the GRN plus a snapshot of the POs so the batch can be undone.
+ */
+export function recordPhotoDelivery(input: {
+  supplier: string;
+  site: string;
+  source: 'photo-invoice' | 'photo-receipt';
+  offContract: boolean;
+  invoiceNumber?: string;
+  receivedBy: string;
+  photo: GRNPhoto;
+  lines: Omit<GRNLine, 'id'>[];
+  poUpdate?: {
+    pos: PO[];
+    lines: DeliveryCommitLine[];
+    alternatives: DeliveryCommitAlternative[];
+  };
+}): { grn: GRN; snapshot: POSnapshot[] } {
+  const snapshot: POSnapshot[] = (input.poUpdate?.pos ?? []).map(po => ({
+    id: po.id,
+    lines: po.lines.map(l => ({ ...l })),
+    status: po.status,
+  }));
+  const poNumbers = (input.poUpdate?.pos ?? []).map(po => po.poNumber);
+  if (input.poUpdate) applyReceiptToPOs(input.poUpdate);
+
+  const highest = Math.max(...MOCK_COMPLETED_DELIVERIES.map(g => Number(g.grnNumber.replace(/\D/g, '')) || 0));
+  const stamp = Date.now();
+  const grn: GRN = {
+    id: `grn-photo-${stamp}`,
+    grnNumber: `GRN-${highest + 1}`,
+    poNumbers,
+    supplier: input.supplier,
+    site: input.site,
+    status: input.source === 'photo-receipt' ? 'Matched' : 'Pending Invoice',
+    dateReceived: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+    receivedBy: input.receivedBy,
+    invoiceNumber: input.invoiceNumber,
+    invoiceStatus: input.source === 'photo-receipt' ? 'Matched' : 'Pending Invoice',
+    source: input.source,
+    offContract: input.offContract,
+    photo: input.photo,
+    lines: input.lines.map((l, idx) => ({ ...l, id: `gl-photo-${stamp}-${idx}` })),
+  };
+  MOCK_COMPLETED_DELIVERIES.push(grn);
+  return { grn, snapshot };
+}
+
+/** Whole-batch undo for a photo capture: removes the GRN and puts the POs back. */
+export function undoPhotoDelivery(grnId: string, snapshot: POSnapshot[]): void {
+  const idx = MOCK_COMPLETED_DELIVERIES.findIndex(g => g.id === grnId);
+  if (idx >= 0) MOCK_COMPLETED_DELIVERIES.splice(idx, 1);
+  for (const snap of snapshot) {
+    const po = MOCK_POS.find(p => p.id === snap.id);
+    if (!po) continue;
+    po.lines = snap.lines;
+    po.status = snap.status;
+  }
 }

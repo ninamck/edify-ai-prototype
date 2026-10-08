@@ -180,7 +180,9 @@ export default function AcceptedDeliveriesPage() {
                     </td>
                     <td style={{ ...tdStyle, color: 'var(--color-text-secondary)', fontSize: '12px' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                        {deliveryTag ?? '—'}
+                        {deliveryTag ?? (grn.source ? null : '—')}
+                        {grn.source && <StatusBadge status={grn.source === 'photo-receipt' ? 'Shop receipt photo' : 'Invoice photo'} variant="default" />}
+                        {grn.offContract && <StatusBadge status="Off-contract" variant="warning" />}
                         {variances > 0 && (
                           <StatusBadge status={`${variances} variance${variances > 1 ? 's' : ''}`} variant="warning" />
                         )}

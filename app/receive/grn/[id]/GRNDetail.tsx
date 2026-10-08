@@ -3,6 +3,13 @@
 import { useRouter } from 'next/navigation';
 import { MOCK_COMPLETED_DELIVERIES, MOCK_POS } from '@/components/Receiving/mockData';
 import { BASE_CURRENCY, currencySymbol, formatMoney } from '@/lib/currency';
+import PaperDocument from '@/components/Receiving/photo/PaperDocument';
+import { StatusPill } from '@/components/ui/StatusPill';
+import { SAMPLE_DOCUMENTS, type SampleId } from '@/components/Receiving/photo/fixtures';
+
+function isSampleId(id: string): id is SampleId {
+  return id in SAMPLE_DOCUMENTS;
+}
 
 export default function GRNDetail({ id }: { id: string }) {
   const router = useRouter();
@@ -31,6 +38,7 @@ export default function GRNDetail({ id }: { id: string }) {
   const grnCurrency = grn.currency ?? BASE_CURRENCY;
   const isForeign = grnCurrency !== BASE_CURRENCY;
   const sym = currencySymbol(grnCurrency);
+  const photoDoc = grn.photo?.sampleId && isSampleId(grn.photo.sampleId) ? SAMPLE_DOCUMENTS[grn.photo.sampleId] : null;
 
   const cell: React.CSSProperties = {
     padding: '10px 14px',
@@ -58,6 +66,14 @@ export default function GRNDetail({ id }: { id: string }) {
           <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
             {grn.supplier} · Received {grn.dateReceived} by {grn.receivedBy}
           </div>
+          {(grn.source || grn.offContract) && (
+            <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
+              {grn.source && (
+                <StatusPill tone="neutral">{grn.source === 'photo-receipt' ? 'Shop receipt photo' : 'Invoice photo'}</StatusPill>
+              )}
+              {grn.offContract && <StatusPill tone="warning">Off-contract</StatusPill>}
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           {grn.attachmentUrl && (
@@ -82,7 +98,7 @@ export default function GRNDetail({ id }: { id: string }) {
 
       {/* Meta cards */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
-        <MetaCard label="PO Reference" value={grn.poNumbers.join(', ')} />
+        <MetaCard label="PO Reference" value={grn.poNumbers.length ? grn.poNumbers.join(', ') : 'No PO, shop receipt'} />
         <MetaCard label="Site" value={grn.site} />
         <MetaCard label="Items" value={`${grn.lines.length} lines`} />
         {grn.invoiceNumber && <MetaCard label="Invoice" value={grn.invoiceNumber} />}
@@ -115,6 +131,16 @@ export default function GRNDetail({ id }: { id: string }) {
                 <tr key={line.id} style={{ background: isShort ? 'rgba(234, 209, 115, 0.12)' : 'transparent' }}>
                   <td style={{ ...cell, fontWeight: 600, color: 'var(--color-text-primary)', boxShadow: isShort ? 'inset 3px 0 0 #001C35' : 'none' }}>
                     {line.name}
+                    {line.extractedText && line.extractedText !== line.name && (
+                      <span style={{ display: 'block', fontSize: '12px', fontWeight: 400, color: 'var(--color-text-secondary)' }}>
+                        On the paper: &ldquo;{line.extractedText}&rdquo;
+                      </span>
+                    )}
+                    {line.priceHeld && (
+                      <span style={{ display: 'block', fontSize: '12px', fontWeight: 400, color: 'var(--color-text-secondary)' }}>
+                        Paper says {sym}{line.priceHeld.paperPrice.toFixed(2)}. Price change waiting for an admin.
+                      </span>
+                    )}
                   </td>
                   <td style={{ ...cell, color: 'var(--color-text-secondary)', fontSize: '12px' }}>{line.sku}</td>
                   <td style={{ ...cell, color: 'var(--color-text-secondary)' }}>{line.unit}</td>
@@ -141,6 +167,23 @@ export default function GRNDetail({ id }: { id: string }) {
           </tfoot>
         </table>
       </div>
+
+      {grn.photo && (
+        <div style={{ marginTop: '24px' }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: '10px' }}>
+            Photo of the {grn.source === 'photo-receipt' ? 'receipt' : 'invoice'}
+            <span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}> · {grn.photo.pages} page{grn.photo.pages === 1 ? '' : 's'}</span>
+          </div>
+          <div style={{ padding: '20px', borderRadius: '10px', background: 'var(--color-bg-hover)', display: 'flex', gap: '20px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            {grn.photo.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={grn.photo.imageUrl} alt="Photo of the document" style={{ maxWidth: '100%', maxHeight: '420px', borderRadius: '4px' }} />
+            ) : photoDoc ? (
+              Array.from({ length: grn.photo.pages }, (_, i) => <PaperDocument key={i} doc={photoDoc} page={i + 1} />)
+            ) : null}
+          </div>
+        </div>
+      )}
 
       {/* Linked POs */}
       {pos.length > 0 && (
