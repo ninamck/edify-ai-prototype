@@ -9,6 +9,7 @@ import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { COGS_VARIANCE_ROWS, type CogsVarianceRow } from './fixtures';
 import { getVarianceReason, getVarianceAction } from './insights';
 import { gbp } from './format';
+import { COUNT_KIND_LABEL, DAY_LABELS, getItemCountHistory } from './quickCounts';
 
 function qty(n: number): string {
   return n.toLocaleString('en-GB', { maximumFractionDigits: 3 });
@@ -109,6 +110,7 @@ export default function CogsVarianceDetailPanel({
   if (!mounted) return null;
 
   const fix = row ? getVarianceAction(row.id) : undefined;
+  const counts = row ? getItemCountHistory(row.id) : null;
 
   return createPortal(
     <AnimatePresence>
@@ -271,6 +273,38 @@ export default function CogsVarianceDetailPanel({
                   <span>{getVarianceReason(row)}</span>
                 </div>
               </div>
+
+              {counts && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <SectionTitle>Counts this period</SectionTitle>
+                  <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', paddingBottom: 4 }}>
+                    Var cost vs previous count / vs opening stocktake ({DAY_LABELS[0]})
+                  </span>
+                  {counts.points
+                    .filter((p) => p.day > 0)
+                    .map((p) => {
+                      const vsPrev = p.varPrevQty * counts.unitCost;
+                      const vsOpening = p.varOpeningQty * counts.unitCost;
+                      const fmt = (n: number) => (Math.round(n) === 0 ? '\u00a30' : gbp(n, { sign: true, decimals: 0 }));
+                      return (
+                        <Line
+                          key={p.sessionId}
+                          label={`${DAY_LABELS[p.day]} \u00b7 ${COUNT_KIND_LABEL[p.kind]}`}
+                          value={
+                            <>
+                              <span style={{ color: Math.round(vsPrev) === 0 ? 'var(--color-text-muted)' : varColor(vsPrev) }}>
+                                {fmt(vsPrev)}
+                              </span>
+                              <span style={{ color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                                {' '}/ {fmt(vsOpening)}
+                              </span>
+                            </>
+                          }
+                        />
+                      );
+                    })}
+                </div>
+              )}
 
               {/* Actual vs theoretical */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
