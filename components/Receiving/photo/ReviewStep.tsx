@@ -2,17 +2,15 @@
 
 import { useState } from 'react';
 import { CheckCircle2, ChevronDown } from 'lucide-react';
-import { ExceptionCard, QuestionCard, ReceiptLineCard } from './ExceptionCards';
+import { MOCK_POS } from '@/components/Receiving/mockData';
+import { StatusPill } from '@/components/ui/StatusPill';
+import { CleanLineList, type MatchedPlan } from './CleanStep';
+import { ExceptionCard, QuestionCard, ReceiptLineCard, type CardContext } from './ExceptionCards';
+import { MatchedOrders } from './MatchedOrders';
+import { RECEIPT_PLANS, docTotal, type PoSampleId } from './fixtures';
 import {
-  PRICE_TOLERANCE_PCT,
-  RECEIPT_PLANS,
-  docTotal,
-  priceChangePct,
-  type SampleDocument,
-} from './fixtures';
-import {
-  effectiveInvoicePlans,
-  invoiceLineDecided,
+  effectivePoPlans,
+  lineDecided,
   needsDecision,
   paperLine,
   receiptLineDecided,
@@ -21,14 +19,7 @@ import {
 import type { Decisions, LineDecision } from './types';
 import { PrimaryButton, StepHeading, cardStyle, gbp, sectionLabel } from './ui';
 
-interface ReviewProps {
-  doc: SampleDocument;
-  isInvoice: boolean;
-  selectedPoIds: string[];
-  decisions: Decisions;
-  onDecide: (lineId: string, patch: LineDecision) => void;
-  onContinue: () => void;
-}
+type Decide = (lineId: string, patch: LineDecision) => void;
 
 function ContinueBar({ decided, total, onContinue }: { decided: number; total: number; onContinue: () => void }) {
   const ready = decided === total;
@@ -38,26 +29,37 @@ function ContinueBar({ decided, total, onContinue }: { decided: number; total: n
         {total === 0 ? 'Nothing to decide' : ready ? `All ${total} decided` : `${decided} of ${total} decided`}
       </p>
       <PrimaryButton disabled={!ready} onClick={onContinue} testId="review-continue">
-        Check what gets booked in
+        Check what gets accepted
       </PrimaryButton>
     </div>
   );
 }
 
-function InvoiceReview({ doc, selectedPoIds, decisions, onDecide, onContinue }: ReviewProps) {
+export function PoReview({
+  ctx, docId, selectedPoIds, decisions, onDecide, onContinue, onChangeOrders,
+}: {
+  ctx: CardContext;
+  docId: PoSampleId;
+  selectedPoIds: string[];
+  decisions: Decisions;
+  onDecide: Decide;
+  onContinue: () => void;
+  onChangeOrders: () => void;
+}) {
+  const { doc } = ctx;
   const [showClean, setShowClean] = useState(false);
-  const plans = effectiveInvoicePlans(selectedPoIds);
-  const clean = plans.filter(p => p.kind === 'clean');
+  const plans = effectivePoPlans(docId, selectedPoIds, decisions);
+  const clean = plans.filter((p): p is MatchedPlan => p.kind === 'clean');
   const exceptions = plans.filter(p => p.kind !== 'clean');
   const toDecide = exceptions.filter(needsDecision);
-  const decidedCount = toDecide.filter(p => invoiceLineDecided(p, decisions[p.lineId])).length;
+  const decidedCount = toDecide.filter(p => lineDecided(p, decisions[p.lineId])).length;
+  const pos = MOCK_POS.filter(p => selectedPoIds.includes(p.id));
 
   return (
     <div>
-      <StepHeading
-        title="Check what arrived"
-        sub={`${doc.supplierName} invoice ${doc.docNumber}, ${gbp(docTotal(doc))}. ${clean.length} lines match the orders and ${toDecide.length} need a decision from you.`}
-      />
+      <StepHeading title="Check what arrived" />
+
+      <MatchedOrders doc={doc} plans={plans} pos={pos} onChange={onChangeOrders} />
 
       <div style={{ ...cardStyle, padding: 0, marginBottom: 16 }}>
         <button
@@ -73,44 +75,35 @@ function InvoiceReview({ doc, selectedPoIds, decisions, onDecide, onContinue }: 
           <ChevronDown size={18} aria-hidden style={{ transform: showClean ? 'rotate(180deg)' : undefined, color: 'var(--color-text-secondary)' }} />
         </button>
         {showClean && (
-          <ul style={{ listStyle: 'none', margin: 0, padding: '0 16px 12px', display: 'flex', flexDirection: 'column' }}>
-            {clean.map(p => {
-              const paper = paperLine(doc, p.lineId);
-              const pct = p.kind === 'clean' ? priceChangePct(p.poPrice, paper.unitPrice) : 0;
-              return (
-                <li key={p.lineId} style={{ padding: '10px 0', borderTop: '1px solid var(--color-border-subtle)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 14 }}>
-                    <span style={{ color: 'var(--color-text-primary)' }}>{paper.text}</span>
-                    <span style={{ color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{paper.qty} × {gbp(paper.unitPrice)}</span>
-                  </div>
-                  {Math.abs(pct) > 0.001 && (
-                    <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                      Price {pct > 0 ? 'up' : 'down'} {Math.abs(pct).toFixed(0)}% from {p.kind === 'clean' ? gbp(p.poPrice) : ''}, inside your {PRICE_TOLERANCE_PCT}% tolerance. New price applied.
-                    </p>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <div style={{ padding: '4px 16px 8px', borderTop: '1px solid var(--color-border-subtle)' }}>
+            <CleanLineList
+              doc={doc}
+              plans={clean}
+              decisions={decisions}
+              onReport={(lineId, problem, affected) => onDecide(lineId, { problem, affected })}
+              onPrice={(lineId, price) => onDecide(lineId, { price })}
+            />
+          </div>
         )}
       </div>
 
-      <h2 style={sectionLabel}>Needs you</h2>
+      {exceptions.length > 0 && <h2 style={sectionLabel}>Needs you</h2>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {exceptions.map(p => {
           const paper = paperLine(doc, p.lineId);
+          const decide = (patch: LineDecision) => onDecide(p.lineId, patch);
           if (p.kind === 'ambiguous') {
-            return <QuestionCard key={p.lineId} plan={p} paper={paper} doc={doc} decision={decisions[p.lineId]} onDecide={patch => onDecide(p.lineId, patch)} />;
+            return <QuestionCard key={p.lineId} ctx={ctx} plan={p} paper={paper} decision={decisions[p.lineId]} onDecide={decide} />;
           }
           return (
             <ExceptionCard
               key={p.lineId}
+              ctx={ctx}
               plan={p}
               paper={paper}
-              doc={doc}
               decision={decisions[p.lineId]}
-              decided={invoiceLineDecided(p, decisions[p.lineId])}
-              onDecide={patch => onDecide(p.lineId, patch)}
+              decided={lineDecided(p, decisions[p.lineId])}
+              onDecide={decide}
             />
           );
         })}
@@ -121,7 +114,16 @@ function InvoiceReview({ doc, selectedPoIds, decisions, onDecide, onContinue }: 
   );
 }
 
-function ReceiptReview({ doc, decisions, onDecide, onContinue }: ReviewProps) {
+export function ReceiptReview({
+  ctx, offContract, decisions, onDecide, onContinue,
+}: {
+  ctx: CardContext;
+  offContract: boolean;
+  decisions: Decisions;
+  onDecide: Decide;
+  onContinue: () => void;
+}) {
+  const { doc } = ctx;
   const toDecide = RECEIPT_PLANS.filter(receiptNeedsDecision);
   const decidedCount = toDecide.filter(p => receiptLineDecided(p, decisions[p.lineId])).length;
 
@@ -132,13 +134,24 @@ function ReceiptReview({ doc, decisions, onDecide, onContinue }: ReviewProps) {
         sub={`${doc.supplierName} receipt, ${gbp(docTotal(doc))}. Edify matched each line to your products. Confirm the ones it can't be sure of.`}
       />
 
+      {offContract && (
+        <div data-testid="off-contract" style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+          <span style={{ alignSelf: 'flex-start' }}>
+            <StatusPill tone="warning">Off-contract</StatusPill>
+          </span>
+          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45, color: 'var(--color-text-primary)' }}>
+            {doc.supplierName} isn&apos;t one of your agreed suppliers. The stock still counts in COGS, and your ops lead sees it in off-contract spend.
+          </p>
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {RECEIPT_PLANS.map(p => (
           <ReceiptLineCard
             key={p.lineId}
+            ctx={ctx}
             plan={p}
             paper={paperLine(doc, p.lineId)}
-            doc={doc}
             decision={decisions[p.lineId]}
             decided={receiptLineDecided(p, decisions[p.lineId])}
             onDecide={patch => onDecide(p.lineId, patch)}
@@ -149,8 +162,4 @@ function ReceiptReview({ doc, decisions, onDecide, onContinue }: ReviewProps) {
       <ContinueBar decided={decidedCount} total={toDecide.length} onContinue={onContinue} />
     </div>
   );
-}
-
-export default function ReviewStep(props: ReviewProps) {
-  return props.isInvoice ? <InvoiceReview {...props} /> : <ReceiptReview {...props} />;
 }

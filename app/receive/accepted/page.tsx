@@ -9,6 +9,7 @@ import {
   GRN,
   grnVarianceCount,
   deliverySequenceTag,
+  PHOTO_SOURCE_LABEL,
 } from '@/components/Receiving/mockData';
 import { BASE_CURRENCY, formatMoney } from '@/lib/currency';
 
@@ -181,7 +182,7 @@ export default function AcceptedDeliveriesPage() {
                     <td style={{ ...tdStyle, color: 'var(--color-text-secondary)', fontSize: '12px' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                         {deliveryTag ?? (grn.source ? null : '—')}
-                        {grn.source && <StatusBadge status={grn.source === 'photo-receipt' ? 'Shop receipt photo' : 'Invoice photo'} variant="default" />}
+                        {grn.source && <StatusBadge status={PHOTO_SOURCE_LABEL[grn.source]} variant="default" />}
                         {grn.offContract && <StatusBadge status="Off-contract" variant="warning" />}
                         {variances > 0 && (
                           <StatusBadge status={`${variances} variance${variances > 1 ? 's' : ''}`} variant="warning" />

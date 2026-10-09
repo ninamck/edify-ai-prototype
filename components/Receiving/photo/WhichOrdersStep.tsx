@@ -2,20 +2,15 @@
 
 import { Info } from 'lucide-react';
 import { MOCK_POS } from '@/components/Receiving/mockData';
-import {
-  INVOICE_CANDIDATE_PO_IDS,
-  INVOICE_PLANS,
-  INVOICE_SKIPPED_POS,
-  type SampleDocument,
-} from './fixtures';
+import { PO_DOCUMENTS, SAMPLE_DOCUMENTS, docNoun, type PoLinePlan, type PoSampleId, type SampleDocument } from './fixtures';
 import { paperLine } from './resolve';
 import { PrimaryButton, StepHeading, cardStyle, sectionLabel } from './ui';
 
-/** Which invoice lines each PO explains, including lines that could belong to either. */
-function linesExplainedBy(doc: SampleDocument, poId: string): { sure: string[]; maybe: string[] } {
+/** Which lines on the paper each PO explains, including lines that could belong to either. */
+function linesExplainedBy(doc: SampleDocument, plans: PoLinePlan[], poId: string): { sure: string[]; maybe: string[] } {
   const sure: string[] = [];
   const maybe: string[] = [];
-  for (const p of INVOICE_PLANS) {
+  for (const p of plans) {
     if (p.kind === 'extra') continue;
     const text = paperLine(doc, p.lineId).text;
     if (p.kind === 'ambiguous') {
@@ -28,19 +23,24 @@ function linesExplainedBy(doc: SampleDocument, poId: string): { sure: string[]; 
 }
 
 export default function WhichOrdersStep({
-  doc, selected, onChange, onContinue,
+  docId, selected, onChange, onContinue,
 }: {
-  doc: SampleDocument;
+  docId: PoSampleId;
   selected: string[];
   onChange: (ids: string[]) => void;
   onContinue: () => void;
 }) {
-  const candidates = MOCK_POS.filter(p => INVOICE_CANDIDATE_PO_IDS.includes(p.id));
+  const doc = SAMPLE_DOCUMENTS[docId];
+  const noun = docNoun(doc);
+  const { plans, candidatePoIds, otherPoIds = [], skippedPos } = PO_DOCUMENTS[docId];
+  const listed = [...candidatePoIds, ...otherPoIds];
+  // Ticked orders first, then the ones Edify ruled out.
+  const candidates = listed.flatMap(id => MOCK_POS.filter(p => p.id === id));
   const toggle = (id: string) =>
     onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]);
 
-  const unmatched = INVOICE_PLANS.filter(p => p.kind === 'extra').map(p => paperLine(doc, p.lineId).text);
-  const orphaned = INVOICE_PLANS.filter(p => {
+  const unmatched = plans.filter(p => p.kind === 'extra').map(p => paperLine(doc, p.lineId).text);
+  const orphaned = plans.filter(p => {
     if (p.kind === 'extra') return false;
     if (p.kind === 'ambiguous') return !p.candidates.some(c => selected.includes(c.poId));
     return !selected.includes(p.poId);
@@ -50,15 +50,19 @@ export default function WhichOrdersStep({
     <div>
       <StepHeading
         title="Which orders does this cover?"
-        sub={`Edify found ${candidates.length} open ${doc.supplierName} orders that this invoice delivers against. Untick any that it doesn't.`}
+        sub={
+          otherPoIds.length > 0
+            ? `Edify found ${candidates.length} open ${doc.supplierName} orders and ticked the ${candidatePoIds.length === 1 ? 'one' : 'ones'} this ${noun} delivers against. Change it if that's wrong.`
+            : `Edify found ${candidates.length} open ${doc.supplierName} orders that this ${noun} delivers against. Untick any that it doesn't.`
+        }
       />
 
-      <fieldset aria-label="Orders this invoice covers" style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <fieldset aria-label={`Orders this ${noun} covers`} style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {candidates.map(po => {
           const on = selected.includes(po.id);
-          const { sure, maybe } = linesExplainedBy(doc, po.id);
+          const { sure, maybe } = linesExplainedBy(doc, plans, po.id);
           const notOnInvoice = po.lines.filter(l =>
-            !INVOICE_PLANS.some(p =>
+            !plans.some(p =>
               (p.kind !== 'extra' && p.kind !== 'ambiguous' && p.poLineId === l.id) ||
               (p.kind === 'ambiguous' && p.candidates.some(c => c.poLineId === l.id)),
             ),
@@ -86,16 +90,20 @@ export default function WhichOrdersStep({
                   <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Sent {po.dateSent} · {po.lines.length} lines</span>
                 </span>
                 <span style={{ display: 'block', fontSize: 14, color: 'var(--color-text-primary)', marginTop: 6, lineHeight: 1.45 }}>
-                  Explains {sure.length} line{sure.length === 1 ? '' : 's'} on the invoice: {sure.join(', ')}.
+                  {sure.length === 0
+                    ? `Explains none of the lines on the ${noun}.`
+                    : sure.length === doc.lines.length
+                      ? `Explains every line on the ${noun}.`
+                      : `Explains ${sure.length} line${sure.length === 1 ? '' : 's'} on the ${noun}: ${sure.join(', ')}.`}
                 </span>
                 {maybe.length > 0 && (
                   <span style={{ display: 'block', fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4 }}>
                     Could also explain &ldquo;{maybe.join(', ')}&rdquo;. You&apos;ll pick on the next screen.
                   </span>
                 )}
-                {notOnInvoice.length > 0 && (
+                {notOnInvoice.length > 0 && notOnInvoice.length < po.lines.length && (
                   <span style={{ display: 'block', fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4 }}>
-                    Not on this invoice: {notOnInvoice.map(l => l.name).join(', ')}.
+                    Not on this {noun}: {notOnInvoice.map(l => l.name).join(', ')}.
                   </span>
                 )}
               </span>
@@ -111,7 +119,7 @@ export default function WhichOrdersStep({
             {unmatched.join(', ')} isn&apos;t on any order. You&apos;ll decide on it next.
           </p>
         )}
-        {INVOICE_SKIPPED_POS.map(s => (
+        {skippedPos.map(s => (
           <p key={s.poNumber} style={{ margin: 0, fontSize: 14, color: 'var(--color-text-secondary)', display: 'flex', gap: 8 }}>
             <Info size={18} aria-hidden style={{ flexShrink: 0 }} />
             {s.poNumber}: {s.reason}
@@ -121,7 +129,7 @@ export default function WhichOrdersStep({
 
       {orphaned > 0 && selected.length > 0 && (
         <div role="status" style={{ ...cardStyle, marginTop: 16, background: 'var(--color-warning-light)', borderColor: 'var(--color-warning-border)', fontSize: 14 }}>
-          {orphaned} line{orphaned === 1 ? '' : 's'} on the invoice won&apos;t match an order. They&apos;ll come through as extras for you to accept or send back.
+          {orphaned} line{orphaned === 1 ? '' : 's'} on the {noun} won&apos;t match an order. They&apos;ll come through as extras for you to accept or send back.
         </div>
       )}
 

@@ -95,13 +95,15 @@ export interface ChoiceOption {
 
 /** Single-select pills. One decision per group, 40px tap targets. */
 export function ChoiceGroup({
-  label, options, value, onChange, stacked = false,
+  label, options, value, onChange, stacked = false, compact = false,
 }: {
   label: string;
   options: ChoiceOption[];
   value: string | undefined;
   onChange: (id: string) => void;
   stacked?: boolean;
+  /** Smaller pills for short labels like pack sizes. Still 36px tall. */
+  compact?: boolean;
 }) {
   return (
     <div role="radiogroup" aria-label={label} style={{ display: 'flex', flexDirection: stacked ? 'column' : 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -115,18 +117,18 @@ export function ChoiceGroup({
             aria-checked={on}
             onClick={() => onChange(o.id)}
             style={{
-              display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left',
-              minHeight: 40, padding: o.hint ? '8px 14px' : '0 14px',
+              display: 'flex', alignItems: 'center', gap: compact ? 6 : 8, textAlign: 'left',
+              minHeight: compact ? 36 : 40, padding: o.hint ? '8px 14px' : compact ? '0 12px' : '0 14px',
               borderRadius: 999,
               border: on ? '1.5px solid var(--color-accent-active)' : '1px solid var(--color-border)',
               background: on ? 'var(--color-accent-active)' : '#fff',
               color: on ? 'var(--color-text-on-active)' : 'var(--color-text-primary)',
-              fontFamily: 'var(--font-primary)', fontSize: 14, fontWeight: 600,
+              fontFamily: 'var(--font-primary)', fontSize: compact ? 13 : 14, fontWeight: 600,
               cursor: 'pointer',
               ...(stacked ? { borderRadius: 'var(--radius-item)', width: '100%' } : {}),
             }}
           >
-            {on && <Check size={16} aria-hidden />}
+            {on && <Check size={compact ? 14 : 16} aria-hidden />}
             <span>
               {o.label}
               {o.hint && (
@@ -138,6 +140,37 @@ export function ChoiceGroup({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/** Whole-number picker with 44px buttons, for counting at the door with one hand. */
+export function Stepper({
+  label, value, min, max, onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (n: number) => void;
+}) {
+  const btn = (disabled: boolean): CSSProperties => ({
+    width: 44, height: 44, borderRadius: 'var(--radius-item)', border: '1px solid var(--color-border)',
+    background: '#fff', color: disabled ? 'var(--color-text-secondary)' : 'var(--color-text-primary)',
+    fontSize: 22, fontWeight: 600, fontFamily: 'var(--font-primary)', cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.5 : 1,
+  });
+  return (
+    <div role="group" aria-label={label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <button type="button" aria-label={`One fewer, ${label.toLowerCase()}`} disabled={value <= min} onClick={() => onChange(value - 1)} style={btn(value <= min)}>
+        −
+      </button>
+      <output aria-live="polite" style={{ minWidth: 36, textAlign: 'center', fontSize: 20, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+        {value}
+      </output>
+      <button type="button" aria-label={`One more, ${label.toLowerCase()}`} disabled={value >= max} onClick={() => onChange(value + 1)} style={btn(value >= max)}>
+        +
+      </button>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Camera, CheckCircle2, Undo2 } from 'lucide-react';
+import { ArrowRight, Camera, CheckCircle2, Sparkles, Undo2 } from 'lucide-react';
 import type { CommitResult } from './PhotoCaptureFlow';
 import { SecondaryButton, cardStyle, gbp, sectionLabel } from './ui';
 
@@ -25,7 +25,7 @@ export default function DoneStep({
         <CheckCircle2 size={24} aria-hidden style={{ color: 'var(--color-success)', flexShrink: 0 }} />
         <div>
           <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--color-success)' }}>
-            Done. {grn.grnNumber} booked in at {time}.
+            Accepted. {grn.grnNumber} at {time}.
           </p>
           <p style={{ margin: '2px 0 0', fontSize: 14, color: 'var(--color-text-primary)' }}>
             {plan.lineCount} lines from {plan.supplier}, {gbp(plan.stockValue)} of stock.
@@ -45,6 +45,30 @@ export default function DoneStep({
         </ul>
       </div>
 
+      {plan.followUps.length > 0 && (
+        <div style={{ ...cardStyle, marginBottom: 12, borderColor: 'var(--color-accent-active)' }}>
+          <h2 style={sectionLabel}>Next</h2>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {plan.followUps.map(f => (
+              <li key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45, color: 'var(--color-text-primary)' }}>{f.detail}</p>
+                <Link
+                  href={f.href}
+                  data-testid={f.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, borderRadius: 'var(--radius-item)',
+                    background: 'var(--color-accent-active)', color: 'var(--color-text-on-active)', fontWeight: 700, fontSize: 15, textDecoration: 'none',
+                  }}
+                >
+                  <Sparkles size={18} aria-hidden />
+                  {f.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {plan.handoffs.length > 0 && (
         <div style={{ ...cardStyle, marginBottom: 16 }}>
           <h2 style={sectionLabel}>Passed on</h2>
@@ -62,10 +86,17 @@ export default function DoneStep({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <Link
           href={`/receive/grn/${grn.id}`}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 48, borderRadius: 'var(--radius-item)',
-            background: 'var(--color-accent-active)', color: 'var(--color-text-on-active)', fontWeight: 700, fontSize: 15, textDecoration: 'none',
-          }}
+          style={
+            plan.followUps.length > 0
+              ? {
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 44, borderRadius: 'var(--radius-item)',
+                  border: '1px solid var(--color-border)', background: '#fff', color: 'var(--color-accent-deep)', fontWeight: 600, fontSize: 14, textDecoration: 'none',
+                }
+              : {
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 48, borderRadius: 'var(--radius-item)',
+                  background: 'var(--color-accent-active)', color: 'var(--color-text-on-active)', fontWeight: 700, fontSize: 15, textDecoration: 'none',
+                }
+          }
         >
           View {grn.grnNumber}
         </Link>
@@ -79,7 +110,7 @@ export default function DoneStep({
           Undo the whole batch
         </SecondaryButton>
         <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--color-text-secondary)', textAlign: 'center' }}>
-          Removes {grn.grnNumber}, puts the orders back and drops any new products.
+          Removes {grn.grnNumber}, puts the orders back as they were and drops any new products.
         </p>
       </div>
     </div>

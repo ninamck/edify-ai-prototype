@@ -9,6 +9,10 @@ interface ProductNewSupplierCardProps {
   /** Pre-filled supplier name from Step 1. */
   supplierName: string;
   initialEmail?: string;
+  /** The supplier is a shop the team buys from over the counter (a
+   *  Sainsbury's receipt, say). Nobody emails a shop a purchase order,
+   *  so the order email is optional here. */
+  shopBought?: boolean;
   onSubmit: (input: {
     supplierName: string;
     email: string;
@@ -34,6 +38,7 @@ export default function ProductNewSupplierCard({
   state,
   supplierName,
   initialEmail,
+  shopBought = false,
   onSubmit,
   onCancel,
 }: ProductNewSupplierCardProps) {
@@ -43,7 +48,9 @@ export default function ProductNewSupplierCard({
   const [phone, setPhone] = useState<string>('');
   const [mov, setMov] = useState<string>('');
 
-  const emailValid = /\S+@\S+\.\S+/.test(email.trim());
+  const emailValid = shopBought
+    ? email.trim() === '' || /\S+@\S+\.\S+/.test(email.trim())
+    : /\S+@\S+\.\S+/.test(email.trim());
 
   function submit() {
     if (!emailValid) return;
@@ -61,7 +68,11 @@ export default function ProductNewSupplierCard({
     <CardShell
       icon={Truck}
       title={`New supplier · ${supplierName}`}
-      subtitle="Order email is required — it's where purchase orders go"
+      subtitle={
+        shopBought
+          ? 'Bought over the counter, so no order email needed'
+          : "Order email is required — it's where purchase orders go"
+      }
       state={state}
       confirmLabel="Next"
       onCancel={onCancel}
@@ -78,20 +89,30 @@ export default function ProductNewSupplierCard({
             lineHeight: 1.45,
           }}
         >
-          A supplier without an order email can&rsquo;t be ordered from, so
-          that one&rsquo;s required. Everything else can wait — add it now or
-          on the supplier page later.
+          {shopBought ? (
+            <>
+              {supplierName} is a shop, not a supplier you send orders to, so
+              nothing here is required. Add an email or contact if someone on
+              the team needs it.
+            </>
+          ) : (
+            <>
+              A supplier without an order email can&rsquo;t be ordered from, so
+              that one&rsquo;s required. Everything else can wait — add it now or
+              on the supplier page later.
+            </>
+          )}
         </p>
 
         <div>
-          <Label>Order email</Label>
+          <Label>{shopBought ? 'Order email (optional)' : 'Order email'}</Label>
           <input
             type="email"
             value={email}
             disabled={state !== 'pending'}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="orders@supplier.com"
-            autoFocus
+            autoFocus={!shopBought}
             style={inputStyle}
           />
         </div>

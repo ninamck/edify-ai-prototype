@@ -2,52 +2,55 @@
 
 import type { ReactNode } from 'react';
 import { CheckCircle2, Info } from 'lucide-react';
-import { ALL_ALLERGENS, type Allergen } from '@/components/Suppliers/fixtures';
 import { StatusPill } from '@/components/ui/StatusPill';
-import { pageOfLine } from './PaperDocument';
+import { LineCrop } from './PhotoParts';
 import {
   PRICE_TOLERANCE_PCT,
+  docNoun,
   priceChangePct,
   type DocLine,
-  type InvoiceLinePlan,
+  type PoLinePlan,
   type ReceiptLinePlan,
   type SampleDocument,
+  type SampleId,
+  type SubstitutePlan,
 } from './fixtures';
+import { shortName } from './resolve';
 import type { LineDecision } from './types';
-import { ChoiceGroup, cardStyle, gbp } from './ui';
+import { ChoiceGroup, Stepper, cardStyle, gbp } from './ui';
 
 type Decide = (patch: LineDecision) => void;
 
-function shortName(text: string): string {
-  return text.replace(/\s+\d.*$/, '');
+/** What every card needs to show the photo the line came from. */
+export interface CardContext {
+  doc: SampleDocument;
+  /** Null for a real camera photo, which has no line positions to crop from. */
+  photoId: SampleId | null;
+  openPhoto: (lineId: string) => void;
 }
 
+const CLEAR_REPORT: LineDecision = { problem: undefined, affected: undefined, choice: undefined };
+
 function CardShell({
-  title, money, status, doc, paper, children, testId,
+  ctx, paper, title, money, status, children,
 }: {
+  ctx: CardContext;
+  paper: DocLine;
   title: string;
   money?: ReactNode;
   status: 'needs' | 'decided' | 'info';
-  doc: SampleDocument;
-  paper: DocLine;
   children: ReactNode;
-  testId?: string;
 }) {
-  // The printed wording only adds anything when the title uses a different name.
-  const showPrinted = !title.toLowerCase().includes(paper.text.toLowerCase());
-  const where = doc.kind === 'invoice' ? `On the invoice, page ${pageOfLine(doc, paper.id)}` : 'On the receipt';
+  const showPrinted = !ctx.photoId && !title.toLowerCase().includes(paper.text.toLowerCase());
   return (
-    <article
-      data-testid={testId}
-      style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: 12 }}
-    >
+    <article data-testid={`card-${paper.id}`} style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
         <div>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.35 }}>{title}</h3>
           {money && <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>{money}</p>}
           {showPrinted && (
             <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--color-text-secondary)' }}>
-              {where}: &ldquo;{paper.text}&rdquo;
+              On the {docNoun(ctx.doc)}: &ldquo;{paper.text}&rdquo;
             </p>
           )}
         </div>
@@ -55,6 +58,7 @@ function CardShell({
         {status === 'decided' && <StatusPill tone="success">Decided</StatusPill>}
         {status === 'info' && <StatusPill tone="neutral">No action</StatusPill>}
       </header>
+      {ctx.photoId && <LineCrop sampleId={ctx.photoId} lineId={paper.id} label={`"${paper.text}" on the ${docNoun(ctx.doc)}`} onOpen={ctx.openPhoto} />}
       {children}
     </article>
   );
@@ -73,14 +77,30 @@ function Note({ children }: { children: ReactNode }) {
   );
 }
 
-// ── Invoice exceptions ─────────────────────────────────────────────────
+function PutBack({ onDecide }: { onDecide: Decide }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onDecide(CLEAR_REPORT)}
+      style={{
+        alignSelf: 'flex-start', minHeight: 40, padding: 0, background: 'none', border: 'none',
+        fontFamily: 'var(--font-primary)', fontSize: 14, fontWeight: 600, color: 'var(--color-accent-deep)',
+        textDecoration: 'underline', cursor: 'pointer',
+      }}
+    >
+      No problem after all, it arrived as listed
+    </button>
+  );
+}
+
+// ── Lines against an order ─────────────────────────────────────────────
 
 export function ExceptionCard({
-  plan, paper, doc, decision, decided, onDecide,
+  ctx, plan, paper, decision, decided, onDecide,
 }: {
-  plan: InvoiceLinePlan;
+  ctx: CardContext;
+  plan: PoLinePlan;
   paper: DocLine;
-  doc: SampleDocument;
   decision: LineDecision | undefined;
   decided: boolean;
   onDecide: Decide;
@@ -90,9 +110,21 @@ export function ExceptionCard({
 
   switch (plan.kind) {
     case 'short': {
-      const missing = plan.ordered - paper.qty;
+      const missing = plan.ordered - plan.received;
       return (
-        <CardShell doc={doc} paper={paper} testId={`card-${paper.id}`} status={status} title={`${name}: ${paper.qty} of ${plan.ordered} arrived`} money={`${missing} short, ${gbp(missing * paper.unitPrice)} not delivered`}>
+        <CardShell
+          ctx={ctx}
+          paper={paper}
+          status={status}
+          title={plan.reported ? `${name}: fewer arrived than the ${docNoun(ctx.doc)} says` : `${name}: ${plan.received} of ${plan.ordered} arrived`}
+          money={`${missing} short, ${gbp(missing * paper.unitPrice)} at the order price`}
+        >
+          {plan.reported && (
+            <>
+              <Question>How many arrived?</Question>
+              <Stepper label="How many arrived" value={plan.received} min={0} max={plan.ordered - 1} onChange={n => onDecide({ affected: plan.ordered - n })} />
+            </>
+          )}
           <Question>What about the other {missing}?</Question>
           <ChoiceGroup
             label={`What about the other ${missing} ${name.toLowerCase()}`}
@@ -100,18 +132,40 @@ export function ExceptionCard({
             value={decision?.choice}
             onChange={choice => onDecide({ choice })}
             options={[
-              { id: 'later', label: 'Rest coming later', hint: `The order stays open for ${missing}` },
-              { id: 'credit', label: 'Ask for a credit note', hint: `${gbp(missing * paper.unitPrice)} back from ${doc.supplierName}` },
-              { id: 'cancel', label: 'Cancel the rest', hint: `Close the line at ${paper.qty}` },
+              { id: 'later', label: 'Rest coming later' },
+              { id: 'credit', label: 'Ask for a credit note' },
+              { id: 'cancel', label: 'Cancel the rest' },
             ]}
           />
+          {plan.reported && <PutBack onDecide={onDecide} />}
+        </CardShell>
+      );
+    }
+    case 'damaged': {
+      const good = plan.delivered - plan.damaged;
+      return (
+        <CardShell ctx={ctx} paper={paper} status={status} title={`${name}: damaged`} money={`${good} of ${plan.delivered} are fine. The damaged ${plan.damaged === 1 ? 'one goes' : 'ones go'} back with the driver.`}>
+          <Question>How many are damaged?</Question>
+          <Stepper label="How many are damaged" value={plan.damaged} min={1} max={plan.delivered} onChange={n => onDecide({ affected: n })} />
+          <Question>What about the {plan.damaged} damaged?</Question>
+          <ChoiceGroup
+            label={`What about the ${plan.damaged} damaged ${name.toLowerCase()}`}
+            stacked
+            value={decision?.choice}
+            onChange={choice => onDecide({ choice })}
+            options={[
+              { id: 'resend', label: 'Replacements coming' },
+              { id: 'credit', label: 'Ask for a credit note' },
+            ]}
+          />
+          <PutBack onDecide={onDecide} />
         </CardShell>
       );
     }
     case 'over': {
       const extra = paper.qty - plan.ordered;
       return (
-        <CardShell doc={doc} paper={paper} testId={`card-${paper.id}`} status={status} title={`${name}: ${paper.qty} arrived, ${plan.ordered} ordered`} money={`${extra} extra, +${gbp(extra * paper.unitPrice)}`}>
+        <CardShell ctx={ctx} paper={paper} status={status} title={`${name}: ${paper.qty} arrived, ${plan.ordered} ordered`} money={`${extra} extra, +${gbp(extra * paper.unitPrice)}`}>
           <Question>Keep the extra {extra}?</Question>
           <ChoiceGroup
             label={`Keep the extra ${extra} ${name.toLowerCase()}`}
@@ -122,56 +176,15 @@ export function ExceptionCard({
               { id: 'refuse', label: `Send ${extra} back` },
             ]}
           />
+          {decision?.choice === 'accept' && <Note>Finance will see the invoice is higher than the order, and why.</Note>}
         </CardShell>
       );
     }
-    case 'substitute': {
-      const pack = plan.packOptions.find(p => p.id === decision?.packId);
-      return (
-        <CardShell
-          doc={doc} paper={paper} testId={`card-${paper.id}`}
-          status={status}
-          title={`${paper.text} instead of ${plan.replacedName.toLowerCase()}`}
-          money={`${paper.qty} boxes at ${gbp(paper.unitPrice)} = ${gbp(paper.qty * paper.unitPrice)}. You ordered ${plan.replacedQty} punnets at ${gbp(plan.replacedPrice)} = ${gbp(plan.replacedQty * plan.replacedPrice)}.`}
-        >
-          <Question>Accept the swap?</Question>
-          <ChoiceGroup
-            label="Accept the swap"
-            value={decision?.choice}
-            onChange={choice => onDecide({ choice })}
-            options={[
-              { id: 'accept', label: 'Accept the swap' },
-              { id: 'refuse', label: 'Send it back' },
-            ]}
-          />
-          {decision?.choice === 'accept' && (
-            <>
-              <Note>Edify adds {paper.text} as a {doc.supplierName} product under your {plan.masterName} master product, linked to the cherry tomatoes line it replaces.</Note>
-              <Question>How big is one box?</Question>
-              <ChoiceGroup
-                label="How big is one box"
-                stacked
-                value={decision.packId}
-                onChange={packId => onDecide({ packId })}
-                options={plan.packOptions.map(p => ({ id: p.id, label: p.label }))}
-              />
-              {pack ? (
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--color-success)' }}>
-                  {paper.qty} boxes = {paper.qty * pack.masterQty} {plan.masterUnitLabel}
-                  {paper.qty * pack.masterQty === plan.replacedQty ? ', the same as you ordered.' : `, ${plan.replacedQty} ordered.`}
-                </p>
-              ) : (
-                <Note>Edify won&apos;t guess the pack size. It needs this to count the boxes against your {plan.masterUnitLabel}.</Note>
-              )}
-            </>
-          )}
-          {decision?.choice === 'refuse' && <Note>{plan.replacedName} stay open on the order for the next delivery.</Note>}
-        </CardShell>
-      );
-    }
+    case 'substitute':
+      return <SubstituteCard ctx={ctx} plan={plan} paper={paper} decision={decision} status={status} onDecide={onDecide} />;
     case 'extra':
       return (
-        <CardShell doc={doc} paper={paper} testId={`card-${paper.id}`} status={status} title={`${paper.text}: not on any order`} money={`${paper.qty} at ${gbp(paper.unitPrice)} = ${gbp(paper.qty * paper.unitPrice)}`}>
+        <CardShell ctx={ctx} paper={paper} status={status} title={`${paper.text}: not on any order`} money={`${paper.qty} at ${gbp(paper.unitPrice)} = ${gbp(paper.qty * paper.unitPrice)}`}>
           <Question>Keep it?</Question>
           <ChoiceGroup
             label={`Keep ${paper.text}`}
@@ -188,7 +201,8 @@ export function ExceptionCard({
       const pct = priceChangePct(plan.poPrice, paper.unitPrice);
       return (
         <CardShell
-          doc={doc} paper={paper} testId={`card-${paper.id}`}
+          ctx={ctx}
+          paper={paper}
           status="info"
           title={`${name}: ${gbp(paper.unitPrice)} each, the order says ${gbp(plan.poPrice)}`}
           money={`${pct > 0 ? 'Up' : 'Down'} ${Math.abs(pct).toFixed(0)}%, over your ${PRICE_TOLERANCE_PCT}% tolerance. ${gbp(Math.abs(paper.unitPrice - plan.poPrice) * paper.qty)} ${pct > 0 ? 'more' : 'less'} on this delivery.`}
@@ -202,22 +216,85 @@ export function ExceptionCard({
   }
 }
 
-export function QuestionCard({
-  plan, paper, doc, decision, onDecide,
+function SubstituteCard({
+  ctx, plan, paper, decision, status, onDecide,
 }: {
-  plan: Extract<InvoiceLinePlan, { kind: 'ambiguous' }>;
+  ctx: CardContext;
+  plan: SubstitutePlan;
   paper: DocLine;
-  doc: SampleDocument;
+  decision: LineDecision | undefined;
+  status: 'needs' | 'decided';
+  onDecide: Decide;
+}) {
+  const pack = plan.packOptions.find(p => p.id === decision?.packId);
+  const priced = ctx.doc.kind !== 'delivery-note';
+  const money = priced
+    ? `${paper.qty} ${plan.deliveredUnit} at ${gbp(paper.unitPrice)}. You ordered ${plan.replacedQty} ${plan.replacedUnit} at ${gbp(plan.replacedPrice)}.`
+    : `${paper.qty} ${plan.deliveredUnit} delivered. You ordered ${plan.replacedQty} ${plan.replacedUnit}.`;
+  const equiv = pack ? paper.qty * pack.masterQty : 0;
+  // Edify places the product itself; the GM at the door only confirms the swap and the pack size.
+  const where = plan.options.find(o => o.id === plan.suggestedOption) ?? plan.options[0];
+  const supplier = ctx.doc.supplierName;
+
+  return (
+    <CardShell ctx={ctx} paper={paper} status={status} title={`${plan.productName} instead of ${plan.replacedName}`} money={money}>
+      <Question>Accept it as the replacement?</Question>
+      <ChoiceGroup
+        label="Accept it as the replacement"
+        value={decision?.choice}
+        onChange={choice => onDecide(choice === 'accept' ? { choice, subOption: plan.suggestedOption } : { choice })}
+        options={[
+          { id: 'accept', label: 'Accept the swap' },
+          { id: 'refuse', label: 'Send it back' },
+        ]}
+      />
+      {decision?.choice === 'accept' && (
+        <>
+          <Question>{plan.packQuestion}</Question>
+          <ChoiceGroup
+            label={plan.packQuestion}
+            compact
+            value={decision.packId}
+            onChange={packId => onDecide({ packId })}
+            options={plan.packOptions.map(p => ({ id: p.id, label: p.label }))}
+          />
+          {pack ? (
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--color-success)' }}>
+              {paper.qty} {plan.deliveredUnit} = {equiv} {plan.masterUnitLabel}
+              {equiv === plan.replacedQty ? ', the same as you ordered.' : `, ${plan.replacedQty} ordered.`}
+            </p>
+          ) : (
+            <Note>Edify needs the pack size to count the {plan.deliveredUnit} against your {plan.masterUnitLabel}.</Note>
+          )}
+          <Note>
+            {where.kind === 'supplier-product'
+              ? <>Already in {supplier}&apos;s catalogue in Edify under <strong>{where.masterName}</strong>, so recipes cost from it straight away.</>
+              : <>New to Edify. It counts under <strong>{where.masterName}</strong> from this delivery. Allergens, sites and recipes are set up in the Command Centre afterwards. It opens from the done screen with the name, supplier, pack and price filled in.</>}
+          </Note>
+        </>
+      )}
+      {decision?.choice === 'refuse' && <Note>{plan.replacedName} stays open on the order for the next delivery.</Note>}
+    </CardShell>
+  );
+}
+
+export function QuestionCard({
+  ctx, plan, paper, decision, onDecide,
+}: {
+  ctx: CardContext;
+  plan: Extract<PoLinePlan, { kind: 'ambiguous' }>;
+  paper: DocLine;
   decision: LineDecision | undefined;
   onDecide: Decide;
 }) {
   const suggested = plan.candidates[plan.suggested];
   return (
     <CardShell
-      doc={doc} paper={paper} testId={`card-${paper.id}`}
+      ctx={ctx}
+      paper={paper}
       status={decision?.choice ? 'decided' : 'needs'}
       title={`Which ${paper.text.toLowerCase()} is this?`}
-      money={`The invoice just says "${paper.text}", ${paper.qty} at ${gbp(paper.unitPrice)}.`}
+      money={`The ${docNoun(ctx.doc)} just says "${paper.text}", ${paper.qty} at ${gbp(paper.unitPrice)}.`}
     >
       <Note>Edify thinks it&apos;s {suggested.label.toLowerCase()}: the quantity and price match that line.</Note>
       <ChoiceGroup
@@ -233,51 +310,24 @@ export function QuestionCard({
 
 // ── Shop receipt lines ─────────────────────────────────────────────────
 
-function AllergenPicker({ value, none, onChange }: { value: Allergen[]; none: boolean; onChange: (patch: LineDecision) => void }) {
-  const toggle = (a: Allergen) =>
-    onChange({ allergens: value.includes(a) ? value.filter(x => x !== a) : [...value, a], noAllergens: false });
-  const pill = (on: boolean) => ({
-    minHeight: 40, padding: '0 14px', borderRadius: 999,
-    border: on ? '1.5px solid var(--color-accent-active)' : '1px solid var(--color-border)',
-    background: on ? 'var(--color-accent-active)' : '#fff',
-    color: on ? 'var(--color-text-on-active)' : 'var(--color-text-primary)',
-    fontFamily: 'var(--font-primary)', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-  });
-  return (
-    <div>
-      <Question>Allergens</Question>
-      <p style={{ margin: '2px 0 8px', fontSize: 13, color: 'var(--color-text-secondary)' }}>Pick every one that applies, or no allergens.</p>
-      <div role="group" aria-label="Allergens" style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        <button type="button" aria-pressed={none} onClick={() => onChange({ noAllergens: !none, allergens: [] })} style={pill(none)}>
-          No allergens
-        </button>
-        {ALL_ALLERGENS.map(a => (
-          <button key={a} type="button" aria-pressed={value.includes(a)} onClick={() => toggle(a)} style={pill(value.includes(a))}>
-            {a}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function ReceiptLineCard({
-  plan, paper, doc, decision, decided, onDecide,
+  ctx, plan, paper, decision, decided, onDecide,
 }: {
+  ctx: CardContext;
   plan: ReceiptLinePlan;
   paper: DocLine;
-  doc: SampleDocument;
   decision: LineDecision | undefined;
   decided: boolean;
   onDecide: Decide;
 }) {
   const money = `${paper.qty} at ${gbp(paper.unitPrice)} = ${gbp(paper.qty * paper.unitPrice)}`;
   const status = plan.kind === 'supplier-product' ? 'info' : decided ? 'decided' : 'needs';
+  const supplier = ctx.doc.supplierName;
 
   switch (plan.kind) {
     case 'supplier-product':
       return (
-        <CardShell doc={doc} paper={paper} testId={`card-${paper.id}`} status={status} title={plan.productName} money={money}>
+        <CardShell ctx={ctx} paper={paper} status={status} title={plan.productName} money={money}>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--color-text-primary)', display: 'flex', gap: 6, alignItems: 'center' }}>
             <CheckCircle2 size={16} aria-hidden style={{ color: 'var(--color-success)' }} />
             Matched to the product you bought here on {plan.lastBought}.
@@ -287,8 +337,8 @@ export function ReceiptLineCard({
     case 'master': {
       const pack = plan.packOptions.find(p => p.id === decision?.packId);
       return (
-        <CardShell doc={doc} paper={paper} testId={`card-${paper.id}`} status={status} title={plan.suggestedName} money={money}>
-          <Note>No {doc.supplierName} product yet, but it&apos;s the same thing as your <strong>{plan.masterName}</strong> master product. Edify adds it under that so it counts with your other milk.</Note>
+        <CardShell ctx={ctx} paper={paper} status={status} title={plan.suggestedName} money={money}>
+          <Note>No {supplier} product yet, but it&apos;s the same thing as your <strong>{plan.masterName}</strong> master product. Edify adds it under that so it counts with your other milk.</Note>
           <Question>How much is in one bottle?</Question>
           <ChoiceGroup
             label="How much is in one bottle"
@@ -308,38 +358,28 @@ export function ReceiptLineCard({
     }
     case 'new':
       return (
-        <CardShell doc={doc} paper={paper} testId={`card-${paper.id}`} status={status} title={paper.text} money={money}>
+        <CardShell ctx={ctx} paper={paper} status={status} title={paper.text.charAt(0) + paper.text.slice(1).toLowerCase()} money={money}>
           <Note>Nothing in your products matches. The closest is {plan.closest}, which isn&apos;t the same thing.</Note>
           <ChoiceGroup
             label={`What to do with ${paper.text.toLowerCase()}`}
             value={decision?.choice}
             onChange={choice => onDecide({ choice })}
             options={[
-              { id: 'create', label: 'Create a new product' },
+              { id: 'create', label: 'Add as a new product' },
               { id: 'ignore', label: 'Not stock, ignore' },
             ]}
           />
           {decision?.choice === 'create' && (
-            <>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)' }}>Product name</span>
-                <input
-                  value={decision.name ?? ''}
-                  onChange={e => onDecide({ name: e.target.value })}
-                  style={{ minHeight: 44, padding: '0 12px', borderRadius: 'var(--radius-item)', border: '1px solid var(--color-border)', fontSize: 15, fontFamily: 'var(--font-primary)', color: 'var(--color-text-primary)' }}
-                />
-              </label>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                {plan.category} · counted {plan.unit} · supplier {doc.supplierName}
-              </p>
-              <AllergenPicker value={decision.allergens ?? []} none={!!decision.noAllergens} onChange={onDecide} />
-            </>
+            <Note>
+              Edify books the {paper.qty} in now as <strong>{plan.suggestedName}</strong> from {supplier}, {plan.category.toLowerCase()}, counted {plan.unit}.
+              Allergens, sites and recipes are set up in the Command Centre afterwards. It opens from the done screen with these details filled in.
+            </Note>
           )}
         </CardShell>
       );
     case 'not-stock':
       return (
-        <CardShell doc={doc} paper={paper} testId={`card-${paper.id}`} status={status} title={paper.text.charAt(0) + paper.text.slice(1).toLowerCase()} money={money}>
+        <CardShell ctx={ctx} paper={paper} status={status} title={paper.text.charAt(0) + paper.text.slice(1).toLowerCase()} money={money}>
           <Note>{plan.reason}</Note>
           <ChoiceGroup
             label="Is the carrier bag stock"

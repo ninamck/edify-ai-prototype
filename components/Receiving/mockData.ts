@@ -64,11 +64,22 @@ export interface GRNLine {
   /** Photo capture only: price on the paper differs from the PO by more than
    *  the tolerance, so stock is received at the PO price until an admin decides. */
   priceHeld?: { poPrice: number; paperPrice: number };
+  /** Photo capture only: units that came off the van but went back with the
+   *  driver. Not in receivedQty, kept so finance and the supplier can see why. */
+  returned?: { qty: number; reason: 'damaged' | 'over' | 'refused' };
 }
+
+export type PhotoSource = 'photo-delivery-note' | 'photo-invoice' | 'photo-receipt';
+
+export const PHOTO_SOURCE_LABEL: Record<PhotoSource, string> = {
+  'photo-delivery-note': 'Delivery note photo',
+  'photo-invoice': 'Invoice photo',
+  'photo-receipt': 'Shop receipt photo',
+};
 
 /** A photographed document attached to a GRN as its audit record. */
 export interface GRNPhoto {
-  /** Prototype sample the photo came from, rendered as paper on the GRN. */
+  /** Prototype sample the photo came from; its page images are in public/photo-samples. */
   sampleId?: string;
   /** Object URL for a real photo taken this session. */
   imageUrl?: string;
@@ -86,6 +97,8 @@ export interface GRN {
   receivedBy: string;
   invoiceNumber?: string;
   invoiceStatus: InvoiceStatus;
+  /** Photo capture only: the supplier's delivery note number, when the photo was a delivery note. */
+  deliveryNoteNumber?: string;
   attachmentUrl?: string;
   lines: GRNLine[];
   /** Transaction currency of the delivery (from the PO). Absent = GBP. */
@@ -97,7 +110,7 @@ export interface GRN {
    */
   lockedFxRate?: number;
   /** How the delivery was recorded. Absent = the standard receiving screen. */
-  source?: 'photo-invoice' | 'photo-receipt';
+  source?: PhotoSource;
   /** Bought outside the agreed supplier list, e.g. a shop run. */
   offContract?: boolean;
   photo?: GRNPhoto;
@@ -312,6 +325,91 @@ export const MOCK_POS: PO[] = [
       { id: 'pl-45', name: 'Chestnut mushrooms 2.5kg', sku: 'CM-25', unit: 'BOX', price: 9.00, expectedQty: 2 },
       { id: 'pl-46', name: 'Cucumbers', sku: 'CUC-EA', unit: 'EA', price: 0.70, expectedQty: 12 },
       { id: 'pl-47', name: 'Flat parsley 100g', sku: 'FP-100', unit: 'PKT', price: 0.95, expectedQty: 6 },
+    ],
+  },
+  // ── Photo capture demo: the weekly Fresh Direct order and a mid-week
+  //    top-up, delivered together on one 40-line delivery note. ──
+  {
+    id: 'po-13',
+    poNumber: 'PO-2940',
+    supplier: 'Fresh Direct',
+    site: 'Fitzroy Espresso',
+    status: 'Sent',
+    dateSent: '3 Apr 2026',
+    lines: [
+      { id: 'pl-50', name: 'Whole milk 2L', sku: 'FD-WM2', unit: 'BOTTLE', price: 2.10, expectedQty: 24 },
+      { id: 'pl-51', name: 'Semi-skimmed milk 2L', sku: 'FD-SS2', unit: 'BOTTLE', price: 2.00, expectedQty: 12 },
+      { id: 'pl-52', name: 'Oatly Barista 1L', sku: 'FD-OAT1', unit: 'CTN', price: 1.95, expectedQty: 24, masterProductId: 'mp-oat-milk' },
+      { id: 'pl-53', name: 'Double cream 1L', sku: 'FD-DC1', unit: 'EA', price: 4.80, expectedQty: 6 },
+      { id: 'pl-54', name: 'Greek yoghurt 1kg', sku: 'FD-GY1', unit: 'TUB', price: 3.90, expectedQty: 6 },
+      { id: 'pl-55', name: 'Free range eggs 30', sku: 'FD-EGG30', unit: 'TRAY', price: 7.20, expectedQty: 8 },
+      { id: 'pl-56', name: 'Unsalted butter 250g', sku: 'FD-UB250', unit: 'EA', price: 2.05, expectedQty: 20 },
+      { id: 'pl-57', name: 'Feta 900g', sku: 'FD-FETA', unit: 'EA', price: 8.40, expectedQty: 3 },
+      { id: 'pl-58', name: 'Halloumi 1kg', sku: 'FD-HAL', unit: 'EA', price: 9.60, expectedQty: 4 },
+      { id: 'pl-59', name: 'Mature cheddar 2.5kg', sku: 'FD-CHD', unit: 'BLOCK', price: 17.50, expectedQty: 2 },
+      { id: 'pl-60', name: 'Avocados, box of 20', sku: 'FD-AVO20', unit: 'BOX', price: 21.00, expectedQty: 2 },
+      { id: 'pl-61', name: 'Lemons', sku: 'FD-LEM', unit: 'EA', price: 0.32, expectedQty: 30 },
+      { id: 'pl-62', name: 'Limes', sku: 'FD-LIM', unit: 'EA', price: 0.28, expectedQty: 20 },
+      { id: 'pl-63', name: 'Baby spinach 500g', sku: 'FD-BS500', unit: 'BAG', price: 3.40, expectedQty: 6 },
+      { id: 'pl-64', name: 'Wild rocket 250g', sku: 'FD-WR250', unit: 'BAG', price: 2.30, expectedQty: 6 },
+      { id: 'pl-65', name: 'Vine tomatoes 1kg', sku: 'FD-VT1', unit: 'BOX', price: 4.20, expectedQty: 6 },
+      { id: 'pl-66', name: 'Cherry tomatoes 500g', sku: 'FD-CT500', unit: 'PUN', price: 2.40, expectedQty: 8 },
+      { id: 'pl-67', name: 'Red onions 5kg', sku: 'FD-RO5', unit: 'SACK', price: 5.00, expectedQty: 2 },
+      { id: 'pl-68', name: 'Peeled garlic 1kg', sku: 'FD-GAR1', unit: 'BAG', price: 6.20, expectedQty: 1 },
+      { id: 'pl-69', name: 'Chestnut mushrooms 2.5kg', sku: 'FD-CM25', unit: 'BOX', price: 8.80, expectedQty: 2 },
+      { id: 'pl-70', name: 'Cucumbers', sku: 'FD-CUC', unit: 'EA', price: 0.65, expectedQty: 10 },
+      { id: 'pl-71', name: 'Basil 100g', sku: 'FD-BAS100', unit: 'PKT', price: 2.60, expectedQty: 4 },
+      { id: 'pl-72', name: 'Flat parsley 100g', sku: 'FD-FP100', unit: 'PKT', price: 0.95, expectedQty: 6 },
+      { id: 'pl-73', name: 'Mint 100g', sku: 'FD-MNT100', unit: 'PKT', price: 1.80, expectedQty: 3 },
+      { id: 'pl-74', name: 'Bananas', sku: 'FD-BAN', unit: 'KG', price: 1.10, expectedQty: 6 },
+      { id: 'pl-75', name: 'Strawberries 2kg', sku: 'FD-STR2', unit: 'TRAY', price: 9.50, expectedQty: 2 },
+      { id: 'pl-76', name: 'Blueberries 12x125g', sku: 'FD-BLU', unit: 'TRAY', price: 14.00, expectedQty: 1 },
+      { id: 'pl-77', name: 'Juicing oranges 10kg', sku: 'FD-OJ10', unit: 'BOX', price: 11.50, expectedQty: 2 },
+    ],
+  },
+  {
+    id: 'po-14',
+    poNumber: 'PO-2944',
+    supplier: 'Fresh Direct',
+    site: 'Fitzroy Espresso',
+    status: 'Sent',
+    dateSent: '6 Apr 2026',
+    lines: [
+      { id: 'pl-80', name: 'Sourdough loaf 800g', sku: 'FD-SD800', unit: 'EA', price: 3.60, expectedQty: 10 },
+      { id: 'pl-81', name: 'Brioche buns 12pk', sku: 'FD-BB12', unit: 'PACK', price: 4.80, expectedQty: 4 },
+      { id: 'pl-82', name: 'Frozen croissants x50', sku: 'FD-CRO50', unit: 'BOX', price: 27.00, expectedQty: 1 },
+      { id: 'pl-83', name: 'Frozen pain au chocolat x50', sku: 'FD-PAC50', unit: 'BOX', price: 29.00, expectedQty: 1 },
+      { id: 'pl-84', name: 'Smoked salmon 1kg', sku: 'FD-SAL1', unit: 'PACK', price: 24.00, expectedQty: 1 },
+      { id: 'pl-85', name: 'Streaky bacon 2kg', sku: 'FD-BAC2', unit: 'PACK', price: 13.50, expectedQty: 2 },
+      { id: 'pl-86', name: 'Pork sausages 2kg', sku: 'FD-SAU2', unit: 'PACK', price: 11.80, expectedQty: 2 },
+      { id: 'pl-87', name: 'Houmous 1kg', sku: 'FD-HUM1', unit: 'TUB', price: 5.40, expectedQty: 2 },
+      { id: 'pl-88', name: 'Granola 2kg', sku: 'FD-GRA2', unit: 'BAG', price: 9.20, expectedQty: 1 },
+      { id: 'pl-89', name: 'Maple syrup 1L', sku: 'FD-MAP1', unit: 'BOTTLE', price: 12.50, expectedQty: 1 },
+      { id: 'pl-90', name: 'Honey 3kg', sku: 'FD-HON3', unit: 'TUB', price: 15.00, expectedQty: 1 },
+      { id: 'pl-91', name: 'Sparkling water 330ml x24', sku: 'FD-SPW24', unit: 'CASE', price: 8.60, expectedQty: 3 },
+    ],
+  },
+  // ── Photo capture demo: a dairy drop where everything arrives as ordered. ──
+  {
+    id: 'po-15',
+    poNumber: 'PO-2950',
+    supplier: 'Fresh Direct',
+    site: 'Fitzroy Espresso',
+    status: 'Sent',
+    dateSent: '7 Apr 2026',
+    lines: [
+      { id: 'pl-100', name: 'Whole milk 2L', sku: 'FD-WM2', unit: 'BOTTLE', price: 2.10, expectedQty: 18 },
+      { id: 'pl-101', name: 'Semi-skimmed milk 2L', sku: 'FD-SS2', unit: 'BOTTLE', price: 2.00, expectedQty: 8 },
+      { id: 'pl-102', name: 'Oatly Barista 1L', sku: 'FD-OAT1', unit: 'CTN', price: 1.95, expectedQty: 24, masterProductId: 'mp-oat-milk' },
+      { id: 'pl-103', name: 'Double cream 1L', sku: 'FD-DC1', unit: 'EA', price: 4.80, expectedQty: 4 },
+      { id: 'pl-104', name: 'Unsalted butter 250g', sku: 'FD-UB250', unit: 'EA', price: 2.05, expectedQty: 12 },
+      { id: 'pl-105', name: 'Free range eggs 30', sku: 'FD-EGG30', unit: 'TRAY', price: 7.20, expectedQty: 6 },
+      { id: 'pl-106', name: 'Greek yoghurt 1kg', sku: 'FD-GY1', unit: 'TUB', price: 3.90, expectedQty: 4 },
+      { id: 'pl-107', name: 'Mature cheddar 2.5kg', sku: 'FD-CHD', unit: 'BLOCK', price: 17.50, expectedQty: 1 },
+      { id: 'pl-108', name: 'Avocados, box of 20', sku: 'FD-AVO20', unit: 'BOX', price: 21.00, expectedQty: 2 },
+      { id: 'pl-109', name: 'Lemons', sku: 'FD-LEM', unit: 'EA', price: 0.32, expectedQty: 20 },
+      { id: 'pl-110', name: 'Baby spinach 500g', sku: 'FD-BS500', unit: 'BAG', price: 3.40, expectedQty: 4 },
+      { id: 'pl-111', name: 'Sourdough loaf 800g', sku: 'FD-SD800', unit: 'EA', price: 3.60, expectedQty: 8 },
     ],
   },
   // Second Cup build only: a CAD-denominated PO on the franchisor's Canadian
@@ -814,9 +912,10 @@ export interface POSnapshot {
 export function recordPhotoDelivery(input: {
   supplier: string;
   site: string;
-  source: 'photo-invoice' | 'photo-receipt';
+  source: PhotoSource;
   offContract: boolean;
   invoiceNumber?: string;
+  deliveryNoteNumber?: string;
   receivedBy: string;
   photo: GRNPhoto;
   lines: Omit<GRNLine, 'id'>[];
@@ -847,6 +946,7 @@ export function recordPhotoDelivery(input: {
     receivedBy: input.receivedBy,
     invoiceNumber: input.invoiceNumber,
     invoiceStatus: input.source === 'photo-receipt' ? 'Matched' : 'Pending Invoice',
+    deliveryNoteNumber: input.deliveryNoteNumber,
     source: input.source,
     offContract: input.offContract,
     photo: input.photo,

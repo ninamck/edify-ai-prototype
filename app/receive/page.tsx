@@ -10,19 +10,7 @@ export default function ReceivePage() {
 
   return (
     <div style={{ padding: '28px 24px 48px', maxWidth: '860px', margin: '0 auto' }}>
-      <div
-        style={{
-          display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
-          padding: '14px 16px', marginBottom: '20px', borderRadius: '10px',
-          border: '1px solid var(--color-border-subtle)', background: '#fff', fontFamily: 'var(--font-primary)',
-        }}
-      >
-        <div style={{ flex: '1 1 240px' }}>
-          <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>Got the paperwork?</div>
-          <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            Photo the invoice, delivery note or shop receipt. Edify matches it to your orders.
-          </div>
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px', fontFamily: 'var(--font-primary)' }}>
         <Link
           href="/receive/photo"
           style={{

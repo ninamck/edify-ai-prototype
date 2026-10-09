@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Radio } from 'lucide-react';
@@ -138,9 +138,47 @@ export default function HomeShell() {
   const { activeSite, isAllSites } = useActiveSite();
   const flowParam = searchParams?.get('flow');
   const autoStartFlow =
-    flowParam === 'recipe' || flowParam === 'integrity' || flowParam === 'pos-match' || flowParam === 'rota' || flowParam === 'sweep'
+    flowParam === 'recipe' || flowParam === 'integrity' || flowParam === 'pos-match' || flowParam === 'rota' || flowParam === 'sweep' || flowParam === 'add-product'
       ? flowParam
       : undefined;
+  // ?flow=add-product carries what the caller already knows about the
+  // product (e.g. a line off a shop receipt) so the wizard opens pre-filled.
+  const autoStartArgs = useMemo<Record<string, unknown> | undefined>(() => {
+    if (flowParam !== 'add-product' || !searchParams) return undefined;
+    const name = searchParams.get('name');
+    const supplier = searchParams.get('supplier');
+    const cost = Number(searchParams.get('cost'));
+    const unit = searchParams.get('unit');
+    const source = searchParams.get('source');
+    // A case of 8 cartons arrives as pack=8 at the case price; a single item has no pack param.
+    const pack = Number(searchParams.get('pack'));
+    const packQty = Number.isFinite(pack) && pack > 1 ? pack : 1;
+    return {
+      mode: 'add',
+      ...(name ? { newProductName: name } : {}),
+      ...(supplier ? { supplierName: supplier } : {}),
+      ...(Number.isFinite(cost) && cost > 0
+        ? { defaultPackType: packQty > 1 ? 'Pack' : 'Single', defaultPackQty: packQty, defaultPackCost: cost }
+        : {}),
+      ...(unit ? { defaultUnitType: unit } : {}),
+      ...(source ? { seededFrom: source } : {}),
+    };
+  }, [flowParam, searchParams]);
+
+  // Keep the first read of ?flow=… so it survives the URL being stripped below.
+  const [startFlow] = useState<typeof autoStartFlow>(() => autoStartFlow);
+  const [startArgs] = useState(() => autoStartArgs);
+
+  // The shell can't tell phone from desktop until it has mounted (the media
+  // query is false during SSR). Hold the flow back until then, otherwise the
+  // desktop Feed starts it and unmounts a moment later on a phone.
+  const [layoutReady, setLayoutReady] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount flag, same pattern as useMediaQuery
+    setLayoutReady(true);
+  }, []);
+  const flowToStart = layoutReady ? startFlow : undefined;
+  const flowArgs = layoutReady ? startArgs : undefined;
 
   // Strip the ?flow=… param after it's been read so a reload doesn't re-trigger the flow.
   useEffect(() => {
@@ -279,7 +317,7 @@ export default function HomeShell() {
   }, [mobileInsightsOpen]);
 
   if (isMobileShell) {
-    return <MobileShell />;
+    return <MobileShell autoStartFlow={flowToStart} autoStartArgs={flowArgs} />;
   }
 
   const currentLayout = layoutByRole[briefingRole] ?? [];
@@ -622,7 +660,8 @@ export default function HomeShell() {
                 onChatStateChange={setChatActive}
                 onAddToDashboard={addPinnedChart}
                 onViewDashboard={() => setShellView('dashboard')}
-                autoStartFlow={autoStartFlow}
+                autoStartFlow={flowToStart}
+                autoStartArgs={flowArgs}
                 enableNoteCapture
                 pinTargets={rolesPinTargets}
                 defaultPinTargetId={rolesPinTargets?.[0]?.id}

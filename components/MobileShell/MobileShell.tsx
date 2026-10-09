@@ -18,7 +18,15 @@ type NavTab = 'receive' | 'checklists' | 'tasks' | 'waste' | 'insights';
 
 const BOTTOM_NAV_HEIGHT = 64;
 
-export default function MobileShell() {
+type FeedProps = React.ComponentProps<typeof Feed>;
+
+export default function MobileShell({
+  autoStartFlow, autoStartArgs,
+}: {
+  /** Guided flow to open on mount, e.g. add-product handed over from the photo receipt flow. */
+  autoStartFlow?: FeedProps['autoStartFlow'];
+  autoStartArgs?: FeedProps['autoStartArgs'];
+} = {}) {
   const router = useRouter();
   const [hamburgerOpen, setHamburgerOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
@@ -90,7 +98,7 @@ export default function MobileShell() {
         }}
       >
         {view === 'command-centre' ? (
-          <Feed briefingRole={briefingRole} />
+          <Feed briefingRole={briefingRole} autoStartFlow={autoStartFlow} autoStartArgs={autoStartArgs} />
         ) : (
           <MobileDashboard role={briefingRole} phase={phase} />
         )}

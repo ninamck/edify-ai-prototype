@@ -1,28 +1,28 @@
 'use client';
 
 import { Circle } from 'lucide-react';
-import type { SampleDocument } from './fixtures';
+import { SITE, docNoun, type SampleDocument } from './fixtures';
 import type { WritePlan } from './resolve';
 import { PrimaryButton, SecondaryButton, StepHeading, cardStyle, gbp, sectionLabel } from './ui';
 
 export default function ConfirmStep({
-  doc, isInvoice, plan, onConfirm, onEdit,
+  doc, plan, onConfirm, onEdit,
 }: {
   doc: SampleDocument;
-  isInvoice: boolean;
   plan: WritePlan;
   onConfirm: () => void;
   onEdit: () => void;
 }) {
   const orders = plan.pos.map(p => p.poNumber).join(' and ');
+  const isReceipt = doc.kind === 'receipt';
   return (
     <div>
       <StepHeading
-        title="Book this into stock?"
+        title="Accept this delivery?"
         sub={
-          isInvoice
-            ? `${plan.lineCount} lines from ${plan.supplier} against ${orders}, ${gbp(plan.stockValue)} of stock at Fitzroy Espresso.`
-            : `${plan.lineCount} lines from ${plan.supplier}, ${gbp(plan.stockValue)} of stock at Fitzroy Espresso.`
+          plan.pos.length > 0
+            ? `${plan.lineCount} lines from ${plan.supplier} against ${orders}, ${gbp(plan.stockValue)} of stock at ${SITE}.`
+            : `${plan.lineCount} lines from ${plan.supplier}, ${gbp(plan.stockValue)} of stock at ${SITE}.`
         }
       />
       <div style={{ ...cardStyle, marginBottom: 16 }}>
@@ -36,13 +36,13 @@ export default function ConfirmStep({
           ))}
         </ul>
       </div>
-      {!isInvoice && (
-        <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
-          Nothing is written until you say yes. {doc.supplierName} receipts go to the expense account, not invoice matching.
-        </p>
-      )}
+      <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
+        {isReceipt
+          ? `Nothing is written until you say yes. ${doc.supplierName} receipts go to the expense account, not invoice matching.`
+          : `Nothing is written until you say yes. The ${docNoun(doc)} photo stays on the GRN as the record of what came in.`}
+      </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <PrimaryButton onClick={onConfirm} testId="confirm-book">Yes, book it in</PrimaryButton>
+        <PrimaryButton onClick={onConfirm} testId="confirm-book">Yes, accept it</PrimaryButton>
         <SecondaryButton full onClick={onEdit}>Change something</SecondaryButton>
       </div>
     </div>

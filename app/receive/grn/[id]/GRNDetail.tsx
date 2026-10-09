@@ -1,15 +1,17 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { MOCK_COMPLETED_DELIVERIES, MOCK_POS } from '@/components/Receiving/mockData';
+import { MOCK_COMPLETED_DELIVERIES, MOCK_POS, PHOTO_SOURCE_LABEL } from '@/components/Receiving/mockData';
 import { BASE_CURRENCY, currencySymbol, formatMoney } from '@/lib/currency';
-import PaperDocument from '@/components/Receiving/photo/PaperDocument';
 import { StatusPill } from '@/components/ui/StatusPill';
-import { SAMPLE_DOCUMENTS, type SampleId } from '@/components/Receiving/photo/fixtures';
+import { SAMPLE_PHOTOS } from '@/components/Receiving/photo/samplePhotos';
+import type { SampleId } from '@/components/Receiving/photo/fixtures';
 
 function isSampleId(id: string): id is SampleId {
-  return id in SAMPLE_DOCUMENTS;
+  return id in SAMPLE_PHOTOS;
 }
+
+const RETURNED_REASON = { damaged: 'damaged', over: 'more than ordered', refused: 'refused' } as const;
 
 export default function GRNDetail({ id }: { id: string }) {
   const router = useRouter();
@@ -38,7 +40,7 @@ export default function GRNDetail({ id }: { id: string }) {
   const grnCurrency = grn.currency ?? BASE_CURRENCY;
   const isForeign = grnCurrency !== BASE_CURRENCY;
   const sym = currencySymbol(grnCurrency);
-  const photoDoc = grn.photo?.sampleId && isSampleId(grn.photo.sampleId) ? SAMPLE_DOCUMENTS[grn.photo.sampleId] : null;
+  const photoPages = grn.photo?.sampleId && isSampleId(grn.photo.sampleId) ? SAMPLE_PHOTOS[grn.photo.sampleId].pages : null;
 
   const cell: React.CSSProperties = {
     padding: '10px 14px',
@@ -69,7 +71,7 @@ export default function GRNDetail({ id }: { id: string }) {
           {(grn.source || grn.offContract) && (
             <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
               {grn.source && (
-                <StatusPill tone="neutral">{grn.source === 'photo-receipt' ? 'Shop receipt photo' : 'Invoice photo'}</StatusPill>
+                <StatusPill tone="neutral">{PHOTO_SOURCE_LABEL[grn.source]}</StatusPill>
               )}
               {grn.offContract && <StatusPill tone="warning">Off-contract</StatusPill>}
             </div>
@@ -102,6 +104,7 @@ export default function GRNDetail({ id }: { id: string }) {
         <MetaCard label="Site" value={grn.site} />
         <MetaCard label="Items" value={`${grn.lines.length} lines`} />
         {grn.invoiceNumber && <MetaCard label="Invoice" value={grn.invoiceNumber} />}
+        {grn.deliveryNoteNumber && <MetaCard label="Delivery note" value={grn.deliveryNoteNumber} />}
         <MetaCard label="Total Received" value={formatMoney(total, grnCurrency)} highlight />
         {isForeign && (
           <MetaCard
@@ -141,6 +144,11 @@ export default function GRNDetail({ id }: { id: string }) {
                         Paper says {sym}{line.priceHeld.paperPrice.toFixed(2)}. Price change waiting for an admin.
                       </span>
                     )}
+                    {line.returned && (
+                      <span style={{ display: 'block', fontSize: '12px', fontWeight: 400, color: 'var(--color-text-secondary)' }}>
+                        {line.returned.qty} sent back with the driver: {RETURNED_REASON[line.returned.reason]}.
+                      </span>
+                    )}
                   </td>
                   <td style={{ ...cell, color: 'var(--color-text-secondary)', fontSize: '12px' }}>{line.sku}</td>
                   <td style={{ ...cell, color: 'var(--color-text-secondary)' }}>{line.unit}</td>
@@ -171,15 +179,18 @@ export default function GRNDetail({ id }: { id: string }) {
       {grn.photo && (
         <div style={{ marginTop: '24px' }}>
           <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: '10px' }}>
-            Photo of the {grn.source === 'photo-receipt' ? 'receipt' : 'invoice'}
+            {grn.source ? PHOTO_SOURCE_LABEL[grn.source] : 'Photo'}
             <span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}> · {grn.photo.pages} page{grn.photo.pages === 1 ? '' : 's'}</span>
           </div>
           <div style={{ padding: '20px', borderRadius: '10px', background: 'var(--color-bg-hover)', display: 'flex', gap: '20px', flexWrap: 'wrap', justifyContent: 'center' }}>
             {grn.photo.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={grn.photo.imageUrl} alt="Photo of the document" style={{ maxWidth: '100%', maxHeight: '420px', borderRadius: '4px' }} />
-            ) : photoDoc ? (
-              Array.from({ length: grn.photo.pages }, (_, i) => <PaperDocument key={i} doc={photoDoc} page={i + 1} />)
+            ) : photoPages ? (
+              photoPages.map((pg, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={pg.src} src={pg.src} alt={`Page ${i + 1} of the photo`} style={{ width: '100%', maxWidth: '380px', borderRadius: '4px' }} />
+              ))
             ) : null}
           </div>
         </div>

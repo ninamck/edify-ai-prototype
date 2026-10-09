@@ -2,12 +2,12 @@
 
 import { useRef } from 'react';
 import { Camera, ImagePlus, Plus, X } from 'lucide-react';
-import PaperDocument from './PaperDocument';
+import { PhotoThumb, photoPages } from './PhotoParts';
 import { SAMPLE_DOCUMENTS, type SampleId } from './fixtures';
 import type { CapturedPage } from './types';
 import { PrimaryButton, SecondaryButton, StepHeading, cardStyle, sectionLabel } from './ui';
 
-const SAMPLE_ORDER: SampleId[] = ['sainsburys', 'fresh-direct', 'menu'];
+const SAMPLE_ORDER: SampleId[] = ['fd-note-clean', 'fd-note', 'fd-invoice', 'sainsburys', 'menu', 'blurry'];
 
 export default function CaptureStep({
   pages, notice, onAddPhoto, onPickSample, onRemovePage, onDone,
@@ -32,10 +32,7 @@ export default function CaptureStep({
 
   return (
     <div>
-      <StepHeading
-        title="Photo a delivery"
-        sub="Take a photo of the receipt, delivery note or invoice. Edify reads it, matches it to your orders and asks you about anything that doesn't line up."
-      />
+      <StepHeading title="Photo a delivery" />
 
       {notice && (
         <div role="status" style={{ ...cardStyle, background: 'var(--color-bg-hover)', marginBottom: 12, fontSize: 14, color: 'var(--color-text-primary)' }}>
@@ -54,24 +51,18 @@ export default function CaptureStep({
           <SecondaryButton full icon={<ImagePlus size={18} aria-hidden />} onClick={() => libraryRef.current?.click()}>
             Choose from your photos
           </SecondaryButton>
-          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '4px 0 0', lineHeight: 1.45 }}>
-            Long invoice? Photo each page. You can add more pages before Edify reads it.
-          </p>
         </div>
       ) : (
         <div style={{ ...cardStyle, padding: 16 }}>
           <p style={sectionLabel}>{pages.length} page{pages.length === 1 ? '' : 's'} ready</p>
           <ul aria-label="Pages" style={{ listStyle: 'none', margin: '0 0 14px', padding: 0, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             {pages.map((p, i) => {
-              const doc = p.sampleId ? SAMPLE_DOCUMENTS[p.sampleId] : null;
+              // Sample pages map onto the sample's photo pages in order.
+              const samplePage = p.sampleId ? pages.filter(q => q.sampleId === p.sampleId).indexOf(p) : 0;
+              const src = p.imageUrl ?? (p.sampleId ? photoPages(p.sampleId)[Math.min(samplePage, photoPages(p.sampleId).length - 1)].src : null);
               return (
                 <li key={p.id} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                  {p.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.imageUrl} alt={`Page ${i + 1}`} style={{ width: 64, height: 84, objectFit: 'cover', borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.18)' }} />
-                  ) : doc ? (
-                    <PaperDocument doc={doc} size="thumb" />
-                  ) : null}
+                  {src && <PhotoThumb src={src} alt={`Page ${i + 1}`} />}
                   <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Page {i + 1}</span>
                   <button
                     type="button"
@@ -111,7 +102,7 @@ export default function CaptureStep({
                   textAlign: 'left', cursor: 'pointer', fontFamily: 'var(--font-primary)', minHeight: 56,
                 }}
               >
-                <PaperDocument doc={doc} size="thumb" />
+                <PhotoThumb src={photoPages(id)[0].src} alt="" width={48} />
                 <span>
                   <span style={{ display: 'block', fontSize: 15, fontWeight: 700, color: 'var(--color-text-primary)' }}>{doc.trayLabel}</span>
                   <span style={{ display: 'block', fontSize: 13, color: 'var(--color-text-secondary)' }}>
@@ -122,9 +113,6 @@ export default function CaptureStep({
             );
           })}
         </div>
-        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '10px 0 0', lineHeight: 1.45 }}>
-          Prototype: a real photo is read as the Sainsbury&apos;s receipt so the rest of the flow works.
-        </p>
       </section>
     </div>
   );

@@ -6799,6 +6799,7 @@ export default function Feed({
   autoSendTableTitle,
   alreadyPinned,
   autoStartFlow,
+  autoStartArgs,
   enableNoteCapture,
   onUserMessageCountChange,
   onPinTable,
@@ -6843,7 +6844,9 @@ export default function Feed({
   /** Charts already pinned to the dashboard — their "Add to dashboard" buttons render as already-pinned. */
   alreadyPinned?: Set<AnalyticsChartId>;
   /** If set, auto-start the named guided flow on mount (e.g. from an external "Ask Quinn" entry point). */
-  autoStartFlow?: 'recipe' | 'integrity' | 'pos-match' | 'rota' | 'sweep';
+  autoStartFlow?: 'recipe' | 'integrity' | 'pos-match' | 'rota' | 'sweep' | 'add-product';
+  /** Seed for the auto-started flow, e.g. the product name and supplier read off a receipt. */
+  autoStartArgs?: Record<string, unknown>;
   /** Shows the "Note for Edify" quick action in the composer. Sending a
    *  message that starts with "Note:" logs it straight to the notebook. */
   enableNoteCapture?: boolean;
@@ -7236,6 +7239,13 @@ export default function Feed({
     else if (autoStartFlow === 'pos-match') startPosMatchCheck();
     else if (autoStartFlow === 'rota') commandRunner.runCommand({ commandId: 'rota-rebalance', args: {}, confidence: 1 });
     else if (autoStartFlow === 'sweep') commandRunner.runCommand({ commandId: 'variance-sweep', args: {}, confidence: 1 });
+    else if (autoStartFlow === 'add-product') {
+      // Opened from another screen (e.g. a shop receipt), so land in the
+      // chat itself rather than the start screen.
+      setChatMinimized(false);
+      setChatStarted(true);
+      commandRunner.runCommand({ commandId: 'product-swap', args: { mode: 'add', ...autoStartArgs }, confidence: 1 });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStartFlow]);
 
@@ -10518,12 +10528,14 @@ export default function Feed({
                           const args = JSON.parse(m.cmdArgsJson) as {
                             supplierName: string;
                             email?: string;
+                            seededFrom?: string;
                           };
                           return (
                             <ProductNewSupplierCard
                               state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                               supplierName={args.supplierName}
                               initialEmail={args.email}
+                              shopBought={args.seededFrom === 'receipt'}
                               onSubmit={(input) => commandRunner.submitProductNewSupplier(m.id, args, input)}
                               onCancel={() => commandRunner.cancelCard(m.id)}
                             />
@@ -10564,6 +10576,7 @@ export default function Feed({
                             supplierCode?: string;
                             taxRatePct?: number;
                             photoDataUrl?: string;
+                            seededFrom?: string;
                           };
                           return (
                             <ProductPackDetailsCard
@@ -10571,6 +10584,7 @@ export default function Feed({
                               mode={args.mode}
                               newProductName={args.newProductName}
                               supplierName={args.supplierName}
+                              shopBought={args.seededFrom === 'receipt'}
                               initialPackType={args.packType ?? args.defaultPackType}
                               initialPackQty={args.packQty ?? args.defaultPackQty}
                               initialPackCost={args.packCost ?? args.defaultPackCost}
