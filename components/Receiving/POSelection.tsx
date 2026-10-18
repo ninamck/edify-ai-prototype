@@ -1,14 +1,18 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { Camera } from 'lucide-react';
 import StatusBadge from './StatusBadge';
 import { MOCK_POS, poItemCount, poTotal, PO } from './mockData';
 
 interface POSelectionProps {
   onReceive: (poIds: string[]) => void;
+  /** Whether a PO can be received from a photo of its paperwork. */
+  canPhoto?: (poId: string) => boolean;
+  onPhoto?: (poId: string) => void;
 }
 
-export default function POSelection({ onReceive }: POSelectionProps) {
+export default function POSelection({ onReceive, canPhoto, onPhoto }: POSelectionProps) {
   const [search, setSearch] = useState('');
   const [siteFilter, setSiteFilter] = useState('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -101,6 +105,8 @@ export default function POSelection({ onReceive }: POSelectionProps) {
         selected={selected}
         onToggle={toggleSelected}
         onReceiveSingle={(id) => onReceive([id])}
+        canPhoto={canPhoto}
+        onPhoto={onPhoto}
       />
     </div>
   );
@@ -108,7 +114,7 @@ export default function POSelection({ onReceive }: POSelectionProps) {
 
 /* ──────────── Awaiting PO cards ──────────── */
 
-function AwaitingList({ pos, selected, onToggle, onReceiveSingle }: { pos: PO[]; selected: Set<string>; onToggle: (id: string) => void; onReceiveSingle: (id: string) => void }) {
+function AwaitingList({ pos, selected, onToggle, onReceiveSingle, canPhoto, onPhoto }: { pos: PO[]; selected: Set<string>; onToggle: (id: string) => void; onReceiveSingle: (id: string) => void; canPhoto?: (id: string) => boolean; onPhoto?: (id: string) => void }) {
   if (pos.length === 0) {
     return <p style={{ textAlign: 'center', padding: '32px', color: 'var(--color-text-secondary)', fontSize: '14px' }}>No purchase orders awaiting delivery.</p>;
   }
@@ -155,6 +161,30 @@ function AwaitingList({ pos, selected, onToggle, onReceiveSingle }: { pos: PO[];
               <span>Sent {po.dateSent}</span>
             </div>
           </div>
+
+          {onPhoto && canPhoto?.(po.id) && (
+            <button
+              type="button"
+              onClick={() => onPhoto(po.id)}
+              aria-label={`Take a photo of the paperwork for ${po.poNumber}`}
+              title="Take a photo"
+              style={{
+                width: '44px',
+                height: '44px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '8px',
+                background: '#fff',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text-primary)',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              <Camera size={18} aria-hidden />
+            </button>
+          )}
 
           {/* Receive button */}
           <button

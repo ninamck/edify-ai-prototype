@@ -2,16 +2,10 @@
 
 import { useRouter } from 'next/navigation';
 import { MOCK_COMPLETED_DELIVERIES, MOCK_POS, PHOTO_SOURCE_LABEL } from '@/components/Receiving/mockData';
-import { BASE_CURRENCY, currencySymbol, formatMoney } from '@/lib/currency';
+import { SAMPLE_PHOTOS } from '@/components/Receiving/capture/samplePhotos';
+import { isSampleId } from '@/components/Receiving/capture/samples';
 import { StatusPill } from '@/components/ui/StatusPill';
-import { SAMPLE_PHOTOS } from '@/components/Receiving/photo/samplePhotos';
-import type { SampleId } from '@/components/Receiving/photo/fixtures';
-
-function isSampleId(id: string): id is SampleId {
-  return id in SAMPLE_PHOTOS;
-}
-
-const RETURNED_REASON = { damaged: 'damaged', over: 'more than ordered', refused: 'refused' } as const;
+import { BASE_CURRENCY, currencySymbol, formatMoney } from '@/lib/currency';
 
 export default function GRNDetail({ id }: { id: string }) {
   const router = useRouter();
@@ -40,7 +34,8 @@ export default function GRNDetail({ id }: { id: string }) {
   const grnCurrency = grn.currency ?? BASE_CURRENCY;
   const isForeign = grnCurrency !== BASE_CURRENCY;
   const sym = currencySymbol(grnCurrency);
-  const photoPages = grn.photo?.sampleId && isSampleId(grn.photo.sampleId) ? SAMPLE_PHOTOS[grn.photo.sampleId].pages : null;
+  const photoId = grn.photo?.sampleId;
+  const photoPages = photoId && isSampleId(photoId) ? (SAMPLE_PHOTOS[photoId]?.pages ?? null) : null;
 
   const cell: React.CSSProperties = {
     padding: '10px 14px',
@@ -70,9 +65,7 @@ export default function GRNDetail({ id }: { id: string }) {
           </div>
           {(grn.source || grn.offContract) && (
             <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
-              {grn.source && (
-                <StatusPill tone="neutral">{PHOTO_SOURCE_LABEL[grn.source]}</StatusPill>
-              )}
+              {grn.source && <StatusPill tone="neutral">{PHOTO_SOURCE_LABEL[grn.source]}</StatusPill>}
               {grn.offContract && <StatusPill tone="warning">Off-contract</StatusPill>}
             </div>
           )}
@@ -139,15 +132,21 @@ export default function GRNDetail({ id }: { id: string }) {
                         On the paper: &ldquo;{line.extractedText}&rdquo;
                       </span>
                     )}
-                    {line.priceHeld && (
-                      <span style={{ display: 'block', fontSize: '12px', fontWeight: 400, color: 'var(--color-text-secondary)' }}>
-                        Paper says {sym}{line.priceHeld.paperPrice.toFixed(2)}. Price change waiting for an admin.
-                      </span>
-                    )}
                     {line.returned && (
                       <span style={{ display: 'block', fontSize: '12px', fontWeight: 400, color: 'var(--color-text-secondary)' }}>
-                        {line.returned.qty} sent back with the driver: {RETURNED_REASON[line.returned.reason]}.
+                        {line.returned.qty} sent back with the driver: {line.returned.reason}.
                       </span>
+                    )}
+                    {line.alternativeFor && (
+                      <span style={{ display: 'block', fontSize: '12px', fontWeight: 400, color: 'var(--color-text-secondary)' }}>
+                        In place of {line.alternativeFor.poName}.
+                      </span>
+                    )}
+                    {line.decision && (
+                      <span style={{ display: 'block', fontSize: '12px', fontWeight: 400, color: 'var(--color-text-secondary)' }}>{line.decision}</span>
+                    )}
+                    {line.varianceResolution && line.receivedQty < line.expectedQty && (
+                      <span style={{ display: 'block', fontSize: '12px', fontWeight: 400, color: 'var(--color-text-secondary)' }}>{line.varianceResolution}.</span>
                     )}
                   </td>
                   <td style={{ ...cell, color: 'var(--color-text-secondary)', fontSize: '12px' }}>{line.sku}</td>
@@ -176,22 +175,17 @@ export default function GRNDetail({ id }: { id: string }) {
         </table>
       </div>
 
-      {grn.photo && (
+      {photoPages && (
         <div style={{ marginTop: '24px' }}>
           <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: '10px' }}>
             {grn.source ? PHOTO_SOURCE_LABEL[grn.source] : 'Photo'}
-            <span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}> · {grn.photo.pages} page{grn.photo.pages === 1 ? '' : 's'}</span>
+            <span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}> · kept as the record of what arrived</span>
           </div>
           <div style={{ padding: '20px', borderRadius: '10px', background: 'var(--color-bg-hover)', display: 'flex', gap: '20px', flexWrap: 'wrap', justifyContent: 'center' }}>
-            {grn.photo.imageUrl ? (
+            {photoPages.map((pg, i) => (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={grn.photo.imageUrl} alt="Photo of the document" style={{ maxWidth: '100%', maxHeight: '420px', borderRadius: '4px' }} />
-            ) : photoPages ? (
-              photoPages.map((pg, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={pg.src} src={pg.src} alt={`Page ${i + 1} of the photo`} style={{ width: '100%', maxWidth: '380px', borderRadius: '4px' }} />
-              ))
-            ) : null}
+              <img key={pg.src} src={pg.src} alt={`Page ${i + 1} of the photo`} style={{ width: '100%', maxWidth: '380px', borderRadius: '4px' }} />
+            ))}
           </div>
         </div>
       )}

@@ -80,14 +80,16 @@ export const FLOOR_ACTION_ICON_MAP: Record<string, LucideIcon> = {
   Camera,
 };
 
+/** Fired when "Photo a delivery" is tapped. The Command Centre feed handles it
+ *  (and calls preventDefault); anywhere else falls back to the photo page. */
+export const PHOTO_DELIVERY_EVENT = 'edify:photo-delivery';
+
 /**
  * Actions added to the defaults after people had already saved a layout.
  * Each is slotted in once, after the action named in `after`, so someone
- * who later deletes it doesn't see it come back.
+ * who later removes it doesn't see it come back.
  */
-const BACKFILL_ACTIONS: { id: string; after: string }[] = [
-  { id: 'photo-delivery', after: 'receive-delivery' },
-];
+const BACKFILL_ACTIONS: { id: string; after: string }[] = [{ id: 'photo-delivery', after: 'receive-delivery' }];
 const BACKFILL_KEY = 'edify:floorActionsBackfilled';
 
 function backfill(merged: Record<BriefingRole, FloorAction[]>): Record<BriefingRole, FloorAction[]> {
@@ -194,7 +196,7 @@ export function useFloorActions(
         onReceiveDelivery?.();
         return;
       case 'photo-delivery':
-        router.push('/receive/photo');
+        if (window.dispatchEvent(new CustomEvent(PHOTO_DELIVERY_EVENT, { cancelable: true }))) router.push('/receive/photo');
         return;
       case 'log-waste':
         router.push('/log-waste');

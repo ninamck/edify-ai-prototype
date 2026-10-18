@@ -9,7 +9,7 @@
  * brand by adding a case to `CHIPS_BY_CUSTOMER`.
  */
 
-import { ChefHat, Truck, ClipboardList, ShieldCheck, Building2, type LucideIcon } from 'lucide-react';
+import { Camera, ChefHat, Truck, ClipboardList, ShieldCheck, Building2, type LucideIcon } from 'lucide-react';
 import { demoCustomer } from '@/lib/demoConfig';
 
 export type PromptChip = {
@@ -37,12 +37,21 @@ export type PromptChip = {
    *  so the job reads as achievable; 8 = STOCK_TAKE_REVIEW's products
    *  missing a storage area. */
   count?: number;
+  /** Phones only. Desktop already has it in the "On the floor" row. */
+  phoneOnly?: boolean;
 };
 
 /** Internal / default build (Fitzroy Espresso café scenario).
  *  Labels follow one wording pattern — verb + object — so the list reads
  *  as a to-do list. Chips with pending data carry a count. */
 const DEFAULT_CHIPS: PromptChip[] = [
+  {
+    label: 'Photo a delivery',
+    icon: Camera,
+    text: '',
+    commandId: 'photo-delivery',
+    phoneOnly: true,
+  },
   {
     label: 'Set up new sites',
     icon: Building2,

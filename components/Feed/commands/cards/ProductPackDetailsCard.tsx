@@ -50,18 +50,8 @@ interface ProductPackDetailsCardProps {
   initialAllergensContains?: Allergen[];
   initialAllergensTraces?: Allergen[];
   initialPhotoDataUrl?: string;
-  /** The product came in on a shop receipt. Shops don't issue product
-   *  codes, but Edify still needs one to reconcile against, so the card
-   *  pre-fills a placeholder and says so. Prototype decision: the real
-   *  rule (code required for every product) stands until we change it. */
-  shopBought?: boolean;
   onSubmit: (input: ProductPackDetailsSubmit) => void;
   onCancel: () => void;
-}
-
-function placeholderCode(name: string): string {
-  const slug = name.toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 14);
-  return `SHOP-${slug || 'ITEM'}`;
 }
 
 const UNIT_OPTIONS: UnitType[] = ['Each', 'g', 'kg', 'ml', 'L'];
@@ -103,7 +93,6 @@ export default function ProductPackDetailsCard({
   initialAllergensContains,
   initialAllergensTraces,
   initialPhotoDataUrl,
-  shopBought = false,
   onSubmit,
   onCancel,
 }: ProductPackDetailsCardProps) {
@@ -113,9 +102,7 @@ export default function ProductPackDetailsCard({
     initialPackCost != null ? String(initialPackCost) : '',
   );
   const [unitType, setUnitType] = useState<UnitType>(initialUnitType ?? 'g');
-  const [supplierCode, setSupplierCode] = useState<string>(
-    initialSupplierCode ?? (shopBought ? placeholderCode(newProductName) : ''),
-  );
+  const [supplierCode, setSupplierCode] = useState<string>(initialSupplierCode ?? '');
   const [taxRate, setTaxRate] = useState<string>(String(initialTaxRatePct ?? 0));
   const [photoDataUrl, setPhotoDataUrl] = useState<string | undefined>(initialPhotoDataUrl);
   // ── "More settings" — offered, never forced ──────────────────
@@ -338,20 +325,6 @@ export default function ProductPackDetailsCard({
               placeholder="e.g. FB-1042 — from their catalogue or invoice"
               style={inputStyle}
             />
-            {shopBought && (
-              <div
-                style={{
-                  marginTop: '6px',
-                  fontSize: '11.5px',
-                  fontWeight: 500,
-                  lineHeight: 1.45,
-                  color: 'var(--color-text-muted)',
-                }}
-              >
-                Placeholder. {supplierName} doesn&rsquo;t issue product codes, but Edify needs one to
-                reconcile against. Change it if you have a better one.
-              </div>
-            )}
           </div>
           <div style={{ flex: 1, minWidth: '110px' }}>
             <Label>VAT %</Label>

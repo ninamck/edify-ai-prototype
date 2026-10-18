@@ -36,8 +36,16 @@ import {
   Layers,
   ClipboardList,
   Search,
+  Camera,
 } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
+import DeliveryCapture from '@/components/Receiving/capture/DeliveryCapture';
+import DeliveryFeedCard, { type DeliveryCardState, type DeliveryFocus } from '@/components/Receiving/capture/FeedCard';
+import { recordCapture, withAccepted, type Recorded } from '@/components/Receiving/capture/record';
+import { freshEdits, gbp as formatGbp, NO_SETUPS } from '@/components/Receiving/capture/review';
+import { SAMPLES, sampleForFile, type Sample, type SampleId } from '@/components/Receiving/capture/samples';
+import { PHOTO_DELIVERY_EVENT } from '@/components/useFloorActions';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import EdifyMarkThinking from '@/components/EdifyMark/EdifyMarkThinking';
 import { motion, AnimatePresence } from 'framer-motion';
 import QuinnOrb from '@/components/Sidebar/QuinnOrb';
@@ -304,7 +312,16 @@ const QUICK_ACTION_CHIPS: {
   // Not a registry command — a guided flow. Special-cased in
   // `handleQuickAction`, which routes it to `startPosMatchCheck`.
   { commandId: 'pos-match-check', label: 'Check my POS matches', icon: Target },
+  // Opens the camera; the photo comes back into the chat to be read.
+  { commandId: 'photo-delivery', label: 'Photo a delivery', icon: Camera },
 ];
+
+/** A file in the composer that reads as delivery paperwork rather than a product sheet. */
+function isDeliveryPaper(text: string, fileName: string): boolean {
+  if (/\b(deliver(y|ies|ed)?|invoice|receipt|delivery note|grn|goods in)\b/i.test(text)) return true;
+  if (/\b(product|recipe|catalogue|supplier sheet|spec)\b/i.test(text)) return false;
+  return /\.(jpe?g|png|heic|webp)$/i.test(fileName);
+}
 
 // ─── Data integrity checks ────────────────────────────────────────────────────
 //
@@ -5855,7 +5872,7 @@ function ClaudeComposer({
         <button
           type="button"
           aria-label="Attach a file"
-          title="Attach a product sheet, email or document"
+          title="Attach a delivery photo, product sheet or document"
           disabled={disabled}
           onClick={() => fileInputRef.current?.click()}
           style={{
@@ -6799,7 +6816,6 @@ export default function Feed({
   autoSendTableTitle,
   alreadyPinned,
   autoStartFlow,
-  autoStartArgs,
   enableNoteCapture,
   onUserMessageCountChange,
   onPinTable,
@@ -6844,9 +6860,7 @@ export default function Feed({
   /** Charts already pinned to the dashboard — their "Add to dashboard" buttons render as already-pinned. */
   alreadyPinned?: Set<AnalyticsChartId>;
   /** If set, auto-start the named guided flow on mount (e.g. from an external "Ask Quinn" entry point). */
-  autoStartFlow?: 'recipe' | 'integrity' | 'pos-match' | 'rota' | 'sweep' | 'add-product';
-  /** Seed for the auto-started flow, e.g. the product name and supplier read off a receipt. */
-  autoStartArgs?: Record<string, unknown>;
+  autoStartFlow?: 'recipe' | 'integrity' | 'pos-match' | 'rota' | 'sweep';
   /** Shows the "Note for Edify" quick action in the composer. Sending a
    *  message that starts with "Note:" logs it straight to the notebook. */
   enableNoteCapture?: boolean;
@@ -7137,10 +7151,117 @@ export default function Feed({
     },
   });
 
+  // ── Photo a delivery ──────────────────────────────────────────────
+  // The camera opens over the feed. The photo comes back into the chat,
+  // where Edify reads it in a card. Checking opens as a focused screen
+  // (full screen on a phone, a wide panel on desktop), and the result is
+  // posted back as an undoable receipt.
+  const isPhoneFeed = useMediaQuery('(max-width: 640px)');
+  const [deliveryFocus, setDeliveryFocus] = useState<DeliveryFocus | null>(null);
+  const [deliveryCards, setDeliveryCards] = useState<Record<string, DeliveryCardState>>({});
+
+  useEffect(() => {
+    const open = (e: Event) => {
+      e.preventDefault();
+      setDeliveryFocus({ mode: 'capture' });
+    };
+    window.addEventListener(PHOTO_DELIVERY_EVENT, open);
+    return () => window.removeEventListener(PHOTO_DELIVERY_EVENT, open);
+  }, []);
+
+  function postDeliveryPhoto(sampleId: SampleId, pages: number, opts: { userText?: string; fileName?: string } = {}) {
+    setChatMinimized(false);
+    setChatStarted(true);
+    setAttachedFileName(null);
+    const stamp = Date.now();
+    const id = `q-delivery-${stamp}`;
+    setDeliveryCards(prev => ({ ...prev, [id]: { sampleId, pages, status: 'reading' } }));
+    setMessages(prev => [
+      ...prev,
+      {
+        id: `u-delivery-${stamp}`,
+        role: 'user',
+        text: opts.userText || 'Check this delivery',
+        attachmentName: opts.fileName ?? (pages > 1 ? `Photo, ${pages} pages` : 'Photo'),
+      },
+      { id, role: 'quinn', text: '', msgType: 'delivery-photo' },
+    ]);
+  }
+
+  function setDeliveryCard(id: string, patch: Partial<DeliveryCardState>) {
+    setDeliveryCards(prev => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev));
+  }
+
+  function deliveryAccepted(msgId: string, sample: Sample, rec: Recorded) {
+    setDeliveryFocus(null);
+    setDeliveryCard(msgId, { status: 'accepted', grnNumber: rec.grn.grnNumber });
+    const credit = rec.creditNotes.reduce((s, n) => s + n.amount, 0);
+    const bits = [rec.grn.grnNumber];
+    if (credit > 0) bits.push(`${formatGbp(credit)} credit requested`);
+    if (rec.added.length) bits.push(`${rec.added.join(' and ')} added`);
+    if (bits.length === 1) bits.push(`${sample.lines.length} lines received`);
+    commandRunner.pushReceipt(
+      {
+        headline: `${sample.kind === 'receipt' ? 'Receipt' : 'Delivery'} accepted \u00b7 ${sample.supplier}`,
+        detail: bits.join(' \u00b7 '),
+        href: `/receive/grn/${rec.grn.id}`,
+        hrefLabel: 'Open GRN',
+        undo: () => {
+          rec.undo();
+          setDeliveryCard(msgId, { status: 'ready', grnNumber: undefined });
+        },
+      },
+      msgId,
+    );
+  }
+
+  function renderDeliveryCard(m: ChatMsg) {
+    const state = deliveryCards[m.id];
+    if (!state) return null;
+    return (
+      <DeliveryFeedCard
+        state={state}
+        onReadDone={() => setDeliveryCard(m.id, { status: 'ready' })}
+        onReview={() => setDeliveryFocus({ mode: 'review', msgId: m.id, sampleId: state.sampleId, pages: state.pages })}
+        onAcceptNow={() => {
+          const sample = withAccepted(SAMPLES[state.sampleId]);
+          deliveryAccepted(m.id, sample, recordCapture(sample, freshEdits(sample), {}, NO_SETUPS));
+        }}
+        onRetake={() => setDeliveryFocus({ mode: 'capture' })}
+      />
+    );
+  }
+
+  const deliveryLayer =
+    deliveryFocus?.mode === 'capture' ? (
+      <DeliveryCapture
+        presentation="panel"
+        onClose={() => setDeliveryFocus(null)}
+        onCaptured={(id, pages) => {
+          setDeliveryFocus(null);
+          postDeliveryPhoto(id, pages);
+        }}
+      />
+    ) : deliveryFocus?.mode === 'review' ? (
+      <DeliveryCapture
+        key={deliveryFocus.msgId}
+        presentation="panel"
+        startAt="review"
+        initialSample={deliveryFocus.sampleId}
+        initialPages={deliveryFocus.pages}
+        onClose={() => setDeliveryFocus(null)}
+        onAccepted={(sample, rec) => deliveryAccepted(deliveryFocus.msgId, sample, rec)}
+      />
+    ) : null;
+
   // Shared handler for the composer's `+` popover.
   const handleQuickAction = (commandId: string) => {
     if (commandId === 'pos-match-check') {
       startPosMatchCheck();
+      return;
+    }
+    if (commandId === 'photo-delivery') {
+      setDeliveryFocus({ mode: 'capture' });
       return;
     }
     if (commandId === 'rota-estate') {
@@ -7239,13 +7360,6 @@ export default function Feed({
     else if (autoStartFlow === 'pos-match') startPosMatchCheck();
     else if (autoStartFlow === 'rota') commandRunner.runCommand({ commandId: 'rota-rebalance', args: {}, confidence: 1 });
     else if (autoStartFlow === 'sweep') commandRunner.runCommand({ commandId: 'variance-sweep', args: {}, confidence: 1 });
-    else if (autoStartFlow === 'add-product') {
-      // Opened from another screen (e.g. a shop receipt), so land in the
-      // chat itself rather than the start screen.
-      setChatMinimized(false);
-      setChatStarted(true);
-      commandRunner.runCommand({ commandId: 'product-swap', args: { mode: 'add', ...autoStartArgs }, confidence: 1 });
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStartFlow]);
 
@@ -9414,6 +9528,22 @@ export default function Feed({
       }
     }
 
+    // Delivery paperwork in the composer: a photo of a delivery note,
+    // invoice or receipt is read in the chat, ahead of the product-sheet
+    // importers that would otherwise claim any attachment.
+    if (explicitChart === undefined && !tableOpts) {
+      if (attachedFileName && isDeliveryPaper(text, attachedFileName)) {
+        const id = sampleForFile(attachedFileName);
+        postDeliveryPhoto(id, SAMPLES[id].pages, { userText: text, fileName: attachedFileName });
+        return;
+      }
+      if (!attachedFileName && /^(photo|snap|scan|take a photo of)\b.*\b(delivery|invoice|receipt|delivery note)\b/i.test(text)) {
+        setMessages(prev => [...prev, userMsg, { id: `q-delivery-cam-${Date.now()}`, role: 'quinn', text: 'Opening the camera. Fit the whole page in the frame.', streaming: true }]);
+        setDeliveryFocus({ mode: 'capture' });
+        return;
+      }
+    }
+
     // New-supplier onboarding — runs FIRST so phrasings like "add a
     // new supplier with their catalogue" don't get hijacked by the
     // product-sheet detector below (which also matches "supplier" +
@@ -10528,14 +10658,12 @@ export default function Feed({
                           const args = JSON.parse(m.cmdArgsJson) as {
                             supplierName: string;
                             email?: string;
-                            seededFrom?: string;
                           };
                           return (
                             <ProductNewSupplierCard
                               state={commandRunner.cmdStates[m.id] ?? m.cmdState ?? 'pending'}
                               supplierName={args.supplierName}
                               initialEmail={args.email}
-                              shopBought={args.seededFrom === 'receipt'}
                               onSubmit={(input) => commandRunner.submitProductNewSupplier(m.id, args, input)}
                               onCancel={() => commandRunner.cancelCard(m.id)}
                             />
@@ -10576,7 +10704,6 @@ export default function Feed({
                             supplierCode?: string;
                             taxRatePct?: number;
                             photoDataUrl?: string;
-                            seededFrom?: string;
                           };
                           return (
                             <ProductPackDetailsCard
@@ -10584,7 +10711,6 @@ export default function Feed({
                               mode={args.mode}
                               newProductName={args.newProductName}
                               supplierName={args.supplierName}
-                              shopBought={args.seededFrom === 'receipt'}
                               initialPackType={args.packType ?? args.defaultPackType}
                               initialPackQty={args.packQty ?? args.defaultPackQty}
                               initialPackCost={args.packCost ?? args.defaultPackCost}
@@ -11254,7 +11380,7 @@ export default function Feed({
                     flexDirection: 'column',
                     gap: '2px',
                   }}>
-                    {PROMPT_CHIPS.map((chip, i) => {
+                    {PROMPT_CHIPS.filter(chip => !chip.phoneOnly || isPhoneFeed).map((chip, i) => {
                       const Icon = chip.icon;
                       const hasCount = chip.count !== undefined && chip.count > 0;
                       return (
@@ -11463,6 +11589,7 @@ export default function Feed({
                             onCancel={() => commandRunner.cancelCard(m.id)}
                           />
                         )}
+                        {m.msgType === 'delivery-photo' && renderDeliveryCard(m)}
                         {m.msgType === 'cmd-receipt' && (() => {
                           // Prefer the live receipt (carries the undo
                           // closure); fall back to the baked-in copy
@@ -11634,6 +11761,8 @@ export default function Feed({
           </div>
         )}
       </div>
+
+      {deliveryLayer}
 
       {/* Task history drawer — portalled, always available. Triggered
           from the inline list "View all" pill, the chat-header clock

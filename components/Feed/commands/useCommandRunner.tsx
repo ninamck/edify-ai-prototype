@@ -902,26 +902,18 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       const mode = args.mode as 'add' | 'replace' | undefined;
       if (mode) {
         // Mode already inferred — skip the purpose card.
-        const PAPER: Record<string, string> = { receipt: 'receipt', 'delivery-note': 'delivery note', invoice: 'invoice' };
-        const paper = typeof args.seededFrom === 'string' ? PAPER[args.seededFrom] : undefined;
-        const seededFromPaper = !!paper && typeof args.newProductName === 'string';
-        const opener = seededFromPaper
-          ? `${args.newProductName} came in on a ${args.supplierName ?? 'supplier'} ${paper} and isn't in your products yet. Let's set it up so recipes can use it. Check the name and supplier first.`
-          : mode === 'add'
+        const opener =
+          mode === 'add'
             ? "Let's add a new product to your recipes. First — what's it called, and who's the supplier?"
             : "Let's replace a product across your recipes. First — what's the new one called, and who's the supplier?";
-        // Anything the caller already knows (supplier, pack defaults from a
-        // receipt line) rides along in the args so later cards open pre-filled.
-        const { newProductName, oldProductName, ...seed } = args;
         pushResponseFlow({
           text: opener,
           commandId: 'product-swap',
           cardMsgType: 'cmd-product-new-info',
           cardArgs: {
-            ...seed,
             mode,
-            ...(newProductName ? { newProductName } : {}),
-            ...(oldProductName ? { oldProductHint: oldProductName } : {}),
+            ...(args.newProductName ? { newProductName: args.newProductName } : {}),
+            ...(args.oldProductName ? { oldProductHint: args.oldProductName } : {}),
           },
         });
         return;
@@ -1063,7 +1055,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       },
     ) => {
       writeCmdState(msgId, 'confirmed');
-      const echoBits: string[] = [input.email || 'No order email, shop-bought'];
+      const echoBits: string[] = [input.email];
       if (input.contactName) echoBits.push(input.contactName);
       if (input.phone) echoBits.push(input.phone);
       if (input.minimumOrderValue != null) echoBits.push(`MOV £${input.minimumOrderValue}`);
@@ -1243,7 +1235,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
       if (mode === 'add') {
         echo =
           n === 0
-            ? 'Skipped recipes for now'
+            ? 'No recipes selected'
             : `${n} recipe${n === 1 ? '' : 's'}${input.addQty != null ? ` · ${input.addQty}${input.addUom ?? ''} each` : ''}`;
       } else {
         echo =
@@ -3328,6 +3320,7 @@ export function useCommandRunner({ setMessages, setChatStarted, setChatMinimized
     rebalanceFromEstate,
     rebalanceFromSweep,
     finishSweep,
+    pushReceipt,
     undoReceipt,
     restoreMessages,
     snapshotTask,

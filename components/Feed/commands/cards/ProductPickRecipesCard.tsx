@@ -273,17 +273,16 @@ export default function ProductPickRecipesCard({
     if (suggestedCategories.length > 0) {
       return `Pre-selected ${matchCount} ${suggestedCategories.join(' / ').toLowerCase()} recipes`;
     }
-    return 'Pick the recipes it goes in, or skip and do this later';
+    return 'Filter or search to find the recipes';
   })();
 
-  // Submit gating: in add mode, picking recipes is optional. A new
-  // product that came in on a receipt (lemons for the bar) often has
-  // no recipe yet, so zero selected is a valid "skip". If recipes are
-  // selected, the per-recipe quantity has to be sensible (>0).
+  // Submit gating: in add mode, must have a sensible quantity (>0)
+  // and at least one recipe selected (otherwise the wizard has
+  // nothing to do — the operator should cancel instead).
   const addQtyNum = Number(addQty);
   const canSubmit = (() => {
     if (mode === 'replace') return true;
-    if (selectedCount === 0) return true;
+    if (selectedCount === 0) return false;
     return Number.isFinite(addQtyNum) && addQtyNum > 0;
   })();
 
@@ -295,9 +294,7 @@ export default function ProductPickRecipesCard({
       state={state}
       confirmLabel={
         confirmLabelOverride ??
-        ((mode === 'replace' && totalCount === 0) || (mode === 'add' && selectedCount === 0)
-          ? 'Skip, just add the product'
-          : 'Next')
+        (mode === 'replace' && totalCount === 0 ? 'Skip, just add the product' : 'Next')
       }
       confirmDisabled={!canSubmit}
       onCancel={onCancel}
@@ -305,7 +302,7 @@ export default function ProductPickRecipesCard({
         onConfirm({
           recipeIds: Array.from(selected),
           totalMatched: mode === 'replace' ? totalCount : matchCount,
-          ...(mode === 'add' && selectedCount > 0
+          ...(mode === 'add'
             ? { addQty: addQtyNum, addUom }
             : {}),
         })
