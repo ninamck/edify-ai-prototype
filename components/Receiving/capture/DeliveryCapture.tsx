@@ -6,10 +6,11 @@ import CaptureScreen from './CaptureScreen';
 import DoneScreen from './DoneScreen';
 import ReadingScreen from './ReadingScreen';
 import ReviewScreen from './ReviewScreen';
-import { recordCapture, withAccepted, type Recorded } from './record';
+import { deliverySample, rematch } from './match';
+import { recordCapture, type Recorded } from './record';
 import { freshEdits, NO_SETUPS, type Answers, type IssueKind, type LineEdit, type Setups } from './review';
-import { DEFAULT_SAMPLE, poIdFor, SAMPLES, sampleForPo, type Sample, type SampleId } from './samples';
-import { C, Layer, useMounted } from './ui';
+import { DEFAULT_SAMPLE, poIdFor, sampleForPo, type Sample, type SampleId } from './samples';
+import { C, Layer, Popup, useMounted } from './ui';
 
 type Stage = 'capture' | 'reading' | 'review' | 'done';
 
@@ -47,13 +48,16 @@ export default function DeliveryCapture({
   const isWide = useMediaQuery('(min-width: 1100px)');
   const contextSample = poId ? sampleForPo(poId) : null;
   const [sampleId, setSampleId] = useState<SampleId>(contextSample ?? initialSample ?? DEFAULT_SAMPLE);
-  const sample = withAccepted(SAMPLES[sampleId]);
-  const contextPo = contextSample ? sample.poNumbers.find(p => poIdFor(p) === poId) : undefined;
+  /** The orders the person picked instead of Edify's match. Null keeps Edify's. */
+  const [orders, setOrders] = useState<string[] | null>(null);
+  const matched = deliverySample(sampleId, orders);
+  const contextPo = contextSample ? matched.poNumbers.find(p => poIdFor(p) === poId) : undefined;
+  const sample: Sample = contextPo && orders == null ? { ...matched, matchedBy: 'start' } : matched;
 
   const [stage, setStage] = useState<Stage>(startAt);
   const [pagesTaken, setPagesTaken] = useState(initialPages);
   const [captureKey, setCaptureKey] = useState(0);
-  const [edits, setEdits] = useState<Record<string, LineEdit>>(() => freshEdits(SAMPLES[sampleId]));
+  const [edits, setEdits] = useState<Record<string, LineEdit>>(() => freshEdits(deliverySample(sampleId)));
   const [answers, setAnswers] = useState<Answers>({});
   const [setups, setSetups] = useState<Setups>(NO_SETUPS);
   const [done, setDone] = useState<Recorded | null>(null);
@@ -64,7 +68,8 @@ export default function DeliveryCapture({
   const restart = (id: SampleId = sampleId, keepPages = 0) => {
     pickedRef.current = id;
     setSampleId(id);
-    setEdits(freshEdits(SAMPLES[id]));
+    setOrders(null);
+    setEdits(freshEdits(deliverySample(id)));
     setAnswers({});
     setSetups(NO_SETUPS);
     setPagesTaken(keepPages);
@@ -134,6 +139,12 @@ export default function DeliveryCapture({
           onAnswer={onAnswer}
           onSetupProduct={(lineId, p) => setSetups(prev => ({ ...prev, products: { ...prev.products, [lineId]: p } }))}
           onSetupSupplier={s => setSetups(prev => ({ ...prev, supplier: s }))}
+          onPickOrders={next => {
+            const r = rematch(sampleId, next, { edits, answers });
+            setOrders(r.orders);
+            setEdits(r.edits);
+            setAnswers(r.answers);
+          }}
           onBack={startAt === 'review' ? onClose : () => restart()}
           onAccept={accept}
         />
@@ -157,6 +168,13 @@ export default function DeliveryCapture({
     </>
   );
 
+  if (!isPhone && (stage === 'capture' || stage === 'reading')) {
+    return (
+      <Popup label={contextPo ? `Photo for ${contextPo}` : 'Photo a delivery'} onClose={onClose}>
+        {content}
+      </Popup>
+    );
+  }
   if (presentation === 'panel' && !isPhone) {
     return (
       <Layer label="Photo a delivery" background="rgba(0,28,53,0.45)">

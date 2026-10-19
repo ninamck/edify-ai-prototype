@@ -1,22 +1,14 @@
 'use client';
 
 import { Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import DeliveryCapture from '@/components/Receiving/capture/DeliveryCapture';
+import { useSearchParams } from 'next/navigation';
+import ReceiveHome from '@/components/Receiving/ReceiveHome';
 import { isSampleId } from '@/components/Receiving/capture/samples';
 
 function PhotoDelivery() {
-  const router = useRouter();
   const params = useSearchParams();
   const sample = params.get('sample');
-  return (
-    <DeliveryCapture
-      initialSample={isSampleId(sample) ? sample : undefined}
-      poId={params.get('po') ?? undefined}
-      onClose={() => router.push('/receive')}
-      onViewAccepted={() => router.push('/receive/accepted')}
-    />
-  );
+  return <ReceiveHome initialCapture={{ sample: isSampleId(sample) ? sample : undefined, poId: params.get('po') ?? undefined }} />;
 }
 
 export default function PhotoDeliveryPage() {

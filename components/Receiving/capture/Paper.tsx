@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { linesOnPage, paperTotal, SAMPLES, type Sample, type SampleId, type SeedLine } from './samples';
+import { linesOnPage, paperLines, paperTotal, SAMPLES, type Sample, type SampleId, type SeedLine } from './samples';
 
 // Draws a sample document as if photographed on a steel bench. Only used to
 // generate public/delivery-samples/*.jpg (scripts/delivery-samples.mjs); the
@@ -102,7 +102,7 @@ function DeliveryNote({ s, page }: { s: Sample; page: number }) {
             <tr key={l.id} data-line-id={l.id} style={{ borderBottom: '1px dotted #9a9a9a' }}>
               <td style={{ ...cell, textAlign: 'left' }}>{printedCode(l)}</td>
               <td style={{ ...cell, textAlign: 'left' }}>{l.printed}</td>
-              <td style={cell}>{l.ordered ?? ''}</td>
+              <td style={cell}>{l.printedOrdered ?? l.ordered ?? ''}</td>
               <td style={cell}>
                 {l.got}
                 {l.mark && <span style={{ marginLeft: 6, fontWeight: 700 }}>{l.mark}</span>}
@@ -113,7 +113,7 @@ function DeliveryNote({ s, page }: { s: Sample; page: number }) {
       </table>
       {page === s.pages && (
         <div style={{ marginTop: 28, fontSize: 13 }}>
-          <div style={{ fontWeight: 700 }}>{s.lines.length} lines</div>
+          <div style={{ fontWeight: 700 }}>{paperLines(s).length} lines</div>
           <div style={{ marginTop: 18, display: 'flex', alignItems: 'flex-end', gap: 12 }}>
             <span>{s.paper.footer[0]}</span>
             <span style={{ fontFamily: HAND, fontSize: 30, color: '#1c3a8a', transform: 'rotate(-4deg)', display: 'inline-block' }}>Priya S</span>

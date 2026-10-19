@@ -41,8 +41,9 @@ import {
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import DeliveryCapture from '@/components/Receiving/capture/DeliveryCapture';
 import DeliveryFeedCard, { type DeliveryCardState, type DeliveryFocus } from '@/components/Receiving/capture/FeedCard';
-import { recordCapture, withAccepted, type Recorded } from '@/components/Receiving/capture/record';
-import { freshEdits, gbp as formatGbp, NO_SETUPS } from '@/components/Receiving/capture/review';
+import { deliverySample } from '@/components/Receiving/capture/match';
+import { recordCapture, type Recorded } from '@/components/Receiving/capture/record';
+import { freshEdits, gbp as formatGbp, NO_SETUPS, parseChange } from '@/components/Receiving/capture/review';
 import { SAMPLES, sampleForFile, type Sample, type SampleId } from '@/components/Receiving/capture/samples';
 import { PHOTO_DELIVERY_EVENT } from '@/components/useFloorActions';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -7153,9 +7154,9 @@ export default function Feed({
 
   // ── Photo a delivery ──────────────────────────────────────────────
   // The camera opens over the feed. The photo comes back into the chat,
-  // where Edify reads it in a card. Checking opens as a focused screen
-  // (full screen on a phone, a wide panel on desktop), and the result is
-  // posted back as an undoable receipt.
+  // where Edify reads it in a card, and the check happens in that card:
+  // answers are tapped there and changes are typed in the composer. The
+  // result is posted back as an undoable receipt.
   const isPhoneFeed = useMediaQuery('(max-width: 640px)');
   const [deliveryFocus, setDeliveryFocus] = useState<DeliveryFocus | null>(null);
   const [deliveryCards, setDeliveryCards] = useState<Record<string, DeliveryCardState>>({});
@@ -7175,7 +7176,7 @@ export default function Feed({
     setAttachedFileName(null);
     const stamp = Date.now();
     const id = `q-delivery-${stamp}`;
-    setDeliveryCards(prev => ({ ...prev, [id]: { sampleId, pages, status: 'reading' } }));
+    setDeliveryCards(prev => ({ ...prev, [id]: { sampleId, pages, status: 'reading', orders: null, edits: freshEdits(deliverySample(sampleId)), answers: {}, setups: NO_SETUPS } }));
     setMessages(prev => [
       ...prev,
       {
@@ -7199,7 +7200,7 @@ export default function Feed({
     const bits = [rec.grn.grnNumber];
     if (credit > 0) bits.push(`${formatGbp(credit)} credit requested`);
     if (rec.added.length) bits.push(`${rec.added.join(' and ')} added`);
-    if (bits.length === 1) bits.push(`${sample.lines.length} lines received`);
+    if (bits.length === 1) bits.push(`${rec.grn.lines.length} lines received`);
     commandRunner.pushReceipt(
       {
         headline: `${sample.kind === 'receipt' ? 'Receipt' : 'Delivery'} accepted \u00b7 ${sample.supplier}`,
@@ -7221,15 +7222,28 @@ export default function Feed({
     return (
       <DeliveryFeedCard
         state={state}
+        isPhone={isPhoneFeed}
         onReadDone={() => setDeliveryCard(m.id, { status: 'ready' })}
-        onReview={() => setDeliveryFocus({ mode: 'review', msgId: m.id, sampleId: state.sampleId, pages: state.pages })}
-        onAcceptNow={() => {
-          const sample = withAccepted(SAMPLES[state.sampleId]);
-          deliveryAccepted(m.id, sample, recordCapture(sample, freshEdits(sample), {}, NO_SETUPS));
+        onChange={patch => setDeliveryCard(m.id, patch)}
+        onAccept={() => {
+          const sample = deliverySample(state.sampleId, state.orders);
+          deliveryAccepted(m.id, sample, recordCapture(sample, state.edits, state.answers, state.setups));
         }}
         onRetake={() => setDeliveryFocus({ mode: 'capture' })}
       />
     );
+  }
+
+  /** "only 3 eggs" typed in the composer changes the newest delivery still being checked. */
+  function typedDeliveryChange(text: string): string | null {
+    const msg = [...messages].reverse().find(m => m.msgType === 'delivery-photo' && deliveryCards[m.id]?.status === 'ready');
+    if (!msg) return null;
+    const state = deliveryCards[msg.id];
+    const sample = deliverySample(state.sampleId, state.orders);
+    const res = parseChange(text, sample.lines, state.edits);
+    if (!res.ok) return null;
+    setDeliveryCard(msg.id, { edits: { ...state.edits, [res.lineId]: { ...state.edits[res.lineId], ...res.patch } } });
+    return `${res.say} The ${sample.supplier} card above is updated.`;
   }
 
   const deliveryLayer =
@@ -7241,16 +7255,6 @@ export default function Feed({
           setDeliveryFocus(null);
           postDeliveryPhoto(id, pages);
         }}
-      />
-    ) : deliveryFocus?.mode === 'review' ? (
-      <DeliveryCapture
-        key={deliveryFocus.msgId}
-        presentation="panel"
-        startAt="review"
-        initialSample={deliveryFocus.sampleId}
-        initialPages={deliveryFocus.pages}
-        onClose={() => setDeliveryFocus(null)}
-        onAccepted={(sample, rec) => deliveryAccepted(deliveryFocus.msgId, sample, rec)}
       />
     ) : null;
 
@@ -9532,6 +9536,13 @@ export default function Feed({
     // invoice or receipt is read in the chat, ahead of the product-sheet
     // importers that would otherwise claim any attachment.
     if (explicitChart === undefined && !tableOpts) {
+      if (!attachedFileName) {
+        const said = typedDeliveryChange(text);
+        if (said) {
+          setMessages(prev => [...prev, userMsg, { id: `q-delivery-edit-${Date.now()}`, role: 'quinn', text: said, streaming: true }]);
+          return;
+        }
+      }
       if (attachedFileName && isDeliveryPaper(text, attachedFileName)) {
         const id = sampleForFile(attachedFileName);
         postDeliveryPhoto(id, SAMPLES[id].pages, { userText: text, fileName: attachedFileName });

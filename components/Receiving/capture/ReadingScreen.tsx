@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Check, Loader2, X } from 'lucide-react';
 import { freshEdits, review } from './review';
-import type { Sample } from './samples';
+import { paperLines, type Sample } from './samples';
 import { C, IconButton, keepIds, photoFor, PrimaryButton, SecondaryButton } from './ui';
 
 const STEP_MS = 850;
@@ -41,7 +41,7 @@ export default function ReadingScreen({ sample, pagesTaken, contextPo, onReady, 
   const kind = KIND_WORD[sample.kind];
 
   const { steps, stop } = useMemo(() => {
-    const lines = sample.lines.length;
+    const lines = paperLines(sample).length;
     const read: Step = {
       doing: 'Reading the photo',
       done:
@@ -58,7 +58,9 @@ export default function ReadingScreen({ sample, pagesTaken, contextPo, onReady, 
         ? { doing: 'Looking for an order', done: 'No order behind it: it\u2019s a shop receipt' }
         : contextPo
           ? { doing: `Checking against ${contextPo}`, done: `Checked against ${contextPo}` }
-          : { doing: 'Finding your order', done: `Matched to ${sample.poNumbers.join(' and ')}` };
+          : sample.poNumbers.length === 0
+            ? { doing: 'Finding your order', done: `No open order from ${sample.supplier}` }
+            : { doing: 'Finding your order', done: `Matched to ${sample.poNumbers.join(' and ')}` };
     const r = review(sample, freshEdits(sample), {});
     const check: Step = {
       doing: 'Checking every line',

@@ -1,9 +1,9 @@
 'use client';
 
-import { useRef, useState, type DragEvent } from 'react';
-import { Check, FileUp, Upload, X } from 'lucide-react';
+import { useId, useRef, useState, type DragEvent } from 'react';
+import { Check, ChevronDown, FileUp, Upload, X } from 'lucide-react';
 import { SAMPLES, SAMPLE_ORDER, type Sample, type SampleId } from './samples';
-import { C, card, IconButton, photoFor, PrimaryButton } from './ui';
+import { C, IconButton, photoFor, PrimaryButton } from './ui';
 
 interface Props {
   sample: Sample;
@@ -192,13 +192,15 @@ function DropZone({ sample, contextPo, onSampleChange, onDone, onClose }: Props)
     onDone(pagesOf(sample));
   };
   const tiles = contextPo ? [sample.id] : SAMPLE_ORDER;
+  const [showSamples, setShowSamples] = useState(false);
+  const samplesId = useId();
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: '40px 24px' }}>
-      <div style={{ ...card, maxWidth: 760, margin: '0 auto', padding: '24px 28px 28px' }}>
+    <div>
+      <div style={{ padding: '24px 28px 28px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
           <div style={{ flex: 1 }}>
-            <h1 style={{ margin: 0, fontSize: 28, fontWeight: 600, lineHeight: 1.2 }}>{contextPo ? `Photo for ${contextPo}` : 'Photo a delivery'}</h1>
+            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 600, lineHeight: 1.25 }}>{contextPo ? `Photo for ${contextPo}` : 'Photo a delivery'}</h2>
             <p style={{ margin: '8px 0 0', fontSize: 16, color: C.muted, lineHeight: 1.5 }}>
               {contextPo
                 ? `Add the delivery note or invoice from ${sample.supplier}. Edify checks every line against ${contextPo}.`
@@ -226,7 +228,7 @@ function DropZone({ sample, contextPo, onSampleChange, onDone, onClose }: Props)
             textAlign: 'center',
           }}
         >
-          <FileUp size={28} color="#6B5E55" aria-hidden />
+          <FileUp size={28} color="#6B5E55" aria-hidden style={{ display: 'block', margin: '0 auto' }} />
           <div style={{ fontSize: 16, fontWeight: 600, marginTop: 8 }}>Drop photos or a PDF here</div>
           <div style={{ fontSize: 14, color: C.muted, marginTop: 4 }}>Add every page. Two-page invoices are fine.</div>
           <div style={{ width: 200, margin: '16px auto 0' }}>
@@ -235,9 +237,36 @@ function DropZone({ sample, contextPo, onSampleChange, onDone, onClose }: Props)
           <input ref={fileRef} type="file" accept="image/*,application/pdf" multiple hidden onChange={() => onDone(pagesOf(sample))} />
         </div>
 
-        <div style={{ marginTop: 28 }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{contextPo ? 'The sample for this delivery' : 'Samples in this prototype'}</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12, marginTop: 10 }}>
+        <div style={{ marginTop: 20, borderTop: `1px solid ${C.subtle}`, paddingTop: 8 }}>
+          <button
+            type="button"
+            aria-expanded={showSamples}
+            aria-controls={samplesId}
+            onClick={() => setShowSamples(v => !v)}
+            style={{
+              width: '100%',
+              minHeight: 44,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: 0,
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-primary)',
+              fontSize: 14,
+              fontWeight: 600,
+              color: C.ink,
+              textAlign: 'left',
+            }}
+          >
+            <span style={{ flex: 1 }}>
+              {contextPo ? 'The sample for this delivery' : 'Samples in this prototype'}
+              <span style={{ fontWeight: 500, color: C.muted }}>{contextPo ? '' : ` \u00b7 ${tiles.length}`}</span>
+            </span>
+            <ChevronDown size={20} aria-hidden style={{ transform: showSamples ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+          </button>
+          <div id={samplesId} hidden={!showSamples} style={{ display: showSamples ? 'grid' : 'none', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12, marginTop: 8 }}>
             {tiles.map(id => {
               const s = SAMPLES[id];
               const thumb = photoFor(s)?.pages[0];

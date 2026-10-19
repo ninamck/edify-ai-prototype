@@ -4,8 +4,9 @@
 // crop a line out of the real image. Needs `npm run dev` running.
 // Uses the @playwright/test install in edify/web-v2. Run with
 // PLAYWRIGHT_BROWSERS_PATH="$HOME/Library/Caches/ms-playwright" node scripts/delivery-samples.mjs
+// ONLY=wrong-order,no-order redoes just those samples and keeps the rest.
 import { createRequire } from 'node:module';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,18 +23,23 @@ const SAMPLES = [
   ['new-price', 1],
   ['receipt', 1],
   ['two-pos', 2],
+  ['wrong-order', 1],
+  ['no-order', 1],
+  ['unsure', 1],
   ['blurry', 1],
   ['menu', 1],
 ];
 
 const outDir = path.join(root, 'public/delivery-samples');
 mkdirSync(outDir, { recursive: true });
+const manifestFile = path.join(root, 'components/Receiving/capture/samplePhotos.ts');
+const only = process.env.ONLY?.split(',');
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1000, height: 1300 }, deviceScaleFactor: 1.5 });
-const manifest = {};
+const manifest = only ? JSON.parse(readFileSync(manifestFile, 'utf8').split('SAMPLE_PHOTOS: Partial<Record<SampleId, SamplePhoto>> = ')[1].replace(/;\s*$/, '')) : {};
 
-for (const [sample, pages] of SAMPLES) {
+for (const [sample, pages] of SAMPLES.filter(([s]) => !only || only.includes(s))) {
   manifest[sample] = { pages: [], lines: {} };
   for (let p = 1; p <= pages; p++) {
     await page.goto(`${BASE}/dev/delivery-paper?sample=${sample}&page=${p}`, { waitUntil: 'networkidle', timeout: 90000 });
@@ -84,5 +90,5 @@ export interface SamplePhoto {
 
 export const SAMPLE_PHOTOS: Partial<Record<SampleId, SamplePhoto>> = ${JSON.stringify(manifest, null, 2)};
 `;
-writeFileSync(path.join(root, 'components/Receiving/capture/samplePhotos.ts'), ts);
+writeFileSync(manifestFile, ts);
 console.log('Wrote samplePhotos.ts');

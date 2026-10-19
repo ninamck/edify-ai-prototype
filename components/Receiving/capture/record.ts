@@ -12,8 +12,8 @@ import {
   type POStatus,
   type VarianceResolution,
 } from '../mockData';
-import { answerFor, gbp, outcomes, review, type Answers, type IssueKind, type LineEdit, type Setups } from './review';
-import { poIdFor, type Sample, type SampleId, type SeedLine } from './samples';
+import { answerFor, gbp, outcomes, review, settledLines, splitAcrossOrders, type Answers, type IssueKind, type LineEdit, type Setups } from './review';
+import type { Sample, SampleId, SeedLine } from './samples';
 
 // Accepting a photographed delivery writes one GRN for the whole paper,
 // settles the order lines it covers, and raises one credit note per reason.
@@ -56,11 +56,17 @@ const RESOLUTION: Record<string, VarianceResolution> = {
 };
 
 function poLineIdFor(sample: Sample, l: SeedLine, poNumber?: string): string {
-  return l.issue?.kind === 'which-po' && poNumber ? `${sample.id}-${l.id}-${poNumber}` : `${sample.id}-${l.id}`;
+  if (l.issue?.kind === 'which-po' && poNumber) return l.issue.options.find(o => o.poNumber === poNumber)?.poLineId ?? `${sample.id}-${l.id}-${poNumber}`;
+  return l.poLineId ?? `${sample.id}-${l.id}`;
 }
 
 function slug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+/** The receiving store only knows five units. */
+function commitUnit(uom: string | undefined): 'Each' | 'kg' | 'L' | 'g' | 'ml' {
+  return ({ GRAM: 'g', KILOGRAM: 'kg', LITRE: 'L', MILLILITRE: 'ml' } as const)[uom as 'GRAM'] ?? 'Each';
 }
 
 function today() {
@@ -73,7 +79,7 @@ function today() {
 
 export function recordCapture(sample: Sample, edits: Record<string, LineEdit>, answers: Answers, setups: Setups, receivedBy = 'Ed Barry'): Recorded {
   const r = review(sample, edits, answers, setups);
-  const itemFor = new Map(r.toCheck.filter(i => i.line).map(i => [i.line!.id, i]));
+  const itemFor = new Map(r.toCheck.filter(i => i.line && i.issue.kind !== 'unsure').map(i => [i.line!.id, i]));
   const stamp = Date.now();
   const { date, time } = today();
 
@@ -82,7 +88,7 @@ export function recordCapture(sample: Sample, edits: Record<string, LineEdit>, a
   const alternatives: DeliveryCommitAlternative[] = [];
   const credits: { reason: CreditNoteReason; amount: number; why: string }[] = [];
 
-  sample.lines.forEach((l, idx) => {
+  settledLines(sample, answers).forEach((l, idx) => {
     const e = edits[l.id];
     const item = itemFor.get(l.id);
     const choice = item ? answerFor(answers, item) : undefined;
@@ -99,6 +105,7 @@ export function recordCapture(sample: Sample, edits: Record<string, LineEdit>, a
       expectedQty: l.ordered ?? e.got,
       receivedQty: e.got,
       extractedText: l.printed,
+      decision: l.paired ? `${receivedBy} matched \u201c${l.printed}\u201d to ${l.name}.` : undefined,
     };
     const commit = (receivedQty: number, resolution?: VarianceResolution, poNumber?: string) => {
       if (l.ordered == null && l.issue?.kind !== 'which-po') return;
@@ -106,9 +113,25 @@ export function recordCapture(sample: Sample, edits: Record<string, LineEdit>, a
     };
     if (credit > 0 && kind && CREDIT_REASON[kind]) credits.push({ reason: CREDIT_REASON[kind]!, amount: credit, why: `${item!.issue.title}: ${gbp(credit)}` });
 
+    if (l.issue?.kind === 'which-po') {
+      const split = splitAcrossOrders(l.issue.options, e.got);
+      const res = choice ? RESOLUTION[choice] : undefined;
+      grnLines.push({
+        ...base,
+        poLineId: poLineIdFor(sample, l, split[0]?.poNumber),
+        varianceResolution: res,
+        decision: `${split.map(o => `${o.qty} on ${o.poNumber}`).join(', ')}.`,
+      });
+      for (const o of split) {
+        if (o.qty === 0 && choice !== 'close') continue;
+        commit(o.qty, o.owed > 0 ? res : undefined, o.poNumber);
+      }
+      return;
+    }
+
     switch (kind) {
       case undefined:
-        grnLines.push({ ...base, decision: l.links ? `Linked to ${l.links}.` : undefined });
+        grnLines.push({ ...base, decision: l.links ? `Linked to ${l.links}.` : base.decision });
         commit(e.got);
         return;
       case 'short': {
@@ -147,9 +170,9 @@ export function recordCapture(sample: Sample, edits: Record<string, LineEdit>, a
           ...base,
           decision:
             choice === 'pay'
-              ? `Paid ${gbp(l.price ?? 0)}, up from ${gbp(l.orderPrice ?? 0)}. Price updated.`
+              ? `Price updated from ${gbp(l.orderPrice ?? 0)} to ${gbp(l.price ?? 0)}.`
               : choice === 'once'
-                ? `Paid ${gbp(l.price ?? 0)} this time only.`
+                ? `${gbp(l.price ?? 0)} on this delivery only. Price stays ${gbp(l.orderPrice ?? 0)}.`
                 : `Invoice says ${gbp(l.price ?? 0)}. Credit asked for the difference from ${gbp(l.orderPrice ?? 0)}.`,
         });
         commit(e.got);
@@ -178,12 +201,12 @@ export function recordCapture(sample: Sample, edits: Record<string, LineEdit>, a
             originPoLineId: base.poLineId,
             masterProductId: `mp-${slug(p?.master ?? s.master)}`,
             masterName: p?.master ?? s.master,
-            masterUnit: p?.unitType ?? 'Each',
+            masterUnit: commitUnit(p?.unitOfMeasure),
             productName: p?.name ?? s.sentName,
             supplierCode: p?.code ?? s.sentCode,
-            packType: p?.packType ?? 'Single',
+            packType: (p?.packQty ?? 1) > 1 ? 'Pack' : 'Single',
             packQty: p?.packQty ?? 1,
-            singleUnitType: p?.unitType ?? 'Each',
+            singleUnitType: commitUnit(p?.unitOfMeasure),
             packCost: p?.packCost ?? s.sentPrice ?? price,
             receivedQty: e.got,
             supplierName: sample.supplier,
@@ -210,10 +233,6 @@ export function recordCapture(sample: Sample, edits: Record<string, LineEdit>, a
           grnLines.push({ ...base, poLineId: `extra-${l.id}`, expectedQty: 0, receivedQty: 0, returned: { qty: e.got, reason: 'not wanted' } });
         }
         return;
-      case 'which-po':
-        grnLines.push({ ...base, poLineId: poLineIdFor(sample, l, choice), decision: `Received on ${choice}.` });
-        commit(e.got, undefined, choice);
-        return;
       case 'new-product': {
         const p = setups.products[l.id];
         grnLines.push(
@@ -226,7 +245,7 @@ export function recordCapture(sample: Sample, edits: Record<string, LineEdit>, a
     }
   });
 
-  const pos = sample.poNumbers.map(n => MOCK_POS.find(p => p.id === poIdFor(n))).filter((p): p is NonNullable<typeof p> => !!p);
+  const pos = sample.poNumbers.map(n => MOCK_POS.find(p => p.poNumber === n)).filter((p): p is NonNullable<typeof p> => !!p);
   const snapshot: { id: string; lines: POLine[]; status: POStatus }[] = pos.map(p => ({ id: p.id, lines: p.lines.map(x => ({ ...x })), status: p.status }));
   if (pos.length) applyReceiptToPOs({ pos, lines: commits, alternatives });
 

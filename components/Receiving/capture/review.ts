@@ -1,3 +1,4 @@
+import { UOM_SHORT, unitTypeLabel } from './productOptions';
 import { poFor, type ProductSeed, type Sample, type SeedLine, type SupplierSeed } from './samples';
 
 // What on a delivery needs a person, the answers they can give, and what each
@@ -15,7 +16,9 @@ export type IssueKind =
   | 'extra'
   | 'which-po'
   | 'new-product'
-  | 'new-supplier';
+  | 'new-supplier'
+  | 'no-order'
+  | 'unsure';
 
 export interface Choice {
   id: string;
@@ -23,6 +26,10 @@ export interface Choice {
   /** Shown under the label when this choice is picked. */
   note?: string;
   credit?: number;
+  /** Heading the choice sits under in a dropdown. */
+  group?: string;
+  /** Second line under the label in a dropdown. */
+  detail?: string;
 }
 
 export interface Issue {
@@ -31,6 +38,10 @@ export interface Issue {
   detail: string;
   choices: Choice[];
   suggested?: string;
+  /** Edify's one guess, offered as a single tap but never picked for the person. */
+  guess?: { id: string; label: string };
+  /** Shown under the choices until the person answers. */
+  hint?: string;
 }
 
 /** What the person changed on a line, on top of what Edify read. */
@@ -51,6 +62,7 @@ export interface Setups {
 export const NO_SETUPS: Setups = { products: {} };
 
 export const SUPPLIER_KEY = '__supplier';
+export const ORDER_KEY = '__order';
 
 const PRICE_TOLERANCE = 0.02;
 
@@ -62,12 +74,38 @@ export function hasPrices(sample: Sample): boolean {
   return sample.kind === 'invoice' || sample.kind === 'receipt';
 }
 
+/** A supplier's paper with no order behind it. Receipts never have one. */
+export function hasNoOrder(sample: Sample): boolean {
+  return sample.kind !== 'receipt' && sample.kind !== 'menu' && sample.poNumbers.length === 0;
+}
+
+/** "PO-10482, the order number on the invoice". */
+export function orderWords(sample: Sample): string {
+  const pos = sample.poNumbers.join(' and ');
+  const kind = sample.kind === 'invoice' ? 'invoice' : 'delivery note';
+  if (sample.matchedBy === 'you') return `${pos}, the order you picked`;
+  if (sample.matchedBy === 'start') return `${pos}, the order you took the photo for`;
+  return `${pos}, the order ${sample.poNumbers.length > 1 ? 'numbers' : 'number'} on the ${kind}`;
+}
+
 export function freshEdits(sample: Sample): Record<string, LineEdit> {
   return Object.fromEntries(sample.lines.map(l => [l.id, { got: l.got, damaged: 0, wrong: false }]));
 }
 
 function unitPrice(l: SeedLine): number {
   return l.price ?? l.orderPrice ?? 0;
+}
+
+/** One product on several orders: what arrived fills them in the order they were placed. */
+export function splitAcrossOrders(options: { poNumber: string; ordered: number; label: string }[], got: number) {
+  let left = got;
+  const split = options.map(o => {
+    const qty = Math.min(left, o.ordered);
+    left -= qty;
+    return { ...o, qty, owed: o.ordered - qty };
+  });
+  if (left > 0 && split.length) split[split.length - 1].qty += left;
+  return split;
 }
 
 export function lineIssue(sample: Sample, l: SeedLine, e: LineEdit): Issue | null {
@@ -100,7 +138,7 @@ export function lineIssue(sample: Sample, l: SeedLine, e: LineEdit): Issue | nul
     return {
       kind: 'extra',
       title: l.name,
-      detail: `Not on ${po}. Got ${e.got}${at}.`,
+      detail: hasNoOrder(sample) ? `Not in your catalogue yet. Got ${e.got}${at}.` : `Not on ${po}. Got ${e.got}${at}.`,
       choices: [
         { id: 'keep', label: seed.inCatalogue ? 'Keep it' : 'Keep it, add to your catalogue' },
         priced
@@ -111,11 +149,23 @@ export function lineIssue(sample: Sample, l: SeedLine, e: LineEdit): Issue | nul
   }
 
   if (seed?.kind === 'which-po') {
+    const split = splitAcrossOrders(seed.options, e.got);
+    const owed = split.filter(o => o.owed > 0);
+    if (owed.length === 0) return null;
+    const total = split.reduce((n, o) => n + o.ordered, 0);
+    const missing = owed.reduce((n, o) => n + o.owed, 0);
+    const filled = split.filter(o => o.owed === 0).map(o => o.label);
+    const short = owed.map(o => o.label).join(' and ');
     return {
       kind: 'which-po',
       title: l.name,
-      detail: `Got ${e.got}. It\u2019s on both orders, and the one you don\u2019t pick stays open.`,
-      choices: seed.options.map(o => ({ id: o.poNumber, label: `${o.poNumber}, ${o.label}` })),
+      detail:
+        `Ordered ${total} across your ${seed.options.map(o => o.label).join(' and ')}. Got ${e.got}` +
+        (filled.length ? `, so Edify filled the ${filled.join(' and ')}. The ${short} is ${missing} short.` : `. The ${short} is ${missing} short.`),
+      choices: [
+        { id: 'later', label: `Keep the ${short} open, ${missing} still to come` },
+        { id: 'close', label: `Close the ${short}, the rest isn\u2019t coming` },
+      ],
     };
   }
 
@@ -161,6 +211,17 @@ export function lineIssue(sample: Sample, l: SeedLine, e: LineEdit): Issue | nul
   if (l.ordered != null && e.got < l.ordered) {
     const missing = l.ordered - e.got;
     const note = e.got === l.got && l.note ? ` ${l.note}` : '';
+    if (l.notOnPaper) {
+      return {
+        kind: 'short',
+        title: l.name,
+        detail: note ? `${note.trim()} Ordered ${l.ordered}.` : `Got ${e.got}, ordered ${l.ordered}.`,
+        choices: [
+          { id: 'later', label: 'Coming in the next delivery', note: `The ${missing} stay on ${po}.` },
+          { id: 'close', label: 'Not coming, nothing owed' },
+        ],
+      };
+    }
     return {
       kind: 'short',
       title: l.name,
@@ -194,20 +255,29 @@ export function lineIssue(sample: Sample, l: SeedLine, e: LineEdit): Issue | nul
       kind: 'price',
       title: l.name,
       detail: `${gbp(l.price)} each on the invoice, ${gbp(l.orderPrice)} on your order. ${diff > 0 ? 'Up' : 'Down'} ${pct}%.`,
-      choices:
-        diff > 0
-          ? [
-              { id: 'pay', label: `Pay ${gbp(l.price)} and update your price` },
-              { id: 'credit', label: `Pay ${gbp(l.orderPrice)}, ask for ${gbp(diff * e.got)} credit`, credit: diff * e.got },
-            ]
-          : [
-              { id: 'pay', label: `Pay ${gbp(l.price)} and update your price` },
-              { id: 'once', label: `Pay ${gbp(l.price)} this time only` },
-            ],
+      choices: [
+        { id: 'pay', label: 'Update your price' },
+        ...(diff > 0 ? [{ id: 'credit', label: `Ask for ${gbp(diff * e.got)} credit`, credit: diff * e.got }] : []),
+        { id: 'once', label: 'Ignore', note: `Your price stays ${gbp(l.orderPrice)}. This delivery is costed at ${gbp(l.price)}.` },
+      ],
     };
   }
 
   return null;
+}
+
+/** No order to check against: find it, or say there isn't one. Never pre-picked. */
+export function orderIssue(sample: Sample): Issue | null {
+  if (!hasNoOrder(sample)) return null;
+  const kind = sample.kind === 'invoice' ? 'invoice' : 'delivery note';
+  return sample.matchedBy === 'you'
+    ? { kind: 'no-order', title: 'Not on an order', detail: 'You said this delivery isn\u2019t on any order.', choices: [{ id: 'none', label: 'Receive it with no order' }] }
+    : {
+        kind: 'no-order',
+        title: `No open order from ${sample.supplier}`,
+        detail: `Nothing from ${sample.supplier} is due at ${sample.site}, and there\u2019s no order number on the ${kind}.`,
+        choices: [{ id: 'none', label: 'Receive it with no order' }],
+      };
 }
 
 export function supplierIssue(sample: Sample): Issue | null {
@@ -217,6 +287,70 @@ export function supplierIssue(sample: Sample): Issue | null {
     title: `${sample.supplier} isn\u2019t in Edify yet`,
     detail: 'Add it once and next time it\u2019s matched for you.',
     choices: [{ id: 'add', label: `Add ${sample.supplier}` }],
+  };
+}
+
+// ─── Lines Edify couldn't link to the order ─────────────────────────────────
+
+/**
+ * What the person said each unsure line is: an order line's id, or 'none'.
+ * Order lines already picked, and the ones still in question, are hidden so
+ * the same product is never asked about twice.
+ */
+function pairing(sample: Sample, answers: Answers) {
+  const picked = new Map<string, string>();
+  const waiting = new Set<string>();
+  for (const l of sample.lines) {
+    if (l.issue?.kind !== 'unsure') continue;
+    const a = answers[l.id];
+    if (a?.kind === 'unsure') picked.set(l.id, a.choice);
+    else l.issue.candidates.forEach(id => waiting.add(id));
+  }
+  return { picked, hidden: new Set([...waiting, ...picked.values()]) };
+}
+
+/** An unsure line once answered: the order line it is, or a line on no order. */
+function asPaired(sample: Sample, l: SeedLine, choice: string): SeedLine {
+  if (choice === 'none') return { ...l, issue: { kind: 'extra', inCatalogue: !l.setup } };
+  const o = sample.lines.find(x => x.id === choice);
+  if (!o) return l;
+  return { ...l, name: o.name, pack: o.pack, ordered: o.ordered, orderPrice: o.orderPrice, poNumber: o.poNumber, poLineId: o.poLineId ?? `${sample.id}-${o.id}`, issue: undefined, paired: true };
+}
+
+/** Every line as the person's answers leave it: what an unsure line was matched to replaces it. */
+export function settledLines(sample: Sample, answers: Answers): SeedLine[] {
+  const { picked, hidden } = pairing(sample, answers);
+  return sample.lines.filter(l => !hidden.has(l.id)).map(l => (picked.has(l.id) ? asPaired(sample, l, picked.get(l.id)!) : l));
+}
+
+/** Which product on the order an unsure line is. Edify's guess comes first but is never picked for the person. */
+function unsureIssue(sample: Sample, l: SeedLine, e: LineEdit, picked: Map<string, string>): Issue | null {
+  if (l.issue?.kind !== 'unsure') return null;
+  const seed = l.issue;
+  const po = poFor(sample, l) ?? 'your order';
+  const kind = sample.kind === 'invoice' ? 'invoice' : 'delivery note';
+  const elsewhere = new Set([...picked].filter(([id]) => id !== l.id).map(([, c]) => c));
+  const open = sample.lines.filter(x => x.notOnPaper && !elsewhere.has(x.id));
+  const rank = (id: string) => (seed.candidates.includes(id) ? seed.candidates.indexOf(id) : seed.candidates.length);
+  const likely = seed.candidates.length === 1 ? 'Most likely' : 'Could be';
+  const guess = seed.candidates.length === 1 ? open.find(x => x.id === seed.candidates[0]) : undefined;
+  return {
+    kind: 'unsure',
+    title: `\u201c${l.printed}\u201d`,
+    detail: `Got ${e.got}. ${seed.why}`,
+    choices: [
+      ...[...open]
+        .sort((a, b) => rank(a.id) - rank(b.id))
+        .map(x => ({
+          id: x.id,
+          label: x.name,
+          detail: `Ordered ${x.ordered} \u00b7 ${x.pack}`,
+          group: seed.candidates.includes(x.id) ? likely : `Also on ${po}, not on the ${kind}`,
+        })),
+      { id: 'none', label: `It isn\u2019t on ${po}`, detail: 'Keep it as an extra, or send it back' },
+    ],
+    guess: guess && { id: guess.id, label: guess.name },
+    hint: seed.candidates.length > 1 ? 'The one you don\u2019t pick shows as not delivered.' : undefined,
   };
 }
 
@@ -237,18 +371,17 @@ export function setupDone(item: CheckItem, setups: Setups): boolean {
 }
 
 /** Price per kg, L or item, for showing what a pack really costs. */
-export function unitCost(p: ProductSeed): string {
-  const items = p.packQty * p.unitSize;
-  if (items <= 0) return '';
-  if (p.unitType === 'Each') return `${gbp(p.packCost / p.packQty)} each`;
-  if (p.unitType === 'g') return `${gbp((p.packCost / items) * 1000)} per kg`;
-  if (p.unitType === 'ml') return `${gbp((p.packCost / items) * 1000)} per L`;
-  return `${gbp(p.packCost / items)} per ${p.unitType}`;
+/** As on the product page: pack cost ÷ pack quantity. */
+export function unitCost(p: Pick<ProductSeed, 'packCost' | 'packQty'>): string {
+  return p.packQty > 0 && p.packCost > 0 ? gbp(p.packCost / p.packQty) : '\u2014';
 }
 
+/** "Pack of 6 × 125g", "1L carton", "30g packet". */
 export function packWords(p: ProductSeed): string {
-  const size = p.unitType === 'Each' ? 'item' : `${p.unitSize}${p.unitType}`;
-  return p.packType === 'Single' ? (p.unitType === 'Each' ? 'Single item' : size) : `Pack of ${p.packQty} \u00d7 ${size}`;
+  const size = p.unitSize && p.unitOfMeasure && UOM_SHORT[p.unitOfMeasure] ? `${p.unitSize}${UOM_SHORT[p.unitOfMeasure]}` : '';
+  const single = /^(Each|Item)$/.test(p.singleUnitType) ? '' : unitTypeLabel(p.singleUnitType).toLowerCase();
+  const item = [size, single].filter(Boolean).join(' ') || 'item';
+  return p.packQty > 1 ? `${unitTypeLabel(p.packType)} of ${p.packQty} \u00d7 ${item}` : item;
 }
 
 export interface CheckItem {
@@ -260,6 +393,8 @@ export interface CheckItem {
 export interface ReviewState {
   toCheck: CheckItem[];
   matches: SeedLine[];
+  /** Lines shown, across To check and Matches. */
+  lineCount: number;
   /** Items still without an answer. */
   open: number;
   credit: number;
@@ -280,9 +415,22 @@ export function isSuggested(answers: Answers, item: CheckItem): boolean {
 export function review(sample: Sample, edits: Record<string, LineEdit>, answers: Answers, setups: Setups = NO_SETUPS): ReviewState {
   const toCheck: CheckItem[] = [];
   const matches: SeedLine[] = [];
+  const order = orderIssue(sample);
+  if (order) toCheck.push({ key: ORDER_KEY, issue: order });
   const sup = supplierIssue(sample);
   if (sup) toCheck.push({ key: SUPPLIER_KEY, issue: sup });
+  const { picked, hidden } = pairing(sample, answers);
   for (const l of sample.lines) {
+    if (hidden.has(l.id)) continue;
+    const pair = unsureIssue(sample, l, edits[l.id], picked);
+    if (pair) {
+      toCheck.push({ key: l.id, line: l, issue: pair });
+      const choice = picked.get(l.id);
+      const then = choice ? asPaired(sample, l, choice) : null;
+      const next = then && lineIssue(sample, then, edits[l.id]);
+      if (then && next) toCheck.push({ key: `${l.id}:${choice}`, line: then, issue: next });
+      continue;
+    }
     const issue = lineIssue(sample, l, edits[l.id]);
     if (issue) toCheck.push({ key: l.id, line: l, issue });
     else matches.push(l);
@@ -294,7 +442,8 @@ export function review(sample: Sample, edits: Record<string, LineEdit>, answers:
     if (!choice || (setupFor(item, choice.id) && !setupDone(item, setups))) open++;
     else credit += choice.credit ?? 0;
   }
-  return { toCheck, matches, open, credit };
+  const lineCount = new Set([...toCheck.flatMap(i => (i.line ? [i.line.id] : [])), ...matches.map(l => l.id)]).size;
+  return { toCheck, matches, lineCount, open, credit };
 }
 
 export function acceptLabel(sample: Sample, r: ReviewState): string {
@@ -309,7 +458,7 @@ export function outcomes(sample: Sample, edits: Record<string, LineEdit>, answer
   const masterOf = (l: SeedLine | undefined, fallback: string) => (l && setups.products[l.id]?.master) || fallback;
   const out: string[] = [];
   const n = r.matches.length;
-  if (sample.kind === 'receipt') {
+  if (sample.kind === 'receipt' || hasNoOrder(sample)) {
     if (n > 0) out.push(`${n} ${n === 1 ? 'line' : 'lines'} linked to your products.`);
   } else if (n > 0) {
     out.push(r.toCheck.length === 0 ? `All ${n} lines received as ordered.` : `${n} ${n === 1 ? 'line' : 'lines'} received as ordered.`);
@@ -320,14 +469,18 @@ export function outcomes(sample: Sample, edits: Record<string, LineEdit>, answer
     const l = item.line;
     const e = l ? edits[l.id] : undefined;
     const credit = choice.credit != null ? gbp(choice.credit) : '';
-    const name = item.issue.title;
+    const name = l?.name ?? item.issue.title;
     switch (item.issue.kind) {
       case 'new-supplier':
         out.push(`${setups.supplier?.name ?? sample.supplier} added as a shop. No ordering.`);
         break;
+      case 'no-order':
+        out.push(`Received with no order from ${sample.supplier}, costed at your prices.`);
+        break;
       case 'short':
         if (!l || !e || l.ordered == null) break;
         if (choice.id === 'credit') out.push(`${name}: ${e.got} received, ${credit} credit requested from ${sample.supplier}.`);
+        else if (e.got === 0) out.push(choice.id === 'later' ? `${name}: none received, all ${l.ordered} stay on ${poFor(sample, l)}.` : `${name}: none received, closed.`);
         else if (choice.id === 'later') out.push(`${name}: ${e.got} received, the other ${l.ordered - e.got} stay on ${poFor(sample, l)}.`);
         else out.push(`${name}: ${e.got} received, closed short.`);
         break;
@@ -349,9 +502,9 @@ export function outcomes(sample: Sample, edits: Record<string, LineEdit>, answer
         if (!l) break;
         out.push(
           choice.id === 'pay'
-            ? `${name}: paid at ${gbp(l.price ?? 0)}, your price is updated.`
+            ? `${name}: your price is now ${gbp(l.price ?? 0)}.`
             : choice.id === 'once'
-              ? `${name}: paid at ${gbp(l.price ?? 0)} this time.`
+              ? `${name}: ${gbp(l.price ?? 0)} on this delivery only. Your price stays ${gbp(l.orderPrice ?? 0)}.`
               : `${name}: ${credit} credit requested for the price difference.`,
         );
         break;
@@ -375,13 +528,23 @@ export function outcomes(sample: Sample, edits: Record<string, LineEdit>, answer
         break;
       case 'which-po': {
         if (l?.issue?.kind !== 'which-po' || !e) break;
-        const other = l.issue.options.find(o => o.poNumber !== choice.id);
-        out.push(`${name}: received on ${choice.id}.${other ? ` ${other.poNumber} stays open for ${other.ordered}.` : ''}`);
+        const split = splitAcrossOrders(l.issue.options, e.got);
+        const owed = split.filter(o => o.owed > 0);
+        const missing = owed.reduce((n, o) => n + o.owed, 0);
+        const short = owed.map(o => `${o.label} (${o.poNumber})`).join(' and ');
+        out.push(choice.id === 'close' ? `${name}: ${e.got} received. The ${short} is closed ${missing} short.` : `${name}: ${e.got} received. The ${short} stays open for ${missing}.`);
         break;
       }
       case 'new-product':
         out.push(choice.id === 'add' ? `${name}: added to your catalogue under ${masterOf(l, name)}.` : `${name}: left out of stock.`);
         break;
+      case 'unsure': {
+        const o = sample.lines.find(x => x.id === choice.id);
+        if (!l || !e || !o) break;
+        const asked = r.toCheck.some(i => i.key === `${l.id}:${choice.id}`);
+        out.push(asked ? `\u201c${l.printed}\u201d matched to ${o.name}.` : `${o.name}: ${e.got} received, matched by you to \u201c${l.printed}\u201d.`);
+        break;
+      }
     }
   }
   if (sample.kind === 'receipt') out.push('Marked off-contract, so it shows in off-contract spend.');

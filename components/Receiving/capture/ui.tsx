@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useId, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent as KeyEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Minus, Plus, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { Check, ChevronDown, Minus, Plus, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { SAMPLE_PHOTOS, type SamplePhoto } from './samplePhotos';
 import type { Sample } from './samples';
 import type { Choice } from './review';
@@ -92,8 +92,8 @@ export function PrimaryButton({ children, onClick, disabled, type = 'button' }: 
       disabled={disabled}
       style={{
         width: '100%',
-        minHeight: 52,
-        padding: '12px 20px',
+        minHeight: 48,
+        padding: '10px 20px',
         borderRadius: 12,
         border: 'none',
         background: disabled ? '#E8E6E3' : C.navy,
@@ -117,8 +117,8 @@ export function SecondaryButton({ children, onClick }: { children: ReactNode; on
       onClick={onClick}
       style={{
         width: '100%',
-        minHeight: 52,
-        padding: '12px 20px',
+        minHeight: 48,
+        padding: '10px 20px',
         borderRadius: 12,
         border: `1.5px solid ${C.border}`,
         background: '#fff',
@@ -159,6 +159,30 @@ export function TextLink({ children, onClick }: { children: ReactNode; onClick: 
   );
 }
 
+/** A link inside a sentence. */
+export function InlineLink({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'inline',
+        padding: 0,
+        border: 'none',
+        background: 'transparent',
+        color: 'var(--color-link)',
+        font: 'inherit',
+        fontWeight: 600,
+        textDecoration: 'underline',
+        textUnderlineOffset: 3,
+        cursor: 'pointer',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 /** One answer per item, as full-width radio rows. */
 export function ChoiceList({ label, choices, value, onChange }: { label: string; choices: Choice[]; value: string | undefined; onChange: (id: string) => void }) {
   const name = useId();
@@ -172,14 +196,14 @@ export function ChoiceList({ label, choices, value, onChange }: { label: string;
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 12,
-              minHeight: 48,
-              padding: '10px 14px',
+              gap: 10,
+              minHeight: 40,
+              padding: '8px 12px',
               borderRadius: 12,
               border: on ? `2px solid ${C.navy}` : `1.5px solid ${C.border}`,
               background: '#fff',
               cursor: 'pointer',
-              fontSize: 15,
+              fontSize: 14,
               fontWeight: on ? 600 : 500,
               color: C.ink,
               lineHeight: 1.35,
@@ -190,12 +214,248 @@ export function ChoiceList({ label, choices, value, onChange }: { label: string;
               name={name}
               checked={on}
               onChange={() => onChange(c.id)}
-              style={{ width: 20, height: 20, margin: 0, accentColor: '#001C35', flexShrink: 0, cursor: 'pointer' }}
+              style={{ width: 18, height: 18, margin: 0, accentColor: '#001C35', flexShrink: 0, cursor: 'pointer' }}
             />
             <span>{keepIds(c.label)}</span>
           </label>
         );
       })}
+    </div>
+  );
+}
+
+const LIST_HEIGHT = 400;
+const LIST_ROOM = LIST_HEIGHT + 20;
+
+/** The nearest ancestor that scrolls, which is what clips an open list. */
+function scrollBox(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    if (/(auto|scroll)/.test(getComputedStyle(p).overflowY)) return p;
+  }
+  return null;
+}
+
+const srOnly: CSSProperties = { position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' };
+
+/**
+ * One of a few choices, each with a second line, under group headings.
+ * Choices without a group sit last, below a rule. A listbox, so arrow keys,
+ * Enter and Escape work and screen readers hear the label and the pick.
+ */
+export function Picker({
+  label,
+  context,
+  placeholder,
+  choices,
+  value,
+  onChange,
+}: {
+  label: string;
+  /** Said to screen readers after the label, so two pickers on a page don't sound the same. */
+  context?: string;
+  placeholder: string;
+  choices: Choice[];
+  value: string | undefined;
+  onChange: (id: string) => void;
+}) {
+  const id = useId();
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const [keyed, setKeyed] = useState(false);
+  const [above, setAbove] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const groups = [...new Set(choices.flatMap(c => (c.group ? [c.group] : [])))];
+  const ordered = [...groups.flatMap(g => choices.filter(c => c.group === g)), ...choices.filter(c => !c.group)];
+  const chosen = choices.find(c => c.id === value);
+  const optionId = (i: number) => `${id}-o${i}`;
+
+  const show = (fromKeys: boolean) => {
+    const trigger = triggerRef.current;
+    if (trigger) {
+      const room = () => {
+        const r = trigger.getBoundingClientRect();
+        const box = scrollBox(trigger)?.getBoundingClientRect() ?? { top: 0, bottom: window.innerHeight };
+        return { below: box.bottom - r.bottom, above: r.top - box.top };
+      };
+      if (room().below < LIST_ROOM) rootRef.current?.scrollIntoView({ block: 'start' });
+      const { below, above: overhead } = room();
+      setAbove(below < LIST_ROOM && overhead > below);
+    }
+    setActive(Math.max(0, ordered.findIndex(c => c.id === value)));
+    setKeyed(fromKeys);
+    setOpen(true);
+  };
+  const close = () => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+  const pick = (c: Choice) => {
+    onChange(c.id);
+    close();
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    listRef.current?.focus();
+    const onDown = (e: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener('pointerdown', onDown);
+    return () => window.removeEventListener('pointerdown', onDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) document.getElementById(optionId(active))?.scrollIntoView({ block: 'nearest' });
+  });
+
+  const onListKey = (e: KeyEvent) => {
+    const last = ordered.length - 1;
+    const move = (i: number) => {
+      e.preventDefault();
+      setKeyed(true);
+      setActive(Math.max(0, Math.min(last, i)));
+    };
+    if (e.key === 'ArrowDown') move(active + 1);
+    else if (e.key === 'ArrowUp') move(active - 1);
+    else if (e.key === 'Home') move(0);
+    else if (e.key === 'End') move(last);
+    else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      pick(ordered[active]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+    } else if (e.key === 'Tab') setOpen(false);
+  };
+
+  const option = (c: Choice) => {
+    const i = ordered.indexOf(c);
+    const on = c.id === value;
+    const hot = i === active;
+    return (
+      <div
+        key={c.id}
+        id={optionId(i)}
+        role="option"
+        aria-selected={on}
+        onClick={() => pick(c)}
+        onPointerMove={() => {
+          setKeyed(false);
+          setActive(i);
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          minHeight: 48,
+          padding: '8px 10px',
+          borderRadius: 8,
+          background: hot ? C.page : '#fff',
+          boxShadow: hot && keyed ? `inset 0 0 0 2px ${C.navy}` : 'none',
+          cursor: 'pointer',
+        }}
+      >
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: 'block', fontSize: 15, fontWeight: on ? 600 : 500, color: C.ink, lineHeight: 1.3 }}>{keepIds(c.label)}</span>
+          {c.detail && <span style={{ display: 'block', fontSize: 13, color: C.muted, lineHeight: 1.35, marginTop: 1 }}>{c.detail}</span>}
+        </span>
+        {on && <Check size={18} aria-hidden style={{ flexShrink: 0, color: C.navy }} />}
+      </div>
+    );
+  };
+
+  return (
+    <div ref={rootRef} style={{ position: 'relative', scrollMarginTop: 16 }}>
+      <div id={`${id}-label`} style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
+        {label}
+        {context && <span style={srOnly}> {context}</span>}
+      </div>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={open ? `${id}-list` : undefined}
+        aria-labelledby={`${id}-label ${id}-value`}
+        onClick={() => (open ? setOpen(false) : show(false))}
+        onKeyDown={e => {
+          if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+            e.preventDefault();
+            show(true);
+          }
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          width: '100%',
+          minHeight: 48,
+          padding: '6px 12px 6px 14px',
+          borderRadius: 12,
+          border: open ? `2px solid ${C.navy}` : `1.5px solid ${C.border}`,
+          background: '#fff',
+          textAlign: 'left',
+          fontFamily: 'var(--font-primary)',
+          color: C.ink,
+          cursor: 'pointer',
+        }}
+      >
+        <span id={`${id}-value`} style={{ flex: 1, minWidth: 0 }}>
+          {chosen ? (
+            <>
+              <span style={{ display: 'block', fontSize: 15, fontWeight: 600, lineHeight: 1.3 }}>{keepIds(chosen.label)}</span>
+              {chosen.detail && <span style={{ display: 'block', fontSize: 13, color: C.muted, lineHeight: 1.35 }}>{chosen.detail}</span>}
+            </>
+          ) : (
+            <span style={{ fontSize: 16, color: C.muted }}>{placeholder}</span>
+          )}
+        </span>
+        <ChevronDown size={20} aria-hidden style={{ flexShrink: 0, color: C.ink, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms' }} />
+      </button>
+      {open && (
+        <div
+          ref={listRef}
+          id={`${id}-list`}
+          role="listbox"
+          tabIndex={-1}
+          aria-labelledby={`${id}-label`}
+          aria-activedescendant={optionId(active)}
+          onKeyDown={onListKey}
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            ...(above ? { bottom: 'calc(100% + 6px)' } : { top: 'calc(100% + 6px)' }),
+            zIndex: 30,
+            maxHeight: LIST_HEIGHT,
+            overflowY: 'auto',
+            padding: 6,
+            background: '#fff',
+            border: `1px solid ${C.border}`,
+            borderRadius: 12,
+            boxShadow: '0 12px 32px rgba(0,28,53,0.18)',
+            outline: 'none',
+          }}
+        >
+          {groups.map(g => (
+            <div key={g} role="group" aria-labelledby={`${id}-g-${groups.indexOf(g)}`}>
+              <div id={`${id}-g-${groups.indexOf(g)}`} style={{ padding: '8px 10px 4px', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: C.muted }}>
+                {keepIds(g)}
+              </div>
+              {choices.filter(c => c.group === g).map(option)}
+            </div>
+          ))}
+          {choices.some(c => !c.group) && (
+            <>
+              {groups.length > 0 && <div aria-hidden style={{ height: 1, background: C.subtle, margin: '6px 4px' }} />}
+              {choices.filter(c => !c.group).map(option)}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -258,11 +518,29 @@ export const inputStyle: CSSProperties = {
 };
 
 /** A labelled form field. The label wraps the control so tapping it focuses the input. */
-export function Field({ label, hint, children, style }: { label: string; hint?: ReactNode; children: ReactNode; style?: CSSProperties }) {
+export function Field({
+  label,
+  hint,
+  required,
+  error,
+  children,
+  style,
+}: {
+  label: string;
+  hint?: ReactNode;
+  required?: boolean;
+  error?: string;
+  children: ReactNode;
+  style?: CSSProperties;
+}) {
   return (
     <label style={{ display: 'block', ...style }}>
-      <span style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 6 }}>{label}</span>
+      <span style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
+        {label}
+        {required && <span aria-hidden style={{ color: '#B42318' }}> *</span>}
+      </span>
       {children}
+      {error && <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#B42318', marginTop: 6, lineHeight: 1.4 }}>{error}</span>}
       {hint && <span style={{ display: 'block', fontSize: 14, color: C.muted, marginTop: 6, lineHeight: 1.4 }}>{hint}</span>}
     </label>
   );
@@ -343,6 +621,45 @@ function useEscape(onClose: () => void) {
   }, [onClose]);
 }
 
+/** A centred dialog over the page it was opened from. */
+export function Popup({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
+  const focused = useRef(false);
+  const ref = (el: HTMLDivElement | null) => {
+    if (el && !focused.current) {
+      focused.current = true;
+      el.focus();
+    }
+  };
+  useEscape(onClose);
+  return (
+    <Layer label={label} background="rgba(0,28,53,0.45)">
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, minHeight: 0 }} onClick={onClose}>
+        <div
+          ref={ref}
+          role="dialog"
+          aria-modal="true"
+          aria-label={label}
+          tabIndex={-1}
+          onClick={e => e.stopPropagation()}
+          style={{
+            width: 'min(640px, 100%)',
+            maxHeight: '100%',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            background: '#fff',
+            borderRadius: 18,
+            boxShadow: '0 16px 48px rgba(0,28,53,0.24)',
+            outline: 'none',
+          }}
+        >
+          {children}
+        </div>
+      </div>
+    </Layer>
+  );
+}
+
 /** Bottom sheet on a phone, centred dialog on a bigger screen. */
 export function Sheet({
   title,
@@ -352,6 +669,7 @@ export function Sheet({
   footer,
   isPhone,
   placement = 'center',
+  width = 480,
 }: {
   title: string;
   subtitle?: string;
@@ -361,6 +679,7 @@ export function Sheet({
   isPhone: boolean;
   /** 'right' keeps a pinned photo on the left in view. */
   placement?: 'center' | 'right';
+  width?: number;
 }) {
   const right = !isPhone && placement === 'right';
   const titleId = useId();
@@ -386,7 +705,7 @@ export function Sheet({
           tabIndex={-1}
           onClick={e => e.stopPropagation()}
           style={{
-            width: isPhone ? '100%' : 480,
+            width: isPhone ? '100%' : `min(${width}px, calc(100vw - 48px))`,
             maxHeight: isPhone ? '92vh' : '86vh',
             display: 'flex',
             flexDirection: 'column',
