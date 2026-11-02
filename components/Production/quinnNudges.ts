@@ -58,7 +58,7 @@ export function getQuinnNudges(): QuinnNudge[] {
         tone: 'success',
         title: `${star.workerName} ran ${formatDelta(star.avgDeltaPercent)} yesterday`,
         body: `${star.batchCount} batches · ${star.totalUnits} units. Worth a mention on the morning huddle.`,
-        cta: { label: 'See the leaderboard', href: '/production/productivity' },
+        cta: { label: 'See productivity', href: '/production/productivity' },
       });
     }
 

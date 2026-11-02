@@ -11,7 +11,9 @@
  *  - batchProductivity(batch)   — per-batch metrics (actual, target, delta%)
  *  - employeeSummary(userId, batches) — totals + average delta vs target
  *  - benchSummary(benchId, batches)   — utilisation, batches/hr, units
- *  - siteProductivity(siteId, dateRange) — top-level aggregate
+ *  - siteProductivity(siteId, dateRange) — top-level aggregate, incl. runs vs
+ *    norm (PAC088/089), recipes with slow-staff flags, and rota labour
+ *  - productivityTrend(siteId)  — daily kitchen trend (PAC161/162)
  *
  * "Completed" means status ∈ {complete, reviewed}. Failed batches are
  * surfaced separately as a quality signal but excluded from speed averages.
@@ -21,11 +23,13 @@ import {
   PRET_PLAN,
   PRET_USERS,
   PRET_BENCHES,
+  dayOffset,
   getBench,
   getProductionItem,
   getRecipe,
   getUser,
   type ProductionBatch,
+  type ProductionItemId,
   type SiteId,
   type BenchId,
   type UserId,
@@ -42,6 +46,11 @@ function hhmmToMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(':').map(Number);
   if (Number.isNaN(h) || Number.isNaN(m)) return 0;
   return h * 60 + m;
+}
+
+function minutesToHhmm(min: number): string {
+  const m = ((Math.round(min) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 }
 
 /** Difference between two HH:MM strings in minutes (handles overnight). */
@@ -167,16 +176,315 @@ export type SiteProductivity = {
   benches: BenchSummary[];
   /** All batches (for the detail table). */
   batches: BatchProductivity[];
+  /** Scheduled vs Pret norm vs actual for each bench run (PAC088 / PAC089). */
+  runs: RunSummary[];
+  /** Recipes with a norm, flagged first then slowest first. */
+  recipes: RecipeSummary[];
+  /** Every staff member running very slow on a recipe, worst first. */
+  flags: StaffFlag[];
+  labour: LabourSummary;
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Demo history
+//
+// PRET_PLAN only carries today and yesterday. The productivity trend needs
+// four weeks, so we replay yesterday's batches back over the previous 26 days
+// with each worker's pace, a gentle improvement over time, and day-to-day
+// noise. Seeded per date + batch so every load renders the same numbers.
+// Kept here rather than in PRET_PLAN so the board, PCR queue and carry-over
+// never see these batches.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const HISTORY_DAYS = 28;
+
+/** Pace vs norm per worker (+0.10 = 10% slower). */
+const WORKER_PACE: Record<UserId, number> = {
+  'user-staff-central': -0.16,
+  'user-staff-central-2': -0.09,
+  'user-staff-central-3': 0.08,
+  'user-staff-central-4': -0.06,
+};
+
+/** Extra pace on specific recipes, keyed `${userId}:${productionItemId}`. */
+const WORKER_RECIPE_PACE: Record<string, number> = {
+  'user-staff-central-3:pi-central-roast-chicken': 0.34,
+  'user-staff-central-3:pi-central-baguette': 0.27,
+};
+
+function seededRandom(seed: string): () => number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return () => {
+    h = (h + 0x6d2b79f5) | 0;
+    let t = Math.imul(h ^ (h >>> 15), 1 | h);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function isWeekend(iso: string): boolean {
+  const day = new Date(`${iso}T00:00:00Z`).getUTCDay();
+  return day === 0 || day === 6;
+}
+
+const historyCache = new Map<SiteId, ProductionBatch[]>();
+
+function generatedHistory(siteId: SiteId): ProductionBatch[] {
+  const cached = historyCache.get(siteId);
+  if (cached) return cached;
+  const templateDate = dayOffset(-1);
+  const template = PRET_PLAN.batches.filter(
+    b => b.date === templateDate && b.status !== 'planned' && getProductionItem(b.productionItemId)?.siteId === siteId,
+  );
+  const staff = PRET_USERS.filter(u => u.siteId === siteId && u.role === 'Staff').map(u => u.id);
+  const out: ProductionBatch[] = [];
+  for (let k = 2; k < HISTORY_DAYS; k++) {
+    const date = dayOffset(-k);
+    const weekend = isWeekend(date);
+    const drift = 0.12 * (k / HISTORY_DAYS);
+    for (const t of template) {
+      const rand = seededRandom(`${date}:${t.id}`);
+      if (rand() < (weekend ? 0.3 : 0.08)) continue;
+      let worker = t.assignedUserId;
+      if (staff.length > 1 && rand() < 0.15) worker = staff[Math.floor(rand() * staff.length)];
+      const qty = weekend ? Math.max(1, Math.round(t.actualQty * 0.75)) : t.actualQty;
+      const target = targetMinutesFor({ ...t, actualQty: qty });
+      const workerPace = worker
+        ? (WORKER_PACE[worker] ?? 0) + (WORKER_RECIPE_PACE[`${worker}:${t.productionItemId}`] ?? 0)
+        : 0;
+      const pace = workerPace + drift + (rand() - 0.5) * 0.16;
+      const base = target ?? batchDurationMinutes(t.startTime, t.endTime);
+      const duration = Math.max(2, Math.round(base * (1 + pace)));
+      const start = hhmmToMinutes(t.startTime) + Math.round((rand() - 0.5) * 10);
+      out.push({
+        id: `hist-${date}-${t.id}`,
+        productionItemId: t.productionItemId,
+        benchId: t.benchId,
+        date,
+        startTime: minutesToHhmm(start),
+        endTime: minutesToHhmm(start + duration),
+        actualQty: qty,
+        status: rand() < 0.025 ? 'failed' : 'reviewed',
+        assignedUserId: worker,
+      });
+    }
+  }
+  historyCache.set(siteId, out);
+  return out;
+}
 
 /** Pull batches for a site within a date range. Includes completed + reviewed + failed. */
 function batchesForSiteOnDates(siteId: SiteId, dates: string[]): ProductionBatch[] {
   const dateSet = new Set(dates);
-  return PRET_PLAN.batches.filter(b => {
+  const seeded = PRET_PLAN.batches.filter(b => {
     if (!dateSet.has(b.date)) return false;
     const item = getProductionItem(b.productionItemId);
     return item?.siteId === siteId;
   });
+  return [...seeded, ...generatedHistory(siteId).filter(b => dateSet.has(b.date))];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Runs, recipes, labour
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type RunSummary = {
+  benchId: BenchId;
+  benchName: string;
+  runLabel: string;
+  startTime: string | undefined;
+  /** Minutes the run was scheduled for. Undefined on benches without runs. */
+  scheduledMinutes: number | undefined;
+  /** Pret norm for the work done, averaged per active day. */
+  normMinutes: number;
+  /** Actual bench-time for the same batches, averaged per active day. */
+  actualMinutes: number;
+  deltaPercent: number | undefined;
+  batchCount: number;
+  activeDays: number;
+};
+
+export type StaffFlag = {
+  userId: UserId;
+  workerName: string;
+  productionItemId: ProductionItemId;
+  recipeName: string;
+  deltaPercent: number;
+  batchCount: number;
+  /** Quickest colleague on the same recipe, if anyone beat the norm. */
+  quickest?: { workerName: string; deltaPercent: number };
+};
+
+export type RecipeStaffSummary = {
+  userId: UserId;
+  workerName: string;
+  batchCount: number;
+  avgDeltaPercent: number | undefined;
+};
+
+export type RecipeSummary = {
+  productionItemId: ProductionItemId;
+  recipeName: string;
+  /** Completed and failed batches with a norm. */
+  batches: BatchProductivity[];
+  avgDeltaPercent: number | undefined;
+  staff: RecipeStaffSummary[];
+  flags: StaffFlag[];
+};
+
+export type LabourSummary = {
+  /** Kitchen team hours from the rota (mocked from first/last batch per shift). */
+  teamHours: number;
+  /** Manager-on-duty hours booked to back of house (PAC157). */
+  managerHours: number;
+  unitsPerLabourHour: number | undefined;
+};
+
+/** A staff member is flagged when this much slower than norm on a recipe. */
+export const VERY_SLOW_PERCENT = 25;
+/** Run-level over-norm threshold, matching the batch "slow" bucket. */
+export const RUN_OVER_PERCENT = 12;
+const MOD_BOH_HOURS_PER_DAY = 1.5;
+/** On-demand singles carry 1–2 minute norms where a minute's wobble reads as +100%. */
+const MIN_NORM_MINUTES = 3;
+
+function hasMeaningfulNorm(it: BatchProductivity): boolean {
+  return it.targetMinutes != null && it.targetMinutes >= MIN_NORM_MINUTES;
+}
+
+function runSummaries(items: BatchProductivity[], benches: BenchId[]): RunSummary[] {
+  const out: RunSummary[] = [];
+  for (const benchId of benches) {
+    const bench = getBench(benchId);
+    const runs = [...(bench?.runs ?? [])].sort((a, b) => a.startTime.localeCompare(b.startTime));
+    const onBench = items.filter(it => it.batch.benchId === benchId && hasMeaningfulNorm(it));
+    const buckets = new Map<string, BatchProductivity[]>();
+    for (const it of onBench) {
+      const t = hhmmToMinutes(it.batch.startTime);
+      const containing = runs.filter(r => {
+        const start = hhmmToMinutes(r.startTime);
+        return t >= start - 15 && t < start + r.durationMinutes;
+      });
+      const run =
+        containing[containing.length - 1] ??
+        [...runs].sort(
+          (a, b) => Math.abs(hhmmToMinutes(a.startTime) - t) - Math.abs(hhmmToMinutes(b.startTime) - t),
+        )[0];
+      const key = run?.id ?? 'all-day';
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key)!.push(it);
+    }
+    const ordered = runs.length > 0 ? runs.map(r => r.id) : ['all-day'];
+    for (const key of ordered) {
+      const group = buckets.get(key);
+      if (!group || group.length === 0) continue;
+      const run = runs.find(r => r.id === key);
+      const days = new Set(group.map(g => g.batch.date)).size;
+      const norm = group.reduce((a, g) => a + (g.targetMinutes ?? 0), 0) / days;
+      const actual = group.reduce((a, g) => a + g.actualMinutes, 0) / days;
+      out.push({
+        benchId,
+        benchName: bench?.name ?? benchId,
+        runLabel: run?.label ?? 'All day',
+        startTime: run?.startTime,
+        scheduledMinutes: run?.durationMinutes,
+        normMinutes: norm,
+        actualMinutes: actual,
+        deltaPercent: norm > 0 ? ((actual - norm) / norm) * 100 : undefined,
+        batchCount: group.length,
+        activeDays: days,
+      });
+    }
+  }
+  return out;
+}
+
+function recipeSummaries(items: BatchProductivity[], multiDay: boolean): RecipeSummary[] {
+  const byItem = new Map<ProductionItemId, BatchProductivity[]>();
+  for (const it of items) {
+    if (!hasMeaningfulNorm(it)) continue;
+    if (!isSpeedRelevant(it.batch) && it.batch.status !== 'failed') continue;
+    const id = it.batch.productionItemId;
+    if (!byItem.has(id)) byItem.set(id, []);
+    byItem.get(id)!.push(it);
+  }
+  const minBatches = multiDay ? 2 : 1;
+  const recipes = Array.from(byItem.entries()).map(([productionItemId, batches]) => {
+    const speed = batches.filter(b => isSpeedRelevant(b.batch));
+    const staffMap = new Map<UserId, BatchProductivity[]>();
+    for (const b of speed) {
+      const uid = b.batch.assignedUserId ?? 'unassigned';
+      if (!staffMap.has(uid)) staffMap.set(uid, []);
+      staffMap.get(uid)!.push(b);
+    }
+    const staff: RecipeStaffSummary[] = Array.from(staffMap.entries())
+      .map(([userId, list]) => ({
+        userId,
+        workerName: list[0].workerName,
+        batchCount: list.length,
+        avgDeltaPercent: weightedAvgDelta(list),
+      }))
+      .sort((a, b) => (a.avgDeltaPercent ?? 0) - (b.avgDeltaPercent ?? 0));
+    const quickest = staff[0];
+    const recipeName = batches[0].recipeName;
+    const flags: StaffFlag[] = staff
+      .filter(s => s.userId !== 'unassigned' && (s.avgDeltaPercent ?? 0) >= VERY_SLOW_PERCENT && s.batchCount >= minBatches)
+      .map(s => ({
+        userId: s.userId,
+        workerName: s.workerName,
+        productionItemId,
+        recipeName,
+        deltaPercent: s.avgDeltaPercent as number,
+        batchCount: s.batchCount,
+        quickest:
+          quickest && quickest.userId !== s.userId && (quickest.avgDeltaPercent ?? 0) <= -3
+            ? { workerName: quickest.workerName, deltaPercent: quickest.avgDeltaPercent as number }
+            : undefined,
+      }))
+      .sort((a, b) => b.deltaPercent - a.deltaPercent);
+    return {
+      productionItemId,
+      recipeName,
+      batches,
+      avgDeltaPercent: weightedAvgDelta(speed),
+      staff,
+      flags,
+    };
+  });
+  return recipes.sort((a, b) => {
+    if (a.flags.length !== b.flags.length) return b.flags.length - a.flags.length;
+    return (b.avgDeltaPercent ?? -Infinity) - (a.avgDeltaPercent ?? -Infinity);
+  });
+}
+
+function labourSummary(items: BatchProductivity[]): LabourSummary {
+  const shifts = new Map<string, { start: number; end: number }>();
+  for (const it of items) {
+    if (it.batch.status === 'planned' || !it.batch.assignedUserId) continue;
+    const key = `${it.batch.date}:${it.batch.assignedUserId}`;
+    const start = hhmmToMinutes(it.batch.startTime);
+    const end = start + it.actualMinutes;
+    const s = shifts.get(key);
+    shifts.set(key, s ? { start: Math.min(s.start, start), end: Math.max(s.end, end) } : { start, end });
+  }
+  let teamMinutes = 0;
+  for (const { start, end } of shifts.values()) {
+    const rotaStart = Math.floor((start - 15) / 15) * 15;
+    const rotaEnd = Math.ceil((end + 15) / 15) * 15;
+    teamMinutes += rotaEnd - rotaStart;
+  }
+  const activeDays = new Set(items.filter(it => it.batch.status !== 'planned').map(it => it.batch.date)).size;
+  const teamHours = teamMinutes / 60;
+  const units = items.filter(it => isSpeedRelevant(it.batch)).reduce((a, it) => a + it.batch.actualQty, 0);
+  return {
+    teamHours,
+    managerHours: activeDays * MOD_BOH_HOURS_PER_DAY,
+    unitsPerLabourHour: teamHours > 0 ? units / teamHours : undefined,
+  };
 }
 
 /** Returns true if the batch should count toward speed averages. */
@@ -267,6 +575,7 @@ export function siteProductivity(siteId: SiteId, dates: string[]): SiteProductiv
   // Site-level aggregate (excludes planned)
   const completed = productivities.filter(p => p.batch.status !== 'planned');
   const speedItems = completed.filter(p => isSpeedRelevant(p.batch));
+  const recipes = recipeSummaries(completed, dates.length > 1);
   return {
     siteId,
     dates,
@@ -281,7 +590,25 @@ export function siteProductivity(siteId: SiteId, dates: string[]): SiteProductiv
       b.batch.date.localeCompare(a.batch.date) ||
       a.batch.startTime.localeCompare(b.batch.startTime)
     ),
+    runs: runSummaries(speedItems, benches.map(b => b.benchId)),
+    recipes,
+    flags: recipes.flatMap(r => r.flags).sort((a, b) => b.deltaPercent - a.deltaPercent),
+    labour: labourSummary(completed),
   };
+}
+
+export type TrendPoint = {
+  date: string;
+  deltaPercent: number | undefined;
+  unitsPerLabourHour: number | undefined;
+};
+
+/** One point per completed day (today's shift is still running), oldest first. */
+export function productivityTrend(siteId: SiteId, days: number = HISTORY_DAYS - 1): TrendPoint[] {
+  return Array.from({ length: days }, (_, i) => dayOffset(-(days - i))).map(date => {
+    const s = siteProductivity(siteId, [date]);
+    return { date, deltaPercent: s.avgDeltaPercent, unitsPerLabourHour: s.labour.unitsPerLabourHour };
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
