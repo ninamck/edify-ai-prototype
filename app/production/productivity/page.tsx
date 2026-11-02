@@ -3,17 +3,20 @@
 /**
  * /production/productivity — Pret P013 / P040 / P041 / P058 / P059 / P060 / P132
  *
- * Answers the two questions a GM brings here: was the plan realistic, and
- * who needs support on which recipe.
+ * Expected time vs actual time, at every level a GM asks about: per product,
+ * bench, employee, production run, and all productions together.
+ *
+ * Expected time is the product's standard time scaled to the batch size
+ * (ProductionItem.targetMinutes). Pret supplies these per product.
  *
  * Layout (top → bottom):
  *  1. Period strip
  *  2. One-line headline
- *  3. Three numbers — vs Pret norm, units per labour hour, runs within norm
- *  4. Recipes vs norm — every batch a dot, very slow staff flagged (PAC169 / PAC172)
- *  5. Production runs: spare scheduled time, actual vs Pret norm (PAC088 / PAC089)
- *  6. Four-week kitchen trend (PAC161 / PAC162 / PAC170)
- *  7. All batches, collapsed
+ *  3. All productions — expected, actual, difference, units per labour hour
+ *  4. Expected vs actual, switchable by product / bench / employee / run,
+ *     with drill-down and very-slow staff flags (PAC089 / PAC168 / PAC169 / PAC172)
+ *  5. Four-week kitchen trend (PAC161 / PAC162 / PAC170)
+ *  6. All batches, collapsed
  */
 
 import { useMemo, useState } from 'react';
@@ -21,12 +24,12 @@ import {
   AlertTriangle,
   Clock,
   Gauge,
+  Timer,
   Users,
   ChevronUp,
   ChevronDown,
   ArrowUpDown,
   ListChecks,
-  CookingPot,
   TrendingUp,
   Rows3,
 } from 'lucide-react';
@@ -51,9 +54,9 @@ import {
   formatMinutes,
   RUN_OVER_PERCENT,
   type BatchProductivity,
-  type RecipeSummary,
-  type RunSummary,
+  type BreakdownBy,
   type SiteProductivity,
+  type TimeRow,
   type TrendPoint,
 } from '@/components/Production/productivity';
 
@@ -66,10 +69,16 @@ const RANGES: Array<{ id: DateRange; label: string }> = [
   { id: 'last28', label: 'Last 4 weeks' },
 ];
 
+const VIEWS: Array<{ id: BreakdownBy; label: string; noun: string }> = [
+  { id: 'product', label: 'Product', noun: 'products' },
+  { id: 'bench', label: 'Bench', noun: 'benches' },
+  { id: 'employee', label: 'Employee', noun: 'employees' },
+  { id: 'run', label: 'Production run', noun: 'runs' },
+];
+
 /** Orange is allowed for graphics only (3.6:1 non-text), never for text. */
-const OVER_NORM = '#EA580C';
-const SLOW_PERCENT = 12;
-const RECIPES_SHOWN = 8;
+const OVER_COLOUR = '#EA580C';
+const ROWS_SHOWN = 8;
 
 function datesFor(range: DateRange): string[] {
   if (range === 'today') return [DEMO_TODAY];
@@ -88,12 +97,10 @@ function priorFor(range: DateRange): { dates: string[]; label: string } | undefi
 export default function ProductivityPage() {
   const { siteId } = useProductionSite();
   const [range, setRange] = useState<DateRange>('yesterday');
-  const [showAllRecipes, setShowAllRecipes] = useState(false);
+  const [view, setView] = useState<BreakdownBy>('product');
+  const [showAllRows, setShowAllRows] = useState(false);
   const [showBatches, setShowBatches] = useState(false);
-  const [batchSort, setBatchSort] = useState<{
-    by: 'date' | 'recipe' | 'worker' | 'bench' | 'qty' | 'duration' | 'delta';
-    dir: 'asc' | 'desc';
-  }>({ by: 'date', dir: 'desc' });
+  const [batchSort, setBatchSort] = useState<{ by: BatchSortKey; dir: 'asc' | 'desc' }>({ by: 'date', dir: 'desc' });
   const [batchFilter, setBatchFilter] = useState<'all' | 'fast' | 'on-target' | 'slow' | 'failed'>('all');
 
   const dates = useMemo(() => datesFor(range), [range]);
@@ -124,6 +131,8 @@ export default function ProductivityPage() {
           return dir * a.benchName.localeCompare(b.benchName);
         case 'qty':
           return dir * (a.batch.actualQty - b.batch.actualQty);
+        case 'expected':
+          return dir * ((a.targetMinutes ?? -1) - (b.targetMinutes ?? -1));
         case 'duration':
           return dir * (a.actualMinutes - b.actualMinutes);
         case 'delta': {
@@ -135,12 +144,11 @@ export default function ProductivityPage() {
     });
   }, [summary.batches, batchSort, batchFilter]);
 
-  const headline = headlineFor(summary, multiDay);
-  const runsWithinNorm = summary.runs.filter(r => (r.deltaPercent ?? 0) < RUN_OVER_PERCENT).length;
-  const worstRun = [...summary.runs]
-    .filter(r => (r.deltaPercent ?? 0) >= RUN_OVER_PERCENT)
-    .sort((a, b) => runOverMinutes(b) - runOverMinutes(a))[0];
-  const recipes = showAllRecipes ? summary.recipes : summary.recipes.slice(0, RECIPES_SHOWN);
+  const headline = headlineFor(summary);
+  const total = diffLabel(summary.total);
+  const rows = summary.breakdown[view];
+  const visibleRows = showAllRows ? rows : rows.slice(0, ROWS_SHOWN);
+  const viewMeta = VIEWS.find(v => v.id === view)!;
   const periodDates = new Set(dates);
 
   return (
@@ -198,12 +206,28 @@ export default function ProductivityPage() {
             <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600, lineHeight: 1.4 }}>{headline.title}</h2>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+          {/* All productions */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+            <KPICard
+              icon={<Clock size={16} />}
+              label="Expected time"
+              value={formatMinutes(summary.total.expectedMinutes)}
+              sub={`All productions · ${summary.total.batchCount} batches`}
+            />
+            <KPICard
+              icon={<Timer size={16} />}
+              label="Actual time"
+              value={formatMinutes(summary.total.actualMinutes)}
+              sub="Start to finish on the bench"
+            />
             <KPICard
               icon={<Gauge size={16} />}
-              label="vs Pret norm"
-              value={summary.avgDeltaPercent == null ? '—' : vsNorm(summary.avgDeltaPercent)}
-              sub={prior ? `${prior.label}: ${vsNorm(prior.summary.avgDeltaPercent)}` : `${summary.batchCount} batches`}
+              label="Difference"
+              value={total.main}
+              sub={[total.sub, prior && `${prior.label}: ${vsExpected(prior.summary.total.deltaPercent)}`]
+                .filter(Boolean)
+                .join(' · ')}
+              alert={total.isOver}
             />
             <KPICard
               icon={<Users size={16} />}
@@ -211,51 +235,76 @@ export default function ProductivityPage() {
               value={summary.labour.unitsPerLabourHour == null ? '—' : summary.labour.unitsPerLabourHour.toFixed(1)}
               sub={`${formatMinutes(summary.labour.teamHours * 60)} team · ${formatMinutes(summary.labour.managerHours * 60)} manager on duty`}
             />
-            <KPICard
-              icon={<Clock size={16} />}
-              label="Runs within norm"
-              value={summary.runs.length === 0 ? '—' : `${runsWithinNorm} of ${summary.runs.length}`}
-              sub={
-                worstRun
-                  ? `${worstRun.benchName} ${worstRun.runLabel}: ${formatMinutes(runOverMinutes(worstRun))} over`
-                  : 'Every run within norm'
-              }
-            />
           </div>
 
           <Section
-            title="Recipes vs norm"
-            icon={<CookingPot size={16} />}
-            badge={summary.flags.length > 0 ? `${summary.flags.length} flagged` : undefined}
-            actions={<RecipeLegend />}
-          >
-            {summary.recipes.length === 0 ? (
-              <EmptyState text="No batches with a Pret norm in this period." />
-            ) : (
-              <>
-                <RecipeAxisHeader />
-                {recipes.map(r => (
-                  <RecipeRow key={r.productionItemId} recipe={r} />
-                ))}
-                {summary.recipes.length > RECIPES_SHOWN && (
-                  <button onClick={() => setShowAllRecipes(v => !v)} style={LINK_BUTTON_STYLE}>
-                    {showAllRecipes ? 'Show fewer recipes' : `Show all ${summary.recipes.length} recipes`}
-                  </button>
-                )}
-              </>
-            )}
-          </Section>
-
-          <Section
-            title="Production runs"
+            title="Expected vs actual time"
             icon={<ListChecks size={16} />}
-            badge={runsBadge(summary.runs, multiDay)}
-            actions={<RunLegend />}
+            subtitle="Expected time is Pret's standard time for each product, scaled to the batch size."
           >
-            {summary.runs.length === 0 ? (
-              <EmptyState text="No runs with a Pret norm in this period." />
+            <div
+              style={{
+                padding: '12px 32px',
+                borderBottom: '1px solid var(--color-border-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 16,
+                flexWrap: 'wrap',
+              }}
+            >
+              <div
+                role="tablist"
+                aria-label="Break down by"
+                style={{
+                  display: 'flex',
+                  background: 'var(--color-bg-hover)',
+                  borderRadius: 100,
+                  padding: 3,
+                  width: 'fit-content',
+                }}
+              >
+                {VIEWS.map(v => {
+                  const active = view === v.id;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => {
+                        setView(v.id);
+                        setShowAllRows(false);
+                      }}
+                      style={{
+                        padding: '8px 18px',
+                        borderRadius: 100,
+                        border: 'none',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        fontFamily: 'var(--font-primary)',
+                        cursor: 'pointer',
+                        background: active ? 'var(--color-accent-active)' : 'transparent',
+                        color: active ? '#fff' : 'var(--color-text-secondary)',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {v.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <BarLegend />
+            </div>
+            {rows.length === 0 ? (
+              <EmptyState text="No timed batches in this period." />
             ) : (
-              <RunsChart runs={summary.runs} multiDay={multiDay} />
+              <TimeTable rows={visibleRows} total={summary.total} view={view} />
+            )}
+            {rows.length > ROWS_SHOWN && (
+              <button onClick={() => setShowAllRows(v => !v)} style={LINK_BUTTON_STYLE}>
+                {showAllRows ? `Show fewer ${viewMeta.noun}` : `Show all ${rows.length} ${viewMeta.noun}`}
+              </button>
             )}
           </Section>
 
@@ -271,14 +320,14 @@ export default function ProductivityPage() {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {showBatches && (
                   <div style={{ display: 'flex', gap: 4 }}>
-                    {(['all', 'fast', 'on-target', 'slow', 'failed'] as const).map(opt => (
+                    {BATCH_FILTERS.map(opt => (
                       <button
-                        key={opt}
-                        onClick={() => setBatchFilter(opt)}
-                        aria-pressed={batchFilter === opt}
-                        style={pillStyle(batchFilter === opt, true)}
+                        key={opt.id}
+                        onClick={() => setBatchFilter(opt.id)}
+                        aria-pressed={batchFilter === opt.id}
+                        style={pillStyle(batchFilter === opt.id, true)}
                       >
-                        {opt === 'all' ? 'All' : opt === 'on-target' ? 'On norm' : opt[0].toUpperCase() + opt.slice(1)}
+                        {opt.label}
                       </button>
                     ))}
                   </div>
@@ -323,12 +372,14 @@ function Section({
   title,
   icon,
   badge,
+  subtitle,
   actions,
   children,
 }: {
   title: string;
   icon: React.ReactNode;
   badge?: string;
+  subtitle?: string;
   actions?: React.ReactNode;
   children?: React.ReactNode;
 }) {
@@ -366,6 +417,7 @@ function Section({
             · {badge}
           </span>
         )}
+        {subtitle && <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{subtitle}</span>}
         {actions && <div style={{ marginLeft: 'auto' }}>{actions}</div>}
       </div>
       {children}
@@ -373,14 +425,26 @@ function Section({
   );
 }
 
-function KPICard({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
+function KPICard({
+  icon,
+  label,
+  value,
+  sub,
+  alert,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  sub?: string;
+  alert?: boolean;
+}) {
   return (
     <div
       style={{
         background: '#ffffff',
         border: '1px solid var(--color-border-subtle)',
         borderRadius: 'var(--radius-card)',
-        padding: '14px 32px',
+        padding: '14px 24px',
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
@@ -390,7 +454,20 @@ function KPICard({ icon, label, value, sub }: { icon: React.ReactNode; label: st
         {icon}
         <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
       </div>
-      <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.1 }}>{value}</div>
+      <div
+        style={{
+          fontSize: 20,
+          fontWeight: 700,
+          color: 'var(--color-text-primary)',
+          lineHeight: 1.1,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        {alert && <AlertTriangle size={16} color={OVER_COLOUR} aria-label="Over expected time" />}
+        {value}
+      </div>
       {sub && <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{sub}</div>}
     </div>
   );
@@ -398,7 +475,7 @@ function KPICard({ icon, label, value, sub }: { icon: React.ReactNode; label: st
 
 function LegendItem({ swatch, label }: { swatch: React.ReactNode; label: string }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--color-text-secondary)' }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
       {swatch}
       {label}
     </span>
@@ -406,358 +483,220 @@ function LegendItem({ swatch, label }: { swatch: React.ReactNode; label: string 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Production runs: bullet chart per run
+// Expected vs actual table
 // ─────────────────────────────────────────────────────────────────────────────
 
-const RUN_GRID = '170px 1fr 90px 120px';
-
-function RunLegend() {
-  return (
-    <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-      <LegendItem
-        swatch={<span style={{ width: 16, height: 10, borderRadius: 3, background: 'var(--color-bg-hover)', border: '1px solid var(--color-border)' }} />}
-        label="Scheduled"
-      />
-      <LegendItem swatch={<span style={{ width: 16, height: 6, borderRadius: 2, background: 'var(--viz-2)' }} />} label="Actual" />
-      <LegendItem
-        swatch={<span style={{ width: 16, height: 6, borderRadius: 2, background: OVER_NORM }} />}
-        label={`Over norm (${RUN_OVER_PERCENT}%+)`}
-      />
-      <LegendItem swatch={<span style={{ width: 2, height: 14, background: 'var(--viz-1)' }} />} label="Pret norm" />
-    </div>
-  );
+/** Only products and employees carry slow-staff flags, so only they get the column. */
+function timeGrid(view: BreakdownBy): string {
+  return view === 'product' || view === 'employee' ? '220px 1fr 76px 76px 120px 170px 16px' : '220px 1fr 76px 76px 120px 16px';
 }
 
-function RunsChart({ runs, multiDay }: { runs: RunSummary[]; multiDay: boolean }) {
-  const max = Math.max(1, ...runs.map(r => Math.max(r.scheduledMinutes ?? 0, r.normMinutes, r.actualMinutes)));
-  const tickStep = max > 240 ? 60 : 30;
-  const ticks = Array.from({ length: Math.floor(max / tickStep) + 1 }, (_, i) => i * tickStep);
-  return (
-    <div>
-      <div aria-hidden style={{ ...COLUMN_HEADER_STYLE, gridTemplateColumns: RUN_GRID }}>
-        <span>Run</span>
-        <span>Time used{multiDay ? ' per day' : ''}</span>
-        <span style={{ textAlign: 'right' }}>Spare time</span>
-        <span style={{ textAlign: 'right' }}>vs norm</span>
-      </div>
-      <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-        {runs.map(r => (
-          <RunRow key={`${r.benchId}-${r.runLabel}`} run={r} max={max} multiDay={multiDay} />
-        ))}
-      </ul>
-      <div aria-hidden style={{ display: 'grid', gridTemplateColumns: RUN_GRID, gap: 16, padding: '6px 32px 12px' }}>
-        <span />
-        <div style={{ position: 'relative', height: 14 }}>
-          {ticks.map(t => (
-            <span
-              key={t}
-              style={{
-                position: 'absolute',
-                left: `${(t / max) * 100}%`,
-                transform: t === 0 ? undefined : 'translateX(-50%)',
-                fontSize: 10,
-                color: 'var(--color-text-muted)',
-              }}
-            >
-              {t === 0 ? '0' : formatMinutes(t)}
-            </span>
-          ))}
-        </div>
-        <span />
-        <span />
-      </div>
-    </div>
-  );
+function hasFlagColumn(view: BreakdownBy): boolean {
+  return view === 'product' || view === 'employee';
 }
 
-function RunRow({ run, max, multiDay }: { run: RunSummary; max: number; multiDay: boolean }) {
-  const over = runOverMinutes(run);
-  const isOver = (run.deltaPercent ?? 0) >= RUN_OVER_PERCENT;
-  const status = isOver ? `${formatMinutes(over)} over` : over <= -1 ? `${formatMinutes(-over)} under` : 'Within norm';
-  const spare = runSpareMinutes(run);
-  const pct = (m: number) => `${Math.min(100, (m / max) * 100)}%`;
-  const spareText =
-    spare == null ? '' : spare < 0 ? `${formatMinutes(-spare)} longer than scheduled. ` : `${formatMinutes(spare)} of scheduled time spare. `;
-  const description =
-    `${run.benchName} ${run.runLabel}: ${spareText}${isOver || over <= -1 ? `${status} norm` : status}. ${formatMinutes(run.actualMinutes)} actual against ${formatMinutes(run.normMinutes)} Pret norm` +
-    (run.scheduledMinutes != null ? `, ${formatMinutes(run.scheduledMinutes)} scheduled` : '') +
-    (multiDay ? ` (average of ${run.activeDays} days)` : '') +
-    `. ${run.batchCount} batch${run.batchCount === 1 ? '' : 'es'}.`;
-  return (
-    <li
-      title={description}
-      style={{
-        display: 'grid',
-        gridTemplateColumns: RUN_GRID,
-        gap: 16,
-        alignItems: 'center',
-        padding: '10px 32px',
-        borderBottom: '1px solid var(--color-border-subtle)',
-      }}
-    >
-      <span style={SR_ONLY}>{description}</span>
-      <div aria-hidden>
-        <div style={{ fontSize: 13, fontWeight: 600 }}>{run.benchName}</div>
-        <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-          {run.runLabel}
-          {run.startTime ? ` · ${run.startTime}` : ''}
-        </div>
-      </div>
-      <div aria-hidden style={{ position: 'relative', height: 22 }}>
-        {run.scheduledMinutes != null && (
-          <div
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 2,
-              height: 18,
-              width: pct(run.scheduledMinutes),
-              background: 'var(--color-bg-hover)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 4,
-              boxSizing: 'border-box',
-            }}
-          />
-        )}
-        <div
-          style={{
-            position: 'absolute',
-            left: 0,
-            top: 7,
-            height: 8,
-            width: pct(run.actualMinutes),
-            background: isOver ? OVER_NORM : 'var(--viz-2)',
-            borderRadius: 3,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            left: `calc(${pct(run.normMinutes)} - 1px)`,
-            top: 0,
-            height: 22,
-            width: 2,
-            background: 'var(--viz-1)',
-          }}
-        />
-      </div>
-      <div aria-hidden style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: 13, fontWeight: 700 }}>
-          {spare == null ? '—' : spare < 0 ? `${formatMinutes(-spare)} short` : formatMinutes(spare)}
-        </div>
-        {run.scheduledMinutes != null && (
-          <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>of {formatMinutes(run.scheduledMinutes)}</div>
-        )}
-      </div>
-      <div aria-hidden style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          {isOver && <AlertTriangle size={12} color={OVER_NORM} />}
-          {status}
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-          {formatMinutes(run.actualMinutes)} vs {formatMinutes(run.normMinutes)}
-        </div>
-      </div>
-    </li>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Recipes vs norm: strip plot per recipe, staff breakdown on expand
-// ─────────────────────────────────────────────────────────────────────────────
-
-const RECIPE_GRID = '220px 1fr 100px 190px 16px';
-const AXIS_LIMIT = 60;
-/** The batch "on-target" bucket in productivity.ts: -8% to +12%. */
-const NORM_BAND = { from: -8, to: 12 };
-
-function axisPos(delta: number): number {
-  const clamped = Math.max(-AXIS_LIMIT, Math.min(AXIS_LIMIT, delta));
-  return ((clamped + AXIS_LIMIT) / (AXIS_LIMIT * 2)) * 100;
-}
-
-function RecipeLegend() {
-  return (
-    <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-      <LegendItem swatch={<Dot color="var(--viz-2)" />} label="Batch" />
-      <LegendItem swatch={<Dot color={OVER_NORM} />} label="Slow batch" />
-      <LegendItem swatch={<Dot hollow />} label="Failed" />
-      <LegendItem swatch={<span style={{ width: 2, height: 14, background: 'var(--viz-1)' }} />} label="Average" />
-    </div>
-  );
-}
-
-function Dot({ color, hollow, size = 10 }: { color?: string; hollow?: boolean; size?: number }) {
+function ActualSwatch({ over, width = 16 }: { over?: boolean; width?: number }) {
   return (
     <span
       style={{
         display: 'inline-block',
-        width: size,
-        height: size,
-        borderRadius: '50%',
-        background: hollow ? '#ffffff' : color,
-        border: hollow ? '2px solid var(--color-error)' : undefined,
-        boxSizing: 'border-box',
+        width,
+        height: 8,
+        borderRadius: 2,
+        background: over ? OVER_COLOUR : 'var(--viz-2)',
       }}
     />
   );
 }
 
-function RecipeAxisHeader() {
+function BarLegend() {
   return (
-    <div aria-hidden style={{ ...COLUMN_HEADER_STYLE, gridTemplateColumns: RECIPE_GRID }}>
-      <span>Recipe</span>
-      <div style={{ position: 'relative' }}>
-        <span>{AXIS_LIMIT}% faster</span>
-        <span style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>Norm</span>
-        <span style={{ position: 'absolute', right: 0 }}>{AXIS_LIMIT}% slower</span>
+    <span aria-hidden style={{ display: 'flex', gap: 14, fontWeight: 600, fontSize: 11, color: 'var(--color-text-secondary)' }}>
+      <LegendItem swatch={<ActualSwatch />} label="Actual" />
+      <LegendItem swatch={<ExpectedTick />} label="Expected" />
+      <LegendItem swatch={<ActualSwatch over />} label={`Over by ${RUN_OVER_PERCENT}%+`} />
+    </span>
+  );
+}
+
+const AXIS_STEPS = [5, 10, 15, 30, 60, 120, 180, 240, 300, 360, 480, 600, 720, 1200, 1800, 2400, 3000, 6000];
+
+/** Round-number ticks from 0, at most five, with the last one at or above `max`. */
+function axisTicks(max: number): number[] {
+  const step = AXIS_STEPS.find(s => max / s <= 4) ?? AXIS_STEPS[AXIS_STEPS.length - 1];
+  const count = Math.max(1, Math.ceil(max / step));
+  return Array.from({ length: count + 1 }, (_, i) => i * step);
+}
+
+function TimeTable({ rows, total, view }: { rows: TimeRow[]; total: TimeRow; view: BreakdownBy }) {
+  const ticks = axisTicks(Math.max(1, ...rows.map(r => Math.max(r.expectedMinutes, r.actualMinutes))));
+  const max = ticks[ticks.length - 1];
+  const label = VIEWS.find(v => v.id === view)!.label;
+  return (
+    <div>
+      <div aria-hidden style={{ ...COLUMN_HEADER_STYLE, gridTemplateColumns: timeGrid(view) }}>
+        <span>{label}</span>
+        <span />
+        <span style={{ textAlign: 'right' }}>Expected</span>
+        <span style={{ textAlign: 'right' }}>Actual</span>
+        <span style={{ textAlign: 'right' }}>Difference</span>
+        {hasFlagColumn(view) && <span>Needs support</span>}
+        <span />
       </div>
-      <span style={{ textAlign: 'right' }}>Average</span>
-      <span>Needs support</span>
-      <span />
-    </div>
-  );
-}
-
-function StripTrack({ children }: { children: React.ReactNode }) {
-  return (
-    <div aria-hidden style={{ position: 'relative', height: 22 }}>
-      <div style={{ position: 'absolute', left: 0, right: 0, top: 10, height: 1, background: 'var(--color-border-subtle)' }} />
-      <div
-        style={{
-          position: 'absolute',
-          top: 4,
-          bottom: 4,
-          left: `${axisPos(NORM_BAND.from)}%`,
-          width: `${axisPos(NORM_BAND.to) - axisPos(NORM_BAND.from)}%`,
-          background: 'var(--color-bg-hover)',
-          borderRadius: 4,
-        }}
+      {/* The total is ~10x any single row, so it gets its own scale rather than flattening every other bar. */}
+      <TimeRowView
+        row={{ ...total, flags: [] }}
+        view={view}
+        max={Math.max(1, total.expectedMinutes, total.actualMinutes)}
+        ticks={[]}
+        emphasis
       />
-      <div style={{ position: 'absolute', top: 2, bottom: 2, left: '50%', width: 1, background: 'var(--color-border)' }} />
-      {children}
-    </div>
-  );
-}
-
-function RecipeRow({ recipe }: { recipe: RecipeSummary }) {
-  const [open, setOpen] = useState(false);
-  const flag = recipe.flags[0];
-  const description =
-    `${recipe.recipeName}: ${recipe.batches.length} batch${recipe.batches.length === 1 ? '' : 'es'}, average ${vsNorm(recipe.avgDeltaPercent)}.` +
-    (recipe.flags.length > 0
-      ? ` Needs support: ${recipe.flags.map(f => `${f.workerName} ${vsNorm(f.deltaPercent)}`).join(', ')}.`
-      : '');
-  return (
-    <div style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-      <button
-        onClick={() => setOpen(v => !v)}
-        aria-expanded={open}
-        aria-label={description}
+      <div
+        aria-hidden
         style={{
-          ...RESET_BUTTON,
-          width: '100%',
           display: 'grid',
-          gridTemplateColumns: RECIPE_GRID,
+          gridTemplateColumns: timeGrid(view),
           gap: 16,
-          alignItems: 'center',
-          padding: '10px 32px',
-          cursor: 'pointer',
-          fontFamily: 'var(--font-primary)',
+          padding: '8px 32px 2px',
+          fontSize: 10,
+          fontWeight: 600,
+          color: 'var(--color-text-muted)',
         }}
       >
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {recipe.recipeName}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-            {recipe.batches.length} batch{recipe.batches.length === 1 ? '' : 'es'}
-          </div>
-        </div>
-        <StripTrack>
-          {recipe.batches.map(b => {
-            const failed = b.batch.status === 'failed';
-            const slow = (b.deltaPercent ?? 0) >= SLOW_PERCENT;
-            return (
-              <span
-                key={b.batch.id}
-                title={batchTooltip(b)}
-                style={{
-                  position: 'absolute',
-                  top: 6,
-                  left: `calc(${axisPos(b.deltaPercent ?? AXIS_LIMIT)}% - 5px)`,
-                  opacity: failed ? 1 : 0.8,
-                  lineHeight: 0,
-                }}
-              >
-                <Dot color={slow ? OVER_NORM : 'var(--viz-2)'} hollow={failed} />
-              </span>
-            );
-          })}
-          {recipe.avgDeltaPercent != null && (
+        <span />
+        <span style={{ position: 'relative', display: 'block', height: 14 }}>
+          {ticks.map((t, i) => (
             <span
+              key={t}
               style={{
                 position: 'absolute',
                 top: 0,
-                height: 22,
-                width: 2,
-                left: `calc(${axisPos(recipe.avgDeltaPercent)}% - 1px)`,
-                background: 'var(--viz-1)',
+                left: `${(t / max) * 100}%`,
+                transform: i === 0 ? 'none' : i === ticks.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)',
+                whiteSpace: 'nowrap',
+                fontVariantNumeric: 'tabular-nums',
               }}
-            />
-          )}
-        </StripTrack>
-        <span style={{ fontSize: 13, fontWeight: 700, textAlign: 'right' }}>{vsNorm(recipe.avgDeltaPercent)}</span>
-        <span style={{ display: 'flex', gap: 4, alignItems: 'center', minWidth: 0 }}>
-          {flag && <FlagChip name={flag.workerName} delta={flag.deltaPercent} />}
-          {recipe.flags.length > 1 && (
-            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>+{recipe.flags.length - 1}</span>
-          )}
+            >
+              {t === 0 ? '0' : formatMinutes(t)}
+            </span>
+          ))}
         </span>
-        <span style={{ color: 'var(--color-text-muted)', display: 'flex' }}>
-          {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+      </div>
+      {rows.map(r => (
+        <TimeRowView key={r.id} row={r} view={view} max={max} ticks={ticks} />
+      ))}
+    </div>
+  );
+}
+
+function TimeRowView({
+  row,
+  view,
+  max,
+  ticks,
+  emphasis,
+}: {
+  row: TimeRow;
+  view: BreakdownBy;
+  max: number;
+  ticks: number[];
+  emphasis?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const expandable = (row.children?.length ?? 0) > 0;
+  const diff = diffLabel(row);
+  const sublabel = rowSublabel(row, view);
+  const description =
+    `${row.label}: expected ${formatMinutes(row.expectedMinutes)}, actual ${formatMinutes(row.actualMinutes)}, ${diff.main}` +
+    (diff.sub ? ` (${diff.sub})` : '') +
+    `. ${row.batchCount} batch${row.batchCount === 1 ? '' : 'es'}.` +
+    (row.flags.length > 0 ? ` Needs support: ${row.flags.map(f => `${flagSubject(f, view)} ${vsExpected(f.deltaPercent)}`).join(', ')}.` : '');
+
+  const cells = (
+    <>
+      <span style={{ display: 'block', minWidth: 0 }}>
+        <span
+          style={{
+            display: 'block',
+            fontSize: emphasis ? 14 : 13,
+            fontWeight: emphasis ? 700 : 600,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {row.label}
         </span>
-      </button>
-      {open && (
-        <ul style={{ listStyle: 'none', margin: 0, padding: '0 0 10px', background: '#ffffff' }}>
-          {recipe.staff.map(s => {
-            const flagged = recipe.flags.some(f => f.userId === s.userId);
-            const d = s.avgDeltaPercent ?? 0;
-            const from = Math.min(axisPos(0), axisPos(d));
-            const width = Math.abs(axisPos(d) - axisPos(0));
+        <span style={{ display: 'block', fontSize: 11, color: 'var(--color-text-muted)' }}>{sublabel}</span>
+      </span>
+      <BulletBar row={row} max={max} ticks={ticks} over={diff.isOver} />
+      <span style={NUMBER_CELL}>{formatMinutes(row.expectedMinutes)}</span>
+      <span style={NUMBER_CELL}>{formatMinutes(row.actualMinutes)}</span>
+      <DiffCell diff={diff} />
+      {hasFlagColumn(view) && <span style={{ display: 'flex', gap: 4, alignItems: 'center', minWidth: 0 }}>
+        {row.flags.length > 0 && (
+          <FlagChip
+            label={
+              view === 'employee'
+                ? `Slow on ${row.flags.length} product${row.flags.length === 1 ? '' : 's'}`
+                : `${flagSubject(row.flags[0], view)} · ${vsExpected(row.flags[0].deltaPercent)}`
+            }
+          />
+        )}
+        {view === 'product' && row.flags.length > 1 && (
+          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>+{row.flags.length - 1}</span>
+        )}
+      </span>}
+      <span style={{ color: 'var(--color-text-muted)', display: 'flex' }}>
+        {expandable && (open ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+      </span>
+    </>
+  );
+
+  const rowStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: timeGrid(view),
+    gap: 16,
+    alignItems: 'center',
+    padding: '10px 32px',
+    width: '100%',
+    fontFamily: 'var(--font-primary)',
+  };
+
+  return (
+    <div style={{ borderBottom: `${emphasis ? 2 : 1}px solid var(--color-border${emphasis ? '' : '-subtle'})` }}>
+      {expandable ? (
+        <button
+          onClick={() => setOpen(v => !v)}
+          aria-expanded={open}
+          aria-label={description}
+          style={{ ...RESET_BUTTON, ...rowStyle, cursor: 'pointer' }}
+        >
+          {cells}
+        </button>
+      ) : (
+        <div role="group" aria-label={description} style={rowStyle}>
+          {cells}
+        </div>
+      )}
+      {open && row.children && (
+        <ul style={{ listStyle: 'none', margin: 0, padding: '0 0 10px' }}>
+          {row.children.map(c => {
+            const cd = diffLabel(c);
             return (
-              <li
-                key={s.userId}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: RECIPE_GRID,
-                  gap: 16,
-                  alignItems: 'center',
-                  padding: '6px 32px',
-                }}
-              >
-                <span style={{ fontSize: 12, paddingLeft: 12, color: 'var(--color-text-primary)' }}>
-                  {s.workerName}
+              <li key={c.id} style={{ ...rowStyle, padding: '6px 32px' }}>
+                <span style={{ fontSize: 12, paddingLeft: 12, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {c.label}
                   <span style={{ color: 'var(--color-text-muted)' }}>
                     {' '}
-                    · {s.batchCount} batch{s.batchCount === 1 ? '' : 'es'}
+                    · {c.batchCount} batch{c.batchCount === 1 ? '' : 'es'}
                   </span>
                 </span>
-                <StripTrack>
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: 7,
-                      height: 8,
-                      left: `${from}%`,
-                      width: `${Math.max(width, 0.5)}%`,
-                      borderRadius: 3,
-                      background: d >= SLOW_PERCENT ? OVER_NORM : 'var(--viz-2)',
-                    }}
-                  />
-                </StripTrack>
-                <span style={{ fontSize: 12, fontWeight: 600, textAlign: 'right' }}>{vsNorm(s.avgDeltaPercent)}</span>
-                <span>{flagged && <FlagChip label="Very slow" />}</span>
+                <BulletBar row={c} max={max} ticks={ticks} over={cd.isOver} thin />
+                <span style={{ ...NUMBER_CELL, fontSize: 12, fontWeight: 500 }}>{formatMinutes(c.expectedMinutes)}</span>
+                <span style={{ ...NUMBER_CELL, fontSize: 12, fontWeight: 500 }}>{formatMinutes(c.actualMinutes)}</span>
+                <DiffCell diff={cd} small />
+                {hasFlagColumn(view) && <span>{c.flags.length > 0 && <FlagChip label="Very slow" />}</span>}
                 <span />
               </li>
             );
@@ -768,7 +707,112 @@ function RecipeRow({ recipe }: { recipe: RecipeSummary }) {
   );
 }
 
-function FlagChip({ name, delta, label }: { name?: string; delta?: number; label?: string }) {
+/**
+ * Bullet bar: actual time as the bar, expected time as a navy tick.
+ * Only the stretch past the tick turns orange, and only once the row is
+ * over the tolerance, so the colour and the Difference column agree.
+ */
+function BulletBar({
+  row,
+  max,
+  ticks,
+  over,
+  thin,
+}: {
+  row: TimeRow;
+  max: number;
+  ticks: number[];
+  over: boolean;
+  thin?: boolean;
+}) {
+  const pct = (m: number) => Math.max(0.5, Math.min(100, (m / max) * 100));
+  const actual = pct(row.actualMinutes);
+  const expected = pct(row.expectedMinutes);
+  const barHeight = thin ? 8 : 12;
+  const tickHeight = thin ? 14 : 20;
+  return (
+    <span aria-hidden style={{ position: 'relative', display: 'block', height: tickHeight }}>
+      {ticks.slice(1).map(t => (
+        <span
+          key={t}
+          style={{
+            position: 'absolute',
+            top: thin ? -6 : -10,
+            bottom: thin ? -6 : -10,
+            left: `${(t / max) * 100}%`,
+            width: 1,
+            background: 'var(--color-border-subtle)',
+          }}
+        />
+      ))}
+      <span
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: (tickHeight - barHeight) / 2,
+          height: barHeight,
+          width: `${over ? expected : actual}%`,
+          borderRadius: over ? '3px 0 0 3px' : 3,
+          background: 'var(--viz-2)',
+        }}
+      />
+      {over && (
+        <span
+          style={{
+            position: 'absolute',
+            left: `${expected}%`,
+            top: (tickHeight - barHeight) / 2,
+            height: barHeight,
+            width: `${actual - expected}%`,
+            borderRadius: '0 3px 3px 0',
+            background: OVER_COLOUR,
+          }}
+        />
+      )}
+      <ExpectedTick height={tickHeight} style={{ position: 'absolute', top: 0, left: `${expected}%`, transform: 'translateX(-1px)' }} />
+    </span>
+  );
+}
+
+function ExpectedTick({ height = 14, style }: { height?: number; style?: React.CSSProperties }) {
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        width: 3,
+        height,
+        borderRadius: 1.5,
+        background: 'var(--viz-1)',
+        boxShadow: '0 0 0 1px #ffffff',
+        ...style,
+      }}
+    />
+  );
+}
+
+type Diff = { main: string; sub: string; isOver: boolean };
+
+function DiffCell({ diff, small }: { diff: Diff; small?: boolean }) {
+  return (
+    <span style={{ display: 'block', textAlign: 'right' }}>
+      <span
+        style={{
+          fontSize: small ? 12 : 13,
+          fontWeight: small ? 600 : 700,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 4,
+        }}
+      >
+        {diff.isOver && <AlertTriangle size={12} color={OVER_COLOUR} />}
+        {diff.main}
+      </span>
+      {diff.sub && <span style={{ display: 'block', fontSize: 11, color: 'var(--color-text-muted)' }}>{diff.sub}</span>}
+    </span>
+  );
+}
+
+function FlagChip({ label }: { label: string }) {
   return (
     <span
       style={{
@@ -787,35 +831,34 @@ function FlagChip({ name, delta, label }: { name?: string; delta?: number; label
         textOverflow: 'ellipsis',
       }}
     >
-      <AlertTriangle size={11} color={OVER_NORM} style={{ flexShrink: 0 }} />
-      {label ?? `${name} · ${vsNorm(delta)}`}
+      <AlertTriangle size={11} color={OVER_COLOUR} style={{ flexShrink: 0 }} />
+      {label}
     </span>
   );
 }
 
-function batchTooltip(b: BatchProductivity): string {
-  const when = `${formatHumanDate(b.batch.date)} ${b.batch.startTime}`;
-  const times =
-    b.targetMinutes != null
-      ? `${formatMinutes(b.actualMinutes)} vs ${formatMinutes(b.targetMinutes)} norm`
-      : formatMinutes(b.actualMinutes);
-  const status = b.batch.status === 'failed' ? ' · failed' : '';
-  return `${b.workerName} · ${when} · ${b.batch.actualQty} units · ${times} (${vsNorm(b.deltaPercent)})${status}`;
+function flagSubject(f: { workerName: string; recipeName: string }, view: BreakdownBy): string {
+  return view === 'employee' ? f.recipeName : f.workerName;
+}
+
+function rowSublabel(row: TimeRow, view: BreakdownBy): string {
+  const batches = `${row.batchCount} batch${row.batchCount === 1 ? '' : 'es'}`;
+  return view === 'run' && row.sublabel ? `${row.sublabel} · ${batches}` : batches;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Kitchen trend
 // ─────────────────────────────────────────────────────────────────────────────
 
-type TrendMetric = 'norm' | 'uplh';
+type TrendMetric = 'expected' | 'uplh';
 
 function TrendChart({ points, periodDates }: { points: TrendPoint[]; periodDates: Set<string> }) {
-  const [metric, setMetric] = useState<TrendMetric>('norm');
+  const [metric, setMetric] = useState<TrendMetric>('expected');
   const data = points.map((p, i) => {
-    const value = metric === 'norm' ? p.deltaPercent : p.unitsPerLabourHour;
+    const value = metric === 'expected' ? p.deltaPercent : p.unitsPerLabourHour;
     const lastWeek = points
       .slice(Math.max(0, i - 6), i + 1)
-      .map(w => (metric === 'norm' ? w.deltaPercent : w.unitsPerLabourHour))
+      .map(w => (metric === 'expected' ? w.deltaPercent : w.unitsPerLabourHour))
       .filter((v): v is number => v != null);
     return {
       date: p.date,
@@ -825,14 +868,14 @@ function TrendChart({ points, periodDates }: { points: TrendPoint[]; periodDates
       inPeriod: periodDates.has(p.date),
     };
   });
-  const format = (v: number) => (metric === 'norm' ? normAxisLabel(v) : v.toFixed(1));
+  const format = (v: number) => (metric === 'expected' ? expectedAxisLabel(v) : v.toFixed(1));
 
   return (
     <div style={{ padding: '12px 32px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: 4 }}>
           {([
-            { id: 'norm', label: 'vs Pret norm' },
+            { id: 'expected', label: 'Actual vs expected' },
             { id: 'uplh', label: 'Units per labour hour' },
           ] as Array<{ id: TrendMetric; label: string }>).map(opt => (
             <button
@@ -845,7 +888,7 @@ function TrendChart({ points, periodDates }: { points: TrendPoint[]; periodDates
             </button>
           ))}
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 14 }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 14, fontSize: 11, color: 'var(--color-text-secondary)' }}>
           <LegendItem swatch={<span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--viz-2)' }} />} label="Selected period" />
           <LegendItem
             swatch={<span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--viz-2)', opacity: 0.3 }} />}
@@ -863,10 +906,10 @@ function TrendChart({ points, periodDates }: { points: TrendPoint[]; periodDates
               tick={{ fontSize: 11 }}
               tickLine={false}
               axisLine={false}
-              width={metric === 'norm' ? 100 : 40}
+              width={metric === 'expected' ? 76 : 40}
               tickFormatter={format}
             />
-            {metric === 'norm' && <ReferenceLine y={0} stroke="var(--viz-1)" strokeDasharray="4 4" />}
+            {metric === 'expected' && <ReferenceLine y={0} stroke="var(--viz-1)" strokeDasharray="4 4" />}
             <Tooltip
               formatter={(v, name) => [
                 typeof v === 'number' ? format(v) : '—',
@@ -903,23 +946,34 @@ function TrendChart({ points, periodDates }: { points: TrendPoint[]; periodDates
 // Batch table
 // ─────────────────────────────────────────────────────────────────────────────
 
+type BatchSortKey = 'date' | 'recipe' | 'worker' | 'bench' | 'qty' | 'expected' | 'duration' | 'delta';
+
+const BATCH_FILTERS: Array<{ id: 'all' | 'fast' | 'on-target' | 'slow' | 'failed'; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'fast', label: 'Under' },
+  { id: 'on-target', label: 'On track' },
+  { id: 'slow', label: 'Over' },
+  { id: 'failed', label: 'Failed' },
+];
+
 function BatchTable({
   rows,
   sort,
   onSort,
 }: {
   rows: BatchProductivity[];
-  sort: { by: string; dir: 'asc' | 'desc' };
-  onSort: (by: 'date' | 'recipe' | 'worker' | 'bench' | 'qty' | 'duration' | 'delta') => void;
+  sort: { by: BatchSortKey; dir: 'asc' | 'desc' };
+  onSort: (by: BatchSortKey) => void;
 }) {
-  const cols: Array<{ id: 'date' | 'recipe' | 'worker' | 'bench' | 'qty' | 'duration' | 'delta'; label: string; align?: 'left' | 'right' }> = [
+  const cols: Array<{ id: BatchSortKey; label: string; align?: 'left' | 'right' }> = [
     { id: 'date', label: 'When' },
-    { id: 'recipe', label: 'Recipe' },
-    { id: 'worker', label: 'Worker' },
+    { id: 'recipe', label: 'Product' },
+    { id: 'worker', label: 'Employee' },
     { id: 'bench', label: 'Bench' },
     { id: 'qty', label: 'Qty', align: 'right' },
+    { id: 'expected', label: 'Expected', align: 'right' },
     { id: 'duration', label: 'Actual', align: 'right' },
-    { id: 'delta', label: 'vs norm', align: 'right' },
+    { id: 'delta', label: 'Difference', align: 'right' },
   ];
   return (
     <div style={{ overflow: 'auto' }}>
@@ -999,15 +1053,15 @@ function BatchRow({ row }: { row: BatchProductivity }) {
       <td style={{ padding: '10px 12px', color: 'var(--color-text-muted)', fontSize: 11 }}>{row.benchName}</td>
       <td style={{ padding: '10px 12px', textAlign: 'right' }}>{row.batch.actualQty}</td>
       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }}>
+        {row.targetMinutes == null ? '—' : formatMinutes(row.targetMinutes)}
+      </td>
+      <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }}>
         {formatMinutes(row.actualMinutes)}
-        {row.targetMinutes != null && (
-          <div style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>norm {formatMinutes(row.targetMinutes)}</div>
-        )}
       </td>
       <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700 }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          {row.bucket === 'slow' && <Dot color={OVER_NORM} size={8} />}
-          {row.deltaPercent == null ? '—' : vsNorm(row.deltaPercent)}
+          {row.bucket === 'slow' && <AlertTriangle size={11} color={OVER_COLOUR} />}
+          {row.deltaPercent == null ? '—' : vsExpected(row.deltaPercent)}
         </span>
       </td>
     </tr>
@@ -1027,6 +1081,7 @@ function EmptyState({ text }: { text: string }) {
 const COLUMN_HEADER_STYLE: React.CSSProperties = {
   display: 'grid',
   gap: 16,
+  alignItems: 'center',
   padding: '8px 32px',
   borderBottom: '1px solid var(--color-border-subtle)',
   background: 'var(--color-bg-hover)',
@@ -1035,6 +1090,13 @@ const COLUMN_HEADER_STYLE: React.CSSProperties = {
   color: 'var(--color-text-muted)',
   textTransform: 'uppercase',
   letterSpacing: '0.04em',
+};
+
+const NUMBER_CELL: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 600,
+  textAlign: 'right',
+  fontVariantNumeric: 'tabular-nums',
 };
 
 const LABEL_STYLE: React.CSSProperties = {
@@ -1066,18 +1128,6 @@ const LINK_BUTTON_STYLE: React.CSSProperties = {
   fontFamily: 'var(--font-primary)',
 };
 
-const SR_ONLY: React.CSSProperties = {
-  position: 'absolute',
-  width: 1,
-  height: 1,
-  padding: 0,
-  margin: -1,
-  overflow: 'hidden',
-  clip: 'rect(0, 0, 0, 0)',
-  whiteSpace: 'nowrap',
-  border: 0,
-};
-
 function pillStyle(active: boolean, small = false): React.CSSProperties {
   return {
     padding: small ? '4px 8px' : '6px 10px',
@@ -1093,34 +1143,38 @@ function pillStyle(active: boolean, small = false): React.CSSProperties {
   };
 }
 
-/** From the rounded figures shown beside it, so "52m vs 50m" always reads "2m". */
-function runOverMinutes(run: RunSummary): number {
-  return Math.round(run.actualMinutes) - Math.round(run.normMinutes);
+/**
+ * Within the tolerance either way a row reads "On track", with the exact minutes
+ * underneath, so the orange colour and the words always agree.
+ * Minutes come from the rounded figures shown beside them.
+ */
+function diffLabel(row: TimeRow): Diff {
+  const d = Math.round(row.actualMinutes) - Math.round(row.expectedMinutes);
+  const pct = row.deltaPercent;
+  const isOver = (pct ?? 0) >= RUN_OVER_PERCENT;
+  if (isOver) return { main: `${formatMinutes(d)} over`, sub: pctText(pct), isOver };
+  if ((pct ?? 0) <= -RUN_OVER_PERCENT) return { main: `${formatMinutes(-d)} under`, sub: pctText(pct), isOver };
+  const within = d >= 1 ? `${formatMinutes(d)} over` : d <= -1 ? `${formatMinutes(-d)} under` : '';
+  return { main: 'On track', sub: [within, pctText(pct)].filter(Boolean).join(' · '), isOver };
 }
 
-/** Scheduled minus actual; negative when the run outlasted its slot. */
-function runSpareMinutes(run: RunSummary): number | undefined {
-  if (run.scheduledMinutes == null) return undefined;
-  return Math.round(run.scheduledMinutes) - Math.round(run.actualMinutes);
+/** Exact percentage with direction, e.g. "2% under". Empty when it rounds to 0. */
+function pctText(delta: number | undefined): string {
+  if (delta == null || Math.round(delta) === 0) return '';
+  return `${Math.abs(Math.round(delta))}% ${delta > 0 ? 'over' : 'under'}`;
 }
 
-function runsBadge(runs: RunSummary[], multiDay: boolean): string | undefined {
-  const spare = runs.reduce((a, r) => a + Math.max(0, runSpareMinutes(r) ?? 0), 0);
-  if (spare < 1) return multiDay ? 'average per day' : undefined;
-  return `${formatMinutes(spare)} scheduled but not needed${multiDay ? ' a day' : ''}`;
-}
-
-/** "12% faster" / "8% slower" / "on norm". Mirrors formatDelta in Pret's vocabulary. */
-function vsNorm(delta: number | undefined): string {
+/** "12% over" / "8% under" / "on track". */
+function vsExpected(delta: number | undefined): string {
   if (delta == null) return '—';
-  if (delta <= -3) return `${Math.abs(Math.round(delta))}% faster`;
-  if (delta >= 3) return `${Math.round(delta)}% slower`;
-  return 'on norm';
+  if (delta <= -3) return `${Math.abs(Math.round(delta))}% under`;
+  if (delta >= 3) return `${Math.round(delta)}% over`;
+  return 'on track';
 }
 
-function normAxisLabel(v: number): string {
-  if (v === 0) return 'Norm';
-  return v > 0 ? `${Math.round(v)}% slower` : `${Math.abs(Math.round(v))}% faster`;
+function expectedAxisLabel(v: number): string {
+  if (v === 0) return 'Expected';
+  return v > 0 ? `${Math.round(v)}% over` : `${Math.abs(Math.round(v))}% under`;
 }
 
 function shortDate(iso: string): string {
@@ -1139,24 +1193,26 @@ function formatHumanDate(iso: string): string {
 // Headline
 // ─────────────────────────────────────────────────────────────────────────────
 
-function headlineFor(s: SiteProductivity, multiDay: boolean): { title: string; tone: 'info' | 'warning' } {
+function headlineFor(s: SiteProductivity): { title: string; tone: 'info' | 'warning' } {
   if (s.batchCount === 0) return { title: 'No bench activity in this period yet.', tone: 'info' };
   const flag = s.flags[0];
   if (flag) {
     const next = flag.quickest
-      ? ` ${flag.quickest.workerName} runs it ${vsNorm(flag.quickest.deltaPercent)}, so pair them on the next run.`
+      ? ` ${flag.quickest.workerName} is ${Math.abs(Math.round(flag.quickest.deltaPercent))}% quicker, so pair them on the next run.`
       : ' Worth a five-minute chat before the next run.';
-    return { title: `${flag.workerName} is ${vsNorm(flag.deltaPercent)} than norm on ${flag.recipeName}.${next}`, tone: 'warning' };
-  }
-  const worst = [...s.runs]
-    .filter(r => (r.deltaPercent ?? 0) >= RUN_OVER_PERCENT)
-    .sort((a, b) => runOverMinutes(b) - runOverMinutes(a))[0];
-  if (worst) {
     return {
-      title: `${worst.benchName} ${worst.runLabel} ran ${formatMinutes(runOverMinutes(worst))} over norm${multiDay ? ' a day' : ''}.`,
+      title: `${flag.workerName} takes ${Math.round(flag.deltaPercent)}% longer than expected on ${flag.recipeName}.${next}`,
       tone: 'warning',
     };
   }
-  const pace = vsNorm(s.avgDeltaPercent);
-  return { title: `Kitchen ran ${pace} across ${s.batchCount} batches.`, tone: 'info' };
+  const run = s.breakdown.run.find(r => (r.deltaPercent ?? 0) >= RUN_OVER_PERCENT);
+  if (run) {
+    const d = Math.round(run.actualMinutes) - Math.round(run.expectedMinutes);
+    return { title: `${run.label} took ${formatMinutes(d)} longer than expected.`, tone: 'warning' };
+  }
+  const pct = s.total.deltaPercent ?? 0;
+  const n = `${s.total.batchCount} batches`;
+  if (pct <= -3) return { title: `The kitchen was ${Math.abs(Math.round(pct))}% quicker than expected across ${n}.`, tone: 'info' };
+  if (pct >= 3) return { title: `The kitchen took ${Math.round(pct)}% longer than expected across ${n}.`, tone: 'info' };
+  return { title: `The kitchen ran to expected time across ${n}.`, tone: 'info' };
 }

@@ -109,8 +109,8 @@ export function batchProductivity(batch: ProductionBatch): BatchProductivity {
   let bucket: BatchProductivity['bucket'];
   if (batch.status === 'failed') bucket = 'failed';
   else if (deltaPercent == null) bucket = 'no-target';
-  else if (deltaPercent <= -8) bucket = 'fast';
-  else if (deltaPercent >= 12) bucket = 'slow';
+  else if (deltaPercent <= -RUN_OVER_PERCENT) bucket = 'fast';
+  else if (deltaPercent >= RUN_OVER_PERCENT) bucket = 'slow';
   else bucket = 'on-target';
 
   return {
@@ -183,6 +183,10 @@ export type SiteProductivity = {
   /** Every staff member running very slow on a recipe, worst first. */
   flags: StaffFlag[];
   labour: LabourSummary;
+  /** Expected vs actual per product, bench, employee and run. */
+  breakdown: Record<BreakdownBy, TimeRow[]>;
+  /** All productions: every timed batch in the period. */
+  total: TimeRow;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -346,14 +350,34 @@ export type LabourSummary = {
 
 /** A staff member is flagged when this much slower than norm on a recipe. */
 export const VERY_SLOW_PERCENT = 25;
-/** Run-level over-norm threshold, matching the batch "slow" bucket. */
-export const RUN_OVER_PERCENT = 12;
+/** Tolerance either side of expected: rows and batches inside it are "On track". A placeholder until Pret confirms theirs. */
+export const RUN_OVER_PERCENT = 10;
 const MOD_BOH_HOURS_PER_DAY = 1.5;
 /** On-demand singles carry 1–2 minute norms where a minute's wobble reads as +100%. */
 const MIN_NORM_MINUTES = 3;
 
 function hasMeaningfulNorm(it: BatchProductivity): boolean {
   return it.targetMinutes != null && it.targetMinutes >= MIN_NORM_MINUTES;
+}
+
+type Run = NonNullable<Bench['runs']>[number];
+
+/** The run a batch belongs to: the one whose slot it started in, else the nearest by start time. */
+function runFor(benchId: BenchId, startTime: string): Run | undefined {
+  const runs = getBench(benchId)?.runs ?? [];
+  const t = hhmmToMinutes(startTime);
+  const containing = runs
+    .filter(r => {
+      const start = hhmmToMinutes(r.startTime);
+      return t >= start - 15 && t < start + r.durationMinutes;
+    })
+    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+  return (
+    containing[containing.length - 1] ??
+    [...runs].sort(
+      (a, b) => Math.abs(hhmmToMinutes(a.startTime) - t) - Math.abs(hhmmToMinutes(b.startTime) - t),
+    )[0]
+  );
 }
 
 function runSummaries(items: BatchProductivity[], benches: BenchId[]): RunSummary[] {
@@ -364,17 +388,7 @@ function runSummaries(items: BatchProductivity[], benches: BenchId[]): RunSummar
     const onBench = items.filter(it => it.batch.benchId === benchId && hasMeaningfulNorm(it));
     const buckets = new Map<string, BatchProductivity[]>();
     for (const it of onBench) {
-      const t = hhmmToMinutes(it.batch.startTime);
-      const containing = runs.filter(r => {
-        const start = hhmmToMinutes(r.startTime);
-        return t >= start - 15 && t < start + r.durationMinutes;
-      });
-      const run =
-        containing[containing.length - 1] ??
-        [...runs].sort(
-          (a, b) => Math.abs(hhmmToMinutes(a.startTime) - t) - Math.abs(hhmmToMinutes(b.startTime) - t),
-        )[0];
-      const key = run?.id ?? 'all-day';
+      const key = runFor(benchId, it.batch.startTime)?.id ?? 'all-day';
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key)!.push(it);
     }
@@ -505,6 +519,103 @@ function weightedAvgDelta(items: BatchProductivity[]): number | undefined {
   return deltaWeightedSum / weightSum;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Expected vs actual breakdown
+//
+// "Expected" is the product's standard time scaled to the batch size (the
+// same figure as targetMinutes). Totals cover the whole period, not a daily
+// average, so the rows add up to the site total.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type BreakdownBy = 'product' | 'bench' | 'employee' | 'run';
+
+export type TimeRow = {
+  id: string;
+  label: string;
+  sublabel?: string;
+  expectedMinutes: number;
+  actualMinutes: number;
+  /** +10 = took 10% longer than expected. */
+  deltaPercent: number | undefined;
+  batchCount: number;
+  /** Run rows only: scheduled slot length summed over the days it ran. */
+  scheduledMinutes?: number;
+  flags: StaffFlag[];
+  children?: TimeRow[];
+};
+
+function timeRow(id: string, label: string, items: BatchProductivity[], flags: StaffFlag[], extra?: Partial<TimeRow>): TimeRow {
+  const expected = items.reduce((a, it) => a + (it.targetMinutes ?? 0), 0);
+  const actual = items.reduce((a, it) => a + it.actualMinutes, 0);
+  return {
+    id,
+    label,
+    expectedMinutes: expected,
+    actualMinutes: actual,
+    deltaPercent: expected > 0 ? ((actual - expected) / expected) * 100 : undefined,
+    batchCount: items.length,
+    flags,
+    ...extra,
+  };
+}
+
+function groupItems(items: BatchProductivity[], key: (it: BatchProductivity) => string): Map<string, BatchProductivity[]> {
+  const map = new Map<string, BatchProductivity[]>();
+  for (const it of items) {
+    const k = key(it);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k)!.push(it);
+  }
+  return map;
+}
+
+function byOverrun(a: TimeRow, b: TimeRow): number {
+  return b.actualMinutes - b.expectedMinutes - (a.actualMinutes - a.expectedMinutes);
+}
+
+function timeBreakdown(items: BatchProductivity[], flags: StaffFlag[]): Record<BreakdownBy, TimeRow[]> {
+  const timed = items.filter(it => isSpeedRelevant(it.batch) && hasMeaningfulNorm(it));
+  const userOf = (it: BatchProductivity) => it.batch.assignedUserId ?? 'unassigned';
+
+  const product = Array.from(groupItems(timed, it => it.batch.productionItemId)).map(([id, list]) => {
+    const own = flags.filter(f => f.productionItemId === id);
+    const children = Array.from(groupItems(list, userOf))
+      .map(([uid, sub]) => timeRow(uid, sub[0].workerName, sub, own.filter(f => f.userId === uid)))
+      .sort(byOverrun);
+    return timeRow(id, list[0].recipeName, list, own, { children });
+  });
+
+  const employee = Array.from(groupItems(timed, userOf)).map(([uid, list]) => {
+    const own = flags.filter(f => f.userId === uid);
+    const children = Array.from(groupItems(list, it => it.batch.productionItemId))
+      .map(([id, sub]) => timeRow(id, sub[0].recipeName, sub, own.filter(f => f.productionItemId === id)))
+      .sort(byOverrun);
+    return timeRow(uid, list[0].workerName, list, own, { children });
+  });
+
+  const bench = Array.from(groupItems(timed, it => it.batch.benchId)).map(([id, list]) =>
+    timeRow(id, list[0].benchName, list, []),
+  );
+
+  const run = Array.from(
+    groupItems(timed, it => `${it.batch.benchId}:${runFor(it.batch.benchId, it.batch.startTime)?.id ?? 'all-day'}`),
+  ).map(([key, list]) => {
+    const r = runFor(list[0].batch.benchId, list[0].batch.startTime);
+    const days = new Set(list.map(it => it.batch.date)).size;
+    return timeRow(key, `${list[0].benchName} ${r?.label ?? 'All day'}`, list, [], {
+      sublabel: r ? `Starts ${r.startTime}` : undefined,
+      scheduledMinutes: r ? r.durationMinutes * days : undefined,
+    });
+  });
+
+  return {
+    product: product.sort(byOverrun),
+    bench: bench.sort(byOverrun),
+    employee: employee.sort(byOverrun),
+    run: run.sort(byOverrun),
+  };
+}
+
 export function siteProductivity(siteId: SiteId, dates: string[]): SiteProductivity {
   const raw = batchesForSiteOnDates(siteId, dates);
   const productivities = raw.map(batchProductivity);
@@ -576,6 +687,7 @@ export function siteProductivity(siteId: SiteId, dates: string[]): SiteProductiv
   const completed = productivities.filter(p => p.batch.status !== 'planned');
   const speedItems = completed.filter(p => isSpeedRelevant(p.batch));
   const recipes = recipeSummaries(completed, dates.length > 1);
+  const flags = recipes.flatMap(r => r.flags).sort((a, b) => b.deltaPercent - a.deltaPercent);
   return {
     siteId,
     dates,
@@ -592,8 +704,15 @@ export function siteProductivity(siteId: SiteId, dates: string[]): SiteProductiv
     ),
     runs: runSummaries(speedItems, benches.map(b => b.benchId)),
     recipes,
-    flags: recipes.flatMap(r => r.flags).sort((a, b) => b.deltaPercent - a.deltaPercent),
+    flags,
     labour: labourSummary(completed),
+    breakdown: timeBreakdown(completed, flags),
+    total: timeRow(
+      'total',
+      'All productions',
+      completed.filter(it => isSpeedRelevant(it.batch) && hasMeaningfulNorm(it)),
+      flags,
+    ),
   };
 }
 
@@ -607,7 +726,7 @@ export type TrendPoint = {
 export function productivityTrend(siteId: SiteId, days: number = HISTORY_DAYS - 1): TrendPoint[] {
   return Array.from({ length: days }, (_, i) => dayOffset(-(days - i))).map(date => {
     const s = siteProductivity(siteId, [date]);
-    return { date, deltaPercent: s.avgDeltaPercent, unitsPerLabourHour: s.labour.unitsPerLabourHour };
+    return { date, deltaPercent: s.total.deltaPercent, unitsPerLabourHour: s.labour.unitsPerLabourHour };
   });
 }
 
