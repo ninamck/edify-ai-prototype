@@ -230,9 +230,6 @@ function Accruals() {
       <div className={s.sectionHead}>
         <div>
           <h2 id="accruals-title" className={s.sectionTitle}>Month-end accruals</h2>
-          <p className={s.sectionIntro}>
-            Goods received at the pizzerias that suppliers haven&apos;t invoiced yet. The value comes from the checked delivery note at the contract price, so you can accrue accurately at month end.
-          </p>
         </div>
         <button type="button" className={cx(s.btn, s.btnPrimary)} onClick={downloadAccruals}>
           <Download size={14} aria-hidden /> Export accrual journal
@@ -346,9 +343,6 @@ function Approvals() {
       <div className={s.sectionHead}>
         <div>
           <h2 id="approvals-title" className={s.sectionTitle}>Approvals and audit trail</h2>
-          <p className={s.sectionIntro}>
-            Who can order and how much before someone else signs it off, plus a log of every change to a count, a price, an approval or a permission.
-          </p>
         </div>
         <Link href="/approvals" className={s.btn}>Review approvals</Link>
       </div>

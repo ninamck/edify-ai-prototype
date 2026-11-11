@@ -50,7 +50,6 @@
 .section { display: flex; flex-direction: column; gap: 16px; scroll-margin-top: 16px; }
 .sectionHead { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .sectionTitle { margin: 0; font-size: 18px; font-weight: 700; }
-.sectionIntro { margin: 4px 0 0; max-width: 680px; font-size: 13px; font-weight: 500; line-height: 1.5; color: var(--muted); }
 
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
 
