@@ -5,7 +5,6 @@
   --muted-bg: #f4f3f1;
   --warn-bg: var(--color-warning-light, #fef6da);
   --warn-border: var(--color-warning-border, #ead173);
-  --warn-strong: #b35309;
   --ok: var(--color-success, #166534);
   --ok-bg: var(--color-success-light, #e3f2e8);
   --ok-border: var(--color-success-border, #93c8a6);
@@ -72,7 +71,7 @@
 .kpiLabel { font-size: 12px; font-weight: 600; color: var(--muted); }
 .kpiValue { font-size: 22px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .kpiHint { font-size: 11px; font-weight: 500; color: var(--muted); }
-.kpiWarn .kpiValue { color: var(--warn-strong); }
+.kpiWarn { background: var(--color-warning-bg, #fefbee); border-color: var(--warn-border); }
 
 .card { overflow: hidden; }
 .cardHead { padding: 16px 16px 10px; display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
