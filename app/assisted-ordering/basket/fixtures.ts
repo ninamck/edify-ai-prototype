@@ -253,7 +253,6 @@ export function buildFixtures(now: Date): Fixtures {
     date: addDays(today, index),
     amount,
     change: changes[index],
-    stale: index === 5,
   }));
 
   return {
