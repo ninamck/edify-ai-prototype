@@ -13,6 +13,7 @@
   --bad-bg: var(--color-error-light, #fce5eb);
   --bad-border: var(--color-error-border, #e89aae);
 
+  position: relative;
   padding-bottom: 32px;
   display: flex;
   flex-direction: column;
