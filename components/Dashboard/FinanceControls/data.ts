@@ -80,12 +80,6 @@ export function accrualTotal(row: AccrualRow): number {
 /** Must match the roles and review triggers in components/Approvals/approvalsStore.ts. */
 export type OrderingRole = 'New employee' | 'Trusted staff' | 'Manager';
 
-export const ORDERING_RULES: { role: OrderingRole; rule: string }[] = [
-  { role: 'New employee', rule: 'Every order is reviewed by a manager' },
-  { role: 'Trusted staff', rule: 'Reviewed when a product goes over its weekly cap, a supplier goes over its weekly limit, or the order is below the supplier minimum' },
-  { role: 'Manager', rule: 'No review. Can approve their own orders and other people’s' },
-];
-
 export type ReviewOutcome = 'Waiting' | 'Approved' | 'Approved with edits' | 'Declined';
 
 export type ReviewedOrder = {

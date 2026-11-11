@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import s from './finance.module.css';
 import {
-  ACCRUALS, APPROVAL_STATS, AS_AT, AUDIT_LOG, CHANGE_LABELS, COMPANY, MONTH_END, ORDERING_RULES,
+  ACCRUALS, APPROVAL_STATS, AS_AT, AUDIT_LOG, CHANGE_LABELS, COMPANY, MONTH_END,
   PERIOD_LABEL, PRICE_ALERTS, PRICE_TOLERANCE_PCT, REOPENS_BY_SITE, REVIEWED_ORDERS, SITE_COUNT,
   accrualTotal, overContract, variancePct,
   type AlertStatus, type AuditEntry, type ChangeType, type PriceAlert, type ReviewOutcome,
@@ -407,14 +407,6 @@ function Approvals() {
       </Card>
 
       <Card title="Orders sent for review">
-        <ul className={s.rules} aria-label="When an order is reviewed">
-          {ORDERING_RULES.map((r) => (
-            <li key={r.role} className={s.rule}>
-              <span className={s.ruleRole}>{r.role}</span>
-              <span className={s.ruleText}>{r.rule}</span>
-            </li>
-          ))}
-        </ul>
         <div className={s.tableWrap}>
           <table className={s.table}>
             <thead>
