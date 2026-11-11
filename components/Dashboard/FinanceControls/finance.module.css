@@ -205,9 +205,6 @@
 .chipOn { background: var(--navy); border-color: var(--navy); color: var(--color-text-on-active, #f4f1ec); }
 .chipOn:hover { background: #0b2a47; }
 
-.change { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.before { color: var(--muted); text-decoration: line-through; }
-
 .split { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
 
 .srOnly {

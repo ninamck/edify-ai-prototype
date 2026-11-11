@@ -341,7 +341,8 @@ function LogTable({ entries }: { entries: AuditEntry[] }) {
             <th scope="col">When</th>
             <th scope="col">Who</th>
             <th scope="col">What changed</th>
-            <th scope="col">Change</th>
+            <th scope="col">Before</th>
+            <th scope="col">After</th>
             <th scope="col">Reason</th>
           </tr>
         </thead>
@@ -358,13 +359,9 @@ function LogTable({ entries }: { entries: AuditEntry[] }) {
                 {e.what}
                 {e.afterSubmit && <> <span className={s.badge}>Reopened after submit</span></>}
               </td>
-              <td data-label="Change">
-                <span className={s.change}>
-                  <span className={s.before}>{e.before}</span>
-                  <span aria-hidden>→</span>
-                  <span className={s.srOnly}>changed to</span>
-                  <span className={s.strong}>{e.after}</span>
-                </span>
+              <td data-label="Before" className={s.nowrap}>{e.before}</td>
+              <td data-label="After">
+                <span className={cx(s.strong, s.nowrap)}>{e.after}</span>
                 {e.value !== undefined && <span className={s.sub}>{money(e.value, 2)} of stock</span>}
               </td>
               <td data-label="Reason">{e.reason}</td>
