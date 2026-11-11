@@ -78,8 +78,9 @@ const TEMPLATE_TABS: Mvp1Tab[] = [
 ];
 
 // Pizza Pilgrims finance controls: contract price alerts, month-end accruals
-// and the approvals audit trail. Pinned like Templates, and reachable from the
-// Joshua portal tile via `/?tab=finance-controls`.
+// and the approvals audit trail. Pinned straight after Dashboard so saved
+// dashboards can't push it off the strip, and reachable from the Joshua
+// portal tile via `/?tab=finance-controls`.
 const FINANCE_TAB_ID = 'finance-controls';
 const FINANCE_TABS: Mvp1Tab[] = [
   { id: FINANCE_TAB_ID, name: 'Finance controls', kind: 'dashboard' },
@@ -322,12 +323,12 @@ export default function HomeShell() {
   const dashboardTab = visibleMvp1Tabs.filter((t) => t.id === 'dashboard');
   const otherMvp1Tabs = visibleMvp1Tabs.filter((t) => t.id !== 'dashboard');
   const baseTabs: Mvp1Tab[] = isMultiCurrencyDemo
-    ? [...dashboardTab, ...allSitesTabs, ...otherMvp1Tabs, ...FINANCE_TABS, ...templateTabs, ...SECOND_CUP_TABS]
-    : [...dashboardTab, ...allSitesTabs, ...otherMvp1Tabs, ...FINANCE_TABS, ...templateTabs];
+    ? [...dashboardTab, ...allSitesTabs, ...FINANCE_TABS, ...otherMvp1Tabs, ...templateTabs, ...SECOND_CUP_TABS]
+    : [...dashboardTab, ...allSitesTabs, ...FINANCE_TABS, ...otherMvp1Tabs, ...templateTabs];
   // Roles personas: the roles-model dashboards slot in right after the
   // Dashboard and All sites tabs. During a "View as" preview only the
   // previewed viewer's dashboards show — that's exactly what they'd see.
-  const leadTabIds = new Set(['dashboard', ...ALL_SITES_TABS.map((t) => t.id)]);
+  const leadTabIds = new Set(['dashboard', ...ALL_SITES_TABS.map((t) => t.id), FINANCE_TAB_ID]);
   const allTabs: Mvp1Tab[] = !rolesPersona
     ? baseTabs
     : rolesViewer?.previewing
