@@ -123,7 +123,7 @@ export const EDIFY_TILES: Tile[] = [
     description: 'Contract price alerts, month-end accruals and the audit trail',
     icon: ShieldCheck,
     tone: 'edify',
-    href: '/finance-controls',
+    href: '/?tab=finance-controls',
   },
 ];
 

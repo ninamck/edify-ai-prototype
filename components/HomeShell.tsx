@@ -42,6 +42,7 @@ import {
 } from '@/components/Dashboard/SecondCup/SecondCupViews';
 import TemplatesDashboard from '@/components/Dashboard/Templates/TemplatesDashboard';
 import AllSitesDashboard from '@/components/Dashboard/AllSitesDashboard';
+import FinanceControlsDashboard from '@/components/Dashboard/FinanceControls/FinanceControlsDashboard';
 import { isMultiCurrencyDemo } from '@/lib/demoConfig';
 import RolesDashboardTab from '@/components/Dashboard/permissions/RolesDashboardTab';
 import PublishedOverviewDialog from '@/components/Dashboard/permissions/PublishedOverviewDialog';
@@ -74,6 +75,14 @@ const ROLES_TAB_PREFIX = 'roles:';
 // renamed or removed from the tab strip.
 const TEMPLATE_TABS: Mvp1Tab[] = [
   { id: 'starter-templates', name: 'Templates', kind: 'dashboard' },
+];
+
+// Pizza Pilgrims finance controls: contract price alerts, month-end accruals
+// and the approvals audit trail. Pinned like Templates, and reachable from the
+// Joshua portal tile via `/?tab=finance-controls`.
+const FINANCE_TAB_ID = 'finance-controls';
+const FINANCE_TABS: Mvp1Tab[] = [
+  { id: FINANCE_TAB_ID, name: 'Finance controls', kind: 'dashboard' },
 ];
 
 // Who can see the Templates dashboard (roles demo). `null` = the default:
@@ -173,6 +182,16 @@ export default function HomeShell() {
     appendTableToTab,
     appendChartToTab,
   } = useMvp1Tabs();
+  // `/?tab=…` deep link (portal tiles). Declared after useMvp1Tabs so it runs
+  // after the stored tab is restored, then strips the param like ?flow=.
+  const tabParam = searchParams?.get('tab');
+  useEffect(() => {
+    if (tabParam !== FINANCE_TAB_ID) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setShellView('dashboard');
+    setActiveTabId(FINANCE_TAB_ID);
+    router.replace('/');
+  }, [tabParam, setActiveTabId, router]);
   // When the insight popup is opened from a view's empty state ("Ask Edify" /
   // "Pick a question"), picked charts and tables land in that view rather
   // than on the role dashboard.
@@ -303,8 +322,8 @@ export default function HomeShell() {
   const dashboardTab = visibleMvp1Tabs.filter((t) => t.id === 'dashboard');
   const otherMvp1Tabs = visibleMvp1Tabs.filter((t) => t.id !== 'dashboard');
   const baseTabs: Mvp1Tab[] = isMultiCurrencyDemo
-    ? [...dashboardTab, ...allSitesTabs, ...otherMvp1Tabs, ...templateTabs, ...SECOND_CUP_TABS]
-    : [...dashboardTab, ...allSitesTabs, ...otherMvp1Tabs, ...templateTabs];
+    ? [...dashboardTab, ...allSitesTabs, ...otherMvp1Tabs, ...FINANCE_TABS, ...templateTabs, ...SECOND_CUP_TABS]
+    : [...dashboardTab, ...allSitesTabs, ...otherMvp1Tabs, ...FINANCE_TABS, ...templateTabs];
   // Roles personas: the roles-model dashboards slot in right after the
   // Dashboard and All sites tabs. During a "View as" preview only the
   // previewed viewer's dashboards show — that's exactly what they'd see.
@@ -467,6 +486,9 @@ export default function HomeShell() {
           tabToolbar
         );
       return <TemplatesDashboard controls={templatesToolbar} />;
+    }
+    if (effectiveTabId === FINANCE_TAB_ID) {
+      return <FinanceControlsDashboard />;
     }
     if (effectiveTabId === 'all-sites-insights') {
       return <AllSitesDashboard editing={editingDashboard} controls={tabToolbar} />;

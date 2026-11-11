@@ -479,7 +479,7 @@ function Approvals() {
   );
 }
 
-export default function FinanceControlsPage() {
+export default function FinanceControlsDashboard() {
   const [statuses, setStatuses] = useState<Statuses>(
     () => Object.fromEntries(PRICE_ALERTS.map((a) => [a.id, a.status])),
   );
@@ -490,8 +490,8 @@ export default function FinanceControlsPage() {
       <header>
         <div className={s.header}>
           <div>
-            <h1 className={s.title}>{PERIOD_LABEL}</h1>
-            <p className={s.meta}>{COMPANY} · {SITE_COUNT} pizzerias · as at {AS_AT}</p>
+            <h2 className={s.title}>{COMPANY} <span className={s.titleMuted}>· Finance controls, {PERIOD_LABEL}</span></h2>
+            <p className={s.meta}>All {SITE_COUNT} pizzerias · as at {AS_AT}</p>
           </div>
           <div className={s.headerActions}>
             <Link href="/scheduled-reports" className={s.btn}>
