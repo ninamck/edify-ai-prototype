@@ -201,7 +201,7 @@ export function buildFixtures(now: Date): Fixtures {
   ): FixtureOrder => {
     const supplier = suppliers.find((s) => s.id === supplierId)!;
     const delivery = pickDelivery(supplier, today, now);
-    const ctx = { today, now, coverEnd: addDays(delivery.deliveryDate, 2), demand: demandChange };
+    const ctx = { today, now, coverEnd: addDays(delivery.deliveryDate, 5), demand: demandChange };
     return {
       id: `ord-${supplierId}`,
       supplierId,
