@@ -77,32 +77,62 @@ export function accrualTotal(row: AccrualRow): number {
 
 // ─── Approvals and audit trail ───────────────────────────────────────────────
 
-export type RolePermission = {
-  role: string;
-  people: number;
-  ordering: string;
-  /** Per order. Null means no limit. */
-  approvalLimit: number | null;
-  counts: string;
-  prices: string;
+/** Must match the roles and review triggers in components/Approvals/approvalsStore.ts. */
+export type OrderingRole = 'New employee' | 'Trusted staff' | 'Manager';
+
+export const ORDERING_RULES: { role: OrderingRole; rule: string }[] = [
+  { role: 'New employee', rule: 'Every order is reviewed by a manager' },
+  { role: 'Trusted staff', rule: 'Reviewed when a product goes over its weekly cap, a supplier goes over its weekly limit, or the order is below the supplier minimum' },
+  { role: 'Manager', rule: 'No review. Can approve their own orders and other people’s' },
+];
+
+export type ReviewOutcome = 'Waiting' | 'Approved' | 'Approved with edits' | 'Declined';
+
+export type ReviewedOrder = {
+  po: string;
+  site: string;
+  supplier: string;
+  raisedBy: string;
+  raisedRole: OrderingRole;
+  total: number;
+  trigger: string;
+  detail: string;
+  outcome: ReviewOutcome;
+  reviewer?: string;
+  reviewerTitle?: string;
+  note?: string;
+  reviewTime: string;
 };
 
-export const ROLES: RolePermission[] = [
-  { role: 'Shift lead', people: 27, ordering: 'Every order needs approval', approvalLimit: 0, counts: 'Own counts, before submit', prices: 'No' },
-  { role: 'Head chef', people: 9, ordering: 'Own pizzeria', approvalLimit: 500, counts: 'Own pizzeria, before submit', prices: 'No' },
-  { role: 'General manager', people: 9, ordering: 'Own pizzeria', approvalLimit: 1500, counts: 'Reopen within 24 hours, with a reason', prices: 'No' },
-  { role: 'Area manager', people: 2, ordering: 'Their pizzerias', approvalLimit: 5000, counts: 'Reopen within 7 days, with a reason', prices: 'No' },
-  { role: 'Ops director', people: 1, ordering: 'All pizzerias', approvalLimit: null, counts: 'Reopen any count, with a reason', prices: 'View only' },
-  { role: 'Finance', people: 3, ordering: "Can't place orders", approvalLimit: null, counts: 'View only', prices: 'Edit contract prices' },
+export const REVIEWED_ORDERS: ReviewedOrder[] = [
+  { po: 'PO-PP-1187', site: 'Kingly Court', supplier: 'Market Row Produce', raisedBy: 'Jade Morris', raisedRole: 'New employee', total: 386.4, trigger: 'New employee', detail: 'Jade has placed 3 orders so far', outcome: 'Waiting', reviewTime: '2h 10m so far' },
+  { po: 'PO-PP-1184', site: 'Soho', supplier: 'Latteria Fresca', raisedBy: 'Chiara Russo', raisedRole: 'Trusted staff', total: 1240, trigger: 'Supplier weekly limit', detail: 'Week to date £ 3,180 of £ 3,000', outcome: 'Approved', reviewer: 'Marco Bellini', reviewerTitle: 'General manager', reviewTime: '48m' },
+  { po: 'PO-PP-1179', site: 'Camden', supplier: 'Kraftpak', raisedBy: 'Luca Ferraro', raisedRole: 'Trusted staff', total: 261, trigger: 'Product weekly cap', detail: 'Pizza boxes 12 inch: £ 652 of £ 500 cap', outcome: 'Approved with edits', reviewer: 'Rosa Mancini', reviewerTitle: 'General manager', note: 'Cut from 20 to 12 cases', reviewTime: '1h 05m' },
+  { po: 'PO-PP-1176', site: 'Kingly Court', supplier: 'Northfield Drinks', raisedBy: 'Ben Hughes', raisedRole: 'Trusted staff', total: 2980, trigger: 'Supplier weekly limit', detail: 'Week to date £ 5,960 of £ 4,000', outcome: 'Declined', reviewer: 'Giulia Romano', reviewerTitle: 'Area manager', note: 'Duplicate of Friday’s order', reviewTime: '2h 40m' },
+  { po: 'PO-PP-1171', site: 'Brighton', supplier: 'Calabria Fine Foods', raisedBy: 'Noah Price', raisedRole: 'New employee', total: 162, trigger: 'New employee', detail: 'Also £ 38 below the £ 200 supplier minimum', outcome: 'Approved', reviewer: 'Kate Lowe', reviewerTitle: 'General manager', reviewTime: '25m' },
+  { po: 'PO-PP-1164', site: 'Soho', supplier: 'Campania Imports', raisedBy: 'Chiara Russo', raisedRole: 'Trusted staff', total: 2140, trigger: 'Supplier weekly limit', detail: 'Week to date £ 4,610 of £ 4,000', outcome: 'Approved', reviewer: 'Giulia Romano', reviewerTitle: 'Area manager', reviewTime: '3h 15m' },
 ];
 
 export const APPROVAL_STATS = {
-  sent: 41,
-  approved: 38,
-  rejected: 2,
+  reviewed: 41,
+  approved: 36,
+  edited: 2,
+  declined: 2,
   waiting: 1,
-  medianTime: '1h 25m',
 };
+
+/** Counts reopened after submit, last 6 weeks. Value is stock moved at cost. */
+export const REOPENS_BY_SITE: { site: string; reopens: number; value: number }[] = [
+  { site: 'Camden', reopens: 6, value: 640 },
+  { site: 'Canary Wharf', reopens: 4, value: 310 },
+  { site: 'Soho', reopens: 3, value: 220 },
+  { site: 'Shoreditch', reopens: 2, value: 140 },
+  { site: 'Brighton', reopens: 2, value: 95 },
+  { site: 'Covent Garden', reopens: 1, value: 60 },
+  { site: 'Kingly Court', reopens: 1, value: 45 },
+  { site: 'Oxford', reopens: 0, value: 0 },
+  { site: 'Spitalfields', reopens: 0, value: 0 },
+];
 
 export type ChangeType = 'count' | 'price' | 'approval' | 'access';
 
@@ -110,17 +140,8 @@ export const CHANGE_LABELS: Record<ChangeType, string> = {
   count: 'Count',
   price: 'Price',
   approval: 'Approval',
-  access: 'Limit or permission',
+  access: 'Rule or role',
 };
-
-export const CHANGES_BY_WEEK = [
-  { week: 'w/c 5 Oct', count: 14, price: 3, approval: 9, access: 1 },
-  { week: 'w/c 12 Oct', count: 11, price: 2, approval: 10, access: 0 },
-  { week: 'w/c 19 Oct', count: 17, price: 5, approval: 8, access: 2 },
-  { week: 'w/c 26 Oct', count: 12, price: 9, approval: 11, access: 1 },
-  { week: 'w/c 2 Nov', count: 19, price: 4, approval: 12, access: 3 },
-  { week: 'w/c 9 Nov', count: 8, price: 2, approval: 6, access: 2 },
-];
 
 export type AuditEntry = {
   id: string;
@@ -133,21 +154,24 @@ export type AuditEntry = {
   before: string;
   after: string;
   reason: string;
-  /** Changed after the count was submitted or the order was sent. */
+  /** Changed after the count was submitted. */
   afterSubmit?: boolean;
+  /** Stock value moved by a count change, at cost. */
+  value?: number;
 };
 
 export const AUDIT_LOG: AuditEntry[] = [
-  { id: 'a1', when: 'Wed 11 Nov, 14:32', who: 'Aisha Khan', role: 'Head chef', site: 'Shoreditch', type: 'count', what: 'Fior di latte, walk-in fridge', before: '18 kg', after: '12 kg', reason: 'Recounted after the delivery was put away' },
+  { id: 'a1', when: 'Wed 11 Nov, 14:32', who: 'Aisha Khan', role: 'Head chef', site: 'Shoreditch', type: 'count', what: 'Fior di latte, walk-in fridge', before: '18 kg', after: '12 kg', reason: 'Recounted after the delivery was put away', value: 50.7 },
   { id: 'a2', when: 'Wed 11 Nov, 11:05', who: 'Tom Reid', role: 'Finance', site: 'All pizzerias', type: 'price', what: 'Rapeseed oil 20 l, contract price', before: '£ 26.90', after: '£ 27.60', reason: 'New Northfield contract from 1 Nov' },
-  { id: 'a3', when: 'Wed 11 Nov, 09:48', who: 'Marco Bellini', role: 'General manager', site: 'Soho', type: 'approval', what: 'Latteria Fresca order', before: 'Waiting', after: 'Approved, £ 1,240', reason: 'Over the head chef’s £ 500 limit' },
-  { id: 'a4', when: 'Wed 11 Nov, 08:40', who: 'Rosa Mancini', role: 'General manager', site: 'Camden', type: 'count', what: 'Pizza boxes 12 inch, dry store', before: '14 cases', after: '4 cases', reason: 'Close count was off, recounted before opening', afterSubmit: true },
-  { id: 'a5', when: 'Tue 10 Nov, 16:20', who: 'Sam Patel', role: 'Ops director', site: 'Brighton', type: 'access', what: 'Head chef approval limit', before: '£ 500', after: '£ 750', reason: 'Christmas trading, until 4 Jan' },
-  { id: 'a6', when: 'Tue 10 Nov, 10:02', who: 'Sam Patel', role: 'Ops director', site: 'All pizzerias', type: 'access', what: 'Finance role', before: 'View prices', after: 'Edit contract prices', reason: 'Finance now owns supplier contracts' },
-  { id: 'a7', when: 'Mon 9 Nov, 17:40', who: 'Giulia Romano', role: 'Area manager', site: 'Kingly Court', type: 'approval', what: 'Northfield Drinks order', before: 'Waiting', after: 'Rejected, £ 2,980', reason: 'Duplicate of Friday’s order' },
-  { id: 'a8', when: 'Mon 9 Nov, 08:15', who: 'Priya Shah', role: 'Head chef', site: 'Covent Garden', type: 'count', what: 'San Marzano tomatoes, dry store', before: '36 tins', after: '30 tins', reason: 'Six tins dented, moved to waste' },
+  { id: 'a3', when: 'Wed 11 Nov, 09:48', who: 'Marco Bellini', role: 'General manager', site: 'Soho', type: 'approval', what: 'PO-PP-1184, Latteria Fresca', before: 'Waiting', after: 'Approved, £ 1,240', reason: 'Latteria Fresca over its £ 3,000 weekly limit' },
+  { id: 'a4', when: 'Wed 11 Nov, 08:40', who: 'Rosa Mancini', role: 'General manager', site: 'Camden', type: 'count', what: 'Pizza boxes 12 inch, dry store', before: '14 cases', after: '4 cases', reason: 'Close count was off, recounted before opening', afterSubmit: true, value: 217.5 },
+  { id: 'a5', when: 'Tue 10 Nov, 16:20', who: 'Sam Patel', role: 'Ops director', site: 'Brighton', type: 'access', what: 'Fior di latte weekly cap', before: '£ 400', after: '£ 600', reason: 'Christmas trading, until 4 Jan' },
+  { id: 'a6', when: 'Tue 10 Nov, 10:02', who: 'Sam Patel', role: 'Ops director', site: 'All pizzerias', type: 'access', what: 'Finance team', before: 'View prices', after: 'Edit contract prices', reason: 'Finance now owns supplier contracts' },
+  { id: 'a7', when: 'Mon 9 Nov, 17:40', who: 'Giulia Romano', role: 'Area manager', site: 'Kingly Court', type: 'approval', what: 'PO-PP-1176, Northfield Drinks', before: 'Waiting', after: 'Declined, £ 2,980', reason: 'Duplicate of Friday’s order' },
+  { id: 'a8', when: 'Mon 9 Nov, 08:15', who: 'Priya Shah', role: 'Head chef', site: 'Covent Garden', type: 'count', what: 'San Marzano tomatoes, dry store', before: '36 tins', after: '30 tins', reason: 'Six tins dented, moved to waste', value: 32.4 },
   { id: 'a9', when: 'Fri 6 Nov, 15:12', who: 'Tom Reid', role: 'Finance', site: 'All pizzerias', type: 'price', what: 'Fresh basil 100 g, agreed price', before: '£ 1.10', after: '£ 1.35', reason: 'Winter price agreed with Market Row until 31 Dec' },
-  { id: 'a10', when: 'Thu 5 Nov, 23:04', who: 'Dan Okoro', role: 'General manager', site: 'Canary Wharf', type: 'count', what: 'Caputo 00 flour, dry store', before: '11 sacks', after: '7 sacks', reason: 'Sacks used for a dough batch before the count', afterSubmit: true },
-  { id: 'a11', when: 'Wed 4 Nov, 12:30', who: 'Sam Patel', role: 'Ops director', site: 'Oxford', type: 'access', what: 'Ellis Grant', before: 'Shift lead', after: 'Head chef', reason: 'Promotion' },
-  { id: 'a12', when: 'Mon 2 Nov, 09:10', who: 'Giulia Romano', role: 'Area manager', site: 'Soho', type: 'approval', what: 'Campania Imports order', before: 'Waiting', after: 'Approved, £ 2,140', reason: 'Over the general manager’s £ 1,500 limit' },
+  { id: 'a10', when: 'Thu 5 Nov, 23:04', who: 'Dan Okoro', role: 'General manager', site: 'Canary Wharf', type: 'count', what: 'Caputo 00 flour, dry store', before: '11 sacks', after: '7 sacks', reason: 'Sacks used for a dough batch before the count', afterSubmit: true, value: 92.4 },
+  { id: 'a11', when: 'Wed 4 Nov, 12:30', who: 'Sam Patel', role: 'Ops director', site: 'Oxford', type: 'access', what: 'Ellis Grant', before: 'New employee', after: 'Trusted staff', reason: 'Ten orders placed without changes' },
+  { id: 'a12', when: 'Mon 2 Nov, 09:10', who: 'Giulia Romano', role: 'Area manager', site: 'Soho', type: 'approval', what: 'PO-PP-1164, Campania Imports', before: 'Waiting', after: 'Approved, £ 2,140', reason: 'Campania Imports over its £ 4,000 weekly limit' },
 ];
+

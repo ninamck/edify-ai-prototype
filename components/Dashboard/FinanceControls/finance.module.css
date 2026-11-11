@@ -77,6 +77,29 @@
 .cardTitle { margin: 0; font-size: 13px; font-weight: 700; }
 .cardSub { margin: 2px 0 0; font-size: 12px; font-weight: 500; color: var(--muted); }
 .chart { padding: 0 16px 12px; }
+.chartNote { margin: 0; padding: 0 16px 14px; font-size: 12px; font-weight: 500; color: var(--muted); }
+
+.rules {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0 16px 16px;
+  list-style: none;
+}
+
+.rule {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--muted-bg);
+}
+
+.ruleRole { font-size: 12px; font-weight: 700; }
+.ruleText { font-size: 12px; font-weight: 500; line-height: 1.45; color: var(--muted); }
 
 .legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; padding: 0 16px 12px; list-style: none; font-size: 12px; font-weight: 500; color: var(--muted); }
 .legendItem { display: inline-flex; align-items: center; gap: 6px; }
@@ -108,7 +131,7 @@
 .up { color: var(--bad); font-weight: 700; }
 .nowrap { white-space: nowrap; }
 
-@media (max-width: 640px) {
+@media (max-width: 900px) {
   .table thead {
     position: absolute;
     width: 1px;

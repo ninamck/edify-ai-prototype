@@ -8,9 +8,10 @@ import {
 } from 'recharts';
 import s from './finance.module.css';
 import {
-  ACCRUALS, APPROVAL_STATS, AS_AT, AUDIT_LOG, CHANGES_BY_WEEK, CHANGE_LABELS, COMPANY, MONTH_END,
-  PERIOD_LABEL, PRICE_ALERTS, PRICE_TOLERANCE_PCT, ROLES, SITE_COUNT, accrualTotal, overContract, variancePct,
-  type AlertStatus, type ChangeType, type PriceAlert,
+  ACCRUALS, APPROVAL_STATS, AS_AT, AUDIT_LOG, CHANGE_LABELS, COMPANY, MONTH_END, ORDERING_RULES,
+  PERIOD_LABEL, PRICE_ALERTS, PRICE_TOLERANCE_PCT, REOPENS_BY_SITE, REVIEWED_ORDERS, SITE_COUNT,
+  accrualTotal, overContract, variancePct,
+  type AlertStatus, type AuditEntry, type ChangeType, type PriceAlert, type ReviewOutcome,
 } from './data';
 
 const TICK = { fontSize: 11, fontFamily: 'var(--font-primary)', fill: 'var(--color-text-muted)' } as const;
@@ -24,7 +25,6 @@ const TOOLTIP = {
 
 const COBALT = '#4a6cb5';
 const COBALT_LIGHT = '#a3b5db';
-const NAVY = '#001c35';
 const AMBER = '#ffc060';
 
 function money(value: number, decimals: 0 | 2 = 0): string {
@@ -317,11 +317,11 @@ function Accruals() {
 
 // ─── Approvals and audit trail ───────────────────────────────────────────────
 
-const TYPE_COLOURS: Record<ChangeType, string> = {
-  count: COBALT,
-  price: NAVY,
-  approval: COBALT_LIGHT,
-  access: AMBER,
+const OUTCOME_CLASS: Record<ReviewOutcome, string> = {
+  Waiting: s.badgeWarn,
+  Approved: s.badgeOk,
+  'Approved with edits': s.badgeOk,
+  Declined: s.badgeBad,
 };
 
 const FILTERS: { id: 'all' | ChangeType; label: string }[] = [
@@ -329,14 +329,62 @@ const FILTERS: { id: 'all' | ChangeType; label: string }[] = [
   { id: 'count', label: 'Counts' },
   { id: 'price', label: 'Prices' },
   { id: 'approval', label: 'Approvals' },
-  { id: 'access', label: 'Limits and permissions' },
+  { id: 'access', label: 'Rules and roles' },
 ];
+
+function LogTable({ entries }: { entries: AuditEntry[] }) {
+  return (
+    <div className={s.tableWrap}>
+      <table className={s.table}>
+        <thead>
+          <tr>
+            <th scope="col">When</th>
+            <th scope="col">Who</th>
+            <th scope="col">What changed</th>
+            <th scope="col">Change</th>
+            <th scope="col">Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((e) => (
+            <tr key={e.id}>
+              <td data-label="When" className={s.nowrap}>{e.when}</td>
+              <td data-label="Who">
+                <span className={s.strong}>{e.who}</span>
+                <span className={s.sub}>{e.role} · {e.site}</span>
+              </td>
+              <td data-label="What changed">
+                <span className={s.badge}>{CHANGE_LABELS[e.type]}</span>{' '}
+                {e.what}
+                {e.afterSubmit && <> <span className={s.badge}>Reopened after submit</span></>}
+              </td>
+              <td data-label="Change">
+                <span className={s.change}>
+                  <span className={s.before}>{e.before}</span>
+                  <span aria-hidden>→</span>
+                  <span className={s.srOnly}>changed to</span>
+                  <span className={s.strong}>{e.after}</span>
+                </span>
+                {e.value !== undefined && <span className={s.sub}>{money(e.value, 2)} of stock</span>}
+              </td>
+              <td data-label="Reason">{e.reason}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 function Approvals() {
   const [filter, setFilter] = useState<'all' | ChangeType>('all');
   const entries = useMemo(() => AUDIT_LOG.filter((e) => filter === 'all' || e.type === filter), [filter]);
-  const afterSubmit = AUDIT_LOG.filter((e) => e.afterSubmit).length;
-  const changesThisMonth = CHANGES_BY_WEEK.slice(-2).reduce((sum, w) => sum + w.count + w.price + w.approval + w.access, 0);
+  const ruleChanges = AUDIT_LOG.filter((e) => e.type === 'access');
+  const reopened = AUDIT_LOG.filter((e) => e.afterSubmit);
+  const reopenedValue = reopened.reduce((sum, e) => sum + (e.value ?? 0), 0);
+  const priceChanges = AUDIT_LOG.filter((e) => e.type === 'price').length;
+  const sitesWithReopens = REOPENS_BY_SITE.filter((r) => r.reopens > 0);
+  const sitesWithout = REOPENS_BY_SITE.filter((r) => r.reopens === 0).map((r) => r.site);
 
   return (
     <section id="approvals" className={s.section} aria-labelledby="approvals-title">
@@ -348,65 +396,84 @@ function Approvals() {
       </div>
 
       <div className={s.kpis}>
-        <Kpi label="Sent for approval" value={String(APPROVAL_STATS.sent)} hint={`${APPROVAL_STATS.approved} approved, ${APPROVAL_STATS.rejected} rejected`} />
-        <Kpi label="Waiting now" value={String(APPROVAL_STATS.waiting)} hint="Kingly Court, Market Row Produce" warn={APPROVAL_STATS.waiting > 0} />
-        <Kpi label="Median time to approve" value={APPROVAL_STATS.medianTime} hint="This month" />
-        <Kpi label="Changes logged" value={String(changesThisMonth)} hint={`${afterSubmit} counts reopened after submit`} />
+        <Kpi label="Rule and role changes" value={String(ruleChanges.length)} hint="1 weekly cap, 1 permission, 1 role" warn={ruleChanges.length > 0} />
+        <Kpi label="Orders reviewed" value={String(APPROVAL_STATS.reviewed)} hint={`${APPROVAL_STATS.declined} declined, ${APPROVAL_STATS.edited} edited, ${APPROVAL_STATS.waiting} waiting`} />
+        <Kpi label="Counts reopened after submit" value={String(reopened.length)} hint={`${money(reopenedValue)} of stock moved`} />
+        <Kpi label="Contract prices changed" value={String(priceChanges)} hint="All by Finance" />
       </div>
 
-      <div className={s.split}>
-        <Card title="Changes logged each week" sub="Last 6 weeks, all pizzerias">
-          <Legend items={(Object.keys(CHANGE_LABELS) as ChangeType[]).map((t) => ({ label: CHANGE_LABELS[t], colour: TYPE_COLOURS[t] }))} />
-          <div className={s.chart} style={{ height: 240 }} role="img" aria-label="Stacked bar chart of changes logged each week by type. The log below has the detail.">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={CHANGES_BY_WEEK} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border-subtle)" />
-                <XAxis dataKey="week" tick={TICK} axisLine={false} tickLine={false} />
-                <YAxis tick={TICK} axisLine={false} tickLine={false} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={TOOLTIP}
-                  cursor={{ fill: 'rgba(0, 28, 53, 0.04)' }}
-                  formatter={(v, name) => [String(v), CHANGE_LABELS[name as ChangeType] ?? String(name)]}
-                />
-                <Bar dataKey="count" stackId="type" fill={TYPE_COLOURS.count} barSize={28} />
-                <Bar dataKey="price" stackId="type" fill={TYPE_COLOURS.price} barSize={28} />
-                <Bar dataKey="approval" stackId="type" fill={TYPE_COLOURS.approval} barSize={28} />
-                <Bar dataKey="access" stackId="type" fill={TYPE_COLOURS.access} radius={[4, 4, 0, 0]} barSize={28} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
+      <Card title="Rule and role changes">
+        <LogTable entries={ruleChanges} />
+      </Card>
 
-        <Card title="Permissions and approval limits">
-          <div className={s.tableWrap}>
-            <table className={s.table}>
-              <thead>
-                <tr>
-                  <th scope="col">Role</th>
-                  <th scope="col" className={s.num}>Approval limit</th>
-                  <th scope="col">Change counts</th>
-                  <th scope="col">Change prices</th>
+      <Card title="Orders sent for review">
+        <ul className={s.rules} aria-label="When an order is reviewed">
+          {ORDERING_RULES.map((r) => (
+            <li key={r.role} className={s.rule}>
+              <span className={s.ruleRole}>{r.role}</span>
+              <span className={s.ruleText}>{r.rule}</span>
+            </li>
+          ))}
+        </ul>
+        <div className={s.tableWrap}>
+          <table className={s.table}>
+            <thead>
+              <tr>
+                <th scope="col">Order</th>
+                <th scope="col">Raised by</th>
+                <th scope="col" className={s.num}>Total</th>
+                <th scope="col">Why it was reviewed</th>
+                <th scope="col">Outcome</th>
+                <th scope="col" className={s.num}>Time to review</th>
+              </tr>
+            </thead>
+            <tbody>
+              {REVIEWED_ORDERS.map((o) => (
+                <tr key={o.po}>
+                  <td>
+                    <span className={s.strong}>{o.po}</span>
+                    <span className={s.sub}>{o.supplier}</span>
+                  </td>
+                  <td data-label="Raised by">
+                    {o.raisedBy}
+                    <span className={s.sub}>{o.raisedRole} · {o.site}</span>
+                  </td>
+                  <td data-label="Total" className={cx(s.num, s.strong)}>{money(o.total, 2)}</td>
+                  <td data-label="Why it was reviewed">
+                    {o.trigger}
+                    <span className={s.sub}>{o.detail}</span>
+                  </td>
+                  <td data-label="Outcome">
+                    <span className={cx(s.badge, OUTCOME_CLASS[o.outcome])}>{o.outcome}</span>
+                    {o.reviewer && <span className={s.sub}>{o.reviewer}, {o.reviewerTitle}</span>}
+                    {o.note && <span className={s.sub}>{o.note}</span>}
+                  </td>
+                  <td data-label="Time to review" className={s.num}>{o.reviewTime}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {ROLES.map((r) => (
-                  <tr key={r.role}>
-                    <td>
-                      <span className={s.strong}>{r.role}</span>
-                      <span className={s.sub}>{r.people} {r.people === 1 ? 'person' : 'people'} · {r.ordering}</span>
-                    </td>
-                    <td data-label="Approval limit" className={cx(s.num, s.strong)}>
-                      {r.ordering === "Can't place orders" ? '–' : r.approvalLimit === null ? 'No limit' : r.approvalLimit === 0 ? 'Needs approval' : `${money(r.approvalLimit)} an order`}
-                    </td>
-                    <td data-label="Change counts">{r.counts}</td>
-                    <td data-label="Change prices">{r.prices}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Card title="Counts reopened after submit, by pizzeria">
+        <div className={s.chart} style={{ height: sitesWithReopens.length * 36 + 40 }} role="img" aria-label="Bar chart of stock value moved by counts reopened after submit, by pizzeria, over the last 6 weeks. Camden is highest.">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={sitesWithReopens} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border-subtle)" />
+              <XAxis type="number" tickFormatter={(v: number) => money(v)} tick={TICK} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="site" tick={TICK} axisLine={false} tickLine={false} width={150} />
+              <Tooltip
+                contentStyle={TOOLTIP}
+                cursor={{ fill: 'rgba(0, 28, 53, 0.04)' }}
+                formatter={(v, _name, item) => [`${money(Number(v))} over ${item.payload.reopens} reopened counts`, 'Last 6 weeks']}
+              />
+              <Bar dataKey="value" fill={COBALT} radius={[0, 4, 4, 0]} barSize={18} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        {sitesWithout.length > 0 && <p className={s.chartNote}>No reopened counts at {sitesWithout.join(' or ')}.</p>}
+      </Card>
 
       <Card
         title="Audit log"
@@ -426,44 +493,7 @@ function Approvals() {
           </div>
         )}
       >
-        <div className={s.tableWrap}>
-          <table className={s.table}>
-            <thead>
-              <tr>
-                <th scope="col">When</th>
-                <th scope="col">Who</th>
-                <th scope="col">What changed</th>
-                <th scope="col">Change</th>
-                <th scope="col">Reason</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((e) => (
-                <tr key={e.id}>
-                  <td data-label="When" className={s.nowrap}>{e.when}</td>
-                  <td data-label="Who">
-                    <span className={s.strong}>{e.who}</span>
-                    <span className={s.sub}>{e.role} · {e.site}</span>
-                  </td>
-                  <td data-label="What changed">
-                    <span className={s.badge}>{CHANGE_LABELS[e.type]}</span>{' '}
-                    {e.what}
-                    {e.afterSubmit && <> <span className={s.badge}>Reopened after submit</span></>}
-                  </td>
-                  <td data-label="Change">
-                    <span className={s.change}>
-                      <span className={s.before}>{e.before}</span>
-                      <span aria-hidden>→</span>
-                      <span className={s.srOnly}>changed to</span>
-                      <span className={s.strong}>{e.after}</span>
-                    </span>
-                  </td>
-                  <td data-label="Reason">{e.reason}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <LogTable entries={entries} />
       </Card>
     </section>
   );
