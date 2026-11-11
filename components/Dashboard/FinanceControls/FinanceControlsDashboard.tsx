@@ -145,7 +145,7 @@ function PriceAlerts({ statuses, setStatuses }: { statuses: Statuses; setStatuse
           </div>
         </Card>
 
-        <Card title="Alerts" sub="Biggest cost first">
+        <Card title="Alerts">
           <div className={s.tableWrap}>
             <table className={s.table}>
               <thead>
@@ -250,7 +250,7 @@ function Accruals() {
       </div>
 
       <div className={s.split}>
-        <Card title="Not yet invoiced, by supplier" sub="Split by how long ago the goods arrived">
+        <Card title="Not yet invoiced, by supplier">
           <Legend items={[
             { label: '0 to 7 days', colour: COBALT_LIGHT },
             { label: '8 to 30 days', colour: COBALT },
@@ -386,7 +386,7 @@ function Approvals() {
           </div>
         </Card>
 
-        <Card title="Permissions and approval limits" sub="Orders over a person's limit go to the next role up">
+        <Card title="Permissions and approval limits">
           <div className={s.tableWrap}>
             <table className={s.table}>
               <thead>
@@ -419,7 +419,6 @@ function Approvals() {
 
       <Card
         title="Audit log"
-        sub={`${entries.length} of ${AUDIT_LOG.length} changes this month, newest first`}
         action={(
           <div className={s.chips} role="group" aria-label="Filter the audit log">
             {FILTERS.map((f) => (
