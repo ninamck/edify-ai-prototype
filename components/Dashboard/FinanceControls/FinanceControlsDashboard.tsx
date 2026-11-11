@@ -116,9 +116,6 @@ function PriceAlerts({ statuses, setStatuses }: { statuses: Statuses; setStatuse
       <div className={s.sectionHead}>
         <div>
           <h2 id="price-alerts-title" className={s.sectionTitle}>Price change alerts</h2>
-          <p className={s.sectionIntro}>
-            Every invoice line is checked against the agreed contract price. Anything more than {PRICE_TOLERANCE_PCT}% over raises an alert, so you can ask for a credit before the invoice is paid.
-          </p>
         </div>
         <Link href="/invoices" className={s.btn}>Open invoices</Link>
       </div>
@@ -131,7 +128,7 @@ function PriceAlerts({ statuses, setStatuses }: { statuses: Statuses; setStatuse
       </div>
 
       <div className={s.split}>
-        <Card title="Over contract by supplier" sub={`${PERIOD_LABEL} to date, accepted prices left out`}>
+        <Card title="Over contract by supplier">
           <div className={s.chart} style={{ height: Math.max(220, bySupplier.length * 36 + 40) }} role="img" aria-label="Bar chart of money paid over contract by supplier. The table below has the figures.">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={bySupplier} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 4 }}>
