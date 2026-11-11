@@ -351,7 +351,7 @@ function Approvals() {
         <Kpi label="Sent for approval" value={String(APPROVAL_STATS.sent)} hint={`${APPROVAL_STATS.approved} approved, ${APPROVAL_STATS.rejected} rejected`} />
         <Kpi label="Waiting now" value={String(APPROVAL_STATS.waiting)} hint="Kingly Court, Market Row Produce" warn={APPROVAL_STATS.waiting > 0} />
         <Kpi label="Median time to approve" value={APPROVAL_STATS.medianTime} hint="This month" />
-        <Kpi label="Changes logged" value={String(changesThisMonth)} hint={`${afterSubmit} counts edited after submit`} />
+        <Kpi label="Changes logged" value={String(changesThisMonth)} hint={`${afterSubmit} counts reopened after submit`} />
       </div>
 
       <div className={s.split}>
@@ -448,7 +448,7 @@ function Approvals() {
                   <td data-label="What changed">
                     <span className={s.badge}>{CHANGE_LABELS[e.type]}</span>{' '}
                     {e.what}
-                    {e.afterSubmit && <> <span className={cx(s.badge, s.badgeWarn)}>Edited after submit</span></>}
+                    {e.afterSubmit && <> <span className={s.badge}>Reopened after submit</span></>}
                   </td>
                   <td data-label="Change">
                     <span className={s.change}>
