@@ -10,6 +10,7 @@ import {
   Layers,
   MessageSquare,
   Receipt,
+  ShieldCheck,
   ShoppingCart,
   Smile,
   Star,
@@ -117,6 +118,13 @@ export const EDIFY_TILES: Tile[] = [
     tone: 'edify',
     href: '/checklists',
   },
+  {
+    title: 'Finance Controls',
+    description: 'Contract price alerts, month-end accruals and the audit trail',
+    icon: ShieldCheck,
+    tone: 'edify',
+    href: '/finance-controls',
+  },
 ];
 
 const OPERATIONS_EDIFY_TILES = ['Command Centre', 'Stocktakes', 'Ordering', 'GP and COGS'];
@@ -158,6 +166,11 @@ export const VIEW_GROUPS: Record<Exclude<ViewId, 'bot' | 'settings'>, TileGroup[
   ],
   edify: [EDIFY_GROUP],
   dashboard: [
+    {
+      heading: 'Finance',
+      edify: true,
+      tiles: EDIFY_TILES.filter((t) => t.title === 'Finance Controls'),
+    },
     {
       heading: 'Trading',
       tiles: [
