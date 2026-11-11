@@ -4,7 +4,6 @@ import {
   CalendarDays,
   ChartColumn,
   ChartPie,
-  ChefHat,
   ClipboardCheck,
   Clock,
   FileText,
@@ -103,13 +102,6 @@ export const EDIFY_TILES: Tile[] = [
     icon: ChartPie,
     tone: 'edify',
     href: '/cogs',
-  },
-  {
-    title: 'Prep and Production',
-    description: 'How much dough and prep to make, from the forecast',
-    icon: ChefHat,
-    tone: 'edify',
-    href: '/production/amounts',
   },
   {
     title: 'Waste',
