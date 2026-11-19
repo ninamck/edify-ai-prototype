@@ -739,7 +739,7 @@ const FITZROY_RECIPES: LegacyFitzroySeed[] = [
     flag: null,
     menuItems: [{ name: 'Latte', posLinked: true }],
     ingredients: coffeeIngs(200),
-    modifierGroups: ['Alt milks'],
+    modifierGroups: ['Alt milks', 'Syrups'],
     variantDimensions: [coffeeSizeDimension('rec-latte', 160, 200, 260)],
     production: { visibility: 'Bar', shelfLifeMinutes: null, prepTimeSeconds: 100 },
   },
@@ -829,7 +829,7 @@ const FITZROY_RECIPES: LegacyFitzroySeed[] = [
       { name: 'Whole milk', qty: '200ml', supplier: 'Fresh Earth Produce', price: 0.44 },
       { name: 'Ice', qty: '80g', supplier: 'In-house', price: 0.05 },
     ],
-    modifierGroups: ['Alt milks'],
+    modifierGroups: ['Alt milks', 'Syrups'],
     production: { visibility: 'Bar', shelfLifeMinutes: null, prepTimeSeconds: 85 },
   },
   {
@@ -1445,6 +1445,7 @@ const LEGACY_MODGROUP_NAME_TO_ID: Record<string, string> = {
   'Alt milks': 'mg-alt-milks',
   'Cup sizes': 'mg-coffee-size',
   'Pour size': 'mg-spirit-measure',
+  'Syrups': 'mg-syrups',
 };
 
 /**

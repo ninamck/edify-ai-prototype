@@ -66,6 +66,8 @@ export type ModifierOption = {
    *  Stored on the option itself rather than in a separate mapping
    *  table — same pattern as variant options. */
   posSourceId?: string;
+  /** Shorter name printed on kitchen tickets. Falls back to `name`. */
+  kitchenName?: string;
 };
 
 export type ModifierGroup = {
@@ -82,4 +84,7 @@ export type ModifierGroup = {
   /** Free-text description — surfaces in the editor and the menu-item
    *  preview. */
   notes?: string;
+  /** Only for `selection: 'many'`. Caps how many options the till lets
+   *  staff pick. Unset means no limit. Maps to Square's max selections. */
+  maxSelections?: number;
 };

@@ -522,6 +522,9 @@ export const SEED_MASTER_PRODUCTS: MasterProduct[] = [
   { id: 'mp-andouille-sausage', name: 'Andouille Sausage', category: 'Meat', unit: '1kg pack', slug: 'andouille-sausage', productClass: 'Food', status: 'Available', siteCosts: wacAt(11.00, 5) },
   { id: 'mp-ham-sliced', name: 'Ham (sliced)', category: 'Meat', unit: '1kg pack', slug: 'ham-sliced', productClass: 'Food', status: 'Available', siteCosts: wacAt(9.00, 5) },
   { id: 'mp-chicken-sausage', name: 'Chicken Sausage', category: 'Meat', unit: '1kg pack', slug: 'chicken-sausage', productClass: 'Food', status: 'Available', siteCosts: wacAt(10.00, 5) },
+  // Syrups modifier group (mg-syrups).
+  { id: 'mp-vanilla-syrup', name: 'Vanilla Syrup 1L', category: 'Pantry', unit: '1L bottle', slug: 'vanilla-syrup', productClass: 'Food', status: 'Available', siteCosts: wacAt(7.20, 8) },
+  { id: 'mp-caramel-syrup', name: 'Caramel Syrup 1L', category: 'Pantry', unit: '1L bottle', slug: 'caramel-syrup', productClass: 'Food', status: 'Available', siteCosts: wacAt(7.20, 8) },
   // ── Second Cup Central Supply (Canada) — multi-currency demo only ─────
   // WACs are in GBP (the base currency): CAD packCost × locked receipt rate.
   ...(isMultiCurrencyDemo
@@ -656,6 +659,21 @@ export const SEED_PRODUCTS: Product[] = [
     singleUnitType: 'Each',
     singleUnitVolumeOrWeight: 0.25,
     unitOfMeasure: 'L',
+  }),
+  // Poured by the glass and sold by the bottle: one product, three till sizes.
+  p({
+    id: 'prd-house-red-75cl',
+    name: 'House Red 75cl',
+    supplierCode: 'B215',
+    productClass: 'Beverage',
+    category: 'Beverage',
+    packQty: 6,
+    packCost: 34.20,
+    taxRatePct: 20,
+    singleUnitType: 'ml',
+    singleUnitVolumeOrWeight: 750,
+    unitOfMeasure: 'ml',
+    allergensContains: ['Sulphites'],
   }),
   p({
     id: 'prd-arabic-allergy-sticker',

@@ -147,7 +147,7 @@ export default function HomeShell() {
   const { activeSite, isAllSites } = useActiveSite();
   const flowParam = searchParams?.get('flow');
   const autoStartFlow =
-    flowParam === 'recipe' || flowParam === 'integrity' || flowParam === 'pos-match' || flowParam === 'rota' || flowParam === 'sweep'
+    flowParam === 'recipe' || flowParam === 'integrity' || flowParam === 'pos-match' || flowParam === 'rota' || flowParam === 'sweep' || flowParam === 'square-changes'
       ? flowParam
       : undefined;
 

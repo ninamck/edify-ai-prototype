@@ -33,6 +33,7 @@ import StyledSelect from '@/components/ui/StyledSelect';
 import { useModifierGroups } from '@/components/Modifiers/store';
 import type { ModifierGroup } from '@/components/Modifiers/types';
 import { GroupEditorDrawer } from '@/components/Modifiers/GroupEditorDrawer';
+import { TillStatusChip } from '@/components/SquareMenu/TillStatusChip';
 import {
   applyModifiers,
   defaultSelectionFor,
@@ -722,6 +723,7 @@ function EditRecipeForm({
               Editing recipe
             </span>
             <KindPill kind={draftKind} isPrep={original.isPrep} />
+            <TillStatusChip recipe={original} />
             {isDirty && (
               <span
                 style={{

@@ -44,6 +44,7 @@ import type {
 import { IngredientRefPicker } from '@/components/Recipe/IngredientRefPicker';
 import { resolveIngredientRef, type IngredientRef } from '@/components/Ingredients/catalogue';
 import StyledSelect from '@/components/ui/StyledSelect';
+import { GroupTillCard } from '@/components/SquareMenu/GroupTillCard';
 
 const UNITS = ['g', 'kg', 'ml', 'L', 'each', 'unit'];
 
@@ -206,6 +207,9 @@ export function GroupEditor({
           })}
         </div>
       </Card>
+
+      {/* Square customers with publishing on only. */}
+      <GroupTillCard value={value} onChange={onChange} />
 
       {/* ── 3. Notes and POS ids ── */}
       <Card padded={false}>

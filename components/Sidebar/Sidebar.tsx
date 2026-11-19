@@ -35,6 +35,7 @@ import { useActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
 import { useFranchise } from '@/components/Franchise/FranchiseContext';
 import { ESTATE_SITES } from '@/components/Stock/fixtures';
 import { getStockStatus } from '@/components/Stock/status';
+import { squareChangeCount, useSquareMenu } from '@/components/SquareMenu/squareMenuStore';
 
 export default function Sidebar() {
   const router = useRouter();
@@ -42,6 +43,9 @@ export default function Sidebar() {
   const approvals = useApprovals();
   const pendingApprovals = approvals.filter(a => a.status === 'pending').length;
   const invoiceReviewCount = needsReviewCount();
+  // Things changed in Square since the last publish, waiting for a decision.
+  const squareMenu = useSquareMenu();
+  const squareChanges = squareMenu.settings.enabled ? squareChangeCount(squareMenu) : 0;
   const demoVersion = useDemoVersion();
   const homeHref =
     demoVersion === 'mvp1' ? '/mvp-1' : demoVersion === 'prod2' ? '/prod-2' : '/';
@@ -384,7 +388,8 @@ export default function Sidebar() {
             label="Manage menu"
             icon={Star}
             compact={compact}
-            active={is('/recipes') || is('/modifier-groups') || is('/pos-connection') || is('/item-matching') || is('/email-orders')}
+            badge={squareChanges || undefined}
+            active={is('/recipes') || is('/modifier-groups') || is('/pos-connection') || is('/item-matching') || is('/square-menu') || is('/email-orders')}
             onClick={() => router.push('/recipes')}
           />
           <NavItem label="Manage suppliers" icon={MapPin} compact={compact} active={is('/suppliers')} onClick={() => router.push('/suppliers')} />

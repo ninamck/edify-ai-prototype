@@ -120,6 +120,31 @@ export const SEED_MODIFIER_GROUPS: ModifierGroup[] = [
     ],
   },
   {
+    id: 'mg-syrups',
+    name: 'Syrups',
+    selection: 'many',
+    required: false,
+    maxSelections: 3,
+    posSourceId: 'pos-mg-syrups',
+    notes: 'Flavour shots for any coffee. Up to three per drink.',
+    options: [
+      {
+        id: 'mg-syrups-vanilla',
+        name: 'Vanilla',
+        priceDelta: 0.50,
+        kitchenName: 'VAN',
+        effects: [{ kind: 'add', ref: { kind: 'master', masterProductId: 'mp-vanilla-syrup' }, qty: { value: 10, unit: 'ml' } }],
+      },
+      {
+        id: 'mg-syrups-caramel',
+        name: 'Caramel',
+        priceDelta: 0.50,
+        kitchenName: 'CAR',
+        effects: [{ kind: 'add', ref: { kind: 'master', masterProductId: 'mp-caramel-syrup' }, qty: { value: 10, unit: 'ml' } }],
+      },
+    ],
+  },
+  {
     id: 'mg-mixer',
     name: 'Mixer',
     selection: 'one',

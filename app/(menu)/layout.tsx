@@ -9,6 +9,8 @@
  *   • POS connection   — system-level link state (which POS, last sync)
  *   • Item matching    — ongoing reconciliation of POS items ↔ recipes
  *   • Email orders     — orders Edify read from the inbox and sent to the till
+ *   • Square menu      — what Edify publishes to Square (Square customers
+ *                        with publishing on only)
  *
  * Uses the shared AreaTopBar (single bar: site switcher · title ·
  * compact tabs) so the managed areas of the app feel like one system.
@@ -23,6 +25,7 @@ import Sidebar from '@/components/Sidebar/Sidebar';
 import AreaTopBar from '@/components/TopBar/AreaTopBar';
 import DemoControls from '@/components/DemoControls/DemoControls';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { squareChangeCount, useSquareMenu } from '@/components/SquareMenu/squareMenuStore';
 
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
 
@@ -36,8 +39,17 @@ const MENU_TABS: Tab[] = [
   { id: 'email-orders',    label: 'Email orders',    href: '/email-orders' },
 ];
 
+/** Only Square customers with publishing turned on see this tab. */
+const SQUARE_MENU_TAB: Tab = { id: 'square-menu', label: 'Square menu', href: '/square-menu' };
+
 export default function MenuLayout({ children }: { children: React.ReactNode }) {
   const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
+  const squareMenu = useSquareMenu();
+  const changes = squareChangeCount(squareMenu);
+  const squareTab = changes ? { ...SQUARE_MENU_TAB, label: `Square menu (${changes})` } : SQUARE_MENU_TAB;
+  const tabs = squareMenu.settings.enabled
+    ? [...MENU_TABS.slice(0, 4), squareTab, ...MENU_TABS.slice(4)]
+    : MENU_TABS;
 
   return (
     <div
@@ -77,7 +89,7 @@ export default function MenuLayout({ children }: { children: React.ReactNode }) 
             matching the redesigned area chrome. */}
         <AreaTopBar
           title="Menu"
-          tabs={MENU_TABS}
+          tabs={tabs}
           siteName="Fitzroy Espresso"
           rightSlot={<DemoControls variant="inline" />}
           backTo="/"

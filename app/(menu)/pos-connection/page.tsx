@@ -32,6 +32,7 @@ import {
   type ConnectionStatus,
   type PosConnection,
 } from '@/components/EmailOrders/posConnection';
+import { SquarePublishingPanel } from '@/components/SquareMenu/SquarePublishingPanel';
 
 const AVAILABLE_INTEGRATIONS = [
   { id: 'lightspeed', name: 'Lightspeed', status: 'available' },
@@ -203,6 +204,7 @@ function ConnectionCard({
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexShrink: 0 }}>
         <StyledSelect
           width={130}
+          aria-label="How often Edify reads from the till"
           value={c.cadence}
           onChange={(e) => onCadence(e.target.value as PosConnection['cadence'])}
         >
@@ -229,6 +231,9 @@ function ConnectionCard({
           {syncing ? 'Syncing…' : 'Sync now'}
         </button>
       </div>
+
+      {/* Square only: menu publishing. Other vendors don't support it. */}
+      {c.vendor.toLowerCase().includes('square') && <SquarePublishingPanel />}
 
       <div
         style={{

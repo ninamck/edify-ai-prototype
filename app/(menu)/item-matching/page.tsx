@@ -35,6 +35,7 @@ import {
 } from '@/components/ItemMatching/overrideStore';
 import { MatchPicker } from '@/components/ItemMatching/MatchPicker';
 import { SyncMatchModal } from '@/components/ItemMatching/SyncMatchModal';
+import { useSquareMenu } from '@/components/SquareMenu/squareMenuStore';
 
 type Filter = 'all' | 'matched' | 'unmatched' | 'review';
 
@@ -100,6 +101,18 @@ export default function ItemMatchingPage() {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [syncOpen, setSyncOpen] = useState(false);
 
+  // Square customers with publishing on: till buttons Edify created are
+  // linked from birth and read only here; they change on the Square menu.
+  // Buttons linked during first link show as matched but stay editable.
+  // Every other customer sees the page unchanged.
+  const squareMenu = useSquareMenu();
+  const publishedByPos = useMemo(() => {
+    const m = new Map<string, (typeof squareMenu.items)[number]>();
+    if (!squareMenu.settings.enabled) return m;
+    for (const i of squareMenu.items) if (i.posItemId) m.set(i.posItemId, i);
+    return m;
+  }, [squareMenu]);
+
   const recipesByPosSourceId = useMemo(() => {
     const m = new Map<string, typeof recipes[number]>();
     for (const r of recipes) {
@@ -142,8 +155,21 @@ export default function ItemMatchingPage() {
 
       let target: ResolvedTarget | undefined;
       let matchTarget: MatchTarget | undefined;
+      const tillItem = publishedByPos.get(p.id);
+      const published = tillItem?.publishedByEdify ? tillItem : undefined;
+      const fromTill = published ?? (!override?.target ? tillItem : undefined);
 
-      if (override?.target) {
+      if (fromTill) {
+        if (fromTill.source.kind === 'recipe') {
+          const r = recipesById.get(fromTill.source.recipeId);
+          if (r) target = { kind: 'recipe', id: r.id, name: r.name, href: `/recipes/${r.id}/edit` };
+          matchTarget = { type: 'recipe', id: fromTill.source.recipeId };
+        } else {
+          const pr = productsById.get(fromTill.source.productId);
+          if (pr) target = { kind: 'product', id: pr.id, name: pr.name, href: `/suppliers/products/${pr.id}` };
+          matchTarget = { type: 'product', id: fromTill.source.productId };
+        }
+      } else if (override?.target) {
         matchTarget = override.target;
         if (override.target.type === 'recipe') {
           const r = recipesById.get(override.target.id);
@@ -163,7 +189,7 @@ export default function ItemMatchingPage() {
         }
       }
 
-      const needsReview = !override?.target
+      const needsReview = !override?.target && !fromTill
         && (p.matchStatus === 'one-ambiguous' || p.matchStatus === 'needs-info');
       const state: RowState = !target
         ? 'unmatched'
@@ -197,9 +223,9 @@ export default function ItemMatchingPage() {
         }
       }
 
-      return { pos: p, target, matchTarget, state, hidden, suggestion, suggestionMatch };
+      return { pos: p, target, matchTarget, state, hidden, suggestion, suggestionMatch, publishedItemId: published?.id };
     });
-  }, [overrides, recipesByPosSourceId, recipesById, productsById, mastersById, beverageProducts]);
+  }, [overrides, recipesByPosSourceId, recipesById, productsById, mastersById, beverageProducts, publishedByPos]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -445,7 +471,10 @@ export default function ItemMatchingPage() {
               isMenuOpen={menuFor === row.pos.id}
               isPickerOpen={pickerFor === row.pos.id}
               onOpenTarget={(href) => router.push(href)}
-              onMatch={() => setPickerFor(pickerFor === row.pos.id ? null : row.pos.id)}
+              onMatch={() => (row.publishedItemId
+                ? router.push(`/square-menu?item=${row.publishedItemId}`)
+                : setPickerFor(pickerFor === row.pos.id ? null : row.pos.id))}
+              publishedFromEdify={!!row.publishedItemId}
               onApplySuggestion={() => {
                 if (row.suggestionMatch) setMatchTarget(row.pos.id, row.suggestionMatch);
               }}
@@ -535,9 +564,11 @@ function StatTile({
 function Row({
   pos, target, matchTarget, suggestion, state, hidden, isMenuOpen, isPickerOpen,
   onOpenTarget, onMatch, onApplySuggestion, onClosePicker, onCreate,
-  onToggleMenu, onCloseMenu, onHide, onClearMatch, canClearMatch,
+  onToggleMenu, onCloseMenu, onHide, onClearMatch, canClearMatch, publishedFromEdify,
 }: {
   pos: typeof FITZROY_POS_INTAKE.menuItems[number];
+  /** Edify created this till button, so the link can't be changed here. */
+  publishedFromEdify?: boolean;
   target?: ResolvedTarget;
   matchTarget?: MatchTarget;
   /** When set, the unmatched cell renders a one-click "Suggested"
@@ -592,7 +623,21 @@ function Row({
             </span>
           )}
         </div>
-        {pos.note && (
+        {publishedFromEdify && (
+          <div style={{ marginTop: 3 }}>
+            <span
+              title="Edify created this till button. Change it on the Square menu."
+              style={{
+                fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)',
+                padding: '1px 7px', borderRadius: 6,
+                border: '1px solid var(--color-border-subtle)',
+              }}
+            >
+              Published from Edify
+            </span>
+          </div>
+        )}
+        {pos.note && !publishedFromEdify && (
           <div style={{
             fontSize: 11.5, color: 'var(--color-warning)',
             display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 3,
@@ -614,7 +659,7 @@ function Row({
               ...recipeLinkStyle,
               ...(isPickerOpen ? { borderColor: 'var(--color-accent-active)' } : null),
             }}
-            title={`${target.name} — click to change match`}
+            title={publishedFromEdify ? `${target.name}. Open on the Square menu` : `${target.name}, click to change match`}
           >
             {targetIcon}
             <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

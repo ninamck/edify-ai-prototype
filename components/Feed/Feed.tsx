@@ -110,6 +110,8 @@ import { ACTIVE_SITES } from '@/components/ActiveSite/ActiveSiteContext';
 import AmbiguityPicker from '@/components/Feed/commands/cards/AmbiguityPicker';
 import ReceiptCard from '@/components/Feed/commands/cards/ReceiptCard';
 import MarginExplorerCard from '@/components/Feed/commands/cards/MarginExplorerCard';
+import { SquareChangesCard } from '@/components/SquareMenu/SquareChangesCard';
+import { getSquareMenu, squareChangeCount } from '@/components/SquareMenu/squareMenuStore';
 import CardShell, { PillRow, type CardState } from '@/components/Feed/commands/cards/CardShell';
 import { demoCustomer } from '@/lib/demoConfig';
 import BatchReviewCard, { type BatchReviewRow, type BatchRowResult, type BatchReviewSubmission } from '@/components/Feed/commands/cards/BatchReviewCard';
@@ -313,6 +315,8 @@ const QUICK_ACTION_CHIPS: {
   // Not a registry command — a guided flow. Special-cased in
   // `handleQuickAction`, which routes it to `startPosMatchCheck`.
   { commandId: 'pos-match-check', label: 'Check my POS matches', icon: Target },
+  // Square customers with menu publishing on only; filtered at render.
+  { commandId: 'square-changes', label: 'What changed in Square?', icon: Store },
   // Opens the camera; the photo comes back into the chat to be read.
   { commandId: 'photo-delivery', label: 'Photo a delivery', icon: Camera },
 ];
@@ -5970,7 +5974,7 @@ function ClaudeComposer({
                     </span>
                   </button>
                 )}
-                {QUICK_ACTION_CHIPS.map((chip) => {
+                {QUICK_ACTION_CHIPS.filter((chip) => chip.commandId !== 'square-changes' || getSquareMenu().settings.enabled).map((chip) => {
                   const Icon = chip.icon;
                   return (
                     <button
@@ -6861,7 +6865,7 @@ export default function Feed({
   /** Charts already pinned to the dashboard — their "Add to dashboard" buttons render as already-pinned. */
   alreadyPinned?: Set<AnalyticsChartId>;
   /** If set, auto-start the named guided flow on mount (e.g. from an external "Ask Quinn" entry point). */
-  autoStartFlow?: 'recipe' | 'integrity' | 'pos-match' | 'rota' | 'sweep';
+  autoStartFlow?: 'recipe' | 'integrity' | 'pos-match' | 'rota' | 'sweep' | 'square-changes';
   /** Shows the "Note for Edify" quick action in the composer. Sending a
    *  message that starts with "Note:" logs it straight to the notebook. */
   enableNoteCapture?: boolean;
@@ -7264,6 +7268,10 @@ export default function Feed({
       startPosMatchCheck();
       return;
     }
+    if (commandId === 'square-changes') {
+      startSquareChanges();
+      return;
+    }
     if (commandId === 'photo-delivery') {
       setDeliveryFocus({ mode: 'capture' });
       return;
@@ -7362,6 +7370,7 @@ export default function Feed({
     if (autoStartFlow === 'recipe') startRecipeFlow();
     else if (autoStartFlow === 'integrity') startIntegrityCheck();
     else if (autoStartFlow === 'pos-match') startPosMatchCheck();
+    else if (autoStartFlow === 'square-changes') startSquareChanges();
     else if (autoStartFlow === 'rota') commandRunner.runCommand({ commandId: 'rota-rebalance', args: {}, confidence: 1 });
     else if (autoStartFlow === 'sweep') commandRunner.runCommand({ commandId: 'variance-sweep', args: {}, confidence: 1 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -8648,6 +8657,27 @@ export default function Feed({
         },
       ]);
     }, 3200);
+  }
+
+  /** "What changed in Square?" — lists what someone changed on the till
+   *  since the last publish and hands off to the Changed in Square panel. */
+  function startSquareChanges() {
+    setChatMinimized(false);
+    setChatStarted(true);
+    const n = squareChangeCount(getSquareMenu());
+    const stamp = Date.now();
+    setMessages((prev) => [
+      ...prev,
+      { id: `u-square-changes-${stamp}`, role: 'user', text: 'What changed in Square?' },
+      {
+        id: `q-square-changes-${stamp}`,
+        role: 'quinn',
+        text: n === 0
+          ? 'Nothing has changed in Square since your last publish.'
+          : `${n} ${n === 1 ? 'thing was' : 'things were'} changed on the till since your last publish. Want to bring them into Edify?`,
+      },
+      { id: `q-square-changes-card-${stamp}`, role: 'quinn', text: '', msgType: 'square-changes' },
+    ]);
   }
 
   /** "Check my POS matches" quick action — the standalone match-triage
@@ -10087,6 +10117,7 @@ export default function Feed({
                             />
                           );
                         })()}
+                        {m.msgType === 'square-changes' && <SquareChangesCard />}
                         {m.msgType === 'pos-match-suggestions' && (() => {
                           let parsed: { suggestions: POSMatchSuggestion[] } | null = null;
                           try {
