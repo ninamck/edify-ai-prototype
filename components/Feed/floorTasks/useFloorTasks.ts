@@ -24,9 +24,6 @@ export interface FloorChatMsg {
 const FLOOR_HINT =
   /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|dozen|half|waste|wasted|binned|bin|chucked|threw|dropped|spilt|spilled|out of date|expired|stale|gone off|on hand|have|got|left|count|counting|delivery|delivered|arrived|here|accept|transfer|send|sending|request|ask|par|batch|add|extra|done|finished|started|start|starting|fridge|freezer|temperature|degrees|checklist|labels|basket|undo|cancel|scrap|allergens?|contains?|arriving|make|busy|quiet|market|toasties?|natoora|notora|bidvest|bidfood)\b/i;
 
-const DEMO_NOTE =
-  'Demo mode: no model is connected, so Edify is reading floor tasks with set patterns. Everyday phrasings work. Anything it doesn\'t recognise goes to the normal chat.';
-
 let seq = 0;
 const mid = (p: string) => `${p}-${Date.now().toString(36)}-${(seq += 1)}`;
 
@@ -35,7 +32,6 @@ export function useFloorTasks<M extends FloorChatMsg>(setMessages: Dispatch<SetS
   const awaitingYes = useRef<string[]>([]);
   const undoReasonFor = useRef<string | null>(null);
   const inConversation = useRef(false);
-  const demoNoted = useRef(false);
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState('');
   const voiceTurn = useRef(false);
@@ -197,10 +193,6 @@ export function useFloorTasks<M extends FloorChatMsg>(setMessages: Dispatch<SetS
       }
 
       setMessages((prev) => prev.filter((m) => m.id !== thinkingId));
-      if (res.engine === 'demo' && !demoNoted.current) {
-        demoNoted.current = true;
-        push({ id: mid('q-floor-demo'), role: 'quinn', text: DEMO_NOTE, streaming: false });
-      }
       history.current.push({ role: 'user', text: t });
       if (res.proposals.length) {
         inConversation.current = false;
