@@ -65,6 +65,10 @@ import type { Column } from '@/components/Mvp1/Tables/dataSources';
 import { parseCommand, parseSiteSetup } from '@/components/Feed/commands/parsers';
 import { COMMAND_REGISTRY, getCommand } from '@/components/Feed/commands/registry';
 import { useCommandRunner } from '@/components/Feed/commands/useCommandRunner';
+import { useFloorTasks, useFloorVoice } from '@/components/Feed/floorTasks/useFloorTasks';
+import FloorTaskCard from '@/components/Feed/floorTasks/FloorTaskCard';
+import FloorTaskBar from '@/components/Feed/floorTasks/FloorTaskBar';
+import { useWorld as useFloorWorld } from '@/lib/floorTasks/world/store';
 import SlashMenu from '@/components/Feed/commands/SlashMenu';
 import TaskHistoryList from '@/components/Feed/TaskHistoryList';
 import { PROMPT_CHIPS } from '@/components/Feed/suggestedPrompts';
@@ -5558,6 +5562,11 @@ type ComposerProps = {
   onAttachFile?: (fileName: string) => void;
   /** Called when the user clears the attached file chip. */
   onClearAttachment?: () => void;
+  /** Mic: speak a floor task instead of typing it. */
+  onVoiceToggle?: () => void;
+  listening?: boolean;
+  /** Words heard so far, shown in the box while listening. */
+  interim?: string;
 };
 
 function ClaudeComposer({
@@ -5573,6 +5582,9 @@ function ClaudeComposer({
   attachedFileName,
   onAttachFile,
   onClearAttachment,
+  onVoiceToggle,
+  listening,
+  interim,
 }: ComposerProps) {
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   /** Hidden file input — opened by the paperclip button. Any
@@ -5702,7 +5714,7 @@ function ClaudeComposer({
               onSend();
             }
           }}
-          placeholder={ghost ? '' : placeholder}
+           placeholder={ghost ? '' : listening ? (interim || 'Listening. Say a task, like "2 croissants in the bin"') : placeholder}
           disabled={disabled}
           rows={2}
           style={{
@@ -6021,19 +6033,21 @@ function ClaudeComposer({
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, justifyContent: 'flex-end' }}>
           <button
             type="button"
-            aria-label="Voice input"
-            disabled={disabled}
+            aria-label={listening ? 'Stop listening' : 'Speak a task'}
+            aria-pressed={!!listening}
+            onClick={onVoiceToggle}
+            disabled={disabled || !onVoiceToggle}
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: '32px',
-              height: '32px',
+              width: '40px',
+              height: '40px',
               borderRadius: '10px',
               border: 'none',
-              background: 'transparent',
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              color: 'var(--color-text-muted)',
+              background: listening ? 'var(--color-accent-active, #224444)' : 'transparent',
+              cursor: disabled || !onVoiceToggle ? 'not-allowed' : 'pointer',
+              color: listening ? '#fff' : 'var(--color-text-muted)',
             }}
           >
             <Mic size={16} strokeWidth={2} />
@@ -7150,6 +7164,24 @@ export default function Feed({
       // message once the user has moved on to a different command.
       setAwaitingRecipeName(false);
     },
+  });
+
+  // ── Floor tasks ─────────────────────────────────────────────────────────
+  // Words to actions: waste, on hand, hot batches, counts, checklists,
+  // basket, deliveries and transfers, typed or spoken. A model stages the
+  // task; the card or a spoken yes applies it.
+  const floor = useFloorTasks(setMessages);
+  const floorWorld = useFloorWorld();
+  const sendMessageRef = useRef<typeof sendMessage | null>(null);
+  useFloorVoice({
+    surface: floorWorld.surface,
+    listening: floor.voice.listening,
+    setListening: floor.voice.setListening,
+    setInterim: floor.voice.setInterim,
+    onFinal: (said) => sendMessageRef.current?.(said, undefined, undefined, { voice: true }),
+  });
+  useEffect(() => {
+    sendMessageRef.current = sendMessage;
   });
 
   // ── Photo a delivery ──────────────────────────────────────────────
@@ -9448,6 +9480,7 @@ export default function Feed({
     overrideText?: string,
     explicitChart?: AnalyticsChartId | null,
     tableOpts?: { tableQuery: TableQuery; tableTitle?: string },
+    floorOpts?: { skipFloor?: boolean; voice?: boolean },
   ) {
     const raw = overrideText !== undefined ? overrideText : input;
     const text = raw.trim();
@@ -9632,6 +9665,16 @@ export default function Feed({
         startProductSheetImport({ fileName, userText: text });
         return;
       }
+    }
+
+    // Floor tasks — before the recipe detector, which reads "add 6
+    // chicken avo sandwiches" as a new recipe. When the model says it
+    // isn't a floor task, the message runs through again without it.
+    if (explicitChart === undefined && !tableOpts && !attachedFileName && !floorOpts?.skipFloor && floor.looksLikeFloor(text)) {
+      void floor.handle(text, userMsg, { voice: floorOpts?.voice }).then((handled) => {
+        if (!handled) sendMessageRef.current?.(text, undefined, undefined, { skipFloor: true });
+      });
+      return;
     }
 
     // "New recipe" intent — sits BEFORE parseCommand because the recipe
@@ -10452,6 +10495,13 @@ export default function Feed({
                           />
                         )}
                         {/* ── Chat-command cards ───────────────────────── */}
+                        {m.msgType === 'floor-proposal' && m.cmdArgsJson && (
+                          <FloorTaskCard
+                            proposalId={(JSON.parse(m.cmdArgsJson) as { proposalId: string }).proposalId}
+                            onApplied={floor.onApplied}
+                            onUndo={floor.onUndo}
+                          />
+                        )}
                         {m.msgType === 'cmd-waste-card' && (
                           <WasteCommandCard
                             initialArgs={m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : {}}
@@ -11323,7 +11373,11 @@ export default function Feed({
                   attachedFileName={attachedFileName}
                   onAttachFile={setAttachedFileName}
                   onClearAttachment={() => setAttachedFileName(null)}
+                  onVoiceToggle={floor.voice.supported ? () => floor.voice.setListening(!floor.voice.listening) : undefined}
+                  listening={floor.voice.listening}
+                  interim={floor.voice.interim}
                 />
+                <FloorTaskBar onOpen={floor.openProposal} />
               </div>
 
               {/* The "Current chat | Resume →" banner used to live
@@ -11701,6 +11755,7 @@ export default function Feed({
                   onPick={(slash) => setInput(slash)}
                   onClose={() => setInput('')}
                 />
+                <FloorTaskBar onOpen={floor.openProposal} compact />
                 <ClaudeComposer
                   value={input}
                   onChange={setInput}
@@ -11714,6 +11769,9 @@ export default function Feed({
                   attachedFileName={attachedFileName}
                   onAttachFile={setAttachedFileName}
                   onClearAttachment={() => setAttachedFileName(null)}
+                  onVoiceToggle={floor.voice.supported ? () => floor.voice.setListening(!floor.voice.listening) : undefined}
+                  listening={floor.voice.listening}
+                  interim={floor.voice.interim}
                 />
               </div>
             </div>
