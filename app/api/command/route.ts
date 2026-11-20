@@ -1,5 +1,6 @@
 import { generateText, isStepCount, tool, type ModelMessage, type ToolSet } from 'ai';
 import { z } from 'zod';
+import { readFloorTask, sayFor } from '@/lib/floorTasks/demoReader';
 import { instructions } from '@/lib/floorTasks/prompt';
 import { floorTools } from '@/lib/floorTasks/tools';
 import { createScope } from '@/lib/floorTasks/tools/scope';
@@ -18,9 +19,8 @@ export async function POST(req: Request) {
   }
   if (!body?.text?.trim() || !body.snapshot) return Response.json({ error: 'bad-request' }, { status: 400 });
 
-  if (!process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL) {
-    const res: CommandResponse = { route: 'other', say: '', proposals: [], toolsCalled: [], error: 'no-model' };
-    return Response.json(res);
+  if (process.env.FLOOR_TASKS_ENGINE === 'demo' || (!process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL)) {
+    return Response.json(await demo(body));
   }
 
   const scope = createScope(body.snapshot);
@@ -59,16 +59,31 @@ export async function POST(req: Request) {
       say: handedOff ? '' : result.text.trim(),
       proposals: scope.proposals,
       toolsCalled,
+      engine: 'model',
     };
     return Response.json(res);
   } catch (err) {
-    const res: CommandResponse = {
-      route: 'other',
-      say: '',
-      proposals: [],
-      toolsCalled: [],
-      error: err instanceof Error ? err.message : 'model-failed',
-    };
-    return Response.json(res);
+    const res = await demo(body);
+    return Response.json({ ...res, error: err instanceof Error ? err.message : 'model-failed' });
   }
+}
+
+/** No model: patterns read the words and call the same tools. */
+async function demo(body: CommandRequest): Promise<CommandResponse> {
+  const call = readFloorTask(body.text, body.snapshot, body.history ?? []);
+  const none: CommandResponse = { route: 'other', say: '', proposals: [], toolsCalled: [], engine: 'demo' };
+  if (!call) return none;
+  if ('say' in call) return { ...none, route: 'floor', say: call.say };
+  const scope = createScope(body.snapshot);
+  const def = floorTools(scope).find((t) => t.name === call.tool);
+  if (!def) return none;
+  const out = JSON.parse((await def.handler(call.args as never)).content[0].text) as Record<string, unknown>;
+  if (scope.handOff) return none;
+  return {
+    route: 'floor',
+    say: scope.proposals.length ? '' : sayFor(call.tool, out),
+    proposals: scope.proposals,
+    toolsCalled: [call.tool],
+    engine: 'demo',
+  };
 }

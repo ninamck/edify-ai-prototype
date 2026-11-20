@@ -9,9 +9,10 @@ Every rule below was read from Edify Main (`../edify`). Each task in `lib/floorT
 ## Running it
 
 1. Add `AI_GATEWAY_API_KEY` to `.env.local` and restart `npm run dev`. On Vercel the deployment's OIDC token is used instead, so no key is needed there. `FLOOR_TASKS_MODEL` overrides the model, which defaults to `anthropic/claude-sonnet-5.5`.
-2. Without a key, `/api/command` answers `route: "other"` and the chat carries on with its existing flows. Nothing breaks, but floor tasks stay off.
-3. `/dev/floor-tasks` has 10 to 12 test phrases per task. "Model" sends a phrase through `/api/command`, the same as the chat, and checks the right tool was called. "Stage directly" calls the tool with known arguments, so the cards and Main's rules can be checked without a model.
-4. `node scripts/check-floor-tasks.mjs` runs 40 checks of the tools and the site store against Main's rules, with no model and no browser.
+2. Without a key, `/api/command` runs in demo mode: `lib/floorTasks/demoReader.ts` reads the sentence with set patterns and calls the same tools the model would, so the cards, rules and undo are identical. The response carries `engine: "demo"` and the chat says once that it is in demo mode. Anything the patterns don't recognise answers `route: "other"` and goes to the existing chat. `FLOOR_TASKS_ENGINE=demo` forces demo mode with a key, and a failed model call falls back to it.
+3. Demo mode is for showing the flow, not for judging language. The patterns were tuned on the test phrases, so they read all 164, but new phrasings, several tasks in one sentence and long follow-up conversations are where the model earns its place.
+4. `/dev/floor-tasks` has 10 to 12 test phrases per task. "Send" sends a phrase through `/api/command`, the same as the chat, and checks the right tool was called. The banner says whether the model or demo mode answered. "Stage directly" calls the tool with known arguments, so the cards and Main's rules can be checked on their own.
+5. `node scripts/check-floor-tasks.mjs` runs 40 checks of the tools and the site store against Main's rules. `node scripts/check-demo-reader.mjs` runs every test phrase through demo mode (`--all` lists each one). Neither needs a model or a browser.
 
 ## How a task flows
 
@@ -133,7 +134,8 @@ These came out of reading Main. None is built in the prototype's backend, becaus
 - `lib/floorTasks/registry.ts`: one entry per task, with tier, slots, Main endpoint, permission, roles, confirm copy, undo, rules, Main files and differences.
 - `lib/floorTasks/tools/`: the tools, one file per area, and `scope.ts` with the Main-shaped `toolFactory`.
 - `lib/floorTasks/prompt.ts`: the instructions, with Edify's product voice block word for word.
-- `app/api/command/route.ts`: the model call.
+- `app/api/command/route.ts`: the model call, and the switch to demo mode.
+- `lib/floorTasks/demoReader.ts`: the demo mode patterns, and the sentences for Ask it answers.
 - `lib/floorTasks/world/`: the site's data for the prototype (seed and store) and how each task is applied.
 - `lib/floorTasks/voice.ts`: yes, no and undo matching, confirm mode per device, readbacks.
 - `components/Feed/floorTasks/`: the card, the Waiting for you bar, the chat hook and the test page.

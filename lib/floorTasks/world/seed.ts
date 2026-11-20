@@ -27,6 +27,10 @@ function unitsFor(item: StockItem): SnapStockRow['units'] {
   return out;
 }
 
+/** The estate data has croissants at 0, which would take the most common
+ *  demo phrase ("3 croissants out of date") below zero. */
+const DEMO_ON_HAND: Record<string, number> = { 'ing-croissants': 4 };
+
 function stockRow(item: StockItem): SnapStockRow {
   return {
     id: item.id,
@@ -35,7 +39,7 @@ function stockRow(item: StockItem): SnapStockRow {
     kind: item.type as StockKind,
     unit: item.stockUnit,
     units: unitsFor(item),
-    onHand: item.currentStock,
+    onHand: DEMO_ON_HAND[item.id] ?? item.currentStock,
     par: item.parLevel,
     unitPrice: item.unitPrice ?? 0,
     supplierName: item.supplierName,

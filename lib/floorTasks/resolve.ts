@@ -23,12 +23,12 @@ const STOP = new Set(['the', 'a', 'an', 'of', 'some', 'my', 'our', 'and', 'from'
 
 function singular(t: string): string {
   if (t.length > 4 && t.endsWith('ies')) return `${t.slice(0, -3)}y`;
-  if (t.length > 4 && /(ches|shes|xes|ses|oes)$/.test(t)) return t.slice(0, -2);
+  if (t.length > 4 && /(ches|shes|xes|sses|oes)$/.test(t)) return t.slice(0, -2);
   if (t.length > 3 && t.endsWith('s') && !t.endsWith('ss')) return t.slice(0, -1);
   return t;
 }
 
-function tokens(s: string): string[] {
+export function tokens(s: string): string[] {
   return normalise(s)
     .split(' ')
     .filter((t) => t && !STOP.has(t))
@@ -46,7 +46,7 @@ function editDistance(a: string, b: string): number {
   return dp[a.length][b.length];
 }
 
-function tokenMatch(q: string, c: string): number {
+export function tokenMatch(q: string, c: string): number {
   if (q === c) return 1;
   if (q.length >= 4 && c.length >= 4 && (c.startsWith(q) || q.startsWith(c))) return 0.85;
   if (q.length >= 4 && c.length >= 4) {

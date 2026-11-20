@@ -456,5 +456,7 @@ export interface CommandResponse {
   proposals: Proposal[];
   /** Which tools ran, for the test page. */
   toolsCalled: string[];
+  /** 'demo' when no model is connected and patterns read the words. */
+  engine?: 'model' | 'demo';
   error?: string;
 }

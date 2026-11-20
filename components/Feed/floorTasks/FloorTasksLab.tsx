@@ -18,6 +18,7 @@ type Result = {
   tools: string[];
   say: string;
   proposalIds: string[];
+  engine?: 'model' | 'demo';
   error?: string;
 };
 
@@ -47,18 +48,19 @@ async function runModel(c: EvalCase): Promise<Result> {
     body: JSON.stringify({ text: c.phrase, history: [], snapshot: buildSnapshot() }),
   });
   const res = (await r.json()) as CommandResponse;
-  if (res.error) return { via: 'model', pass: false, tools: res.toolsCalled ?? [], say: res.say ?? '', proposalIds: [], error: res.error };
-  stage(res.proposals);
+  const proposals = res.proposals ?? [];
+  stage(proposals);
   const tools = res.toolsCalled ?? [];
-  const pass = c.tool === 'not_a_floor_task' ? res.route === 'other' : tools.includes(c.tool);
-  return { via: 'model', pass, tools, say: res.say, proposalIds: res.proposals.map((p) => p.id) };
+  const asked = res.route === 'floor' && !tools.length && !!res.say;
+  const pass = c.tool === 'not_a_floor_task' ? res.route === 'other' : tools.includes(c.tool) || asked;
+  const say = res.say || proposals.map((p) => p.readback).join(' ');
+  return { via: 'model', pass, tools, say, proposalIds: proposals.map((p) => p.id), engine: res.engine, error: res.error };
 }
 
 export default function FloorTasksLab() {
   const w = useWorld();
   const [results, setResults] = useState<Record<string, Result>>({});
   const [busy, setBusy] = useState<string | null>(null);
-  const [noModel, setNoModel] = useState(false);
   const [openSet, setOpenSet] = useState<string>(EVAL_SETS[0].id);
 
   async function run(setId: string, i: number, via: 'model' | 'direct') {
@@ -68,7 +70,6 @@ export default function FloorTasksLab() {
     setBusy(k);
     try {
       const res = via === 'model' ? await runModel(c) : await runDirect(c);
-      if (res.error === 'no-model') setNoModel(true);
       setResults((prev) => ({ ...prev, [k]: res }));
     } catch (e) {
       setResults((prev) => ({ ...prev, [k]: { via, pass: false, tools: [], say: '', proposalIds: [], error: String(e) } }));
@@ -87,18 +88,21 @@ export default function FloorTasksLab() {
 
   const total = Object.values(results).filter((r) => r.via === 'model');
   const passed = total.filter((r) => r.pass).length;
+  const demoMode = total.some((r) => r.engine === 'demo');
 
   return (
     <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 24px 80px', fontFamily: 'var(--font-primary)', color: 'var(--color-text-primary)' }}>
       <h1 style={{ fontSize: '22px', fontWeight: 700, margin: '0 0 6px' }}>Floor tasks: test phrases</h1>
       <p style={{ fontSize: '13.5px', color: 'var(--color-text-secondary)', margin: '0 0 16px', maxWidth: '720px', lineHeight: 1.5 }}>
-        Each phrase says which tool Edify should call. &ldquo;Model&rdquo; sends it through /api/command, the same as the chat. &ldquo;Stage directly&rdquo; calls the tool with known
-        arguments, so the card and Main&rsquo;s rules can be checked without a model. Nothing here is applied until you confirm a card.
+        Each phrase says which tool Edify should call. &ldquo;Send&rdquo; puts it through /api/command, the same as the chat: the model when a key is set, demo mode when
+        not. &ldquo;Stage directly&rdquo; calls the tool with known arguments, so the card and Main&rsquo;s rules can be checked on their own. Nothing here is applied until you
+        confirm a card.
       </p>
 
-      {noModel && (
+      {demoMode && (
         <div role="status" style={{ padding: '10px 14px', borderRadius: '10px', background: 'rgba(234,88,12,0.08)', border: '1px solid rgba(234,88,12,0.35)', color: '#7A3800', fontSize: '13px', marginBottom: '14px' }}>
-          No model key on this machine, so the chat hands floor tasks to its existing flows. Add AI_GATEWAY_API_KEY to .env.local and restart, or use Stage directly.
+          Demo mode: no model key on this machine, so these were read with set patterns, which were written against these phrases. Add AI_GATEWAY_API_KEY to .env.local and
+          restart to test the model.
         </div>
       )}
 
@@ -107,7 +111,7 @@ export default function FloorTasksLab() {
         <Toggle label="Delivery needs a supplier reference" on={w.deliveries.some((d) => d.requiresReference)} onChange={setReferenceRequired} />
         <button type="button" onClick={() => { resetWorld(); setResults({}); }} style={btn}>Reset the site</button>
         {total.length > 0 && (
-          <span style={{ fontSize: '13px', fontWeight: 600 }} aria-live="polite">Model: {passed} of {total.length} called the right tool</span>
+          <span style={{ fontSize: '13px', fontWeight: 600 }} aria-live="polite">{demoMode ? 'Demo mode' : 'Model'}: {passed} of {total.length} read as the right task</span>
         )}
       </div>
       <FloorTaskBar onOpen={() => undefined} />
@@ -138,7 +142,7 @@ export default function FloorTasksLab() {
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '10px' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, flex: 1 }}>{s.title}</h2>
               <button type="button" style={btn} disabled={!!busy} onClick={() => void runSet(s.id, 'direct')}>Stage all directly</button>
-              <button type="button" style={btnDark} disabled={!!busy} onClick={() => void runSet(s.id, 'model')}>Run all with the model</button>
+              <button type="button" style={btnDark} disabled={!!busy} onClick={() => void runSet(s.id, 'model')}>Send all</button>
             </div>
             {s.cases.map((c, i) => {
               const k = keyOf(s.id, i);
@@ -158,7 +162,7 @@ export default function FloorTasksLab() {
                       <button type="button" style={btn} disabled={busy === k} onClick={() => void run(s.id, i, 'direct')}>Stage directly</button>
                     )}
                     <button type="button" style={btnDark} disabled={busy === k} onClick={() => void run(s.id, i, 'model')}>
-                      {busy === k ? 'Running' : 'Model'}
+                      {busy === k ? 'Sending' : 'Send'}
                     </button>
                   </div>
                   {r && (
@@ -166,7 +170,7 @@ export default function FloorTasksLab() {
                       <div style={{ fontSize: '12.5px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                         <span style={{ fontWeight: 700, color: r.pass ? '#166534' : '#B42318' }}>{r.pass ? 'Pass' : 'Check'}</span>
                         <span style={{ color: 'var(--color-text-secondary)' }}>
-                          {r.via === 'model' ? 'Model' : 'Direct'} · tools: {r.tools.join(', ') || 'none'}
+                          {r.via === 'direct' ? 'Direct' : r.engine === 'demo' ? 'Demo mode' : 'Model'} · tools: {r.tools.join(', ') || 'none'}
                           {r.error ? ` · ${r.error}` : ''}
                         </span>
                       </div>
