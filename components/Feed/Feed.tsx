@@ -5426,14 +5426,18 @@ function ChatBubble({
     msg.msgType !== 'analytics-thinking' &&
     msg.msgType !== 'cmd-thinking' &&
     showSignature;
+  // Floor-task cards carry their own frame, so they sit under the
+  // readback line without a bubble around them.
+  const bare = msg.msgType === 'floor-proposal';
   return (
     <div style={{
       display: 'flex',
       flexDirection: 'column',
       alignItems: isUser ? 'flex-end' : 'flex-start',
       marginBottom: '12px',
+      marginTop: bare ? '-10px' : undefined,
     }}>
-      <div style={{
+      <div style={bare ? { width: '88%', maxWidth: '560px' } : {
         maxWidth: '88%',
         padding: '11px 14px',
         borderRadius: isUser ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
@@ -5445,7 +5449,7 @@ function ChatBubble({
         color: 'var(--color-text-secondary)',
         whiteSpace: 'pre-wrap',
       }}>
-        {!isUser && (
+        {!isUser && !bare && (
           <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-accent-active)', marginBottom: '6px', letterSpacing: '0.04em' }}>
             EDIFY
           </div>
@@ -5496,7 +5500,7 @@ function ChatBubble({
               </div>
             );
           })()
-        ) : (
+        ) : bare ? null : (
           <QuinnMessageBody text={msg.text} streaming={msg.streaming} />
         )}
         {children}
@@ -11583,7 +11587,8 @@ export default function Feed({
                           break;
                         }
                       }
-                      return messages.map((m) => {
+                      return messages.map((m, mi) => {
+                      const cardFollows = messages[mi + 1]?.msgType === 'floor-proposal';
                       // In split view the interactive card lives in
                       // the workspace panel — a message that exists
                       // only to host a card would render as an empty
@@ -11633,7 +11638,7 @@ export default function Feed({
                         showSignature={m.id === lastQuinnSignatureId}
                         feedback={evalFeedback[m.id]}
                         commentOpen={evalCommentOpenFor === m.id}
-                        onRate={(rating) => handleEvalRate(m.id, rating)}
+                        onRate={cardFollows ? undefined : (rating) => handleEvalRate(m.id, rating)}
                         onRetry={() => handleEvalRetry(m.id)}
                         onToggleComment={() => handleEvalToggleComment(m.id)}
                         onCommentChange={(text) => handleEvalCommentChange(m.id, text)}
