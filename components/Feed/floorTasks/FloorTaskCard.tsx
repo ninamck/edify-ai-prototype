@@ -36,12 +36,18 @@ interface Props {
   /** After a yes, so the chat can read the result out. */
   onApplied?: (receipt: Receipt) => void;
   onUndo?: (receiptId: string) => void;
+  /** In the workspace panel. Inline in the chat it lines up with Edify's message. */
+  centred?: boolean;
 }
 
-export default function FloorTaskCard({ proposalId, onApplied, onUndo }: Props) {
+export default function FloorTaskCard({ proposalId, onApplied, onUndo, centred }: Props) {
   const proposal = useProposal(proposalId);
   if (!proposal) return null;
-  return <CardFor key={proposal.id} proposal={proposal} onApplied={onApplied} onUndo={onUndo} />;
+  return (
+    <div style={{ maxWidth: '520px', margin: centred ? '0 auto' : undefined }}>
+      <CardFor key={proposal.id} proposal={proposal} onApplied={onApplied} onUndo={onUndo} />
+    </div>
+  );
 }
 
 /** The chat's marker for a card that has moved to the workspace. */
@@ -85,7 +91,7 @@ function CardFor({ proposal, onApplied, onUndo }: { proposal: Proposal; onApplie
   const warnings = proposal.status === 'applied' ? [] : view.warnings ?? proposal.warnings;
 
   return (
-    <div style={{ maxWidth: '520px' }}>
+    <div>
       <CardShell
         icon={ICONS[proposal.taskId]}
         title={view.title ?? spec.title}

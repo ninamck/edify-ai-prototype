@@ -10505,6 +10505,7 @@ export default function Feed({
                             proposalId={(JSON.parse(m.cmdArgsJson) as { proposalId: string }).proposalId}
                             onApplied={floor.onApplied}
                             onUndo={floor.onUndo}
+                            centred={splitView}
                           />
                         )}
                         {m.msgType === 'cmd-waste-card' && (
