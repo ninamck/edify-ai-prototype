@@ -84,7 +84,7 @@ export const STOCK_CATEGORIES: StockCategory[] = [
 
 // ─── Storage areas ──────────────────────────────────────────────────────────
 // The physical places a GM walks during a stocktake. Real sites configure
-// these per venue; the prototype uses one café layout for every Fitzroy
+// these per venue; the prototype uses one café layout for every Pret
 // site. The order is the walk order: it drives the voice stocktake's
 // area strip, the grid's area tabs and the "Count an area" pills, so all
 // three always agree.
@@ -128,6 +128,7 @@ const LOCATION_OVERRIDES: Record<string, StockLocation> = {
 const SITE_PREFIX = /^(fe|kx|hr|is)-/;
 
 export function locationForItem(item: StockItem): StockLocation {
+  if (item.location) return item.location;
   const override =
     LOCATION_OVERRIDES[item.id] ?? LOCATION_OVERRIDES[item.id.replace(SITE_PREFIX, '')];
   if (override) return override;
@@ -290,6 +291,8 @@ export interface StockItem {
 
   /** Recent movements ordered by date desc. Powers the drawer history. */
   movements: StockMovement[];
+  /** Storage area from the product record. Wins over the category default. */
+  location?: StockLocation;
 }
 
 // ─── Status taxonomy ─────────────────────────────────────────────────────────
@@ -497,7 +500,8 @@ export function formatPackSize(item: StockItem, unit: string): string | null {
   // Append the base unit only when it's a measure (kg / L / g …); a
   // pack of loose counts (each / units) reads cleaner bare: "12" not
   // "12units".
-  const baseIsLooseCount = LOOSE_COUNT_UNITS.includes(baseUnit.trim().toLowerCase());
+  const baseIsLooseCount = LOOSE_COUNT_UNITS.includes(baseUnit.trim().toLowerCase())
+    || !DEFAULT_UNIT_FACTORS[baseUnit.trim().toLowerCase()];
   return baseIsLooseCount ? qty : `${qty}${baseUnit}`;
 }
 

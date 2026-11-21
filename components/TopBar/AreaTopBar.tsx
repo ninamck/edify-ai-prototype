@@ -115,7 +115,8 @@ export const AREA_BACK_BUTTON: CSSProperties = {
 
 // ── Bar ──────────────────────────────────────────────────────────────
 
-export type AreaRouteTab = { id: string; label: string; href: string };
+/** `exact` stops a parent route's tab lighting up on its child routes. */
+export type AreaRouteTab = { id: string; label: string; href: string; exact?: boolean };
 
 export type AreaStateTabs = {
   items: { id: string; label: string }[];
@@ -212,7 +213,7 @@ export default function AreaTopBar({
         }}
       >
         {tabs?.map(tab => {
-          const active = pathname === tab.href || pathname.startsWith(tab.href + '/');
+          const active = pathname === tab.href || (!tab.exact && pathname.startsWith(tab.href + '/'));
           return (
             <AreaTabButton
               key={tab.id}

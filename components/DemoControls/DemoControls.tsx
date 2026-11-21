@@ -25,6 +25,7 @@ import {
   type ActingUserId,
   type DemoVersion,
 } from './demoStore';
+import { CASH_AUDIENCE_LABEL, useCashAudience, type CashAudience } from '@/components/Pret/cashOperators';
 
 const USER_ORDER: ActingUserId[] = ['u-manager', 'u-sam', 'u-jordan', 'u-reese'];
 
@@ -232,7 +233,17 @@ function PanelBody({ extraSection }: { extraSection?: ReactNode }) {
   const rules = actingUser ? getRoleRules(actingUser.role) : null;
 
   return (
-    <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 14, maxHeight: 'min(620px, calc(100vh - 140px))', overflowY: 'auto' }}>
+      <CashAudienceSection />
+      <div>
+        <div style={sectionLabelStyle}>Guest feedback</div>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          <button type="button" onClick={() => router.push('/feedback')} style={pillOptionStyle(false)}>Angela, district</button>
+          <button type="button" onClick={() => router.push('/feedback/today')} style={pillOptionStyle(false)}>Marcus&apos;s phone</button>
+        </div>
+        <div style={hintStyle}>Always the Dunkin Bronx story. Phone screens open full width on a phone.</div>
+      </div>
+
       {isBrandSwitchable && (
         <div>
           <div style={sectionLabelStyle}>Demo brand</div>
@@ -473,6 +484,33 @@ export function DemoControlsSection({
     <div>
       <div style={sectionLabelStyle}>{label}</div>
       {children}
+    </div>
+  );
+}
+
+const hintStyle: CSSProperties = {
+  fontSize: 11,
+  lineHeight: 1.4,
+  color: 'var(--color-text-secondary)',
+  marginTop: 6,
+};
+
+function CashAudienceSection() {
+  const [audience, setAudience] = useCashAudience();
+  return (
+    <div>
+      <div style={sectionLabelStyle}>Cash features</div>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        {(Object.keys(CASH_AUDIENCE_LABEL) as CashAudience[]).map(a => (
+          <button key={a} type="button" aria-pressed={audience === a} onClick={() => setAudience(a)} style={pillOptionStyle(audience === a)}>
+            {CASH_AUDIENCE_LABEL[a]}
+          </button>
+        ))}
+      </div>
+      <div style={hintStyle}>
+        Pub adds the Anglian Country Inns features, such as cash in and out, bank runs and the statement of trade. Dunkin is
+        Kyle&apos;s set-up: one end of day screen and bank deposits with a slip photo.
+      </div>
     </div>
   );
 }
