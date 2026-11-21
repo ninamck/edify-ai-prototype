@@ -48,9 +48,8 @@ export function GroupTillCard({ value, onChange }: { value: ModifierGroup; onCha
       </div>
       <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '0 0 14px', lineHeight: 1.45 }}>
         {usedOn > 0
-          ? `On ${usedOn} ${usedOn === 1 ? 'item' : 'items'} on your Square menu. Changes here go to the till when you publish.`
+          ? `On ${usedOn} Square menu ${usedOn === 1 ? 'item' : 'items'}. Changes go to the till when you publish.`
           : 'Not on any Square menu item yet.'}
-        {' '}Option prices above go to the till too.
       </p>
 
       {value.selection === 'many' && (
@@ -64,7 +63,7 @@ export function GroupTillCard({ value, onChange }: { value: ModifierGroup; onCha
             value={value.maxSelections ?? null}
             onChange={(v) => onChange({ ...value, maxSelections: v == null || v <= 0 ? undefined : Math.round(v) })}
           />
-          <span style={{ color: 'var(--color-text-muted)' }}>options. Leave blank for no limit.</span>
+          <span style={{ color: 'var(--color-text-muted)' }}>options</span>
         </div>
       )}
 
@@ -89,8 +88,8 @@ export function GroupTillCard({ value, onChange }: { value: ModifierGroup; onCha
           <div style={{ fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 2 }}>Prices by site</div>
           {siteLines.join('. ')}.{' '}
           {sitePrices.keepInSquare
-            ? 'Edify sends the prices above and leaves these site prices as they are in Square.'
-            : 'Your next publish charges the prices above at every site.'}{' '}
+            ? 'Square keeps these.'
+            : 'Your next publish charges one price everywhere.'}{' '}
           <button type="button" style={linkBtn} onClick={() => setKeepSitePrices(value.id, !sitePrices.keepInSquare)}>
             {sitePrices.keepInSquare ? 'Charge one price everywhere' : "Keep each site's price"}
           </button>
@@ -99,8 +98,7 @@ export function GroupTillCard({ value, onChange }: { value: ModifierGroup; onCha
 
       {noChange.length > 0 && (
         <p style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', lineHeight: 1.5, margin: '0 0 14px' }}>
-          {noChange.map((o) => o.name).join(' and ')} {noChange.length === 1 ? 'changes' : 'change'} nothing in the recipe.
-          Square still lists {noChange.length === 1 ? 'it' : 'them'} so staff can pick {noChange.length === 1 ? 'it' : 'them'}
+          {noChange.map((o) => o.name).join(' and ')} still {noChange.length === 1 ? 'shows' : 'show'} on the till with no recipe change
           {noChange.some((o) => o.isDefault) ? ', picked by default' : ''}.
         </p>
       )}

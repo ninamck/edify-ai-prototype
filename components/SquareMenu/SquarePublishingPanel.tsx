@@ -44,8 +44,8 @@ export function SquarePublishingPanel() {
           </div>
           <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '4px 0 0', lineHeight: 1.5 }}>
             {on
-              ? `Edify builds the till from your recipes and products. ${mapped} of ${SQUARE_LOCATIONS.length} locations matched to sites.${sm.settings.lastPublishedAt ? ` Last published ${sm.settings.lastPublishedAt}.` : ''}`
-              : 'Build the till from your recipes and products, so you set up each item once. Square keeps sold out, menus and the till layout.'}
+              ? `${mapped} of ${SQUARE_LOCATIONS.length} locations matched to sites.${sm.settings.lastPublishedAt ? ` Last published ${sm.settings.lastPublishedAt}.` : ''}`
+              : 'Build the till from your recipes and products, so you set up each item once.'}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -178,7 +178,7 @@ function SetupSheet({ mode, onClose, onDone }: { mode: 'full' | 'settings'; onCl
             />
           </div>
           <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.5, margin: '14px 0 0' }}>
-            Nothing reaches the till until you review and publish. If someone changes an item in Square, Edify spots it and asks you what to keep.
+            Nothing reaches the till until you publish. If an item changes in Square, Edify asks which version to keep.
           </p>
         </>
       )}
@@ -186,7 +186,7 @@ function SetupSheet({ mode, onClose, onDone }: { mode: 'full' | 'settings'; onCl
       {step === 2 && (
         <>
           <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.5, margin: '0 0 14px' }}>
-            Edify already reads your sales and sends email orders. To build the till it also needs permission to update items. Square asks you to allow it, once.
+            Edify already reads your sales. To build the till it also needs permission to update items. Square asks once.
           </p>
           {authorised ? (
             <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', borderRadius: 12, background: '#fff', border: '1px solid var(--color-success, #166534)', fontSize: 13.5 }}>
@@ -203,7 +203,7 @@ function SetupSheet({ mode, onClose, onDone }: { mode: 'full' | 'settings'; onCl
       {step === 3 && (
         <>
           <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.5, margin: '0 0 12px' }}>
-            Edify uses this to send each site only what it sells, with its own prices.
+            Each site gets only what it sells, at its own prices.
           </p>
           <div style={{ background: '#fff', border: '1px solid var(--color-border-subtle)', borderRadius: 12, marginBottom: 16 }}>
             {SQUARE_LOCATIONS.map((l, idx) => (
@@ -237,11 +237,11 @@ function SetupSheet({ mode, onClose, onDone }: { mode: 'full' | 'settings'; onCl
             </div>
           </div>
           <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', lineHeight: 1.5, margin: '8px 0 0' }}>
-            These are the rates set up in your Square account. Edify starts each item on one of them and you can change any item. You confirm the rates. Edify doesn&apos;t decide VAT treatment.
+            From your Square account. You can change it on any item.
           </p>
 
           <div style={{ marginTop: 16, padding: '12px 14px', borderRadius: 12, background: '#fff', border: '1px solid var(--color-border-subtle)', fontSize: 12.5, lineHeight: 1.5, color: 'var(--color-text-secondary)' }}>
-            <strong style={{ color: 'var(--color-text-primary)' }}>Tip:</strong> in Square, give your team a permission set without &quot;Edit items&quot;. Changes then come through Edify and nothing drifts on the till.
+            <strong style={{ color: 'var(--color-text-primary)' }}>Tip:</strong> remove &quot;Edit items&quot; from your team&apos;s Square permissions so every change comes through Edify.
           </div>
         </>
       )}

@@ -105,7 +105,7 @@ export function AddTillItemsPicker({ onClose, onAdded }: { onClose: () => void; 
   const footer = (
     <>
       <span style={{ flex: 1, fontSize: 12.5, color: 'var(--color-text-muted)' }}>
-        Added items wait for your next publish. Nothing reaches the till yet.
+        Nothing reaches the till until you publish.
       </span>
       <button type="button" style={secondaryBtn} onClick={onClose}>Cancel</button>
       <button
@@ -122,7 +122,7 @@ export function AddTillItemsPicker({ onClose, onAdded }: { onClose: () => void; 
   const rows = tab === 'recipes' ? recipeRows : productRows;
 
   return (
-    <Sheet eyebrowText="Square menu" title="Add items to the till" onClose={onClose} footer={footer} width={720}>
+    <Sheet title="Add items to the till" onClose={onClose} footer={footer} width={720}>
       <div role="tablist" aria-label="What to add" style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
         {(['recipes', 'products'] as Tab[]).map((t) => (
           <button
@@ -167,8 +167,8 @@ export function AddTillItemsPicker({ onClose, onAdded }: { onClose: () => void; 
       </h3>
       <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '0 0 8px' }}>
         {tab === 'recipes'
-          ? 'Active recipes with a price that are not on the till yet.'
-          : 'Drinks and other products you sell without a recipe.'}
+          ? 'Active recipes with a price, not on the till yet'
+          : 'Drinks and other products sold without a recipe'}
       </p>
       <List>
         {tab === 'recipes'
@@ -188,7 +188,7 @@ export function AddTillItemsPicker({ onClose, onAdded }: { onClose: () => void; 
               {tab === 'recipes' ? 'Other recipes' : 'Other products'} · {rows.rest.length}
             </h3>
             <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '0 0 8px' }}>
-              {tab === 'recipes' ? 'Drafts, prep and components. Most of these aren’t sold on their own.' : 'Ingredients and packaging. Most of these aren’t sold on their own.'}
+              {tab === 'recipes' ? 'Drafts, prep and components' : 'Ingredients and packaging'}
             </p>
             <List>
               {tab === 'recipes'

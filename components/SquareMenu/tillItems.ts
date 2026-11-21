@@ -89,9 +89,9 @@ export type TillItem = {
   laterKeys: FieldKey[];
   /** Square changes the user chose to overwrite. Shown as a warning on publish. */
   overwriteKeys: FieldKey[];
+  /** Square reports when a change happened, never who made it. */
   squareChangedAt?: string;
-  squareChangedBy?: string;
-  deletedInSquare?: { at: string; by: string };
+  deletedInSquare?: { at: string };
   /** Waiting to be archived in Square on the next publish. */
   takeOff?: boolean;
   /** Edify created this till button, so Item matching shows it as published. */
@@ -110,7 +110,6 @@ export type SquareOnlyItem = {
   sizes: string[];
   prices: Record<string, number | null>;
   createdAt: string;
-  createdBy: string;
 };
 
 /** An option someone added to a published modifier group in Square. */
@@ -120,7 +119,6 @@ export type SquareGroupChange = {
   optionName: string;
   priceDelta?: number;
   at: string;
-  by: string;
   later?: boolean;
 };
 
@@ -214,18 +212,6 @@ export function hasPublishWork(item: TillItem): boolean {
   if (item.takeOff) return true;
   if (item.regularTypeInSquare) return true;
   return publishKeys(item).length > 0;
-}
-
-/** Optional fields left blank. Suggestions only, never a gate. */
-export function gapsOf(item: TillItem): FieldKey[] {
-  const f = item.current;
-  const gaps: FieldKey[] = [];
-  if (!f.category) gaps.push('category');
-  if (!f.kitchenName) gaps.push('kitchenName');
-  if (!f.description) gaps.push('description');
-  if (!f.photo) gaps.push('photo');
-  if (f.sizes.some((s) => f.prices[s] == null)) gaps.push('prices');
-  return gaps;
 }
 
 // ── Money ───────────────────────────────────────────────────────────────────

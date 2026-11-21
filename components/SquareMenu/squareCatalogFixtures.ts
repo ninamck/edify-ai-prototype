@@ -131,7 +131,6 @@ export const SEED_TILL_ITEMS: TillItem[] = [
     inSquare: { ...JSON.parse(JSON.stringify(cappuccinoBefore)), name: 'Cappo' },
     sizeCosts: { 'Small (8oz)': 0.7, 'Medium (12oz)': 0.81, 'Large (16oz)': 0.98 },
     squareChangedAt: '19 Nov, 08:42',
-    squareChangedBy: 'Jess at Brixton',
   },
   {
     ...base,
@@ -143,7 +142,6 @@ export const SEED_TILL_ITEMS: TillItem[] = [
     inSquare: { ...JSON.parse(JSON.stringify(americanoBefore)), prices: { Regular: 3.4 } },
     sizeCosts: { Regular: 0.45 },
     squareChangedAt: '18 Nov, 17:05',
-    squareChangedBy: 'Tom at Fitzroy St',
   },
   {
     ...base,
@@ -152,7 +150,7 @@ export const SEED_TILL_ITEMS: TillItem[] = [
     posItemId: 'mi-croissant',
     ...settled(croissant),
     sizeCosts: { Regular: 0.95 },
-    deletedInSquare: { at: '18 Nov, 21:10', by: 'Sam at Soho' },
+    deletedInSquare: { at: '18 Nov, 21:10' },
     regularTypeInSquare: true,
   },
   {
@@ -274,7 +272,6 @@ export const SEED_SQUARE_ONLY: SquareOnlyItem[] = [
     sizes: ['Regular', 'Large'],
     prices: { Regular: 4.5, Large: 4.9 },
     createdAt: '17 Nov, 11:30',
-    createdBy: 'Jess at Brixton',
   },
   {
     id: 'sq-staff-coffee',
@@ -283,7 +280,6 @@ export const SEED_SQUARE_ONLY: SquareOnlyItem[] = [
     sizes: ['Regular'],
     prices: { Regular: null },
     createdAt: '2 Oct, 07:15',
-    createdBy: 'Tom at Fitzroy St',
   },
 ];
 
@@ -294,7 +290,6 @@ export const SEED_GROUP_CHANGES: SquareGroupChange[] = [
     optionName: 'Hazelnut',
     priceDelta: 0.5,
     at: '19 Nov, 09:15',
-    by: 'Jess at Brixton',
   },
 ];
 
@@ -364,7 +359,7 @@ export const FIRST_LINK_PROPOSALS: FirstLinkProposal[] = [
     kind: 'group',
     squareLabel: 'Milk (modifier set)',
     squareDetail: 'Whole, Oat +£0.40 (Soho +£0.50), Skimmed',
-    proposal: 'Alt milks group. Soho charges more for oat than your other sites, and Edify holds one price per option.',
+    proposal: 'Alt milks group. Soho charges +£0.50 for oat, but Edify holds one price per option.',
     choices: [
       { id: 'keep', label: "Keep each site's price in Square" },
       { id: 'one-price', label: 'Charge +£0.40 at every site' },
@@ -379,7 +374,7 @@ export const FIRST_LINK_PROPOSALS: FirstLinkProposal[] = [
     kind: 'item',
     squareLabel: 'Smirnoff 25ml and Smirnoff 50ml',
     squareDetail: 'Two separate buttons',
-    proposal: 'One Smirnoff vodka item with two sizes, 25ml and 50ml. Sales history stays with each size.',
+    proposal: 'One Smirnoff vodka item with 25ml and 50ml sizes. Sales history stays with each size.',
     choices: [
       { id: 'combine', label: 'Make one item with two sizes' },
       { id: 'separate', label: 'Keep two separate buttons' },
@@ -391,12 +386,12 @@ export const FIRST_LINK_PROPOSALS: FirstLinkProposal[] = [
     kind: 'item',
     squareLabel: 'Hot choc',
     squareDetail: '1 size, £3.90',
-    proposal: 'Closest recipe is Mocha, but Mocha has coffee in it. Probably a different drink.',
+    proposal: 'Closest recipe is Mocha, which has coffee in it.',
     choices: [
       { id: 'leave', label: 'Leave it on the till only' },
       { id: 'mocha', label: 'Link it to Mocha' },
     ],
   },
-  { id: 'fl-pumpkin', band: 'new', kind: 'item', squareLabel: 'Pumpkin spice latte', squareDetail: '2 sizes, £4.50 to £4.90', proposal: 'No recipe yet. Stays on the till. Create the recipe when you want costs and stock.' },
-  { id: 'fl-staff', band: 'new', kind: 'item', squareLabel: 'Staff coffee', squareDetail: 'Price at the till', proposal: 'No recipe yet. Stays on the till.' },
+  { id: 'fl-pumpkin', band: 'new', kind: 'item', squareLabel: 'Pumpkin spice latte', squareDetail: '2 sizes, £4.50 to £4.90', proposal: 'No recipe yet' },
+  { id: 'fl-staff', band: 'new', kind: 'item', squareLabel: 'Staff coffee', squareDetail: 'Price at the till', proposal: 'No recipe yet' },
 ];

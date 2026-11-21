@@ -31,7 +31,7 @@ import {
   useSquareMenu,
 } from './squareMenuStore';
 import { SQUARE_CATEGORIES, SQUARE_TAXES } from './squareCatalogFixtures';
-import { gapsOf, gpPct, isBlocked, money, statusOf, type TillItem } from './tillItems';
+import { gpPct, isBlocked, money, statusOf, type TillItem } from './tillItems';
 import {
   FieldLabel,
   NumberField,
@@ -66,22 +66,6 @@ export function allergensFor(item: TillItem, recipes: Recipe[], products: Produc
   return out;
 }
 
-const SUGGESTION_COPY: Record<string, string> = {
-  category: 'Add a till category so it sits with similar items on the till.',
-  kitchenName: 'Add a short kitchen name if the till name is long on tickets.',
-  description: 'Add a description for online ordering and kiosks.',
-  photo: 'Add a photo for online ordering and kiosks.',
-  prices: 'Some sizes have no price. Staff will type the price at the till.',
-};
-
-const FIELD_ID: Record<string, string> = {
-  category: 'sq-category',
-  kitchenName: 'sq-kitchen',
-  description: 'sq-description',
-  photo: 'sq-photo',
-  prices: 'sq-prices',
-};
-
 export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { itemId: string; onClose: () => void; onReviewChanges?: () => void }) {
   const router = useRouter();
   const sm = useSquareMenu();
@@ -96,7 +80,6 @@ export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { ite
   const f = item.current;
   const status = statusOf(item);
   const blocked = isBlocked(item);
-  const gaps = gapsOf(item);
   const allergens = allergensFor(item, recipes, products);
   const isProduct = item.source.kind === 'product';
   const sourceHref = item.source.kind === 'recipe' ? `/recipes/${item.source.recipeId}/edit` : '/suppliers';
@@ -170,7 +153,7 @@ export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { ite
         </button>
       )}
       <span style={{ flex: 1, fontSize: 12.5, color: 'var(--color-text-muted)' }}>
-        Changes save as you go. They reach the till when you publish.
+        Saves as you go. Publish to send it to the till.
       </span>
       <button type="button" style={primaryBtn} onClick={onClose}>Done</button>
     </>
@@ -178,7 +161,6 @@ export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { ite
 
   return (
     <Sheet
-      eyebrowText="Till item"
       title={f.name || 'Untitled'}
       onClose={onClose}
       headerRight={<TillStatusPill status={status} />}
@@ -192,7 +174,7 @@ export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { ite
 
       {status === 'changed' && onReviewChanges && (
         <Notice tone="warning">
-          Someone changed this in Square. Review it first so you don&apos;t overwrite their change.{' '}
+          This was changed in Square. Review it first so you don&apos;t overwrite it.{' '}
           <button type="button" style={linkBtn} onClick={onReviewChanges}>Review the change</button>
         </Notice>
       )}
@@ -203,7 +185,7 @@ export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { ite
             Square can&apos;t put {blockedGroups.map((g) => groups.find((x) => x.id === g)?.name ?? g).join(', ')} on {blockedSizes.join(', ')} only.
           </div>
           <div style={{ marginBottom: 10 }}>
-            On Square every size of an item has the same modifier groups. Pick one fix and this item can publish.
+            Square gives every size the same modifier groups. Pick a fix to publish it.
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button type="button" style={secondaryBtn} onClick={() => alignSizeGroups(item.id)}>
@@ -220,13 +202,13 @@ export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { ite
 
       {item.regularTypeInSquare && (
         <Notice tone="info">
-          Square set this up as a regular item, so the till can&apos;t show its allergens. Your next publish swaps it for a food and drink item.
+          Square has this as a regular item, so the till can&apos;t show its allergens. Your next publish makes it a food and drink item.
         </Notice>
       )}
 
       <Section
         title="On the till"
-        hint={`From the ${isProduct ? 'product' : 'recipe'} ${sourceLabel}.`}
+        hint={sourceLabel.toLowerCase() !== f.name.toLowerCase() ? `From the ${isProduct ? 'product' : 'recipe'} ${sourceLabel}` : undefined}
         right={
           <button type="button" style={linkBtn} onClick={() => router.push(sourceHref)}>
             Open {isProduct ? 'product' : 'recipe'} <ExternalLink size={12} aria-hidden />
@@ -239,17 +221,7 @@ export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { ite
             <input id="sq-name" style={inputStyle} value={f.name} onChange={(e) => updateFields(item.id, { name: e.target.value })} />
           </div>
           <div>
-            <FieldLabel htmlFor="sq-kitchen" hint="Optional">Kitchen name</FieldLabel>
-            <input
-              id="sq-kitchen"
-              style={inputStyle}
-              value={f.kitchenName}
-              placeholder={f.name}
-              onChange={(e) => updateFields(item.id, { kitchenName: e.target.value })}
-            />
-          </div>
-          <div>
-            <FieldLabel htmlFor="sq-category" hint="Optional">Till category</FieldLabel>
+            <FieldLabel htmlFor="sq-category">Till category</FieldLabel>
             <select
               id="sq-category"
               style={inputStyle}
@@ -260,36 +232,14 @@ export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { ite
               {SQUARE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
-          <div>
-            <FieldLabel htmlFor="sq-photo" hint="Optional">Photo</FieldLabel>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '8px 0' }}>
-              <input
-                id="sq-photo"
-                type="checkbox"
-                checked={f.photo}
-                onChange={(e) => updateFields(item.id, { photo: e.target.checked })}
-              />
-              Use the {isProduct ? 'product' : 'recipe'} photo
-            </label>
-          </div>
-          <div style={{ gridColumn: '1 / -1' }}>
-            <FieldLabel htmlFor="sq-description" hint="Optional. Shows on online ordering">Description</FieldLabel>
-            <textarea
-              id="sq-description"
-              rows={2}
-              style={{ ...inputStyle, resize: 'vertical' }}
-              value={f.description}
-              onChange={(e) => updateFields(item.id, { description: e.target.value })}
-            />
-          </div>
         </div>
       </Section>
 
       <Section
         title="Sizes and till prices"
         hint={isProduct
-          ? 'Each size uses an amount of the product, so stock comes off correctly. Prices include VAT.'
-          : 'Sizes come from the recipe. Prices include VAT. Leave a price blank and staff type it at the till.'}
+          ? 'Prices include VAT. The amount is what each size takes off stock.'
+          : 'Prices include VAT. Leave blank to price at the till.'}
       >
         <div id="sq-prices" role="table" aria-label="Sizes and till prices">
           <div
@@ -387,7 +337,7 @@ export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { ite
         </div>
       </Section>
 
-      <Section title="Modifier groups" hint="Every size gets the same groups. Option prices come from the group.">
+      <Section title="Modifier groups">
         {optionsOffOnSizes(item).map((o) => (
           <Notice key={`${o.groupName}-${o.optionName}`} tone="warning">{optionOffCopy(o)}</Notice>
         ))}
@@ -406,7 +356,7 @@ export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { ite
             <PillToggle key={s} on={f.sites.length === 0 || f.sites.includes(s)} onClick={() => toggleSite(s)}>{s}</PillToggle>
           ))}
         </div>
-        <FieldLabel htmlFor="sq-vat" hint="Your Square tax rates">VAT</FieldLabel>
+        <FieldLabel htmlFor="sq-vat">VAT</FieldLabel>
         <select id="sq-vat" style={{ ...inputStyle, maxWidth: 280 }} value={f.vat} onChange={(e) => updateFields(item.id, { vat: e.target.value })}>
           {SQUARE_TAXES.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
@@ -414,7 +364,7 @@ export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { ite
 
       <Section
         title="Allergens"
-        hint={`Read from the ${isProduct ? 'product' : 'recipe'}. Change them there and the till picks them up on the next publish.`}
+        hint={`From the ${isProduct ? 'product' : 'recipe'}. Edit them there.`}
       >
         {allergens.length === 0 ? (
           <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>No allergens recorded.</span>
@@ -425,24 +375,46 @@ export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { ite
         )}
       </Section>
 
-      {gaps.length > 0 && (
-        <Section title="Optional suggestions" hint="None of these stop you publishing.">
-          <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {gaps.map((g) => (
-              <li key={g} style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                {SUGGESTION_COPY[g]}{' '}
-                <button type="button" style={linkBtn} onClick={() => document.getElementById(FIELD_ID[g])?.focus()}>
-                  {g === 'prices' ? 'Go to prices' : 'Add it'}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      )}
+      <Section title="Tickets and online ordering">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div>
+            <FieldLabel htmlFor="sq-kitchen">Kitchen name</FieldLabel>
+            <input
+              id="sq-kitchen"
+              style={inputStyle}
+              value={f.kitchenName}
+              placeholder={f.name}
+              onChange={(e) => updateFields(item.id, { kitchenName: e.target.value })}
+            />
+          </div>
+          <div>
+            <FieldLabel htmlFor="sq-photo">Photo</FieldLabel>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '8px 0' }}>
+              <input
+                id="sq-photo"
+                type="checkbox"
+                checked={f.photo}
+                onChange={(e) => updateFields(item.id, { photo: e.target.checked })}
+              />
+              Use the {isProduct ? 'product' : 'recipe'} photo
+            </label>
+          </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <FieldLabel htmlFor="sq-description">Description</FieldLabel>
+            <textarea
+              id="sq-description"
+              rows={2}
+              style={{ ...inputStyle, resize: 'vertical' }}
+              value={f.description}
+              onChange={(e) => updateFields(item.id, { description: e.target.value })}
+            />
+          </div>
+        </div>
+      </Section>
 
-      {item.inSquare && (
+      {item.inSquare && status !== 'in-sync' && (
         <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '4px 2px 0' }}>
-          On the till at the moment: {item.inSquare.name}, {item.inSquare.sizes.map((s) => `${s} ${money(item.inSquare!.prices[s])}`).join(', ')}.
+          On the till now: {item.inSquare.name}, {item.inSquare.sizes.map((s) => `${s} ${money(item.inSquare!.prices[s])}`).join(', ')}.
         </p>
       )}
     </Sheet>

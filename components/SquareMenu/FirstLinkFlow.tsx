@@ -16,10 +16,9 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Link2 } from 'lucide-react';
-import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { FIRST_LINK_PROPOSALS, type FirstLinkProposal } from './squareCatalogFixtures';
 import { completeFirstLink } from './squareMenuStore';
-import { card, eyebrow, primaryBtn, secondaryBtn } from './ui';
+import { card, primaryBtn, secondaryBtn } from './ui';
 
 export function FirstLinkFlow() {
   const router = useRouter();
@@ -57,42 +56,16 @@ export function FirstLinkFlow() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
-        <span aria-hidden style={{ marginTop: 3 }}><EdifyMark size={18} /></span>
-        <div style={{ flex: 1 }}>
-          <div style={eyebrow}>Square menu · first link</div>
-          <h1 style={{ fontSize: 19, fontWeight: 700, margin: '4px 0 0' }}>
-            We read your Square menu: {items} items and {sets} modifier sets
-          </h1>
-          <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: '6px 0 0', lineHeight: 1.5, maxWidth: 720 }}>
-            Here&apos;s how we&apos;d link them to your recipes and products. Links you already made on Item matching carry over.
-            Nothing changes on the till until you publish.
-          </p>
-        </div>
+      <div style={{ marginBottom: 16 }}>
+        <h1 style={{ fontSize: 19, fontWeight: 700, margin: 0 }}>
+          {items} items and {sets} modifier sets in your Square menu
+        </h1>
+        <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: '6px 0 0', lineHeight: 1.5, maxWidth: 720 }}>
+          Check how they link to your recipes and products. Nothing changes on the till until you publish.
+        </p>
       </div>
 
-      <Band
-        title="Ready to link"
-        hint="We're confident about these. Untick anything that looks wrong and it stays on the till only."
-        count={ready.length}
-      >
-        {ready.map((p) => (
-          <ProposalRow
-            key={p.id}
-            p={p}
-            control={(
-              <input
-                type="checkbox"
-                checked={!unticked.has(p.id)}
-                onChange={() => toggle(p.id)}
-                aria-label={`Link ${p.squareLabel}`}
-              />
-            )}
-          />
-        ))}
-      </Band>
-
-      <Band title="Needs your call" hint="We have a best guess, but you know your menu." count={call.length}>
+      <Band title="Needs your call" count={call.length}>
         {call.map((p) => (
           <ProposalRow
             key={p.id}
@@ -120,8 +93,29 @@ export function FirstLinkFlow() {
       </Band>
 
       <Band
+        title="Ready to link"
+        hint="Untick anything that looks wrong. It stays on the till unlinked."
+        count={ready.length}
+      >
+        {ready.map((p) => (
+          <ProposalRow
+            key={p.id}
+            p={p}
+            control={(
+              <input
+                type="checkbox"
+                checked={!unticked.has(p.id)}
+                onChange={() => toggle(p.id)}
+                aria-label={`Link ${p.squareLabel}`}
+              />
+            )}
+          />
+        ))}
+      </Band>
+
+      <Band
         title="Not in Edify yet"
-        hint="These stay on the till as they are. You'll see them as On the till only, ready to link when a recipe exists."
+        hint="They stay on the till as they are. Link them once the recipe exists."
         count={fresh.length}
       >
         {fresh.map((p) => <ProposalRow key={p.id} p={p} plain />)}
@@ -140,7 +134,7 @@ export function FirstLinkFlow() {
           <ArrowLeft size={14} /> Back
         </button>
         <span style={{ flex: 1, fontSize: 12.5, color: 'var(--color-text-muted)' }}>
-          You can change any link later on Item matching.
+          Change any link later in Item matching.
         </span>
         <button type="button" style={primaryBtn} onClick={finish}>
           <Link2 size={14} /> Link {linkCount} and open the Square menu
@@ -150,11 +144,11 @@ export function FirstLinkFlow() {
   );
 }
 
-function Band({ title, hint, count, children }: { title: string; hint: string; count: number; children: React.ReactNode }) {
+function Band({ title, hint, count, children }: { title: string; hint?: string; count: number; children: React.ReactNode }) {
   return (
     <section style={{ marginBottom: 18 }}>
-      <h2 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>{title} · {count}</h2>
-      <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '3px 0 8px' }}>{hint}</p>
+      <h2 style={{ fontSize: 14, fontWeight: 700, margin: hint ? 0 : '0 0 8px' }}>{title} · {count}</h2>
+      {hint && <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '3px 0 8px' }}>{hint}</p>}
       <div style={card}>{children}</div>
     </section>
   );
@@ -178,13 +172,10 @@ function ProposalRow({ p, control, extra, plain }: { p: FirstLinkProposal; contr
         <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)' }}>On Square: {p.squareDetail}</div>
       </div>
       <div>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 13, color: 'var(--color-text-primary)' }}>
-          {!plain && <span role="img" aria-label="Suggested by Edify" style={{ marginTop: 2 }}><EdifyMark size={12} /></span>}
-          <span>{p.proposal}</span>
-        </div>
+        <div style={{ fontSize: 13, color: plain ? 'var(--color-text-muted)' : 'var(--color-text-primary)' }}>{p.proposal}</div>
         {p.regularType && (
           <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginTop: 4 }}>
-            Square has this as a regular item, so the till can&apos;t show its allergens. Your first publish swaps it for a food and drink item.
+            Square has this as a regular item, so the till can&apos;t show its allergens. Your first publish makes it a food and drink item.
           </div>
         )}
         {extra}

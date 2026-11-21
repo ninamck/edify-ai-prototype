@@ -197,8 +197,7 @@ function toSquareOnly(i: TillItem, name = i.inSquare?.name ?? i.current.name, si
     category: f.category,
     sizes: use,
     prices: Object.fromEntries(use.map((s) => [s, f.prices[s] ?? null])),
-    createdAt: 'before Edify',
-    createdBy: 'your team',
+    createdAt: '',
   };
 }
 
@@ -221,7 +220,6 @@ export function completeFirstLink(choices: Record<string, string>, skipped: stri
         takeOff: false,
         deletedInSquare: undefined,
         squareChangedAt: undefined,
-        squareChangedBy: undefined,
         publishedByEdify: false,
       };
     });
@@ -249,7 +247,6 @@ export function completeFirstLink(choices: Record<string, string>, skipped: stri
       sizes: ['Regular'],
       prices: { Regular: 3.9 },
       createdAt: '14 Mar, 10:02',
-      createdBy: 'Tom at Fitzroy St',
     });
   } else {
     const hotChoc: TillFields = {
@@ -599,7 +596,7 @@ export function optionsOffOnSizes(item: TillItem): OptionOffOnSizes[] {
 
 export function optionOffCopy(o: OptionOffOnSizes): string {
   const where = o.everySize ? 'on every size' : `for ${o.sizes.join(' and ')}`;
-  return `${o.optionName} is off ${where} in the recipe. Square offers every option on every size, so staff can still pick it. Edify logs those sales as a modifier it couldn't apply.`;
+  return `${o.optionName} is off ${where} in the recipe, but Square still offers it there.`;
 }
 
 export function groupsWithPublishWork(groups: ModifierGroup[], s: State = state): ModifierGroup[] {
@@ -619,7 +616,7 @@ export function publishItem(id: string): { ok: true } | { ok: false; reason: str
   if (!item) return { ok: true };
   if (failOnce.has(id)) {
     failOnce.delete(id);
-    return { ok: false, reason: 'Square was saving another change to your menu. Try again.' };
+    return { ok: false, reason: 'Square was busy saving another change. Nothing changed on the till for this item.' };
   }
   if (item.takeOff) {
     removeFromList(id);

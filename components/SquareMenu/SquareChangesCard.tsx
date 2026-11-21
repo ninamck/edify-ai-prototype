@@ -23,7 +23,7 @@ export function SquareChangesCard() {
   const lines: string[] = [];
   for (const i of sm.items) {
     if (i.deletedInSquare) {
-      lines.push(`${i.current.name} was deleted by ${i.deletedInSquare.by}`);
+      lines.push(`${i.current.name} was deleted`);
       continue;
     }
     for (const k of squareChangeKeys(i)) {
@@ -40,8 +40,8 @@ export function SquareChangesCard() {
 
   if (count === 0) {
     return (
-      <CardShell icon={Store} title="Nothing changed in Square" subtitle="The till matches what Edify last published." state="confirmed">
-        <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>Nothing to do here.</p>
+      <CardShell icon={Store} title="Nothing changed in Square" subtitle="The till matches your last publish." state="confirmed">
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>Nothing to review.</p>
       </CardShell>
     );
   }
@@ -49,8 +49,8 @@ export function SquareChangesCard() {
   return (
     <CardShell
       icon={Store}
-      title={`${count} ${count === 1 ? 'thing' : 'things'} changed in Square`}
-      subtitle={`Since you published ${sm.settings.lastPublishedAt ?? 'last'}`}
+      title="Changed in Square"
+      subtitle={sm.settings.lastPublishedAt ? `Since ${sm.settings.lastPublishedAt}` : 'Since your last publish'}
       state={state}
       confirmLabel="Review changes"
       cancelLabel="Later"
@@ -62,9 +62,6 @@ export function SquareChangesCard() {
           <li key={l} style={{ fontSize: 13, color: 'var(--color-text-primary)' }}>{l}</li>
         ))}
       </ul>
-      <p style={{ margin: '10px 0 0', fontSize: 12.5, color: 'var(--color-text-muted)' }}>
-        Your next publish leaves these alone until you decide.
-      </p>
     </CardShell>
   );
 }

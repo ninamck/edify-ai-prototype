@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Changed in Square. Lists everything someone changed on the till since
+ * Changed in Square. Lists everything changed on the till since
  * Edify last published, field by field, and lets the user pick:
  *
  *   Use Square's   Edify takes the change
@@ -87,7 +87,7 @@ export function ChangedInSquarePanel({ onClose, onEditGroup }: { onClose: () => 
   const footer = (
     <>
       <span style={{ flex: 1, fontSize: 12.5, color: 'var(--color-text-muted)' }}>
-        {`${total === 0 ? 'All decided.' : `${total} still to decide.`} Keep Edify's goes to Square on your next publish.`}
+        {total === 0 ? 'All decided' : `${total} to decide`}
       </span>
       {changed.length > 0 && (
         <button type="button" style={secondaryBtn} onClick={() => { takeAllSquareChanges(); setTaken((t) => [...t, "Used every change made in Square"]); }}>
@@ -99,14 +99,14 @@ export function ChangedInSquarePanel({ onClose, onEditGroup }: { onClose: () => 
   );
 
   return (
-    <Sheet eyebrowText="Square menu" title="Changed in Square" onClose={onClose} footer={footer}>
+    <Sheet title="Changed in Square" onClose={onClose} footer={footer}>
       <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '0 0 14px', lineHeight: 1.5 }}>
-        Someone changed these on the till since you last published. Pick what Edify keeps. Nothing is overwritten until you decide.
+        Pick what to keep for each change. Keep Edify&apos;s goes back to Square on your next publish.
       </p>
 
       {total === 0 && (
         <div style={{ ...card, padding: 16, fontSize: 13.5 }}>
-          Nothing left to decide. The till and Edify agree.
+          Nothing left to decide.
         </div>
       )}
 
@@ -117,7 +117,7 @@ export function ChangedInSquarePanel({ onClose, onEditGroup }: { onClose: () => 
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>{item.current.name}</h3>
               <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                Changed by {item.squareChangedBy ?? 'someone in Square'}, {item.squareChangedAt ?? 'recently'}
+                {item.squareChangedAt ? `Changed ${item.squareChangedAt}` : 'Changed since you last published'}
               </span>
             </div>
             {keys.map((k) => {
@@ -140,7 +140,7 @@ export function ChangedInSquarePanel({ onClose, onEditGroup }: { onClose: () => 
                   )}
                   {k === 'name' && (
                     <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '6px 0 0' }}>
-                      Using Square&apos;s renames the till item only. The recipe keeps its own name.
+                      The recipe keeps its own name.
                     </p>
                   )}
                   <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
@@ -161,7 +161,7 @@ export function ChangedInSquarePanel({ onClose, onEditGroup }: { onClose: () => 
         <section key={item.id} style={{ ...card, padding: 14, marginBottom: 12 }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>{item.current.name} was deleted in Square</h3>
           <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '6px 0 0', lineHeight: 1.45 }}>
-            {item.deletedInSquare!.by} deleted it on {item.deletedInSquare!.at}. Staff can&apos;t ring it up. The recipe stays in Edify either way.
+            Deleted {item.deletedInSquare!.at}. Staff can&apos;t ring it up. The recipe stays in Edify either way.
           </p>
           <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
             <button type="button" style={primaryBtn} onClick={() => { resolveDeleted(item.id, 'remove'); setTaken((t) => [...t, `${item.current.name}: taken off the till in Edify too`]); }}>
@@ -186,7 +186,7 @@ export function ChangedInSquarePanel({ onClose, onEditGroup }: { onClose: () => 
               {c.later && <StatusPill tone="neutral" size="xs" icon={<Clock size={10} />}>Deciding later</StatusPill>}
             </div>
             <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '6px 0 0', lineHeight: 1.45 }}>
-              {c.by} added it on {c.at}{c.priceDelta ? ` at +${money(c.priceDelta)}` : ''}. Edify doesn&apos;t know what it does to the recipe yet, so stock and costs miss it.
+              Added {c.at}{c.priceDelta ? ` at +${money(c.priceDelta)}` : ''}. Until you set its recipe change, stock and costs miss it.
             </p>
             <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
               <button

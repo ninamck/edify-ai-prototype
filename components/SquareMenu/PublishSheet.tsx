@@ -203,7 +203,6 @@ export function PublishSheet({
     const doneCount = plan.filter((l) => run[l.id] === 'done').length;
     return (
       <Sheet
-        eyebrowText="Publish to Square"
         title={stage === 'running' ? 'Publishing to Square' : failures.length ? `Published, with ${failures.length === 1 ? 'one' : failures.length} to try again` : 'Published to Square'}
         onClose={stage === 'running' ? () => undefined : onClose}
         footer={stage === 'done' ? (
@@ -222,7 +221,7 @@ export function PublishSheet({
             title={failures.length
               ? `${doneCount} of ${plan.length} changes are on the till`
               : plan.length === 1 ? `${plan[0].name} is on the till` : `All ${plan.length} changes are on the till`}
-            subtitle={`Published ${sm.lastReceipt?.at ?? ''}. Staff see them next time the till refreshes.`}
+            subtitle={`Published ${sm.lastReceipt?.at ?? ''}. Tills show them after their next refresh.`}
             state={failures.length ? 'partial' : 'confirmed'}
           >
             <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -246,7 +245,7 @@ export function PublishSheet({
         ) : (
           <div aria-live="polite" style={{ background: '#fff', border: '1px solid var(--color-border-subtle)', borderRadius: 12, padding: 14 }}>
             <p style={{ fontSize: 13, margin: '0 0 10px', color: 'var(--color-text-muted)' }}>
-              {doneCount} of {plan.length} done. Square takes one change at a time, so this runs in order.
+              {doneCount} of {plan.length} done
             </p>
             <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
               {plan.map((l) => (
@@ -283,22 +282,22 @@ export function PublishSheet({
   );
 
   return (
-    <Sheet eyebrowText="Publish to Square" title="Check what goes to the till" onClose={onClose} footer={footer}>
+    <Sheet title={`${all.length} ${all.length === 1 ? 'change' : 'changes'} to publish`} onClose={onClose} footer={footer}>
       <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '0 0 14px', lineHeight: 1.5 }}>
-        This is everything that changed in Edify since you last published. Untick anything you&apos;re not ready to send.
+        Untick anything you&apos;re not ready to send.
       </p>
 
       {(overwrites.length > 0 || blocked.length > 0 || waiting > 0 || sizeRemovals.length > 0 || optionsOff.length > 0) && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
           {waiting > 0 && (
             <Warn>
-              {waiting} {waiting === 1 ? 'change' : 'changes'} made in Square {waiting === 1 ? 'is' : 'are'} waiting for you. This publish leaves {waiting === 1 ? 'it' : 'them'} alone.{' '}
+              {waiting} {waiting === 1 ? 'change' : 'changes'} made in Square {waiting === 1 ? 'stays' : 'stay'} as {waiting === 1 ? 'it is' : 'they are'} until you review {waiting === 1 ? 'it' : 'them'}.{' '}
               <button type="button" style={linkBtn} onClick={onReviewChanges}>Review them</button>
             </Warn>
           )}
           {overwrites.map((i) => (
             <Warn key={`ow-${i.id}`}>
-              {i.current.name}: you chose to keep Edify&apos;s {i.overwriteKeys.map((k) => FIELD_LABELS[k].toLowerCase()).join(' and ')}. This replaces the change made in Square.
+              {`${i.current.name}: Edify's ${i.overwriteKeys.map((k) => FIELD_LABELS[k].toLowerCase()).join(' and ')} replaces the change made in Square.`}
             </Warn>
           ))}
           {sizeRemovals.map((i) => {
@@ -317,7 +316,7 @@ export function PublishSheet({
           ))}
           {blocked.map((i) => (
             <Warn key={`bl-${i.id}`} tone="error">
-              {i.current.name} can&apos;t publish. Square needs the same modifier groups on every size.{' '}
+              {i.current.name} can&apos;t publish until every size has the same modifier groups.{' '}
               <button type="button" style={linkBtn} onClick={() => onOpenItem(i.id)}>Fix it</button>
             </Warn>
           ))}
@@ -330,7 +329,7 @@ export function PublishSheet({
       <Group title="Coming off the till" lines={removed} unticked={unticked} onToggle={toggle} onOpen={onOpenItem} />
 
       {all.length === 0 && (
-        <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)' }}>Nothing to publish. The till matches Edify.</p>
+        <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)' }}>Nothing to publish.</p>
       )}
     </Sheet>
   );

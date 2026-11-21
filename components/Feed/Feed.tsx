@@ -8674,7 +8674,7 @@ export default function Feed({
         role: 'quinn',
         text: n === 0
           ? 'Nothing has changed in Square since your last publish.'
-          : `${n} ${n === 1 ? 'thing was' : 'things were'} changed on the till since your last publish. Want to bring them into Edify?`,
+          : `${n} ${n === 1 ? 'change was' : 'changes were'} made in Square since your last publish. Want to review ${n === 1 ? 'it' : 'them'}?`,
       },
       { id: `q-square-changes-card-${stamp}`, role: 'quinn', text: '', msgType: 'square-changes' },
     ]);
