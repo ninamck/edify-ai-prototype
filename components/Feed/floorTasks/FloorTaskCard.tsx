@@ -264,9 +264,8 @@ function wasteBody(p: ProposalOf<'waste'>, e: Editable): View {
     invalid: d.lines.some((l) => !(l.qty > 0)) ? 'Each line needs a quantity above 0.' : undefined,
     node: (
       <>
-        <Note>{spec.body}</Note>
         {d.lines.map((l, i) => (
-          <div key={`${l.itemId}-${i}`} style={{ padding: '6px 0', borderTop: '1px solid var(--color-border-subtle, rgba(0,28,53,0.06))' }}>
+          <div key={`${l.itemId}-${i}`} style={{ padding: i ? '6px 0' : '0 0 6px', borderTop: i ? '1px solid var(--color-border-subtle, rgba(0,28,53,0.06))' : undefined }}>
             <Line flush label={l.itemName} sub={`${l.unit}${l.unit !== l.stockUnit ? ` · ${fmtQty(l.qtyInStockUnit)} ${l.stockUnit}` : ''} · £${l.value.toFixed(2)}`}>
               <QtyStepper value={l.qty} onChange={(v) => set(i, { qty: v })} disabled={e.locked} />
             </Line>
@@ -460,10 +459,9 @@ function deliveryBody(p: ProposalOf<'delivery-accept'>, e: Editable): View {
     invalid: d.requiresReference && !d.supplierReference?.trim() ? 'Delivery must include a Supplier Reference' : undefined,
     node: (
       <>
-        <Note>{spec.body}</Note>
         <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
           {d.lines.map((l, i) => (
-            <Line key={l.id} label={l.name} sub={`Ordered ${l.ordered} ${l.unit}${l.received < l.ordered ? ` · ${l.ordered - l.received} short` : ''}`}>
+            <Line key={l.id} flush={i === 0} label={l.name} sub={`Ordered ${l.ordered} ${l.unit}${l.received < l.ordered ? ` · ${l.ordered - l.received} short` : ''}`}>
               <QtyStepper
                 value={l.received}
                 disabled={e.locked}
