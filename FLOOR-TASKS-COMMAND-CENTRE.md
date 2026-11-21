@@ -27,8 +27,9 @@ Each task has a tier, and the device decides how it is confirmed.
 | Tier | Tasks | On the app | On a headset |
 |---|---|---|---|
 | Ask it | Stock, arriving, left to make, allergens | Answers, stages nothing | Answers, stages nothing |
-| Say it | Waste, on hand, hot add, production step, par, request stock, quick count, checklist answer, basket add, undo | Card, or a typed "yes" | Spoken "yes" |
+| Say it | Waste, on hand, hot add, production step, par, request stock, checklist answer, basket add, undo | Card, or a typed "yes" | Spoken "yes" |
 | Show it | Accept delivery, send transfer, accept transfer, one-off day | Card | Goes to Waiting for you |
+| Start straight away | Start a quick count | Starts with no confirm, and leaves a note with Open count and Discard. A card when it comes with other tasks in one sentence | Goes to Waiting for you, because counting needs a screen |
 
 Waiting for you sits by the composer. An item there stays until someone reviews and confirms it, dismisses it, or the trading day ends. Several tasks in one sentence come back as one readback: "Two things: ... Save both?".
 
@@ -70,8 +71,11 @@ Who can do what is shown as Team member or Manager. Par and on hand are confirme
 ### Ask another site for stock (Say it, everyone)
 `POST /transfer-requests`. Moves no stock; the other site sends it as a transfer. Undo cancels it while it is still Requested.
 
-### Start a quick count (Say it, everyone)
+### Start a quick count (Start straight away, everyone)
 `POST /count-lists/:id/quick-counts`. Needs a count list. Starting on a list with an open count carries on with it. Blocked during a full stocktake. Submitting updates on hand for counted items only and doesn't change COGS. Undo discards the open count.
+- No confirm on the app. Starting changes nothing; the Submit on the count screen is the confirm that matters. A wrong list costs one tap on Discard.
+- Discard from the chat note goes without a second confirm, because nothing has been counted from the chat. Main's count screen keeps its own "Discard this quick count?".
+- Open count should land on that list's count screen. In the prototype it opens the stock page's Stocktake tab until that page takes a count list in the link.
 
 ### Answer a checklist question (Say it, everyone)
 `POST /checklists/:id/response/:logId`.
