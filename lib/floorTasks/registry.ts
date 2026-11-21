@@ -56,7 +56,7 @@ export const FLOOR_TASKS: Record<FloorTaskId, FloorTaskSpec> = {
     rules: [
       'Lines can be products, master products, recipes or sub-recipes, each in one of its own units.',
       'Reasons are the site\'s waste reasons. The seven built-ins: Beyond expiry date, Damaged, No longer fresh, R&D, Third Party food waste app, Used by Staff, No Reason.',
-      'Without EditWasteDate the date can only be today or yesterday.',
+      'Without EditWasteDate the date can only be today or yesterday. With it, the screen allows the last 7 days, but the backend accepts any earlier date. Never a future day.',
       'A line is flagged as unusually large when it is worth at least £5, the item has at least 3 lines in the last 90 days, and it is more than 5 times their median. Flagged lines still save after "Record anyway".',
       'Stock goes down by the wasted quantity. Wasting more than is on hand takes it below zero.',
     ],

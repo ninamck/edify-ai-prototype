@@ -1,4 +1,4 @@
-import { fmtQty } from './format';
+import { fmtQty, weekdayName } from './format';
 import type { FloorSnapshot } from './types';
 
 /** EDIFY-PRODUCT-VOICE.md section 10, v1.0. The doc and this block change
@@ -41,7 +41,7 @@ function rowLine(r: FloorSnapshot['stock'][number]): string {
 export function digest(s: FloorSnapshot): string {
   const parts: string[] = [];
   parts.push(`Site: ${s.site.name}. Other sites: ${s.sites.filter((x) => x.id !== s.site.id).map((x) => x.name).join(', ')}.`);
-  parts.push(`Now: ${s.nowLabel} (today is ${s.today}). Person: ${s.role === 'manager' ? 'a manager' : 'a team member'}, on ${s.surface === 'headset' ? 'a headset with no screen' : 'the app'}.`);
+  parts.push(`Now: ${s.nowLabel} (today is ${weekdayName(s.today)} ${s.today}). Person: ${s.role === 'manager' ? 'a manager' : 'a team member'}, on ${s.surface === 'headset' ? 'a headset with no screen' : 'the app'}.`);
   parts.push(`Stock items: ${s.stock.map(rowLine).join('; ')}.`);
   parts.push(`Waste reasons: ${s.wasteReasons.join(', ')}.`);
   parts.push(`Count lists: ${s.countLists.map((l) => `${l.name}${l.openCountId ? ' (count open)' : ''}`).join(', ')}.${s.stocktakeInProgress ? ' A full stocktake is being counted.' : ''}`);

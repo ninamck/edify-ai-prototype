@@ -7,8 +7,8 @@ import {
 } from 'lucide-react';
 import CardShell, { FieldRow, PillRow, QtyStepper, type CardIcon, type CardState } from '../commands/cards/CardShell';
 import { FLOOR_TASKS } from '@/lib/floorTasks/registry';
-import { REJECTION_REASONS, WASTE_REASON_NAMES, isUnusuallyLarge } from '@/lib/floorTasks/constants';
-import { fmtQty, itemPhrase } from '@/lib/floorTasks/format';
+import { REJECTION_REASONS, WASTE_REASON_NAMES, isUnusuallyLarge, wasteDates } from '@/lib/floorTasks/constants';
+import { dayLabel, fmtQty, itemPhrase } from '@/lib/floorTasks/format';
 import type { FloorTaskId, PayloadByTask, Proposal, ProposalOf, Receipt, RejectionReason } from '@/lib/floorTasks/types';
 import {
   confirmProposal, declineProposal, getWorld, receiptFor, undoSpecLabel, updateProposalPayload, useProposal,
@@ -253,19 +253,41 @@ function wasteBody(p: ProposalOf<'waste'>, e: Editable): View {
   const flagged = d.lines.some((l) => isUnusuallyLarge(l.itemId, l.qtyInStockUnit, l.value));
   const total = d.lines.reduce((s, l) => s + l.value, 0);
   const spec = FLOOR_TASKS.waste.confirm;
+  const { today, role } = getWorld();
+  const allowed = wasteDates(role, today);
+  const days = allowed.includes(d.wasteDate) ? allowed : [d.wasteDate, ...allowed];
+  const dayName = (iso: string) => {
+    const label = dayLabel(iso, today);
+    return label[0].toUpperCase() + label.slice(1);
+  };
   return {
     title: flagged ? spec.flaggedTitle : 'Log waste',
-    subtitle: d.wasteDate === getWorld().today ? 'Today' : 'Yesterday',
+    subtitle: dayName(d.wasteDate),
     confirmLabel: flagged ? spec.flaggedButton : spec.button,
     warnings: [
       ...d.lines.filter((l) => isUnusuallyLarge(l.itemId, l.qtyInStockUnit, l.value)).map((l) => `${l.itemName} is far more than usual. Check the number.`),
       ...d.lines.filter((l) => l.qtyInStockUnit > l.onHand).map((l) => `That takes ${l.itemName} below zero: ${fmtQty(l.onHand)} ${l.stockUnit} on hand.`),
     ],
-    invalid: d.lines.some((l) => !(l.qty > 0)) ? 'Each line needs a quantity above 0.' : undefined,
+    invalid: !allowed.includes(d.wasteDate)
+      ? 'You can only log waste for today or yesterday. A manager can go back 7 days.'
+      : d.lines.some((l) => !(l.qty > 0)) ? 'Each line needs a quantity above 0.' : undefined,
     node: (
       <>
+        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', paddingBottom: '8px' }}>
+          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>Waste date</span>
+          <select
+            value={d.wasteDate}
+            disabled={e.locked}
+            onChange={(ev) => e.setDraft({ ...d, wasteDate: ev.target.value })}
+            style={{ minHeight: '40px', padding: '0 10px', borderRadius: '10px', border: '1.5px solid var(--color-border, rgba(0,28,53,0.18))', background: '#fff', fontSize: '13px', fontFamily: 'var(--font-primary)', color: 'var(--color-text-primary)', cursor: e.locked ? 'default' : 'pointer' }}
+          >
+            {days.map((iso) => (
+              <option key={iso} value={iso}>{dayName(iso)}</option>
+            ))}
+          </select>
+        </label>
         {d.lines.map((l, i) => (
-          <div key={`${l.itemId}-${i}`} style={{ padding: i ? '6px 0' : '0 0 6px', borderTop: i ? '1px solid var(--color-border-subtle, rgba(0,28,53,0.06))' : undefined }}>
+          <div key={`${l.itemId}-${i}`} style={{ padding: '6px 0', borderTop: '1px solid var(--color-border-subtle, rgba(0,28,53,0.06))' }}>
             <Line flush label={l.itemName} sub={`${l.unit}${l.unit !== l.stockUnit ? ` · ${fmtQty(l.qtyInStockUnit)} ${l.stockUnit}` : ''} · £${l.value.toFixed(2)}`}>
               <QtyStepper value={l.qty} onChange={(v) => set(i, { qty: v })} disabled={e.locked} />
             </Line>

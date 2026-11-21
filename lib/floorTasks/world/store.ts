@@ -4,7 +4,7 @@ import { useSyncExternalStore } from 'react';
 import type {
   FloorSnapshot, FloorTaskId, PayloadByTask, Proposal, ProposalOf, Receipt, Role, SnapStockRow, Surface, UndoSpec,
 } from '../types';
-import { endOfTradingDay, fmtQty, itemPhrase } from '../format';
+import { endOfTradingDay, fmtQty, itemPhrase, wasteDayPhrase } from '../format';
 import { addChatBasketLine, removeChatBasketLine } from '@/app/assisted-ordering/basket/chatBasketStore';
 import { WASTE_REASON_NAMES } from '../constants';
 import { seedWorld } from './seed';
@@ -309,9 +309,9 @@ function applyWaste(w: WorldState, p: ProposalOf<'waste'>): Applied {
   return {
     world: next,
     receipt: {
-      headline: p.payload.lines.length === 1
+      headline: (p.payload.lines.length === 1
         ? `Waste recorded: ${itemPhrase(first.qty, first.unit, first.itemName)}`
-        : `Waste recorded: ${p.payload.lines.length} lines`,
+        : `Waste recorded: ${p.payload.lines.length} lines`) + wasteDayPhrase(p.payload.wasteDate, w.today),
       detail: p.payload.lines.length === 1
         ? `${first.reason}. £${total.toFixed(2)}. ${first.itemName} now ${fmtQty(after?.onHand ?? 0)} ${first.stockUnit}.`
         : `£${total.toFixed(2)} in total.`,

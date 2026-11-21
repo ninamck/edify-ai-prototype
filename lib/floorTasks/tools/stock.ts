@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { isUnusuallyLarge, WASTE_REASON_NAMES } from '../constants';
-import { addDaysIso, fmtQty, isCountUnit, itemPhrase } from '../format';
+import { isUnusuallyLarge, WASTE_REASON_NAMES, wasteDates } from '../constants';
+import { addDaysIso, daysBetween, fmtQty, isCountUnit, itemPhrase, wasteDayPhrase } from '../format';
 import { resolve, resolveStock, resolveUnit } from '../resolve';
 import type { RequestLine, SnapStockRow, TransferSendLine, WasteLine } from '../types';
 import {
@@ -47,11 +47,12 @@ const itemLine = z.object({
 
 function wasteDate(scope: Scope, said?: string | null): { ok: true; date: string } | { ok: false; result: ReturnType<typeof refuse> } {
   const today = scope.snap.today;
-  if (!said || said === 'today') return { ok: true, date: today };
-  const yesterday = addDaysIso(today, -1);
-  if (said === 'yesterday' || said === yesterday) return { ok: true, date: yesterday };
-  if (said === today) return { ok: true, date: today };
-  return { ok: false, result: refuse('Waste can only be logged for today or yesterday from here.', 'A manager with permission to edit waste dates can log earlier days on the waste screen.') };
+  const date = !said || said === 'today' ? today : said === 'yesterday' ? addDaysIso(today, -1) : said;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, result: ask('Which day was it wasted?') };
+  if (daysBetween(today, date) > 0) return { ok: false, result: refuse('Waste can\'t be logged for a future day.') };
+  if (wasteDates(scope.snap.role, today).includes(date)) return { ok: true, date };
+  if (scope.snap.role === 'manager') return { ok: false, result: refuse('Waste can only be logged for the last 7 days.') };
+  return { ok: false, result: refuse('Waste can only be logged for today or yesterday.', 'A manager can log it for up to 7 days back.') };
 }
 
 export const stageWaste = (scope: Scope): ToolDefinition =>
@@ -63,7 +64,7 @@ export const stageWaste = (scope: Scope): ToolDefinition =>
       lines: z.array(itemLine.extend({
         reason: z.enum(WASTE_REASON_NAMES).optional().describe('Map their words: "out of date" is Beyond expiry date, "dropped" is Damaged, "stale" or "gone off" is No longer fresh, "staff meal" is Used by Staff, "Too Good To Go" or "Olio" is Third Party food waste app.'),
       })).min(1),
-      date: z.string().optional().describe('"today", "yesterday" or YYYY-MM-DD. Default today.'),
+      date: z.string().optional().describe('"today", "yesterday" or YYYY-MM-DD, worked out from what they said ("on Tuesday", "3 days ago", "the 18th"). Default today.'),
     },
     async ({ lines, date }) => {
       const refusal = roleRefusal(scope, 'waste');
@@ -92,7 +93,7 @@ export const stageWaste = (scope: Scope): ToolDefinition =>
       const reasons = [...new Set(out.map((l) => l.reason))];
       const what = andNames(out.map((l) => itemPhrase(l.qty, l.unit, l.itemName)));
       const why = reasons.length === 1 && reasons[0] !== 'No Reason' ? `, ${reasons[0].toLowerCase()}` : '';
-      const when2 = when.date === scope.snap.today ? '' : ', yesterday';
+      const when2 = wasteDayPhrase(when.date, scope.snap.today);
       return record(
         scope,
         'waste',

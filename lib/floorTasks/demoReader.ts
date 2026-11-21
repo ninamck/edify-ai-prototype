@@ -1,4 +1,4 @@
-import { addDaysIso } from './format';
+import { addDaysIso, isoDay } from './format';
 import { tokenMatch, tokens } from './resolve';
 import type { FloorSnapshot, FloorTurn } from './types';
 
@@ -143,6 +143,26 @@ function lastWeekday(today: string, day: number): string {
   return addDaysIso(today, -back);
 }
 
+const PAST_DAY = /\b((the )?day before yesterday|yesterday|\d+ days? ago|(last|on|from) (sunday|monday|tuesday|wednesday|thursday|friday|saturday)|(on )?the \d{1,2}(st|nd|rd|th))\b/g;
+
+/** A day in the past from "yesterday", "on Tuesday", "3 days ago" or "the 18th". */
+function pastDate(t: string, today: string): string | undefined {
+  if (/\bday before yesterday\b/.test(t)) return addDaysIso(today, -2);
+  if (/\byesterday\b/.test(t)) return 'yesterday';
+  const ago = /\b(\d+) days? ago\b/.exec(t);
+  if (ago) return addDaysIso(today, -Number(ago[1]));
+  const day = /\b(?:last|on|from) (sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/.exec(t);
+  if (day) return lastWeekday(today, WEEKDAYS.indexOf(day[1]));
+  const nth = /\bthe (\d{1,2})(?:st|nd|rd|th)\b/.exec(t);
+  if (nth) {
+    const [y, m, d] = today.split('-').map(Number);
+    const n = Number(nth[1]);
+    const when = n <= d ? new Date(y, m - 1, n) : new Date(y, m - 2, n);
+    return isoDay(when);
+  }
+  return undefined;
+}
+
 function futureDates(t: string, today: string): { startDate: string; endDate?: string } | null {
   if (/\btoday\b/.test(t)) return { startDate: today };
   if (/\btomorrow\b/.test(t)) return { startDate: addDaysIso(today, 1) };
@@ -222,11 +242,13 @@ export function readFloorTask(text: string, snap: FloorSnapshot, history: FloorT
   const lastEdify = [...history].reverse().find((h) => h.role === 'edify');
   const lastUser = [...history].reverse().find((h) => h.role === 'user');
   const short = text.trim().split(/\s+/).length <= 5;
+  const alone = read(text, text, snap);
+  if (alone && 'tool' in alone) return alone;
   if (lastEdify && /\?\s*$/.test(lastEdify.text) && lastUser && short) {
     const joined = read(`${lastUser.text} ${text}`, text, snap);
     if (joined) return joined;
   }
-  return read(text, text, snap);
+  return alone;
 }
 
 function read(raw: string, said: string, snap: FloorSnapshot): DemoCall {
@@ -391,21 +413,19 @@ function read(raw: string, said: string, snap: FloorSnapshot): DemoCall {
 
   // Log waste
   if (WASTE.test(t)) {
-    let lines = linesOf(t, stockNames);
+    const said = t.replace(PAST_DAY, ' ');
+    let lines = linesOf(said, stockNames);
     if (!lines.length) {
-      const item = t
+      const item = said
         .replace(WASTE, ' ')
         .replace(/\b(mark|log|put|down|as|can you|please|we|i|the|some|were|was|a|an|\d+(\.\d+)?)\b/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
       if (!item) return needs('What was wasted, and how many?');
-      lines = [{ item, ...qtyOf(t) }];
+      lines = [{ item, ...qtyOf(said) }];
     }
     const reason = wasteReason(t);
-    let date: string | undefined;
-    if (/\byesterday\b/.test(t)) date = 'yesterday';
-    const past = /\b(?:last|on) (sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/.exec(t);
-    if (past) date = lastWeekday(snap.today, WEEKDAYS.indexOf(past[1]));
+    const date = pastDate(t, snap.today);
     return { tool: 'stage_waste', args: { lines: lines.map((l) => ({ ...l, ...(reason ? { reason } : {}) })), ...(date ? { date } : {}) } };
   }
 

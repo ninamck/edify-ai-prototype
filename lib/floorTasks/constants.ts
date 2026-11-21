@@ -1,3 +1,15 @@
+import { addDaysIso } from './format';
+import type { Role } from './types';
+
+/** Days waste can be logged against, newest first. Main allows today or
+ *  yesterday without EditWasteDate and the last 7 days with it, never a
+ *  future day (web/src/features/waste/waste-date-window.ts). The prototype
+ *  gives EditWasteDate to managers. */
+export function wasteDates(role: Role, today: string): string[] {
+  const back = role === 'manager' ? 7 : 1;
+  return Array.from({ length: back + 1 }, (_, i) => addDaysIso(today, -i));
+}
+
 /** Main's seven built-in waste reasons, by name. */
 export const WASTE_REASON_NAMES = [
   'Beyond expiry date',

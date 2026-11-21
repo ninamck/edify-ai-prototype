@@ -52,3 +52,15 @@ export function dayLabel(iso: string, today: string): string {
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 }
+
+/** "" for today, ", yesterday", or ", on Tuesday 17 November". */
+export function wasteDayPhrase(iso: string, today: string): string {
+  const label = dayLabel(iso, today);
+  if (label === 'today') return '';
+  return label === 'yesterday' ? ', yesterday' : `, on ${label}`;
+}
+
+export function weekdayName(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'long' });
+}

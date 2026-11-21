@@ -40,7 +40,7 @@ Who can do what is shown as Team member or Manager. Par and on hand are confirme
 `POST /waste`, permission CreateWaste.
 - Lines can be products, master products, recipes or sub-recipes, each in one of its own units. "3 croissants" on a box of 12 records 0.25 boxes.
 - Reasons are the site's waste reasons. Edify maps the words: "out of date" is Beyond expiry date, "dropped" is Damaged, "stale" is No longer fresh, "staff meal" is Used by Staff, "Too Good To Go" is Third Party food waste app. No reason given means No Reason.
-- Today or yesterday only without EditWasteDate.
+- The date comes from what they say ("yesterday", "on Tuesday", "3 days ago", "the 18th") and can be changed on the card. Today or yesterday without EditWasteDate; the last 7 days with it, matching Main's waste screen. Main's backend accepts any past date with the permission, so the 7 days is a screen rule, not a server one. The prototype gives EditWasteDate to managers; in Main it's a permission any role can hold.
 - Unusually large: worth at least £5, the item has at least 3 lines in the last 90 days, and more than 5 times their median. The card becomes "Record waste anyway?" and still saves.
 - Undo deletes the line. Main asks "Why are you deleting this?" and needs 3 to 500 characters, so Edify asks for the reason before it deletes.
 
