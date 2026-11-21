@@ -14,6 +14,7 @@ import {
 } from '@/lib/demoConfig';
 import { useFranchise, type FranchiseViewMode } from '@/components/Franchise/FranchiseContext';
 import { BRIEFING_ROLES } from '@/components/briefing';
+import { FloorTaskSwitches } from '@/components/Feed/floorTasks/FloorTaskBar';
 import type { BriefingRole } from '@/components/briefing';
 import {
   useActingUser,
@@ -418,6 +419,17 @@ function PanelBody({ extraSection }: { extraSection?: ReactNode }) {
             {rules.description}
           </div>
         )}
+      </div>
+
+      <div>
+        <div style={sectionLabelStyle}>Floor tasks in chat</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <FloorTaskSwitches size="small" />
+        </div>
+        <div style={{ fontSize: 10, lineHeight: 1.4, color: 'var(--color-text-muted)', marginTop: 6 }}>
+          Team members can&apos;t backdate waste or set stock outright. Headset reads back out loud
+          and parks screen tasks in Waiting for you.
+        </div>
       </div>
 
       <div>

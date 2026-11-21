@@ -114,7 +114,7 @@ export default function FloorTasksLab() {
           <span style={{ fontSize: '13px', fontWeight: 600 }} aria-live="polite">{demoMode ? 'Demo mode' : 'Model'}: {passed} of {total.length} read as the right task</span>
         )}
       </div>
-      <FloorTaskBar onOpen={() => undefined} />
+      <FloorTaskBar onOpen={() => undefined} switches />
 
       <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '20px', marginTop: '20px' }}>
         <nav aria-label="Tasks" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>

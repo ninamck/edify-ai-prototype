@@ -7,37 +7,25 @@ import type { Role, Surface } from '@/lib/floorTasks/types';
 import { declineProposal, setRole, setSurface, useWorld, waitingProposals } from '@/lib/floorTasks/world/store';
 
 /**
- * Who's talking and on what, plus Waiting for you: Show-it tasks raised
- * on a headset that need a screen before they go through. They stay
- * until someone confirms them or the trading day ends.
+ * Waiting for you: Show-it tasks raised on a headset that need a screen
+ * before they go through. They stay until someone confirms them or the
+ * trading day ends. The role and device switches live in Demo controls;
+ * `switches` shows them inline for the test page, which has no demo panel.
  */
-export default function FloorTaskBar({ onOpen, compact }: { onOpen: (proposalId: string) => void; compact?: boolean }) {
+export default function FloorTaskBar({ onOpen, compact, switches }: { onOpen: (proposalId: string) => void; compact?: boolean; switches?: boolean }) {
   const w = useWorld();
   const waiting = waitingProposals(w);
   const [open, setOpen] = useState(!compact);
+  const showChip = compact && waiting.length > 0;
+
+  if (!switches && !showChip && !(waiting.length > 0 && open)) return null;
 
   return (
     <div style={{ marginTop: compact ? 0 : '14px', marginBottom: compact ? '8px' : 0, fontFamily: 'var(--font-primary)' }}>
+      {(switches || showChip) && (
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: compact ? 'flex-start' : 'center' }}>
-        <Segmented<Role>
-          label="Who's using Edify"
-          value={w.role}
-          onChange={setRole}
-          options={[
-            { value: 'team-member', label: 'Team member' },
-            { value: 'manager', label: 'Manager' },
-          ]}
-        />
-        <Segmented<Surface>
-          label="Device"
-          value={w.surface}
-          onChange={setSurface}
-          options={[
-            { value: 'app', label: 'App', icon: <Smartphone size={14} strokeWidth={2} /> },
-            { value: 'headset', label: 'Headset', icon: <Headphones size={14} strokeWidth={2} /> },
-          ]}
-        />
-        {compact && waiting.length > 0 && (
+        {switches && <FloorTaskSwitches />}
+        {showChip && (
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -49,6 +37,7 @@ export default function FloorTaskBar({ onOpen, compact }: { onOpen: (proposalId:
           </button>
         )}
       </div>
+      )}
 
       {waiting.length > 0 && open && (
         <section aria-label="Waiting for you" style={{ marginTop: '10px', border: '1px solid var(--color-border-subtle, rgba(0,28,53,0.12))', borderRadius: '12px', background: '#fff', overflow: 'hidden' }}>
@@ -91,19 +80,51 @@ const chip: React.CSSProperties = {
   cursor: 'pointer',
 };
 
+/** Who's talking and on what. */
+export function FloorTaskSwitches({ size = 'regular' }: { size?: 'regular' | 'small' }) {
+  const w = useWorld();
+  return (
+    <>
+      <Segmented<Role>
+        label="Who's using Edify"
+        value={w.role}
+        onChange={setRole}
+        size={size}
+        options={[
+          { value: 'team-member', label: 'Team member' },
+          { value: 'manager', label: 'Manager' },
+        ]}
+      />
+      <Segmented<Surface>
+        label="Device"
+        value={w.surface}
+        onChange={setSurface}
+        size={size}
+        options={[
+          { value: 'app', label: 'App', icon: <Smartphone size={size === 'small' ? 12 : 14} strokeWidth={2} /> },
+          { value: 'headset', label: 'Headset', icon: <Headphones size={size === 'small' ? 12 : 14} strokeWidth={2} /> },
+        ]}
+      />
+    </>
+  );
+}
+
 function Segmented<T extends string>({
   label,
   value,
   onChange,
   options,
+  size = 'regular',
 }: {
   label: string;
   value: T;
   onChange: (v: T) => void;
   options: { value: T; label: string; icon?: ReactNode }[];
+  size?: 'regular' | 'small';
 }) {
+  const small = size === 'small';
   return (
-    <div role="group" aria-label={label} style={{ display: 'inline-flex', padding: '3px', borderRadius: '100px', background: 'rgba(0,28,53,0.05)' }}>
+    <div role="group" aria-label={label} style={{ display: 'flex', padding: '3px', borderRadius: '100px', background: 'rgba(0,28,53,0.05)', width: small ? '100%' : 'auto' }}>
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -115,15 +136,17 @@ function Segmented<T extends string>({
             style={{
               display: 'inline-flex',
               alignItems: 'center',
+              justifyContent: 'center',
+              flex: small ? 1 : undefined,
               gap: '6px',
-              minHeight: '36px',
-              padding: '0 14px',
+              minHeight: small ? '30px' : '36px',
+              padding: small ? '0 8px' : '0 14px',
               borderRadius: '100px',
               border: 'none',
               background: active ? '#fff' : 'transparent',
               boxShadow: active ? '0 1px 4px rgba(0,28,53,0.14)' : 'none',
               color: active ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-              fontSize: '12.5px',
+              fontSize: small ? '11.5px' : '12.5px',
               fontWeight: 600,
               fontFamily: 'var(--font-primary)',
               cursor: 'pointer',
