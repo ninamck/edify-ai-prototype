@@ -208,14 +208,16 @@ export default function CardShell({
         )}
       </div>
 
-      <div style={{ padding: '12px' }}>
-        {notice && (
-          <Callout tone="info" icon={<Info size={14} strokeWidth={2.2} aria-hidden />} style={{ marginBottom: '10px' }}>
-            {notice}
-          </Callout>
-        )}
-        {children}
-      </div>
+      {(notice || hasContent(children)) && (
+        <div className="card-shell-body" style={{ padding: '12px' }}>
+          {notice && (
+            <Callout tone="info" icon={<Info size={14} strokeWidth={2.2} aria-hidden />} style={{ marginBottom: hasContent(children) ? '10px' : 0 }}>
+              {notice}
+            </Callout>
+          )}
+          {children}
+        </div>
+      )}
 
       {warnings.length > 0 && state === 'pending' && (
         <Callout tone="warning" icon={<AlertTriangle size={14} strokeWidth={2.2} aria-hidden />} role="status" style={{ margin: '0 12px 12px' }}>
@@ -289,6 +291,12 @@ export default function CardShell({
 }
 
 // ─── Shared bits used across cards ────────────────────────────────────────
+
+function hasContent(node: ReactNode): boolean {
+  if (node == null || typeof node === 'boolean' || node === '') return false;
+  if (Array.isArray(node)) return node.some(hasContent);
+  return true;
+}
 
 const CALLOUT_TONES = {
   warning: { bg: 'var(--color-warning-light)', border: 'var(--color-warning-border)' },

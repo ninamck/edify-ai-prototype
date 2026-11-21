@@ -92,6 +92,7 @@ function CardFor({ proposal, onApplied, onUndo }: { proposal: Proposal; onApplie
 
   return (
     <div>
+      <style>{FIRST_LINE_CSS}</style>
       <CardShell
         icon={ICONS[proposal.taskId]}
         title={view.title ?? spec.title}
@@ -179,13 +180,12 @@ type View = {
   invalid?: string;
 };
 
-function Note({ children }: { children: ReactNode }) {
-  return <p style={{ margin: '0 0 8px', fontSize: '12.5px', color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>{children}</p>;
-}
+/** The first line sits straight under the card header, which already draws a rule. */
+const FIRST_LINE_CSS = '.card-shell-body > .ft-line:first-child, .card-shell-body > :first-child > .ft-line:first-child { border-top: none !important; padding-top: 0 !important; }';
 
 function Line({ label, children, sub, flush }: { label: string; sub?: string; children: ReactNode; flush?: boolean }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: flush ? '0 0 6px' : '6px 0', borderTop: flush ? undefined : '1px solid var(--color-border-subtle, rgba(0,28,53,0.06))' }}>
+    <div className="ft-line" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: flush ? '0 0 6px' : '6px 0', borderTop: flush ? undefined : '1px solid var(--color-border-subtle, rgba(0,28,53,0.06))' }}>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{label}</div>
         {sub && <div style={{ fontSize: '11.5px', color: 'var(--color-text-secondary)' }}>{sub}</div>}
@@ -323,11 +323,6 @@ function onHandBody(p: ProposalOf<'on-hand'>, e: Editable): View {
     confirmLabel: quick ? 'Submit count' : 'Update',
     node: (
       <>
-        <Note>
-          {quick
-            ? `On hand will update for ${d.itemName}. Everything else at ${getWorld().sites.find((s) => s.id === p.siteId)?.name ?? 'this site'} stays as it is. This is not a stocktake and will not change COGS.`
-            : `Update the on hand stock of ${d.itemName} from ${fmtQty(d.from)} ${d.unit} to ${fmtQty(d.to)} ${d.unit}?`}
-        </Note>
         <Line label={d.itemName} sub={`Was ${fmtQty(d.from)} ${d.unit}`}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
             <QtyStepper value={d.to} onChange={(v) => e.setDraft({ ...d, to: v })} disabled={e.locked} step={d.unit === 'kg' || d.unit === 'L' ? 0.5 : 1} />
@@ -347,7 +342,6 @@ function hotAddBody(p: ProposalOf<'hot-add'>, e: Editable): View {
     invalid: d.lines.some((l) => l.add < 1) ? 'Each line needs at least 1.' : d.lines.some((l) => l.newMade > 1000) ? 'Up to 1000 per line.' : undefined,
     node: (
       <>
-        <Note>{FLOOR_TASKS['hot-add'].confirm.body}</Note>
         {d.lines.map((l, i) => (
           <Line key={l.recipeId} label={l.recipeName} sub={`${l.existingMade ?? 0} made so far, ${l.newMade} after`}>
             <QtyStepper
@@ -381,7 +375,6 @@ function parBody(p: ProposalOf<'par-level'>, e: Editable): View {
     title: 'Set par level',
     node: (
       <>
-        <Note>Suggested orders top {d.itemName} back up to this level.</Note>
         <Line label={d.itemName} sub={`Now ${d.from === null ? 'not set' : `${fmtQty(d.from)} ${d.unit}`}`}>
           <QtyStepper value={d.to} onChange={(v) => e.setDraft({ ...d, to: v })} disabled={e.locked} />
         </Line>
@@ -398,7 +391,6 @@ function requestBody(p: ProposalOf<'transfer-request'>, e: Editable): View {
     invalid: d.lines.some((l) => !(l.qty > 0)) ? 'Each line needs a quantity above 0.' : undefined,
     node: (
       <>
-        <Note>Nothing moves until {d.fulfillingSiteName} sends it.</Note>
         {d.lines.map((l, i) => (
           <Line key={l.itemId} label={l.itemName} sub={l.unit}>
             <QtyStepper value={l.qty} disabled={e.locked} onChange={(v) => e.setDraft({ ...d, lines: d.lines.map((x, j) => (j === i ? { ...x, qty: v } : x)) })} />
@@ -413,9 +405,9 @@ function quickCountBody(p: ProposalOf<'quick-count-start'>): View {
   const d = p.payload;
   return {
     title: d.resume ? 'Carry on counting' : 'Start a quick count',
-    subtitle: d.countListName,
+    subtitle: `${d.countListName} · ${d.itemCount} items`,
     confirmLabel: d.resume ? 'Carry on' : 'Start count',
-    node: <Note>{d.itemCount} items to count. On hand updates only for what you count, and COGS doesn&apos;t change.</Note>,
+    node: null,
   };
 }
 
@@ -448,7 +440,6 @@ function checklistBody(p: ProposalOf<'checklist-answer'>, e: Editable): View {
             disabled={e.locked}
           />
         )}
-        <Note>{`${d.answeredAfter} of ${d.totalQuestions} answered after this. Saving keeps your progress; it doesn't complete the checklist.`}</Note>
       </>
     ),
   };
@@ -466,7 +457,6 @@ function basketBody(p: ProposalOf<'basket-add'>, e: Editable): View {
         <Line label={d.productName} sub={`${d.orderUnitPlural} of ${fmtQty(d.packSize)} ${d.stockUnit} · £${(d.packs * d.unitPrice).toFixed(2)}`}>
           <QtyStepper value={d.packs} min={1} onChange={(v) => e.setDraft({ ...d, packs: Math.round(v) })} disabled={e.locked} />
         </Line>
-        <Note>Nothing is sent. The order goes when you place it from the basket.</Note>
       </>
     ),
   };
@@ -536,7 +526,6 @@ function transferSendBody(p: ProposalOf<'transfer-send'>, e: Editable): View {
     invalid: d.lines.some((l) => !(l.qty > 0)) ? 'Each line needs a quantity above 0.' : undefined,
     node: (
       <>
-        <Note>{spec.body}</Note>
         {d.lines.map((l, i) => (
           <Line key={l.itemId} label={l.itemName} sub={`${l.unit} · ${fmtQty(l.onHand)} on hand`}>
             <QtyStepper value={l.qty} disabled={e.locked} onChange={(v) => e.setDraft({ ...d, lines: d.lines.map((x, j) => (j === i ? { ...x, qty: v } : x)) })} />
@@ -559,7 +548,6 @@ function transferAcceptBody(p: ProposalOf<'transfer-accept'>, e: Editable): View
     invalid: d.lines.some((l) => l.received < l.sent && !l.reason) ? 'Pick a reason for each line not fully received.' : undefined,
     node: (
       <>
-        <Note>{spec.body}</Note>
         {d.lines.map((l, i) => (
           <div key={l.id} style={{ paddingBottom: '6px' }}>
             <Line label={l.itemName} sub={`Sent ${fmtQty(l.sent)} ${l.unit}`}>
@@ -576,7 +564,6 @@ function transferAcceptBody(p: ProposalOf<'transfer-accept'>, e: Editable): View
             )}
           </div>
         ))}
-        <Note>Damaged, temperature and quality rejections are written off at the sending site. Incorrect, missing and other go back to them.</Note>
       </>
     ),
   };
@@ -614,9 +601,7 @@ function undoBody(p: ProposalOf<'undo'>, e: Editable): View {
     invalid: needsReason && (d.reason ?? '').trim().length < 3 ? 'Why are you deleting this? At least 3 characters.' : undefined,
     node: needsReason ? (
       <TextField label="Why are you deleting this?" value={d.reason ?? ''} onChange={(v) => e.setDraft({ ...d, reason: v })} disabled={e.locked} placeholder="Wrong item, counted twice" />
-    ) : (
-      <Note>{p.readback}</Note>
-    ),
+    ) : null,
   };
 }
 
