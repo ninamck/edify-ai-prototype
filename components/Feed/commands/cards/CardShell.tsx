@@ -16,6 +16,7 @@
 
 import type { ComponentType, ReactNode, SVGProps } from 'react';
 import { AlertTriangle, Check, Info, Pencil, X } from 'lucide-react';
+import PlatformQtyStepper, { getStepperValueStyle } from '@/components/Production/QtyStepper';
 import type React from 'react';
 
 export type CardState = 'pending' | 'confirmed' | 'cancelled' | 'partial';
@@ -379,57 +380,31 @@ export function QtyStepper({
   min?: number;
   step?: number;
 }) {
-  const btn: React.CSSProperties = {
-    width: '32px',
-    height: '32px',
-    borderRadius: '10px',
-    border: '1.5px solid var(--color-border, rgba(0,28,53,0.18))',
-    background: '#fff',
-    fontSize: '15px',
-    fontWeight: 700,
-    fontFamily: 'var(--font-primary)',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    color: 'var(--color-text-primary)',
-  };
+  const round = (v: number) => Math.round(v * 1000) / 1000;
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => onChange(Math.max(min, value - step))}
-        style={btn}
-        aria-label="Decrement"
-      >
-        −
-      </button>
+    <PlatformQtyStepper
+      size="emphasized"
+      disabled={disabled}
+      canDecrement={value > min}
+      onDecrement={() => onChange(round(Math.max(min, value - step)))}
+      onIncrement={() => onChange(round(value + step))}
+    >
       <input
         type="number"
         value={value}
         disabled={disabled}
+        aria-label="Quantity"
         onChange={(e) => onChange(Math.max(min, Number(e.target.value) || 0))}
         style={{
-          width: '56px',
+          ...getStepperValueStyle('emphasized'),
+          width: '48px',
           height: '32px',
-          textAlign: 'center',
-          border: '1.5px solid var(--color-border, rgba(0,28,53,0.18))',
-          borderRadius: '10px',
-          fontSize: '14px',
-          fontWeight: 700,
-          fontFamily: 'var(--font-primary)',
-          color: 'var(--color-text-primary)',
-          background: '#fff',
+          padding: 0,
+          border: 'none',
+          background: 'transparent',
         }}
       />
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => onChange(value + step)}
-        style={btn}
-        aria-label="Increment"
-      >
-        +
-      </button>
-    </div>
+    </PlatformQtyStepper>
   );
 }
 
