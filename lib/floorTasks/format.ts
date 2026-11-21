@@ -12,7 +12,7 @@ export function fmtQty(n: number): string {
 }
 
 export function itemPhrase(qty: number, unit: string, name: string): string {
-  return isCountUnit(unit) ? `${fmtQty(qty)} ${name}` : `${fmtQty(qty)} ${unit} ${name}`;
+  return isCountUnit(unit) ? `${fmtQty(qty)} ${name}` : `${fmtQty(qty)} ${unit} of ${name}`;
 }
 
 /** The end of the trading day, when Waiting for you items expire. The
