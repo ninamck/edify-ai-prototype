@@ -68,6 +68,7 @@ import { useCommandRunner } from '@/components/Feed/commands/useCommandRunner';
 import { useFloorTasks, useFloorVoice } from '@/components/Feed/floorTasks/useFloorTasks';
 import FloorTaskCard, { FloorTaskPointerLabel } from '@/components/Feed/floorTasks/FloorTaskCard';
 import FloorTaskBar from '@/components/Feed/floorTasks/FloorTaskBar';
+import FloorReceiptLine from '@/components/Feed/floorTasks/FloorReceiptLine';
 import { useWorld as useFloorWorld } from '@/lib/floorTasks/world/store';
 import SlashMenu from '@/components/Feed/commands/SlashMenu';
 import TaskHistoryList from '@/components/Feed/TaskHistoryList';
@@ -11656,6 +11657,12 @@ export default function Feed({
                           <QuinnThinkingContent variant="step" />
                         )}
                         {!splitView && renderWorkspaceCard(m)}
+                        {m.msgType === 'floor-receipt' && m.cmdArgsJson && (
+                          <FloorReceiptLine
+                            receiptId={(JSON.parse(m.cmdArgsJson) as { receiptId: string }).receiptId}
+                            onDiscard={floor.onDiscard}
+                          />
+                        )}
                         {m.msgType === 'cmd-ambiguity' && m.cmdChoicesJson && m.cmdId && (
                           <AmbiguityPicker
                             prompt={m.text}

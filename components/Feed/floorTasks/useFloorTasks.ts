@@ -81,17 +81,35 @@ export function useFloorTasks<M extends FloorChatMsg>(setMessages: Dispatch<SetS
     say([...done, ...failed].join(' ') || 'Nothing was waiting for a yes.');
   }, [say]);
 
+  /** Run a task with no confirm and leave a one-line note in the chat. */
+  const runDirect = useCallback(
+    (proposalId: string) => {
+      const res = confirmProposal(proposalId);
+      if (!res.ok) {
+        say(res.error);
+        return;
+      }
+      history.current.push({ role: 'edify', text: res.receipt.headline });
+      push({ id: mid('q-floor-receipt'), role: 'quinn', text: '', msgType: 'floor-receipt', cmdArgsJson: JSON.stringify({ receiptId: res.receipt.id }) });
+      if (getWorld().surface === 'headset' || voiceTurn.current) speak(speakReceipt(res.receipt));
+    },
+    [push, say],
+  );
+
   const stageAndOffer = useCallback(
     (proposals: Proposal[]) => {
       const surface = getWorld().surface;
-      const items = proposals.map((p) => ({ p, mode: confirmMode(p, surface) }));
+      const items = proposals.map((p) => ({ p, mode: confirmMode(p, surface, proposals.length) }));
       addProposals(proposals, items.filter((i) => i.mode === 'waiting').map((i) => i.p.id));
-      awaitingYes.current = items.filter((i) => FLOOR_TASKS[i.p.taskId].tier === 'say').map((i) => i.p.id);
-      const text = composeReadback(items, surface);
-      say(text);
-      for (const i of items) if (i.mode === 'card') pushCard(i.p.id);
+      const offered = items.filter((i) => i.mode !== 'direct');
+      awaitingYes.current = offered.filter((i) => FLOOR_TASKS[i.p.taskId].tier === 'say' && i.mode !== 'waiting').map((i) => i.p.id);
+      if (offered.length) {
+        say(composeReadback(offered, surface));
+        for (const i of offered) if (i.mode === 'card') pushCard(i.p.id);
+      }
+      for (const i of items) if (i.mode === 'direct') runDirect(i.p.id);
     },
-    [pushCard, say],
+    [pushCard, runDirect, say],
   );
 
   /** Returns false when the words weren't a floor task, so the chat can
@@ -228,15 +246,32 @@ export function useFloorTasks<M extends FloorChatMsg>(setMessages: Dispatch<SetS
     [pushCard, stageAndOffer],
   );
 
+  /** Discard a count started from the chat. Nothing has been counted
+   *  from here, so it goes without a second confirm. */
+  const onDiscard = useCallback(
+    (receiptId: string) => {
+      const p = stageUndo(receiptId);
+      if (!p) return;
+      addProposals([p]);
+      const res = confirmProposal(p.id);
+      if (!res.ok) say(res.error);
+    },
+    [say],
+  );
+
   /** Open a Waiting for you item as a card in the chat. */
   const openProposal = useCallback(
     (proposalId: string) => {
       const p = getProposal(proposalId);
       if (!p) return;
+      if (p.taskId === 'quick-count-start') {
+        runDirect(proposalId);
+        return;
+      }
       push({ id: mid('q-floor'), role: 'quinn', text: `From Waiting for you: ${p.label}.`, streaming: false });
       pushCard(proposalId);
     },
-    [push, pushCard],
+    [push, pushCard, runDirect],
   );
 
   return {
@@ -244,6 +279,7 @@ export function useFloorTasks<M extends FloorChatMsg>(setMessages: Dispatch<SetS
     handle,
     onApplied,
     onUndo,
+    onDiscard,
     openProposal,
     voice: { supported: speechSupported, listening, setListening, interim, setInterim },
   };

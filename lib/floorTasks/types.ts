@@ -37,7 +37,9 @@ export type FloorTaskId =
   | 'demand-adjustment'
   | 'undo';
 
-export type ConfirmMode = 'none' | 'spoken' | 'card' | 'waiting';
+/** 'direct' runs without a confirm: the task changes nothing until a later
+ *  step on another screen (starting a quick count). */
+export type ConfirmMode = 'none' | 'spoken' | 'card' | 'waiting' | 'direct';
 
 export type ProposalStatus = 'staged' | 'waiting' | 'applied' | 'declined' | 'expired';
 

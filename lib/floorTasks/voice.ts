@@ -3,10 +3,17 @@ import type { ConfirmMode, Proposal, Receipt, Surface } from './types';
 
 /** How a task is confirmed on this device. Say-it tasks take a spoken
  *  yes on a headset and a card on the app. Show-it tasks always need a
- *  screen, so on a headset they wait. */
-export function confirmMode(p: Proposal, surface: Surface): ConfirmMode {
+ *  screen, so on a headset they wait. Starting a quick count changes
+ *  nothing until the count is submitted, so on the app it starts straight
+ *  away when it's the only task; counting needs a screen, so a headset
+ *  parks it. */
+export function confirmMode(p: Proposal, surface: Surface, batchSize = 1): ConfirmMode {
   const tier = FLOOR_TASKS[p.taskId].tier;
   if (tier === 'ask') return 'none';
+  if (p.taskId === 'quick-count-start') {
+    if (surface === 'headset') return 'waiting';
+    return batchSize === 1 ? 'direct' : 'card';
+  }
   if (tier === 'say') return surface === 'headset' ? 'spoken' : 'card';
   return surface === 'headset' ? 'waiting' : 'card';
 }
@@ -42,8 +49,7 @@ const COUNT_WORDS = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six'];
 
 /** What Edify says after staging, given how each will be confirmed. */
 export function composeReadback(items: { p: Proposal; mode: ConfirmMode }[], surface: Surface): string {
-  const say = items.filter((i) => i.mode === 'spoken' || (i.mode === 'card' && FLOOR_TASKS[i.p.taskId].tier === 'say'));
-  const show = items.filter((i) => FLOOR_TASKS[i.p.taskId].tier === 'show');
+  const say = items.filter((i) => i.mode === 'spoken' || (i.mode === 'card' && FLOOR_TASKS[i.p.taskId].tier === 'say'));  const show = items.filter((i) => FLOOR_TASKS[i.p.taskId].tier === 'show' || i.mode === 'waiting');
   const parts: string[] = [];
   if (say.length === 1) {
     parts.push(say[0].p.readback + (say[0].p.warnings.length ? ` ${say[0].p.warnings[0]}` : ''));

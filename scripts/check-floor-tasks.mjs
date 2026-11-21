@@ -279,4 +279,19 @@ await check('on hand of oat milk', async () => {
   assert.equal(out.items[0].name, 'Oat Milk');
 });
 
+console.log('Starting a quick count');
+const { confirmMode } = await jiti.import('../lib/floorTasks/voice.ts');
+await check('starts straight away on the app when it is the only task', async () => {
+  const { proposals } = await call('start_quick_count', { countList: 'dry store' });
+  assert.equal(confirmMode(proposals[0], 'app', 1), 'direct');
+});
+await check('shows a card when said with other tasks', async () => {
+  const { proposals } = await call('start_quick_count', { countList: 'dry store' });
+  assert.equal(confirmMode(proposals[0], 'app', 2), 'card');
+});
+await check('waits for a screen on a headset', async () => {
+  const { proposals } = await call('start_quick_count', { countList: 'dry store' });
+  assert.equal(confirmMode(proposals[0], 'headset', 1), 'waiting');
+});
+
 console.log(`\n${passed} checks passed`);

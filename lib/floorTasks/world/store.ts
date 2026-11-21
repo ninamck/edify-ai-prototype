@@ -460,9 +460,9 @@ function applyQuickCountStart(w: WorldState, p: ProposalOf<'quick-count-start'>)
   return {
     world: next,
     receipt: {
-      headline: open ? `Back into the ${d.countListName} count` : `Quick count started: ${d.countListName}`,
-      detail: `${d.itemCount} items to count. On hand updates only for what you count.`,
-      href: '/stock',
+      headline: open ? `Back into the ${d.countListName} count, ${d.itemCount} items` : `Started the ${d.countListName} count, ${d.itemCount} items`,
+      detail: 'On hand updates only for what you count.',
+      href: '/stock?tab=stocktake',
       hrefLabel: 'Open count',
       undo: { kind: 'cancel', prompt: 'Discard this quick count?' },
     },
