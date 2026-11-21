@@ -175,9 +175,9 @@ function Note({ children }: { children: ReactNode }) {
   return <p style={{ margin: '0 0 8px', fontSize: '12.5px', color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>{children}</p>;
 }
 
-function Line({ label, children, sub }: { label: string; sub?: string; children: ReactNode }) {
+function Line({ label, children, sub, flush }: { label: string; sub?: string; children: ReactNode; flush?: boolean }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '6px 0', borderTop: '1px solid var(--color-border-subtle, rgba(0,28,53,0.06))' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: flush ? '0 0 6px' : '6px 0', borderTop: flush ? undefined : '1px solid var(--color-border-subtle, rgba(0,28,53,0.06))' }}>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{label}</div>
         {sub && <div style={{ fontSize: '11.5px', color: 'var(--color-text-secondary)' }}>{sub}</div>}
@@ -267,7 +267,7 @@ function wasteBody(p: ProposalOf<'waste'>, e: Editable): View {
         <Note>{spec.body}</Note>
         {d.lines.map((l, i) => (
           <div key={`${l.itemId}-${i}`} style={{ padding: '6px 0', borderTop: '1px solid var(--color-border-subtle, rgba(0,28,53,0.06))' }}>
-            <Line label={l.itemName} sub={`${l.unit}${l.unit !== l.stockUnit ? ` · ${fmtQty(l.qtyInStockUnit)} ${l.stockUnit}` : ''} · £${l.value.toFixed(2)}`}>
+            <Line flush label={l.itemName} sub={`${l.unit}${l.unit !== l.stockUnit ? ` · ${fmtQty(l.qtyInStockUnit)} ${l.stockUnit}` : ''} · £${l.value.toFixed(2)}`}>
               <QtyStepper value={l.qty} onChange={(v) => set(i, { qty: v })} disabled={e.locked} />
             </Line>
             <PillRow
