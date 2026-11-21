@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeftRight, CalendarDays, ChefHat, ClipboardCheck, ClipboardList, Flame, Gauge, Inbox, Package, ShoppingBasket, Trash2, Truck, Undo2,
+  ArrowLeftRight, CalendarDays, ChefHat, ClipboardCheck, ClipboardList, Flame, Gauge, Package, ShoppingBasket, Trash2, Truck, Undo2,
 } from 'lucide-react';
 import CardShell, { FieldRow, PillRow, QtyStepper, type CardIcon, type CardState } from '../commands/cards/CardShell';
 import { FLOOR_TASKS } from '@/lib/floorTasks/registry';
@@ -42,6 +42,12 @@ export default function FloorTaskCard({ proposalId, onApplied, onUndo }: Props) 
   const proposal = useProposal(proposalId);
   if (!proposal) return null;
   return <CardFor key={proposal.id} proposal={proposal} onApplied={onApplied} onUndo={onUndo} />;
+}
+
+/** The chat's marker for a card that has moved to the workspace. */
+export function FloorTaskPointerLabel({ proposalId }: { proposalId: string }) {
+  const proposal = useProposal(proposalId);
+  return <>{proposal ? FLOOR_TASKS[proposal.taskId].title : 'Floor task'}</>;
 }
 
 function cardState(p: Proposal): CardState {
@@ -89,13 +95,9 @@ function CardFor({ proposal, onApplied, onUndo }: { proposal: Proposal; onApplie
         cancelLabel={proposal.taskId === 'demand-adjustment' ? 'No' : 'Cancel'}
         onConfirm={confirm}
         onCancel={() => declineProposal(proposal.id)}
-        warning={error ?? (warnings.length ? warnings.join(' ') : undefined)}
+        warning={error ? [error] : warnings}
+        notice={proposal.status === 'waiting' ? 'From Waiting for you. Raised on a headset.' : undefined}
       >
-        {proposal.status === 'waiting' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-            <Inbox size={13} strokeWidth={2} /> From Waiting for you. Raised on a headset.
-          </div>
-        )}
         {view.node}
         {receipt && <ReceiptBlock receipt={receipt} onUndo={onUndo} />}
       </CardShell>

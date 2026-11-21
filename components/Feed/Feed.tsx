@@ -66,7 +66,7 @@ import { parseCommand, parseSiteSetup } from '@/components/Feed/commands/parsers
 import { COMMAND_REGISTRY, getCommand } from '@/components/Feed/commands/registry';
 import { useCommandRunner } from '@/components/Feed/commands/useCommandRunner';
 import { useFloorTasks, useFloorVoice } from '@/components/Feed/floorTasks/useFloorTasks';
-import FloorTaskCard from '@/components/Feed/floorTasks/FloorTaskCard';
+import FloorTaskCard, { FloorTaskPointerLabel } from '@/components/Feed/floorTasks/FloorTaskCard';
 import FloorTaskBar from '@/components/Feed/floorTasks/FloorTaskBar';
 import { useWorld as useFloorWorld } from '@/lib/floorTasks/world/store';
 import SlashMenu from '@/components/Feed/commands/SlashMenu';
@@ -593,6 +593,7 @@ type ChatMsg = {
  *  "work surfaces" (wizard steps, import cards, charts, tables)
  *  migrate to the side. */
 const WORKSPACE_MSG_TYPES = new Set<string>([
+  'floor-proposal',
   'new-supplier-import',
   'product-sheet-import',
   'chagee-tea-supplier',
@@ -11620,7 +11621,11 @@ export default function Feed({
                               color: 'var(--color-text-secondary)',
                             }}
                           >
-                            {WORKSPACE_POINTER_LABELS[m.msgType ?? ''] ?? 'Working on this'} · in the workspace
+                            {m.msgType === 'floor-proposal' && m.cmdArgsJson ? (
+                              <FloorTaskPointerLabel proposalId={(JSON.parse(m.cmdArgsJson) as { proposalId: string }).proposalId} />
+                            ) : (
+                              WORKSPACE_POINTER_LABELS[m.msgType ?? ''] ?? 'Working on this'
+                            )} · in the workspace
                             <ChevronDown size={12} strokeWidth={2.4} style={{ transform: 'rotate(-90deg)' }} />
                           </motion.div>
                         );

@@ -42,7 +42,7 @@ export default function FloorTaskBar({ onOpen, compact }: { onOpen: (proposalId:
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
-            style={{ ...chip, background: 'rgba(234,88,12,0.08)', borderColor: 'rgba(234,88,12,0.35)', color: '#7A3800' }}
+            style={{ ...chip, background: 'var(--color-warning-light)', borderColor: 'var(--color-warning-border)', color: 'var(--color-text-primary)' }}
           >
             <Inbox size={14} strokeWidth={2} /> Waiting for you · {waiting.length}
             <ChevronDown size={14} style={{ transform: open ? 'rotate(180deg)' : 'none' }} />

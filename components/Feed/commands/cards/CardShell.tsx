@@ -15,7 +15,7 @@
  */
 
 import type { ComponentType, ReactNode, SVGProps } from 'react';
-import { AlertTriangle, Check, Pencil, X } from 'lucide-react';
+import { AlertTriangle, Check, Info, Pencil, X } from 'lucide-react';
 import type React from 'react';
 
 export type CardState = 'pending' | 'confirmed' | 'cancelled' | 'partial';
@@ -44,9 +44,11 @@ interface CardShellProps {
   onConfirm?: () => void;
   onCancel?: () => void;
   confirmDisabled?: boolean;
-  /** Optional inline warning line, rendered between body and footer
-   *  (e.g. "Variance −2 vs expected — Quinn will flag this"). */
-  warning?: string;
+  /** Warnings to check before confirming, shown in a yellow callout
+   *  under the body. One line each. */
+  warning?: string | string[];
+  /** Neutral context shown in a blue callout above the body. */
+  notice?: ReactNode;
   /** When provided, a confirmed card shows an Edit button beside the
    *  Done badge — used by wizard flows where any step stays editable
    *  until the final confirm. */
@@ -65,10 +67,12 @@ export default function CardShell({
   onCancel,
   confirmDisabled,
   warning,
+  notice,
   onEdit,
   children,
 }: CardShellProps) {
   const disabled = state !== 'pending';
+  const warnings = (Array.isArray(warning) ? warning : warning ? [warning] : []).filter(Boolean);
   const style: React.CSSProperties = {
     marginTop: '8px',
     borderRadius: '14px',
@@ -189,8 +193,9 @@ export default function CardShell({
               gap: '4px',
               padding: '3px 8px',
               borderRadius: '100px',
-              background: '#FEF3E2',
-              color: '#7A3800',
+              background: 'var(--color-warning-light)',
+              border: '1px solid var(--color-warning-border)',
+              color: 'var(--color-text-primary)',
               fontSize: '11px',
               fontWeight: 700,
               letterSpacing: '0.03em',
@@ -202,21 +207,25 @@ export default function CardShell({
         )}
       </div>
 
-      <div style={{ padding: '12px' }}>{children}</div>
+      <div style={{ padding: '12px' }}>
+        {notice && (
+          <Callout tone="info" icon={<Info size={14} strokeWidth={2.2} aria-hidden />} style={{ marginBottom: '10px' }}>
+            {notice}
+          </Callout>
+        )}
+        {children}
+      </div>
 
-      {warning && state === 'pending' && (
-        <div
-          style={{
-            padding: '7px 12px',
-            background: '#FEF9F3',
-            borderTop: '1px solid #F5E6D3',
-            color: '#7A3800',
-            fontSize: '12px',
-            fontWeight: 500,
-          }}
-        >
-          {warning}
-        </div>
+      {warnings.length > 0 && state === 'pending' && (
+        <Callout tone="warning" icon={<AlertTriangle size={14} strokeWidth={2.2} aria-hidden />} role="status" style={{ margin: '0 12px 12px' }}>
+          {warnings.length === 1 ? (
+            warnings[0]
+          ) : (
+            <ul style={{ margin: 0, paddingLeft: '16px' }}>
+              {warnings.map((w) => <li key={w}>{w}</li>)}
+            </ul>
+          )}
+        </Callout>
       )}
 
       {state === 'pending' && (onConfirm || onCancel) && (
@@ -279,6 +288,50 @@ export default function CardShell({
 }
 
 // ─── Shared bits used across cards ────────────────────────────────────────
+
+const CALLOUT_TONES = {
+  warning: { bg: 'var(--color-warning-light)', border: 'var(--color-warning-border)' },
+  info: { bg: 'var(--color-info-light)', border: 'var(--color-info-border)' },
+} as const;
+
+/** Yellow for something to check, blue for context. Ink is always navy. */
+export function Callout({
+  tone,
+  icon,
+  role,
+  style,
+  children,
+}: {
+  tone: keyof typeof CALLOUT_TONES;
+  icon?: ReactNode;
+  role?: 'status' | 'alert' | 'note';
+  style?: React.CSSProperties;
+  children: ReactNode;
+}) {
+  const t = CALLOUT_TONES[tone];
+  return (
+    <div
+      role={role}
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '8px',
+        padding: '9px 12px',
+        borderRadius: '10px',
+        background: t.bg,
+        border: `1px solid ${t.border}`,
+        color: 'var(--color-text-primary)',
+        fontSize: '12.5px',
+        fontWeight: 500,
+        lineHeight: 1.45,
+        ...style,
+      }}
+    >
+      {icon && <span style={{ flexShrink: 0, display: 'inline-flex', marginTop: '2px' }}>{icon}</span>}
+      <div style={{ minWidth: 0, flex: 1 }}>{children}</div>
+    </div>
+  );
+}
 
 export function FieldRow({
   label,

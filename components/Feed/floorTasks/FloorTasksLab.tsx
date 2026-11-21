@@ -100,7 +100,7 @@ export default function FloorTasksLab() {
       </p>
 
       {demoMode && (
-        <div role="status" style={{ padding: '10px 14px', borderRadius: '10px', background: 'rgba(234,88,12,0.08)', border: '1px solid rgba(234,88,12,0.35)', color: '#7A3800', fontSize: '13px', marginBottom: '14px' }}>
+        <div role="status" style={{ padding: '10px 14px', borderRadius: '10px', background: 'var(--color-warning-light)', border: '1px solid var(--color-warning-border)', color: 'var(--color-text-primary)', fontSize: '13px', marginBottom: '14px' }}>
           Demo mode: no model key on this machine, so these were read with set patterns, which were written against these phrases. Add AI_GATEWAY_API_KEY to .env.local and
           restart to test the model.
         </div>
