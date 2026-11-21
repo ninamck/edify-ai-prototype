@@ -14,9 +14,9 @@
  * disappear, so the panel doubles as the session's audit trail.
  */
 
-import type { ComponentType, ReactNode, SVGProps } from 'react';
+import { useState, type ComponentType, type ReactNode, type SVGProps } from 'react';
 import { AlertTriangle, Check, Info, Pencil, X } from 'lucide-react';
-import PlatformQtyStepper, { getStepperValueStyle } from '@/components/Production/QtyStepper';
+import { NumberStepper } from '@/components/ui/NumberStepper';
 import type React from 'react';
 
 export type CardState = 'pending' | 'confirmed' | 'cancelled' | 'partial';
@@ -380,39 +380,43 @@ export function QtyStepper({
   onChange,
   disabled,
   min = 0,
+  max = 999999,
   step = 1,
+  label,
+  tone,
 }: {
   value: number;
   onChange: (v: number) => void;
   disabled?: boolean;
   min?: number;
+  max?: number;
   step?: number;
+  /** What's being counted, for screen readers: "One more Croissants". */
+  label?: string;
+  tone?: 'default' | 'warning';
 }) {
-  const round = (v: number) => Math.round(v * 1000) / 1000;
+  // Holds what's typed so "2." or an empty box survives until it's a number.
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown =
+    draft !== null && (draft === '' || draft === '-' || Number(draft) === value) ? draft : String(value);
   return (
-    <PlatformQtyStepper
-      size="emphasized"
+    <NumberStepper
+      value={shown}
+      onValueChange={(next) => {
+        setDraft(next);
+        const n = Number(next);
+        if (next !== '' && next !== '-' && Number.isFinite(n)) onChange(n);
+      }}
+      min={min}
+      max={max}
+      maxDecimals={3}
+      step={step}
       disabled={disabled}
-      canDecrement={value > min}
-      onDecrement={() => onChange(round(Math.max(min, value - step)))}
-      onIncrement={() => onChange(round(value + step))}
-    >
-      <input
-        type="number"
-        value={value}
-        disabled={disabled}
-        aria-label="Quantity"
-        onChange={(e) => onChange(Math.max(min, Number(e.target.value) || 0))}
-        style={{
-          ...getStepperValueStyle('emphasized'),
-          width: '48px',
-          height: '32px',
-          padding: 0,
-          border: 'none',
-          background: 'transparent',
-        }}
-      />
-    </PlatformQtyStepper>
+      tone={tone}
+      ariaLabel={label ? `Quantity for ${label}` : 'Quantity'}
+      decrementLabel={label ? `One fewer ${label}` : 'Decrease quantity'}
+      incrementLabel={label ? `One more ${label}` : 'Increase quantity'}
+    />
   );
 }
 

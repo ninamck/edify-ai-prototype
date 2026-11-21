@@ -297,7 +297,7 @@ function wasteBody(p: ProposalOf<'waste'>, e: Editable): View {
         {d.lines.map((l, i) => (
           <div key={`${l.itemId}-${i}`} style={{ padding: '6px 0', borderTop: '1px solid var(--color-border-subtle, rgba(0,28,53,0.06))' }}>
             <Line flush label={l.itemName} sub={`${l.unit}${l.unit !== l.stockUnit ? ` · ${fmtQty(l.qtyInStockUnit)} ${l.stockUnit}` : ''} · £${l.value.toFixed(2)}`}>
-              <QtyStepper value={l.qty} onChange={(v) => set(i, { qty: v })} disabled={e.locked} />
+              <QtyStepper label={l.itemName} value={l.qty} onChange={(v) => set(i, { qty: v })} disabled={e.locked} />
             </Line>
             <PillRow
               small
@@ -325,7 +325,7 @@ function onHandBody(p: ProposalOf<'on-hand'>, e: Editable): View {
       <>
         <Line label={d.itemName} sub={`Was ${fmtQty(d.from)} ${d.unit}`}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <QtyStepper value={d.to} onChange={(v) => e.setDraft({ ...d, to: v })} disabled={e.locked} step={d.unit === 'kg' || d.unit === 'L' ? 0.5 : 1} />
+            <QtyStepper label={d.itemName} value={d.to} onChange={(v) => e.setDraft({ ...d, to: v })} disabled={e.locked} step={d.unit === 'kg' || d.unit === 'L' ? 0.5 : 1} />
             <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{d.unit}</span>
           </span>
         </Line>
@@ -345,8 +345,10 @@ function hotAddBody(p: ProposalOf<'hot-add'>, e: Editable): View {
         {d.lines.map((l, i) => (
           <Line key={l.recipeId} label={l.recipeName} sub={`${l.existingMade ?? 0} made so far, ${l.newMade} after`}>
             <QtyStepper
+              label={l.recipeName}
               value={l.add}
               min={1}
+              max={1000}
               disabled={e.locked}
               onChange={(v) =>
                 e.setDraft({ ...d, lines: d.lines.map((x, j) => (j === i ? { ...x, add: v, newMade: (x.existingMade ?? 0) + v } : x)) })
@@ -376,7 +378,7 @@ function parBody(p: ProposalOf<'par-level'>, e: Editable): View {
     node: (
       <>
         <Line label={d.itemName} sub={`Now ${d.from === null ? 'not set' : `${fmtQty(d.from)} ${d.unit}`}`}>
-          <QtyStepper value={d.to} onChange={(v) => e.setDraft({ ...d, to: v })} disabled={e.locked} />
+          <QtyStepper label={d.itemName} value={d.to} onChange={(v) => e.setDraft({ ...d, to: v })} disabled={e.locked} />
         </Line>
       </>
     ),
@@ -393,7 +395,7 @@ function requestBody(p: ProposalOf<'transfer-request'>, e: Editable): View {
       <>
         {d.lines.map((l, i) => (
           <Line key={l.itemId} label={l.itemName} sub={l.unit}>
-            <QtyStepper value={l.qty} disabled={e.locked} onChange={(v) => e.setDraft({ ...d, lines: d.lines.map((x, j) => (j === i ? { ...x, qty: v } : x)) })} />
+            <QtyStepper label={l.itemName} value={l.qty} disabled={e.locked} onChange={(v) => e.setDraft({ ...d, lines: d.lines.map((x, j) => (j === i ? { ...x, qty: v } : x)) })} />
           </Line>
         ))}
       </>
@@ -418,7 +420,7 @@ function checklistBody(p: ProposalOf<'checklist-answer'>, e: Editable): View {
       <PillRow options={[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]} selected={d.answer} onSelect={(v) => e.setDraft({ ...d, answer: v })} disabled={e.locked} />
     ) : d.responseType === 'temperature' || d.responseType === 'number' ? (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-        <QtyStepper value={Number(d.answer)} min={-100} onChange={(v) => e.setDraft({ ...d, answer: String(v) })} disabled={e.locked} />
+        <QtyStepper label={d.questionName} value={Number(d.answer)} min={-100} max={1000} onChange={(v) => e.setDraft({ ...d, answer: String(v) })} disabled={e.locked} />
         {d.responseType === 'temperature' && <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>°C</span>}
       </span>
     ) : null;
@@ -455,7 +457,7 @@ function basketBody(p: ProposalOf<'basket-add'>, e: Editable): View {
     node: (
       <>
         <Line label={d.productName} sub={`${d.orderUnitPlural} of ${fmtQty(d.packSize)} ${d.stockUnit} · £${(d.packs * d.unitPrice).toFixed(2)}`}>
-          <QtyStepper value={d.packs} min={1} onChange={(v) => e.setDraft({ ...d, packs: Math.round(v) })} disabled={e.locked} />
+          <QtyStepper label={d.productName} value={d.packs} min={1} onChange={(v) => e.setDraft({ ...d, packs: Math.round(v) })} disabled={e.locked} />
         </Line>
       </>
     ),
@@ -483,7 +485,10 @@ function deliveryBody(p: ProposalOf<'delivery-accept'>, e: Editable): View {
           {d.lines.map((l, i) => (
             <Line key={l.id} flush={i === 0} label={l.name} sub={`Ordered ${l.ordered} ${l.unit}${l.received < l.ordered ? ` · ${l.ordered - l.received} short` : ''}`}>
               <QtyStepper
+                label={l.name}
                 value={l.received}
+                max={l.ordered}
+                tone={l.received < l.ordered ? 'warning' : 'default'}
                 disabled={e.locked}
                 onChange={(v) => e.setDraft({ ...d, lines: d.lines.map((x, j) => (j === i ? { ...x, received: Math.min(v, x.ordered) } : x)) })}
               />
@@ -528,7 +533,7 @@ function transferSendBody(p: ProposalOf<'transfer-send'>, e: Editable): View {
       <>
         {d.lines.map((l, i) => (
           <Line key={l.itemId} label={l.itemName} sub={`${l.unit} · ${fmtQty(l.onHand)} on hand`}>
-            <QtyStepper value={l.qty} disabled={e.locked} onChange={(v) => e.setDraft({ ...d, lines: d.lines.map((x, j) => (j === i ? { ...x, qty: v } : x)) })} />
+            <QtyStepper label={l.itemName} value={l.qty} disabled={e.locked} onChange={(v) => e.setDraft({ ...d, lines: d.lines.map((x, j) => (j === i ? { ...x, qty: v } : x)) })} />
           </Line>
         ))}
       </>
@@ -551,7 +556,7 @@ function transferAcceptBody(p: ProposalOf<'transfer-accept'>, e: Editable): View
         {d.lines.map((l, i) => (
           <div key={l.id} style={{ paddingBottom: '6px' }}>
             <Line label={l.itemName} sub={`Sent ${fmtQty(l.sent)} ${l.unit}`}>
-              <QtyStepper value={l.received} disabled={e.locked} onChange={(v) => setLine(i, { received: Math.min(v, l.sent), reason: v >= l.sent ? undefined : l.reason })} />
+              <QtyStepper label={l.itemName} value={l.received} max={l.sent} disabled={e.locked} onChange={(v) => setLine(i, { received: Math.min(v, l.sent), reason: v >= l.sent ? undefined : l.reason })} />
             </Line>
             {l.received < l.sent && (
               <PillRow
@@ -581,7 +586,7 @@ function demandBody(p: ProposalOf<'demand-adjustment'>, e: Editable): View {
         <FieldRow label="Days">{d.startDate === d.endDate ? d.startDate : `${d.startDate} to ${d.endDate}`}</FieldRow>
         <Line label="Busier or quieter" sub="100% is a usual day">
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <QtyStepper value={d.percentOfDemand} step={10} onChange={(v) => e.setDraft({ ...d, percentOfDemand: Math.min(300, v) })} disabled={e.locked} />
+            <QtyStepper label="percentage of a usual day" value={d.percentOfDemand} max={300} step={10} onChange={(v) => e.setDraft({ ...d, percentOfDemand: Math.min(300, v) })} disabled={e.locked} />
             <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>%</span>
           </span>
         </Line>
