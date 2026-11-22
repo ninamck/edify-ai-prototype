@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { chatBasketLines } from './chatBasketStore';
 import { buildFixtures, cutOffFor, lineFromProduct, newOrderFor, type Fixtures } from './fixtures';
 import { toBase } from './format';
 import type { BasketLine, BasketOrder, CatalogueProduct } from './types';
@@ -35,14 +36,34 @@ export function useBasket(now: Date) {
     () => new Set(fixtures.orders.flatMap((o) => o.lines.filter((l) => l.startsRemoved).map((l) => l.id))),
     [fixtures],
   );
+  const chatSeed = useMemo(() => {
+    const qty: Record<string, number> = {};
+    const restored = new Set<string>();
+    const added: Record<string, BasketLine[]> = {};
+    for (const c of chatBasketLines()) {
+      const order = fixtures.orders.find((o) => o.supplierId === c.supplierId);
+      const item = fixtures.catalogue.find((p) => p.productId === c.productId);
+      if (!order || !item) continue;
+      const existing = order.lines.find((l) => l.productId === c.productId);
+      if (existing) {
+        qty[existing.id] = c.packs;
+        restored.add(existing.id);
+        continue;
+      }
+      const line = { ...lineFromProduct(item, fixtures.today, now), addedByYou: true };
+      qty[line.id] = c.packs;
+      added[order.id] = [...(added[order.id] ?? []), line];
+    }
+    return { qty, restored, added };
+  }, [fixtures, now]);
 
   const [step, setStep] = useState<Step>('basket');
   const [mode, setMode] = useState<Mode>('predictive');
-  const [quantities, setQuantities] = useState<Record<string, number>>(startQuantities);
-  const [removed, setRemoved] = useState<Set<string>>(startRemoved);
+  const [quantities, setQuantities] = useState<Record<string, number>>(() => ({ ...startQuantities, ...chatSeed.qty }));
+  const [removed, setRemoved] = useState<Set<string>>(() => new Set([...startRemoved].filter((id) => !chatSeed.restored.has(id))));
   const [stopped, setStopped] = useState<Set<string>>(new Set());
   const [reasons, setReasons] = useState<Record<string, LineReasons>>({});
-  const [addedLines, setAddedLines] = useState<Record<string, BasketLine[]>>({});
+  const [addedLines, setAddedLines] = useState<Record<string, BasketLine[]>>(() => chatSeed.added);
   const [builtOrders, setBuiltOrders] = useState<BasketOrder[]>([]);
   const [dates, setDates] = useState<Record<string, string | null>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
