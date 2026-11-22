@@ -18,6 +18,9 @@ import {
 import { SlipCell } from '@/components/Pret/cash/SlipField';
 import { whenLabel } from '@/components/Pret/countStore';
 import DayRangePicker, { control, rangeLabel, type DayRange } from '@/components/Pret/cash/DayRangePicker';
+import DunkinDays from '@/components/Pret/cash/DunkinDays';
+import { dunkinLedger } from '@/components/Pret/dunkinReport';
+import { usePaidOutNotes } from '@/components/Pret/paidOuts';
 
 const LAST_7: DayRange = { lo: -6, hi: 0 };
 
@@ -58,6 +61,7 @@ function CashHistory() {
   const dunkin = useDunkinCash();
   const banked = operators || dunkin;
   const [landings, setLandings] = useBankLandings();
+  const [notes] = usePaidOutNotes();
 
   if (!shop) return <NoShop />;
   const now = new Date();
@@ -164,7 +168,14 @@ function CashHistory() {
       </div>
 
       <section style={ui.card}>
-        {shown === 'bankings' && (
+        {shown === 'bankings' && dunkin && (
+          <DunkinDays
+            rows={dunkinLedger(cashShop(shop.siteId)!, cash, notes, landings, lo, now).filter(r => inRange(r.day)).reverse()}
+            closeDetail={r => <CloseSummary close={r.close} corrections={cash.corrections} onCorrect={x => cash.setCorrections(prev => [...prev, x])} team={shop.team} me={me.name} rules={rules} />}
+          />
+        )}
+
+        {shown === 'bankings' && !dunkin && (
           closes.length === 0 ? <p style={ui.muted}>No days closed in this period.</p> : (
             <div style={{ overflowX: 'auto' }}>
               <table style={ui.table}>

@@ -23,6 +23,7 @@ import { paidOutAlerts, paidOutSummary, paidOutsFor, usePaidOutNotes } from '@/c
 import VarianceTrend from '@/components/Pret/cash/VarianceTrend';
 import { shopCaption, useShopName } from '@/components/Pret/shopNames';
 import { AccountsExport, BlindCountSetting } from '@/components/Pret/cash/OperatorSettings';
+import DunkinOverview from '@/components/Pret/cash/DunkinOverview';
 
 const STALE_AFTER = 20;
 
@@ -50,9 +51,13 @@ function Headline({ cells }: { cells: { label: string; value: ReactNode; note?: 
 export default function SupportCentreCashPage() {
   return (
     <Suspense>
-      <CashOverview />
+      <OverviewForSetUp />
     </Suspense>
   );
+}
+
+function OverviewForSetUp() {
+  return useDunkinCash() ? <DunkinOverview /> : <CashOverview />;
 }
 
 function CashOverview() {
