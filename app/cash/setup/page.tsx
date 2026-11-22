@@ -7,8 +7,10 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { usePretState } from '@/components/Pret/pretStore';
 import { useCashAudience, type CashAudience } from '@/components/Pret/cashOperators';
 import {
-  ALL_STEPS, BACKBONE, SETUP, SETUP_ORDER, STAGES, type ChoiceStep, type Step, type SwitchStep,
+  ALL_STEPS, BACKBONE, SETUP, SETUP_ORDER, STAGES, useShopBanking, type ChoiceStep, type Step, type SwitchStep,
 } from '@/components/Pret/cashSetup';
+import { CASH_SHOPS } from '@/components/Pret/cashFixtures';
+import { useShopName } from '@/components/Pret/shopNames';
 
 const T = { title: 28, section: 17, body: 14, meta: 13 } as const;
 const hairline = '1px solid var(--color-border-subtle)';
@@ -150,6 +152,7 @@ export default function CashSetupPage() {
                 </button>
               </div>
             )}
+            {audience === 'dunkin' && <ShopBanking narrow={narrow} />}
             {STAGES.map(stage => (
               <section key={stage.id} aria-labelledby={`${stage.id}-h`} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -249,6 +252,48 @@ function StepRow({ step, first, audience, value, changed, onChange, narrow }: {
         )
         : <Choice step={step} value={value} onChange={onChange} labelledBy={labelId} />}
     </li>
+  );
+}
+
+/** Dunkin managers take the cash to the bank themselves, so each shop has its own branch and bag rule. */
+function ShopBanking({ narrow }: { narrow: boolean }) {
+  const { bankingFor, setBanking } = useShopBanking();
+  const nameOf = useShopName();
+  const ids = useId();
+  return (
+    <section aria-labelledby={`${ids}-h`} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <h2 id={`${ids}-h`} style={{ margin: 0, fontSize: T.section, fontWeight: 700 }}>Where each shop banks</h2>
+        <p style={help}>The close fills these in, so managers never type them. Some branches need deposits in a numbered bag, such as overnight drops in South Carolina.</p>
+      </div>
+      <ul style={{ ...whiteCard, margin: 0, padding: 0, listStyle: 'none', overflow: 'hidden' }}>
+        {CASH_SHOPS.map((shop, i) => {
+          const b = bankingFor(shop.siteId);
+          const name = nameOf(shop.siteId, shop.name);
+          const bagLabel = `${ids}-${shop.siteId}-bag`;
+          return (
+            <li key={shop.siteId} style={{
+              display: 'grid', gridTemplateColumns: narrow ? '1fr' : 'minmax(0, 1fr) minmax(0, 1.4fr) auto', alignItems: 'center', gap: narrow ? 10 : 16,
+              padding: '14px 20px', borderTop: i === 0 ? 'none' : hairline,
+            }}>
+              <span style={{ fontSize: T.body, fontWeight: 600 }}>{name}</span>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12.5, fontWeight: 600 }}>
+                Bank and branch
+                <input
+                  value={b.bank}
+                  onChange={e => setBanking(shop.siteId, { bank: e.target.value })}
+                  style={{ minHeight: 44, padding: '0 12px', borderRadius: 10, border: '1px solid var(--color-border)', fontFamily: 'inherit', fontSize: T.body, color: 'inherit' }}
+                />
+              </label>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, justifySelf: narrow ? 'start' : 'end' }}>
+                <span id={bagLabel} style={{ fontSize: T.meta, fontWeight: 600 }}>Deposit bag needed<span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>, {name}</span></span>
+                <Switch checked={b.bagNeeded} onChange={v => setBanking(shop.siteId, { bagNeeded: v })} labelledBy={bagLabel} />
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

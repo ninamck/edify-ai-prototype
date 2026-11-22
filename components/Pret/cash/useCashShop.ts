@@ -14,9 +14,12 @@ import {
   useChangeOrders,
   useRuleChanges,
 } from '../cashStore';
+import { useCashAudience } from '../cashOperators';
 
 /** Everything a shop cash screen needs for the shop the walkthrough is playing. */
 export function useCashShop() {
+  // Read for its side effect: it sets the currency this screen's amounts show in.
+  useCashAudience();
   const { activeSiteId } = useActiveSite();
   const shop = cashShop(activeSiteId);
   const [counts, setCounts] = useCashCounts();

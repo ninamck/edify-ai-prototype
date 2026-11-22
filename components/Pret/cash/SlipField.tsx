@@ -66,7 +66,7 @@ export default function SlipField({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <label style={ui.field} htmlFor={id}>
-        <span style={ui.fieldLabel}>Photo of the paying-in slip {required ? '(required)' : '(optional)'}</span>
+        <span style={ui.fieldLabel}>Photo of the bank slip {required ? '(required)' : '(optional)'}</span>
         <input
           id={id}
           type="file"
@@ -83,11 +83,11 @@ export default function SlipField({
         {value ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={value} alt="Paying-in slip" style={{ width: 180, borderRadius: 8, border: '1px solid var(--color-border-subtle)' }} />
-            <button type="button" style={ui.ghostBtn} onClick={() => onChange('')}>Remove photo</button>
+            <img src={value} alt="Bank slip" style={{ width: 180, borderRadius: 8, border: '1px solid var(--color-border-subtle)' }} />
+            <button type="button" style={{ ...ui.ghostBtn, minHeight: 44 }} onClick={() => onChange('')}>Remove photo</button>
           </>
         ) : (
-          <button type="button" style={ui.ghostBtn} onClick={() => onChange(sampleSlip(amount, reference, shop))}>Use a sample slip</button>
+          <button type="button" style={{ ...ui.ghostBtn, minHeight: 44 }} onClick={() => onChange(sampleSlip(amount, reference, shop))}>Use a sample slip</button>
         )}
       </div>
     </div>

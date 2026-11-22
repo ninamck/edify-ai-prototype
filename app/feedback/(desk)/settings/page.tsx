@@ -7,7 +7,7 @@ import { ArrowRight, Lock, ReceiptText, Search, ShieldAlert, Users } from 'lucid
 import StyledSelect from '@/components/ui/StyledSelect';
 import { useCompanyContext } from '@/components/Settings/companyContextStore';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { DISTRICT, STORES, storeById } from '@/components/Feedback/bronxData';
+import { DISTRICT, PHONE_STORE, STORES, storeById } from '@/components/Feedback/dunkinData';
 import { firstName, signOff, useFeedback, type LiveTicket } from '@/components/Feedback/feedbackState';
 import { WHO_SENDS_LABEL, type ReplySettings, type StoreId, type WhoSends } from '@/components/Feedback/model';
 import { hairline, quote, whiteCard } from '@/components/Feedback/ui';
@@ -20,14 +20,14 @@ const T = { title: 28, section: 17, body: 14, meta: 13 } as const;
 const help: CSSProperties = { margin: 0, fontSize: T.meta, lineHeight: 1.5, color: 'var(--color-text-secondary)' };
 const WHO_HELP: Record<WhoSends, string> = {
   person: 'Every reply waits for a manager to read it, add their own line and send.',
-  'edify-thanks': 'Five stars with no comment go out signed by the store manager. Everything else is drafted.',
+  'edify-thanks': 'Compliments with no comment get a thank-you signed by the store manager. Everything else is drafted.',
 };
 const NEVER = [
   { icon: ShieldAlert, text: 'Allergy and food safety reports' },
   { icon: Users, text: 'Complaints about a team member by name' },
   { icon: ReceiptText, text: 'Requests for money back' },
 ];
-const SAMPLE_TICKET = '4471';
+const SAMPLE_TICKET = '5105';
 
 type StoreRow = { id: string; name: string; manager: string; avgReplyHours: number };
 
@@ -131,7 +131,7 @@ function SettingsForm({ initial, extra, sample, saved, onEdit, onDiscard, onSave
   };
   const thanksStores = rows.filter(x => whoAt(x.id) === 'edify-thanks');
   const differ = rows.filter(x => whoAt(x.id) !== s.district).length;
-  const fordham = storeById('fordham');
+  const irmo = storeById(PHONE_STORE);
 
   return (
     <div style={{ maxWidth: 1040, margin: '0 auto', padding: '32px clamp(20px, 4vw, 48px) 40px', display: 'flex', flexDirection: 'column', gap: 44 }}>
@@ -209,11 +209,11 @@ function SettingsForm({ initial, extra, sample, saved, onEdit, onDiscard, onSave
                 <option value="team">The store team</option>
               </StyledSelect>
             </Row>
-            <Row label="Ask for the manager's own line" help="On replies under 4 stars, Send stays off until the manager adds a line in their own words.">
+            <Row label="Ask for the manager's own line" help="On replies to complaints, Send stays off until the manager adds a line in their own words.">
               {labelId => <Switch checked={s.ownLine} onChange={v => edit({ ownLine: v })} labelledBy={labelId} />}
             </Row>
           </Rows>
-          {sample && <SamplePreview t={sample} s={s} managerFirst={fordham.managerFirst} />}
+          {sample && <SamplePreview t={sample} s={s} managerFirst={irmo.managerFirst} />}
         </div>
       </Group>
 
@@ -353,7 +353,7 @@ function SamplePreview({ t, s, managerFirst }: { t: LiveTicket; s: ReplySettings
     <aside aria-labelledby="sample-h" style={{ ...whiteCard, borderRadius: 14, padding: '16px 20px 20px', display: 'flex', flexDirection: 'column', gap: 12, position: 'sticky', top: 24 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <h3 id="sample-h" style={{ margin: 0, fontSize: T.body, fontWeight: 700 }}>Preview</h3>
-        <p style={help}>Edify&apos;s reply to {firstName(t.guest)}, {t.stars} stars at {t.store.name}.</p>
+        <p style={help}>Edify&apos;s reply to {firstName(t.guest)}, {t.reason.toLowerCase()} at {t.store.name}.</p>
       </div>
       <p style={{ ...quote, margin: 0, fontSize: T.body, lineHeight: 1.5, color: 'var(--color-text-secondary)' }}>&ldquo;{t.words}&rdquo;</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 12, borderTop: hairline, fontSize: T.body, lineHeight: 1.55 }}>

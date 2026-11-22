@@ -3,15 +3,14 @@
 import Link from 'next/link';
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowRight, Check, Clock, Heart, Pencil } from 'lucide-react';
-import { HUDDLE_TIME, storeById } from '@/components/Feedback/bronxData';
+import { DEMO_NOW, fmtLongDay, HUDDLE_TIME, PHONE_STORE, storeById } from '@/components/Feedback/dunkinData';
 import { huddleNotes, signOff, storeMorning, useFeedback } from '@/components/Feedback/feedbackState';
-import type { StoreId } from '@/components/Feedback/model';
 
-const STORE: StoreId = 'fordham';
+const STORE = PHONE_STORE;
 const rule = '1px solid rgba(255,255,255,0.18)';
 const soft = 'rgba(255,255,255,0.82)';
 
-/** Screen 3. Marcus at 9 AM: what came in, what Edify has ready, and what needs him. */
+/** Marcus at the end of Saturday: what came in, what Edify has ready, and what needs him. */
 export default function MorningBriefPage() {
   const { tickets, ripples, settings, sendThankYous } = useFeedback();
   const store = storeById(STORE);
@@ -40,8 +39,8 @@ export default function MorningBriefPage() {
         </div>
 
         <header>
-          <p style={{ margin: 0, fontSize: 14, color: soft }}>Friday, Nov 20 · {store.name}</p>
-          <h1 style={{ margin: '8px 0 10px', fontSize: 32, lineHeight: 1.1, fontWeight: 700 }}>Morning, {store.managerFirst}.</h1>
+          <p style={{ margin: 0, fontSize: 14, color: soft }}>{fmtLongDay(DEMO_NOW)} · {store.name}</p>
+          <h1 style={{ margin: '8px 0 10px', fontSize: 32, lineHeight: 1.1, fontWeight: 700 }}>Evening, {store.managerFirst}.</h1>
           <p style={{ margin: 0, fontSize: 17, lineHeight: 1.45 }}>
             {m.arrived.length} guests wrote in. {m.thanksReady.length + m.words.length > 0 ? "Here's what needs you." : "You're clear for now."}
           </p>
@@ -59,7 +58,7 @@ export default function MorningBriefPage() {
               icon={m.thanksReady.length ? <Heart size={20} aria-hidden /> : <Check size={20} aria-hidden />}
               tone="blue"
               title={m.thanksReady.length ? `${m.thanksReady.length} thank-yous ready` : `${m.thankYous.length} thank-yous sent`}
-              sub={m.thanksReady.length ? 'Five stars, no comment' : m.thanksByEdify.length ? `Edify sent them. ${store.name} sends thank-yous automatically.` : `Signed ${signOff(STORE, settings)}`}
+              sub={m.thanksReady.length ? 'Compliments, no comment' : m.thanksByEdify.length ? `Edify sent them. ${store.name} sends thank-yous automatically.` : `Signed ${signOff(STORE, settings)}`}
               action={m.thanksReady.length > 0 && (
                 <button type="button" onClick={sendThanks} style={{
                   minHeight: 48, padding: '0 16px', borderRadius: 12, border: 0, background: 'var(--color-review-light)', color: 'var(--color-text-primary)',
@@ -84,9 +83,9 @@ export default function MorningBriefPage() {
           {m.held.length > 0 && heldRipple && (
             <Row
               icon={<Clock size={20} aria-hidden />}
-              tone="pink"
-              title={`${m.held.length} waiting on ${heldRipple.owner}`}
-              sub={heldRipple.kind === 'late-delivery' ? 'Open until deliveries are on time. Angela has it.' : heldRipple.ownerSentence}
+              tone="white"
+              title={`${m.held.length} waiting on a fix`}
+              sub={heldRipple.ownerSentence}
             />
           )}
         </ul>
@@ -122,10 +121,10 @@ export default function MorningBriefPage() {
 
 const srOnly: CSSProperties = { position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' };
 
-const TONE: Record<'blue' | 'yellow' | 'pink', string> = {
+const TONE: Record<'blue' | 'yellow' | 'white', string> = {
   blue: 'var(--color-review-light)',
   yellow: 'var(--color-warning-light)',
-  pink: 'var(--color-accent-pink)',
+  white: '#ffffff',
 };
 
 function Row({ icon, tone, title, sub, action, first }: { icon: ReactNode; tone: keyof typeof TONE; title: string; sub: string; action?: ReactNode; first?: boolean }) {

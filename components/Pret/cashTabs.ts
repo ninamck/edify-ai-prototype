@@ -12,11 +12,12 @@ const T = {
   history: { id: 'history', label: 'History', href: '/cash/history' },
   endOfDay: { id: 'end-of-day', label: 'End of day', href: '/cash/end-of-day' },
   deposit: { id: 'collection', label: 'Bank deposit', href: '/cash/collection' },
+  overview: { id: 'overview', label: 'All shops', href: '/cash/overview' },
   setup: { id: 'setup', label: 'Set-up', href: '/cash/setup' },
 } satisfies Record<string, AreaRouteTab>;
 
 export const CASH_TABS: Record<CashAudience, AreaRouteTab[]> = {
-  pret: [T.today, T.collection, T.paidOuts, T.change, T.activity, T.history, T.setup],
-  pub: [T.today, T.movements, T.collection, T.paidOuts, T.change, T.activity, T.statement, T.history, T.setup],
-  dunkin: [T.today, T.endOfDay, T.deposit, T.paidOuts, T.activity, T.history, T.setup],
+  pret: [T.today, T.collection, T.paidOuts, T.change, T.activity, T.history, T.overview, T.setup],
+  pub: [T.today, T.movements, T.collection, T.paidOuts, T.change, T.activity, T.statement, T.history, T.overview, T.setup],
+  dunkin: [T.today, T.history, T.overview, T.setup],
 };

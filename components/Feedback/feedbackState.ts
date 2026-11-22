@@ -2,20 +2,18 @@
 
 import { useCallback, useMemo } from 'react';
 import { usePretState } from '@/components/Pret/pretStore';
-import { DEMO_NOW, DEFAULT_SETTINGS, RIPPLE_HUDDLE_LINE, RIPPLES, storeById, TEAM_NAMES, TICKETS } from './bronxData';
+import { DEMO_NOW, DEFAULT_SETTINGS, RIPPLE_HUDDLE_LINE, RIPPLES, storeById, TEAM_NAMES, TICKETS } from './dunkinData';
+import { isComplaint } from './model';
 import type { InStoreFix, ReplySettings, ResolveChoice, Ripple, RippleState, RippleStatus, Store, StoreId, Ticket, TicketState } from './model';
 
 export type LiveTicket = Ticket & TicketState & { store: Store; ripple?: Ripple };
 
-export type LiveRipple = Omit<Ripple, 'status' | 'done'> & {
+export type LiveRipple = Omit<Ripple, 'status'> & {
   status: RippleStatus;
-  done?: string;
   told?: boolean;
   tickets: LiveTicket[];
   /** Tickets not yet resolved. */
   open: LiveTicket[];
-  /** The one number the ripple leads with. */
-  number: number;
 };
 
 const NO_TICKET_CHANGES: Record<string, Partial<TicketState>> = {};
@@ -25,27 +23,28 @@ const NO_RIPPLE_CHANGES: Record<string, RippleState> = {};
 
 export const firstName = (guest: string) => guest.split(' ')[0];
 
-export const isThankYou = (t: Ticket) => t.stars === 5 && !t.words;
+/** A compliment with no comment. */
+export const isThankYou = (t: Ticket) => t.reason === 'Compliment' && !t.words;
 
-/** Open, unanswered and with words to answer. */
-export const needsReply = (t: LiveTicket) => t.status === 'open' && !t.reply && !!t.words;
+/** Open, unanswered and with words to answer. FYI-only feedback is for the store to see, not to answer. */
+export const needsReply = (t: LiveTicket) => t.status === 'open' && !t.reply && !!t.words && !t.fyiOnly;
 
-/** A low rating with no comment, waiting on its ripple's fix rather than a reply. */
-export const isHeldForFix = (t: LiveTicket) => t.status === 'open' && !t.words && t.stars < 5 && !!t.rippleId;
+/** A complaint with no comment, waiting on its ripple's fix rather than a reply. */
+export const isHeldForFix = (t: LiveTicket) => t.status === 'open' && !t.words && isComplaint(t.reason) && !!t.rippleId;
 
 /** Allergy, food safety, a named team member and refunds are never drafted. */
 export const canDraft = (t: Ticket) => !t.flag;
 
 export const isSafety = (t: Ticket) => t.flag === 'allergy' || t.flag === 'food-safety';
 
-export const ownLineRequired = (t: Ticket, s: ReplySettings) => s.ownLine && t.stars < 4 && canDraft(t);
+export const ownLineRequired = (t: Ticket, s: ReplySettings) => s.ownLine && isComplaint(t.reason) && canDraft(t);
 
 export function signOff(storeId: StoreId, s: ReplySettings): string {
   const store = storeById(storeId);
   return s.signAs === 'manager' ? `${store.managerFirst}, Dunkin ${store.name}` : `The Dunkin ${store.name} team`;
 }
 
-export const thankYouText = (t: Ticket, s: ReplySettings) => `Thanks for the five stars, ${firstName(t.guest)}. See you soon.\n\n${signOff(t.storeId, s)}`;
+export const thankYouText = (t: Ticket, s: ReplySettings) => `Thanks for the kind words, ${firstName(t.guest)}. See you soon.\n\n${signOff(t.storeId, s)}`;
 
 export function composeReply(body: string, ownLine: string | undefined, sign: string): string {
   return [body.trim(), ownLine?.trim(), sign].filter(Boolean).join('\n\n');
@@ -86,11 +85,9 @@ export function useFeedback() {
       return {
         ...r,
         status: rs.status ?? r.status,
-        done: rs.done ?? r.done,
         told: rs.told,
         tickets: own,
         open,
-        number: r.numberKind === 'open' ? open.length : own.length,
       };
     });
     const problems = out.filter(r => r.kind !== 'praise').sort((a, b) => b.tickets.length - a.tickets.length);
@@ -172,12 +169,7 @@ export function useFeedback() {
   return { tickets, ripples, settings, setSettings, sendReply, resolveNow, sendThankYous, setRipple, closeRipple, sendFollowUps };
 }
 
-export function rippleStatusText(r: Pick<LiveRipple, 'status' | 'owner'>): string {
-  if (r.status === 'decision') return 'Needs a decision';
-  if (r.status === 'with') return `With ${r.owner}`;
-  if (r.status === 'watching') return 'Fixed and watching';
-  return 'Closed';
-}
+export const rippleStatusText = (r: Pick<LiveRipple, 'status'>) => (r.status === 'open' ? 'Open' : 'Fixed');
 
 // ── Summaries ──────────────────────────────────────────────────────
 
@@ -185,22 +177,22 @@ export const ticketById = (tickets: LiveTicket[], id: string) => tickets.find(t 
 
 /** What explains the week, worked out from the tickets. */
 export function weekSummary(tickets: LiveTicket[], ripples: LiveRipple[]) {
-  const low = tickets.filter(t => t.stars <= 3);
-  const problems = ripples.filter(r => r.kind !== 'praise');
-  const top = problems.slice(0, 2).filter(r => r.tickets.length > 0);
-  const fromTop = low.filter(t => top.some(r => r.id === t.rippleId)).length;
+  const complaints = tickets.filter(t => isComplaint(t.reason));
+  const compliments = tickets.filter(t => !isComplaint(t.reason));
+  const problems = ripples.filter(r => r.kind !== 'praise' && r.tickets.length > 0);
+  const linked = complaints.filter(t => problems.some(r => r.id === t.rippleId)).length;
   const waiting = tickets.filter(needsReply).sort((a, b) => a.at - b.at);
   const repliedOpen = tickets.filter(t => t.status === 'replied');
   const resolved = tickets.filter(t => t.status === 'resolved');
-  const explains = top.length > 0 && fromTop * 2 > low.length;
+  const lead = problems[0];
+  const explains = !!lead && lead.tickets.length >= 3;
 
-  const phrases = top.map(r => r.causePhrase).join(' and ');
-  const headline = explains ? top[0].headline : `${low.length} low ratings this week, with no single cause.`;
+  const headline = explains ? lead.headline : `${complaints.length} complaints this week, with no single cause.`;
   const sub = explains
-    ? `${fromTop} of ${low.length} low ratings across your stores trace back to ${phrases}.${top.every(r => r.offFloor) ? ` ${top.length === 2 ? 'Neither started' : 'It didn\'t start'} on the floor.` : ''}`
-    : `Edify links a ticket to a cause only when the store's data shows one.`;
+    ? `${linked} of ${complaints.length} complaints trace back to ${problems.length === 1 ? 'one cause' : `${problems.length} causes`} in your stores' data. The rest are one-offs.`
+    : `Edify links a complaint to a cause only when the store's data shows one.`;
 
-  return { low, top, fromTop, waiting, repliedOpen, resolved, headline, sub, oldest: waiting[0] };
+  return { complaints, compliments, top: problems, linked, waiting, repliedOpen, resolved, headline, sub, oldest: waiting[0] };
 }
 
 /** One store manager's morning: what came in since the last close, and what is left. */
@@ -228,7 +220,7 @@ export function huddleNotes(storeId: StoreId, tickets: LiveTicket[], ripples: Li
     if (line) notes.push(line);
   }
   for (const person of TEAM_NAMES[storeId] ?? []) {
-    const n = tickets.filter(t => t.storeId === storeId && t.stars === 5 && t.words && new RegExp(`\\b${person}\\b`, 'i').test(t.words)).length;
+    const n = tickets.filter(t => t.storeId === storeId && t.reason === 'Compliment' && t.words && new RegExp(`\\b${person}\\b`, 'i').test(t.words)).length;
     if (n >= 2) notes.push(`${person}, thank you. ${n} guests named her.`);
   }
   return notes.slice(0, 3);

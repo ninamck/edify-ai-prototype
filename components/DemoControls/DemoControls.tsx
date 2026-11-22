@@ -27,6 +27,7 @@ import {
   type DemoVersion,
 } from './demoStore';
 import { CASH_AUDIENCE_LABEL, useCashAudience, type CashAudience } from '@/components/Pret/cashOperators';
+import { resetPretWalkthrough } from '@/components/Pret/pretStore';
 
 const USER_ORDER: ActingUserId[] = ['u-manager', 'u-sam', 'u-jordan', 'u-reese'];
 
@@ -242,7 +243,7 @@ function PanelBody({ extraSection }: { extraSection?: ReactNode }) {
           <button type="button" onClick={() => router.push('/feedback')} style={pillOptionStyle(false)}>Angela, district</button>
           <button type="button" onClick={() => router.push('/feedback/today')} style={pillOptionStyle(false)}>Marcus&apos;s phone</button>
         </div>
-        <div style={hintStyle}>Always the Dunkin Bronx story. Phone screens open full width on a phone.</div>
+        <div style={hintStyle}>Kyle&apos;s stores and his ten real complaints. Marcus runs Irmo #358804. Phone screens open full width on a phone.</div>
       </div>
 
       {isBrandSwitchable && (
@@ -509,6 +510,7 @@ const hintStyle: CSSProperties = {
 
 function CashAudienceSection() {
   const [audience, setAudience] = useCashAudience();
+  const [cleared, setCleared] = useState(false);
   return (
     <div>
       <div style={sectionLabelStyle}>Cash features</div>
@@ -519,9 +521,20 @@ function CashAudienceSection() {
           </button>
         ))}
       </div>
+      <button
+        type="button"
+        onClick={() => {
+          resetPretWalkthrough();
+          setCleared(true);
+        }}
+        style={{ ...pillOptionStyle(false), width: '100%', marginTop: 6 }}
+      >
+        {cleared ? 'Walkthrough reset' : 'Reset walkthrough'}
+      </button>
       <div style={hintStyle}>
         Pub adds the Anglian Country Inns features, such as cash in and out, bank runs and the statement of trade. Dunkin is
-        Kyle&apos;s set-up: one end of day screen and bank deposits with a slip photo.
+        Kyle&apos;s set-up: one end of day screen and bank deposits with a slip photo. Reset clears every close, deposit, reply
+        and ripple entered during the session, and keeps the set-up you picked.
       </div>
     </div>
   );

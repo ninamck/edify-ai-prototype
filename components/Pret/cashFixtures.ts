@@ -36,10 +36,22 @@ export const TO_GBP: Record<Tender, number> = { GBP: 1, EUR: 0.86, USD: 0.79, VO
 
 export const round2 = (v: number) => Math.round(v * 100) / 100;
 
+/** The demo's figures are sterling; the Dunkin set-up shows the same numbers in dollars. */
+export type HomeCurrency = 'GBP' | 'USD';
+let home: HomeCurrency = 'GBP';
+
+/** Set while rendering, by the screens that know the cash set-up, before any amounts render. */
+export function setHomeCurrency(c: HomeCurrency) {
+  home = c;
+}
+
+export const homeCurrency = () => home;
+
 export function money(value: number, tender: Tender = 'GBP'): string {
   const v = round2(value);
   const body = Math.abs(v).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `${v < 0 ? '−' : ''}${SYMBOL[tender]}${body}`;
+  const symbol = tender === 'GBP' || tender === 'VOUCHER' ? SYMBOL[home] : SYMBOL[tender];
+  return `${v < 0 ? '−' : ''}${symbol}${body}`;
 }
 
 export function signedMoney(value: number, tender: Tender = 'GBP'): string {
@@ -410,6 +422,27 @@ export function tillPaidOuts(shop: CashShop, day: number, opts: { till?: string;
 
 export const eventsTotal = (events: TillEvent[]) => round2(events.reduce((s, e) => s + e.value, 0));
 
+/** Cash put in the drawer that wasn't a sale. Only the Dunkin set-up uses these, so they sit outside tillEvents. */
+export type PaidIn = { id: string; till: string; day: number; minute: number; value: number; reason: string; login: string };
+
+const PAID_IN_REASONS = ['Catering order paid in cash', 'Change back from a paid out'];
+
+export function tillPaidIns(shop: CashShop, day: number, opts: { upTo?: number } = {}): PaidIn[] {
+  const r = rng(`${shop.siteId}|${day}|paid-ins`);
+  const open = hm(shop.open);
+  const out: PaidIn[] =
+    shop.siteId === 'fitzroy-espresso' && day === 0
+      ? [{ id: `${shop.siteId}|${day}|in1`, till: shop.tills[0], day, minute: hm('07:20'), value: 38.5, reason: PAID_IN_REASONS[0], login: shop.team[0] }]
+      : r() < 0.35
+        ? [{
+          id: `${shop.siteId}|${day}|in1`, till: shop.tills[Math.floor(r() * shop.tills.length)], day,
+          minute: open + 60 + Math.floor(r() * (hm(shop.close) - open - 120)), value: round2(5 + r() * 40),
+          reason: PAID_IN_REASONS[Math.floor(r() * PAID_IN_REASONS.length)], login: shop.team[Math.floor(r() * shop.team.length)],
+        }]
+        : [];
+  return out.filter(p => opts.upTo === undefined || p.minute <= opts.upTo);
+}
+
 // ── History: closes, bags, collections, safe counts ────────────────
 
 export type BankingLine = { bagNo: string; value: number; foreign?: Partial<Record<Tender, number>> };
@@ -470,10 +503,10 @@ export function wasteForDay(shop: CashShop, day: number): number {
 }
 
 const SPECIAL_VARIANCE: Record<string, { variance: number; reason?: string }> = {
-  'fitzroy-espresso|-6': { variance: -27.4, reason: 'Till 3 short. A £20 note was likely taken as a £10. Recounted with Grace, same result.' },
+  'fitzroy-espresso|-6': { variance: -27.4, reason: 'Till 3 short. Wrong change likely given on a large note. Recounted with Grace, same result.' },
   'fitzroy-heathrow|-2': { variance: 21.6, reason: 'Euro change given in sterling at Till 4 during the morning rush.' },
   // A late cash sale that lands in the next day's till data: over one day, short the next.
-  'fitzroy-kings-cross|-5': { variance: 16.4, reason: 'A customer paid £16.40 in cash after Till 1 had closed on the till system.' },
+  'fitzroy-kings-cross|-5': { variance: 16.4, reason: 'A customer paid in cash after Till 1 had closed on the till system.' },
   'fitzroy-kings-cross|-4': { variance: -16.4, reason: "Yesterday's late cash sale came through on today's till data." },
   // Small shortfalls three days running: none needs a reason, together they're worth a look.
   'fitzroy-islington|-4': { variance: -6.2 },
@@ -591,7 +624,7 @@ export type Collection = {
 /** Islington's last deposit carries King's Cross's slip, the mix-up Kyle catches by hand. */
 const SAME_SLIP_AS: Record<string, string> = { 'fitzroy-islington': 'fitzroy-kings-cross' };
 
-function slipReference(siteId: string, day: number): string {
+export function slipReference(siteId: string, day: number): string {
   const d = dayDate(day);
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');

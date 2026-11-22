@@ -665,10 +665,10 @@ export type CashAlert = { id: string; siteId: string; rule: string; detail: stri
 
 export const ALERT_RULES = {
   noSale: 'Five or more drawer opens without a sale at one till within an hour',
-  refunds: 'Refunds over £40 at a shop in a day',
+  refunds: () => `Refunds over ${money(40).replace('.00', '')} at a shop in a day`,
   variance: 'Day variance over the reason threshold at banking',
   bags: 'Bags in the safe for three days or more',
-  streak: 'Cash short by more than £5 three days or more in a row',
+  streak: () => `Cash short by more than ${money(5).replace('.00', '')} three days or more in a row`,
 } as const;
 
 /** Smallest daily variance the pattern checks count, above day-to-day counting noise. */
@@ -721,7 +721,7 @@ export function alertsFor(
     }
     const refunds = round2(events.filter(e => e.type === 'refund').reduce((s, e) => s + e.value, 0));
     if (refunds > 40) {
-      out.push({ id: `refund-${shop.siteId}-${day}`, siteId: shop.siteId, rule: ALERT_RULES.refunds, day, severity: 'warn', detail: `${money(refunds)} refunded across ${events.filter(e => e.type === 'refund').length} refunds.` });
+      out.push({ id: `refund-${shop.siteId}-${day}`, siteId: shop.siteId, rule: ALERT_RULES.refunds(), day, severity: 'warn', detail: `${money(refunds)} refunded across ${events.filter(e => e.type === 'refund').length} refunds.` });
     }
   }
   for (const c of allCloses(shop.siteId, data.closes, now).filter(x => x.day >= -6)) {
@@ -738,7 +738,7 @@ export function alertsFor(
       if (last.day < -6) continue;
       const total = round2(run.reduce((s, c) => s + c.variance, 0));
       out.push({
-        id: `streak-${shop.siteId}-${last.day}`, siteId: shop.siteId, rule: ALERT_RULES.streak, day: last.day, severity: 'warn',
+        id: `streak-${shop.siteId}-${last.day}`, siteId: shop.siteId, rule: ALERT_RULES.streak(), day: last.day, severity: 'warn',
         detail: `Short ${run.length} days running, ${money(-total)} in all. Each day was small, so none needed a reason on its own.`,
       });
     }

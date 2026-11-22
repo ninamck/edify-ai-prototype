@@ -21,13 +21,25 @@ export const SOURCE_REPLY_NOTE: Record<Source, string> = {
   ubereats: "Goes back through Uber Eats' review replies.",
 };
 
+/** The reason Dunkin's feedback system files each comment under. */
+export type Reason =
+  | 'Receipt'
+  | 'Hours'
+  | 'Taste'
+  | 'Slow Service'
+  | 'Team Member Friendliness'
+  | 'Charges'
+  | 'Foreign Object'
+  | 'Order Accuracy'
+  | 'Product Quality'
+  | 'Compliment';
+
+export const isComplaint = (r: Reason) => r !== 'Compliment';
+
 /** The Edify module a context line came from. */
 export type Module =
   | 'Sales and POS'
   | 'Menu'
-  | 'Products and Suppliers'
-  | 'Invoices'
-  | 'Ordering and Stock'
   | 'Checklists and Compliance';
 
 export type ContextLine = {
@@ -60,17 +72,20 @@ export const FLAG_NEVER: Record<Flag, string> = {
   refund: 'refund requests',
 };
 
-export type StoreId = 'fordham' | 'tremont' | 'concourse' | 'pelham' | 'castlehill' | 'westchester';
+export type StoreId = 's301184' | 's332974' | 's340462' | 's302692' | 's302065' | 's350605' | 's358804' | 's345207';
 
 export type Store = {
   id: StoreId;
+  /** Town and store number, like "Irmo #358804". */
   name: string;
+  town: string;
+  state: 'NY' | 'SC';
   manager: string;
   managerFirst: string;
   avgReplyHours: number;
 };
 
-/** Minutes since Mon, Nov 16 at midnight. The demo week is Nov 16 to 20. */
+/** Minutes since Sun, Nov 15 at midnight. The demo week is Nov 15 to 21. */
 export type WeekMinute = number;
 
 export type Drafts = { standard: string; shorter: string; warmer: string };
@@ -84,10 +99,14 @@ export type Ticket = {
   id: string;
   storeId: StoreId;
   guest: string;
-  stars: 1 | 2 | 3 | 4 | 5;
+  reason: Reason;
   words?: string;
   at: WeekMinute;
   source: Source;
+  /** How it reached Dunkin's feedback system, like "Web / Drive-thru". */
+  origin?: string;
+  /** Logged for the store to see. Nobody replies. */
+  fyiOnly?: boolean;
   context: ContextLine[];
   rippleId?: string;
   flag?: Flag;
@@ -110,51 +129,41 @@ export type TicketState = {
   resolvedAt?: WeekMinute;
   fix?: InStoreFix;
   fixNote?: string;
-  /** Drafted when the ripple closed, waiting for a person to approve. */
+  /** Drafted when the ripple was marked fixed, waiting for a person to approve. */
   followUp?: string;
   followUpSent?: boolean;
 };
 
-export type RippleKind = 'late-delivery' | 'sold-out' | 'check-skipped' | 'recipe' | 'removed' | 'price' | 'praise';
+export type RippleKind = 'price' | 'check-skipped' | 'early-close' | 'praise';
 
-export type RippleStatus = 'decision' | 'with' | 'watching' | 'closed';
+export type RippleStatus = 'open' | 'closed';
 
+/** Guests saying the same thing, grouped, with the one line in Edify's data that explains it. */
 export type Ripple = {
   id: string;
   kind: RippleKind;
-  /** Event chip, like "Late delivery · 3 mornings". */
-  chip: string;
+  /** What guests said, as Dunkin files it. */
+  reason: Reason;
   title: string;
-  /** Where and when, in one line. A struck value shows what was replaced. */
-  detail: { struck?: string; text: string };
+  /** Praise has no cause to fix. */
+  cause?: { text: string; from: Module };
   /** The short tag on a ticket row. */
   tag: string;
   /** How the headline names this cause. */
   causePhrase: string;
   headline: string;
-  /** True when the cause started outside the store, like a delivery or a price. */
-  offFloor: boolean;
   storeIds: StoreId[];
   quoteIds: string[];
-  /** Which count the big number shows. */
-  numberKind: 'open' | 'guests';
-  numberLabel: (stores: number) => string;
-  /** One supporting number from Edify's data. */
-  support: string;
-  owner: string;
   status: RippleStatus;
-  /** Something already done, shown in light blue. */
-  done?: string;
-  /** Short sentence for the phone and the ticket, like "Angela has the bakery." */
+  /** Who fixes the cause, in one sentence, like "Marcus has the drive-thru board." */
   ownerSentence: string;
   resolveLabel: string;
   resolveHelp: (others: number, guestFirst: string) => string;
-  fixRule: string;
   followUp: (guestFirst: string, signOff: string) => string;
   action?: { label: string; done: string };
 };
 
-export type RippleState = { status?: RippleStatus; done?: string; told?: boolean };
+export type RippleState = { status?: RippleStatus; told?: boolean };
 
 export type WhoSends = 'person' | 'edify-thanks';
 

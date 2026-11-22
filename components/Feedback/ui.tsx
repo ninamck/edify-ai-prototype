@@ -3,17 +3,20 @@
 import Link from 'next/link';
 import type { CSSProperties, ReactNode } from 'react';
 import { Check, CircleDot, CornerUpLeft, Heart } from 'lucide-react';
-import { ageLabel } from './bronxData';
+import { ageLabel } from './dunkinData';
 import { SOURCE_LABEL, STATUS_LABEL, type ContextLine, type TicketStatus } from './model';
 import type { LiveTicket } from './feedbackState';
 
-/** A person speaking: guests' words and the manager's own line. */
+/** A person speaking: guests' words and the manager's own line. Same font as the rest, so it reads easily. */
 export const quote: CSSProperties = {
-  fontFamily: 'var(--font-quote), Georgia, serif',
-  fontStyle: 'italic',
+  fontFamily: 'var(--font-primary)',
+  fontStyle: 'normal',
   fontWeight: 400,
   color: 'var(--color-text-primary)',
 };
+
+/** The bar down the left of a person's words, so they stand apart from what Edify wrote. */
+export const spoken: CSSProperties = { borderLeft: '3px solid var(--color-border)', paddingLeft: 12 };
 
 export const eyebrow: CSSProperties = {
   margin: 0,
@@ -46,25 +49,10 @@ const btnBase: CSSProperties = {
 export const primaryBtn: CSSProperties = { ...btnBase, background: 'var(--color-accent-active)', color: '#ffffff', border: '1px solid var(--color-accent-active)' };
 export const secondaryBtn: CSSProperties = { ...btnBase, background: '#ffffff', color: 'var(--color-text-primary)', border: '1.5px solid var(--color-text-primary)' };
 
-export const whiteCard: CSSProperties = { background: '#ffffff', borderRadius: 16, border: '1px solid var(--color-border-subtle)' };
-
-export function Stars({ value, size = 13 }: { value: number; size?: number }) {
-  return (
-    <span role="img" aria-label={`${value} out of 5 stars`} style={{ display: 'inline-flex', gap: 1, lineHeight: 1, verticalAlign: '-1px' }}>
-      {[1, 2, 3, 4, 5].map(i => (
-        <svg key={i} width={size} height={size} viewBox="0 0 20 20" aria-hidden>
-          <path
-            d="M10 1.5l2.6 5.3 5.9.9-4.25 4.1 1 5.8L10 14.9l-5.25 2.7 1-5.8L1.5 7.7l5.9-.9z"
-            fill={i <= value ? 'var(--color-text-primary)' : 'none'}
-            stroke="var(--color-text-primary)"
-            strokeWidth={1.3}
-            strokeLinejoin="round"
-          />
-        </svg>
-      ))}
-    </span>
-  );
-}
+export const whiteCard: CSSProperties = {
+  background: '#ffffff', borderRadius: 16, border: '1px solid var(--color-border-subtle)',
+  boxShadow: '0 1px 2px rgba(10, 20, 25, 0.04), 0 4px 12px rgba(10, 20, 25, 0.04)',
+};
 
 const chipBase: CSSProperties = {
   display: 'inline-flex',
@@ -79,8 +67,8 @@ const chipBase: CSSProperties = {
   lineHeight: 1.5,
 };
 
-/** An event or cause. The pink marker is kept for the biggest problem. */
-export function CauseChip({ children, marker = 'dot' }: { children: ReactNode; marker?: 'pink' | 'dot' | 'heart' }) {
+/** An event or cause. */
+export function CauseChip({ children, marker = 'dot' }: { children: ReactNode; marker?: 'dot' | 'heart' }) {
   if (marker === 'heart') {
     return (
       <span style={{ ...chipBase, background: '#ffffff', border: '1px solid var(--color-border)' }}>
@@ -90,13 +78,7 @@ export function CauseChip({ children, marker = 'dot' }: { children: ReactNode; m
   }
   return (
     <span style={{ ...chipBase, background: 'var(--color-warning-light)', border: '1px solid var(--color-warning-border)' }}>
-      <span
-        aria-hidden
-        style={{
-          width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-          background: marker === 'pink' ? 'var(--color-accent-pink)' : 'var(--color-text-primary)',
-        }}
-      />
+      <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: 'var(--color-text-primary)' }} />
       {children}
     </span>
   );
@@ -160,28 +142,34 @@ export function ContextList({ lines, extra }: { lines: ContextLine[]; extra?: Re
   );
 }
 
+/** Where it came in: the route through Dunkin's feedback system when known, otherwise the source. */
+export const sourceLine = (t: Pick<LiveTicket, 'source' | 'origin'>) => t.origin ?? SOURCE_LABEL[t.source];
+
 export function ticketMeta(t: LiveTicket, opts: { store?: boolean } = {}) {
-  return [t.guest, `${t.stars} ${t.stars === 1 ? 'star' : 'stars'}`, SOURCE_LABEL[t.source], opts.store === false ? null : t.store.name].filter(Boolean).join(' · ');
+  return [t.guest, t.reason, sourceLine(t), opts.store === false ? null : t.store.name].filter(Boolean).join(' · ');
 }
 
+/** Shown in place of the guest's words when there are none. */
+export const noWordsLabel = (t: Pick<LiveTicket, 'reason'>) => (t.reason === 'Compliment' ? 'Compliment, no comment' : `${t.reason}, no comment`);
+
 /** One ticket as a row: wait, the guest's words, its ripple, its status and the action. */
-export function TicketRow({ t, action }: { t: LiveTicket; action?: ReactNode }) {
+export function TicketRow({ t, action, hideStatus }: { t: LiveTicket; action?: ReactNode; hideStatus?: boolean }) {
   return (
     <li
       style={{
-        display: 'grid', gridTemplateColumns: '52px minmax(0, 1fr) auto', gap: 16, alignItems: 'center', padding: '14px 18px', borderTop: hairline,
+        display: 'grid', gridTemplateColumns: '52px minmax(0, 1fr) auto', gap: 20, alignItems: 'center', padding: '18px 22px', borderTop: hairline,
       }}
     >
       <span style={{ fontSize: 14, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{t.status === 'open' ? ageLabel(t.at) : ''}</span>
-      <span style={{ minWidth: 0 }}>
-        <span style={{ ...quote, display: 'block', fontSize: 15, lineHeight: 1.4 }}>
-          {t.words ? `“${t.words}”` : <span style={{ fontFamily: 'var(--font-primary)', fontStyle: 'normal', fontSize: 14 }}>Rating only, no comment</span>}
+      <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={{ ...quote, ...(t.words ? spoken : {}), display: 'block', fontSize: 15, lineHeight: 1.5 }}>
+          {t.words ? `“${t.words}”` : noWordsLabel(t)}
         </span>
-        <span style={{ display: 'block', fontSize: 12.5, color: 'var(--color-text-secondary)', marginTop: 3 }}>{ticketMeta(t)}</span>
+        <span style={{ display: 'block', fontSize: 13, lineHeight: 1.5, color: 'var(--color-text-secondary)' }}>{ticketMeta(t)}</span>
       </span>
       <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-        {t.ripple ? <CauseChip>{t.ripple.tag}</CauseChip> : <OutlineChip>No pattern</OutlineChip>}
-        <StatusTag status={t.status} />
+        {t.ripple ? <CauseChip marker={t.ripple.kind === 'praise' ? 'heart' : 'dot'}>{t.ripple.tag}</CauseChip> : t.fyiOnly ? <OutlineChip>FYI only</OutlineChip> : null}
+        {!hideStatus && <StatusTag status={t.status} />}
         {action}
       </span>
     </li>

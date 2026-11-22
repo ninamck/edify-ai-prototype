@@ -1,3 +1,4 @@
+import { usePretState } from './pretStore';
 import type { CashAudience } from './cashOperators';
 
 /**
@@ -14,7 +15,7 @@ export const SETUP_ORDER: CashAudience[] = ['pret', 'pub', 'dunkin'];
 export const SETUP: Record<CashAudience, { name: string; who: string; summary: string }> = {
   pret: { name: 'Pret', who: 'Pret', summary: 'Shared tills, counts through the day, a collector picks up sealed bags.' },
   pub: { name: 'Pub', who: 'Larry, Anglian Country Inns', summary: 'Every payment type declared, open tabs, a safe ledger and an accounts file.' },
-  dunkin: { name: 'Dunkin', who: 'Kyle, Dunkin franchisee', summary: 'One end-of-day screen. The manager takes the cash to the bank.' },
+  dunkin: { name: 'Dunkin', who: 'Kyle, Dunkin franchisee', summary: 'Three steps to close: paid outs, count, slip. The manager takes the cash to the bank.' },
 };
 
 export const BACKBONE = [
@@ -81,8 +82,8 @@ export const STAGES: Stage[] = [
     description: 'What the manager does before the day is done.',
     steps: [
       {
-        id: 'close-style', kind: 'choice', label: 'How the day closes', help: 'Step by step counts each till, then banks. One screen does the count, the difference and the deposit together.',
-        options: ['Step by step', 'One screen'], value: { pret: 'Step by step', pub: 'Step by step', dunkin: 'One screen' }, pretRef: 'CAS-013',
+        id: 'close-style', kind: 'choice', label: 'How the day closes', help: 'Step by step counts each till, then banks. Three steps is paid outs, the count and the bank slip, for one manager closing alone.',
+        options: ['Step by step', 'Three steps'], value: { pret: 'Step by step', pub: 'Step by step', dunkin: 'Three steps' }, pretRef: 'CAS-013',
       },
       { id: 'declarations', kind: 'switch', label: 'Declare every payment type', help: 'Cash, card, vouchers and others each get an expected and declared figure. Card fills itself in.', use: on('pret', 'pub'), pretRef: 'CAS-006' },
       { id: 'charity', kind: 'switch', label: 'Charity banking', help: 'Charity cash banked and reported on its own.', use: on('pret'), pretRef: 'CAS-009' },
@@ -139,4 +140,35 @@ export const ALL_STEPS = STAGES.flatMap(s => s.steps);
 export function stepsOn(a: CashAudience) {
   const switches = ALL_STEPS.filter((s): s is SwitchStep => s.kind === 'switch');
   return { on: switches.filter(s => s.use[a] === 'on').length, ask: switches.filter(s => s.use[a] === 'ask').length, total: switches.length };
+}
+
+const NO_OVERRIDES: Partial<Record<CashAudience, Record<string, string>>> = {};
+
+/** A step's value for a set-up, with any change made on the Set-up page. */
+export function useSetupValue(a: CashAudience, stepId: string): string {
+  const [overrides] = usePretState('cash-setup-overrides', NO_OVERRIDES);
+  const step = ALL_STEPS.find(s => s.id === stepId);
+  if (!step) return 'off';
+  return overrides[a]?.[stepId] ?? (step.kind === 'switch' ? step.use[a] : step.value[a]);
+}
+
+/** Where each shop banks, and whether its branch needs a deposit bag. Dunkin only: the manager takes the cash. */
+export type ShopBanking = { bank: string; bagNeeded: boolean };
+
+export const SHOP_BANKING: Record<string, ShopBanking> = {
+  'fitzroy-espresso': { bank: 'Chase, Fordham Rd', bagNeeded: false },
+  'fitzroy-kings-cross': { bank: 'TD Bank, Central Park Ave', bagNeeded: false },
+  'fitzroy-heathrow': { bank: 'Chase, Mamaroneck Ave', bagNeeded: false },
+  'fitzroy-gatwick': { bank: 'Wells Fargo, Woodruff Rd', bagNeeded: true },
+  'fitzroy-islington': { bank: 'Bank of America, Lake Murray Blvd', bagNeeded: true },
+};
+
+const NO_BANKING_CHANGES: Record<string, Partial<ShopBanking>> = {};
+
+/** Each shop's bank and bag rule, with any changes made in Set-up. */
+export function useShopBanking() {
+  const [changes, setChanges] = usePretState('cash-shop-banking', NO_BANKING_CHANGES);
+  const bankingFor = (siteId: string): ShopBanking => ({ ...(SHOP_BANKING[siteId] ?? { bank: '', bagNeeded: false }), ...changes[siteId] });
+  const setBanking = (siteId: string, p: Partial<ShopBanking>) => setChanges(prev => ({ ...prev, [siteId]: { ...prev[siteId], ...p } }));
+  return { bankingFor, setBanking };
 }

@@ -105,7 +105,7 @@ export function AccountsExport({
                   <strong>{d.shop.name}</strong>, {dayPhrase(d.close.day, now)}: cash {signedMoney(d.close.variance)}
                   {d.close.varianceReason ? <span style={ui.muted}>. {d.close.varianceReason}</span> : <span style={ui.muted}>. No reason given</span>}
                 </span>
-                <Link href={`/support-centre/cash?shop=${d.shop.siteId}&day=${d.close.day}#day-h`} style={{ color: 'var(--color-accent-active)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                <Link href={`/cash/overview?shop=${d.shop.siteId}&day=${d.close.day}#day-h`} style={{ color: 'var(--color-accent-active)', fontWeight: 700, whiteSpace: 'nowrap' }}>
                   View day
                 </Link>
               </li>
@@ -185,7 +185,7 @@ export function AccountsExport({
       {rows.length === 0 ? (
         <p style={ui.muted}>No days closed in this period.</p>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto' }} tabIndex={0} role="region" aria-label="Export preview, scrolls sideways">
           <table style={ui.table}>
             <caption style={{ ...ui.fieldLabel, textAlign: 'left', paddingBottom: 6 }}>
               Preview, {preview.length} of {rows.length} lines, {dayLabel(lo, now)} to {dayPhrase(hi, now)}

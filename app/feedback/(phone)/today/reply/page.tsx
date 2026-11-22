@@ -5,13 +5,13 @@ import { useCallback, useId, useRef, useState, type CSSProperties } from 'react'
 import { ArrowLeft, Clock, Mic, Send, Square } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
 import { Sheet } from '@/components/Receiving/capture/ui';
-import { hoursWaiting } from '@/components/Feedback/bronxData';
+import { ageLabel, PHONE_STORE } from '@/components/Feedback/dunkinData';
 import { firstName, storeMorning, useFeedback, type LiveRipple, type LiveTicket } from '@/components/Feedback/feedbackState';
-import { FLAG_NEVER, IN_STORE_FIX_LABEL, SOURCE_LABEL, SOURCE_REPLY_NOTE, type InStoreFix, type ResolveChoice, type StoreId } from '@/components/Feedback/model';
-import { quote } from '@/components/Feedback/ui';
+import { FLAG_NEVER, IN_STORE_FIX_LABEL, SOURCE_REPLY_NOTE, type InStoreFix, type ResolveChoice } from '@/components/Feedback/model';
+import { quote, sourceLine, spoken } from '@/components/Feedback/ui';
 import { useReplyDraft, useVoiceLine } from '@/components/Feedback/useReplyDraft';
 
-const STORE: StoreId = 'fordham';
+const STORE = PHONE_STORE;
 const srOnly: CSSProperties = { position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' };
 const label: CSSProperties = { margin: 0, fontSize: 12.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' };
 
@@ -42,7 +42,6 @@ export default function PhoneReplyPage() {
             position={position}
             total={total}
             ripple={fb.ripples.find(r => r.id === current.rippleId && r.kind !== 'praise')}
-            biggest={fb.ripples.find(r => r.kind !== 'praise' && r.status !== 'closed')?.id === current.rippleId}
             onSkip={() => {
               setSkipped(s => [...s, current.id]);
               setAnnounce(`Skipped ${firstName(current.guest)}. It stays on the list.`);
@@ -72,7 +71,7 @@ function Done({ sent, skipped }: { sent: number; skipped: number }) {
           : 'Each ticket stays open until its cause is fixed. Edify drafts the follow-ups for you to approve.'}
       </p>
       <Link href="/feedback/today" style={{ ...bigBtn, background: 'var(--color-text-primary)', color: '#ffffff', textDecoration: 'none', marginTop: 8 }}>
-        Back to your morning
+        Back to today
       </Link>
     </div>
   );
@@ -85,8 +84,8 @@ const bigBtn: CSSProperties = {
 
 const initials = (name: string) => name.split(/\s+/).map(p => p[0]).join('').replace(/[^A-Z]/gi, '').slice(0, 2).toUpperCase();
 
-function Reply({ t, fb, position, total, ripple, biggest, onSkip, onSent }: {
-  t: LiveTicket; fb: Feedback; position: number; total: number; ripple?: LiveRipple; biggest: boolean; onSkip: () => void; onSent: () => void;
+function Reply({ t, fb, position, total, ripple, onSkip, onSent }: {
+  t: LiveTicket; fb: Feedback; position: number; total: number; ripple?: LiveRipple; onSkip: () => void; onSent: () => void;
 }) {
   const ids = useId();
   const d = useReplyDraft(t, fb.settings, 'shorter');
@@ -116,12 +115,12 @@ function Reply({ t, fb, position, total, ripple, biggest, onSkip, onSent }: {
     reply: 'Resolves when you send',
     'in-store': d.fix ? `Resolves as fixed in store: ${IN_STORE_FIX_LABEL[d.fix].toLowerCase()}` : 'Fixed in store. Pick what you did.',
   };
-  const why = d.missingLine ? 'Add your line to send. Under 4 stars, a line of your own goes in every reply.' : d.missingFix ? 'Pick what you did in store.' : '';
+  const why = d.missingLine ? 'Add your line to send. Every reply to a complaint gets a line of your own.' : d.missingFix ? 'Pick what you did in store.' : '';
 
   return (
     <>
       <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr 56px', alignItems: 'center', marginBottom: 14 }}>
-        <Link href="/feedback/today" aria-label="Back to your morning" style={{
+        <Link href="/feedback/today" aria-label="Back to today" style={{
           width: 52, height: 52, borderRadius: '50%', border: '1.5px solid var(--color-text-primary)', display: 'grid', placeItems: 'center', color: 'var(--color-text-primary)',
         }}>
           <ArrowLeft size={22} aria-hidden />
@@ -148,17 +147,17 @@ function Reply({ t, fb, position, total, ripple, biggest, onSkip, onSent }: {
           </span>
           <span style={{ flex: 1, minWidth: 0 }}>
             <h1 id={`${ids}-who`} style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{t.guest}</h1>
-            <span style={{ fontSize: 13.5, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{t.stars} {t.stars === 1 ? 'star' : 'stars'} · {hoursWaiting(t.at)}h ago</span>
+            <span style={{ fontSize: 13.5, color: 'var(--color-text-secondary)' }}>{t.reason} · {ageLabel(t.at)} ago</span>
           </span>
-          <span style={{ padding: '3px 10px', borderRadius: 999, border: '1.5px solid var(--color-text-primary)', fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap' }}>{SOURCE_LABEL[t.source]}</span>
+          <span style={{ padding: '3px 10px', borderRadius: 999, border: '1.5px solid var(--color-text-primary)', fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap' }}>{sourceLine(t)}</span>
         </div>
 
-        <blockquote style={{ ...quote, margin: 0, fontSize: 20, lineHeight: 1.35 }}>&ldquo;{t.words}&rdquo;</blockquote>
+        <blockquote style={{ ...quote, ...spoken, margin: 0, fontSize: 18, fontWeight: 500, lineHeight: 1.45 }}>&ldquo;{t.words}&rdquo;</blockquote>
 
         {t.phoneLine && (
           <div style={{ padding: '12px 14px', borderRadius: 14, background: 'var(--color-warning-light)', border: '1px solid var(--color-warning-border)' }}>
             <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700 }}>
-              <span aria-hidden style={{ width: 9, height: 9, transform: 'rotate(45deg)', flexShrink: 0, background: biggest ? 'var(--color-accent-pink)' : 'var(--color-text-primary)' }} />
+              <span aria-hidden style={{ width: 9, height: 9, transform: 'rotate(45deg)', flexShrink: 0, background: 'var(--color-text-primary)' }} />
               {t.phoneLine}
             </p>
             <p style={{ margin: '3px 0 0', fontSize: 13.5, lineHeight: 1.45 }}>

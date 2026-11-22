@@ -12,7 +12,10 @@ import { PAID_OUT_FOR } from './cashOperators';
  * can do it any time: nothing locks once the day is closed or banked.
  */
 
-export type PaidOutNote = { category: string; note?: string; receipt: boolean; by: string; when: string };
+export type PaidOutEntry = { category: string; note?: string; receipt: boolean; by: string; when: string };
+
+/** The current explanation, with every earlier version kept, oldest first, so accounts can see what changed after the books were done. */
+export type PaidOutNote = PaidOutEntry & { history?: PaidOutEntry[] };
 
 export const usePaidOutNotes = () => usePretState<Record<string, PaidOutNote>>('cash-paid-out-notes', {});
 

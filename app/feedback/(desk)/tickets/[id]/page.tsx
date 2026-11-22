@@ -5,21 +5,20 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Clock, Mic, Send, Square } from 'lucide-react';
 import EdifyMark from '@/components/EdifyMark/EdifyMark';
-import DeliveryChart from '@/components/Feedback/DeliveryChart';
-import { ageLabel, fmtDay, fmtTime } from '@/components/Feedback/bronxData';
+import { ageLabel, DISTRICT, fmtDay, fmtTime } from '@/components/Feedback/dunkinData';
 import {
   firstName, isHeldForFix, isThankYou, needsReply, ticketById, useFeedback, type LiveRipple, type LiveTicket,
 } from '@/components/Feedback/feedbackState';
 import {
-  FLAG_LABEL, FLAG_NEVER, IN_STORE_FIX_LABEL, SOURCE_LABEL, SOURCE_REPLY_NOTE, type InStoreFix, type RippleKind,
+  FLAG_LABEL, FLAG_NEVER, IN_STORE_FIX_LABEL, SOURCE_REPLY_NOTE, type InStoreFix, type RippleKind,
 } from '@/components/Feedback/model';
-import { ContextList, Stars, StatusTag, hairline, primaryBtn, quote, secondaryBtn, whiteCard } from '@/components/Feedback/ui';
+import { ContextList, StatusTag, hairline, noWordsLabel, sourceLine, primaryBtn, quote, secondaryBtn, spoken, whiteCard } from '@/components/Feedback/ui';
 import { useReplyDraft, useVoiceLine } from '@/components/Feedback/useReplyDraft';
 
 const KIND_NOUN: Partial<Record<RippleKind, string>> = {
-  'late-delivery': 'late-delivery',
   price: 'price',
   'check-skipped': 'missing-item',
+  'early-close': 'early-close',
 };
 
 const sectionLabel: CSSProperties = {
@@ -48,7 +47,7 @@ export default function TicketPage() {
     return (
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '48px 24px' }}>
         <h1 style={{ fontSize: 20, margin: '0 0 12px' }}>No ticket {id}</h1>
-        <p style={{ margin: '0 0 20px' }}>It isn&apos;t in the Bronx district this week.</p>
+        <p style={{ margin: '0 0 20px' }}>It isn&apos;t in this week&apos;s feedback.</p>
         <Link href="/feedback/tickets" style={secondaryBtn}>All tickets</Link>
       </div>
     );
@@ -61,7 +60,7 @@ function TicketView({ t, fb }: { t: LiveTicket; fb: Feedback }) {
   const ripple = t.ripple && t.ripple.kind !== 'praise' ? fb.ripples.find(r => r.id === t.rippleId) : undefined;
   const [announce, setAnnounce] = useState('');
   const first = firstName(t.guest);
-  const composing = t.status === 'open' && !t.reply && (!!t.words || isThankYou(t));
+  const composing = t.status === 'open' && !t.reply && !t.fyiOnly && (!!t.words || isThankYou(t));
   const noun = ripple ? KIND_NOUN[ripple.kind] ?? 'same-cause' : '';
 
   const resolve = (
@@ -112,7 +111,7 @@ function TicketView({ t, fb }: { t: LiveTicket; fb: Feedback }) {
       <header style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '4px 24px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0 16px' }}>
           <Link href="/feedback" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 44, fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)', textDecoration: 'none' }}>
-            <ArrowLeft size={16} aria-hidden /> Bronx district
+            <ArrowLeft size={16} aria-hidden /> {DISTRICT.short}
           </Link>
           <h1 style={{ margin: 0, fontSize: 14, fontWeight: 400, color: 'var(--color-text-secondary)' }}>
             Ticket {t.id} · {t.store.name}
@@ -149,22 +148,22 @@ function TicketView({ t, fb }: { t: LiveTicket; fb: Feedback }) {
             <p style={{ margin: 0, fontSize: 14, color: 'var(--color-text-secondary)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
               <strong style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>{t.guest}</strong>
               <span aria-hidden>·</span>
-              <Stars value={t.stars} />
-              <span>{t.stars} {t.stars === 1 ? 'star' : 'stars'}</span>
+              <span>{t.reason}</span>
               <span aria-hidden>·</span>
-              <span>{SOURCE_LABEL[t.source]}</span>
+              <span>{sourceLine(t)}</span>
               <span aria-hidden>·</span>
               <span>{fmtDay(t.at)}, {fmtTime(t.at)}</span>
             </p>
             {t.words ? (
-              <blockquote style={{ ...quote, margin: 0, fontSize: 'clamp(22px, 2.4vw, 28px)', lineHeight: 1.35, textWrap: 'balance' }}>
+              <blockquote style={{ ...quote, ...spoken, borderLeftWidth: 4, paddingLeft: 18, margin: 0, fontSize: 'clamp(20px, 2.2vw, 24px)', fontWeight: 500, lineHeight: 1.45, textWrap: 'balance' }}>
                 &ldquo;{t.words}&rdquo;
               </blockquote>
             ) : (
               <p style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>
-                {t.stars} {t.stars === 1 ? 'star' : 'stars'}, no comment.
+                {noWordsLabel(t)}.
               </p>
             )}
+            {t.fyiOnly && <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>FYI only. Logged for the store to see, so nobody replies.</p>}
             {t.flag && (
               <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{FLAG_LABEL[t.flag]}. Edify doesn&apos;t draft replies to {FLAG_NEVER[t.flag]}.</p>
             )}
@@ -192,7 +191,7 @@ function TicketView({ t, fb }: { t: LiveTicket; fb: Feedback }) {
               extra={ripple ? undefined : <span>No pattern. Nothing else in Edify&apos;s data links this to a cause.</span>}
             />
           </section>
-          {ripple && <RipplePanel r={ripple} noun={noun} storeName={t.store.name} />}
+          {ripple && <RipplePanel r={ripple} noun={noun} />}
         </aside>
       </div>
     </div>
@@ -211,7 +210,7 @@ function Composer({ t, d, ripple, after, settingsLabel, resolve, onSend }: {
   const [showResolve, setShowResolve] = useState(false);
   const resolveOpen = showResolve || d.missingFix;
   const why = d.missingLine
-    ? 'Add your line first. Reply settings ask for one on ratings under 4 stars.'
+    ? 'Add your line first. Reply settings ask for one on every complaint.'
     : d.missingFix
       ? 'Pick what you did in store.'
       : !d.body.trim()
@@ -230,7 +229,7 @@ function Composer({ t, d, ripple, after, settingsLabel, resolve, onSend }: {
           <p style={{ ...muted, display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
             {d.drafted
               ? <><EdifyMark size={14} color="var(--color-accent-pink)" /> Edify drafted this. Change anything.</>
-              : <>Write this one yourself. It&apos;s on Angela Ruiz&apos;s district page too.</>}
+              : <>Write this one yourself. It&apos;s on {DISTRICT.manager}&apos;s page too.</>}
           </p>
         </div>
         {d.drafted && t.drafts && (
@@ -272,7 +271,7 @@ function Composer({ t, d, ripple, after, settingsLabel, resolve, onSend }: {
               <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <label htmlFor={`${ids}-line`} style={{ fontSize: 12.5, fontWeight: 700 }}>
                   Your line{d.fromVoice ? ', from voice' : ''}
-                  {d.needLine && <span style={{ fontWeight: 400 }}> · needed under 4 stars</span>}
+                  {d.needLine && <span style={{ fontWeight: 400 }}> · needed on complaints</span>}
                 </label>
                 <textarea
                   id={`${ids}-line`}
@@ -355,19 +354,19 @@ function ReplyText({ t }: { t: LiveTicket }) {
   return (
     <div style={{ padding: '18px 20px', borderRadius: 16, background: '#ffffff', border: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: 12 }}>
       {t.reply!.split('\n\n').map(p => (
-        <p key={p} style={p === t.ownLine ? { ...quote, margin: 0, fontSize: 16, lineHeight: 1.5 } : { margin: 0, fontSize: 14.5, lineHeight: 1.6 }}>{p}</p>
+        <p key={p} style={p === t.ownLine ? { ...quote, ...spoken, margin: 0, fontSize: 15, fontWeight: 500, lineHeight: 1.6 } : { margin: 0, fontSize: 14.5, lineHeight: 1.6 }}>{p}</p>
       ))}
     </div>
   );
 }
 
 function FollowUp({ t, onSend }: { t: LiveTicket; onSend: () => void }) {
-  if (t.followUpSent) return <p style={{ margin: 0, fontSize: 14 }}>Follow-up sent to {firstName(t.guest)} when the ripple closed.</p>;
+  if (t.followUpSent) return <p style={{ margin: 0, fontSize: 14 }}>Follow-up sent to {firstName(t.guest)} when the ripple was fixed.</p>;
   if (!t.followUp) return null;
   return (
     <div style={{ borderTop: hairline, paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <h3 style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <EdifyMark size={16} color="var(--color-accent-pink)" />Follow-up, drafted when the ripple closed
+        <EdifyMark size={16} color="var(--color-accent-pink)" />Follow-up, drafted when the ripple was marked fixed
       </h3>
       <div style={{ padding: '16px 18px', borderRadius: 14, background: '#ffffff', border: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {t.followUp.split('\n\n').map(p => <p key={p} style={{ margin: 0, fontSize: 14, lineHeight: 1.6 }}>{p}</p>)}
@@ -391,7 +390,7 @@ function SentReply({ t, onSendFollowUp }: { t: LiveTicket; onSendFollowUp: () =>
         <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>{by}</span>
       </div>
       <ReplyText t={t} />
-      {t.ownLineFromVoice && <p style={{ margin: 0, fontSize: 12.5, color: 'var(--color-text-secondary)' }}>The italic line came from voice.</p>}
+      {t.ownLineFromVoice && <p style={{ margin: 0, fontSize: 12.5, color: 'var(--color-text-secondary)' }}>The line marked on the left came from voice.</p>}
       <FollowUp t={t} onSend={onSendFollowUp} />
     </section>
   );
@@ -402,7 +401,7 @@ function HeldTicket({ t, onSendFollowUp }: { t: LiveTicket; onSendFollowUp: () =
     <section aria-labelledby="held" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <h2 id="held" style={heading}>Nothing to reply to yet</h2>
       <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55 }}>
-        {firstName(t.guest)} left a rating without a comment. Edify linked it to the ripple through the order time. It stays open until the ripple closes, then Edify drafts a follow-up for you to approve.
+        {firstName(t.guest)} picked a reason without leaving a comment. Edify linked it to the ripple through the order time. It stays open until the ripple is marked fixed, then Edify drafts a follow-up for you to approve.
       </p>
       <FollowUp t={t} onSend={onSendFollowUp} />
     </section>
@@ -523,29 +522,17 @@ function Resolve({ t, ripple, d, composing, onResolveNow }: {
   );
 }
 
-function RipplePanel({ r, noun, storeName }: { r: LiveRipple; noun: string; storeName: string }) {
+function RipplePanel({ r, noun }: { r: LiveRipple; noun: string }) {
   const waiting = r.open.length;
-  const title = r.kind === 'late-delivery' ? `Bakery delivery, ${storeName}` : r.title;
-  const note = r.kind === 'late-delivery'
-    ? `Angela sent the bakery these times on Thursday. ${waiting} ${waiting === 1 ? 'guest is' : 'guests are'} waiting on the fix.`
-    : `${r.ownerSentence} ${waiting} ${waiting === 1 ? 'guest is' : 'guests are'} waiting on the fix.`;
   return (
-    <section aria-labelledby="ripple-mini" style={{ ...whiteCard, padding: '18px 22px 8px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <section aria-labelledby="ripple-mini" style={{ ...whiteCard, padding: '18px 22px 8px', display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <p style={asideLabel}>The ripple</p>
-        <h2 id="ripple-mini" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{title}</h2>
+        <h2 id="ripple-mini" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{r.title}</h2>
         <p style={muted}>One of {r.tickets.length} tickets in the {noun} ripple.</p>
       </div>
-      {r.kind === 'late-delivery' && <DeliveryChart tone="light" />}
-      {r.kind === 'price' && (
-        <p style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>
-          <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Changed from </span>
-          <s style={{ color: 'var(--color-accent-pink)', textDecorationThickness: 2 }}>{r.detail.struck}</s>{' '}
-          <span aria-hidden>→</span><span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}> to</span> $3.79
-        </p>
-      )}
-      {r.kind !== 'late-delivery' && <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5 }}>{r.support}</p>}
-      <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5 }}>{note}</p>
+      {r.cause && <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5 }}>{r.cause.text}</p>}
+      <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5 }}>{r.ownerSentence} {waiting} {waiting === 1 ? 'guest is' : 'guests are'} waiting on the fix.</p>
       <Link href={`/feedback/ripples/${r.id}`} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 44, fontSize: 13.5, fontWeight: 700, color: 'var(--color-text-primary)' }}>
         Open ripple <ArrowRight size={15} aria-hidden />
       </Link>

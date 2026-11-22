@@ -20,9 +20,9 @@ export function NoShop() {
       <div style={ui.card}>
         <h1 style={ui.h1}>Choose a shop</h1>
         <p style={ui.lede}>
-          Cash is recorded per shop. For all shops, go to the{' '}
-          <Link href="/support-centre/cash" style={{ color: 'var(--color-accent-active)', fontWeight: 700 }}>
-            Support Centre cash overview
+          Cash is recorded per shop. Pick one in the shop switcher, or see{' '}
+          <Link href="/cash/overview" style={{ color: 'var(--color-accent-active)', fontWeight: 700 }}>
+            all shops
           </Link>
           .
         </p>

@@ -3,7 +3,7 @@
 import Sidebar from '@/components/Sidebar/Sidebar';
 import AreaTopBar, { type AreaRouteTab } from '@/components/TopBar/AreaTopBar';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { DISTRICT, STORES } from '@/components/Feedback/bronxData';
+import { DISTRICT, STORES } from '@/components/Feedback/dunkinData';
 
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
 

@@ -13,7 +13,7 @@ import {
 } from '@/components/Pret/cashStore';
 import VarianceTrend from '@/components/Pret/cash/VarianceTrend';
 import {
-  asDeposit, bankDifference, coveredDays, landingFor, safeLedger, useBankLandings, useDunkinCash, useOperatorCash,
+  asDeposit, bankDifference, coveredDays, landingFor, missingAtBank, safeLedger, useBankLandings, useDunkinCash, useOperatorCash,
 } from '@/components/Pret/cashOperators';
 import { SlipCell } from '@/components/Pret/cash/SlipField';
 import { whenLabel } from '@/components/Pret/countStore';
@@ -282,7 +282,9 @@ function CashHistory() {
                             </>
                           ) : (
                             <>
-                              <span style={ui.pill('warn')}>Not landed</span>
+                              {missingAtBank(c, landings, now)
+                                ? <span style={ui.pill('warn')}>Missing at bank, {-dayOf(c.when, now)} days</span>
+                                : <span style={ui.pill('neutral')}>Waiting for the bank</span>}
                               <div className="no-print" style={{ marginTop: 4 }}>
                                 <button
                                   type="button"

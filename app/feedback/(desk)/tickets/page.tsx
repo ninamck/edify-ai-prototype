@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, type CSSProperties } from 'react';
-import { STORES } from '@/components/Feedback/bronxData';
-import { canDraft, needsReply, useFeedback, type LiveTicket } from '@/components/Feedback/feedbackState';
-import { SOURCE_LABEL, STATUS_LABEL, type Source, type StoreId, type TicketStatus } from '@/components/Feedback/model';
+import { Suspense, useState, type CSSProperties } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { STORES } from '@/components/Feedback/dunkinData';
+import { needsReply, useFeedback, type LiveTicket } from '@/components/Feedback/feedbackState';
+import { STATUS_LABEL, type Reason, type StoreId, type TicketStatus } from '@/components/Feedback/model';
 import { ReplyLink, TicketRow, secondaryBtn, whiteCard } from '@/components/Feedback/ui';
 
 type StatusFilter = 'all' | TicketStatus;
@@ -15,14 +16,24 @@ const selectStyle: CSSProperties = {
   fontFamily: 'var(--font-primary)', fontSize: 14, color: 'var(--color-text-primary)',
 };
 
-/** Every ticket this week. Open first, oldest first; then replied; then resolved, newest first. */
 export default function AllTicketsPage() {
-  const { tickets } = useFeedback();
-  const [status, setStatus] = useState<StatusFilter>('open');
-  const [store, setStore] = useState<'all' | StoreId>('all');
-  const [source, setSource] = useState<'all' | Source>('all');
+  return (
+    <Suspense>
+      <AllTickets />
+    </Suspense>
+  );
+}
 
-  const scoped = tickets.filter(t => (store === 'all' || t.storeId === store) && (source === 'all' || t.source === source));
+/** Every ticket this week. Open first, oldest first; then replied; then resolved, newest first. */
+function AllTickets() {
+  const { tickets } = useFeedback();
+  const reasonParam = useSearchParams().get('reason') as Reason | null;
+  const reasons = [...new Set(tickets.map(t => t.reason))].sort();
+  const [status, setStatus] = useState<StatusFilter>(reasonParam ? 'all' : 'open');
+  const [store, setStore] = useState<'all' | StoreId>('all');
+  const [reason, setReason] = useState<'all' | Reason>(reasonParam && reasons.includes(reasonParam) ? reasonParam : 'all');
+
+  const scoped = tickets.filter(t => (store === 'all' || t.storeId === store) && (reason === 'all' || t.reason === reason));
   const count = (s: StatusFilter) => (s === 'all' ? scoped.length : scoped.filter(t => t.status === s).length);
   const shown = scoped
     .filter(t => status === 'all' || t.status === status)
@@ -33,7 +44,7 @@ export default function AllTicketsPage() {
       <div>
         <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700 }}>Tickets</h1>
         <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-          {tickets.length} this week across {STORES.length}{' '}stores. Each one is a guest&apos;s rating or review, from wherever they left it.
+          {tickets.length} this week across {STORES.length}{' '}stores. Each one is a complaint or compliment, as Dunkin&apos;s feedback system files it.
         </p>
       </div>
 
@@ -62,15 +73,15 @@ export default function AllTicketsPage() {
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12.5, fontWeight: 700 }}>
             Store
             <select value={store} onChange={e => setStore(e.target.value as 'all' | StoreId)} style={selectStyle}>
-              <option value="all">All 6 stores</option>
+              <option value="all">All {STORES.length} stores</option>
               {STORES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12.5, fontWeight: 700 }}>
-            Source
-            <select value={source} onChange={e => setSource(e.target.value as 'all' | Source)} style={selectStyle}>
-              <option value="all">Every source</option>
-              {(Object.keys(SOURCE_LABEL) as Source[]).map(s => <option key={s} value={s}>{SOURCE_LABEL[s]}</option>)}
+            Reason
+            <select value={reason} onChange={e => setReason(e.target.value as 'all' | Reason)} style={selectStyle}>
+              <option value="all">Every reason</option>
+              {reasons.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </label>
         </div>
@@ -81,7 +92,7 @@ export default function AllTicketsPage() {
           {shown.length} {shown.length === 1 ? 'ticket' : 'tickets'}
         </p>
         {shown.length === 0 ? (
-          <p style={{ margin: 0, padding: '14px 18px 18px', fontSize: 14, borderTop: '1px solid var(--color-border-subtle)' }}>No tickets match. Try another store or source.</p>
+          <p style={{ margin: 0, padding: '14px 18px 18px', fontSize: 14, borderTop: '1px solid var(--color-border-subtle)' }}>No tickets match. Try another store or reason.</p>
         ) : (
           <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
             {shown.map(t => <TicketRow key={t.id} t={t} action={<RowAction t={t} />} />)}
@@ -93,7 +104,7 @@ export default function AllTicketsPage() {
 }
 
 function RowAction({ t }: { t: LiveTicket }) {
-  if (needsReply(t)) return <ReplyLink t={t} label={canDraft(t) ? 'Reply' : 'Write reply'} />;
+  if (needsReply(t)) return <ReplyLink t={t} />;
   return (
     <Link href={`/feedback/tickets/${t.id}`} aria-label={`Open ticket from ${t.guest}`} style={{ ...secondaryBtn, padding: '0 16px', border: '1.5px solid var(--color-border)' }}>
       Open

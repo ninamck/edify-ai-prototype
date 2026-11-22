@@ -4,6 +4,7 @@ import { usePretState } from './pretStore';
 import {
   CASH_SHOPS,
   at,
+  cashSalesUpTo,
   cashShop,
   dayLabel,
   eventsTotal,
@@ -15,6 +16,8 @@ import {
   money,
   rng,
   round2,
+  setHomeCurrency,
+  tillPaidIns,
   tillPaidOuts,
   type CashRules,
   type CashShop,
@@ -54,7 +57,19 @@ export const CASH_AUDIENCE_LABEL: Record<CashAudience, string> = { pret: 'Pret',
 export function useCashAudience(): [CashAudience, (a: CashAudience) => void] {
   const [stored, setStored] = usePretState<string>('cash-audience', 'pret');
   const audience: CashAudience = stored === 'operators' ? 'pub' : stored === 'pub' || stored === 'dunkin' ? stored : 'pret';
+  // Dunkin shows amounts in dollars. Set here, while the screen that branches on the set-up renders, so its amounts
+  // agree with the branch it picked, including the first render after a reload.
+  setHomeCurrency(audience === 'dunkin' ? 'USD' : 'GBP');
   return [audience, setStored];
+}
+
+/** Cash due the way Oracle works it out for Kyle: cash sales, less paid outs, plus paid ins, all from the till. */
+export function dunkinCashDue(shop: CashShop, paidOuts: { value: number }[], upTo: number) {
+  const sales = round2(shop.tills.reduce((s, _, i) => s + (cashSalesUpTo(shop, i, 0, upTo, ['GBP']).GBP ?? 0), 0));
+  const paidOut = round2(paidOuts.reduce((s, p) => s + p.value, 0));
+  const paidIns = tillPaidIns(shop, 0, { upTo });
+  const paidIn = round2(paidIns.reduce((s, p) => s + p.value, 0));
+  return { sales, paidOut, paidIns, paidIn, due: round2(sales - paidOut + paidIn) };
 }
 
 /** The pub set-up's full feature set. */
@@ -271,19 +286,30 @@ export type Landing = { when: string; by: string; amount?: number };
 
 export const useBankLandings = () => usePretState<Record<string, Landing>>('cash-landings', {});
 
-/** Victoria Hub's latest matched deposit reached the bank £20 light, so the demo has one to chase. */
+/** Victoria Hub's latest matched deposit reached the bank 20 light, so the demo has one to chase. */
 const SHORT_AT_BANK: Record<string, number> = { 'fitzroy-espresso': 20 };
+
+/** Kings Cross (Yonkers in the Dunkin set-up): the latest deposit old enough to match never reached the bank. */
+const MISSING_AT_BANK = new Set(['fitzroy-kings-cross']);
+
+/** Days a deposit can take to show on the bank statement before it counts as missing. */
+export const BANK_DAYS = 3;
 
 /** Deposits three or more days old have reached the bank statement in the demo; newer ones wait. */
 export function landingFor(c: Collection, stored: Record<string, Landing>, now = new Date()): Landing | undefined {
   if (stored[c.id]) return stored[c.id];
   const d = dayOf(c.when, now);
-  if (d > -3) return undefined;
+  if (d > -BANK_DAYS) return undefined;
   const shop = cashShop(c.siteId);
-  const matched = shop ? historyCollections(shop).filter(x => dayOf(x.when, now) <= -3) : [];
+  const matched = shop ? historyCollections(shop).filter(x => dayOf(x.when, now) <= -BANK_DAYS) : [];
+  if (MISSING_AT_BANK.has(c.siteId) && matched.at(-1)?.id === c.id) return undefined;
   const short = matched.at(-1)?.id === c.id ? SHORT_AT_BANK[c.siteId] ?? 0 : 0;
   return { when: at(d + 2, '09:00'), by: 'Bank statement', amount: round2(c.value - short) };
 }
+
+/** Deposited by the shop but still not on the bank statement after BANK_DAYS. */
+export const missingAtBank = (c: Collection, stored: Record<string, Landing>, now = new Date()) =>
+  !landingFor(c, stored, now) && dayOf(c.when, now) <= -BANK_DAYS;
 
 const BRANCH: Record<string, string> = {
   'fitzroy-kings-cross': 'Barclays, Euston Road',
@@ -336,6 +362,12 @@ export function depositAlerts(
   for (const c of mine) {
     const l = landingFor(c, landings, now);
     const diff = l ? bankDifference(c, l) : 0;
+    if (missingAtBank(c, landings, now)) {
+      out.push({
+        id: `bank-missing-${c.id}`, siteId: shop.siteId, rule: DEPOSIT_RULES.missingAtBank, day: dayOf(c.when, now), severity: 'bad',
+        detail: `Deposited ${money(c.value)} on ${dayLabel(dayOf(c.when, now), now)}${c.bankName ? ` at ${c.bankName}` : ''}. Not on the bank statement ${-dayOf(c.when, now)} days later.`,
+      });
+    }
     if (diff < 0) {
       out.push({
         id: `bank-${c.id}`, siteId: shop.siteId, rule: DEPOSIT_RULES.bankShort, day: dayOf(c.when, now), severity: 'bad',
@@ -358,6 +390,7 @@ export function depositAlerts(
 
 export const DEPOSIT_RULES = {
   bankShort: 'Bank received less than the shop deposited',
+  missingAtBank: 'Deposit not on the bank statement after 3 days',
   sameSlip: 'Same paying-in slip reference at two shops',
   missed: 'Deposit day missed and nothing banked for 3 days or more',
 } as const;
