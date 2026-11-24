@@ -1,7 +1,7 @@
 # Square menu publishing: business logic for the build
 
 **Owner:** Nina McKenna, Head of Product
-**Date:** 19 November 2026
+**Date:** 19 November 2026, updated 24 November after review with Ed
 **Follows:** Recipe variants and modifier groups (Isaac, Phase 1), PRD v0.2 in Notion
 **Fills:** Phase 3, [ENG-3667](https://linear.app/edify-systems/issue/ENG-3667/phase-3-push-recipe-families-and-modifier-groups-to-the-square-catalog)
 **Prototype:** `edify-ai-prototype`, Menu area, Square menu tab (`/square-menu`)
@@ -26,7 +26,7 @@ A multi-site café group builds its menu once, in Edify, and Edify writes it to 
 
 | Field | Who owns it | What happens when Square changes it |
 | --- | --- | --- |
-| Item name, sizes, modifier groups and options, allergens, sites, till category, VAT, photo, description | Edify | Flagged as Changed in Square, user decides |
+| Item name, sizes, modifier groups and options, allergens, sites, POS category, menus and menu groups, VAT, photo, description | Edify | Flagged as Changed in Square, user decides |
 | Price per size and per site, option prices | Edify | Flagged as Changed in Square, user decides, margin effect shown |
 | Option prices that differ by site, when the customer keeps them in Square (section 9) | Square | Ignored. Edify resends them unchanged |
 | Sold out | Square | Read only. Apps can't set it |
@@ -41,11 +41,11 @@ A multi-site café group builds its menu once, in Edify, and Edify writes it to 
 Recipes and products both hold things nobody sells: prep, sauces, the milk itself. So the Square menu list is curated, not derived from the recipe list.
 
 - Each row is a **till item**. It points at exactly one recipe family or one product.
-- It holds only till-facing fields: till name, kitchen name, till category, sizes, till price per size (with optional per-site prices), sites, VAT, photo, description.
+- It holds only till-facing fields: POS name, kitchen name, POS category, sizes, till price per size (with optional per-site prices), sites, VAT, photo, description.
 - It never holds ingredients, quantities or cost. The recipe stays the one place that says how something is made.
 - A recipe-family till item has one size per variant (Small, Regular, Large). Sizes come from the family and can't be added on the till item.
 - A product till item carries an **amount per size**. House red sold as 175ml, 250ml and Bottle is one Square item with three sizes, each drawing a different amount from the same product. This is the same amount and unit Item matching already stores when it links a till button to a product.
-- The till name defaults to the family name. Changing the till name never renames the recipe.
+- The POS name defaults to the family name. Changing the POS name never renames the recipe.
 - Allergens on the till item are read only and come from the recipe.
 
 ### How the list gets built
@@ -54,6 +54,27 @@ Recipes and products both hold things nobody sells: prep, sauces, the milk itsel
 2. **New Square merchant, empty till.** The list starts empty. Edify suggests active standalone recipe families with a price, and products already sold at other sites.
 3. **After that, on purpose.** "Add items" on the list opens a picker with Recipes and Products tabs, likely sellables first, "Show all" for components and prep. "Sell this at the till" in the recipe editor does the same for one recipe.
 4. **Taking something off.** "Take off the till" removes the till item. The next publish archives it in Square. The recipe or product is untouched.
+
+### Menus, menu groups and POS categories
+
+Square keeps two separate things that are easy to confuse, and Edify keeps them separate too.
+
+**POS category belongs to the item.** Each till item has one. Square uses it for reporting. It defaults to the item's Edify class (the recipe or product category), or to an existing POS category with the same name. The drawer shows "Edify class: Coffee" beside it, because Ed wants the two to match wherever possible. The user can pick another or create a new one.
+
+**Menus are ranges you add items to.** The merchant creates a menu, such as a Spring menu, and adds items to it. One item can be on several menus.
+
+- A menu is **live** or **draft**. Nothing on a draft reaches Square. This lets the head of food build next season's menu weeks early.
+- **Release** turns a draft live. The menu and its new items go on the next publish, after a confirm: "Release Spring menu? The menu and its 2 new items go to Square on your next publish. You then turn it on for each site in Square."
+- The customer then turns the menu on for each site and channel in the Square Dashboard. Apps can't do this (section 11).
+- A new item that is only on a draft waits for the release. An item already on the till publishes its changes as normal, even if it is also on a draft.
+
+**Menu groups belong to a menu.** The merchant makes them, names them and orders them, separately on each menu.
+
+- An item sits in one group on each menu, and the group can differ per menu. The Iced latte sits in Coffee on the All day menu and in Spring specials on the Spring menu.
+- Renaming or reordering a group changes that menu only. A group can be deleted only when it is empty, so no item loses its place by accident.
+- By default an item lands in the group named like its POS category on that menu, if there is one. Otherwise it shows under "Not in a group". "Group by POS category" creates the missing groups in one go, which is the quick start for a new menu.
+- Items move between groups by dragging the handle on the row. The same handle opens a "Move to" list for keyboard and single-tap use, which AA requires for anything draggable (WCAG 2.5.7).
+- Group changes on a menu Square already has go on the next publish.
 
 ## 5. Till statuses
 
@@ -173,8 +194,8 @@ Today, Square write permission is only requested when email orders are on. Publi
 2. Option prices, one per option. Where a site charges differently, the customer keeps that price in Square or moves to one price (section 9).
 3. Selection rules, including "up to N".
 4. Per-recipe default option override.
-5. Till category, picked from the merchant's Square categories or created new. Edify also writes menus and menu groups.
-6. Kitchen name. Till name defaults to the family name.
+5. POS category, written as the item's reporting category. Menus and menu groups, written as Square menu categories: the menu at the top, its groups beneath it, each holding its items (section 4). One item can belong to several, which is how it sits in a different group on each menu.
+6. Kitchen name. POS name defaults to the family name.
 7. VAT from the merchant's existing Square taxes; Edify creates one only when none exists.
 8. Photo and description from the recipe.
 9. Nested modifiers: next, not now. Square supports them in beta; Edify needs conditional groups first.
@@ -240,3 +261,10 @@ The Square sandbox may not support menus, so use a real UK test account on Squar
 - The prototype lets a modifier group attach to some sizes and not others. Square can't represent that, so publishing blocks it with a fix, as the PRD already says.
 - The prototype holds option price, selection rules, a default option and kitchen names on each group. Isaac's Phase 1 holds none of them. ENG-3667 brings back price and the minimum and maximum; default option and kitchen name need adding to it.
 - The prototype's Alt milks group has Whole milk as an option with no recipe change. Isaac's model can't hold that option yet (section 9).
+
+### From the review with Ed on 23 November
+
+- **Done in the prototype:** menus with drafts and a release step, menu groups the merchant makes per menu, and "POS name" and "POS category" in place of "till name" and "till category", with the Edify class shown beside the category.
+- **Item matching stays** for now. Square menu covers matching for Square customers, but Ed hasn't decided whether it replaces Item matching for them.
+- **Channel prices.** Edify holds dine-in, takeaway and delivery prices. Square holds one price per size per site, so the three don't map across. Edify sends one till price per size per site, starting from the dine-in price. Ed accepted this.
+- **Not built yet, still to decide:** block modifier groups that differ by size when a Square customer creates the recipe, rather than at publish. Use the Square sale price to update the recipe's sale price, which would make GP% more accurate.
