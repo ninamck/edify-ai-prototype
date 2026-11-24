@@ -14,6 +14,7 @@ import {
 } from '@/lib/demoConfig';
 import { useFranchise, type FranchiseViewMode } from '@/components/Franchise/FranchiseContext';
 import { BRIEFING_ROLES } from '@/components/briefing';
+import { FloorTaskSwitches } from '@/components/Feed/floorTasks/FloorTaskBar';
 import type { BriefingRole } from '@/components/briefing';
 import {
   useActingUser,
@@ -25,6 +26,8 @@ import {
   type ActingUserId,
   type DemoVersion,
 } from './demoStore';
+import { CASH_AUDIENCE_LABEL, useCashAudience, type CashAudience } from '@/components/Pret/cashOperators';
+import { resetPretWalkthrough } from '@/components/Pret/pretStore';
 
 const USER_ORDER: ActingUserId[] = ['u-manager', 'u-sam', 'u-jordan', 'u-reese'];
 
@@ -232,7 +235,17 @@ function PanelBody({ extraSection }: { extraSection?: ReactNode }) {
   const rules = actingUser ? getRoleRules(actingUser.role) : null;
 
   return (
-    <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 14, maxHeight: 'min(620px, calc(100vh - 140px))', overflowY: 'auto' }}>
+      <CashAudienceSection />
+      <div>
+        <div style={sectionLabelStyle}>Guest feedback</div>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          <button type="button" onClick={() => router.push('/feedback')} style={pillOptionStyle(false)}>Angela, district</button>
+          <button type="button" onClick={() => router.push('/feedback/today')} style={pillOptionStyle(false)}>Marcus&apos;s phone</button>
+        </div>
+        <div style={hintStyle}>Kyle&apos;s stores and his ten real complaints. Marcus runs Irmo #358804. Phone screens open full width on a phone.</div>
+      </div>
+
       {isBrandSwitchable && (
         <div>
           <div style={sectionLabelStyle}>Demo brand</div>
@@ -421,6 +434,17 @@ function PanelBody({ extraSection }: { extraSection?: ReactNode }) {
       </div>
 
       <div>
+        <div style={sectionLabelStyle}>Floor tasks in chat</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <FloorTaskSwitches size="small" />
+        </div>
+        <div style={{ fontSize: 10, lineHeight: 1.4, color: 'var(--color-text-muted)', marginTop: 6 }}>
+          Team members can&apos;t backdate waste or set stock outright. Headset reads back out loud
+          and parks screen tasks in Waiting for you.
+        </div>
+      </div>
+
+      <div>
         <div style={sectionLabelStyle}>Briefing persona</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
           {BRIEFING_ROLES.map((r) => {
@@ -473,6 +497,45 @@ export function DemoControlsSection({
     <div>
       <div style={sectionLabelStyle}>{label}</div>
       {children}
+    </div>
+  );
+}
+
+const hintStyle: CSSProperties = {
+  fontSize: 11,
+  lineHeight: 1.4,
+  color: 'var(--color-text-secondary)',
+  marginTop: 6,
+};
+
+function CashAudienceSection() {
+  const [audience, setAudience] = useCashAudience();
+  const [cleared, setCleared] = useState(false);
+  return (
+    <div>
+      <div style={sectionLabelStyle}>Cash features</div>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        {(Object.keys(CASH_AUDIENCE_LABEL) as CashAudience[]).map(a => (
+          <button key={a} type="button" aria-pressed={audience === a} onClick={() => setAudience(a)} style={pillOptionStyle(audience === a)}>
+            {CASH_AUDIENCE_LABEL[a]}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          resetPretWalkthrough();
+          setCleared(true);
+        }}
+        style={{ ...pillOptionStyle(false), width: '100%', marginTop: 6 }}
+      >
+        {cleared ? 'Walkthrough reset' : 'Reset walkthrough'}
+      </button>
+      <div style={hintStyle}>
+        Pub adds the Anglian Country Inns features, such as cash in and out, bank runs and the statement of trade. Dunkin is
+        Kyle&apos;s set-up: one end of day screen and bank deposits with a slip photo. Reset clears every close, deposit, reply
+        and ripple entered during the session, and keeps the set-up you picked.
+      </div>
     </div>
   );
 }

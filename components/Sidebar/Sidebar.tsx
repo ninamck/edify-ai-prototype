@@ -24,6 +24,8 @@ import {
   Boxes,
   Sparkles,
   Users,
+  Banknote,
+  MessageSquare,
 } from 'lucide-react';
 
 import NavGroup from './NavGroup';
@@ -289,6 +291,14 @@ export default function Sidebar() {
               ("Monitor stock" + "Count stock") — folded into one so the
               operator doesn't route-hop between monitoring and counting. */}
           <NavItem label="Manage stock" icon={Box} compact={compact} badge={stockAttentionCount || undefined} active={is('/stock')} onClick={() => router.push('/stock')} />
+          {/* Cash is counted per shop; with All shops chosen, Cash opens on the estate view. */}
+          <NavItem
+            label="Cash"
+            icon={Banknote}
+            compact={compact}
+            active={is('/cash')}
+            onClick={() => router.push(isAllSites ? '/cash/overview' : '/cash/today')}
+          />
           {/* Deliveries is now just receiving — placed orders moved into
               the Orders area as its "Placed" tab. */}
           <NavItem label="Deliveries" icon={List} compact={compact} active={is('/receive')} onClick={() => router.push('/receive')} />
@@ -362,6 +372,13 @@ export default function Sidebar() {
             compact={compact}
             active={is('/labour')}
             onClick={() => router.push('/labour')}
+          />
+          <NavItem
+            label="Guest feedback"
+            icon={MessageSquare}
+            compact={compact}
+            active={is('/feedback')}
+            onClick={() => router.push('/feedback')}
           />
           <NavItem
             label="Notebook"

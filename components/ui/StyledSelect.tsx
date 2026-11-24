@@ -18,12 +18,15 @@ import { ChevronDown } from 'lucide-react';
 export type StyledSelectProps = SelectHTMLAttributes<HTMLSelectElement> & {
   /** Force the wrapper to a specific width. Defaults to '100%'. */
   width?: number | string;
+  /** Field height in px. Defaults to 38; pass 44 where touch targets must meet 44px. */
+  height?: number;
   /** Children must be `<option>` (or `<optgroup>`) elements. */
   children: ReactNode;
 };
 
 export default function StyledSelect({
   width = '100%',
+  height = 38,
   disabled = false,
   style,
   children,
@@ -41,7 +44,7 @@ export default function StyledSelect({
     display: 'inline-flex',
     alignItems: 'center',
     width,
-    height: 38,
+    height,
     borderRadius: 8,
     border: `1px solid ${focused ? 'var(--color-accent-active)' : 'var(--color-border)'}`,
     background: disabled ? 'var(--color-bg-hover)' : '#ffffff',

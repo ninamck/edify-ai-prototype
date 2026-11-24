@@ -65,6 +65,11 @@ import type { Column } from '@/components/Mvp1/Tables/dataSources';
 import { parseCommand, parseSiteSetup } from '@/components/Feed/commands/parsers';
 import { COMMAND_REGISTRY, getCommand } from '@/components/Feed/commands/registry';
 import { useCommandRunner } from '@/components/Feed/commands/useCommandRunner';
+import { useFloorTasks, useFloorVoice } from '@/components/Feed/floorTasks/useFloorTasks';
+import FloorTaskCard, { FloorTaskPointerLabel } from '@/components/Feed/floorTasks/FloorTaskCard';
+import FloorTaskBar from '@/components/Feed/floorTasks/FloorTaskBar';
+import FloorReceiptLine from '@/components/Feed/floorTasks/FloorReceiptLine';
+import { useWorld as useFloorWorld } from '@/lib/floorTasks/world/store';
 import SlashMenu from '@/components/Feed/commands/SlashMenu';
 import TaskHistoryList from '@/components/Feed/TaskHistoryList';
 import { PROMPT_CHIPS } from '@/components/Feed/suggestedPrompts';
@@ -593,6 +598,7 @@ type ChatMsg = {
  *  "work surfaces" (wizard steps, import cards, charts, tables)
  *  migrate to the side. */
 const WORKSPACE_MSG_TYPES = new Set<string>([
+  'floor-proposal',
   'new-supplier-import',
   'product-sheet-import',
   'chagee-tea-supplier',
@@ -5426,14 +5432,18 @@ function ChatBubble({
     msg.msgType !== 'analytics-thinking' &&
     msg.msgType !== 'cmd-thinking' &&
     showSignature;
+  // Floor-task cards carry their own frame, so they sit under the
+  // readback line without a bubble around them.
+  const bare = msg.msgType === 'floor-proposal';
   return (
     <div style={{
       display: 'flex',
       flexDirection: 'column',
       alignItems: isUser ? 'flex-end' : 'flex-start',
       marginBottom: '12px',
+      marginTop: bare ? '-10px' : undefined,
     }}>
-      <div style={{
+      <div style={bare ? { width: '88%', maxWidth: '560px' } : {
         maxWidth: '88%',
         padding: '11px 14px',
         borderRadius: isUser ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
@@ -5445,7 +5455,7 @@ function ChatBubble({
         color: 'var(--color-text-secondary)',
         whiteSpace: 'pre-wrap',
       }}>
-        {!isUser && (
+        {!isUser && !bare && (
           <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-accent-active)', marginBottom: '6px', letterSpacing: '0.04em' }}>
             EDIFY
           </div>
@@ -5496,7 +5506,7 @@ function ChatBubble({
               </div>
             );
           })()
-        ) : (
+        ) : bare ? null : (
           <QuinnMessageBody text={msg.text} streaming={msg.streaming} />
         )}
         {children}
@@ -5562,6 +5572,11 @@ type ComposerProps = {
   onAttachFile?: (fileName: string) => void;
   /** Called when the user clears the attached file chip. */
   onClearAttachment?: () => void;
+  /** Mic: speak a floor task instead of typing it. */
+  onVoiceToggle?: () => void;
+  listening?: boolean;
+  /** Words heard so far, shown in the box while listening. */
+  interim?: string;
 };
 
 function ClaudeComposer({
@@ -5577,6 +5592,9 @@ function ClaudeComposer({
   attachedFileName,
   onAttachFile,
   onClearAttachment,
+  onVoiceToggle,
+  listening,
+  interim,
 }: ComposerProps) {
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   /** Hidden file input — opened by the paperclip button. Any
@@ -5706,7 +5724,7 @@ function ClaudeComposer({
               onSend();
             }
           }}
-          placeholder={ghost ? '' : placeholder}
+           placeholder={ghost ? '' : listening ? (interim || 'Listening. Say a task, like "2 croissants in the bin"') : placeholder}
           disabled={disabled}
           rows={2}
           style={{
@@ -6025,19 +6043,21 @@ function ClaudeComposer({
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, justifyContent: 'flex-end' }}>
           <button
             type="button"
-            aria-label="Voice input"
-            disabled={disabled}
+            aria-label={listening ? 'Stop listening' : 'Speak a task'}
+            aria-pressed={!!listening}
+            onClick={onVoiceToggle}
+            disabled={disabled || !onVoiceToggle}
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: '32px',
-              height: '32px',
+              width: '40px',
+              height: '40px',
               borderRadius: '10px',
               border: 'none',
-              background: 'transparent',
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              color: 'var(--color-text-muted)',
+              background: listening ? 'var(--color-accent-active, #224444)' : 'transparent',
+              cursor: disabled || !onVoiceToggle ? 'not-allowed' : 'pointer',
+              color: listening ? '#fff' : 'var(--color-text-muted)',
             }}
           >
             <Mic size={16} strokeWidth={2} />
@@ -7154,6 +7174,24 @@ export default function Feed({
       // message once the user has moved on to a different command.
       setAwaitingRecipeName(false);
     },
+  });
+
+  // ── Floor tasks ─────────────────────────────────────────────────────────
+  // Words to actions: waste, on hand, hot batches, counts, checklists,
+  // basket, deliveries and transfers, typed or spoken. A model stages the
+  // task; the card or a spoken yes applies it.
+  const floor = useFloorTasks(setMessages);
+  const floorWorld = useFloorWorld();
+  const sendMessageRef = useRef<typeof sendMessage | null>(null);
+  useFloorVoice({
+    surface: floorWorld.surface,
+    listening: floor.voice.listening,
+    setListening: floor.voice.setListening,
+    setInterim: floor.voice.setInterim,
+    onFinal: (said) => sendMessageRef.current?.(said, undefined, undefined, { voice: true }),
+  });
+  useEffect(() => {
+    sendMessageRef.current = sendMessage;
   });
 
   // ── Photo a delivery ──────────────────────────────────────────────
@@ -9478,6 +9516,7 @@ export default function Feed({
     overrideText?: string,
     explicitChart?: AnalyticsChartId | null,
     tableOpts?: { tableQuery: TableQuery; tableTitle?: string },
+    floorOpts?: { skipFloor?: boolean; voice?: boolean },
   ) {
     const raw = overrideText !== undefined ? overrideText : input;
     const text = raw.trim();
@@ -9662,6 +9701,16 @@ export default function Feed({
         startProductSheetImport({ fileName, userText: text });
         return;
       }
+    }
+
+    // Floor tasks — before the recipe detector, which reads "add 6
+    // chicken avo sandwiches" as a new recipe. When the model says it
+    // isn't a floor task, the message runs through again without it.
+    if (explicitChart === undefined && !tableOpts && !attachedFileName && !floorOpts?.skipFloor && floor.looksLikeFloor(text)) {
+      void floor.handle(text, userMsg, { voice: floorOpts?.voice }).then((handled) => {
+        if (!handled) sendMessageRef.current?.(text, undefined, undefined, { skipFloor: true });
+      });
+      return;
     }
 
     // "New recipe" intent — sits BEFORE parseCommand because the recipe
@@ -10483,6 +10532,14 @@ export default function Feed({
                           />
                         )}
                         {/* ── Chat-command cards ───────────────────────── */}
+                        {m.msgType === 'floor-proposal' && m.cmdArgsJson && (
+                          <FloorTaskCard
+                            proposalId={(JSON.parse(m.cmdArgsJson) as { proposalId: string }).proposalId}
+                            onApplied={floor.onApplied}
+                            onUndo={floor.onUndo}
+                            centred={splitView}
+                          />
+                        )}
                         {m.msgType === 'cmd-waste-card' && (
                           <WasteCommandCard
                             initialArgs={m.cmdArgsJson ? JSON.parse(m.cmdArgsJson) : {}}
@@ -11354,7 +11411,11 @@ export default function Feed({
                   attachedFileName={attachedFileName}
                   onAttachFile={setAttachedFileName}
                   onClearAttachment={() => setAttachedFileName(null)}
+                  onVoiceToggle={floor.voice.supported ? () => floor.voice.setListening(!floor.voice.listening) : undefined}
+                  listening={floor.voice.listening}
+                  interim={floor.voice.interim}
                 />
+                <FloorTaskBar onOpen={floor.openProposal} />
               </div>
 
               {/* The "Current chat | Resume →" banner used to live
@@ -11560,7 +11621,8 @@ export default function Feed({
                           break;
                         }
                       }
-                      return messages.map((m) => {
+                      return messages.map((m, mi) => {
+                      const cardFollows = messages[mi + 1]?.msgType === 'floor-proposal';
                       // In split view the interactive card lives in
                       // the workspace panel — a message that exists
                       // only to host a card would render as an empty
@@ -11592,7 +11654,11 @@ export default function Feed({
                               color: 'var(--color-text-secondary)',
                             }}
                           >
-                            {WORKSPACE_POINTER_LABELS[m.msgType ?? ''] ?? 'Working on this'} · in the workspace
+                            {m.msgType === 'floor-proposal' && m.cmdArgsJson ? (
+                              <FloorTaskPointerLabel proposalId={(JSON.parse(m.cmdArgsJson) as { proposalId: string }).proposalId} />
+                            ) : (
+                              WORKSPACE_POINTER_LABELS[m.msgType ?? ''] ?? 'Working on this'
+                            )} · in the workspace
                             <ChevronDown size={12} strokeWidth={2.4} style={{ transform: 'rotate(-90deg)' }} />
                           </motion.div>
                         );
@@ -11610,7 +11676,7 @@ export default function Feed({
                         showSignature={m.id === lastQuinnSignatureId}
                         feedback={evalFeedback[m.id]}
                         commentOpen={evalCommentOpenFor === m.id}
-                        onRate={(rating) => handleEvalRate(m.id, rating)}
+                        onRate={cardFollows ? undefined : (rating) => handleEvalRate(m.id, rating)}
                         onRetry={() => handleEvalRetry(m.id)}
                         onToggleComment={() => handleEvalToggleComment(m.id)}
                         onCommentChange={(text) => handleEvalCommentChange(m.id, text)}
@@ -11622,6 +11688,12 @@ export default function Feed({
                           <QuinnThinkingContent variant="step" />
                         )}
                         {!splitView && renderWorkspaceCard(m)}
+                        {m.msgType === 'floor-receipt' && m.cmdArgsJson && (
+                          <FloorReceiptLine
+                            receiptId={(JSON.parse(m.cmdArgsJson) as { receiptId: string }).receiptId}
+                            onDiscard={floor.onDiscard}
+                          />
+                        )}
                         {m.msgType === 'cmd-ambiguity' && m.cmdChoicesJson && m.cmdId && (
                           <AmbiguityPicker
                             prompt={m.text}
@@ -11732,6 +11804,7 @@ export default function Feed({
                   onPick={(slash) => setInput(slash)}
                   onClose={() => setInput('')}
                 />
+                <FloorTaskBar onOpen={floor.openProposal} compact />
                 <ClaudeComposer
                   value={input}
                   onChange={setInput}
@@ -11745,6 +11818,9 @@ export default function Feed({
                   attachedFileName={attachedFileName}
                   onAttachFile={setAttachedFileName}
                   onClearAttachment={() => setAttachedFileName(null)}
+                  onVoiceToggle={floor.voice.supported ? () => floor.voice.setListening(!floor.voice.listening) : undefined}
+                  listening={floor.voice.listening}
+                  interim={floor.voice.interim}
                 />
               </div>
             </div>

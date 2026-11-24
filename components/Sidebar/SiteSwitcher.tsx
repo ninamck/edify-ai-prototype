@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { useActiveSite, type ActiveSite } from '@/components/ActiveSite/ActiveSiteContext';
+import { useCashAudience } from '@/components/Pret/cashOperators';
+import { shopCaption, shopName } from '@/components/Pret/shopNames';
 
 /**
  * SiteSwitcher — top-bar (and sidebar) control that lets the demo flip
@@ -118,7 +120,9 @@ export default function SiteSwitcher({ siteName, compact = false }: SiteSwitcher
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuPos, setMenuPos] = useState<{ left: number; top: number; width: number } | null>(null);
 
-  const displayName = siteName ?? activeSite.name;
+  const [audience] = useCashAudience();
+  const ownName = shopName(activeSite.id, audience, activeSite.name);
+  const displayName = activeSite.id === 'all-sites' ? (siteName ?? ownName) : ownName;
 
   // Close on outside click / escape.
   useEffect(() => {
@@ -224,7 +228,7 @@ export default function SiteSwitcher({ siteName, compact = false }: SiteSwitcher
                   marginTop: '1px',
                 }}
               >
-                {siteTypeCaption(activeSite.type)} · Switch
+                {audience === 'dunkin' ? shopCaption(activeSite.id, audience, '').split(' · ').pop() : siteTypeCaption(activeSite.type)} · Switch
               </span>
             </span>
 
@@ -280,6 +284,8 @@ export default function SiteSwitcher({ siteName, compact = false }: SiteSwitcher
               <SiteRow
                 key={site.id}
                 site={site}
+                name={shopName(site.id, audience, site.name)}
+                caption={shopCaption(site.id, audience, site.caption)}
                 isActive={site.id === activeSiteId}
                 onSelect={() => {
                   setActiveSiteId(site.id);
@@ -300,10 +306,14 @@ export default function SiteSwitcher({ siteName, compact = false }: SiteSwitcher
 
 function SiteRow({
   site,
+  name,
+  caption,
   isActive,
   onSelect,
 }: {
   site: ActiveSite;
+  name: string;
+  caption: string;
   isActive: boolean;
   onSelect: () => void;
 }) {
@@ -348,7 +358,7 @@ function SiteRow({
           flexShrink: 0,
         }}
       >
-        {getInitials(site.name)}
+        {getInitials(name)}
       </span>
       <span style={{ flex: 1, minWidth: 0 }}>
         <span
@@ -361,7 +371,7 @@ function SiteRow({
             color: 'var(--color-text-primary)',
           }}
         >
-          {site.name}
+          {name}
           <span
             style={{
               display: 'inline-flex',
@@ -389,7 +399,7 @@ function SiteRow({
             whiteSpace: 'nowrap',
           }}
         >
-          {site.caption}
+          {caption}
         </span>
       </span>
       {isActive && <Check size={14} color="var(--color-accent-active)" />}
