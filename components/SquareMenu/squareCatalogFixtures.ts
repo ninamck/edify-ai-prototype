@@ -5,7 +5,7 @@
  *   Up to date        Flat white, House red, Coca-Cola, Smirnoff, Avocado toast
  *   Ready to publish  Latte (Edify raised the Large price), Blueberry muffin (taken off)
  *   Changed in Square Cappuccino (renamed), Americano (price), Croissant (deleted)
- *   Not on the till   Mocha (no till category yet)
+ *   Not on the till   Mocha (no menu group yet)
  *   Can't publish     Iced latte (Syrups on the Large only)
  *   On the till only  Pumpkin spice latte, Staff coffee
  * plus Hazelnut, added to the Syrups group in Square.
@@ -13,9 +13,41 @@
 
 import type { SquareGroupChange, SquareOnlyItem, TillFields, TillItem } from './tillItems';
 
-export const SQUARE_CATEGORIES = [
-  'Coffee', 'Tea', 'Bakery', 'Breakfast', 'Lunch', 'Soft drinks', 'Wine', 'Spirits', 'Kids',
+/** The item's own category in Square, one per item. Used for reporting. */
+export const SEED_POS_CATEGORIES = ['Coffee', 'Bakery', 'Breakfast', 'Soft drinks', 'Wine', 'Spirits'];
+
+export type MenuStatus = 'live' | 'draft';
+
+export type SquareMenuDef = {
+  id: string;
+  name: string;
+  status: MenuStatus;
+  /** Square has this menu. False for a menu released since the last publish. */
+  onSquare: boolean;
+  /** Menu groups the merchant made for this menu, in menu order. */
+  groups: string[];
+  /** Square has an older version of this menu's groups. */
+  groupsChanged?: boolean;
+};
+
+export const ALL_DAY_MENU_ID = 'menu-all-day';
+
+export const SEED_MENUS: SquareMenuDef[] = [
+  {
+    id: ALL_DAY_MENU_ID, name: 'All day menu', status: 'live', onSquare: true,
+    groups: ['Coffee', 'Bakery', 'Breakfast', 'Soft drinks', 'Wine', 'Spirits'],
+  },
+  {
+    id: 'menu-spring', name: 'Spring menu', status: 'draft', onSquare: false,
+    groups: ['Spring specials', 'Coffee', 'Bakery'],
+  },
 ];
+
+/** Already on the till and also on the spring draft. */
+export const SPRING_MENU_ITEM_IDS = ['ti-flat-white', 'ti-latte', 'ti-iced-latte', 'ti-croissant'];
+
+/** Stays in Coffee on the all day menu, sits in Spring specials on the spring menu. */
+export const SPRING_SPECIALS_IDS = ['ti-iced-latte'];
 
 export const SQUARE_TAXES = ['Standard rate 20%', 'Zero rate 0%'];
 
@@ -261,6 +293,36 @@ export const SEED_TILL_ITEMS: TillItem[] = [
     })),
     sizeCosts: { Regular: 0.8 },
     takeOff: true,
+  },
+  {
+    ...base,
+    id: 'ti-almond-croissant',
+    source: { kind: 'recipe', recipeId: 'rec-almond-croissant' },
+    current: fields({
+      name: 'Almond croissant',
+      category: 'Bakery',
+      sizes: ['Regular'],
+      prices: { Regular: 3.6 },
+      vat: 'Zero rate 0%',
+      photo: true,
+    }),
+    sizeCosts: { Regular: 1.05 },
+    menuIds: ['menu-spring'],
+    menuGroups: { 'menu-spring': 'Spring specials' },
+  },
+  {
+    ...base,
+    id: 'ti-cortado',
+    source: { kind: 'recipe', recipeId: 'rec-cortado' },
+    current: fields({
+      name: 'Cortado',
+      category: 'Coffee',
+      sizes: ['Regular'],
+      prices: { Regular: 3.4 },
+      groups: ['mg-alt-milks'],
+    }),
+    sizeCosts: { Regular: 0.62 },
+    menuIds: ['menu-spring'],
   },
 ];
 

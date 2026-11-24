@@ -161,7 +161,7 @@ function SetupSheet({ mode, onClose, onDone }: { mode: 'full' | 'settings'; onCl
               items={[
                 'Item names, sizes and till prices',
                 'Modifier groups and option prices',
-                'Till categories and kitchen names',
+                'Menu groups and kitchen names',
                 'Allergens from your recipes',
                 'Which sites sell what',
                 'The VAT rate on each item',

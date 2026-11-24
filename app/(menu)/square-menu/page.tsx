@@ -10,9 +10,9 @@
  * pages read the same links.
  */
 
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronDown, Plus, Search, Send, Settings } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Pencil, Plus, Rocket, Search, Send, Settings, Trash2 } from 'lucide-react';
 import { useRecipes } from '@/components/Recipe/recipeStore';
 import { useProducts } from '@/components/Suppliers/store';
 import { useModifierGroups } from '@/components/Modifiers/store';
@@ -20,17 +20,26 @@ import { GroupEditorDrawer } from '@/components/Modifiers/GroupEditorDrawer';
 import type { ModifierGroup } from '@/components/Modifiers/types';
 import { MatchPicker } from '@/components/ItemMatching/MatchPicker';
 import {
+  addMenuGroup,
+  createMenu,
+  deleteMenuGroup,
+  groupOn,
+  groupsFromPosCategories,
   groupTillStatus,
+  isOnLiveMenu,
   linkSquareOnly,
+  menuIdsOf,
+  moveMenuGroup,
   publishCount,
+  releaseMenu,
+  renameMenuGroup,
+  setItemGroup,
+  setSquareOnlyGroup,
   squareChangeCount,
   useSquareMenu,
 } from '@/components/SquareMenu/squareMenuStore';
 import {
-  FIELD_LABELS,
   priceRange,
-  publishKeys,
-  squareChangeKeys,
   statusOf,
   type SquareOnlyItem,
   type TillItem,
@@ -41,6 +50,7 @@ import {
   TillStatusPill,
   card,
   eyebrow,
+  inputStyle,
   linkBtn,
   primaryBtn,
   secondaryBtn,
@@ -50,8 +60,14 @@ import { PublishSheet } from '@/components/SquareMenu/PublishSheet';
 import { ChangedInSquarePanel } from '@/components/SquareMenu/ChangedInSquarePanel';
 import { AddTillItemsPicker } from '@/components/SquareMenu/AddTillItemsPicker';
 import { FirstLinkFlow } from '@/components/SquareMenu/FirstLinkFlow';
+import { StatusPill } from '@/components/ui/StatusPill';
+import { ALL_DAY_MENU_ID } from '@/components/SquareMenu/squareCatalogFixtures';
 
 type Filter = 'all' | TillStatus;
+
+/** Statuses that need someone to look before the next publish. */
+const NEEDS_REVIEW: TillStatus[] = ['changed', 'blocked', 'till-only'];
+const TO_PUBLISH: TillStatus[] = ['ready', 'not-on-till'];
 
 /** Filter order: what needs a decision first, what's fine last. */
 const FILTER_ORDER: TillStatus[] = ['changed', 'blocked', 'ready', 'not-on-till', 'till-only', 'in-sync'];
@@ -69,34 +85,17 @@ type Row =
   | { kind: 'item'; id: string; item: TillItem; status: TillStatus; name: string }
   | { kind: 'square'; id: string; sq: SquareOnlyItem; status: 'till-only'; name: string };
 
-function groupNames(ids: string[], groups: ModifierGroup[]): string {
-  return ids.map((id) => groups.find((g) => g.id === id)?.name ?? id).join(', ');
+/** Size names without their amounts. Four or more collapse to a count. */
+function sizeSummary(sizes: string[]): string {
+  if (sizes.length === 1 && ['Regular', 'Each'].includes(sizes[0])) return 'One size';
+  if (sizes.length > 3) return `${sizes.length} sizes`;
+  return sizes.map((x) => x.replace(/\s*\(.*?\)\s*/g, '')).join(', ');
 }
 
-/** One line under the status pill saying what is going on, in plain words. */
-function statusLine(item: TillItem, status: TillStatus, groups: ModifierGroup[]): string | null {
-  if (status === 'changed') {
-    if (item.deletedInSquare) return 'Deleted in Square';
-    const keys = squareChangeKeys(item);
-    if (keys.length === 1 && keys[0] === 'name') return `Renamed to "${item.inSquare?.name}"`;
-    if (keys.length === 1 && keys[0] === 'prices') return 'Price changed in Square';
-    return `${keys.length} changes in Square`;
-  }
-  if (status === 'ready') {
-    if (item.takeOff) return 'Coming off the till';
-    if (item.regularTypeInSquare && publishKeys(item).length === 0) return 'Becomes a food and drink item';
-    const keys = publishKeys(item);
-    return keys.map((k) => FIELD_LABELS[k].toLowerCase()).join(', ').replace(/^./, (c) => c.toUpperCase());
-  }
-  if (status === 'blocked' && item.sizeGroups) {
-    const all = Array.from(new Set(Object.values(item.sizeGroups).flat()));
-    const partial = all.filter((g) => !Object.values(item.sizeGroups!).every((l) => l.includes(g)));
-    const sizes = Object.entries(item.sizeGroups).filter(([, l]) => partial.some((g) => l.includes(g))).map(([s]) => s);
-    return `${groupNames(partial, groups)} on ${sizes.join(', ')} only`;
-  }
-  if (status === 'not-on-till') return 'Goes on the till next publish';
-  return null;
-}
+const oneLine: React.CSSProperties = {
+  fontSize: 13, color: 'var(--color-text-primary)',
+  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
+};
 
 function SquareMenuInner() {
   const router = useRouter();
@@ -114,14 +113,66 @@ function SquareMenuInner() {
   const [addOpen, setAddOpen] = useState(false);
   const [linkFor, setLinkFor] = useState<string | null>(null);
   const [editGroup, setEditGroup] = useState<ModifierGroup | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [menuId, setMenuId] = useState<string>(params.get('menu') ?? ALL_DAY_MENU_ID);
+  const [newMenuName, setNewMenuName] = useState<string | null>(null);
+  const [newCatName, setNewCatName] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<{ from: string; value: string } | null>(null);
+  const [catActions, setCatActions] = useState<string | null>(null);
+  const [confirmRelease, setConfirmRelease] = useState(false);
+  const [dragging, setDragging] = useState<{ kind: 'item' | 'square'; id: string; name: string; from: string } | null>(null);
+  const [dropOn, setDropOn] = useState<string | null>(null);
+  const [announce, setAnnounce] = useState('');
+
+  const menu = sm.menus.find((m) => m.id === menuId) ?? sm.menus[0];
+  const isDraft = menu?.status === 'draft';
+
+  function saveNewMenu() {
+    if (newMenuName?.trim()) {
+      const id = createMenu(newMenuName);
+      setMenuId(id);
+      setFilter('all');
+    }
+    setNewMenuName(null);
+  }
+
+  function saveNewCategory() {
+    if (menu && newCatName?.trim()) addMenuGroup(menu.id, newCatName);
+    setNewCatName(null);
+  }
+
+  function moveRow(row: { kind: 'item' | 'square'; id: string; name: string; from: string }, group: string) {
+    if (!menu || row.from === group) return;
+    if (row.kind === 'item') setItemGroup(row.id, menu.id, group);
+    else setSquareOnlyGroup(row.id, menu.id, group);
+    setAnnounce(`${row.name} moved to ${group || 'Not in a group'}`);
+    requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-move-handle="${row.id}"]`)?.focus());
+  }
+
+  function saveRename() {
+    if (renaming && menu) renameMenuGroup(menu.id, renaming.from, renaming.value);
+    setRenaming(null);
+  }
+
+  function toggleSection(name: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
 
   const rows = useMemo<Row[]>(() => {
-    const items: Row[] = sm.items.map((item) => ({
+    if (!menu) return [];
+    const items: Row[] = sm.items.filter((i) => menuIdsOf(i).includes(menu.id)).map((item) => ({
       kind: 'item', id: item.id, item, status: statusOf(item), name: item.current.name,
     }));
-    const sq: Row[] = sm.squareOnly.map((s) => ({ kind: 'square', id: s.id, sq: s, status: 'till-only', name: s.name }));
+    const sq: Row[] = sm.squareOnly
+      .filter((q) => menuIdsOf(q).includes(menu.id))
+      .map((q) => ({ kind: 'square', id: q.id, sq: q, status: 'till-only', name: q.name }));
     return [...items, ...sq];
-  }, [sm.items, sm.squareOnly]);
+  }, [sm.items, sm.squareOnly, menu]);
 
   const counts = useMemo(() => {
     const c: Record<TillStatus, number> = { 'in-sync': 0, ready: 0, changed: 0, 'not-on-till': 0, 'till-only': 0, blocked: 0 };
@@ -136,6 +187,23 @@ function SquareMenuInner() {
       .filter((r) => !q || r.name.toLowerCase().includes(q))
       .sort((a, b) => FILTER_ORDER.indexOf(a.status) - FILTER_ORDER.indexOf(b.status) || a.name.localeCompare(b.name));
   }, [rows, filter, query]);
+
+  const sections = useMemo(() => {
+    const byGroup = new Map<string, Row[]>();
+    for (const r of filtered) {
+      const g = !menu ? '' : r.kind === 'item' ? groupOn(r.item, r.item.current.category, menu) : groupOn(r.sq, r.sq.category, menu);
+      byGroup.set(g, [...(byGroup.get(g) ?? []), r]);
+    }
+    const order = menu?.groups ?? [];
+    const showEmpty = filter === 'all' && !query.trim();
+    if (showEmpty) for (const c of order) if (!byGroup.has(c)) byGroup.set(c, []);
+    const rank = (g: string) => (g === '' ? Number.MAX_SAFE_INTEGER : order.indexOf(g) === -1 ? order.length : order.indexOf(g));
+    return Array.from(byGroup.entries())
+      .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))
+      .map(([name, list]) => ({ name, rows: list }));
+  }, [filtered, menu, filter, query]);
+
+  const draftNew = rows.filter((r) => r.kind === 'item' && !r.item.inSquare && !isOnLiveMenu(r.item, sm)).length;
 
   const changes = squareChangeCount(sm);
   const toPublish = publishCount(sm, groups);
@@ -169,7 +237,7 @@ function SquareMenuInner() {
     return (
       <Page>
         <EmptyStart onAdd={() => setAddOpen(true)} />
-        {addOpen && <AddTillItemsPicker onClose={() => setAddOpen(false)} onAdded={(id) => { setAddOpen(false); setOpenItem(id ?? null); }} />}
+        {addOpen && <AddTillItemsPicker menuId={menu?.id} menuName={menu?.name} onClose={() => setAddOpen(false)} onAdded={(id) => { setAddOpen(false); setOpenItem(id ?? null); }} />}
         {openItem && <SquareMenuItemDrawer itemId={openItem} onClose={() => setOpenItem(null)} />}
       </Page>
     );
@@ -177,34 +245,108 @@ function SquareMenuInner() {
 
   return (
     <Page>
+      <nav aria-label="Menus" style={{ display: 'flex', alignItems: 'flex-end', gap: 4, borderBottom: '1px solid var(--color-border)', marginBottom: 16, flexWrap: 'wrap' }}>
+        {sm.menus.map((m) => {
+          const active = m.id === menu?.id;
+          return (
+            <button
+              key={m.id}
+              type="button"
+              aria-current={active ? 'page' : undefined}
+              onClick={() => { setMenuId(m.id); setFilter('all'); setConfirmRelease(false); }}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                padding: '8px 12px', marginBottom: -1,
+                background: 'transparent', border: 'none',
+                borderBottom: active ? '2px solid var(--color-accent-active)' : '2px solid transparent',
+                fontFamily: 'var(--font-primary)', fontSize: 13.5, fontWeight: active ? 700 : 600,
+                color: active ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                cursor: 'pointer',
+              }}
+            >
+              {m.name}
+              {m.status === 'draft' && <StatusPill tone="neutral" size="xs">Draft</StatusPill>}
+            </button>
+          );
+        })}
+        {newMenuName == null ? (
+          <button
+            type="button"
+            onClick={() => setNewMenuName('')}
+            style={{ ...linkBtn, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '8px 10px', fontSize: 13 }}
+          >
+            <Plus size={13} aria-hidden /> New menu
+          </button>
+        ) : (
+          <span style={{ display: 'inline-flex', gap: 6, padding: '4px 0 6px' }}>
+            <input
+              aria-label="New menu name"
+              autoFocus
+              placeholder="e.g. Summer menu"
+              value={newMenuName}
+              onChange={(e) => setNewMenuName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') saveNewMenu(); if (e.key === 'Escape') setNewMenuName(null); }}
+              style={{ ...inputStyle, height: 32, width: 180, fontSize: 13 }}
+            />
+            <button type="button" style={secondaryBtn} onClick={saveNewMenu}>Create</button>
+          </span>
+        )}
+      </nav>
+
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 320px', minWidth: 0 }}>
-          <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>{rows.length} items on your Square menu</h1>
-          {sm.settings.lastPublishedAt && (
-            <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
-              Last published {sm.settings.lastPublishedAt}
-            </p>
-          )}
+          <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>{rows.length} {rows.length === 1 ? 'item' : 'items'} on {menu?.name}</h1>
+          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
+            {isDraft
+              ? 'Draft. Nothing here reaches Square until you release it.'
+              : menu && !menu.onSquare
+                ? 'Goes to Square on your next publish'
+                : sm.settings.lastPublishedAt ? `Last published ${sm.settings.lastPublishedAt}` : null}
+          </p>
         </div>
         <button type="button" style={secondaryBtn} onClick={() => setAddOpen(true)}>
           <Plus size={14} /> Add items
         </button>
-        <button
-          type="button"
-          style={{ ...primaryBtn, opacity: toPublish === 0 ? 0.5 : 1, cursor: toPublish === 0 ? 'not-allowed' : 'pointer' }}
-          disabled={toPublish === 0}
-          onClick={() => setPublishOpen(true)}
-        >
-          <Send size={14} /> Publish to Square
-          {toPublish > 0 && (
-            <span style={{ padding: '1px 7px', borderRadius: 100, background: 'rgba(255,255,255,0.18)', fontSize: 11.5, fontWeight: 700 }}>
-              {toPublish}
-            </span>
-          )}
-        </button>
+        {isDraft ? (
+          <button type="button" style={primaryBtn} onClick={() => setConfirmRelease(true)}>
+            <Rocket size={14} /> Release menu
+          </button>
+        ) : (
+          <button
+            type="button"
+            style={{ ...primaryBtn, opacity: toPublish === 0 ? 0.5 : 1, cursor: toPublish === 0 ? 'not-allowed' : 'pointer' }}
+            disabled={toPublish === 0}
+            onClick={() => setPublishOpen(true)}
+          >
+            <Send size={14} /> Publish to Square
+            {toPublish > 0 && (
+              <span style={{ padding: '1px 7px', borderRadius: 100, background: 'rgba(255,255,255,0.18)', fontSize: 11.5, fontWeight: 700 }}>
+                {toPublish}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
-      {changes > 0 && (
+      {isDraft && confirmRelease && menu && (
+        <div
+          role="alertdialog"
+          aria-label={`Release ${menu.name}`}
+          style={{
+            ...card, marginTop: 16, padding: '12px 14px',
+            display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+            borderColor: 'var(--color-accent-active)',
+          }}
+        >
+          <span style={{ flex: 1, fontSize: 13.5, minWidth: 240 }}>
+            <strong>Release {menu.name}?</strong> The menu{draftNew > 0 ? ` and its ${draftNew} new ${draftNew === 1 ? 'item' : 'items'}` : ''} go to Square on your next publish. You then turn it on for each site in Square.
+          </span>
+          <button type="button" style={secondaryBtn} onClick={() => setConfirmRelease(false)}>Cancel</button>
+          <button type="button" style={primaryBtn} onClick={() => { releaseMenu(menu.id); setConfirmRelease(false); }}>Release</button>
+        </div>
+      )}
+
+      {!isDraft && changes > 0 && (
         <div
           role="status"
           style={{
@@ -281,40 +423,223 @@ function SquareMenuInner() {
           <span>Status</span>
           <span aria-hidden />
         </div>
-        {filtered.length === 0 ? (
+        {sections.length === 0 ? (
           <div style={{ padding: 28, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 13 }}>
             No items match.
           </div>
         ) : (
-          filtered.map((r) =>
-            r.kind === 'item' ? (
-              <ItemRow
-                key={r.id}
-                item={r.item}
-                status={r.status}
-                sourceName={sourceName(r.item, recipes, products)}
-                line={statusLine(r.item, r.status, groups)}
-                onOpen={() => (r.status === 'changed' ? setChangesOpen(true) : setOpenItem(r.id))}
-                onEdit={() => setOpenItem(r.id)}
-              />
-            ) : (
-              <SquareOnlyRow
-                key={r.id}
-                sq={r.sq}
-                pickerOpen={linkFor === r.id}
-                onLink={() => setLinkFor(linkFor === r.id ? null : r.id)}
-                onClosePicker={() => setLinkFor(null)}
-                onPicked={(target) => {
-                  setLinkFor(null);
-                  if (target.type === 'recipe') linkSquareOnly(r.id, { kind: 'recipe', recipeId: target.id });
-                  else if (target.type === 'product') linkSquareOnly(r.id, { kind: 'product', productId: target.id });
+          sections.map((sec, secIdx) => {
+            const open = !collapsed.has(sec.name);
+            const label = sec.name || 'Not in a group';
+            const review = sec.rows.filter((r) => NEEDS_REVIEW.includes(r.status)).length;
+            const toPublishHere = sec.rows.filter((r) => TO_PUBLISH.includes(r.status)).length;
+            const onMenu = !!menu && menu.groups.includes(sec.name);
+            const catIdx = menu ? menu.groups.indexOf(sec.name) : -1;
+            const isRenaming = renaming?.from === sec.name;
+            return (
+              <section
+                key={sec.name || 'none'}
+                aria-label={label}
+                onDragOver={(e) => {
+                  if (!dragging) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (dropOn !== sec.name) setDropOn(sec.name);
                 }}
-                onCreate={() => router.push('/recipes/intake/pos')}
-              />
-            ),
-          )
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropOn((d) => (d === sec.name ? null : d));
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (dragging) moveRow(dragging, sec.name);
+                  setDragging(null);
+                  setDropOn(null);
+                }}
+                style={{
+                  outline: dropOn === sec.name && dragging?.from !== sec.name ? '2px dashed var(--color-accent-active)' : 'none',
+                  outlineOffset: -2,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'grid', gridTemplateColumns: GRID, gap: 12, alignItems: 'center',
+                    padding: '6px 16px',
+                    background: 'var(--color-bg-hover)',
+                    borderTop: secIdx === 0 ? 'none' : '1px solid var(--color-border)',
+                    position: 'relative',
+                  }}
+                >
+                  <h3 style={{ gridColumn: '1 / 4', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {isRenaming ? (
+                      <span style={{ display: 'inline-flex', gap: 6, padding: '2px 0' }}>
+                        <input
+                          aria-label={`Rename ${label}`}
+                          autoFocus
+                          value={renaming.value}
+                          onChange={(e) => setRenaming({ from: sec.name, value: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === 'Enter') saveRename(); if (e.key === 'Escape') setRenaming(null); }}
+                          style={{ ...inputStyle, height: 30, width: 200, fontSize: 13 }}
+                        />
+                        <button type="button" style={secondaryBtn} onClick={saveRename}>Save</button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => toggleSection(sec.name)}
+                        aria-expanded={open}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 8,
+                          padding: '4px 0', background: 'transparent', border: 'none',
+                          cursor: 'pointer', fontFamily: 'var(--font-primary)', color: 'var(--color-text-primary)',
+                        }}
+                      >
+                        {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
+                        <span style={{ fontSize: 13.5, fontWeight: 700 }}>{label}</span>
+                        <span style={{ fontSize: 12.5, fontWeight: 400, color: 'var(--color-text-secondary)' }}>
+                          {sec.rows.length} {sec.rows.length === 1 ? 'item' : 'items'}
+                        </span>
+                      </button>
+                    )}
+                  </h3>
+                  <span>
+                    {!open && review > 0 && <StatusPill tone="warning">{review} to review</StatusPill>}
+                    {!open && review === 0 && toPublishHere > 0 && <StatusPill tone="info">{toPublishHere} to publish</StatusPill>}
+                  </span>
+                  <span style={{ textAlign: 'right', position: 'relative' }}>
+                    {!sec.name && menu && sec.rows.some((r) => r.kind === 'item' && r.item.current.category) && (
+                      <button type="button" style={{ ...linkBtn, fontSize: 12.5 }} onClick={() => groupsFromPosCategories(menu.id)}>
+                        Group by POS category
+                      </button>
+                    )}
+                    {sec.name && (
+                      <button
+                        type="button"
+                        aria-label={`Actions for ${label}`}
+                        aria-expanded={catActions === sec.name}
+                        onClick={() => setCatActions(catActions === sec.name ? null : sec.name)}
+                        style={{ ...secondaryBtn, padding: '5px 8px' }}
+                      >
+                        <MoreHorizontal size={14} aria-hidden />
+                      </button>
+                    )}
+                    {catActions === sec.name && (
+                      <>
+                        <div onClick={() => setCatActions(null)} style={{ position: 'fixed', inset: 0, zIndex: 50 }} />
+                        <div
+                          role="menu"
+                          style={{
+                            position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 60,
+                            background: '#fff', border: '1px solid var(--color-border)', borderRadius: 10,
+                            boxShadow: '0 12px 24px -8px rgba(0, 28, 53, 0.25)', minWidth: 200, overflow: 'hidden', textAlign: 'left',
+                          }}
+                        >
+                          <CatAction icon={<Pencil size={13} />} onClick={() => { setRenaming({ from: sec.name, value: sec.name }); setCatActions(null); }}>
+                            Rename
+                          </CatAction>
+                          {onMenu && catIdx > 0 && (
+                            <CatAction icon={<ArrowUp size={13} />} onClick={() => { moveMenuGroup(menu!.id, sec.name, -1); setCatActions(null); }}>
+                              Move up
+                            </CatAction>
+                          )}
+                          {onMenu && catIdx < menu!.groups.length - 1 && (
+                            <CatAction icon={<ArrowDown size={13} />} onClick={() => { moveMenuGroup(menu!.id, sec.name, 1); setCatActions(null); }}>
+                              Move down
+                            </CatAction>
+                          )}
+                          {onMenu && sec.rows.length === 0 && (
+                            <CatAction icon={<Trash2 size={13} />} onClick={() => { deleteMenuGroup(menu!.id, sec.name); setCatActions(null); }}>
+                              Delete group
+                            </CatAction>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </span>
+                </div>
+                {open && sec.rows.length === 0 && (
+                  <div style={{ padding: '12px 16px 12px 38px', borderTop: '1px solid var(--color-border)', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                    No items yet. Drag items here or{' '}
+                    <button type="button" style={{ ...linkBtn, fontSize: 13 }} onClick={() => setAddOpen(true)}>add items</button>
+                  </div>
+                )}
+                {open && sec.rows.map((r) =>
+                  r.kind === 'item' ? (
+                    <ItemRow
+                      key={r.id}
+                      handle={menu && (
+                        <MoveHandle
+                          rowId={r.id}
+                          name={r.item.current.name}
+                          current={sec.name}
+                          groups={menu.groups}
+                          onMove={(g) => moveRow({ kind: 'item', id: r.id, name: r.item.current.name, from: sec.name }, g)}
+                          onDragStart={() => setDragging({ kind: 'item', id: r.id, name: r.item.current.name, from: sec.name })}
+                          onDragEnd={() => { setDragging(null); setDropOn(null); }}
+                        />
+                      )}
+                      dragged={dragging?.id === r.id}
+                      item={r.item}
+                      status={r.status}
+                      sourceName={sourceName(r.item, recipes, products)}
+                      onOpen={() => (r.status === 'changed' ? setChangesOpen(true) : setOpenItem(r.id))}
+                      onEdit={() => setOpenItem(r.id)}
+                    />
+                  ) : (
+                    <SquareOnlyRow
+                      key={r.id}
+                      handle={menu && (
+                        <MoveHandle
+                          rowId={r.id}
+                          name={r.sq.name}
+                          current={sec.name}
+                          groups={menu.groups}
+                          onMove={(g) => moveRow({ kind: 'square', id: r.id, name: r.sq.name, from: sec.name }, g)}
+                          onDragStart={() => setDragging({ kind: 'square', id: r.id, name: r.sq.name, from: sec.name })}
+                          onDragEnd={() => { setDragging(null); setDropOn(null); }}
+                        />
+                      )}
+                      dragged={dragging?.id === r.id}
+                      sq={r.sq}
+                      pickerOpen={linkFor === r.id}
+                      onLink={() => setLinkFor(linkFor === r.id ? null : r.id)}
+                      onClosePicker={() => setLinkFor(null)}
+                      onPicked={(target) => {
+                        setLinkFor(null);
+                        if (target.type === 'recipe') linkSquareOnly(r.id, { kind: 'recipe', recipeId: target.id });
+                        else if (target.type === 'product') linkSquareOnly(r.id, { kind: 'product', productId: target.id });
+                      }}
+                      onCreate={() => router.push('/recipes/intake/pos')}
+                    />
+                  ),
+                )}
+              </section>
+            );
+          })
         )}
+        <div style={{ padding: '10px 16px', borderTop: '1px solid var(--color-border)' }}>
+          {newCatName == null ? (
+            <button type="button" style={{ ...linkBtn, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13 }} onClick={() => setNewCatName('')}>
+              <Plus size={13} aria-hidden /> New group
+            </button>
+          ) : (
+            <span style={{ display: 'inline-flex', gap: 6 }}>
+              <input
+                aria-label="New group name"
+                autoFocus
+                placeholder="e.g. Spring specials"
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveNewCategory(); if (e.key === 'Escape') setNewCatName(null); }}
+                style={{ ...inputStyle, height: 32, width: 220, fontSize: 13 }}
+              />
+              <button type="button" style={secondaryBtn} onClick={saveNewCategory}>Add</button>
+              <button type="button" style={linkBtn} onClick={() => setNewCatName(null)}>Cancel</button>
+            </span>
+          )}
+        </div>
       </div>
+
+      <div aria-live="polite" style={visuallyHidden}>{announce}</div>
 
       {tillGroups.length > 0 && (
         <>
@@ -372,7 +697,7 @@ function SquareMenuInner() {
           onEditGroup={(g) => { setChangesOpen(false); setEditGroup(g); }}
         />
       )}
-      {addOpen && <AddTillItemsPicker onClose={() => setAddOpen(false)} onAdded={(id) => { setAddOpen(false); setOpenItem(id ?? null); }} />}
+      {addOpen && <AddTillItemsPicker menuId={menu?.id} menuName={menu?.name} onClose={() => setAddOpen(false)} onAdded={(id) => { setAddOpen(false); setOpenItem(id ?? null); }} />}
       <GroupEditorDrawer
         open={!!editGroup}
         mode="edit"
@@ -410,34 +735,46 @@ function sourceName(item: TillItem, recipes: ReturnType<typeof useRecipes>, prod
 }
 
 function ItemRow({
-  item, status, sourceName: src, line, onOpen, onEdit,
+  item, status, sourceName: src, onOpen, onEdit, handle, dragged,
 }: {
+  handle?: React.ReactNode;
+  dragged?: boolean;
   item: TillItem;
   status: TillStatus;
   sourceName: string;
-  line: string | null;
   onOpen: () => void;
   onEdit: () => void;
 }) {
+  const [hover, setHover] = useState(false);
   const f = item.current;
   const meta = [
     ...(item.source.kind === 'product' ? ['product'] : []),
     ...(src.toLowerCase() !== f.name.toLowerCase() ? [src] : []),
     ...(f.sites.length > 0 ? [`${f.sites.length} ${f.sites.length === 1 ? 'site' : 'sites'}`] : []),
-    ...(!f.category ? ['No till category'] : []),
     ...(item.soldOutAt?.length ? [`Sold out at ${item.soldOutAt.join(', ')}`] : []),
   ];
   const action = status === 'changed' ? 'Review' : status === 'blocked' ? 'Fix' : null;
   return (
     <div
+      data-row
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest('button, a, input, select, [role="menu"]')) return;
+        onEdit();
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
         display: 'grid', gridTemplateColumns: GRID, gap: 12, alignItems: 'center',
         padding: '12px 16px',
         borderTop: '1px solid var(--color-border)',
-        background: item.takeOff ? '#FBFAF8' : undefined,
+        background: hover ? 'var(--color-bg-hover)' : item.takeOff ? '#FBFAF8' : '#fff',
+        opacity: dragged ? 0.45 : 1,
+        cursor: 'pointer',
       }}
     >
-      <div style={{ minWidth: 0 }}>
+      <div style={{ minWidth: 0, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+        {handle}
+        <div style={{ minWidth: 0 }}>
         <button
           type="button"
           onClick={onEdit}
@@ -457,14 +794,12 @@ function ItemRow({
             {meta.filter((m) => m !== 'product').join(' · ')}
           </div>
         )}
+        </div>
       </div>
-      <span style={{ fontSize: 13, color: 'var(--color-text-primary)' }}>
-        {f.sizes.length === 1 && ['Regular', 'Each'].includes(f.sizes[0]) ? 'One size' : f.sizes.join(', ')}
-      </span>
+      <span style={oneLine} title={f.sizes.join(', ')}>{sizeSummary(f.sizes)}</span>
       <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{priceRange(f)}</span>
       <div style={{ minWidth: 0 }}>
         <TillStatusPill status={status} />
-        {line && <div style={{ fontSize: 12.5, color: 'var(--color-text-primary)', marginTop: 4 }}>{line}</div>}
       </div>
       <span style={{ textAlign: 'right' }}>
         {action && (
@@ -478,8 +813,10 @@ function ItemRow({
 }
 
 function SquareOnlyRow({
-  sq, pickerOpen, onLink, onClosePicker, onPicked, onCreate,
+  sq, pickerOpen, onLink, onClosePicker, onPicked, onCreate, handle, dragged,
 }: {
+  handle?: React.ReactNode;
+  dragged?: boolean;
   sq: SquareOnlyItem;
   pickerOpen: boolean;
   onLink: () => void;
@@ -494,23 +831,24 @@ function SquareOnlyRow({
         padding: '12px 16px',
         borderTop: '1px solid var(--color-border)',
         position: 'relative',
+        background: '#fff',
+        opacity: dragged ? 0.45 : 1,
       }}
+      data-row
     >
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 600 }}>{sq.name}</div>
-        {sq.createdAt && (
-          <div style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', marginTop: 3 }}>Added in Square {sq.createdAt}</div>
-        )}
+      <div style={{ minWidth: 0, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+        {handle}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 600 }}>{sq.name}</div>
+          {sq.createdAt && (
+            <div style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', marginTop: 3 }}>Added in Square {sq.createdAt}</div>
+          )}
+        </div>
       </div>
-      <span style={{ fontSize: 13, color: 'var(--color-text-primary)' }}>
-        {sq.sizes.length === 1 ? 'One size' : sq.sizes.join(', ')}
-      </span>
+      <span style={oneLine} title={sq.sizes.join(', ')}>{sizeSummary(sq.sizes)}</span>
       <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{priceRange({ sizes: sq.sizes, prices: sq.prices } as TillItem['current'])}</span>
       <div>
         <TillStatusPill status="till-only" />
-        <div style={{ fontSize: 12.5, marginTop: 4 }}>
-          <button type="button" style={{ ...linkBtn, fontSize: 12.5 }} onClick={onCreate}>Create a recipe</button>
-        </div>
       </div>
       <span style={{ textAlign: 'right', position: 'relative' }}>
         <button
@@ -534,6 +872,7 @@ function SquareOnlyRow({
             onClose={onClosePicker}
             align="right"
             onPick={(t) => onPicked(t)}
+            onCreate={onCreate}
           />
         )}
       </span>
@@ -552,6 +891,122 @@ function EmptyStart({ onAdd }: { onAdd: () => void }) {
         <Plus size={14} /> Choose what you sell
       </button>
     </div>
+  );
+}
+
+const visuallyHidden: React.CSSProperties = {
+  position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0,
+};
+
+/** Drag to another group, or click for a list. The list is the keyboard and single-tap route. */
+function MoveHandle({
+  rowId, name, current, groups, onMove, onDragStart, onDragEnd,
+}: {
+  rowId: string;
+  name: string;
+  current: string;
+  groups: string[];
+  onMove: (group: string) => void;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const targets = [...groups.filter((g) => g !== current), ...(current ? [''] : [])];
+
+  useEffect(() => {
+    if (open) menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+  }, [open]);
+
+  function close() {
+    setOpen(false);
+    btnRef.current?.focus();
+  }
+
+  return (
+    <span style={{ position: 'relative', flexShrink: 0, marginLeft: -6 }}>
+      <button
+        ref={btnRef}
+        type="button"
+        data-move-handle={rowId}
+        draggable
+        aria-label={`Move ${name} to another group`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Drag to another group"
+        onClick={() => setOpen(!open)}
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', name);
+          const row = e.currentTarget.closest('[data-row]');
+          if (row) e.dataTransfer.setDragImage(row, 24, 20);
+          onDragStart();
+        }}
+        onDragEnd={onDragEnd}
+        style={{
+          width: 24, height: 24, padding: 0, borderRadius: 6,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          border: 'none', background: 'transparent', cursor: 'grab',
+          color: 'var(--color-text-secondary)',
+        }}
+      >
+        <GripVertical size={15} aria-hidden />
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 50 }} />
+          <div
+            ref={menuRef}
+            role="menu"
+            aria-label={`Move ${name} to`}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') close();
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+                const idx = items.indexOf(document.activeElement as HTMLButtonElement);
+                items[(idx + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
+              }
+            }}
+            style={{
+              position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 60,
+              background: '#fff', border: '1px solid var(--color-border)', borderRadius: 10,
+              boxShadow: '0 12px 24px -8px rgba(0, 28, 53, 0.25)', minWidth: 200, overflow: 'hidden',
+            }}
+          >
+            <div style={{ padding: '9px 12px 5px', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>
+              Move to
+            </div>
+            {targets.length === 0 ? (
+              <div style={{ padding: '6px 12px 10px', fontSize: 13, color: 'var(--color-text-secondary)' }}>Make another group first.</div>
+            ) : targets.map((g) => (
+              <CatAction key={g || 'none'} onClick={() => { onMove(g); close(); }}>
+                {g || 'Not in a group'}
+              </CatAction>
+            ))}
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
+
+function CatAction({ icon, onClick, children }: { icon?: React.ReactNode; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+        padding: '9px 12px', background: '#fff', border: 'none', cursor: 'pointer',
+        fontFamily: 'var(--font-primary)', fontSize: 13, color: 'var(--color-text-primary)', textAlign: 'left',
+      }}
+    >
+      {icon && <span aria-hidden style={{ display: 'inline-flex', color: 'var(--color-text-secondary)' }}>{icon}</span>}
+      {children}
+    </button>
   );
 }
 

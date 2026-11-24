@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * Till item drawer. Everything the till needs that a recipe doesn't:
- * till name, kitchen name, till category, till price per size and site,
+ * Till item drawer. Everything Square needs that a recipe doesn't:
+ * POS name, POS category, menus and the group on each, till price per size and site,
  * sites and VAT. Allergens are read from the recipe or product.
  *
  * Edits save as you type and wait for the next publish. Nothing here is
@@ -20,17 +20,23 @@ import type { Recipe } from '@/components/Recipe/libraryFixtures';
 import type { Product } from '@/components/Suppliers/fixtures';
 import { StatusPill } from '@/components/ui/StatusPill';
 import {
+  addPosCategory,
   alignSizeGroups,
   dropSize,
+  groupOn,
+  menuIdsOf,
   optionOffCopy,
   optionsOffOnSizes,
   removeFromList,
+  setItemGroup,
+  setItemMenus,
+  setPosCategory,
   setTakeOff,
   updateFields,
   updateItem,
   useSquareMenu,
 } from './squareMenuStore';
-import { SQUARE_CATEGORIES, SQUARE_TAXES } from './squareCatalogFixtures';
+import { SQUARE_TAXES } from './squareCatalogFixtures';
 import { gpPct, isBlocked, money, statusOf, type TillItem } from './tillItems';
 import {
   FieldLabel,
@@ -75,6 +81,7 @@ export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { ite
   const item = sm.items.find((i) => i.id === itemId);
   const [sitePriceOpen, setSitePriceOpen] = useState<string | null>(null);
   const [newSize, setNewSize] = useState<{ name: string; amount: string } | null>(null);
+  const [newCat, setNewCat] = useState<string | null>(null);
 
   if (!item) return null;
   const f = item.current;
@@ -86,6 +93,21 @@ export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { ite
   const sourceLabel = item.source.kind === 'recipe'
     ? recipes.find((r) => r.id === (item.source as { recipeId: string }).recipeId)?.name ?? 'recipe'
     : products.find((p) => p.id === (item.source as { productId: string }).productId)?.name ?? 'product';
+  const edifyClass = item.source.kind === 'recipe'
+    ? recipes.find((r) => r.id === (item.source as { recipeId: string }).recipeId)?.category
+    : products.find((p) => p.id === (item.source as { productId: string }).productId)?.category;
+  const itemMenus = menuIdsOf(item);
+
+  function saveNewCategory() {
+    const cat = newCat ? addPosCategory(newCat) : null;
+    if (cat) setPosCategory(item!.id, cat);
+    setNewCat(null);
+  }
+
+  function toggleMenu(id: string) {
+    const next = itemMenus.includes(id) ? itemMenus.filter((m) => m !== id) : [...itemMenus, id];
+    if (next.length) setItemMenus(item!.id, next);
+  }
 
   function setPrice(size: string, v: number | null) {
     updateFields(item!.id, { prices: { ...f.prices, [size]: v } });
@@ -207,7 +229,7 @@ export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { ite
       )}
 
       <Section
-        title="On the till"
+        title="On Square"
         hint={sourceLabel.toLowerCase() !== f.name.toLowerCase() ? `From the ${isProduct ? 'product' : 'recipe'} ${sourceLabel}` : undefined}
         right={
           <button type="button" style={linkBtn} onClick={() => router.push(sourceHref)}>
@@ -217,20 +239,37 @@ export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { ite
       >
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div>
-            <FieldLabel htmlFor="sq-name">Till name</FieldLabel>
+            <FieldLabel htmlFor="sq-name">POS name</FieldLabel>
             <input id="sq-name" style={inputStyle} value={f.name} onChange={(e) => updateFields(item.id, { name: e.target.value })} />
           </div>
           <div>
-            <FieldLabel htmlFor="sq-category">Till category</FieldLabel>
-            <select
-              id="sq-category"
-              style={inputStyle}
-              value={f.category}
-              onChange={(e) => updateFields(item.id, { category: e.target.value })}
-            >
-              <option value="">No category</option>
-              {SQUARE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
+            <FieldLabel htmlFor="sq-category" hint={edifyClass ? `Edify class: ${edifyClass}` : undefined}>POS category</FieldLabel>
+            {newCat == null ? (
+              <select
+                id="sq-category"
+                style={inputStyle}
+                value={f.category}
+                onChange={(e) => (e.target.value === '__new' ? setNewCat('') : setPosCategory(item.id, e.target.value))}
+              >
+                <option value="">No POS category</option>
+                {sm.posCategories.map((c) => <option key={c} value={c}>{c}</option>)}
+                <option value="__new">New POS category…</option>
+              </select>
+            ) : (
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  id="sq-category"
+                  aria-label="New POS category"
+                  style={inputStyle}
+                  autoFocus
+                  placeholder={edifyClass ?? 'e.g. Spring specials'}
+                  value={newCat}
+                  onChange={(e) => setNewCat(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveNewCategory(); if (e.key === 'Escape') { e.stopPropagation(); setNewCat(null); } }}
+                />
+                <button type="button" style={secondaryBtn} onClick={saveNewCategory}>Add</button>
+              </div>
+            )}
           </div>
         </div>
       </Section>
@@ -349,6 +388,38 @@ export function SquareMenuItemDrawer({ itemId, onClose, onReviewChanges }: { ite
       </Section>
 
       <Section title="Where it sells">
+        <FieldLabel hint="Make and order groups on the menu page">Menus and groups</FieldLabel>
+        <div style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
+          {sm.menus.map((m) => {
+            const on = itemMenus.includes(m.id);
+            return (
+              <div key={m.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 220px', gap: 12, alignItems: 'center', minHeight: 36 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    disabled={on && itemMenus.length === 1}
+                    onChange={() => toggleMenu(m.id)}
+                    style={{ width: 16, height: 16, accentColor: 'var(--color-accent-active)' }}
+                  />
+                  {m.name}
+                  {m.status === 'draft' && <StatusPill tone="neutral" size="xs">Draft</StatusPill>}
+                </label>
+                {on && (
+                  <select
+                    aria-label={`Group on ${m.name}`}
+                    style={inputStyle}
+                    value={groupOn(item, f.category, m)}
+                    onChange={(e) => setItemGroup(item.id, m.id, e.target.value)}
+                  >
+                    <option value="">Not in a group</option>
+                    {m.groups.map((g) => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                )}
+              </div>
+            );
+          })}
+        </div>
         <FieldLabel>Sites</FieldLabel>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
           <PillToggle on={f.sites.length === 0} onClick={() => updateFields(item.id, { sites: [] })}>All sites</PillToggle>

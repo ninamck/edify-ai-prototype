@@ -24,7 +24,13 @@ import {
   SEED_TILL_ITEMS,
   SQUARE_LOCATIONS,
   SQUARE_TAXES,
+  ALL_DAY_MENU_ID,
+  SEED_MENUS,
+  SEED_POS_CATEGORIES,
+  SPRING_MENU_ITEM_IDS,
+  SPRING_SPECIALS_IDS,
   type GroupSitePrices,
+  type SquareMenuDef,
 } from './squareCatalogFixtures';
 import {
   cloneFields,
@@ -72,6 +78,9 @@ type State = {
   publishedGroups: Record<string, string>;
   /** Groups whose option prices differ by Square location. */
   groupSitePrices: Record<string, GroupSitePrices>;
+  menus: SquareMenuDef[];
+  /** Every POS category the merchant has, whichever menu uses it. */
+  posCategories: string[];
   lastReceipt?: PublishReceipt;
 };
 
@@ -111,11 +120,21 @@ function seededState(): State {
       lastPublishedAt: '18 Nov, 16:20',
     },
     stage: 'done',
-    items: clone(SEED_TILL_ITEMS),
+    items: clone(SEED_TILL_ITEMS).map((i) => (
+      SPRING_MENU_ITEM_IDS.includes(i.id)
+        ? {
+          ...i,
+          menuIds: [ALL_DAY_MENU_ID, 'menu-spring'],
+          ...(SPRING_SPECIALS_IDS.includes(i.id) ? { menuGroups: { 'menu-spring': 'Spring specials' } } : {}),
+        }
+        : i
+    )),
     squareOnly: clone(SEED_SQUARE_ONLY),
     groupChanges: clone(SEED_GROUP_CHANGES),
     publishedGroups: seedPublishedGroups(),
     groupSitePrices: clone(SEED_GROUP_SITE_PRICES),
+    menus: clone(SEED_MENUS),
+    posCategories: [...SEED_POS_CATEGORIES],
   };
 }
 
@@ -170,6 +189,8 @@ export function resetForSetup(squareHasMenu: boolean): void {
     groupChanges: [],
     publishedGroups: {},
     groupSitePrices: {},
+    menus: [],
+    posCategories: [],
     lastReceipt: undefined,
   });
 }
@@ -210,6 +231,7 @@ export function completeFirstLink(choices: Record<string, string>, skipped: stri
   // Straight after the first link, Edify and Square agree on everything that was linked.
   let items: TillItem[] = seeded.items
     .filter((i) => i.inSquare)
+    .map((i) => ({ ...i, menuIds: undefined, menuGroups: undefined }))
     .map((i) => {
       const agreed = cloneFields(i.published ?? i.inSquare!);
       return {
@@ -269,10 +291,13 @@ export function completeFirstLink(choices: Record<string, string>, skipped: stri
     ];
   }
 
+  const allDay = seeded.menus.find((m) => m.id === ALL_DAY_MENU_ID)!;
   set({
     stage: 'done',
     items,
     squareOnly,
+    menus: [allDay],
+    posCategories: [...SEED_POS_CATEGORIES],
     groupChanges: [],
     publishedGroups: seeded.publishedGroups,
     groupSitePrices: Object.fromEntries(
@@ -285,7 +310,166 @@ export function completeFirstLink(choices: Record<string, string>, skipped: stri
 }
 
 export function startFromEmpty(): void {
-  set({ stage: 'done' });
+  set({
+    stage: 'done',
+    menus: [{ id: ALL_DAY_MENU_ID, name: 'All day menu', status: 'live', onSquare: false, groups: [] }],
+  });
+}
+
+// ── Menus, menu groups and POS categories ──────────────────────────────────
+// A POS category belongs to the item: one each, used for reporting in Square.
+// Menu groups belong to a menu: the merchant makes them, and one item can sit
+// in a different group on each menu.
+
+export function menuIdsOf(x: { menuIds?: string[] }): string[] {
+  return x.menuIds ?? [ALL_DAY_MENU_ID];
+}
+
+/** The item's group on this menu, or '' when it isn't in one. */
+export function groupOn(x: { menuGroups?: Record<string, string> }, posCategory: string, menu: SquareMenuDef): string {
+  const chosen = x.menuGroups?.[menu.id];
+  if (chosen !== undefined) return menu.groups.includes(chosen) ? chosen : '';
+  return menu.groups.includes(posCategory) ? posCategory : '';
+}
+
+export function isOnLiveMenu(i: TillItem, s: State = state): boolean {
+  return menuIdsOf(i).some((id) => s.menus.find((m) => m.id === id)?.status === 'live');
+}
+
+/** New items wait until a live menu carries them. Changes to items already on the till always go. */
+export function readyToPublish(i: TillItem, s: State = state): boolean {
+  return hasPublishWork(i) && (!!i.inSquare || isOnLiveMenu(i, s));
+}
+
+/** A new item's POS category: the one named like its Edify class, or the class itself. */
+export function posCategoryFor(edifyClass: string, s: State = state): string {
+  return s.posCategories.find((c) => c.toLowerCase() === edifyClass.toLowerCase()) ?? edifyClass;
+}
+
+function patchMenu(id: string, fn: (m: SquareMenuDef) => SquareMenuDef): void {
+  set({ menus: state.menus.map((m) => (m.id === id ? fn(m) : m)) });
+}
+
+/** Group edits on a menu Square already has go out on the next publish. */
+function touchGroups(id: string, fn: (m: SquareMenuDef) => SquareMenuDef): void {
+  patchMenu(id, (m) => {
+    const next = fn(m);
+    return next === m ? m : { ...next, groupsChanged: m.onSquare ? true : m.groupsChanged };
+  });
+}
+
+export function createMenu(name: string): string {
+  const id = `menu-${Math.random().toString(36).slice(2, 8)}`;
+  set({ menus: [...state.menus, { id, name: name.trim(), status: 'draft', onSquare: false, groups: [] }] });
+  return id;
+}
+
+export function renameMenu(id: string, name: string): void {
+  if (name.trim()) patchMenu(id, (m) => ({ ...m, name: name.trim() }));
+}
+
+/** A released menu goes to Square on the next publish, with its new items. */
+export function releaseMenu(id: string): void {
+  patchMenu(id, (m) => ({ ...m, status: 'live' }));
+}
+
+export function publishMenu(id: string): void {
+  patchMenu(id, (m) => ({ ...m, onSquare: true, groupsChanged: false }));
+}
+
+export function menusWithPublishWork(s: State = state): SquareMenuDef[] {
+  return s.menus.filter((m) => m.status === 'live' && (!m.onSquare || m.groupsChanged));
+}
+
+export function addMenuGroup(menuId: string, name: string): string | null {
+  const clean = name.trim();
+  const menu = state.menus.find((m) => m.id === menuId);
+  if (!clean || !menu) return null;
+  const existing = menu.groups.find((g) => g.toLowerCase() === clean.toLowerCase());
+  if (existing) return existing;
+  touchGroups(menuId, (m) => ({ ...m, groups: [...m.groups, clean] }));
+  return clean;
+}
+
+/** Renames on this menu only. Items in the group stay in it. */
+export function renameMenuGroup(menuId: string, from: string, to: string): void {
+  const clean = to.trim();
+  const menu = state.menus.find((m) => m.id === menuId);
+  if (!clean || clean === from || !menu || menu.groups.includes(clean)) return;
+  const pin = <T extends { menuGroups?: Record<string, string>; menuIds?: string[] }>(x: T, cat: string): T =>
+    menuIdsOf(x).includes(menuId) && groupOn(x, cat, menu) === from ? { ...x, menuGroups: { ...x.menuGroups, [menuId]: clean } } : x;
+  set({
+    items: state.items.map((i) => pin(i, i.current.category)),
+    squareOnly: state.squareOnly.map((q) => pin(q, q.category)),
+  });
+  touchGroups(menuId, (m) => ({ ...m, groups: m.groups.map((g) => (g === from ? clean : g)) }));
+}
+
+export function moveMenuGroup(menuId: string, group: string, dir: -1 | 1): void {
+  touchGroups(menuId, (m) => {
+    const list = [...m.groups];
+    const idx = list.indexOf(group);
+    const to = idx + dir;
+    if (idx < 0 || to < 0 || to >= list.length) return m;
+    [list[idx], list[to]] = [list[to], list[idx]];
+    return { ...m, groups: list };
+  });
+}
+
+/** Only for empty groups. Items never lose their place by accident. */
+export function deleteMenuGroup(menuId: string, group: string): void {
+  touchGroups(menuId, (m) => ({ ...m, groups: m.groups.filter((g) => g !== group) }));
+}
+
+/** Makes a group for every POS category on this menu that hasn't got one. */
+export function groupsFromPosCategories(menuId: string): number {
+  const menu = state.menus.find((m) => m.id === menuId);
+  if (!menu) return 0;
+  const cats = new Set<string>();
+  for (const i of state.items) {
+    if (menuIdsOf(i).includes(menuId) && !groupOn(i, i.current.category, menu) && i.current.category) cats.add(i.current.category);
+  }
+  const add = Array.from(cats).filter((c) => !menu.groups.includes(c));
+  if (add.length) touchGroups(menuId, (m) => ({ ...m, groups: [...m.groups, ...add] }));
+  return add.length;
+}
+
+export function setItemGroup(id: string, menuId: string, group: string): void {
+  patchItem(id, (i) => ({ ...i, menuGroups: { ...i.menuGroups, [menuId]: group } }));
+  touchGroups(menuId, (m) => ({ ...m }));
+}
+
+export function setSquareOnlyGroup(id: string, menuId: string, group: string): void {
+  set({ squareOnly: state.squareOnly.map((q) => (q.id === id ? { ...q, menuGroups: { ...q.menuGroups, [menuId]: group } } : q)) });
+  touchGroups(menuId, (m) => ({ ...m }));
+}
+
+export function setItemMenus(id: string, menuIds: string[]): void {
+  const before = menuIdsOf(findTillItem(id) ?? {});
+  patchItem(id, (i) => ({ ...i, menuIds }));
+  for (const mid of new Set([...before, ...menuIds])) {
+    if (before.includes(mid) !== menuIds.includes(mid)) touchGroups(mid, (m) => ({ ...m }));
+  }
+}
+
+export function addItemToMenu(id: string, menuId: string): void {
+  const item = findTillItem(id);
+  if (!item) return;
+  const ids = menuIdsOf(item);
+  if (!ids.includes(menuId)) setItemMenus(id, [...ids, menuId]);
+}
+
+export function addPosCategory(name: string): string | null {
+  const clean = name.trim();
+  if (!clean) return null;
+  const existing = state.posCategories.find((c) => c.toLowerCase() === clean.toLowerCase());
+  if (!existing) set({ posCategories: [...state.posCategories, clean] });
+  return existing ?? clean;
+}
+
+export function setPosCategory(id: string, cat: string): void {
+  if (cat) addPosCategory(cat);
+  updateFields(id, { category: cat });
 }
 
 // ── Items ───────────────────────────────────────────────────────────────────
@@ -355,7 +539,7 @@ export function suggestFromRecipe(r: Recipe): { fields: TillFields; costs: Recor
     fields: {
       name: r.name,
       kitchenName: '',
-      category: '',
+      category: posCategoryFor(r.category),
       sizes,
       prices,
       groups: r.modifierGroupIds ?? [],
@@ -368,9 +552,12 @@ export function suggestFromRecipe(r: Recipe): { fields: TillFields; costs: Recor
   };
 }
 
-export function addRecipeToTill(r: Recipe): string {
+export function addRecipeToTill(r: Recipe, menuId: string = ALL_DAY_MENU_ID): string {
   const existing = tillItemForRecipe(r.id);
-  if (existing) return existing.id;
+  if (existing) {
+    addItemToMenu(existing.id, menuId);
+    return existing.id;
+  }
   const { fields, costs } = suggestFromRecipe(r);
   const id = genTillId();
   const item: TillItem = {
@@ -380,8 +567,10 @@ export function addRecipeToTill(r: Recipe): string {
     sizeCosts: costs,
     laterKeys: [],
     overwriteKeys: [],
+    menuIds: [menuId],
   };
   set({ items: [...state.items, item] });
+  if (fields.category) addPosCategory(fields.category);
   return id;
 }
 
@@ -398,9 +587,12 @@ export function defaultProductSizes(p: Product): ProductSize[] {
   return [{ name: 'Each', amount: 1, unit: 'each', price: null }];
 }
 
-export function addProductToTill(p: Product, sizes: ProductSize[]): string {
+export function addProductToTill(p: Product, sizes: ProductSize[], menuId: string = ALL_DAY_MENU_ID): string {
   const existing = tillItemForProduct(p.id);
-  if (existing) return existing.id;
+  if (existing) {
+    addItemToMenu(existing.id, menuId);
+    return existing.id;
+  }
   const unitCost = p.packQty > 0 ? p.packCost / p.packQty : 0;
   const perMl = p.singleUnitType === 'ml' && p.singleUnitVolumeOrWeight ? unitCost / p.singleUnitVolumeOrWeight : null;
   const id = genTillId();
@@ -411,7 +603,7 @@ export function addProductToTill(p: Product, sizes: ProductSize[]): string {
     current: {
       name: p.name.replace(/\s+\d+(ml|cl|L)$/i, ''),
       kitchenName: '',
-      category: '',
+      category: posCategoryFor(p.category),
       sizes: names,
       prices: Object.fromEntries(sizes.map((s) => [s.name, s.price])),
       groups: [],
@@ -426,8 +618,10 @@ export function addProductToTill(p: Product, sizes: ProductSize[]): string {
     ),
     laterKeys: [],
     overwriteKeys: [],
+    menuIds: [menuId],
   };
   set({ items: [...state.items, item] });
+  if (item.current.category) addPosCategory(item.current.category);
   return id;
 }
 
@@ -545,6 +739,8 @@ export function linkSquareOnly(sqId: string, source: TillSource, costs: Record<s
     sizeCosts: costs,
     laterKeys: [],
     overwriteKeys: [],
+    menuIds: sq.menuIds,
+    menuGroups: sq.menuGroups,
   };
   set({ items: [...state.items, item], squareOnly: state.squareOnly.filter((s) => s.id !== sqId) });
   return id;
@@ -668,7 +864,7 @@ export function squareChangeCount(s: State = state): number {
 }
 
 export function publishCount(s: State, groups: ModifierGroup[]): number {
-  return s.items.filter(hasPublishWork).length + groupsWithPublishWork(groups, s).length;
+  return s.items.filter((i) => readyToPublish(i, s)).length + groupsWithPublishWork(groups, s).length + menusWithPublishWork(s).length;
 }
 
 export { statusOf };

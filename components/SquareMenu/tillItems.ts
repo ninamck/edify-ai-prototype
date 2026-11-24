@@ -4,7 +4,7 @@
  * A till item points at one recipe (sizes come from its variants) or one
  * product (sizes are amounts of that product, e.g. 175ml, 250ml, Bottle).
  * It carries the till-only fields a recipe doesn't need: till name,
- * kitchen name, till category, till price per size, sites and VAT.
+ * kitchen name, menu group, till price per size, sites and VAT.
  *
  * Three snapshots of the Edify-owned fields drive every status:
  *
@@ -33,9 +33,9 @@ export const FIELD_KEYS: FieldKey[] = [
 ];
 
 export const FIELD_LABELS: Record<FieldKey, string> = {
-  name: 'Till name',
+  name: 'POS name',
   kitchenName: 'Kitchen name',
-  category: 'Till category',
+  category: 'POS category',
   sizes: 'Sizes',
   prices: 'Till price',
   groups: 'Modifier groups',
@@ -100,6 +100,10 @@ export type TillItem = {
   regularTypeInSquare?: boolean;
   /** Read from Square. Square owns sold out. */
   soldOutAt?: string[];
+  /** Menus this item is on. Missing means the all day menu. */
+  menuIds?: string[];
+  /** Group on each menu, by menu id. Missing means the group named like its POS category, if the menu has one. */
+  menuGroups?: Record<string, string>;
 };
 
 /** A Square item with no Edify recipe or product behind it. */
@@ -110,6 +114,8 @@ export type SquareOnlyItem = {
   sizes: string[];
   prices: Record<string, number | null>;
   createdAt: string;
+  menuIds?: string[];
+  menuGroups?: Record<string, string>;
 };
 
 /** An option someone added to a published modifier group in Square. */

@@ -12,7 +12,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Link2, Package, Boxes } from 'lucide-react';
+import { Search, Link2, Package, Boxes, Plus } from 'lucide-react';
 import { useRecipes } from '@/components/Recipe/recipeStore';
 import { useProducts, useMasterProducts, useSuppliers } from '@/components/Suppliers/store';
 import { setMatchTarget, type MatchTarget, type MatchTargetType } from './overrideStore';
@@ -31,6 +31,7 @@ export function MatchPicker({
   align = 'left',
   mode = 'popover',
   onPick,
+  onCreate,
 }: {
   posItemId: string;
   /** Reserved — keep for parity with the previous modal API. */
@@ -49,6 +50,8 @@ export function MatchPicker({
    * can record the chosen target (name + type) in their own UI state.
    */
   onPick?: (picked: { type: MatchTargetType; id: string; name: string }) => void;
+  /** Adds a "Create a recipe" footer for when nothing in the list fits. */
+  onCreate?: () => void;
 }) {
   const recipes = useRecipes();
   const products = useProducts();
@@ -230,6 +233,23 @@ export function MatchPicker({
           </>
         )}
       </div>
+      {onCreate && (
+        <button
+          type="button"
+          onClick={() => { onClose(); onCreate(); }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+            padding: '10px 14px', border: 'none',
+            borderTop: '1px solid var(--color-border)',
+            background: '#fff', cursor: 'pointer', textAlign: 'left',
+            fontFamily: 'var(--font-primary)', fontSize: 13, fontWeight: 600,
+            color: 'var(--color-text-primary)',
+          }}
+        >
+          <Plus size={14} aria-hidden />
+          Nothing fits? Create a recipe
+        </button>
+      )}
     </div>
   );
 }

@@ -16,17 +16,19 @@ import {
   finishPublish,
   groupTillStatus,
   groupsWithPublishWork,
+  menusWithPublishWork,
   nowLabel,
   optionOffCopy,
   optionsOffOnSizes,
   publishGroup,
   publishItem,
+  publishMenu,
+  readyToPublish,
   squareChangeCount,
   useSquareMenu,
 } from './squareMenuStore';
 import {
   FIELD_LABELS,
-  hasPublishWork,
   isBlocked,
   money,
   priceRange,
@@ -39,7 +41,7 @@ import { Sheet, eyebrow, linkBtn, primaryBtn, secondaryBtn } from './ui';
 
 type Line = {
   id: string;
-  kind: 'item' | 'group';
+  kind: 'item' | 'group' | 'menu';
   name: string;
   details: string[];
 };
@@ -74,12 +76,12 @@ function describe(key: FieldKey, from: TillFields, to: TillFields, groups: Modif
   }
 }
 
-function linesFor(items: TillItem[], groups: ModifierGroup[]) {
+function linesFor(items: TillItem[], groups: ModifierGroup[], ready: (i: TillItem) => boolean) {
   const created: Line[] = [];
   const updated: Line[] = [];
   const removed: Line[] = [];
   for (const i of items) {
-    if (!hasPublishWork(i)) continue;
+    if (!ready(i)) continue;
     if (!i.inSquare) {
       const groupNames = i.current.groups.map((id) => groups.find((g) => g.id === id)?.name).filter(Boolean);
       created.push({
@@ -87,7 +89,7 @@ function linesFor(items: TillItem[], groups: ModifierGroup[]) {
         details: [
           `${i.current.sizes.length === 1 ? 'One size' : i.current.sizes.join(', ')}, ${priceRange(i.current)}`,
           groupNames.length ? `With ${groupNames.join(', ')}` : '',
-          i.current.category ? `In ${i.current.category}` : 'No till category',
+          i.current.category ? `POS category: ${i.current.category}` : 'No POS category',
         ].filter(Boolean),
       });
     } else if (i.takeOff) {
@@ -123,7 +125,16 @@ export function PublishSheet({
   // Snapshot the plan when publishing starts, so lines don't vanish as items publish.
   const [plan, setPlan] = useState<Line[]>([]);
 
-  const { created, updated, removed } = useMemo(() => linesFor(sm.items, groups), [sm.items, groups]);
+  const { created, updated, removed } = useMemo(() => linesFor(sm.items, groups, (i) => readyToPublish(i, sm)), [sm, groups]);
+  const menuLines: Line[] = useMemo(
+    () => menusWithPublishWork(sm).map((m) => ({
+      id: m.id, kind: 'menu' as const, name: m.name,
+      details: [m.onSquare
+        ? 'Groups changed. Square shows the new order and items.'
+        : `New menu with ${m.groups.length} ${m.groups.length === 1 ? 'group' : 'groups'}. Turn it on for each site in Square.`],
+    })),
+    [sm],
+  );
   const groupLines: Line[] = useMemo(
     () => groupsWithPublishWork(groups, sm).map((g) => ({
       id: g.id, kind: 'group' as const, name: g.name,
@@ -136,10 +147,10 @@ export function PublishSheet({
     })),
     [groups, sm],
   );
-  const all = [...groupLines, ...created, ...updated, ...removed];
+  const all = [...groupLines, ...created, ...updated, ...removed, ...menuLines];
   const selected = all.filter((l) => !unticked.has(l.id));
 
-  const overwrites = sm.items.filter((i) => i.overwriteKeys.length > 0 && hasPublishWork(i));
+  const overwrites = sm.items.filter((i) => i.overwriteKeys.length > 0 && readyToPublish(i, sm));
   const blocked = sm.items.filter(isBlocked);
   const waiting = squareChangeCount(sm);
   const optionsOff = [...created, ...updated].flatMap((l) => {
@@ -171,8 +182,9 @@ export function PublishSheet({
         setRun((r) => ({ ...r, [l.id]: 'running' }));
       }, idx * 420);
       window.setTimeout(() => {
-        if (l.kind === 'group') {
-          publishGroup(l.id);
+        if (l.kind === 'group' || l.kind === 'menu') {
+          if (l.kind === 'group') publishGroup(l.id);
+          else publishMenu(l.id);
           done.push(l.name);
           setRun((r) => ({ ...r, [l.id]: 'done' }));
         } else {
@@ -327,6 +339,7 @@ export function PublishSheet({
       <Group title="New on the till" lines={created} unticked={unticked} onToggle={toggle} onOpen={onOpenItem} />
       <Group title="Updated" lines={updated} unticked={unticked} onToggle={toggle} onOpen={onOpenItem} />
       <Group title="Coming off the till" lines={removed} unticked={unticked} onToggle={toggle} onOpen={onOpenItem} />
+      <Group title="Menus" lines={menuLines} unticked={unticked} onToggle={toggle} />
 
       {all.length === 0 && (
         <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)' }}>Nothing to publish.</p>

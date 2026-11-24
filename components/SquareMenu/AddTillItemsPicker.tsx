@@ -17,6 +17,7 @@ import type { Product } from '@/components/Suppliers/fixtures';
 import {
   addProductToTill,
   addRecipeToTill,
+  menuIdsOf,
   defaultProductSizes,
   useSquareMenu,
   type ProductSize,
@@ -34,7 +35,7 @@ function sellableProduct(p: Product): boolean {
   return p.tags.includes('whole-drink') || (p.category === 'Beverage' && p.productClass === 'Beverage' && p.source !== 'made');
 }
 
-export function AddTillItemsPicker({ onClose, onAdded }: { onClose: () => void; onAdded: (id?: string) => void }) {
+export function AddTillItemsPicker({ onClose, onAdded, menuId, menuName }: { onClose: () => void; onAdded: (id?: string) => void; menuId?: string; menuName?: string }) {
   const sm = useSquareMenu();
   const recipes = useRecipes();
   const products = useProducts();
@@ -44,8 +45,9 @@ export function AddTillItemsPicker({ onClose, onAdded }: { onClose: () => void; 
   const [pickedRecipes, setPickedRecipes] = useState<Set<string>>(new Set());
   const [pickedProducts, setPickedProducts] = useState<Record<string, ProductSize[]>>({});
 
-  const onTillRecipe = new Set(sm.items.flatMap((i) => (i.source.kind === 'recipe' ? [i.source.recipeId] : [])));
-  const onTillProduct = new Set(sm.items.flatMap((i) => (i.source.kind === 'product' ? [i.source.productId] : [])));
+  const onThisMenu = sm.items.filter((i) => !menuId || menuIdsOf(i).includes(menuId));
+  const onTillRecipe = new Set(onThisMenu.flatMap((i) => (i.source.kind === 'recipe' ? [i.source.recipeId] : [])));
+  const onTillProduct = new Set(onThisMenu.flatMap((i) => (i.source.kind === 'product' ? [i.source.productId] : [])));
 
   const q = query.trim().toLowerCase();
 
@@ -93,11 +95,11 @@ export function AddTillItemsPicker({ onClose, onAdded }: { onClose: () => void; 
     const ids: string[] = [];
     for (const id of pickedRecipes) {
       const r = recipes.find((x) => x.id === id);
-      if (r) ids.push(addRecipeToTill(r));
+      if (r) ids.push(addRecipeToTill(r, menuId));
     }
     for (const [pid, sizes] of Object.entries(pickedProducts)) {
       const p = products.find((x) => x.id === pid);
-      if (p && sizes.length) ids.push(addProductToTill(p, sizes));
+      if (p && sizes.length) ids.push(addProductToTill(p, sizes, menuId));
     }
     onAdded(ids.length === 1 ? ids[0] : undefined);
   }
@@ -122,7 +124,7 @@ export function AddTillItemsPicker({ onClose, onAdded }: { onClose: () => void; 
   const rows = tab === 'recipes' ? recipeRows : productRows;
 
   return (
-    <Sheet title="Add items to the till" onClose={onClose} footer={footer} width={720}>
+    <Sheet title={menuName ? `Add items to ${menuName}` : 'Add items to the till'} onClose={onClose} footer={footer} width={720}>
       <div role="tablist" aria-label="What to add" style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
         {(['recipes', 'products'] as Tab[]).map((t) => (
           <button
@@ -167,7 +169,7 @@ export function AddTillItemsPicker({ onClose, onAdded }: { onClose: () => void; 
       </h3>
       <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '0 0 8px' }}>
         {tab === 'recipes'
-          ? 'Active recipes with a price, not on the till yet'
+          ? 'Active recipes with a price, not on this menu yet'
           : 'Drinks and other products sold without a recipe'}
       </p>
       <List>
